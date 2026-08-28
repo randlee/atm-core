@@ -86,8 +86,17 @@ if ($env:ATM_TRANSFER_SSH_CONFIG) {
 #     constant you fill in once, not a computed value. Determine it ahead
 #     of time with `ssh <host> id -u` and hardcode the result below; this
 #     keeps the script local-only (no extra network round trip) and
-#     matches sftp.sh's single-ssh-call shape (mkdir, then scp):
-$RemoteAtmTemp = "/tmp/atm-<destination-uid>"
+#     matches sftp.sh's single-ssh-call shape (mkdir, then scp). The
+#     placeholder below intentionally avoids `<`/`>`: both are legal in a
+#     POSIX filename on the real (Unix) receiver this variable names, but
+#     they are reserved Win32/NTFS characters, and this exact string is
+#     also what `.just/tests/test_transfer_scripts.py`'s `SftpPs1Tests`
+#     asks its local fake-ssh/fake-scp harness to `mkdir` on the sender's
+#     own filesystem to simulate the remote copy -- on a Windows sender
+#     that local simulation is real NTFS, so a placeholder containing
+#     `<`/`>` fails there even though the genuine remote `mkdir` (a Unix
+#     shell command run over `ssh`) would have accepted it:
+$RemoteAtmTemp = "/tmp/atm-REPLACE_WITH_DESTINATION_UID"
 #
 # (b) Ask the remote host what it actually resolved (uncomment instead --
 #     this adds one extra `ssh` round trip beyond the mkdir call below):

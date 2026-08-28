@@ -35,19 +35,19 @@ PWSH = shutil.which("pwsh")
 
 
 def posix_shell() -> str | None:
-    """A POSIX shell to run `sftp.sh`/`tailscale.sh` with.
+    """A POSIX shell, when one happens to be available.
 
     `CreateProcess` on Windows has no shebang interpretation:
     `subprocess.run([str(a_dot_sh_file)])` there raises `OSError:
     [WinError 193] %1 is not a valid Win32 application`, even though the
-    script's own logic is entirely portable `/bin/sh`. GitHub's
-    `windows-latest` runners ship Git for Windows, which puts `bash.exe` on
-    PATH -- use that (or a bare `sh`) instead of executing the file
-    directly. This mirrors `.just/tests/test_picker_exclusion.py`'s
-    `posix_shell()` for the same reason. This is a capability check, not a
-    platform check: the `.sh` contract tests below run wherever a POSIX
-    shell is found, on any OS, and skip with this exact reason only when
-    one genuinely is not available.
+    script's own logic is entirely portable `/bin/sh`. `sftp.sh`/
+    `tailscale.sh` are not the shipped Windows transfer path (`sftp.ps1`
+    is, covered separately by `SftpPs1Tests`), so `SftpShTests`/
+    `TailscaleShTests` below unconditionally skip on `win32` regardless of
+    what this returns -- this helper and `sh_invocation()` stay in place
+    only for `PosixShellDiscoveryTests`' direct unit coverage of the
+    bash/sh preference order, and so `sh_invocation()` keeps working
+    correctly if a future non-Windows-gated caller needs it.
     """
     return shutil.which("bash") or shutil.which("sh")
 
@@ -438,8 +438,9 @@ class _TransferScriptContractTestsMixin:
 
 
 @unittest.skipIf(
-    sys.platform == "win32" and posix_shell() is None,
-    "no POSIX shell (bash/sh) found on PATH to run this .sh script on Windows",
+    sys.platform == "win32",
+    "unix transfer scripts (sftp.sh/tailscale.sh) are not the Windows path; "
+    "Windows ships sftp.ps1, covered by SftpPs1Tests",
 )
 class SftpShTests(_TransferScriptContractTestsMixin, unittest.TestCase):
     SCRIPT = SFTP_SH
@@ -450,8 +451,9 @@ class SftpShTests(_TransferScriptContractTestsMixin, unittest.TestCase):
 
 
 @unittest.skipIf(
-    sys.platform == "win32" and posix_shell() is None,
-    "no POSIX shell (bash/sh) found on PATH to run this .sh script on Windows",
+    sys.platform == "win32",
+    "unix transfer scripts (sftp.sh/tailscale.sh) are not the Windows path; "
+    "Windows ships sftp.ps1, covered by SftpPs1Tests",
 )
 class TailscaleShTests(_TransferScriptContractTestsMixin, unittest.TestCase):
     SCRIPT = TAILSCALE_SH

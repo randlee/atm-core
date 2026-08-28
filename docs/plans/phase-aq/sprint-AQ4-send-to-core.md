@@ -480,6 +480,21 @@ paths unchanged.
   `win32 or pwsh found`, honest skip otherwise, mirroring this suite's
   existing platform-gated tests). **SFTP leg satisfied:** run 33128348487
   (linux+macos PASS) provides live cross-host loopback-SSH transcripts.
+  **Windows scope (run 33138148783):** `SftpShTests`/`TailscaleShTests`
+  unconditionally skip on `win32` — `sftp.sh`/`tailscale.sh` are the
+  macOS/Linux transfer scripts, Windows ships `sftp.ps1`, and running the
+  `.sh` scripts under a discovered MSYS `bash` on `windows-latest` exercises
+  an unshipped configuration, not the Windows contract. `SftpPs1Tests` is
+  Windows's real coverage and must pass there: run 33138148783 surfaced a
+  genuine `sftp.ps1` defect — the example's fixed-`$RemoteAtmTemp`
+  placeholder (`atm-<destination-uid>`) used `<`/`>`, legal in a POSIX
+  filename on the real Unix receiver but reserved Win32/NTFS characters,
+  which broke `SftpPs1Tests`' local fake-ssh/fake-scp harness's `mkdir`
+  simulation on a real Windows sender (`test_happy_path_exact_argv_and_single_line_landed_dir`,
+  `test_copy_failure_fails_closed`); fixed by changing the placeholder to
+  `atm-REPLACE_WITH_DESTINATION_UID`, which carries the same "must
+  customize before use" intent without reserved characters. Unix behavior
+  (`sftp.sh`/`tailscale.sh`) is unchanged.
 - AC 7 (live cross-host transcript): the sftp.sh leg is complete via run
   33128348487 (evidence table above); the Tailscale leg remains a
   **FOLLOW-UP `AQ4-tailscale-m5`** (fleet `m5` host not reachable from
