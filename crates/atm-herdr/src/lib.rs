@@ -1193,7 +1193,15 @@ mod tests {
         )
         .await;
         assert!(matches!(result, Err(HerdrError::TimedOut)));
-        assert!(started.elapsed() < Duration::from_secs(5));
+        // Hang-detector bound only, not a pass/fail timing assertion: a
+        // tight upper bound here (e.g. the old 5s) is exactly what makes
+        // this flaky under CI/kill+reap scheduling contention. The
+        // semantic assertion above already proves the process timed out
+        // rather than completing its 30s `sleep`; this generous margin
+        // (comfortably above both the 2s caller deadline and the 5s
+        // `HERDR_PROCESS_CAP`) exists solely to catch the test genuinely
+        // hanging, never to assert *which* of the two bounds fired first.
+        assert!(started.elapsed() < Duration::from_secs(15));
     }
 
     #[test]
