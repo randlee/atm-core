@@ -225,21 +225,7 @@ pub(crate) fn build_replacement_handler(
         bare_cli,
         herdr_process,
     } = config;
-    let herdr_process = match herdr_process {
-        Some(process) => process,
-        None => {
-            let herdr_breaker = Arc::new(HerdrSpawnBreaker::new());
-            let process: Arc<dyn HerdrProcessAdapter> =
-                Arc::new(HerdrProcessInvoker::new(Arc::clone(&herdr_breaker)));
-            assembly.doctor_ports.herdr_breaker = Arc::new(HerdrBreakerDoctorAdapter {
-                breaker: Arc::clone(&herdr_breaker),
-            });
-            assembly.doctor_ports.herdr_presence = Arc::new(HerdrPresenceDoctorAdapter {
-                process: Arc::clone(&process),
-            });
-            process
-        }
-    };
+    let herdr_process = resolve_herdr_process(&mut assembly, herdr_process);
     let queue_wake_process = Arc::clone(&herdr_process);
     let (selector, recovery_sweep) = compose_queue_workers(
         assembly.service_runtime.clone(),
@@ -287,4 +273,25 @@ pub(crate) fn build_replacement_handler(
         None => handler,
     };
     Ok((Arc::new(handler), recovery_sweep))
+}
+
+fn resolve_herdr_process(
+    assembly: &mut RuntimeAssembly,
+    herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
+) -> Arc<dyn HerdrProcessAdapter> {
+    match herdr_process {
+        Some(process) => process,
+        None => {
+            let herdr_breaker = Arc::new(HerdrSpawnBreaker::new());
+            let process: Arc<dyn HerdrProcessAdapter> =
+                Arc::new(HerdrProcessInvoker::new(Arc::clone(&herdr_breaker)));
+            assembly.doctor_ports.herdr_breaker = Arc::new(HerdrBreakerDoctorAdapter {
+                breaker: Arc::clone(&herdr_breaker),
+            });
+            assembly.doctor_ports.herdr_presence = Arc::new(HerdrPresenceDoctorAdapter {
+                process: Arc::clone(&process),
+            });
+            process
+        }
+    }
 }
