@@ -2658,6 +2658,31 @@
    "minor": 0,
    "count_basis": "headline/reviewer",
    "evidence": "AQ4 #1055 @ f9eb08449 QA-2 closure (evidence run 4): B1 cfg(unix) gating for Windows test code in send.rs confirmed; B2 sftp.ps1 local fixed-value option (argv ssh,scp) + [Console]::Error diagnostics for remote failures verified; B3 Windows-correct harness with profile-containment record, NUL known-hosts sink, unix-only modes confirmed; B4 send.rs refactored \u2192 commands/send_fan_out.rs (RULE-003 compliance); B6 scratch ssh -F config via opt-in ATM_TRANSFER_SSH_CONFIG allow-list entry per ADR-055 decision (c) amended, flagged for arch review; FTQ-002/003 pipe draining confirmed; RBQA-F001 canonical atm_storage::RosterStore confirmed. Original CI failures were test-infra (sftp.ps1 round-trip, age_file read-only open on Windows) \u2014 no production sweeper change. Gates green incl. pwsh pytests. https://github.com/randlee/atm-core/pull/1055"
+  },
+  {
+   "run_id": "CI-AQ4-RUNNER-4",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "quality-mgr",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 clean-runner integration tests (run 4) @ f9eb08449 (GHA run 33135390308)",
+   "result_time_utc": "2026-08-28T13:50:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "FAIL",
+   "blockers": 1,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "Clean-runner test matrix (GHA run 33135390308 @ f9eb08449): ubuntu PASS (AQ4 transfer PASS, AQ2.5/AQ3/AQ1.9 restart-matrix PASS), macos PASS (AQ4 transfer PASS, AQ2.5/AQ3/AQ1.9 restart-matrix PASS), windows FAIL (AQ4 transfer FAIL: sftp.ps1 + containment under diagnosis, AQ2.5 PASS, AQ1.9 PASS, AQ3 skipped_no_tmux). Evidence artifacts committed byte-for-byte to #1055."
   }
  ],
  "follow_ups": [
