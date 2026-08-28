@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -95,6 +96,50 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
         ):
             with self.subTest(status=status):
                 self.assertEqual(0 if status in ("pass", "blocked_ambient_daemon", "skipped_no_sshd") else 1, expected)
+
+    def test_install_transfer_script_forces_0700_on_every_path_the_safety_check_inspects(self) -> None:
+        # Clean-runner CI (run 33126676155) refused the harness live with
+        # exactly this failure before this fix: ~/.atm/transfer created via
+        # a bare mkdir(parents=True) inherited 0755 from the runner's
+        # default umask 022, which
+        # crates/atm-core/src/transfer_script.rs::check_transfer_root_metadata
+        # (a real production safety check) correctly refuses.
+        import stat as stat_module
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "home"
+            # A permissive umask masking-in group/other bits, matching the
+            # exact CI condition this regression guards against, deliberately
+            # left in place around the call (not reset first) so the fix's
+            # explicit os.chmod calls -- not a favorable ambient umask -- are
+            # what this test actually exercises.
+            previous_umask = os.umask(0o022)
+            try:
+                info = module.install_transfer_script(home)
+            finally:
+                os.umask(previous_umask)
+
+            atm_dir = home / ".atm"
+            transfer_dir = atm_dir / "transfer"
+            installed = transfer_dir / module.TRANSFER_HOST
+
+            self.assertEqual(info["atm_dir_mode"], "0o700")
+            self.assertEqual(info["transfer_dir_mode"], "0o700")
+            self.assertEqual(info["script_mode"], "0o700")
+            self.assertEqual(stat_module.S_IMODE(atm_dir.stat().st_mode), 0o700)
+            self.assertEqual(stat_module.S_IMODE(transfer_dir.stat().st_mode), 0o700)
+            self.assertEqual(stat_module.S_IMODE(installed.stat().st_mode), 0o700)
+            self.assertEqual(installed.read_bytes(), (module.ROOT / "scripts" / "transfer" / "sftp.sh").read_bytes())
+
+    def test_install_transfer_script_is_idempotent_and_still_forces_0700_on_rerun(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "home"
+            module.install_transfer_script(home)
+            (home / ".atm" / "transfer").chmod(0o755)
+            info = module.install_transfer_script(home)
+            self.assertEqual(info["transfer_dir_mode"], "0o700")
 
     def test_write_sender_atm_config_writes_the_local_host_key_directly_into_cwd(self) -> None:
         module = load_module()

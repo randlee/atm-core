@@ -55,6 +55,7 @@ from pathlib import Path
 import re
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -459,13 +460,47 @@ def write_sender_atm_config(cwd: Path, local_host: str) -> Path:
     return config_path
 
 
-def install_transfer_script(home: Path) -> Path:
-    transfer_dir = home / ".atm" / "transfer"
-    transfer_dir.mkdir(parents=True, exist_ok=True)
+def _mode_octal(path: Path) -> str:
+    return oct(stat.S_IMODE(path.stat().st_mode))
+
+
+def install_transfer_script(home: Path) -> dict[str, Any]:
+    """Installs the unmodified `scripts/transfer/sftp.sh` example at
+    `<home>/.atm/transfer/localhost`, explicitly enforcing 0700 on the
+    `.atm` and `.atm/transfer` directories (`check_transfer_root_metadata`,
+    `crates/atm-core/src/transfer_script.rs`) and the script file itself
+    (`check_script_safety`) -- the only two paths ADR-055's Unix
+    transfer-script safety check inspects; nothing else under `home` is on
+    that check's path.
+
+    `os.makedirs(..., mode=0o700)`'s `mode` argument governs only the leaf
+    directory it creates (`transfer`), never any parent it also creates
+    along the way (`.atm`) -- Python's own documented behavior, mirroring
+    POSIX `mkdir -p`. Both `mkdir`/`makedirs`' `mode` argument and a bare
+    `Path.chmod` are additionally subject to the process umask (CI runners
+    commonly default to 022, which is exactly the 0755 the safety check
+    refused live on clean-runner CI, run 33126676155) unless the requested
+    mode has no bits in the umask's cleared positions -- 0700 has none, so
+    it is umask-proof, but this still `os.chmod`s every directory level
+    explicitly after creation rather than relying on that interaction.
+    """
+    atm_dir = home / ".atm"
+    transfer_dir = atm_dir / "transfer"
+    os.makedirs(transfer_dir, mode=0o700, exist_ok=True)
+    os.chmod(atm_dir, 0o700)
+    os.chmod(transfer_dir, 0o700)
+
     installed = transfer_dir / TRANSFER_HOST
     shutil.copyfile(ROOT / "scripts" / "transfer" / "sftp.sh", installed)
-    installed.chmod(0o700)
-    return installed
+    os.chmod(installed, 0o700)
+
+    return {
+        "installed_at": str(installed),
+        "source": str(ROOT / "scripts" / "transfer" / "sftp.sh"),
+        "atm_dir_mode": _mode_octal(atm_dir),
+        "transfer_dir_mode": _mode_octal(transfer_dir),
+        "script_mode": _mode_octal(installed),
+    }
 
 
 def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
@@ -541,11 +576,19 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
                     "receiver": add_roster_member(args.atm, env, home, RECEIVER, args.timeout, host=TRANSFER_HOST),
                 }
 
-                installed_script = install_transfer_script(home)
-                record["transfer_script"] = {
-                    "installed_at": str(installed_script),
-                    "source": str(ROOT / "scripts" / "transfer" / "sftp.sh"),
-                }
+                record["transfer_script"] = install_transfer_script(home)
+                # Not a bare `assert` (stripped under `python -O`): the
+                # whole point of installing at 0700 explicitly is to make
+                # the safety check pass, so a mode mismatch here must be a
+                # loud, unconditional harness failure, not a silently
+                # skippable assertion.
+                for mode_key in ("atm_dir_mode", "transfer_dir_mode", "script_mode"):
+                    recorded_mode = record["transfer_script"][mode_key]
+                    if recorded_mode != "0o700":
+                        raise RuntimeError(
+                            f"install_transfer_script did not achieve 0700 for {mode_key}: "
+                            f"got {recorded_mode} (record: {record['transfer_script']})"
+                        )
 
                 daemon = start_daemon(args.daemon, env, args.timeout)
                 daemon_process = daemon.pop("process")
