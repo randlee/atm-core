@@ -641,11 +641,20 @@ def _python_distribution_name_from_wheel(path: Path, expected: set[str]) -> str:
 
 def _python_distribution_name_from_sdist(path: Path, expected: set[str]) -> str | None:
     with tarfile.open(path, "r:gz") as archive:
-        metadata = [member for member in archive.getmembers() if member.name.endswith("/PKG-INFO")]
+        # Release-branch fix (v1.4.4, upstream sc-publish#74): match only the
+        # sdist's canonical root metadata file (`<rootdir>/PKG-INFO`). A
+        # standard setuptools sdist also legitimately contains the package's
+        # `*.egg-info/PKG-INFO` deeper in the tree, so matching every
+        # `*/PKG-INFO` member rejects well-formed sdists.
+        metadata = [
+            member
+            for member in archive.getmembers()
+            if member.name.endswith("/PKG-INFO") and member.name.count("/") == 1
+        ]
         if not metadata:
             return None
         if len(metadata) != 1:
-            raise SystemExit(f"{path}: expected exactly one sdist PKG-INFO file")
+            raise SystemExit(f"{path}: expected exactly one root-level sdist PKG-INFO file")
         extracted = archive.extractfile(metadata[0])
         if extracted is None:
             raise SystemExit(f"{path}: unable to read sdist PKG-INFO")
@@ -662,6 +671,7 @@ def cmd_verify_python_release_assets(args: argparse.Namespace) -> int:
         raise SystemExit(f"Python asset directory does not exist: {asset_dir}")
     expected = _python_distribution_expectations(manifest)
     found = {name: {"wheel": 0, "sdist": 0} for name in expected}
+    universal_wheel = {name: False for name in expected}
     destination = Path(args.copy_to) if args.copy_to else None
     if destination:
         destination.mkdir(parents=True, exist_ok=True)
@@ -672,6 +682,8 @@ def cmd_verify_python_release_assets(args: argparse.Namespace) -> int:
         if asset.suffix == ".whl":
             name = _python_distribution_name_from_wheel(asset, set(expected))
             found[name]["wheel"] += 1
+            if asset.name.endswith("-none-any.whl"):
+                universal_wheel[name] = True
         elif asset.name.endswith(".tar.gz"):
             name = _python_distribution_name_from_sdist(asset, set(expected))
             if name is None:
@@ -681,6 +693,15 @@ def cmd_verify_python_release_assets(args: argparse.Namespace) -> int:
             continue
         if destination:
             shutil.copy2(asset, destination / asset.name)
+
+    # Release-branch fix (v1.4.4, upstream sc-publish#75): the manifest's
+    # `wheels` list drives the per-OS build matrix, but a pure-Python build
+    # produces one platform-independent wheel (`*-none-any.whl`) whose
+    # identical filename deduplicates across matrix legs in the GitHub
+    # Release. Expect exactly one wheel for such distributions.
+    for name, entry in expected.items():
+        if universal_wheel[name] and found[name]["wheel"] == 1 and entry["wheel"] > 1:
+            entry["wheel"] = 1
 
     if found != expected:
         raise SystemExit(

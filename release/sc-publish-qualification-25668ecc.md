@@ -195,6 +195,75 @@ artifact builds:
     `--version` still fails closed, and `maturin sdist` builds
     `atm_graft-1.4.4.tar.gz` with the correctly derived dynamic version.
 
+11. **sdist metadata matcher rejects well-formed setuptools sdists** (found
+    on TestPyPI rehearsal run 33211063257, pypi-publish.yml "Select and
+    verify Python distributions"): `_python_distribution_name_from_sdist`
+    matched every `*/PKG-INFO` tar member and hard-failed on more than one.
+    A standard setuptools sdist legitimately contains both the root
+    `<pkg>-<ver>/PKG-INFO` and the package's `*.egg-info/PKG-INFO`
+    (hermes_atm-1.4.4.tar.gz carries `src/hermes_atm.egg-info/PKG-INFO`),
+    so the well-formed hermes-atm sdist was rejected before any upload
+    began. The sdist itself is NOT defective. Fix: match only the canonical
+    root-level `<rootdir>/PKG-INFO`; still fail closed on zero or multiple
+    root matches. Upstream:
+    [sc-publish #74](https://github.com/randlee/sc-publish/issues/74).
+12. **Asset-count expectation wrong for pure-Python wheels** (found only by
+    local rehearsal of fix 11 against the real v1.4.4 release assets —
+    would have failed the next CI dispatch): `verify-python-release-assets`
+    expects `len(wheels)` wheel files per distribution, but the manifest's
+    `wheels` list drives the per-OS *build matrix*, and a pure-Python
+    setuptools build produces one platform-independent `*-none-any.whl`
+    whose identical filename deduplicates across the three matrix legs in
+    the GitHub Release (hermes-atm: expected 3, release correctly holds 1).
+    Fix: when a distribution's found wheel is a single universal wheel,
+    expect exactly one; every other mismatch still fails closed (verified:
+    a removed platform wheel and a duplicate universal wheel both still
+    fail). Upstream:
+    [sc-publish #75](https://github.com/randlee/sc-publish/issues/75).
+13. **`pypi-publish.yml` pins its checkout to the immutable release tag**
+    (found while verifying that fixes 11–12 would actually take effect on
+    re-dispatch): both jobs check out `ref: ${{ inputs.tag }}`, but the
+    workflow never builds from source — the checkout exists only to supply
+    the verify tooling and manifest. Tag `v1.4.4` (e8a5b1c1b) predates
+    every round-3 script fix, so a re-dispatch after merging fixes 11–12 to
+    `main` would have run the tag's frozen `release_artifacts.py` and
+    failed identically — the immutable tag permanently bricks PyPI
+    publication on any verify-tooling defect. Fix: drop the `ref:` pins so
+    both jobs check out the dispatch ref (main), mirroring `release.yml`'s
+    model (immutable tag for artifacts — `gh release download` stays pinned
+    to the tag and `verify-published-release` validates via the API — with
+    tooling from current main). Upstream:
+    [sc-publish #76](https://github.com/randlee/sc-publish/issues/76).
+
+Round-3 full-pipeline rehearsal (every remaining pypi-publish.yml step,
+per the standing "no surprises" rule — collect all defects in one pass
+rather than one merge cycle per CI discovery):
+
+- `channel-config --channel pypi` → valid JSON; `test_repository=testpypi`,
+  `production_repository=pypi`.
+- `build-plan` → `python_upload_tool=maturin` (correct: maturin
+  distributions present).
+- The "Select configured Python repository" inline snippet run verbatim
+  with the real channel JSON → `PYPI_REPOSITORY=testpypi` (target=testpypi)
+  and `PYPI_REPOSITORY=pypi` (target=production).
+- `twine check` (twine 6.1.0, the kit-pinned uploader version) over all 10
+  release dist files → 10/10 PASSED. The maturin wheels/sdists warn about a
+  missing `long_description` (empty PyPI description page — cosmetic, not
+  an upload blocker; candidate future polish, not a v1.4.4 gate).
+- maturin 1.9.4 upload semantics verified in its pinned source
+  (`src/upload.rs` at tag v1.9.4): `testpypi` and `pypi` repository names
+  are built in (no `.pypirc` needed), token read from `MATURIN_PYPI_TOKEN`,
+  and `--skip-existing` is supported. Upload itself is deliberately NOT
+  rehearsed locally (tokens are CI secrets; maturin falls back to keyring
+  credentials, so a local invocation risks an accidental real publish).
+
+Round-3 rehearsal evidence (fixes 11–12): the exact failing CI step was
+rehearsed verbatim against the real v1.4.4 GitHub Release assets
+(`verify-python-release-assets --manifest release/publish-artifacts.toml`
+over the downloaded `*.whl`/`*.tar.gz` set) — passes and selects all 10
+distributions (3+1 atm-graft, 3+1 atm-query, 1+1 hermes-atm); both
+negative paths above still exit nonzero.
+
 Round-3 rehearsal evidence (fix 9): the fix is byte-for-byte the component list and
 rationale already running green on every sprint CI maturin job (`ci.yml`
 "Install Rust toolchain": `components: clippy, rustfmt` with the same race
