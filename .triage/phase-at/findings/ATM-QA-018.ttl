@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-018>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-018" ;
+  triage:title "CHANGELOG.md 1.4.4 entry still cites the superseded sc-publish pin (42e0fcea, 49 files) after this PR advances the pin to 25668ecc (54 files)" ;
+  triage:description "CHANGELOG.md's already-drafted '## 1.4.4' section states the publish surface is cut over to the kit at 'pinned revision 42e0fcea (49 byte-copied files)'. This PR (chore/sc-publish-repin-25668ec) advances release/sc-publish-pin.toml to revision 25668ecc164261be676c9414c4f603b18ab74c91, and the qualification receipt records a byte-parity sweep of 54 byte-identical files (kit grew 49 -> 54 files vs the prior pin). CHANGELOG.md was not touched by this PR despite being listed among the review's phase_or_sprint_docs, so the released changelog would ship stating the wrong revision and file count for what actually installs at v1.4.4 cut time. Independently verified by quality-mgr via direct grep of CHANGELOG.md:6 on commit 70739a990 (confirmed literal string '42e0fcea', '49 byte-copied')." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-28T03:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RELPREP-1069 ;
+  triage:foundAt "2026-08-28T03:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-018/REPIN-25668EC-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-018/REPIN-25668EC-1>
+  a triage:Occurrence ;
+  triage:file "CHANGELOG.md" ;
+  triage:line 6 ;
+  triage:snippet "the installed `sc-publish` kit (pinned revision `42e0fcea`, 49 byte-copied files)" ;
+  triage:status "open" ; triage:closed false ;
+  triage:branch "chore/sc-publish-repin-25668ec" ; triage:headSha "70739a990" ;
+  triage:occursIn <urn:atm:triage:worktree/REPIN-25668EC/70739a990-b> .
+
+<urn:atm:triage:worktree/REPIN-25668EC/70739a990-b>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/chore-sc-publish-repin-25668ec" ;
+  triage:branch "chore/sc-publish-repin-25668ec" ;
+  triage:headSha "70739a990" ;
+  triage:orderIndex 1 .

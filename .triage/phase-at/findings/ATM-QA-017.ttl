@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-017>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-017" ;
+  triage:title "sc-publish pin advanced to 25668ecc despite README.sc-publish.md's own qualification-before-pin-advance gate reporting 2 of 5 legs pending and the kit test suite not fully passing" ;
+  triage:description "README.sc-publish.md ('Pinning, bootstrap, and qualification' section, lines 61-68) states: 'A new kit revision is blessed for the org only after, on at least one real consumer repository: a clean install from the candidate revision, a clean repeat --dry-run (exit 0, no drift), a passing kit test suite (pytest .github/scripts/tests/ with the pinned renderer), a live release-candidate tag cut, and one post-release channel leg retry. Record the evidence in a receipt, then advance every consumer's pin to the blessed SHA together.' release/sc-publish-qualification-25668ecc.md's own evidence table records 'Live release-candidate tag cut' and 'Post-release leg retry' as status 'pending — satisfied by the atm-core v1.4.4 candidate cut...' / 'pending — satisfied by a v1.4.4 post-release channel leg retry', i.e. legs this very PR's downstream release is meant to satisfy. The kit test suite result is 101 passed / 8 skipped / 1 failed, not literally 'passing' (the receipt's own carve-out explaining the 1 failure as kit-repo-only-by-construction is a reasonable technical argument but is not itself sanctioned by README.sc-publish.md's gate text). Despite 2 of 5 legs being self-reported pending and the test-suite clause not literally satisfied, release/sc-publish-pin.toml was already advanced to 25668ecc164261be676c9414c4f603b18ab74c91 in this PR, ahead of the gate's own stated sequence ('...then advance every consumer's pin'). Independently verified by quality-mgr by direct read of README.sc-publish.md:61-68 and release/sc-publish-qualification-25668ecc.md's evidence table on commit 70739a990. Filed by req-qa as ATM-QA-001 (Blocking) and ATM-QA-003 (Important, test-suite sub-clause); consolidated here as one finding since both cite the same gate text and the same required correction." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "acceptance-gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-28T03:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RELPREP-1069 ;
+  triage:foundAt "2026-08-28T03:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-017/REPIN-25668EC-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-017/REPIN-25668EC-1>
+  a triage:Occurrence ;
+  triage:file "README.sc-publish.md" ;
+  triage:line 61 ;
+  triage:snippet "A new kit revision is blessed for the org only after ... a live release-candidate tag cut, and one post-release channel leg retry. Record the evidence in a receipt, then advance every consumer's pin to the blessed SHA together." ;
+  triage:status "open" ; triage:closed false ;
+  triage:branch "chore/sc-publish-repin-25668ec" ; triage:headSha "70739a990" ;
+  triage:occursIn <urn:atm:triage:worktree/REPIN-25668EC/70739a990> .
+
+<urn:atm:triage:worktree/REPIN-25668EC/70739a990>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/chore-sc-publish-repin-25668ec" ;
+  triage:branch "chore/sc-publish-repin-25668ec" ;
+  triage:headSha "70739a990" ;
+  triage:orderIndex 1 .
