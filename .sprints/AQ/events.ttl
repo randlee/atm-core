@@ -136,3 +136,25 @@ triage:c14 a triage:Completion ;
     triage:prBranch "feature/aq-6-ecosystem-preflight" ;
     triage:headCommit "08fa8fd04" ;
     triage:note "PR merge gated on #1059 (AQ5)" .
+
+triage:a15 a triage:Assignment ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-28T05:30:00Z"^^xsd:dateTime ;
+    triage:note "cycle-4 re-dispatch: merge-forward #1055 fix d0d54e004 into #1056 (stale-base resolve)" .
+
+triage:m1 a triage:Merge ;
+    triage:ofPR "#1054" ;
+    triage:mergeCommit "deed32e93" ;
+    triage:headCommit "e7a488e5a" ;
+    triage:mergedAt "2026-08-28T06:15:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ3 sprint #1054 merged to integration branch (QA-final6 PASS 14/14)" .
+
+triage:m2 a triage:Merge ;
+    triage:ofPR "#1070" ;
+    triage:mergeCommit "26fb5bc4d" ;
+    triage:headCommit "9327b558b" ;
+    triage:mergedAt "2026-08-28T06:30:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ1.9 sprint #1070 restart-matrix crash guard merged (light gate PASS)" .
