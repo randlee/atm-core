@@ -3258,6 +3258,31 @@
    "minor": 0,
    "count_basis": "evidence",
    "evidence": "AQ4 #1055 head 5b8a72ff4 (GHA run 33141941621) evidence run 8: artifacts committed byte-for-byte @ 21f00edb1 (linux PASS, macOS PASS, windows FAIL). CI @ 21f00edb1 (run 33141901187): 1 ubuntu Test failure (commands::send_to::tests::invoke_transfer_script_rejects_multi_line_stdout; green @ a122d7ad6, harness-only changes since); root-cause dispatched under no-flaky policy. Windows-leg diagnosis in progress (DefaultShell configured; remote mkdir still failing)."
+  },
+  {
+   "run_id": "CI-PR1070-FINAL",
+   "aich_sprint": "AQ1.9",
+   "phase_sprint": "AQ1.9",
+   "pass": null,
+   "run_type": "ci",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "quality-mgr",
+   "assignment_shared_path": null,
+   "assignment_summary": "PR #1070 @ 9327b558b CI final gate (restart-matrix crash guard)",
+   "result_time_utc": "2026-08-29T01:30:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "PASS",
+   "blockers": 0,
+   "important": 0,
+   "minor": 0,
+   "count_basis": "harness-written",
+   "evidence": "PR #1070 @ 9327b558b: CI run 33141558146 fully GREEN; light gate PASS; merge-ready."
   }
  ],
  "follow_ups": [
