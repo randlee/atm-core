@@ -188,3 +188,19 @@ triage:m2 a triage:Merge ;
     triage:mergedAt "2026-08-28T06:30:00Z"^^xsd:dateTime ;
     triage:target "integrate/phase-aq" ;
     triage:note "AQ1.9 sprint #1070 restart-matrix crash guard merged (light gate PASS)" .
+
+triage:m3 a triage:Merge ;
+    triage:ofPR "#1055" ;
+    triage:mergeCommit "0adce24d6" ;
+    triage:headCommit "8a3dd0d9c" ;
+    triage:mergedAt "2026-08-28T06:00:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ4 sprint #1055 merged to integration branch (QA-3 PASS-with-deferral 7/9 AC; Windows loopback deferred)" .
+
+triage:m4 a triage:Merge ;
+    triage:ofPR "#1056" ;
+    triage:mergeCommit "6c70f88ce" ;
+    triage:headCommit "d25b049d7" ;
+    triage:mergedAt "2026-08-28T10:30:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ2.7 sprint #1056 merged to integration branch (QA-5 PASS closing gate; 12/14 sprints on integrate)" .
