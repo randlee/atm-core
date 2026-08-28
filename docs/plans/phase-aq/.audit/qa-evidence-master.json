@@ -1582,7 +1582,7 @@
    "important": 0,
    "minor": 3,
    "count_basis": "headline/reviewer",
-   "evidence": "8/9 deliverables @ 2be7346c8. Blocking: ATM-QA-010 release-preflight.yml would fail every dispatch — no Wyvern install. Minors: subn count guard, dry-run-only happy-path test, AC4 run ids pending. Fix head b8ccdad8a: Wyvern install in release-preflight + bootstrap, exact-one-match guard, non-dry-run test, Windows lint fix, paired WYVERN_PIN agreement check. CI 33127761449 (linux/windows green, macOS queued). QA-3 pending."
+   "evidence": "8/9 deliverables @ 2be7346c8. Blocking: ATM-QA-010 release-preflight.yml would fail every dispatch \u2014 no Wyvern install. Minors: subn count guard, dry-run-only happy-path test, AC4 run ids pending. Fix head b8ccdad8a: Wyvern install in release-preflight + bootstrap, exact-one-match guard, non-dry-run test, Windows lint fix, paired WYVERN_PIN agreement check. CI 33127761449 (linux/windows green, macOS queued). QA-3 pending."
   },
   {
    "run_id": "QA-AQ3-R4",
@@ -1882,7 +1882,57 @@
    "important": 4,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "11/14 @ 8cb881dfe: ATM-QA-AQ5-001 pickers now exclude dead/idle members (real exclusion proven, traceability confirmed), ATM-QA-AQ5-002 traceability table correctly mapped (entry/exit confirmed), ATM-QA-AQ5-003 Wyvern pick-member.html vendored from randlee/wyvern#140 (real invocation contract proven), ATM-QA-AQ5-004 manual GUI E2E absent — ruling (fenix): deferred to Phase AQ closeout as AQ5-gui-e2e (owner Rand, macOS Finder first, then Explorer/Nautilus). Important: no OS notification for GUI-entry stderr, README Nautilus path drift, committed fixtures unused by harness. R1/R15 inherit. Minors (broken link, PRD R4 wording) docs fix in progress. wyvern#140 reference confirmed. Real contract delivered."
+   "evidence": "11/14 @ 8cb881dfe: ATM-QA-AQ5-001 pickers now exclude dead/idle members (real exclusion proven, traceability confirmed), ATM-QA-AQ5-002 traceability table correctly mapped (entry/exit confirmed), ATM-QA-AQ5-003 Wyvern pick-member.html vendored from randlee/wyvern#140 (real invocation contract proven), ATM-QA-AQ5-004 manual GUI E2E absent \u2014 ruling (fenix): deferred to Phase AQ closeout as AQ5-gui-e2e (owner Rand, macOS Finder first, then Explorer/Nautilus). Important: no OS notification for GUI-entry stderr, README Nautilus path drift, committed fixtures unused by harness. R1/R15 inherit. Minors (broken link, PRD R4 wording) docs fix in progress. wyvern#140 reference confirmed. Real contract delivered."
+  },
+  {
+   "run_id": "QA-AQ3-R2",
+   "aich_sprint": "AQ3",
+   "phase_sprint": "AQ3",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": null,
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ3 #1054 evidence run 2 (33126990425 @ 35a28588a)",
+   "result_time_utc": null,
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": null,
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "AQ3 #1054 evidence run 2 in progress: GHA 33126990425 @ 35a28588a"
+  },
+  {
+   "run_id": "QA-AQ4-R2",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": null,
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 harness fix head d0d54e004 (transfer dir/script forced 0o700; +2 tests incl. umask 022)",
+   "result_time_utc": "2026-08-28T03:00:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "AQ4 #1055 harness fix head d0d54e004 (transfer dir/script forced 0o700 \u2014 the exact paths transfer_script.rs safety check inspects; +2 tests incl. umask 022); evidence run 3 dispatched."
   }
  ],
  "follow_ups": [
