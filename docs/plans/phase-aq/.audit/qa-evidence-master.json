@@ -2957,7 +2957,7 @@
    "important": null,
    "minor": null,
    "count_basis": "evidence",
-   "evidence": "AQ4 #1055 clean-runner evidence run 6 (job 33137262962 @ c510a4745, head-verified): ubuntu and macOS Test lanes PASS (both 3/3 matrix tests passing). Windows Test lane FAIL: evidence artifact integrity issue — Windows harness crashed before write_evidence(), leaving STALE committed record from run 4 (commit f9eb08449, synthesized_env null) instead of expected c510a4745 (synthesized PATH). Linux record correct (c510a4745). INTEGRITY FIX DISPATCHED: harnesses now clear their output paths at start and emit status 'harness_crashed' with traceback on exception. Reviewers must verify record commit == expected head, not only cmp vs artifact. Windows crash root cause pending job log analysis. #1055 @ a122d7ad6 CI watching."
+   "evidence": "AQ4 #1055 clean-runner evidence run 6 (job 33137262962 @ c510a4745, head-verified): ubuntu and macOS Test lanes PASS (both 3/3 matrix tests passing). Windows Test lane FAIL: evidence artifact integrity issue \u2014 Windows harness crashed before write_evidence(), leaving STALE committed record from run 4 (commit f9eb08449, synthesized_env null) instead of expected c510a4745 (synthesized PATH). Linux record correct (c510a4745). INTEGRITY FIX DISPATCHED: harnesses now clear their output paths at start and emit status 'harness_crashed' with traceback on exception. Reviewers must verify record commit == expected head, not only cmp vs artifact. Windows crash root cause pending job log analysis. #1055 @ a122d7ad6 CI watching."
   },
   {
    "run_id": "CI-AQ4-CI-OBSERVABILITY-PYTEST-R1",
@@ -3083,6 +3083,31 @@
    "minor": null,
    "count_basis": "headline/reviewer",
    "evidence": "AQ4 #1055 @ c76314cd1 CI 33138148783 (Just lint windows-latest): errors=16 hypothesis confirmed. SftpShTests and TailscaleShTests FAIL on path/argv shape under bash on Windows. SftpPs1Tests fails test_copy_failure_fails_closed and test_happy_path_exact_argv_and_single_line_landed_dir. Ruling (fenix): unix .sh transfer scripts are not the shipped Windows path \u2192 win32 skip with explicit reason for SftpShTests/TailscaleShTests (scope in AC7 test map); sftp.ps1 (shipped) must pass for real \u2014 fix dispatched from the full Windows log."
+  },
+  {
+   "run_id": "QA-AQ4-R1-verdict",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": null,
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 Send-To core CI fully green (all 10 committed records match harness heads)",
+   "result_time_utc": "2026-08-28T21:40:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "PASS",
+   "blockers": 0,
+   "important": 0,
+   "minor": 0,
+   "count_basis": "harness-written core fields",
+   "evidence": "AQ4 #1055 @ a122d7ad6: CI run 33139895101 fully GREEN on all lanes including Windows lint (first fully green Windows lint on branch; .sh contract tests exec'd on Windows, sftp.ps1 NTFS placeholder fixed). Evidence commit-field audit: all 10 committed records match their run heads with harness-written core fields."
   }
  ],
  "follow_ups": [
