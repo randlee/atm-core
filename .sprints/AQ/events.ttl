@@ -34,6 +34,11 @@ triage:c3 a triage:Completion ;
     triage:ofSprint triage:AQ1-5 ;
     triage:at "2026-08-27T01:29:54Z"^^xsd:dateTime .
 
+triage:c18 a triage:QACompletion ;
+    triage:ofSprint triage:AQ1-5 ;
+    triage:verdict "PASS" ;
+    triage:at "2026-08-28T00:15:00Z"^^xsd:dateTime .
+
 triage:a4 a triage:Assignment ;
     triage:ofSprint triage:AQ1-6 ;
     triage:assignedTo "cipher" ;

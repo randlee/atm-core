@@ -260,6 +260,31 @@
    "evidence": "14/14 deliverables, 0 blocking, 1 important (inert sealed-double allowlist entry \u2014 scanner never visits cfg(test) modules in src/); fix dispatched. https://github.com/randlee/atm-core/pull/1045#issuecomment-5433862555"
   },
   {
+   "run_id": "QA-AQ1.5-R3",
+   "aich_sprint": "AQ1-5",
+   "phase_sprint": "AQ1.5",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "team-lead",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ1.5 regate final QA PASS",
+   "result_time_utc": "2026-08-28T00:15:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "PASS",
+   "blockers": 0,
+   "important": 0,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "Final Quality Report \u2014 Final Verdict: PASS posted by quality-mgr as PR #1045 comment @ 1e21ff849; merged to integrate/phase-aq @ 1b89d2b7b; backfilled 2026-08-28 from PR #1045 comment history (quality-mgr phase-gate finding on #1079)"
+  },
+  {
    "run_id": "QA-AQ1.8-R1",
    "aich_sprint": "AQ1-8",
    "phase_sprint": "AQ1.8",
@@ -3820,7 +3845,7 @@
    "assignment_message_id": null,
    "assignment_from": "team-lead",
    "assignment_shared_path": null,
-   "assignment_summary": "Phase AQ integrate→develop PR #1079 opened from head 8d6a90e10 (AQ5 evidence file, wyvern#139)",
+   "assignment_summary": "Phase AQ integrate\u2192develop PR #1079 opened from head 8d6a90e10 (AQ5 evidence file, wyvern#139)",
    "result_time_utc": null,
    "result_time_pst": null,
    "result_message_id": null,
@@ -3832,7 +3857,7 @@
    "important": null,
    "minor": null,
    "count_basis": "phase-closure",
-   "evidence": "Phase AQ PR #1079 integrate/phase-aq → develop opened 2026-08-28 from head 8d6a90e10 (AC5 phase-closure links: AQ5 evidence file, wyvern#139)."
+   "evidence": "Phase AQ PR #1079 integrate/phase-aq \u2192 develop opened 2026-08-28 from head 8d6a90e10 (AC5 phase-closure links: AQ5 evidence file, wyvern#139)."
   }
  ],
  "follow_ups": [
