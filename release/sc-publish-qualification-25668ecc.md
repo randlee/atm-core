@@ -57,3 +57,36 @@ suite, so no consumer CI impact. Filed upstream as
 [sc-publish #65](https://github.com/randlee/sc-publish/issues/65) for the next
 qualified revision; no kit change made mid-qualification per the multi-repo
 qualification rule.
+
+## Release-branch fixes (release/v1.4.4 only — documented kit drift)
+
+The v1.4.4 final Release Preflight (run 33150049684, main tip 78913af39)
+surfaced three defects in the kit's own workflows — the first real execution
+of these paths on a crates-publishing consumer. Per Rand's rulings
+(2026-08-28): sc-lint is a lint tool owned by repo CI (`just lint` runs it —
+the vendored workspace analyzer — extensively, every sprint); sc-publish is
+git workflows and agent prompts; the publish pipeline must run the same
+lint/build/test sprint CI runs plus only publish-specific checks, and there
+must be NO surprises at publish time. Fixes applied directly on
+`release/v1.4.4` (commit 9f5bae568), bypassing `develop` per the
+release-state strategy's release-fix path:
+
+1. Removed the sc-lint install/smoke gate from
+   `.github/actions/setup-lint-toolchain` — preflight was downloading
+   published sc-lint 0.4.0 while the repo runs the vendored workspace
+   analyzer (version/schema skew). Upstream deletion:
+   [sc-publish #67](https://github.com/randlee/sc-publish/issues/67).
+2. Implemented the `crates_io` credential-liveness arm in
+   `release-preflight.yml` (read-only probe of `https://crates.io/api/v1/me`).
+   Upstream: [sc-publish #68](https://github.com/randlee/sc-publish/issues/68).
+3. Added `if: always()` to the five evidence steps that skipped on an earlier
+   hard failure, so one run collects complete evidence. Upstream:
+   [sc-publish #69](https://github.com/randlee/sc-publish/issues/69).
+
+These are deliberate, temporary drift from pin 25668ecc, scoped to the
+release branch; `develop` stays byte-clean against the pin and re-converges
+on the next qualified sc-publish revision. All preflight gates were rehearsed
+locally green before any CI dispatch (fmt, clippy, workspace tests,
+validate-manifest, publish-order, verify-version, version-lockstep, helper
+presence; the crates_io liveness probe and registry-state checks execute
+first in CI since publish tokens exist only as Actions secrets).
