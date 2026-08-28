@@ -2808,6 +2808,31 @@
    "minor": null,
    "count_basis": "headline/reviewer",
    "evidence": "AQ4 #1055 @ f9eb08449: CI run 33135353514 (Just lint windows-latest) RED. 3 pytest failures on Windows (SFTP module, Windows-specific Path handling): SftpPs1Tests.test_happy_path_exact_argv_and_single_line_landed_dir, SftpPs1Tests.test_ssh_config_override_is_passed_through_when_set, test_write_scratch_ssh_client_config_uses_dev_null_known_hosts_on_unix (NUL variant needed on Windows). Fix dispatched on top of c510a4745. c510a4745's own CI and evidence run 5 in progress."
+  },
+  {
+   "run_id": "CI-AQ4-RUNNER-5",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": false,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "quality-mgr",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 clean-runner evidence run 5 (GHA run 33136767284); ubuntu + macOS AQ4 transfer PASS; Windows leg FAIL under diagnosis",
+   "result_time_utc": "2026-08-28T16:00:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "FAIL",
+   "blockers": 1,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "AQ4 #1055 @ c510a4745 (GHA run 33136767284): Clean-runner matrix run 5: ubuntu PASS (transfer tests 3/3), macos PASS (transfer tests 3/3); Windows FAIL (pytest-fixture NUL variant issues from CI-AQ4-LINT-WINDOWS-PYTEST-R1). Windows pytest-fixture fix in progress in parallel. Pending full matrix rerun."
   }
  ],
  "follow_ups": [
