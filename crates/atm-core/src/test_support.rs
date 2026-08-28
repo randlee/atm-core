@@ -1,12 +1,17 @@
 #![cfg(any(test, feature = "test-utils"))]
 
 #[cfg(any(test, feature = "test-utils"))]
+use std::collections::HashMap;
+#[cfg(any(test, feature = "test-utils"))]
 use std::ffi::{OsStr, OsString};
 #[cfg(any(test, feature = "test-utils"))]
 use std::sync::OnceLock;
 
 #[cfg(any(test, feature = "test-utils"))]
 use parking_lot::{RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard};
+
+#[cfg(any(test, feature = "test-utils"))]
+use crate::atm_temp::EnvSource;
 
 pub const TEST_TEAM: &str = "test-team";
 pub const TEST_SENDER: &str = "sender-a";
@@ -105,6 +110,49 @@ pub fn remove_env_var<K: AsRef<OsStr>>(key: K) {
     // SAFETY: test callers acquire the shared test env lock before mutating
     // the process environment.
     unsafe { std::env::remove_var(key) }
+}
+
+/// A deterministic, in-memory [`EnvSource`] for tests that need to inject
+/// environment values into production code that reads through the
+/// `EnvSource` seam, without mutating the real (process-global) process
+/// environment via [`EnvGuard`].
+///
+/// Prefer this over `EnvGuard` whenever the code under test accepts an
+/// `&dyn EnvSource` parameter: it needs no shared lock, has no cross-test
+/// interference risk, and does not require `std::env::var` callers
+/// elsewhere in the process to cooperate with a guard.
+#[cfg(any(test, feature = "test-utils"))]
+#[derive(Debug, Default, Clone)]
+pub struct FakeEnvSource(HashMap<String, String>);
+
+#[cfg(any(test, feature = "test-utils"))]
+impl FakeEnvSource {
+    /// An env source that reports every key as unset.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self::default()
+    }
+
+    /// Builds a fake env source from `(key, value)` pairs. A `None` value
+    /// leaves that key unset, matching [`EnvGuard::set_many`]'s shape so
+    /// call sites can switch between the two with a minimal diff.
+    #[must_use]
+    pub fn new<'a, const N: usize>(vars: [(&'a str, Option<&'a str>); N]) -> Self {
+        let mut map = HashMap::new();
+        for (key, value) in vars {
+            if let Some(value) = value {
+                map.insert(key.to_string(), value.to_string());
+            }
+        }
+        Self(map)
+    }
+}
+
+#[cfg(any(test, feature = "test-utils"))]
+impl EnvSource for FakeEnvSource {
+    fn var(&self, key: &str) -> Option<String> {
+        self.0.get(key).cloned()
+    }
 }
 
 /// Captures `tracing` events emitted by `f` **on the calling thread**, into
