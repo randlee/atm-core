@@ -1,0 +1,113 @@
+name: Publish Crates
+
+# Standalone crates.io retry leg. Production publication normally happens in
+# release.yml; this workflow re-publishes only the crates still missing for an
+# already-published tag, so a failed crates leg is retryable in isolation
+# without re-running the release gate or rebuilding any artifact. It reads the
+# ordered publish plan from release/publish-artifacts.toml and may be safely
+# re-dispatched for the same tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Published GitHub Release tag to publish (e.g. v1.4.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-crates-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  verify-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: ./.github/actions/verify-published-release
+        with:
+          release_tag: ${{ inputs.tag }}
+
+  publish-crates:
+    needs: verify-release
+    runs-on: ubuntu-latest
+    environment: crates-io
+    env:
+      RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Read build plan from release manifest
+        id: build_plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan="$(python3 .github/scripts/release_artifacts.py build-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
+          echo "rust_toolchain=$(jq -r '.rust_toolchain' <<<"${plan}")" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.build_plan.outputs.rust_toolchain }}
+
+      - name: Install Linux native build deps
+        uses: ./.github/actions/install-linux-native-deps
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Publish crates in order (idempotent)
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          contracts="$(dirname "${RELEASE_ARTIFACT_MANIFEST}")/publish-channel-contracts.toml"
+
+          # Exact, contract-derived already-published lookup (200/404 state
+          # machine); fuzzy registry text search is index-lagged and ranked.
+          crate_exists() {
+            local crate="$1"
+            local version="$2"
+            local url status
+            url="$(python3 .github/scripts/release_artifacts.py public-registry-inquiry-plan \
+              --contracts "${contracts}" --channel crates_io --name "${crate}" --version "${version}" \
+              | jq -r '.checks[0].version_lookup_url')"
+            state="$(python3 .github/scripts/release_artifacts.py registry-status --url "${url}")"
+            case "${state}" in
+              published) return 0 ;;
+              absent) return 1 ;;
+              *)
+                echo "crates.io state for ${crate}@${version} is indeterminate (state ${state})" >&2
+                exit 1
+                ;;
+            esac
+          }
+
+          publish_if_missing() {
+            local crate="$1"
+            local wait_seconds="${2:-0}"
+            if crate_exists "$crate" "$version"; then
+              echo "${crate} ${version} already published; skipping"
+              return 0
+            fi
+            cargo publish -p "$crate" --locked
+            if [[ "$wait_seconds" != "0" ]]; then
+              sleep "$wait_seconds"
+            fi
+          }
+
+          while IFS='|' read -r package wait_secs; do
+            publish_if_missing "$package" "${wait_secs:-0}"
+          done < <(python3 .github/scripts/release_artifacts.py list-publish-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")

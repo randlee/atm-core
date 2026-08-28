@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-010>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-010" ;
+  triage:title ".just/tests/test_validate_release.py missing the AT.2 Test Ownership Rule module docstring" ;
+  triage:description ".just/tests/test_validate_release.py is a retained release test (disposition retained-atm-owned-data-deferred-until-first-kit-release-receipt per the AT.2 receipt) but carries no module-level docstring recording its ATM-owned-data rationale, unlike every other retained .just release test touched this sprint. Violates AT.2's own Test Ownership Rule and Deliverable #3 ('Retained-file rationales recorded in module docstrings'). Reported by req-qa (ATM-QA-RECHECK-001) in QA pass AT2-QA-R1 on PR #1064." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-27T20:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT2 ;
+  triage:foundAt "2026-08-27T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-010/PAT-S2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-010/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-27T21:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-010/PAT-S2-1>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_validate_release.py" ;
+  triage:line 1 ;
+  triage:snippet "(no module-level docstring; only a class docstring at line 30)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "b7f8c189872f4a07b1329fc3f0af911130968b88" ;
+  triage:occursIn <urn:atm:triage:worktree/PAT-S2/b7f8c189> .
+
+<urn:atm:triage:worktree/PAT-S2/b7f8c189>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature-pat-s2-legacy-publish-deletion" ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "b7f8c189872f4a07b1329fc3f0af911130968b88" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/ATM-QA-010/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_validate_release.py" ;
+  triage:line 1 ;
+  triage:snippet "quality-mgr AT2-QA-R2 re-verification: module now opens with the docstring \"ATM-owned consumer-contract tests retained until the first kit-release receipt.\"; confirmed independently by arch-qa, ruthless-boundary-qa, and req-qa on PR #1064" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "a9697994ada4bd00b84b971269ead48d897808ba" ;
+  triage:occursIn <urn:atm:triage:worktree/PAT-S2/a9697994> .
+
+<urn:atm:triage:worktree/PAT-S2/a9697994>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature-pat-s2-legacy-publish-deletion" ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "a9697994ada4bd00b84b971269ead48d897808ba" ;
+  triage:orderIndex 2 .

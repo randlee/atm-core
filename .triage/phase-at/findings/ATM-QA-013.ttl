@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-013>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-013" ;
+  triage:title "AT.1 sprint-doc frontmatter never flipped to complete; README's status-flip convention has no carve-out for authorization-gated terminal sprints" ;
+  triage:description "docs/plans/phase-at/AT.1-install-parity-and-publish.md:9 still reads status: in-progress even though AT.1 merged long ago, has a filed receipt (docs/plans/phase-at/receipts/AT.1-receipt.md, status install-parity-complete), and AT.2 (must_follow AT.1 per README.md:129) is already merged with status: complete -- which could not be true if AT.1 were genuinely still in-progress. The phase README's own Sprint Sequence convention ('frontmatter status: flips to complete in the same PR that merges the sprint's final commit') is unconditional and has no carve-out for a sprint whose deliverables are structurally complete but whose publish legs remain permanently authorization-gated (unlike AT.2, which has an explicit deferred-until-<gate> disposition vocabulary for exactly this situation). Independently reported by three reviewers in QA pass AT-PHASECLOSE-QA-R2 on PR #1065: arch-qa (ARCH-AT-001), ruthless-boundary-qa (RBQA-F005), and req-qa (ATM-QA-EOP-001)." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-27T21:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT2 ;
+  triage:foundAt "2026-08-27T21:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-013/INTEGRATE-AT-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-013/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-27T22:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-013/INTEGRATE-AT-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-at/AT.1-install-parity-and-publish.md" ;
+  triage:line 9 ;
+  triage:snippet "status: in-progress" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "5c8cbf760" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760> .
+
+<urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate-phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "5c8cbf760" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/ATM-QA-013/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-at/AT.1-install-parity-and-publish.md" ;
+  triage:line 9 ;
+  triage:snippet "status: complete" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "e5f750bc2" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE-AT/e5f750bc2> .
+
+<urn:atm:triage:worktree/INTEGRATE-AT/e5f750bc2>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate-phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "e5f750bc2" ;
+  triage:orderIndex 2 .

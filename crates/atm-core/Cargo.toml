@@ -35,7 +35,7 @@ base64.workspace = true
 semver.workspace = true
 fs4 = "0.13"
 async-trait.workspace = true
-sc-lint-attributes = { path = "../sc-lint-attributes", version = "1.4.5" }
+sc-lint-attributes = "0.5"
 
 [dev-dependencies]
 atm-runtime-test-support = { path = "../atm-runtime-test-support" }

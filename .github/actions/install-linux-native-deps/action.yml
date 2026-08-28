@@ -1,0 +1,21 @@
+name: Install Linux native build deps
+description: Install webview and Wayland packages required to compile native Linux crates
+runs:
+  using: composite
+  steps:
+    - name: Install Linux native build deps
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install -y \
+          libwayland-dev \
+          pkg-config \
+          libwebkit2gtk-4.1-dev \
+          libxkbcommon-x11-0 \
+          libgl1-mesa-dri \
+          mesa-utils \
+          at-spi2-core \
+          dbus-x11 \
+          xvfb

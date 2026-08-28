@@ -90,6 +90,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify pinned ecosystem tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sc-compose --version
+          wyvern --version
+
       - name: Run just lint
         run: just lint
 
@@ -257,6 +264,14 @@ jobs:
         run: just bootstrap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify pinned ecosystem tools
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sc-compose --version
+          wyvern --version
 
       - name: Build workspace
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}

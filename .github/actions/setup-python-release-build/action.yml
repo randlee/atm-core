@@ -1,0 +1,61 @@
+name: Prepare Python release build
+description: Check out the tagged release and prepare the Python build toolchain.
+
+inputs:
+  release_ref:
+    description: Git ref or commit to check out for the release build.
+    required: true
+  release_version:
+    description: Release version expected in Python metadata.
+    required: true
+  python_version:
+    description: Python version to install.
+    required: false
+    default: "3.11"
+  pyproject:
+    description: Python package manifest whose version must match the workspace release.
+    required: true
+  build_system:
+    description: Declared build system for this distribution (maturin or setuptools).
+    required: false
+    default: "maturin"
+  rust_toolchain:
+    description: Rust toolchain used for maturin builds (from the manifest build plan).
+    required: true
+  workspace_toml:
+    description: >-
+      Manifest-declared release version source (from the build plan): a Cargo
+      workspace manifest, or a pyproject.toml for pure-Python consumers.
+    required: false
+    default: "Cargo.toml"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.release_ref }}
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python_version }}
+    - uses: dtolnay/rust-toolchain@master
+      if: ${{ inputs.build_system == 'maturin' }}
+      with:
+        toolchain: ${{ inputs.rust_toolchain }}
+    - name: Install maturin
+      if: ${{ inputs.build_system == 'maturin' }}
+      shell: bash
+      run: python -m pip install maturin==1.9.4
+    - name: Sync Python package version
+      shell: bash
+      run: |
+        python3 .github/scripts/release_artifacts.py sync-python-version \
+          --workspace-toml '${{ inputs.workspace_toml }}' \
+          --pyproject '${{ inputs.pyproject }}'
+    - name: Verify Python package version
+      shell: bash
+      run: |
+        python3 .github/scripts/release_artifacts.py verify-python-version \
+          --workspace-toml '${{ inputs.workspace_toml }}' \
+          --pyproject '${{ inputs.pyproject }}' \
+          --version '${{ inputs.release_version }}'

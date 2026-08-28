@@ -1,0 +1,13 @@
+# sc-publish pin manifest (convention: copy to release/sc-publish-pin.toml).
+#
+# Records the exact upstream kit revision this repository is qualified
+# against. Every consumer repository pins one qualified 40-character commit
+# SHA; nothing tracks a moving branch. Advance the pin only to a revision
+# that has passed the qualification checklist in README.sc-publish.md, and
+# advance all consumer repositories together when the org blesses a new
+# revision.
+
+[sc-publish]
+repository = "https://github.com/randlee/sc-publish"
+# The org-blessed, consumer-qualified kit revision (full 40-character SHA).
+revision = "0000000000000000000000000000000000000000"

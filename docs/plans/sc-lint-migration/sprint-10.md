@@ -9,6 +9,32 @@ target: TBD - integrate/phase-<new-id>, not develop directly
 
 # Sprint 10 — Vendored Workspace Removal
 
+## Partial-Scope Exception — 2026-08-27 (Rand, recorded by fenix)
+
+`crates/sc-lint-attributes/` was removed ahead of this sprint by PR #1068
+under Rand's direct, narrow authorization, to clear a v1.4.4 release-preflight
+blocker: `agent-team-mail-core` carried a path dependency on the local
+`publish = false` crate, which `cargo publish` cannot satisfy. Rand's rulings,
+verbatim:
+
+> "local sc-lint-attributes crate?  we are not publishing this to crates.io."
+> "there is sc-lint-attribute crate already published as part of the sc-lint
+> repo/project."
+> "if sc-lint-attribute is no longer used locally, we should remove it
+> completely." / "so there is no ambiguity around implementation."
+> "we are planning to move all sc-lint to use the published crates, but
+> haven't gotten a gap to make these changes yet."
+
+Scope of the exception: `sc-lint-attributes` only. Both consumers (`atm-core`,
+`sc-lint-boundary`) now depend on the published `sc-lint-attributes = "0.5"`.
+Proc-macro parity was proven in PR #1068 by compile plus the full lint gate
+(the published macro accepts the existing `#[sc_lint(boundary.allow(...))]`
+call sites and `sc-boundary` still honors them), `just test`, and a clean
+`just validate`. `crates/sc-lint-directives/` and `crates/sc-lint-boundary/`
+remain vendored; analyzer parity remains unproven and stays gated on this
+sprint's Hard Dependencies. This sprint's remaining scope is the removal of
+those two crates.
+
 ## Goal
 
 Delete the vendored sc-lint crates from the ATM workspace once direct or

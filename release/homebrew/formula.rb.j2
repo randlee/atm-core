@@ -1,0 +1,36 @@
+class {{ formula_class }} < Formula
+  desc {{ description | tojson }}
+  homepage {{ homepage | tojson }}
+  version {{ version | tojson }}
+  license {{ license | tojson }}
+
+  on_macos do
+    on_arm do
+      url {{ macos_arm_url | tojson }}
+      sha256 {{ macos_arm_sha256 | tojson }}
+    end
+
+    on_intel do
+      url {{ macos_intel_url | tojson }}
+      sha256 {{ macos_intel_sha256 | tojson }}
+    end
+  end
+
+  on_linux do
+    url {{ linux_url | tojson }}
+    sha256 {{ linux_sha256 | tojson }}
+  end
+
+  def install
+{% for binary_path in binary_paths %}
+    bin.install {{ binary_path | tojson }}
+{% endfor %}
+{% for bundle in bundled_paths %}
+    ({% for component in bundle.destination_components %}{{ component | tojson }}{% if not loop.last %}/{% endif %}{% endfor %}).install Dir[{{ bundle.source_glob | tojson }}]
+{% endfor %}
+  end
+
+  test do
+    assert_match {{ test_output | tojson }}, shell_output("#{bin}/" + {{ test_binary | tojson }} + " " + {{ test_command | tojson }})
+  end
+end
