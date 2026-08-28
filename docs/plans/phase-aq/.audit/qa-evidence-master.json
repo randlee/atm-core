@@ -3196,18 +3196,18 @@
    "assignment_from": null,
    "assignment_shared_path": null,
    "assignment_summary": "AQ1.9 restart-matrix harness crash guard, light gate pending",
-   "result_time_utc": "2026-08-28T23:20:00Z",
+   "result_time_utc": "2026-08-28T23:45:00Z",
    "result_time_pst": null,
    "result_message_id": null,
    "result_from": "quality-mgr",
    "result_shared_path": null,
    "result_temp_path": null,
-   "verdict": null,
-   "blockers": null,
-   "important": null,
-   "minor": null,
+   "verdict": "PASS",
+   "blockers": 0,
+   "important": 0,
+   "minor": 0,
    "count_basis": "evidence",
-   "evidence": "PR #1070 @ 9327b558b fix/aq-restart-matrix-crash-guard: AQ1.9 restart-matrix harness integrity (stale-evidence clear at start, harness_crashed row on exception, records before teardown, tolerant cleanup with cleanup_warning); 9 tests; lint 32/32; light gate pending."
+   "evidence": "PR #1070 @ 9327b558b fix/aq-restart-matrix-crash-guard (FENIX-QA light gate): PASS 7/7 \u2014 rust-qa PASS, flaky-test-qa PASS; run_lint 32/32; 14/14 tests; diff = 2 harness/test files. Merge-ready pending in-progress CI."
   }
  ],
  "follow_ups": [
