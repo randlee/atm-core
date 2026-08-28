@@ -1,6 +1,6 @@
 # Sprint AQ3 — Queue: Tmux Idle-Drain
 
-Status: implementation complete · Branch: `feature/aq-3-queue-tmux` off
+Status: complete · Branch: `feature/aq-3-queue-tmux` off
 `integrate/phase-aq` · Worktree: `atm-core-worktrees/feature/aq-3-queue-tmux` ·
 PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning

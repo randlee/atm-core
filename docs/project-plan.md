@@ -1342,7 +1342,7 @@ satisfied — AO merged to `develop` via the AO2 integration (PR #966). AP.1's
 physical hardware proof remains the mandatory entry gate; no AP dispatch has
 occurred.
 
-## 48. Phase AQ — ATM Send-To Shell Integration [PROPOSED — PLAN HARDENED, READY TO START]
+## 48. Phase AQ — ATM Send-To Shell Integration [IN PROGRESS — 12/14 sprints merged to integrate/phase-aq; AQ5 + AQ6 in QA/PR review]
 
 Phase AQ delivers PRD Phase 1 of ATM "Send To": one gesture from the OS file
 manager (Finder / Explorer / Nautilus) to a delivered message whose text
@@ -1384,33 +1384,42 @@ plan is [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md); source PRD is
 [prd-atm-send-to](./plans/phase-aq/prd-atm-send-to.md). PRD Phase 2
 (agent-assisted drafting, Wyvern chat sessions) is explicitly deferred.
 
-Status 2026-08-26: plan hardened (plan-QA PASS 2026-08-24, queue-first
-6-sprint structure with the AQ1.5–AQ1.9 graft-registration insertion and
-AQ2.5 delivery triggers). AQ's entry dependency — Phase AO2 merged to
-`develop` (ADR-047/ADR-053 on the cut head) — is satisfied as of PR #966.
-AQ1.6 graft receiver registration client implementation is complete on
-`feature/aq-1-6-graft-receiver-registration-client`; its PR targets
-`integrate/phase-aq`. AQ1.7 graft endpoint consumer cutover is complete on
-`feature/aq-1-7-graft-endpoint-consumer-cutover`, pending its PR review.
-AQ1.8 graft file-record retirement is complete on
-`feature/aq-1-8-graft-file-record-retirement`, pending its PR review.
-AQ1.9 hermes-atm wheel bump and local restart-matrix harness are complete on
-`feature/aq-1-9-hermes-atm-wheel-verification`; the m5 live matrix remains
-pending its host run.
-AQ2 graft dual-channel queue delivery is complete on
-`feature/aq-2-queue-graft`; its PR carries the additive wire kind, exact
-pending-marker handoff semantics, and Hermes `/queue`/`/steer` routing.
-AQ3 tmux idle-drain and recovery-sweep QA-1 remediation is implemented on
-`feature/aq-3-queue-tmux`: transition tasks are tracked and joined, interrupted
-claims are released, per-member sweep failures are isolated, and marker-clear
-ownership is mechanically gated in `atm-core`. The real daemon/tmux loopback
-transcript remains pending because the shared local daemon owner lock is
-occupied and the documented `m5` alias is not resolvable from this workstation.
-AQ2.5 queue delivery triggers (heartbeat CLI surface, reference Claude/Codex
-hook scripts, the RAM-only bare-CLI FIFO + Stop-pull drain route, the
-`QueuePull` classifier arm, and the ADR-054 delivery-trigger addendum) is on
-`feature/aq-2-5-queue-delivery-triggers`; its PR (#1053) targets
-`integrate/phase-aq` and its reconciled head is `72d413134`.
+Status 2026-08-28: 12 of the phase's 14 sprints are merged to
+`integrate/phase-aq`:
+
+- AQ1 trait foundation + `atm queue` CLI verb/taxonomy — PR #1040
+  (`feature/aq-1-trait-foundation`)
+- AQ1.5 graft push-registration API — PR #1045
+- AQ1.6 graft receiver registration client — PR #1046
+- AQ1.7 graft endpoint consumer cutover — PR #1048
+- AQ1.8 graft file-record retirement — PR #1049
+- AQ1.9 hermes-atm wheel verification + restart-matrix crash guard — PR #1050,
+  PR #1070 (`26fb5bc4d`); the m5 live matrix follow-up remains pending
+- AQ2 graft dual-channel queue delivery — PR #1051
+- AQ2.5 queue delivery triggers (heartbeat CLI surface, bare-CLI FIFO,
+  `QueuePull` classifier, ADR-054 delivery-trigger addendum) — PR #1053
+- AQ2.6 Herdr local-steer backend — PR #1042
+- AQ2.7 Herdr poll-gated queue wake — PR #1056, merged `6c70f88ce`
+  (cycle-5 QA-5 PASS, closing commit `d25b049d7`)
+- AQ3 tmux idle-drain + recovery sweep — PR #1054, merged `deed32e93`
+  (QA-final6 PASS 14/14)
+- AQ4 Send-To core (ATM_TEMP, CLI surface, transfer scripts, sweeper) —
+  PR #1055, merged `0adce24d6` (QA-3 PASS-with-deferral, 7/9 AC; Windows
+  loopback and tailscale legs deferred by ruling)
+
+Not yet merged: AQ5 (surface + phase evidence, PR #1059) and AQ6
+(sc-ecosystem dependency preflight + Wyvern contract issue, PR #1066) remain
+open, in QA/PR review against `integrate/phase-aq`.
+
+Tracked follow-ups (owner in parentheses): AQ1.9-m5 — live m5 restart matrix
+and hermes-atm suite run (Phase AQ closeout/AQ6); AQ4-tailscale-m5 — live
+tailscale transfer transcript (Phase AQ closeout); AQ4-windows-loopback —
+real Windows-host/POSIX-receiver reproduction of the ssh-under-pwsh loopback
+gap (Phase AQ closeout); AQ5-gui-e2e — live Finder/Explorer/Nautilus
+member-picker GUI E2E transcripts (Rand). See
+[Phase AQ plan](./plans/phase-aq/plan-phase-aq.md) for the authoritative
+sprint-by-sprint detail and `docs/plans/phase-aq/.audit/qa-evidence-master.json`
+for QA/merge provenance.
 
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 

@@ -3632,7 +3632,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ4 run 13 (GHA 33206719429): Linux/macOS AC coverage 7/9 PASS; Windows loopback deferred (deferral.follow_up=AQ4-windows-loopback; vvv probe rc 0, send rc 3 banner-exchange abort, timed_out=false). Harness fix 8a3dd0d9c (90s cap, tree kill, partial output) resolves run 12 TimeoutExpired. Merged to integrate/phase-aq @ 0adce24d6 (team-lead, 2026-08-28)."
+   "evidence": "AQ4 run 13 (GHA 33206719429): Linux/macOS AC coverage 7/9 PASS; Windows record classified `deferred_windows_loopback` (deferral.follow_up=AQ4-windows-loopback; vvv probe rc 0 succeeded, send rc 3 on the documented banner-exchange abort (WSARecv 10053), timed_out=false) \u2014 NOT a timeout. Harness fix 8a3dd0d9c (90s cap, tree kill, partial output) resolves run 12's one-off TimeoutExpired. Merged to integrate/phase-aq @ 0adce24d6 (team-lead, 2026-08-28)."
   },
   {
    "run_id": "QA-AQ2.7-R5",
@@ -3658,6 +3658,31 @@
    "minor": null,
    "count_basis": "headline/reviewer",
    "evidence": "AQ2.7 cycle-5 QA-5 final gate PASS: 20/20 AC verified; AC12 second fixture added (herdr_queue_wake.rs:1288-1369); ADR-054 addendum signed (:415-428); qa2-validation count corrected. CI fully green all lanes. PR #1056 @ d25b049d7 merged to integrate/phase-aq @ 6c70f88ce (team-lead, 2026-08-28)."
+  },
+  {
+   "run_id": "MERGE-PR1056",
+   "aich_sprint": "AQ2-7",
+   "phase_sprint": "AQ2.7",
+   "pass": true,
+   "run_type": "merge",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "team-lead",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ2.7 #1056 merged to integrate/phase-aq @ 6c70f88ce (cycle-5 QA-5 PASS)",
+   "result_time_utc": "2026-08-28T10:45:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "team-lead",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "PASS",
+   "blockers": 0,
+   "important": 0,
+   "minor": 0,
+   "count_basis": "merge-event",
+   "evidence": "AQ2.7 #1056 merged to integrate/phase-aq @ 6c70f88ce (head d25b049d7, merged 2026-08-28 by team-lead, QA-5 PASS)."
   }
  ],
  "follow_ups": [

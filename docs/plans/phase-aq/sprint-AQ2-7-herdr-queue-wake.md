@@ -13,6 +13,13 @@ cursor, selector-based Queue dispatch, cancellation-safe claim release, and
 The pre-existing AQ2.6 breaker timing flake was made deterministic with an
 injected test clock before this sprint's implementation.
 
+Status update (2026-08-28): the 2026-08-26 "complete" note above predates QA
+cycles 2–5 (QA-AQ2.7-R3..R5 in `.audit/qa-evidence-master.json`). Fix cycles
+2–5 closed on PR #1056; the closing commit is d25b049d7 (AC12
+changing-candidate fixture at `herdr_queue_wake.rs:1288-1369`; ADR-054
+addendum). QA-5 is a PASS, and PR #1056 merged to `integrate/phase-aq` as
+`6c70f88ce`. Status remains: complete.
+
 QA-1 rework adds deterministic breaker coverage, runtime shutdown-signal
 selection, the documented release/requeue partition with a ten-release bound,
 failure propagation from the Herdr emitter, AC-named pump fixtures using the

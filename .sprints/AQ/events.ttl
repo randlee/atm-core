@@ -173,6 +173,12 @@ triage:a15 a triage:Assignment ;
     triage:assignedAt "2026-08-28T05:30:00Z"^^xsd:dateTime ;
     triage:note "cycle-4 re-dispatch: merge-forward origin/integrate/phase-aq (26fb5bc4d) into #1056 (stale-base resolve)" .
 
+triage:c17 a triage:Completion ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:at "2026-08-28T10:30:00Z"^^xsd:dateTime ;
+    triage:headCommit "d25b049d7" ;
+    triage:note "AQ2.7 cycle-5 QA-5 closing gate: PASS, 20/20 AC verified, 0 blockers, 0 important (AC12 second fixture herdr_queue_wake.rs:1288-1369; ADR-054 addendum); PR #1056 merge-ready" .
+
 triage:m1 a triage:Merge ;
     triage:ofPR "#1054" ;
     triage:mergeCommit "deed32e93" ;
