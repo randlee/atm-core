@@ -187,7 +187,24 @@ None.
   heartbeats directly; the sweep pre-check consumes AQ2.5's classifier
   seam (see Dependencies).
 
-### AC8 multi-OS CI citation (2026-08-27, ATM-QA-102)
+### AC8 multi-OS CI citation (2026-08-28, ATM-QA-102)
+
+CI run [`33128710126`](https://github.com/randlee/atm-core/actions/runs/33128710126)
+at head `8b8071793055fc32ed87988012e781d16032424a` (PR #1054; verify with
+`gh run view 33128710126`):
+
+| Lane | ubuntu-latest | macos-latest | windows-latest |
+| --- | --- | --- | --- |
+| Test | pass | pass | pass |
+| Just lint | pass | pass | pass |
+| Clippy | pass | — | — |
+| Format check | pass | — | — |
+
+All three `Test` lanes are green at this head; the `windows-latest` failure
+below (`scripts/hooks/test_queue_hooks.py`) is fixed on this branch and no
+longer reproduces. **ATM-QA-102 is satisfied.**
+
+Prior citation, superseded by the above (2026-08-27, ATM-QA-102):
 
 CI run [`33123121121`](https://github.com/randlee/atm-core/actions/runs/33123121121)
 at head `9af3817b2704594bb6ef7f44d2670f552ca9eb10` (PR #1054):
@@ -240,6 +257,36 @@ sprint's own live-evidence harness, `run_aq3_tmux_idle_drain_evidence.py`
 those heads — it is registered as part of this same change and will be
 exercised, along with a Windows leg added to that workflow's matrix (the
 harness self-records a `skipped_no_tmux` status there), on the next dispatch.
+
+### Recovery sweep (deliverable 3) evidence and orphan harness removal (2026-08-28, ATM-QA-104)
+
+`scripts/phase-aq/run_aq3_idle_drain_sweep_evidence.py` was an orphaned local
+script: it had no `EVIDENCE_DIR_BY_SCRIPT` entry in the `Phase AQ Evidence`
+workflow (so CI never ran it), and no automated test covered it. It has been
+deleted, along with its committed "local" transcripts
+(`docs/plans/phase-aq/evidence/AQ3/idle-drain-sweep-local.json`, `.md`).
+
+Deliverable 3 (the recovery sweep) does not need a separate live harness: it
+is a low-frequency, in-process periodic pass with no tmux/pane dependency, so
+its correctness is fully exercised by `crates/atm-daemon-bootstrap/src/queue_drain.rs`'s
+unit and integration tests, run on every `just test` lane (AC8):
+
+- `recovery_sweep_replays_pending_after_restart` — AC3 (restart with pending
+  rows drains for an Idle member with no transition).
+- `recovery_sweep_isolates_one_member_failure_and_continues` — one member's
+  dispatch failure does not block the sweep pass for the rest of the roster.
+- `concurrent_transition_and_sweep_claim_once` — AC4 (transition drain and
+  sweep pass racing for one member claim exactly once).
+- `shared_channel_precheck_skips_herdr_and_bare_cli_members` — AC6 (the
+  sweep's shared channel pre-check admits only `TmuxSteer`/`Graft`).
+- `shutdown_cancels_tracked_transition_and_releases_in_flight_claim` — AC5
+  (daemon shutdown cancels and joins an in-flight sweep/drain task within the
+  deadline).
+
+`run_aq3_tmux_idle_drain_evidence.py` (ATM-QA-101, above) remains AQ3's sole
+live/CI-exercised evidence harness; it proves deliverables 1 and 2 (the
+idle-transition hook and drain step) end to end against a real daemon and
+tmux server. **ATM-QA-104 is satisfied.**
 
 ## Non-closure / out of scope
 

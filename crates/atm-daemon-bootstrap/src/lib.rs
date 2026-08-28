@@ -13,10 +13,8 @@ use std::sync::{Arc, Once};
 use std::time::Duration;
 
 use atm_core::LocalFileNonClaudeOutbound;
-use atm_core::api::RequestDeadline;
 use atm_core::atm_temp::{ProcessEnvSource, is_atm_temp_unset};
 use atm_core::boundary::{NonClaudeOutbound, RosterStore, TemplateComposer};
-use atm_core::doctor::{DoctorFinding, DoctorSeverity, HerdrPresenceDoctor};
 use atm_core::error::AtmError;
 #[cfg(unix)]
 use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
@@ -27,19 +25,14 @@ use atm_core::observability::{
 };
 use atm_core::peer_wire::{PeerWireMode, PeerWireSecurity};
 use atm_core::send::input::DEFAULT_MESSAGE_MAX_BYTES;
-use atm_core::team_admin::MembersList;
 use atm_core::types::HostName;
 use atm_core::types::{AgentName, TeamName};
 use atm_core::{AtmConfig, resolve_atm_temp, validate_sweep_config};
-use atm_herdr::{
-    BreakerPolicy, HerdrBreakerState, HerdrError, HerdrProcessAdapter, HerdrProcessInvoker,
-    HerdrSpawnBreaker,
-};
+use atm_herdr::HerdrProcessAdapter;
 use atm_http_runtime::{
     AcceptedPeerStream, DirectPeerTcpConfig, EstablishedPeerStream, HttpRuntimeBuilder,
-    HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, PeerConnectionPool, PeerPoolConfig,
-    PeerStreamAdapter, PeerStreamFuture, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
-    StorageAndNudgeRouter, shared_direct_peer_client,
+    HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, PeerPoolConfig, PeerStreamAdapter,
+    PeerStreamFuture, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage_rusqlite::SqliteStorageFactory;
@@ -52,9 +45,13 @@ mod owner_gate;
 mod peer_launch_config;
 mod queue_drain;
 mod received_hook_selector;
+mod replacement_handler;
 
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
 use bare_cli_runtime::BareCliRuntime;
+use replacement_handler::{
+    ReplacementHandlerConfig, SelectedPeerAdapterSelection, build_replacement_handler,
+};
 
 pub use owner_gate::DaemonOwnerGuard;
 pub use peer_launch_config::{
@@ -75,178 +72,6 @@ pub const REPLACEMENT_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 /// remaining a bounded admission limit. The wire request's `max_message_bytes`
 /// can only lower the body policy; it cannot raise this server ceiling.
 const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
-
-/// The bootstrap-owned peer transport selection passed as one coherent unit
-/// into replacement-daemon composition. Runtime code receives only the
-/// opaque established-stream adapter and validated pool bounds.
-struct SelectedPeerAdapterSelection {
-    adapter: Option<Arc<dyn PeerStreamAdapter>>,
-    pool_config: PeerPoolConfig,
-}
-
-struct ReplacementHandlerConfig<F> {
-    observability: Arc<dyn ObservabilityPort + Send + Sync>,
-    selector_factory: F,
-    daemon_launch_identity: DaemonLaunchIdentity,
-    peer_wire_mode: PeerWireMode,
-    peer_adapter_selection: SelectedPeerAdapterSelection,
-    runtime_health: RuntimeHealth,
-    bare_cli: BareCliRuntime,
-    herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
-}
-
-fn compose_queue_workers<F>(
-    runtime: atm_core::LocalServiceRuntime,
-    selector_factory: F,
-    herdr_process: Arc<dyn HerdrProcessAdapter>,
-    runtime_health: RuntimeHealth,
-    bare_cli: BareCliRuntime,
-) -> (
-    Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
-    queue_drain::RecoverySweepHandle,
-)
-where
-    F: FnOnce(
-        atm_core::LocalServiceRuntime,
-        Arc<dyn HerdrProcessAdapter>,
-        RuntimeHealth,
-        BareCliRuntime,
-    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
-{
-    let selector = selector_factory(
-        runtime.clone(),
-        herdr_process,
-        runtime_health.clone(),
-        bare_cli,
-    );
-    let recovery_sweep =
-        queue_drain::spawn_recovery_sweep(runtime, selector.clone(), runtime_health);
-    (selector, recovery_sweep)
-}
-
-struct HerdrBreakerDoctorAdapter {
-    breaker: Arc<HerdrSpawnBreaker>,
-}
-
-impl atm_core::doctor::HerdrBreakerDoctor for HerdrBreakerDoctorAdapter {
-    fn report(&self) -> atm_core::doctor::HerdrBreakerDoctorReport {
-        let snapshot = self.breaker.snapshot();
-        match snapshot.state {
-            HerdrBreakerState::Closed => Default::default(),
-            HerdrBreakerState::Open { retry_after } => atm_core::doctor::HerdrBreakerDoctorReport {
-                state: atm_core::doctor::report::HerdrBreakerDoctorState::Open,
-                retry_after_ms: Some(retry_after.as_millis() as u64),
-                consecutive_failures: Some(snapshot.consecutive_failures),
-            },
-            HerdrBreakerState::HalfOpen => atm_core::doctor::HerdrBreakerDoctorReport {
-                state: atm_core::doctor::report::HerdrBreakerDoctorState::Open,
-                retry_after_ms: Some(0),
-                consecutive_failures: Some(snapshot.consecutive_failures),
-            },
-        }
-    }
-}
-
-struct HerdrPresenceDoctorAdapter {
-    process: Arc<dyn HerdrProcessAdapter>,
-}
-
-impl HerdrPresenceDoctor for HerdrPresenceDoctorAdapter {
-    fn probe<'a>(
-        &'a self,
-        roster: &'a MembersList,
-        caller_deadline: RequestDeadline,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<DoctorFinding>> + Send + 'a>> {
-        Box::pin(probe_herdr_presence(
-            Arc::clone(&self.process),
-            roster,
-            caller_deadline,
-        ))
-    }
-}
-
-async fn probe_herdr_presence(
-    process: Arc<dyn HerdrProcessAdapter>,
-    roster: &MembersList,
-    caller_deadline: RequestDeadline,
-) -> Vec<DoctorFinding> {
-    let mut findings = Vec::new();
-    let mut outage_reason = None;
-    for member in roster.members.iter().filter(|member| {
-        matches!(
-            member.local_message_received_backend(),
-            Some(atm_core::LocalMessageReceivedBackend::Herdr { .. })
-        )
-    }) {
-        match probe_herdr_member(process.as_ref(), member, caller_deadline).await {
-            Ok(()) => {}
-            Err(error) if error.is_infrastructure() => {
-                outage_reason.get_or_insert_with(|| format!("{error:?}"));
-            }
-            Err(error) => findings.push(herdr_presence_finding(error)),
-        }
-    }
-    if let Some(reason) = outage_reason {
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Info,
-            code: atm_core::error_codes::AtmErrorCode::HerdrUnavailable,
-            message: format!("Herdr presence probe skipped: {reason}"),
-            remediation: None,
-        });
-    }
-    findings
-}
-
-async fn probe_herdr_member(
-    process: &dyn HerdrProcessAdapter,
-    member: &atm_core::team_admin::MemberSummary,
-    caller_deadline: RequestDeadline,
-) -> Result<(), HerdrError> {
-    let Some(atm_core::LocalMessageReceivedBackend::Herdr { session }) =
-        member.local_message_received_backend()
-    else {
-        return Ok(());
-    };
-    let deadline = caller_deadline
-        .remaining()
-        .map(|remaining| RequestDeadline::after(remaining.min(Duration::from_secs(2))))
-        .unwrap_or_else(|| RequestDeadline::after(Duration::ZERO));
-    process
-        .get(
-            &member.name,
-            session.as_ref(),
-            deadline,
-            BreakerPolicy::Bypass,
-        )
-        .await
-        .map(|_| ())
-}
-
-fn herdr_presence_finding(error: HerdrError) -> DoctorFinding {
-    let outcome = error.emission_outcome();
-    if matches!(error, HerdrError::AgentNotFound) {
-        let error = AtmError::new(
-            atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible,
-            "agent not visible in the member's configured Herdr session",
-        );
-        return DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            code: error.code(),
-            message: error.detail().to_owned(),
-            remediation: Some(error.remediation().to_owned()),
-        };
-    }
-    let error: AtmError = error.into();
-    DoctorFinding {
-        severity: DoctorSeverity::Warning,
-        code: error.code(),
-        message: format!(
-            "Herdr presence probe outcome `{outcome}`: {}",
-            error.detail()
-        ),
-        remediation: Some(error.remediation().to_owned()),
-    }
-}
 
 /// Identity values captured once at the daemon bootstrap boundary.
 ///
@@ -435,83 +260,6 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
         )),
     )
     .await
-}
-
-fn build_replacement_handler(
-    mut assembly: RuntimeAssembly,
-    config: ReplacementHandlerConfig<
-        impl FnOnce(
-            atm_core::LocalServiceRuntime,
-            Arc<dyn HerdrProcessAdapter>,
-            RuntimeHealth,
-            BareCliRuntime,
-        ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
-    >,
-) -> Result<(Arc<StorageAndNudgeRouter>, queue_drain::RecoverySweepHandle), AtmError> {
-    let ReplacementHandlerConfig {
-        observability,
-        selector_factory,
-        daemon_launch_identity,
-        peer_wire_mode,
-        peer_adapter_selection,
-        runtime_health,
-        bare_cli,
-        herdr_process,
-    } = config;
-    let herdr_process = match herdr_process {
-        Some(process) => process,
-        None => {
-            let herdr_breaker = Arc::new(HerdrSpawnBreaker::new());
-            let process: Arc<dyn HerdrProcessAdapter> =
-                Arc::new(HerdrProcessInvoker::new(Arc::clone(&herdr_breaker)));
-            assembly.doctor_ports.herdr_breaker = Arc::new(HerdrBreakerDoctorAdapter {
-                breaker: Arc::clone(&herdr_breaker),
-            });
-            assembly.doctor_ports.herdr_presence = Arc::new(HerdrPresenceDoctorAdapter {
-                process: Arc::clone(&process),
-            });
-            process
-        }
-    };
-    let (selector, recovery_sweep) = compose_queue_workers(
-        assembly.service_runtime.clone(),
-        selector_factory,
-        herdr_process,
-        runtime_health.clone(),
-        bare_cli.clone(),
-    );
-    let transition_sink = queue_drain::transition_sink(
-        assembly.service_runtime.clone(),
-        Arc::clone(&selector),
-        runtime_health.clone(),
-        recovery_sweep.transition_tracker(),
-    );
-    let handler = StorageAndNudgeRouter::new(
-        assembly.service_runtime,
-        observability,
-        selector,
-        atm_core::home::atm_home()?,
-    )
-    .with_runtime_health(runtime_health, assembly.doctor_ports)
-    .with_member_state_transition_sink(transition_sink)
-    .with_bare_cli_fifo(bare_cli.fifo(), bare_cli.queue_full_drops())
-    .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
-        team: daemon_launch_identity.team.clone(),
-        identity: daemon_launch_identity.identity.clone(),
-        version: Some(atm_core::protocol::ReleaseVersion::current()),
-        cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
-        http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
-        peer_wire_security: Some(peer_wire_mode.security().into()),
-    })
-    .with_shared_direct_peer_client(shared_direct_peer_client()?);
-    let handler = match peer_adapter_selection.adapter {
-        Some(adapter) => handler.with_peer_connection_pool(PeerConnectionPool::new(
-            peer_adapter_selection.pool_config,
-            adapter,
-        )),
-        None => handler,
-    };
-    Ok((Arc::new(handler), recovery_sweep))
 }
 
 /// Selects the optional mTLS stream adapter from the immutable daemon launch
@@ -1041,12 +789,13 @@ mod replacement_runtime_tests {
     use serde_json::Map;
 
     use super::peer_launch_config::parse_peer_pool_config_with_environment;
+    use super::replacement_handler::{HerdrPresenceDoctorAdapter, herdr_presence_finding};
     use super::{
-        DaemonLaunchIdentity, HerdrPresenceDoctorAdapter, REPLACEMENT_DRAIN_DEADLINE,
-        ReplacementHandlerConfig, SelectedPeerAdapterSelection, ShutdownSignal,
-        assemble_host_runtime_with_template_composer, build_replacement_handler,
-        parse_direct_peer_port, parse_peer_wire_mode, peer_stream_adapter_for_mode,
-        replacement_runtime_config_with_direct_peer, write_ready_signal_if_requested,
+        DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ReplacementHandlerConfig,
+        SelectedPeerAdapterSelection, ShutdownSignal, assemble_host_runtime_with_template_composer,
+        build_replacement_handler, parse_direct_peer_port, parse_peer_wire_mode,
+        peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
+        write_ready_signal_if_requested,
     };
 
     /// Test-owned receiver selection prevents an external tmux/graft action
@@ -1493,7 +1242,7 @@ mod replacement_runtime_tests {
         ];
         for error in errors {
             let outcome = error.emission_outcome();
-            let finding = super::herdr_presence_finding(error.clone());
+            let finding = herdr_presence_finding(error.clone());
             if matches!(error, atm_herdr::HerdrError::AgentNotFound) {
                 assert_eq!(
                     finding.code,
