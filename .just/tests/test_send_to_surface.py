@@ -48,10 +48,23 @@ class SendToSurfaceTests(unittest.TestCase):
     def make_atm(self, directory: Path, log: Path) -> Path:
         path = fixture_path(directory, "atm")
         if os.name == "nt":
+            # `type nul > log` (an earlier draft) only ever created an empty
+            # file -- it never reads the PickerOutput JSON piped in on stdin
+            # (`$pickerOutput | & $atm @sendArgs` in atm-send-to.ps1), so the
+            # log was always empty and the test's json.loads on it failed on
+            # every real Windows run. `more`'s output-redirected-to-a-file
+            # mode is cmd.exe's documented stdin-to-file idiom (it disables
+            # the pager and copies straight through when stdout is not a
+            # console), which is what's needed to capture that JSON body --
+            # mirroring the POSIX fake's `cat > {log}` below.
             path.write_text(
                 "@echo off\r\n"
                 'if "%~1"=="teams" type "' + str(directory / "input.json") + '"\r\n'
-                'if "%~1"=="send" (type nul > "' + str(log) + '" & echo send-called 1>&2)\r\n',
+                'if "%~1"=="send" (\r\n'
+                '  echo %* > "' + str(log) + '.args"\r\n'
+                '  more > "' + str(log) + '"\r\n'
+                "  echo send-called 1>&2\r\n"
+                ")\r\n",
                 encoding="utf-8",
             )
         else:
