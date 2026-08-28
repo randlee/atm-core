@@ -1,6 +1,6 @@
 # Phase AU — Boundary Debt Retirement
 
-status: proposed
+status: complete
 branch: plan/boundary-regression
 target: develop
 integration_branch: integrate/phase-au
