@@ -2,9 +2,13 @@ name: Phase AQ Evidence
 
 # Runs the Phase AQ live-evidence harnesses (AQ1.9 restart matrix, AQ2.5
 # queue-delivery triggers, AQ3's tmux idle-transition-drain transcript, AQ4
-# cross-host transfer) on a clean runner with no ambient atm-daemon. The AQ3
-# harness needs a real tmux server, which is unavailable on Windows; it
-# self-records a `skipped_no_tmux` status there instead of failing the job.
+# cross-host transfer, and AQ5's Wyvern degradation matrix) on a clean
+# runner with no ambient atm-daemon. The AQ3 harness needs a real tmux
+# server, which is unavailable on Windows; it self-records a
+# `skipped_no_tmux` status there instead of failing the job. AQ5's harness
+# is daemon-free (see its own module docstring) but still runs here so its
+# six-case transcript is produced on every PR touching the Send-To surface,
+# exactly like the other Phase AQ evidence artifacts.
 #
 # These harnesses fail closed by design: `atm_core::home::current_host_runtime_scope`
 # intentionally ignores `ATM_HOME`/`HOME` and always resolves the OS
@@ -210,6 +214,7 @@ jobs:
               "run_aq25_queue_delivery_trigger_evidence.py": "AQ2.5",
               "run_aq3_tmux_idle_drain_evidence.py": "AQ3",
               "run_aq4_transfer_evidence.py": "AQ4",
+              "run_aq5_wyvern_degradation_evidence.py": "AQ5",
           }
 
           # Release binaries carry a `.exe` suffix on Windows.
