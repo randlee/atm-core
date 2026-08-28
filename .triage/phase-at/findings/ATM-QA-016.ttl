@@ -14,14 +14,17 @@
   triage:category "documentation" ;
   triage:severity "important" ;
   triage:repeatable false ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-28T00:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:RELPREP1 ;
   triage:foundAt "2026-08-28T00:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-016/CHANGELOG-1.4.4-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-016/CHANGELOG-1.4.4-2> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-016/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-28T00:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-016/CHANGELOG-1.4.4-1>
   a triage:Occurrence ;
@@ -47,3 +50,19 @@
   triage:branch "chore/changelog-1.4.4" ;
   triage:headSha "18e0dca2d" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/ATM-QA-016/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1482 ;
+  triage:snippet "## 53. Phase AU — Boundary Debt Retirement ✅ COMPLETE" ;
+  triage:status "fixed" ; triage:closed true ;
+  triage:branch "chore/changelog-1.4.4" ; triage:headSha "51fdd4dfb" ;
+  triage:occursIn <urn:atm:triage:worktree/CHANGELOG-1.4.4/51fdd4dfb> .
+
+<urn:atm:triage:worktree/CHANGELOG-1.4.4/51fdd4dfb>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/chore-changelog-1.4.4" ;
+  triage:branch "chore/changelog-1.4.4" ;
+  triage:headSha "51fdd4dfb" ;
+  triage:orderIndex 2 .
