@@ -15,18 +15,15 @@ SCRIPT = ROOT / "scripts/send-to" / ("atm-send-to.ps1" if os.name == "nt" else "
 PICKER = ROOT / "scripts/send-to/picker.py"
 COMMAND_WRAPPER = ROOT / "scripts/send-to/atm-send-to.command"
 NAUTILUS_WRAPPER = ROOT / "scripts/send-to/nautilus-atm-send-to.sh"
+FIXTURES = ROOT / "docs/plans/phase-aq/fixtures"
 
-PICKER_INPUT = {
-    "schema_version": 1,
-    "teams": [{
-        "id": "atm-dev",
-        "name": "atm-dev",
-        "members": [
-            {"id": "cipher@atm-dev", "name": "cipher", "host": "m4", "cwd": "/work", "status": "active"},
-            {"id": "fenix@atm-dev", "name": "fenix", "host": "m5", "cwd": "/work", "status": "idle"},
-        ],
-    }],
-}
+# Load the committed PickerInput/PickerOutput fixtures verbatim (rather than
+# inline-shaped equivalents) so this suite exercises the exact bytes the
+# fixture docs (wyvern-pick-member-contract.md, validation-evidence.md) claim
+# are under test.
+PICKER_INPUT = json.loads((FIXTURES / "picker-input-v1.json").read_text())
+PICKER_OUTPUT_V1 = json.loads((FIXTURES / "picker-output-v1.json").read_text())
+PICKER_OUTPUT_UNKNOWN_SCHEMA = json.loads((FIXTURES / "picker-output-unknown-schema.json").read_text())
 
 
 def executable(path: Path) -> None:
@@ -128,11 +125,11 @@ class SendToSurfaceTests(unittest.TestCase):
             (directory / "input.json").write_text(json.dumps(PICKER_INPUT))
             log = directory / "send.log"
             self.make_atm(directory, log)
-            output = json.dumps({"schema_version": 1, "recipients": ["cipher@atm-dev", "fenix@atm-dev"]})
+            output = json.dumps(PICKER_OUTPUT_V1)
             picker = self.make_picker(directory, output)
             result = self.run_surface(picker, [directory / "one file.txt", directory / "two.txt"], directory, log)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(json.loads(log.read_text()), {"schema_version": 1, "recipients": ["cipher@atm-dev", "fenix@atm-dev"]})
+            self.assertEqual(json.loads(log.read_text()), PICKER_OUTPUT_V1)
             self.assertIn("--attach", (log.with_suffix(".log.args")).read_text())
 
     def test_reference_picker_emits_versioned_output(self) -> None:
@@ -213,10 +210,21 @@ class SendToSurfaceTests(unittest.TestCase):
                         # (docs/plans/phase-aq/fixtures/
                         # wyvern-pick-member-contract.md), not the illustrative
                         # bare-stdout sketch the PRD started from.
-                        wizard_result = (
-                            '{"button":"finish","data":{"schema_version":99,"recipients":["cipher@atm-dev"]},"stack":[]}'
-                            if case == "unknown-schema"
-                            else '{"button":"finish","data":{"schema_version":1,"recipients":["cipher@atm-dev"]},"stack":[]}'
+                        wizard_result = json.dumps(
+                            {
+                                "button": "finish",
+                                "data": (
+                                    PICKER_OUTPUT_UNKNOWN_SCHEMA
+                                    if case == "unknown-schema"
+                                    # No committed fixture covers this shape (a
+                                    # single-recipient, note-less PickerOutput);
+                                    # PICKER_OUTPUT_V1 is two recipients plus a
+                                    # note, so this case stays inline.
+                                    else {"schema_version": 1, "recipients": ["cipher@atm-dev"]}
+                                ),
+                                "stack": [],
+                            },
+                            separators=(",", ":"),
                         )
                         if os.name == "nt":
                             if body is None:
