@@ -98,8 +98,8 @@ See [`issues.md`](./issues.md) for sprint mapping.
   - `AE.5` owns install-copy packaging, the deterministic staged install root
     at `target/phase-ae/staged-install-root/`, and the release-note wording
     that documents the installed doc location
-  - `AE.7` owns `scripts/verify_user_docs.py` and all source-tree/installed-copy
-    document-content validation
+  - `AE.7` owned the source-tree/installed-copy document-content validator;
+    AT.2 retires it after the kit manifest superseded its legacy schema
   - `AE.9` owns only the accepted-line proof artifact and verification that the
     already-authored release notes still describe the installed doc surface
 

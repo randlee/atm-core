@@ -55,23 +55,13 @@ Five publishable crates were missing. Four internal crates lacked `publish = fal
   34467437). Decoupling is deferred to a post-v1.2.0 sprint. Publishing as-is is
   authorized.
 
-## User-Doc Freshness Gate
+## User-Document Shipping Contract
 
-The retained publish surface now includes the installed end-user markdown corpus
-under `docs/user-documents/`. Release preflight treats that corpus as a
-blocking publish artifact.
+End-user markdown under `docs/user-documents/` is shipped as archive content
+through the ATM-owned `release_binaries[].bundled_paths` declaration in the
+consumer input. The installed kit renders that declaration into the release
+manifest and uses it to construct the binary archives.
 
-Required contract:
-
-- every markdown file under `docs/user-documents/` must carry
-  `reviewed_for_release: <release version>`
-- the value must match the release version under validation exactly
-- linked documents must exist and remain relative within the user-doc tree
-
-Canonical validation entrypoint:
-
-- `python3 scripts/validate_release.py all --version <release version> --staged-install-root target/phase-ae/staged-install-root`
-
-The release-preflight workflow invokes that exact entrypoint, and the user-doc
-freshness gate reuses `scripts/verify_user_docs.py` rather than maintaining a
-second partial checker.
+The retained ATM checks validate consumer contract data (the declared bundle
+sources and destinations); they do not maintain a second user-document
+staging or freshness-verifier path. This is the post-AT.2 release boundary.
