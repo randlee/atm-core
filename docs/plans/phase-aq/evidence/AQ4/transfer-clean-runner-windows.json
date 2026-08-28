@@ -2,11 +2,11 @@
   "schema_version": 1,
   "sprint": "AQ4",
   "host": "clean-runner-windows",
-  "commit": "dcd3130f100b64e542c8e0800565ebd88cb7271e",
+  "commit": "9c9f9918a2870193344459bcec227d2e12d3162b",
   "record": {
     "sprint": "AQ4",
     "host": "clean-runner-windows",
-    "started_at_ns": 1787893248899984100,
+    "started_at_ns": 1787894622270895000,
     "status": "fail",
     "sshd_probe": {
       "found": true,
@@ -20,15 +20,15 @@
     },
     "sshd_start": {
       "ready": true,
-      "pid": 8956,
+      "pid": 1820,
       "log_tail": "",
-      "port": 63803
+      "port": 60725
     },
     "sender_atm_config": {
-      "path": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\sender-cwd\\.atm.toml",
+      "path": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-1smlz9ye\\sender-cwd\\.atm.toml",
       "local_host": "aq4-sender"
     },
-    "scratch_ssh_client_config": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\ssh_client_config",
+    "scratch_ssh_client_config": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-1smlz9ye\\ssh_client_config",
     "roster": {
       "sender": {
         "argv": [
@@ -38,7 +38,7 @@
           "aq4-transfer-evidence",
           "aq4-sender",
           "--home-dir",
-          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\home",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-1smlz9ye\\home",
           "--json"
         ],
         "stdout": "{\n  \"action\": \"add-member\",\n  \"team\": \"aq4-transfer-evidence\",\n  \"member\": \"aq4-sender\",\n  \"created_inbox\": true\n}"
@@ -51,7 +51,7 @@
           "aq4-transfer-evidence",
           "aq4-receiver",
           "--home-dir",
-          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\home",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-1smlz9ye\\home",
           "--host",
           "localhost",
           "--json"
@@ -60,15 +60,15 @@
       }
     },
     "transfer_script": {
-      "installed_at": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\home\\.atm\\transfer\\localhost.ps1",
+      "installed_at": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-1smlz9ye\\home\\.atm\\transfer\\localhost.ps1",
       "source": "D:\\a\\atm-core\\atm-core\\scripts\\transfer\\sftp.ps1",
       "receiver_atm_temp": {
-        "windows_native": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\tmp\\atm",
-        "posix_msys": "/c/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-y7co57m6/tmp/atm",
-        "substituted": "C:/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-y7co57m6/tmp/atm"
+        "windows_native": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-1smlz9ye\\tmp\\atm",
+        "posix_msys": "/c/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-1smlz9ye/tmp/atm",
+        "substituted": "C:/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-1smlz9ye/tmp/atm"
       },
       "windows_profile_containment": {
-        "profile_home": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\home",
+        "profile_home": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aq4-evidence-1smlz9ye\\home",
         "transfer_dir_contained": true,
         "script_contained": true,
         "transfer_dir_is_reparse_point": false,
@@ -78,12 +78,12 @@
         "PATH": "C:\\Windows\\System32;C:\\Windows\\System32\\OpenSSH;C:\\Program Files\\PowerShell\\7",
         "SystemRoot": "C:\\Windows",
         "SYSTEMROOT": "C:\\Windows",
-        "TEMP": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\tmp"
+        "TEMP": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-1smlz9ye\\tmp"
       }
     },
     "daemon_start": {
       "ready": true,
-      "pid": 9212,
+      "pid": 6840,
       "stdout_tail": [
         "ATM_DAEMON_READY"
       ],
@@ -100,17 +100,31 @@
         "--host",
         "localhost",
         "--attach",
-        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\attach-source\\aq4-report.pdf"
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-1smlz9ye\\attach-source\\aq4-report.pdf"
       ],
       "returncode": 3,
       "stdout": "",
-      "stderr_tail": "transfer script for host 'localhost' failed (exit code: 1): failed to create C:/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-y7co57m6/tmp/atm/send-to/01M13BW1QRXNZZ2Q89RT283JBE on localhost (ssh exit ): (no output)\n\n  Recovery: Check the transfer script's stderr output above and retry."
+      "stderr_tail": "transfer script for host 'localhost' failed (exit code: 1): failed to create C:/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-1smlz9ye/tmp/atm/send-to/01M13D5YWRB7X4YEXT3ES4E3CB on localhost (ssh exit unknown): (no output)\n\n  Recovery: Check the transfer script's stderr output above and retry."
     },
-    "sshd_debug_log_tail": "C:\\\\Users\\\\RUNNER~1\\\\AppData\\\\Local\\\\Temp\\\\aq4-evidence-y7co57m6\\\\sshd\\\\sshd_config line 6: Unsupported option UsePAM\ndebug2: fd 3 setting O_NONBLOCK\ndebug1: Bind to port 63803 on 127.0.0.1.\nServer listening on 127.0.0.1 port 63803.\ndebug3: pselect: installing signal handler for 3, previous 00007FF699EE81A0\ndebug3: pselect: installing signal handler for 6, previous 00007FF699EE80A0\ndebug3: pselect: installing signal handler for 7, previous 00007FF699EE8190\ndebug3: pselect: installing signal handler for 8, previous 00007FF699EE8190\ndebug3: pselect_notify_setup: initializing\ndebug2: fd 6 setting O_NONBLOCK\ndebug2: fd 4 setting O_NONBLOCK\ndebug3: pselect_notify_setup: pid 8956 saved 8956 pipe0 6 pipe1 4\ndebug3: fd 5 is not O_NONBLOCK\ndebug3: spawning \"C:\\\\Windows\\\\System32\\\\OpenSSH\\\\sshd.EXE\" -f C:\\\\Users\\\\RUNNER~1\\\\AppData\\\\Local\\\\Temp\\\\aq4-evidence-y7co57m6\\\\sshd\\\\sshd_config -D -e -R as subprocess\ndebug3: send_rexec_state: entering fd = 9 config len 448\ndebug3: ssh_msg_send: type 0\ndebug3: send_rexec_state: done\nrexec line 6: Unsupported option UsePAM\ndebug1: inetd sockets after dupping: 4, 4\ndebug3: process_channel_timeouts: setting 0 timeouts\ndebug3: channel_clear_timeouts: clearing\nConnection from 127.0.0.1 port 63805 on 127.0.0.1 port 63803\ndebug1: Local version string SSH-2.0-OpenSSH_for_Windows_9.5\ndebug3: WSARecv - WSARecv() ERROR: io:00000266CAAA9720 10053\nkex_exchange_identification: read: Connection aborted\nbanner exchange: Connection from 127.0.0.1 port 63805: Connection aborted\ndebug2: pselect_notify_done: reading",
+    "sshd_debug_log_tail": "C:\\\\Users\\\\RUNNER~1\\\\AppData\\\\Local\\\\Temp\\\\aq4-evidence-1smlz9ye\\\\sshd\\\\sshd_config line 6: Unsupported option UsePAM\ndebug2: fd 3 setting O_NONBLOCK\ndebug1: Bind to port 60725 on 127.0.0.1.\nServer listening on 127.0.0.1 port 60725.\ndebug3: pselect: installing signal handler for 3, previous 00007FF6499C81A0\ndebug3: pselect: installing signal handler for 6, previous 00007FF6499C80A0\ndebug3: pselect: installing signal handler for 7, previous 00007FF6499C8190\ndebug3: pselect: installing signal handler for 8, previous 00007FF6499C8190\ndebug3: pselect_notify_setup: initializing\ndebug2: fd 6 setting O_NONBLOCK\ndebug2: fd 4 setting O_NONBLOCK\ndebug3: pselect_notify_setup: pid 1820 saved 1820 pipe0 6 pipe1 4\ndebug3: fd 5 is not O_NONBLOCK\ndebug3: spawning \"C:\\\\Windows\\\\System32\\\\OpenSSH\\\\sshd.EXE\" -f C:\\\\Users\\\\RUNNER~1\\\\AppData\\\\Local\\\\Temp\\\\aq4-evidence-1smlz9ye\\\\sshd\\\\sshd_config -D -e -R as subprocess\ndebug3: send_rexec_state: entering fd = 9 config len 448\ndebug3: ssh_msg_send: type 0\ndebug3: send_rexec_state: done\nrexec line 6: Unsupported option UsePAM\ndebug1: inetd sockets after dupping: 4, 4\ndebug3: process_channel_timeouts: setting 0 timeouts\ndebug3: channel_clear_timeouts: clearing\nConnection from 127.0.0.1 port 60727 on 127.0.0.1 port 60725\ndebug1: Local version string SSH-2.0-OpenSSH_for_Windows_9.5\ndebug3: WSARecv - WSARecv() ERROR: io:00000209FAD48930 10053\nkex_exchange_identification: read: Connection aborted\nbanner exchange: Connection from 127.0.0.1 port 60727: Connection aborted\ndebug2: pselect_notify_done: reading",
+    "ssh_vvv_diagnostic": {
+      "argv": [
+        "C:\\Windows\\System32\\OpenSSH\\ssh.EXE",
+        "-F",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-1smlz9ye\\ssh_client_config",
+        "-vvv",
+        "-n",
+        "localhost",
+        "echo aq4-ssh-vvv-diagnostic-probe"
+      ],
+      "returncode": 0,
+      "stdout": "aq4-ssh-vvv-diagnostic-probe",
+      "stderr_tail": "<0>\ndebug1: kex_ext_info_check_ver: ping@openssh.com=<0>\ndebug3: receive packet: type 6\ndebug2: service_accept: ssh-userauth\ndebug1: SSH2_MSG_SERVICE_ACCEPT received\ndebug3: send packet: type 50\ndebug3: receive packet: type 51\ndebug1: Authentications that can continue: publickey,keyboard-interactive\ndebug3: start over, passed a different list publickey,keyboard-interactive\ndebug3: preferred publickey\ndebug3: authmethod_lookup publickey\ndebug3: remaining preferred: \ndebug3: authmethod_is_enabled publickey\ndebug1: Next authentication method: publickey\ndebug1: Offering public key: C:\\\\Users\\\\RUNNER~1\\\\AppData\\\\Local\\\\Temp\\\\aq4-evidence-1smlz9ye\\\\sshd\\\\id_ed25519 ED25519 SHA256:aBqBGJxT1PXUM/k0Z00hvyxjkejXEiGaMskkG0VCZiE explicit\ndebug3: send packet: type 50\ndebug2: we sent a publickey packet, wait for reply\ndebug3: receive packet: type 60\ndebug1: Server accepts key: C:\\\\Users\\\\RUNNER~1\\\\AppData\\\\Local\\\\Temp\\\\aq4-evidence-1smlz9ye\\\\sshd\\\\id_ed25519 ED25519 SHA256:aBqBGJxT1PXUM/k0Z00hvyxjkejXEiGaMskkG0VCZiE explicit\ndebug3: sign_and_send_pubkey: using publickey-hostbound-v00@openssh.com with ED25519 SHA256:aBqBGJxT1PXUM/k0Z00hvyxjkejXEiGaMskkG0VCZiE\ndebug3: sign_and_send_pubkey: signing using ssh-ed25519 SHA256:aBqBGJxT1PXUM/k0Z00hvyxjkejXEiGaMskkG0VCZiE\ndebug3: send packet: type 50\ndebug3: receive packet: type 52\nAuthenticated to 127.0.0.1 ([127.0.0.1]:60725) using \"publickey\".\ndebug2: fd 5 setting O_NONBLOCK\ndebug2: fd 6 setting O_NONBLOCK\ndebug1: channel 0: new session [client-session] (inactive timeout: 0)\ndebug3: ssh_session2_open: channel_new: 0\ndebug2: channel 0: send open\ndebug3: send packet: type 90\ndebug1: Requesting no-more-sessions@openssh.com\ndebug3: send packet: type 80\ndebug1: Entering interactive session.\ndebug1: pledge: network\ndebug3: client_repledge: enter\ndebug3: receive packet: type 80\ndebug1: client_input_global_request: rtype hostkeys-00@openssh.com want_reply 0\ndebug3: receive packet: type 91\ndebug2: channel_input_open_confirmation: channel 0: callback start\ndebug2: fd 3 setting TCP_NODELAY\ndebug2: client_session2_setup: id 0\ndebug1: Sending command: echo aq4-ssh-vvv-diagnostic-probe\ndebug2: channel 0: request exec confirm 1\ndebug3: send packet: type 98\ndebug3: client_repledge: enter\ndebug1: pledge: fork\ndebug2: channel_input_open_confirmation: channel 0: callback done\ndebug2: channel 0: open confirm rwindow 0 rmax 32768\ndebug2: channel 0: rcvd adjust 2097152\ndebug3: receive packet: type 99\ndebug2: channel_input_status_confirm: type 99 id 0\ndebug2: exec request accepted on channel 0\ndebug3: read - ERROR from cb :87, io:00000259BD5B92B0\ndebug2: channel 0: read failed rfd 4 maxlen 32768: Unknown error\ndebug2: channel 0: read failed\ndebug2: chan_shutdown_read: channel 0: (i0 o0 sock -1 wfd 4 efd 6 [write])\ndebug2: channel 0: input open -> drain\ndebug2: channel 0: ibuf empty\ndebug2: channel 0: send eof\ndebug3: send packet: type 96\ndebug2: channel 0: input drain -> closed\ndebug3: receive packet: type 96\ndebug2: channel 0: rcvd eof\ndebug2: channel 0: output open -> drain\ndebug2: channel 0: obuf empty\ndebug2: chan_shutdown_write: channel 0: (i3 o1 sock -1 wfd 5 efd 6 [write])\ndebug2: channel 0: output drain -> closed\ndebug3: receive packet: type 98\ndebug1: client_input_channel_req: channel 0 rtype exit-status reply 0\ndebug3: receive packet: type 97\ndebug2: channel 0: rcvd close\ndebug3: channel 0: will not send data after close\ndebug2: channel 0: almost dead\ndebug2: channel 0: gc: notify user\ndebug2: channel 0: gc: user detached\ndebug2: channel 0: send close\ndebug3: send packet: type 97\ndebug2: channel 0: is dead\ndebug2: channel 0: garbage collecting\ndebug1: channel 0: free: client-session, nchannels 1\ndebug3: channel 0: status: The following connections are open:\n  #0 client-session (t4 [session] r0 i3/0 o3/0 e[write]/0 fd -1/-1/6 sock -1 cc -1 io 0x00/0x00)\n\ndebug3: send packet: type 1\nTransferred: sent 2232, received 1964 bytes, in 0.1 seconds\nBytes per second: sent 24800.0, received 21822.2\ndebug1: Exit status 0"
+    },
     "landed_path": null,
     "landed_matches_send_to_convention": false,
     "landed_file_exists": false,
     "landed_content_matches": false,
-    "finished_at_ns": 1787893261656615600
+    "finished_at_ns": 1787894634630750900
   }
 }
