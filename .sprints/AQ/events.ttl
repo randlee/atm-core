@@ -234,3 +234,28 @@ triage:m7 a triage:Merge ;
     triage:mergedAt "2026-08-28T22:00:00Z"^^xsd:dateTime ;
     triage:target "integrate/phase-aq" ;
     triage:note "merge/develop-into-phase-aq #1076 (develop f99c85656) merged to integration branch (quality-mgr PASS-with-1-important: Wyvern pin not latest -> follow-up AQ6-wyvern-pin-bump)" .
+
+triage:m8 a triage:Merge ;
+    triage:ofPR "#1078" ;
+    triage:mergeCommit "d0127c999" ;
+    triage:headCommit "246a3db9d" ;
+    triage:mergedAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ1.9 sprint #1078 fix/aq1-9-restart-matrix-bound merged (quality-mgr light gate PASS)" .
+
+triage:m9 a triage:Merge ;
+    triage:ofPR "#1075" ;
+    triage:mergeCommit "8d6a90e10" ;
+    triage:headCommit "9dbd599f1" ;
+    triage:mergedAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ closeout #1075 docs/aq-closeout merged to integration branch (doc-lint PASS)" .
+
+triage:phasePR1079 a triage:PhasePROpened ;
+    triage:ofPhase "AQ" ;
+    triage:prNumber "#1079" ;
+    triage:openedAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+    triage:headCommit "8d6a90e10" ;
+    triage:source "integrate/phase-aq" ;
+    triage:target "develop" ;
+    triage:note "Phase AQ integrate→develop PR #1079 opened (AQ5 evidence file, wyvern#139)" .
