@@ -2583,6 +2583,31 @@
    "minor": null,
    "count_basis": "ci-lanes",
    "evidence": "AQ3 #1054 @ 50eb04544 CI 33134101624: lint/clippy/fmt/wheel lanes green. Hermes ATM release wheel (musllinux x86_64) smoke-test FAIL on Docker Hub registry timeout (exit 125, infrastructure issue). Test matrix skipped downstream. Failed job re-run initiated. QA-final5 (FENIX-QA) aggregation in progress."
+  },
+  {
+   "run_id": "QA-AQ3-QA-final5",
+   "aich_sprint": "AQ3",
+   "phase_sprint": "AQ3",
+   "pass": false,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "team-lead",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ3 #1054 QA-final5 (FENIX-QA)",
+   "result_time_utc": "2026-08-28T12:20:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "FAIL",
+   "blockers": 1,
+   "important": 0,
+   "minor": 0,
+   "count_basis": "headline/reviewer",
+   "evidence": "AQ3 #1054 @ 50eb04544 QA-final5 (FENIX-QA): 13/14 PASS. All QA-final4 blockers verified fixed (ATM-QA-101 artifact byte-identical; ARCH-001 lib.rs 761 via replacement_handler.rs PASS; ATM-QA-102 AC8 run 33128710126 verified; ATM-QA-104 orphan removed; FTQ-001 deterministic). Sole blocker ATM-QA-105 doc accuracy: deliverable 4 cites emit_daemon_event; code uses tracing:: structured events. Docs-only fix pushed by fenix. QA-final6 targeted re-verify next. Non-blocking: RBQA-F001/F002/F003."
   }
  ],
  "follow_ups": [
