@@ -835,11 +835,28 @@ mod tests {
 
     // -- validate_landed_dir_stdout --
 
+    /// A platform-genuinely-absolute example landed-directory path.
+    /// `Path::is_absolute` (what `validate_landed_dir_stdout` actually
+    /// checks, not a string prefix) requires a drive letter on Windows --
+    /// a leading `/` alone is a *rooted* path there, not an absolute one --
+    /// so a single Unix-shaped literal cannot exercise this on every
+    /// platform.
+    #[cfg(not(windows))]
+    fn absolute_landed_dir_example() -> &'static str {
+        "/remote/atm-temp/send-to/abc"
+    }
+
+    #[cfg(windows)]
+    fn absolute_landed_dir_example() -> &'static str {
+        r"C:\remote\atm-temp\send-to\abc"
+    }
+
     #[test]
     fn validate_landed_dir_stdout_accepts_a_single_absolute_line() {
-        let landed = validate_landed_dir_stdout(b"/remote/atm-temp/send-to/abc\n")
-            .expect("valid single-line absolute path");
-        assert_eq!(landed, PathBuf::from("/remote/atm-temp/send-to/abc"));
+        let stdout = format!("{}\n", absolute_landed_dir_example());
+        let landed =
+            validate_landed_dir_stdout(stdout.as_bytes()).expect("valid single-line absolute path");
+        assert_eq!(landed, PathBuf::from(absolute_landed_dir_example()));
     }
 
     #[test]
@@ -870,15 +887,21 @@ mod tests {
 
     #[test]
     fn format_attachment_note_lists_every_landed_file() {
+        // Asserted against paths this test builds itself with `Path::join`
+        // (platform-native separators), not a hardcoded `/`-joined string:
+        // `format_attachment_note` displays a real filesystem path for a
+        // human reader, so rendering it with the platform's own separator
+        // is correct production behavior, not a bug to route around.
+        let landed_dir = Path::new(absolute_landed_dir_example());
         let note = format_attachment_note(
-            Path::new("/atm-temp/send-to/abc"),
+            landed_dir,
             &[
                 PathBuf::from("/local/report.pdf"),
                 PathBuf::from("/local/notes.txt"),
             ],
         );
         assert!(note.starts_with("Attached files (on this host):"));
-        assert!(note.contains("/atm-temp/send-to/abc/report.pdf"));
-        assert!(note.contains("/atm-temp/send-to/abc/notes.txt"));
+        assert!(note.contains(&landed_dir.join("report.pdf").display().to_string()));
+        assert!(note.contains(&landed_dir.join("notes.txt").display().to_string()));
     }
 }
