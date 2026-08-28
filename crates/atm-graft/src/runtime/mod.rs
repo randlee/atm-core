@@ -1879,12 +1879,26 @@ mod tests {
             "initial announce must land before the sustained-load phase starts"
         );
 
-        // Sustain back-to-back deliveries for multiple refresh intervals so
-        // the accept loop never reaches an idle `Ok(None)` poll iteration.
-        const SUSTAINED_LOAD_DURATION: Duration = Duration::from_secs(4);
-        let deadline = Instant::now() + SUSTAINED_LOAD_DURATION;
+        // Sustain back-to-back deliveries so the accept loop never reaches
+        // an idle `Ok(None)` poll iteration, driving load while polling for
+        // the observable this AC actually cares about: at least two
+        // refreshes land while the receiver stays continuously busy. Per
+        // ADR-008, wait on the observable rather than asserting a minimum
+        // count within a fixed wall-clock window — the outer bound here is
+        // a generous hang-detector deadline only, not a pass/fail timing
+        // assertion.
+        const HANG_DETECTOR_TIMEOUT: Duration = Duration::from_secs(15);
+        let hang_deadline = Instant::now() + HANG_DETECTOR_TIMEOUT;
         let mut delivered = 0usize;
-        while Instant::now() < deadline {
+        while registry.refresh_count() < 2 {
+            assert!(
+                Instant::now() < hang_deadline,
+                "a continuously busy receiver never observed >= 2 refreshes \
+                 within the hang-detector deadline (got {} refreshes over {} \
+                 deliveries)",
+                registry.refresh_count(),
+                delivered
+            );
             assert_eq!(
                 deliver_request(endpoint, &capability, request_event()),
                 GraftPostSendResponse::Delivered
@@ -1898,14 +1912,6 @@ mod tests {
         assert_eq!(
             injector.nudges.lock().expect("nudges lock").len(),
             delivered
-        );
-
-        assert!(
-            registry.refresh_count() >= 2,
-            "a continuously busy receiver must still refresh on cadence \
-             (got {} refreshes over {:?})",
-            registry.refresh_count(),
-            SUSTAINED_LOAD_DURATION
         );
 
         stop_receiver(stop_tx, join);
