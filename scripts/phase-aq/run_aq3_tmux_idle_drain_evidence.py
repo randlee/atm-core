@@ -77,11 +77,14 @@ import argparse
 import json
 import os
 from pathlib import Path
+import queue
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+import traceback
 from typing import Any
 import uuid
 
@@ -284,6 +287,54 @@ def wait_for_pane(socket_name: str, pane: str, marker: str, timeout: float) -> s
     raise TimeoutError(f"tmux pane did not receive {marker!r} within {timeout}s; latest={latest!r}")
 
 
+def _drain_ready_lines(process: subprocess.Popen[str], timeout: float) -> tuple[list[str], bool]:
+    """Read `process.stdout` until `ATM_DAEMON_READY`, honoring `timeout` even
+    when the child produces no output at all (FTQ-001).
+
+    A plain blocking `readline()` call has no notion of an overall deadline:
+    if the child never writes a line (for example it hangs before its first
+    flush, or crashes without closing the pipe promptly), the caller blocks
+    past `timeout` waiting on that single call. The read runs on a daemon
+    background thread instead and this loop drains it through a queue with a
+    per-call `timeout=remaining`, so the deadline is enforced even against
+    the very first read.
+    """
+    line_queue: "queue.Queue[str | None]" = queue.Queue()
+
+    def _pump_stdout() -> None:
+        stream = process.stdout
+        if stream is None:
+            line_queue.put(None)
+            return
+        try:
+            for line in iter(stream.readline, ""):
+                line_queue.put(line)
+        finally:
+            line_queue.put(None)
+
+    reader = threading.Thread(target=_pump_stdout, daemon=True)
+    reader.start()
+
+    deadline = time.monotonic() + timeout
+    lines: list[str] = []
+    ready = False
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            line = line_queue.get(timeout=remaining)
+        except queue.Empty:
+            break
+        if line is None:
+            break
+        lines.append(line.rstrip("\n"))
+        if line.strip() == "ATM_DAEMON_READY":
+            ready = True
+            break
+    return lines, ready
+
+
 def start_daemon(daemon: Path, env: dict[str, str], timeout: float) -> dict[str, Any]:
     process = subprocess.Popen(
         [str(daemon), "--peer-wire-security", "plaintext-test"],
@@ -295,18 +346,7 @@ def start_daemon(daemon: Path, env: dict[str, str], timeout: float) -> dict[str,
         encoding="utf-8",
         errors="replace",
     )
-    deadline = time.monotonic() + timeout
-    lines: list[str] = []
-    ready = False
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            break
-        line = process.stdout.readline() if process.stdout is not None else ""
-        if line:
-            lines.append(line.rstrip("\n"))
-            if line.strip() == "ATM_DAEMON_READY":
-                ready = True
-                break
+    lines, ready = _drain_ready_lines(process, timeout)
     stderr_tail = ""
     if process.poll() is not None:
         stderr_tail = (process.stderr.read() if process.stderr is not None else "").strip()
@@ -588,11 +628,26 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
     return record
 
 
-def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Path, Path]:
+def _evidence_output_paths(args: argparse.Namespace) -> tuple[Path, Path]:
     evidence_dir = args.evidence_dir or ROOT / "docs" / "plans" / "phase-aq" / "evidence" / "AQ3"
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    json_path = evidence_dir / f"tmux-idle-drain-{args.host}.json"
-    markdown_path = evidence_dir / f"tmux-idle-drain-{args.host}.md"
+    return evidence_dir / f"tmux-idle-drain-{args.host}.json", evidence_dir / f"tmux-idle-drain-{args.host}.md"
+
+
+def _clear_stale_evidence(*paths: Path) -> None:
+    """Deletes any pre-existing evidence file at these exact output paths
+    before the scenario runs, so a harness crash that never reaches
+    `write_evidence` leaves this run's evidence missing, never a stale
+    copy of a previous run's committed file (see AQ4 evidence run 6,
+    33137262962 @ c510a4745, for the concrete failure this guards
+    against).
+    """
+    for path in paths:
+        path.unlink(missing_ok=True)
+
+
+def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Path, Path]:
+    json_path, markdown_path = _evidence_output_paths(args)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema_version": 1,
         "sprint": "AQ3",
@@ -642,6 +697,21 @@ def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Pa
             "  --evidence-dir docs/plans/phase-aq/evidence/AQ3",
             "```",
         ]
+    elif record["status"] == "harness_crashed":
+        lines += [
+            "The harness raised an unhandled exception before it could "
+            "finish running the scenario. This transcript is written by a "
+            "top-level guard specifically so a crash can never leave this "
+            "run's evidence stale (a previous run's committed file, "
+            "reused unchanged) or missing (no file at all) -- see "
+            "`main`'s top-level `try`/`except` around `run_scenario`.",
+            "",
+            f"Error: `{record.get('error')}`",
+            "",
+            "```",
+            record.get("traceback", "").rstrip(),
+            "```",
+        ]
     else:
         lines += [
             "## Steer-kind message: immediate delivery",
@@ -676,13 +746,26 @@ def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Pa
 
 def main() -> int:
     args = parse_args()
+    # Deleted before any other work: a harness crash the guard below
+    # cannot itself recover from must leave this run's evidence missing,
+    # never a stale copy of a previous run's committed file.
+    _clear_stale_evidence(*_evidence_output_paths(args))
     if args.timeout <= 0:
         raise SystemExit("--timeout must be positive")
     if not args.daemon.is_file():
         raise SystemExit(f"owned daemon binary does not exist: {args.daemon}")
     if not args.atm.is_file():
         raise SystemExit(f"matched atm binary does not exist: {args.atm}")
-    record = run_scenario(args)
+    try:
+        record = run_scenario(args)
+    except Exception as error:  # noqa: BLE001 - a crash must still produce evidence, not none
+        record = {
+            "sprint": "AQ3",
+            "host": args.host,
+            "status": "harness_crashed",
+            "error": f"{type(error).__name__}: {error}",
+            "traceback": traceback.format_exc(),
+        }
     json_path, markdown_path = write_evidence(args, record)
     print(f"{record['status'].upper()} AQ3 tmux idle-drain evidence: {json_path}")
     print(f"transcript: {markdown_path}")

@@ -152,7 +152,13 @@ baseline.
    process inherits **only** `ATM_TEMP`, `ATM_IDENTITY`, `ATM_TEAM` from
    the caller's environment (an explicit allow-list, not the full parent
    environment), runs with the caller's cwd, and has stdin closed (no
-   accidental interactive prompt hang). **Bounded deadline** (default
+   accidental interactive prompt hang).
+   (QA-2 B6 correction, recorded post-merge: the allow-list gained a
+   fourth, opt-in entry, `ATM_TRANSFER_SSH_CONFIG` -- unset for every
+   ordinary operator, identical behavior to the original three-entry list;
+   see ADR-055's matching correction and
+   `TRANSFER_SCRIPT_ALLOWED_ENV_KEYS` for the single source of truth.)
+   **Bounded deadline** (default
    60 s, configurable; child killed on expiry), **capped stdout/stderr**
    (truncate with marker), success = single-line absolute-path landed dir
    on stdout **validated as untrusted input** (one line, absolute, no
@@ -474,6 +480,21 @@ paths unchanged.
   `win32 or pwsh found`, honest skip otherwise, mirroring this suite's
   existing platform-gated tests). **SFTP leg satisfied:** run 33128348487
   (linux+macos PASS) provides live cross-host loopback-SSH transcripts.
+  **Windows scope (run 33138148783):** `SftpShTests`/`TailscaleShTests`
+  unconditionally skip on `win32` — `sftp.sh`/`tailscale.sh` are the
+  macOS/Linux transfer scripts, Windows ships `sftp.ps1`, and running the
+  `.sh` scripts under a discovered MSYS `bash` on `windows-latest` exercises
+  an unshipped configuration, not the Windows contract. `SftpPs1Tests` is
+  Windows's real coverage and must pass there: run 33138148783 surfaced a
+  genuine `sftp.ps1` defect — the example's fixed-`$RemoteAtmTemp`
+  placeholder (`atm-<destination-uid>`) used `<`/`>`, legal in a POSIX
+  filename on the real Unix receiver but reserved Win32/NTFS characters,
+  which broke `SftpPs1Tests`' local fake-ssh/fake-scp harness's `mkdir`
+  simulation on a real Windows sender (`test_happy_path_exact_argv_and_single_line_landed_dir`,
+  `test_copy_failure_fails_closed`); fixed by changing the placeholder to
+  `atm-REPLACE_WITH_DESTINATION_UID`, which carries the same "must
+  customize before use" intent without reserved characters. Unix behavior
+  (`sftp.sh`/`tailscale.sh`) is unchanged.
 - AC 7 (live cross-host transcript): the sftp.sh leg is complete via run
   33128348487 (evidence table above); the Tailscale leg remains a
   **FOLLOW-UP `AQ4-tailscale-m5`** (fleet `m5` host not reachable from
@@ -493,8 +514,9 @@ paths unchanged.
 
 | Runner | Status | Run ID | Head | Files |
 |--------|--------|--------|------|-------|
-| ubuntu-latest | PASS | 33128348487 | d0d54e004 | [transfer-clean-runner-linux.json](evidence/AQ4/transfer-clean-runner-linux.json) · [transfer-clean-runner-linux.md](evidence/AQ4/transfer-clean-runner-linux.md) |
-| macOS | PASS | 33128348487 | d0d54e004 | [transfer-clean-runner-macos.json](evidence/AQ4/transfer-clean-runner-macos.json) · [transfer-clean-runner-macos.md](evidence/AQ4/transfer-clean-runner-macos.md) |
+| ubuntu-latest | PASS | 33144153970 | 9c9f9918a | [transfer-clean-runner-linux.json](evidence/AQ4/transfer-clean-runner-linux.json) · [transfer-clean-runner-linux.md](evidence/AQ4/transfer-clean-runner-linux.md) |
+| macOS | PASS | 33144153970 | 9c9f9918a | [transfer-clean-runner-macos.json](evidence/AQ4/transfer-clean-runner-macos.json) · [transfer-clean-runner-macos.md](evidence/AQ4/transfer-clean-runner-macos.md) |
+| windows | FAIL | 33144153970 | 9c9f9918a | [transfer-clean-runner-windows.json](evidence/AQ4/transfer-clean-runner-windows.json) · [transfer-clean-runner-windows.md](evidence/AQ4/transfer-clean-runner-windows.md) · harness ssh -vvv probe succeeds; residual failure is ssh-under-pwsh-under-atm handshake behavior, not sshd/auth/config — tracked as **FOLLOW-UP `AQ4-windows-loopback`** (see below) |
 
 The Tailscale leg (`scripts/transfer/tailscale.sh`) cannot run on either
 clean-runner lane (Tailscale enrollment is an operator/IT environment
@@ -503,6 +525,38 @@ below); a real cross-host Mac → `m5` transcript over Tailscale is tracked
 as **FOLLOW-UP `AQ4-tailscale-m5`**, paired with `AQ1.9-m5` (same
 prerequisite: `m5` reachable), in
 `docs/plans/phase-aq/.audit/qa-evidence-master.json`'s `follow_ups`.
+
+- AC 7 (Windows live cross-host transcript): 11 clean-runner Windows runs
+  against the `sftp.ps1` leg have failed at the ssh handshake step; every
+  other layer the Windows lane exercises is proven working on this PR —
+  `sftp.ps1`'s own contract tests pass under a real `pwsh`
+  (`.just/tests/test_transfer_scripts.py::SftpPs1Tests`), the NTFS
+  junction/reparse-point sweeper test passes
+  (`crates/atm-core/src/atm_temp_sweeper.rs::junction_escape_is_never_followed`,
+  `#[cfg(windows)]`), and the harness itself gets through every step up to
+  and including `DefaultShell`→Git Bash configuration and its own `ssh -vvv`
+  diagnostic probe. Run 11 (workflow run 33145261567, `pull_request` merge
+  ref of `431e6ad4e`) is the final isolating data point: from the harness's
+  own Python process, `ssh -F <scratch config> -vvv -n localhost echo …`
+  against the same loopback `sshd` succeeds (rc 0, pubkey accepted) — but
+  the identical ssh invocation made by `sftp.ps1` inside the atm-spawned
+  `pwsh` child (synthesized env, `Stdio::null()` stdin) still aborts at
+  banner exchange (sshd: `WSARecv() ERROR 10053`,
+  `kex_exchange_identification: read: Connection aborted`; `pwsh` sees
+  `$LASTEXITCODE` null → "(ssh exit unknown): (no output)"). This proves
+  sshd, auth, and the ssh client config are not the cause; the residual gap
+  is Windows OpenSSH client behavior specifically when hosted by `pwsh`
+  under atm's restricted child environment/handles. Tracked as
+  **FOLLOW-UP `AQ4-windows-loopback`** in
+  `docs/plans/phase-aq/.audit/qa-evidence-master.json`'s `follow_ups`:
+  reproduce ssh-under-pwsh-under-atm handle/console behavior on a real
+  Windows host against a real POSIX receiver (candidate cause:
+  console/handle inheritance of the transfer child process). Run 10
+  (workflow run 33144153970, head `9c9f9918a`) is the committed FAIL record
+  in the evidence table above; run 11 reproduces the same failure signature
+  one layer deeper (harness-level ssh succeeds, `sftp.ps1`-level ssh does
+  not) and is not separately committed as an evidence file. No PASS is
+  claimed for the Windows lane.
 
 ## Non-closure / out of scope
 
@@ -513,6 +567,18 @@ prerequisite: `m5` reachable), in
   `AQ1.9-m5`) in `docs/plans/phase-aq/.audit/qa-evidence-master.json`;
   neither clean-runner CI lane can reach `m5`, and this sprint does not
   implement Tailscale enrollment itself (see above).
+- Live Windows cross-host transfer transcript through `sftp.ps1` over the
+  clean-runner loopback harness — tracked as **FOLLOW-UP
+  `AQ4-windows-loopback`** in
+  `docs/plans/phase-aq/.audit/qa-evidence-master.json`. Every layer up to
+  the ssh handshake is proven working on this PR (sshd, auth, ssh client
+  config, `sftp.ps1`'s own `pwsh` contract tests, the NTFS junction
+  sweeper test, the harness's `DefaultShell`/`ssh -vvv` probe — see
+  Evidence/validation above); the unresolved residual is Windows OpenSSH
+  client behavior specifically when hosted by `pwsh` under atm's
+  restricted child environment/handles, isolated but not yet reproduced
+  outside CI. Neither the `sftp.sh` nor `tailscale.sh` legs are affected —
+  this is specific to `sftp.ps1`'s `pwsh` host process.
 - Structured `attachments` envelope metadata, `note_source` (Phase 2).
 - The rejected pull-based transfer design (fetch endpoints,
   delivery-gating, attachment storage traits) — see plan Non-closure.

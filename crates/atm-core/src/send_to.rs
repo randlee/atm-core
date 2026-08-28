@@ -19,11 +19,7 @@ use ulid::Ulid;
 
 use crate::address::AgentAddress;
 use crate::atm_temp::{AtmTemp, send_to_staging_dir};
-#[allow(
-    deprecated,
-    reason = "send_to resolves picker recipients through the retained atm-core roster boundary, matching every other roster-reading module in this crate"
-)]
-use crate::boundary::{RosterEntry, RosterStore};
+use crate::boundary::RosterEntry;
 use crate::error::AtmError;
 use crate::types::{AgentName, HostName, TeamName};
 
@@ -175,20 +171,21 @@ pub fn member_host(
 /// Returns [`AddressResolutionError`] when `member_id` is malformed, names an
 /// unknown roster member, or the member's registered host is null (`--
 /// from-json` cannot route a file transfer without one) or unparsable.
-#[allow(
-    deprecated,
-    reason = "resolves against the retained atm-core RosterStore boundary, matching this module's other roster reads"
-)]
 pub fn resolve_picker_recipient(
     member_id: &str,
-    roster: &dyn RosterStore,
+    roster: &dyn atm_storage::RosterStore,
 ) -> Result<AgentAddress, AddressResolutionError> {
     let (agent, team) = parse_member_id(member_id)?;
-    let entry = roster
-        .query_membership(&team, &agent)
-        .map_err(|error| AddressResolutionError::RosterUnavailable {
-            reason: error.detail().to_string(),
-        })?
+    let snapshot =
+        roster
+            .load_roster(&team)
+            .map_err(|error| AddressResolutionError::RosterUnavailable {
+                reason: error.detail().to_string(),
+            })?;
+    let entry = snapshot
+        .members
+        .into_iter()
+        .find(|member| member.agent_name == agent)
         .ok_or_else(|| AddressResolutionError::UnknownMember {
             member_id: member_id.to_string(),
         })?;
@@ -549,44 +546,24 @@ mod tests {
         entries: Vec<RosterEntry>,
     }
 
-    #[allow(
-        deprecated,
-        reason = "test double for the retained RosterStore boundary"
-    )]
-    impl crate::boundary::sealed::Sealed for FakeRosterStore {}
+    impl atm_storage::contract::sealed::Sealed for FakeRosterStore {}
 
-    #[allow(
-        deprecated,
-        reason = "test double for the retained RosterStore boundary"
-    )]
-    impl RosterStore for FakeRosterStore {
-        fn replace_roster(
-            &self,
-            _team: &TeamName,
-            _members: &[RosterEntry],
-        ) -> Result<(), AtmError> {
+    impl atm_storage::RosterStore for FakeRosterStore {
+        fn load_roster(&self, team: &TeamName) -> Result<atm_storage::RosterSnapshot, AtmError> {
+            Ok(atm_storage::RosterSnapshot {
+                team_name: team.clone(),
+                members: self
+                    .entries
+                    .iter()
+                    .filter(|entry| &entry.team_name == team)
+                    .cloned()
+                    .collect(),
+                refreshed_at: None,
+            })
+        }
+
+        fn save_roster(&self, _roster: &atm_storage::RosterSnapshot) -> Result<(), AtmError> {
             unimplemented!("not exercised by these tests")
-        }
-
-        fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
-            Ok(self
-                .entries
-                .iter()
-                .filter(|entry| &entry.team_name == team)
-                .cloned()
-                .collect())
-        }
-
-        fn query_membership(
-            &self,
-            team: &TeamName,
-            member: &AgentName,
-        ) -> Result<Option<RosterEntry>, AtmError> {
-            Ok(self
-                .entries
-                .iter()
-                .find(|entry| &entry.team_name == team && &entry.agent_name == member)
-                .cloned())
         }
 
         fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
@@ -595,13 +572,6 @@ mod tests {
                 .iter()
                 .map(|entry| entry.team_name.clone())
                 .collect())
-        }
-
-        fn health_snapshot(
-            &self,
-            _team: &TeamName,
-        ) -> Result<crate::boundary::RosterStoreHealthSnapshot, AtmError> {
-            unimplemented!("not exercised by these tests")
         }
     }
 

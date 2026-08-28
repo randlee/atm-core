@@ -17,7 +17,7 @@ use atm_core::send_to::{
 };
 use atm_core::transfer_script::{
     ConfiguredTransferScript, TRANSFER_SCRIPT_ALLOWED_ENV_KEYS, TransferScript,
-    resolve_transfer_script,
+    resolve_transfer_script, synthesized_transfer_script_env,
 };
 use atm_core::types::HostName;
 use ulid::Ulid;
@@ -131,13 +131,16 @@ async fn resolve_and_invoke_transfer_script(
 /// Spawns one bounded, argv-array transfer-script invocation (ADR-055
 /// decision (c)).
 ///
-/// The child inherits **only** `ATM_TEMP`/`ATM_IDENTITY`/`ATM_TEAM` from this
+/// The child inherits **only** [`TRANSFER_SCRIPT_ALLOWED_ENV_KEYS`] from this
 /// process's environment (an explicit allow-list, never the full parent
-/// environment), has stdin closed, and is killed if it outlives `timeout`.
-/// Captured stdout/stderr are capped at [`MAX_CAPTURED_OUTPUT_BYTES`] with a
-/// truncation marker. Success is validated as untrusted input: exactly one
-/// absolute-path line, no control characters
-/// ([`validate_landed_dir_stdout`]).
+/// environment), plus a deliberately minimal, synthesized `PATH` (and, on
+/// Windows, a few process-startup variables) from
+/// [`synthesized_transfer_script_env`] -- never the caller's own `PATH`
+/// (ADR-055 decision (c) amendment). It has stdin closed, and is killed if
+/// it outlives `timeout`. Captured stdout/stderr are capped at
+/// [`MAX_CAPTURED_OUTPUT_BYTES`] with a truncation marker. Success is
+/// validated as untrusted input: exactly one absolute-path line, no control
+/// characters ([`validate_landed_dir_stdout`]).
 ///
 /// # Errors
 ///
@@ -158,6 +161,9 @@ pub(crate) async fn invoke_transfer_script(
         if let Ok(value) = std::env::var(key) {
             command.env(key, value);
         }
+    }
+    for (key, value) in synthesized_transfer_script_env(&ProcessEnvSource) {
+        command.env(key, value);
     }
     command.stdin(Stdio::null());
     command.stdout(Stdio::piped());
@@ -247,6 +253,19 @@ async fn read_capped(mut reader: impl tokio::io::AsyncRead + Unpin) -> Vec<u8> {
 // script directly (shebang exec, `sleep`, `env | cut`), which has no
 // Windows equivalent, so the whole module is gated rather than each
 // test individually.
+//
+// Every `invoke_transfer_script_*` test below is tagged
+// `#[serial_test::serial(transfer_script_spawn)]`: each one forks and reaps
+// a real child process (some killed mid-flight, e.g. the wedged-child
+// deadline test), and `cargo test`'s default parallel-thread execution was
+// observed to intermittently corrupt/stall sibling tests' captured
+// stdout when several ran concurrently in the same process (CI run
+// 33141901187: `invoke_transfer_script_rejects_multi_line_stdout` got an
+// error whose text didn't match its own script's output; reproduced
+// locally as a ~10% rate of 30s stalls on the wedged-child test *only*
+// when run alongside its siblings, never in isolation). Serializing this
+// module's real-subprocess tests removes the concurrent fork/reap window
+// entirely rather than chasing the exact interleaving.
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
@@ -274,6 +293,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial(transfer_script_spawn)]
     async fn invoke_transfer_script_happy_path_returns_the_landed_directory() {
         let dir = tempfile::tempdir().expect("tempdir");
         let landed = dir.path().join("landed");
@@ -298,6 +318,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial(transfer_script_spawn)]
     async fn invoke_transfer_script_propagates_bounded_stderr_on_failure() {
         let dir = tempfile::tempdir().expect("tempdir");
         let script_path = write_script(
@@ -320,6 +341,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial(transfer_script_spawn)]
     async fn invoke_transfer_script_kills_a_wedged_child_after_its_deadline() {
         let dir = tempfile::tempdir().expect("tempdir");
         let script_path = write_script(dir.path(), "stub.sh", "#!/bin/sh\nsleep 30\n");
@@ -338,6 +360,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial(transfer_script_spawn)]
     async fn invoke_transfer_script_rejects_multi_line_stdout() {
         let dir = tempfile::tempdir().expect("tempdir");
         let script_path = write_script(dir.path(), "stub.sh", "#!/bin/sh\necho /one\necho /two\n");
@@ -356,7 +379,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial(env)]
+    #[serial_test::serial(transfer_script_spawn)]
     async fn invoke_transfer_script_child_environment_is_restricted_to_the_allow_list() {
         let dir = tempfile::tempdir().expect("tempdir");
         let landed = dir.path().join("landed");
@@ -400,6 +423,114 @@ mod tests {
         assert!(names.contains("ATM_TEAM"));
         assert!(names.contains("ATM_TEMP"));
         assert!(!names.contains("NOT_ALLOWED_LEAK"));
+    }
+
+    /// QA-2 B6: `ATM_TRANSFER_SSH_CONFIG` is an opt-in fourth allow-list
+    /// entry -- forwarded when the caller's process happens to have it set
+    /// (exactly like the other three), and simply absent from the child
+    /// otherwise. Every ordinary `atm send --attach` invocation never sets
+    /// it; only tooling like `scripts/phase-aq/run_aq4_transfer_evidence.py`
+    /// does, to route `ssh`/`scp` through a scratch config instead of the
+    /// real `~/.ssh/config`.
+    #[tokio::test]
+    #[serial_test::serial(transfer_script_spawn)]
+    async fn invoke_transfer_script_forwards_the_opt_in_ssh_config_override_when_set() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let landed = dir.path().join("landed");
+        std::fs::create_dir_all(&landed).expect("landed dir");
+        let capture_file = dir.path().join("env-capture.txt");
+        let script_contents = format!(
+            "#!/bin/sh\nenv | grep '^ATM_TRANSFER_SSH_CONFIG=' > {}\necho {}\n",
+            capture_file.display(),
+            landed.display()
+        );
+        let script_path = write_script(dir.path(), "stub.sh", &script_contents);
+        let configured = fixture_configured_script(script_path, host("m5"));
+
+        let _env = atm_core::test_support::EnvGuard::set_many([
+            ("ATM_TEMP", Some("atm-temp-test-value")),
+            ("ATM_IDENTITY", Some("test-agent")),
+            ("ATM_TEAM", Some("test-team")),
+            (
+                "ATM_TRANSFER_SSH_CONFIG",
+                Some("/scratch/ssh_client_config"),
+            ),
+        ]);
+
+        invoke_transfer_script(
+            &configured,
+            Ulid::new(),
+            &[PathBuf::from("/tmp/report.pdf")],
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("happy path succeeds");
+
+        let captured =
+            std::fs::read_to_string(&capture_file).expect("script wrote its captured env");
+        assert_eq!(
+            captured.trim(),
+            "ATM_TRANSFER_SSH_CONFIG=/scratch/ssh_client_config"
+        );
+    }
+
+    /// ADR-055 decision (c) amendment: the child gets a synthesized,
+    /// deliberately minimal `PATH` (never the caller's own). This proves
+    /// both halves at once: the child's `PATH` is non-empty (the AQ4
+    /// Windows regression, run 33135390308, was a completely absent
+    /// `PATH`) and it is never the caller's real, distinctive `PATH`
+    /// value -- forwarding that would be exactly the ambient-authority
+    /// leak the rest of the allow-list already refuses.
+    #[tokio::test]
+    #[serial_test::serial(transfer_script_spawn)]
+    async fn invoke_transfer_script_child_gets_a_synthesized_path_never_the_callers() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let landed = dir.path().join("landed");
+        std::fs::create_dir_all(&landed).expect("landed dir");
+        let capture_file = dir.path().join("env-capture.txt");
+        let script_contents = format!(
+            "#!/bin/sh\nprintf '%s' \"$PATH\" > {}\necho {}\n",
+            capture_file.display(),
+            landed.display()
+        );
+        let script_path = write_script(dir.path(), "stub.sh", &script_contents);
+        let configured = fixture_configured_script(script_path, host("m5"));
+
+        let distinctive_caller_path = "/definitely-not-a-real-dir/atm-caller-path-marker";
+        let _env = atm_core::test_support::EnvGuard::set_many([
+            ("ATM_TEMP", Some("atm-temp-test-value")),
+            ("ATM_IDENTITY", Some("test-agent")),
+            ("ATM_TEAM", Some("test-team")),
+            ("PATH", Some(distinctive_caller_path)),
+        ]);
+
+        invoke_transfer_script(
+            &configured,
+            Ulid::new(),
+            &[PathBuf::from("/tmp/report.pdf")],
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("happy path succeeds");
+
+        let child_path = std::fs::read_to_string(&capture_file).expect("script captured PATH");
+        assert!(!child_path.is_empty(), "child PATH must never be empty");
+        assert!(
+            !child_path.contains(distinctive_caller_path),
+            "the caller's own PATH must never leak into the child: {child_path:?}"
+        );
+        assert_eq!(
+            child_path,
+            atm_core::transfer_script::synthesized_transfer_script_env(
+                &atm_core::atm_temp::ProcessEnvSource
+            )
+            .into_iter()
+            .find(|(key, _)| *key == "PATH")
+            .expect("synthesized env always includes PATH")
+            .1
+            .to_str()
+            .expect("synthesized PATH is UTF-8 in this test")
+        );
     }
 
     /// Builds a real [`ConfiguredTransferScript`] by resolving `script_path`

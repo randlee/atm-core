@@ -439,8 +439,31 @@ mod tests {
         let modified = now
             .checked_sub(age)
             .expect("age must not underflow SystemTime");
-        let file = std::fs::File::open(path).expect("open for mtime rewrite");
+        let file = open_for_mtime_rewrite(path);
         file.set_modified(modified).expect("set mtime");
+    }
+
+    /// Opens `path` for an [`age_file`] mtime-only rewrite.
+    ///
+    /// Windows requires the handle to carry `FILE_WRITE_ATTRIBUTES`
+    /// (granted by `write(true)`) before `set_modified` is permitted; a
+    /// read-only `File::open` handle fails there with `PermissionDenied`
+    /// ("Access is denied.") even though the test process owns the file.
+    /// Unix instead permits mtime rewrites through a read-only fd for the
+    /// owning user, and *requires* the read-only open: `write(true)` fails
+    /// immediately with `EISDIR` when `path` is a directory (this helper's
+    /// unix-only callers do age directories, never just files).
+    #[cfg(unix)]
+    fn open_for_mtime_rewrite(path: &Path) -> std::fs::File {
+        std::fs::File::open(path).expect("open for mtime rewrite")
+    }
+
+    #[cfg(windows)]
+    fn open_for_mtime_rewrite(path: &Path) -> std::fs::File {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(path)
+            .expect("open for mtime rewrite")
     }
 
     /// Test-only [`EntryAgeSource`] that supplies an explicit [`EntryAge`]

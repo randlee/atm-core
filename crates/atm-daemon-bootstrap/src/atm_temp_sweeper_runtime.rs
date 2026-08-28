@@ -256,8 +256,13 @@ fn record_sweep_pass_event(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use atm_core::observability::NullObservability;
+    use atm_core::observability::{
+        AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
+        LogTailSession, NullObservability,
+    };
+    use atm_core::types::{AgentName, TeamName};
     use std::time::Duration;
+    use tokio::sync::Notify;
 
     fn start_test_sweeper(root: PathBuf, config: SweepConfig) -> AtmTempSweeperRuntime {
         AtmTempSweeperRuntime::start(
@@ -266,6 +271,58 @@ mod tests {
             Arc::new(NullObservability),
             DaemonLaunchIdentity::default(),
         )
+    }
+
+    /// Test-only [`ObservabilityPort`] that notifies a [`Notify`] every time
+    /// `run_one_pass` reports a completed (or failed) sweep pass through
+    /// `record_sweep_pass_event`. This is the sweeper's own existing
+    /// completion signal -- not a new production hook -- so
+    /// `sweeper_reclaims_expired_entries_on_its_own_schedule` can await the
+    /// real event a `spawn_blocking` pass fires when it finishes instead of
+    /// polling with a fixed iteration cap, which is not a synchronization
+    /// primitive and can under-wait on a loaded CI runner.
+    #[derive(Default)]
+    struct SweepPassCompletionObservability {
+        pass_completed: Notify,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for SweepPassCompletionObservability {}
+
+    impl ObservabilityPort for SweepPassCompletionObservability {
+        fn emit(&self, _event: CommandEvent) -> Result<(), atm_core::error::AtmError> {
+            self.pass_completed.notify_one();
+            Ok(())
+        }
+
+        fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, atm_core::error::AtmError> {
+            Ok(AtmLogSnapshot::default())
+        }
+
+        fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, atm_core::error::AtmError> {
+            Ok(LogTailSession::empty())
+        }
+
+        fn health(&self) -> Result<AtmObservabilityHealth, atm_core::error::AtmError> {
+            Ok(AtmObservabilityHealth {
+                active_log_path: None,
+                logging_state: AtmObservabilityHealthState::Unavailable,
+                query_state: Some(AtmObservabilityHealthState::Unavailable),
+                maintenance: None,
+                diagnostic: None,
+                detail: Some("sweep pass completion test observer".to_string()),
+            })
+        }
+    }
+
+    /// A `team`/`identity` pair is required for `record_sweep_pass_event` to
+    /// call `observability.emit` at all (it silently no-ops otherwise, mirroring
+    /// production's `daemon_launch_identity`-gated attribution), so tests that
+    /// need the completion signal must supply one.
+    fn test_daemon_launch_identity_with_team_and_agent() -> DaemonLaunchIdentity {
+        DaemonLaunchIdentity {
+            team: Some(TeamName::from_validated("test-team")),
+            identity: Some(AgentName::from_validated("test-sweeper-agent")),
+        }
     }
 
     // `start_paused` runs this test on tokio's virtual clock: no real
@@ -286,24 +343,34 @@ mod tests {
         let expired = dir.path().join("expired.bin");
         std::fs::write(&expired, b"x").expect("write");
 
-        let sweeper = start_test_sweeper(
+        let observability = Arc::new(SweepPassCompletionObservability::default());
+        let sweeper = AtmTempSweeperRuntime::start(
             dir.path().to_path_buf(),
             SweepConfig {
                 interval: Duration::from_secs(3600),
                 ttl,
             },
+            Arc::clone(&observability) as Arc<dyn ObservabilityPort + Send + Sync>,
+            test_daemon_launch_identity_with_team_and_agent(),
         );
 
         // `tokio::time::interval`'s first tick resolves immediately, so the
-        // sweeper's first pass starts right away; yield until its
-        // `spawn_blocking` pass has had a chance to complete and notify this
-        // task back, bounded by an iteration cap rather than a timer.
-        for _ in 0..10_000 {
-            if !expired.exists() {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
+        // sweeper's first pass starts right away on a `spawn_blocking`
+        // thread. Await the pass's own completion signal --
+        // `record_sweep_pass_event`'s `observability.emit` call, which
+        // `run_one_pass` fires unconditionally once the pass returns --
+        // instead of polling with a fixed iteration cap: a cap is not a
+        // synchronization primitive, and on a loaded CI runner the real
+        // blocking thread can still be mid-pass when the cap is exhausted,
+        // which is exactly the flake this replaces. `Notify::notified()` is
+        // not a timer, so it is unaffected by this test's paused virtual
+        // clock; a real, wall-clock-bounded `timeout` is intentionally not
+        // used here since `start_paused`'s time auto-advance can race a
+        // still-running `spawn_blocking` pass and fire the timeout before
+        // the real thread finishes, reintroducing the exact kind of
+        // under-wait flake this fix removes. A genuinely hung pass instead
+        // fails loudly via the test harness's own overall timeout.
+        observability.pass_completed.notified().await;
         assert!(!expired.exists(), "expired entry must be reclaimed");
 
         sweeper.shutdown().await;
