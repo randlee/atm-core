@@ -162,6 +162,23 @@ HERDR_WIRE_PATTERNS = tuple(
     )
 )
 
+# The literal-containment check below only sees a contiguous `"backendType"`
+# token, so it cannot catch a computed equivalent (e.g.
+# `["backend", "Type"].concat()`, `concat!("backend", "Type")`, or
+# `"backend" + "Type"`) built outside the two owning modules to route around
+# the ownership gate (RBQA-F101/F102). These patterns catch the computed
+# forms regardless of internal whitespace; each is matched against every
+# Rust source line, including test-only sources and inline `#[cfg(test)]`
+# modules, since evading the gate from test code is exactly the bug class
+# being guarded against.
+BACKEND_TYPE_COMPUTED_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r'"backend"\s*,\s*"Type"',
+        r'"backend"\s*\+\s*"Type"',
+    )
+)
+
 
 def iter_rust_sources(repo_root: Path) -> tuple[Path, ...]:
     crates_dir = repo_root / "crates"
@@ -245,6 +262,19 @@ def find_violations(repo_root: Path) -> tuple[Violation, ...]:
                                 Path(relative_path),
                                 line_number,
                                 "herdr_string_containment_gate: Herdr wire literal must remain inside crates/atm-herdr",
+                                line.strip(),
+                            )
+                        )
+            if relative_path not in backend_type_paths:
+                for pattern in BACKEND_TYPE_COMPUTED_PATTERNS:
+                    if pattern.search(line):
+                        violations.append(
+                            Violation(
+                                Path(relative_path),
+                                line_number,
+                                "backend_type_containment_gate: computed \"backendType\" literal must not "
+                                "bypass the member_mutation.rs/delivery_channel.rs ownership gate "
+                                "(RBQA-F101/F102)",
                                 line.strip(),
                             )
                         )

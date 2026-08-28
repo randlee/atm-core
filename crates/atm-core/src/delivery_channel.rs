@@ -127,6 +127,24 @@ pub fn classify_delivery_channel(
     }
 }
 
+/// Roster metadata selecting `backend` as the classifier for test fixtures.
+///
+/// Test fixtures in dependent crates (e.g. `atm-daemon-bootstrap`,
+/// `atm-http-runtime`) need roster metadata keyed by `backendType` without
+/// duplicating that literal outside its two owning modules
+/// (`scripts/check-nudge-taxonomy.py` enforces the containment). Callers
+/// that also need `herdrSession` should insert it into the returned map.
+#[cfg(any(test, feature = "test-utils"))]
+#[must_use]
+pub fn test_backend_type_metadata(backend: &str) -> serde_json::Map<String, Value> {
+    let mut metadata = serde_json::Map::new();
+    metadata.insert(
+        BACKEND_TYPE_METADATA_KEY.to_owned(),
+        Value::String(backend.to_owned()),
+    );
+    metadata
+}
+
 /// Derives the local backend from durable roster data. No schema migration:
 /// `recipient_pane_id` selects `Tmux`;
 /// `metadata_json["backendType"] == "herdr"` selects `Herdr`, reading an
