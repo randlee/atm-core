@@ -24,6 +24,7 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SFTP_SH = ROOT / "scripts" / "transfer" / "sftp.sh"
@@ -31,6 +32,35 @@ TAILSCALE_SH = ROOT / "scripts" / "transfer" / "tailscale.sh"
 SFTP_PS1 = ROOT / "scripts" / "transfer" / "sftp.ps1"
 
 PWSH = shutil.which("pwsh")
+
+
+def posix_shell() -> str | None:
+    """A POSIX shell, when one happens to be available.
+
+    `CreateProcess` on Windows has no shebang interpretation:
+    `subprocess.run([str(a_dot_sh_file)])` there raises `OSError:
+    [WinError 193] %1 is not a valid Win32 application`, even though the
+    script's own logic is entirely portable `/bin/sh`. `sftp.sh`/
+    `tailscale.sh` are not the shipped Windows transfer path (`sftp.ps1`
+    is, covered separately by `SftpPs1Tests`), so `SftpShTests`/
+    `TailscaleShTests` below unconditionally skip on `win32` regardless of
+    what this returns -- this helper and `sh_invocation()` stay in place
+    only for `PosixShellDiscoveryTests`' direct unit coverage of the
+    bash/sh preference order, and so `sh_invocation()` keeps working
+    correctly if a future non-Windows-gated caller needs it.
+    """
+    return shutil.which("bash") or shutil.which("sh")
+
+
+def sh_invocation(script: Path) -> list[str]:
+    """Argv prefix to invoke a `.sh` script portably; callers on Windows
+    must gate on `posix_shell()` first (see its docstring above)."""
+    if sys.platform == "win32":
+        shell = posix_shell()
+        if shell is None:  # pragma: no cover - guarded by class-level skip
+            raise AssertionError("posix_shell() must be checked before sh_invocation() on Windows")
+        return [shell, str(script)]
+    return [str(script)]
 
 FAKE_SSH = textwrap.dedent(
     """\
@@ -44,16 +74,17 @@ FAKE_SSH = textwrap.dedent(
     import pathlib
     import sys
 
-    from fake_transfer_lib import log_invocation, resolve_within_profile
+    from fake_transfer_lib import log_invocation, resolve_within_profile, strip_ssh_config_flag
 
     def main() -> int:
         argv = sys.argv[1:]
         log_invocation("ssh", argv)
-        if len(argv) < 1:
+        positional = strip_ssh_config_flag(argv)
+        if len(positional) < 1:
             print("fake ssh: missing host argument", file=sys.stderr)
             return 2
-        host = argv[0]
-        command = argv[1] if len(argv) > 1 else ""
+        host = positional[0]
+        command = positional[1] if len(positional) > 1 else ""
 
         allowed = os.environ.get("FAKE_SSH_ALLOWED_HOSTS")
         if allowed is not None and host not in allowed.split(","):
@@ -90,7 +121,7 @@ FAKE_SCP = textwrap.dedent(
     import shutil
     import sys
 
-    from fake_transfer_lib import log_invocation, resolve_within_profile
+    from fake_transfer_lib import log_invocation, resolve_within_profile, strip_ssh_config_flag
 
     def main() -> int:
         argv = sys.argv[1:]
@@ -101,7 +132,8 @@ FAKE_SCP = textwrap.dedent(
             print("fake scp: forced failure for test", file=sys.stderr)
             return int(forced)
 
-        positional = [arg for arg in argv if not arg.startswith("-")]
+        remaining = strip_ssh_config_flag(argv)
+        positional = [arg for arg in remaining if not arg.startswith("-")]
         if len(positional) != 2:
             print(f"fake scp: expected exactly one source and one destination, got {positional}", file=sys.stderr)
             return 1
@@ -156,20 +188,69 @@ FAKE_TRANSFER_LIB = textwrap.dedent(
         except ValueError:
             return None
         return resolved
+
+
+    def strip_ssh_config_flag(argv: list[str]) -> list[str]:
+        \"\"\"Strips a leading `-F <path>` pair (QA-2 B6's
+        ATM_TRANSFER_SSH_CONFIG passthrough) and any leading boolean
+        client flags sftp.ps1/sftp.sh may put ahead of the host argument
+        (currently just `-n`, sftp.ps1's non-interactive-stdin fix -- run
+        33142976493 @ dcd3130f1 -- and `-T`, kept for parity since real
+        OpenSSH accepts it in the same no-value position) before
+        host/positional derivation, exactly like real OpenSSH's own flag
+        parsing -- so contract tests can assert on the `-F` pair's
+        presence in the logged argv while the rest of this fake's logic
+        still finds the real host/command/source/destination arguments
+        regardless of whether either is there.\"\"\"
+        remaining = argv
+        if len(remaining) >= 2 and remaining[0] == "-F":
+            remaining = remaining[2:]
+        while remaining and remaining[0] in ("-n", "-T"):
+            remaining = remaining[1:]
+        return remaining
     """
 )
 
 
 def _install_fake_bin(bin_dir: Path) -> None:
     """Writes the fake `ssh`/`scp` (and their shared helper module) into
-    `bin_dir`, marking the two executables owner-executable."""
+    `bin_dir`, marking the two executables owner-executable.
+
+    On Windows, `sftp.ps1` resolves `ssh`/`scp` via `Get-Command -CommandType
+    Application`, which only matches files whose extension is in
+    `$env:PATHEXT` -- a bare, extension-less file (fine for Unix, where the
+    kernel reads the shebang line regardless of extension) is invisible to
+    it. Also write a `<name>.cmd` shim next to each bare script so
+    `Get-Command ssh`/`Get-Command scp` finds a real command on `PATH`
+    exactly like the production OpenSSH client's `ssh.exe`/`scp.exe` would
+    be found; the shim just re-execs this same Python source under the
+    interpreter already running the test.
+
+    The bare, extension-less files are what a POSIX shell (`sftp.sh`/
+    `tailscale.sh` invoked via a discovered `bash`/`sh` on Windows, see
+    `posix_shell()`) actually resolves on `PATH` -- MSYS/Git-for-Windows
+    treats a PATH entry as executable by content-sniffing its shebang line,
+    which only works if that line is pure `\n`-terminated. `Path.write_text`
+    defaults to universal-newline translation, which would silently turn
+    every `\n` in these scripts into `\r\n` on Windows and corrupt the
+    shebang (`#!/usr/bin/env python3\r` is not a resolvable interpreter
+    name) -- pass `newline=""` throughout this function so every byte is
+    written exactly as authored, on every platform.
+    """
     bin_dir.mkdir(parents=True, exist_ok=True)
-    (bin_dir / "fake_transfer_lib.py").write_text(FAKE_TRANSFER_LIB, encoding="utf-8")
+    (bin_dir / "fake_transfer_lib.py").write_text(FAKE_TRANSFER_LIB, encoding="utf-8", newline="")
     for name, body in (("ssh", FAKE_SSH), ("scp", FAKE_SCP)):
         script_path = bin_dir / name
-        script_path.write_text(body, encoding="utf-8")
+        script_path.write_text(body, encoding="utf-8", newline="")
         mode = script_path.stat().st_mode
         script_path.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        if sys.platform == "win32":
+            cmd_path = bin_dir / f"{name}.cmd"
+            cmd_path.write_text(
+                f'@echo off\r\n"{sys.executable}" "%~dp0{name}" %*\r\n',
+                encoding="utf-8",
+                newline="",
+            )
 
 
 def _read_log(log_path: Path) -> list[dict]:
@@ -188,7 +269,7 @@ class _TransferScriptContractTestsMixin:
 
     def _invoke(self, args, env, cwd):
         return subprocess.run(
-            [str(self.SCRIPT), *args],
+            [*sh_invocation(self.SCRIPT), *args],
             env=env,
             cwd=cwd,
             capture_output=True,
@@ -270,6 +351,32 @@ class _TransferScriptContractTestsMixin:
             invocations = _read_log(log_path)
             self.assertEqual([call["bin"] for call in invocations], ["ssh"], invocations)
 
+    def test_ssh_config_override_is_passed_through_when_set(self) -> None:
+        # QA-2 B6: an opt-in fourth allow-list entry, ATM_TRANSFER_SSH_CONFIG,
+        # unset by every ordinary install (the fixture in `_fixture` never
+        # sets it, and `test_happy_path_exact_argv_and_single_line_landed_dir`
+        # above already proves ssh/scp's argv is unaffected when it is
+        # absent). When a caller *does* set it -- only
+        # `scripts/phase-aq/run_aq4_transfer_evidence.py` does, to avoid
+        # touching the real `~/.ssh/config` -- both ssh and scp must receive
+        # it as `-F <path>`.
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            _bin_dir, log_path, env = self._fixture(tmp)
+            scratch_config = tmp / "scratch_ssh_config"
+            scratch_config.write_text("Host m5\n    Hostname 127.0.0.1\n", encoding="utf-8")
+            env["ATM_TRANSFER_SSH_CONFIG"] = str(scratch_config)
+            attach = tmp / "report.pdf"
+            attach.write_bytes(b"pdf-bytes")
+
+            result = self._invoke(["m5", "01J00000000000000000000f01", str(attach)], env, str(tmp))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            invocations = _read_log(log_path)
+            ssh_call, scp_call = invocations[0], invocations[1]
+            self.assertEqual(ssh_call["argv"][:2], ["-F", str(scratch_config)])
+            self.assertEqual(scp_call["argv"][:2], ["-F", str(scratch_config)])
+
     def test_remote_mkdir_failure_fails_closed_before_any_copy(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmp:
             tmp = Path(raw_tmp)
@@ -337,6 +444,11 @@ class _TransferScriptContractTestsMixin:
             self.assertEqual(before, after, "invoking a transfer script must never mutate this process's own environment")
 
 
+@unittest.skipIf(
+    sys.platform == "win32",
+    "unix transfer scripts (sftp.sh/tailscale.sh) are not the Windows path; "
+    "Windows ships sftp.ps1, covered by SftpPs1Tests",
+)
 class SftpShTests(_TransferScriptContractTestsMixin, unittest.TestCase):
     SCRIPT = SFTP_SH
 
@@ -345,6 +457,11 @@ class SftpShTests(_TransferScriptContractTestsMixin, unittest.TestCase):
         self.assertTrue(os.access(SFTP_SH, os.X_OK))
 
 
+@unittest.skipIf(
+    sys.platform == "win32",
+    "unix transfer scripts (sftp.sh/tailscale.sh) are not the Windows path; "
+    "Windows ships sftp.ps1, covered by SftpPs1Tests",
+)
 class TailscaleShTests(_TransferScriptContractTestsMixin, unittest.TestCase):
     SCRIPT = TAILSCALE_SH
 
@@ -406,17 +523,52 @@ class SftpPs1Tests(unittest.TestCase):
             invocations = _read_log(log_path)
             self.assertEqual([call["bin"] for call in invocations], ["ssh", "scp"], invocations)
 
+    def test_ssh_config_override_is_passed_through_when_set(self) -> None:
+        # QA-2 B6: mirrors the sh mixin's equivalent test for the pwsh
+        # example -- ATM_TRANSFER_SSH_CONFIG, unset by every ordinary
+        # install, is passed to both ssh and scp as -F <path>.
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            _bin_dir, log_path, env = self._fixture(tmp)
+            scratch_config = tmp / "scratch_ssh_config"
+            scratch_config.write_text("Host m5\n    Hostname 127.0.0.1\n", encoding="utf-8")
+            env["ATM_TRANSFER_SSH_CONFIG"] = str(scratch_config)
+            attach = tmp / "report.pdf"
+            attach.write_bytes(b"pdf-bytes")
+
+            result = self._invoke(["m5", "01J00000000000000000000f02", str(attach)], env, str(tmp))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            invocations = _read_log(log_path)
+            ssh_call, scp_call = invocations[0], invocations[1]
+            self.assertEqual(ssh_call["argv"][:2], ["-F", str(scratch_config)])
+            self.assertEqual(scp_call["argv"][:2], ["-F", str(scratch_config)])
+
     def test_missing_binary_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmp:
             tmp = Path(raw_tmp)
             env = dict(os.environ)
             env["PATH"] = ""
+            # ADR-055 decision (c) amendment: sftp.ps1 now falls back to
+            # `%SystemRoot%\System32\OpenSSH\ssh.exe`/`scp.exe` when
+            # Get-Command finds nothing on PATH. On a real Windows runner
+            # (which normally ships OpenSSH there), leaving the real
+            # SystemRoot in place would let that fallback mask this test's
+            # intent -- repoint it at a directory that exists but was never
+            # given an OpenSSH client, so the fallback legitimately misses
+            # too, without leaving SystemRoot empty (pwsh itself needs a
+            # non-empty SystemRoot to start).
+            fake_system_root = tmp / "not-a-real-system-root"
+            fake_system_root.mkdir()
+            env["SystemRoot"] = str(fake_system_root)
+            env["SYSTEMROOT"] = str(fake_system_root)
             attach = tmp / "report.pdf"
             attach.write_bytes(b"pdf-bytes")
 
             result = self._invoke(["m5", "01J00000000000000000000049", str(attach)], env, str(tmp))
 
             self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("not found on PATH", result.stderr)
 
     def test_copy_failure_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmp:
@@ -431,6 +583,123 @@ class SftpPs1Tests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0, result.stdout)
             invocations = _read_log(log_path)
             self.assertEqual([call["bin"] for call in invocations], ["ssh", "scp"], invocations)
+
+    def test_remote_mkdir_failure_surfaces_ssh_stderr_and_exit_code(self) -> None:
+        """run 33141941621 @ 21f00edb1: the previous "failed to create ..."
+        message never included ssh's own diagnostic text or exit code,
+        making the real remote failure unrecoverable from the caller's
+        side. `fake ssh`'s forced-failure branch always writes "fake ssh:
+        forced failure for test" to its own stderr before exiting
+        non-zero (see `FAKE_SSH` above); that text, and the exit code,
+        must both now appear in sftp.ps1's own failure message."""
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            _bin_dir, _log_path, env = self._fixture(tmp)
+            env["FAKE_SSH_EXIT_CODE"] = "17"
+            attach = tmp / "report.pdf"
+            attach.write_bytes(b"pdf-bytes")
+
+            result = self._invoke(["m5", "01J0000000000000000000004B", str(attach)], env, str(tmp))
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("failed to create", result.stderr)
+            self.assertIn("ssh exit 17", result.stderr)
+            self.assertIn("fake ssh: forced failure for test", result.stderr)
+
+    def test_copy_failure_surfaces_scp_stderr_and_exit_code(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            _bin_dir, _log_path, env = self._fixture(tmp)
+            env["FAKE_SCP_EXIT_CODE"] = "9"
+            attach = tmp / "report.pdf"
+            attach.write_bytes(b"pdf-bytes")
+
+            result = self._invoke(["m5", "01J0000000000000000000004C", str(attach)], env, str(tmp))
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("failed to copy", result.stderr)
+            self.assertIn("scp exit 9", result.stderr)
+            self.assertIn("fake scp: forced failure for test", result.stderr)
+
+    def test_remote_mkdir_failure_exit_code_and_stderr_survive_capture(self) -> None:
+        """Regression coverage for the exit-code/stderr capture order
+        itself (not just its downstream message, already covered by
+        `test_remote_mkdir_failure_surfaces_ssh_stderr_and_exit_code`
+        above): a distinct forced exit code (7, never reused by another
+        test in this class) must still show up as `ssh exit 7` with fake
+        ssh's own forced-failure text, and never fall back to the blank
+        "(ssh exit ): (no output)" run 33142976493 (dcd3130f1) recorded
+        live -- proof `Invoke-Transfer` reads `$LASTEXITCODE` on the
+        statement immediately after the native call that sets it, with
+        nothing else running in between, regardless of the hosting pwsh
+        version's `$PSNativeCommandUseErrorActionPreference` default."""
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            _bin_dir, log_path, env = self._fixture(tmp)
+            env["FAKE_SSH_EXIT_CODE"] = "7"
+            attach = tmp / "report.pdf"
+            attach.write_bytes(b"pdf-bytes")
+
+            result = self._invoke(["m5", "01J0000000000000000000004D", str(attach)], env, str(tmp))
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("ssh exit 7", result.stderr)
+            self.assertNotIn("(no output)", result.stderr)
+            self.assertIn("fake ssh: forced failure for test", result.stderr)
+            invocations = _read_log(log_path)
+            self.assertEqual([call["bin"] for call in invocations], ["ssh"], invocations)
+
+    def test_mkdir_call_is_non_interactive_no_stdin(self) -> None:
+        """sftp.ps1's mkdir call passes ssh `-n` (never scp -- OpenSSH's
+        `scp` has no such flag) so ssh never tries to read this script's
+        own closed stdin (ATM's contract, see the top-of-file comment):
+        run 33142976493 (dcd3130f1)'s live Windows evidence showed the
+        real OpenSSH client dropping the connection mid-handshake
+        (WSAECONNABORTED) when spawned with an invalid stdin handle and
+        no `-n`. Fake ssh never touches stdin, so it cannot reproduce
+        that live network symptom -- this only proves the exact flag
+        sftp.ps1 sends, and that adding it leaves the invoked-binary
+        sequence unchanged (still exactly `["ssh", "scp"]`)."""
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            _bin_dir, log_path, env = self._fixture(tmp)
+            attach = tmp / "report.pdf"
+            attach.write_bytes(b"pdf-bytes")
+
+            result = self._invoke(["m5", "01J0000000000000000000004E", str(attach)], env, str(tmp))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            invocations = _read_log(log_path)
+            self.assertEqual([call["bin"] for call in invocations], ["ssh", "scp"], invocations)
+            ssh_call, scp_call = invocations[0], invocations[1]
+            self.assertIn("-n", ssh_call["argv"])
+            self.assertNotIn("-n", scp_call["argv"])
+
+
+class PosixShellDiscoveryTests(unittest.TestCase):
+    """Direct unit coverage for `posix_shell()`'s discovery order, mocking
+    `shutil.which` so these assertions never depend on what happens to be
+    on this machine's real `PATH`."""
+
+    def test_prefers_bash_when_both_bash_and_sh_are_on_path(self) -> None:
+        with mock.patch.object(
+            shutil,
+            "which",
+            side_effect=lambda name: f"/usr/bin/{name}" if name in ("bash", "sh") else None,
+        ):
+            self.assertEqual(posix_shell(), "/usr/bin/bash")
+
+    def test_falls_back_to_sh_when_bash_is_absent(self) -> None:
+        with mock.patch.object(
+            shutil,
+            "which",
+            side_effect=lambda name: "/bin/sh" if name == "sh" else None,
+        ):
+            self.assertEqual(posix_shell(), "/bin/sh")
+
+    def test_returns_none_when_neither_is_on_path(self) -> None:
+        with mock.patch.object(shutil, "which", return_value=None):
+            self.assertIsNone(posix_shell())
 
 
 if __name__ == "__main__":
