@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "sprint": "AQ4",
+  "host": "clean-runner-windows",
+  "commit": "f9eb08449e8eda279da97470e30af9aea3c66149",
+  "record": {
+    "sprint": "AQ4",
+    "host": "clean-runner-windows",
+    "started_at_ns": 1787883915527287100,
+    "status": "fail",
+    "sshd_probe": {
+      "found": true,
+      "path": "C:\\Windows\\System32\\OpenSSH\\sshd.EXE"
+    },
+    "sshd_start": {
+      "ready": true,
+      "pid": 4880,
+      "log_tail": "",
+      "port": 61795
+    },
+    "sender_atm_config": {
+      "path": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\sender-cwd\\.atm.toml",
+      "local_host": "aq4-sender"
+    },
+    "scratch_ssh_client_config": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\ssh_client_config",
+    "roster": {
+      "sender": {
+        "argv": [
+          "D:\\a\\atm-core\\atm-core\\target\\release\\atm.exe",
+          "teams",
+          "add-member",
+          "aq4-transfer-evidence",
+          "aq4-sender",
+          "--home-dir",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\home",
+          "--json"
+        ],
+        "stdout": "{\n  \"action\": \"add-member\",\n  \"team\": \"aq4-transfer-evidence\",\n  \"member\": \"aq4-sender\",\n  \"created_inbox\": true\n}"
+      },
+      "receiver": {
+        "argv": [
+          "D:\\a\\atm-core\\atm-core\\target\\release\\atm.exe",
+          "teams",
+          "add-member",
+          "aq4-transfer-evidence",
+          "aq4-receiver",
+          "--home-dir",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\home",
+          "--host",
+          "localhost",
+          "--json"
+        ],
+        "stdout": "{\n  \"action\": \"add-member\",\n  \"team\": \"aq4-transfer-evidence\",\n  \"member\": \"aq4-receiver\",\n  \"created_inbox\": true\n}"
+      }
+    },
+    "transfer_script": {
+      "installed_at": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\home\\.atm\\transfer\\localhost.ps1",
+      "source": "D:\\a\\atm-core\\atm-core\\scripts\\transfer\\sftp.ps1",
+      "windows_profile_containment": {
+        "profile_home": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\home",
+        "transfer_dir_contained": true,
+        "script_contained": true,
+        "transfer_dir_is_reparse_point": false,
+        "script_is_reparse_point": false
+      }
+    },
+    "daemon_start": {
+      "ready": true,
+      "pid": 904,
+      "stdout_tail": [
+        "ATM_DAEMON_READY"
+      ],
+      "exited_early": false,
+      "returncode": null,
+      "stderr_tail": ""
+    },
+    "send": {
+      "argv": [
+        "D:\\a\\atm-core\\atm-core\\target\\release\\atm.exe",
+        "send",
+        "aq4-receiver@aq4-transfer-evidence",
+        "AQ4 live transfer evidence: see attached file",
+        "--host",
+        "localhost",
+        "--attach",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\attach-source\\aq4-report.pdf"
+      ],
+      "returncode": 3,
+      "stdout": "",
+      "stderr_tail": "transfer script for host 'localhost' failed (exit code: 1): \u001b[31;1mlocalhost.ps1: \u001b[31;1mThe term 'ssh' is not recognized as a name of a cmdlet, function, script file, or executable program.\u001b[0m\n\u001b[31;1m\u001b[31;1mCheck the spelling of the name, or if a path was included, verify that the path is correct and try again.\u001b[0m\n\n  Recovery: Check the transfer script's stderr output above and retry."
+    },
+    "landed_path": null,
+    "landed_matches_send_to_convention": false,
+    "landed_file_exists": false,
+    "landed_content_matches": false,
+    "finished_at_ns": 1787883926130059900
+  }
+}

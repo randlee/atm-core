@@ -499,8 +499,9 @@ paths unchanged.
 
 | Runner | Status | Run ID | Head | Files |
 |--------|--------|--------|------|-------|
-| ubuntu-latest | PASS | 33128348487 | d0d54e004 | [transfer-clean-runner-linux.json](evidence/AQ4/transfer-clean-runner-linux.json) · [transfer-clean-runner-linux.md](evidence/AQ4/transfer-clean-runner-linux.md) |
-| macOS | PASS | 33128348487 | d0d54e004 | [transfer-clean-runner-macos.json](evidence/AQ4/transfer-clean-runner-macos.json) · [transfer-clean-runner-macos.md](evidence/AQ4/transfer-clean-runner-macos.md) |
+| ubuntu-latest | pass | 33135390308 | f9eb08449 | [transfer-clean-runner-linux.json](evidence/AQ4/transfer-clean-runner-linux.json) · [transfer-clean-runner-linux.md](evidence/AQ4/transfer-clean-runner-linux.md) |
+| macOS | pass | 33135390308 | f9eb08449 | [transfer-clean-runner-macos.json](evidence/AQ4/transfer-clean-runner-macos.json) · [transfer-clean-runner-macos.md](evidence/AQ4/transfer-clean-runner-macos.md) |
+| windows | fail | 33135390308 | f9eb08449 | [transfer-clean-runner-windows.json](evidence/AQ4/transfer-clean-runner-windows.json) · [transfer-clean-runner-windows.md](evidence/AQ4/transfer-clean-runner-windows.md) |
 
 The Tailscale leg (`scripts/transfer/tailscale.sh`) cannot run on either
 clean-runner lane (Tailscale enrollment is an operator/IT environment
