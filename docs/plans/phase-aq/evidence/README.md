@@ -2,7 +2,7 @@
 
 `.github/workflows/phase-aq-evidence.yml` runs the Phase AQ live-evidence
 harnesses — AQ1.9's restart matrix, AQ2.5's queue-delivery-trigger scenario,
-and any future AQ3 drain/sweep transcript harness — on a clean GitHub Actions
+and AQ3's tmux idle-transition-drain transcript — on a clean GitHub Actions
 runner instead of a developer host.
 
 ## Why local runs fail closed
@@ -54,10 +54,11 @@ transcripts it produces as workflow artifacts but does not commit them
 anywhere, since a pull-request-triggered run has no authority to push to the
 PR branch.
 
-The job runs on both `ubuntu-latest` and `macos-latest`. The macOS leg exists
-because AQ3's drain/sweep transcript exercises a real tmux pane, and `tmux` is
-not preinstalled on the macOS runner image (the job installs it via
-`brew install tmux` when missing).
+The job runs on `ubuntu-latest`, `macos-latest`, and `windows-latest`. AQ3's
+idle-drain transcript exercises a real tmux pane, so the job installs `tmux`
+when missing on Linux (`apt-get install tmux`) and macOS (`brew install
+tmux`); tmux has no supported Windows build, so on that leg AQ3's harness
+self-records a `skipped_no_tmux` status instead of failing the job.
 
 ## How evidence lands
 
@@ -73,14 +74,13 @@ not preinstalled on the macOS runner image (the job installs it via
    `--evidence-dir`, `--daemon`, and `--atm` — never by scanning its source
    text. Each eligible harness's *evidence directory* comes from an explicit
    `EVIDENCE_DIR_BY_SCRIPT` mapping in the workflow (filename → sprint, for
-   example `run_hermes_atm_restart_matrix.py` → `AQ1.9`), never by
+   example `run_hermes_atm_restart_matrix.py` → `AQ1.9`,
+   `run_aq3_tmux_idle_drain_evidence.py` → `AQ3`), never by
    regex-reconstructing it from the harness's own source. A harness that is
-   eligible but has no mapping entry yet (for example, an AQ3 drain/sweep
-   transcript runner that does not exist at the time of writing) is skipped
-   with a clear `SKIP:` log line that says to add a mapping entry — the job
-   never guesses an evidence directory. When AQ3's harness lands, add its
-   filename and sprint slug to `EVIDENCE_DIR_BY_SCRIPT` in
-   `.github/workflows/phase-aq-evidence.yml`.
+   eligible but has no mapping entry yet is skipped with a clear `SKIP:` log
+   line that says to add a mapping entry — the job never guesses an evidence
+   directory. When a new harness lands, add its filename and sprint slug to
+   `EVIDENCE_DIR_BY_SCRIPT` in `.github/workflows/phase-aq-evidence.yml`.
 2. Each harness writes its own JSON + Markdown transcript under
    `docs/plans/phase-aq/evidence/<sprint>/…` (for example `AQ1.9/` or
    `AQ2.5/`), exactly as it does when run locally.

@@ -12,14 +12,29 @@ import sys
 import time
 
 
-def state_path() -> Path:
+def state_path(*, create: bool = True) -> Path:
     root = Path(os.environ.get("ATM_HOOK_STATE_DIR", ".atm-hook-state"))
-    root.mkdir(parents=True, exist_ok=True)
+    if create:
+        root.mkdir(parents=True, exist_ok=True)
     return root / "pending-idle"
 
 
 def atm_command() -> str:
     return os.environ.get("ATM_BIN", "atm")
+
+
+def atm_command_parts() -> list[str]:
+    """Build a portable argv for the configured ATM executable.
+
+    Unix can execute a Python test shim through its shebang, but Windows does
+    not treat a `.py` path as an executable for `CreateProcess`. Supporting a
+    Python shim here keeps the deterministic hook harness cross-platform while
+    leaving normal `atm`/`atm.exe` launches unchanged.
+    """
+    command = atm_command()
+    if Path(command).suffix.lower() == ".py":
+        return [sys.executable, command]
+    return [command]
 
 
 def write_hook_trace(
@@ -52,7 +67,7 @@ def write_hook_trace(
 def run_atm(
     args: list[str], *, strict: bool = False, trace: bool = False
 ) -> subprocess.CompletedProcess[str] | None:
-    command = [atm_command(), *args]
+    command = [*atm_command_parts(), *args]
     try:
         completed = subprocess.run(
             command,
@@ -132,7 +147,7 @@ def send_heartbeat(activity: str, harness: str) -> None:
 
 def cancel_idle() -> None:
     try:
-        state_path().unlink()
+        state_path(create=False).unlink()
     except FileNotFoundError:
         pass
 
@@ -159,7 +174,9 @@ def expire_idle(token: str, harness: str) -> None:
     delay = max(0.0, float(os.environ.get("ATM_HOOK_DEBOUNCE_SECONDS", "2")))
     if delay:
         time.sleep(delay)
-    path = state_path()
+    # The hook process can outlive the host application's temporary state
+    # directory. Never recreate that directory from a detached expiry child.
+    path = state_path(create=False)
     try:
         if path.read_text(encoding="utf-8") != token:
             return

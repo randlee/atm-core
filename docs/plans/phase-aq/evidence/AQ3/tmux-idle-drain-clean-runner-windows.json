@@ -1,0 +1,11 @@
+{
+  "commit": "35a28588ab4aa319eabbb972ca68931d9a61f05e",
+  "host": "clean-runner-windows",
+  "record": {
+    "host": "clean-runner-windows",
+    "sprint": "AQ3",
+    "status": "skipped_no_tmux"
+  },
+  "schema_version": 1,
+  "sprint": "AQ3"
+}

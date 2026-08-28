@@ -26,8 +26,8 @@
   triage:openOn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> ;
   triage:promoteTo <urn:atm:triage:worktree/phase-AI/future-planning-sprint> ;
   triage:highestOpenBranch "feature/aq-1-8-graft-file-record-retirement" ;
-  triage:resolution "Superseded by ADR-056 and closed by AQ1.8. Defect #1 (bind-overwrite / singleton safety) is fixed by the retained AI.36 ReceiverOwnershipGuard flock; defect #2 (truncating endpoint-file write) is eliminated because the file publication and read machinery are deleted; defect #3 (unconditional Drop deletion) is eliminated because receiver Drop no longer removes a shared artifact and the registry lifecycle remains owner-generation checked. Merge-forward commit 78a3d739b and implementation commit a8ccbbe874ee4ca433060dca3436d0d733499ed are ancestry-verified: git merge-base --is-ancestor 78a3d739b a8ccbbe874ee4ca433060d0d733499ed passed, and git merge-base --is-ancestor 1c74392a8 a8ccbbe874ee4ca433060d0d733499ed passed on the AQ1.8 branch. The accepted cold-start residual risk is recorded in ADR-056: a receiver binding while the daemon is down has no registry lease until the next successful refresh tick and delivery reports receiver-not-registered during that window. I12 capability parity is retained: the registry uses the existing LocalCapability base64url encoding and shared SQLite file-level protection, with no new 0o600 database guarantee claimed." ;
-  triage:closureNote "Developer evidence: feature/aq-1-8-graft-file-record-retirement @ a8ccbbe874ee4ca433060dca3436d0d733499ed removes the file endpoint schema, path builders, read/write/republish lifecycle, and listener Drop cleanup; bind retains the historical .atm/graft/<team>/<agent>.lock flock and removes one orphaned legacy .json artifact. cargo test --workspace --all-targets, clippy -D warnings, fmt, boundary lint, function-length lint, and Python ownership integration were run on the branch." .
+  triage:resolution "Superseded by ADR-056 and closed by AQ1.8. Defect #1 (bind-overwrite / singleton safety) is fixed by the retained AI.36 ReceiverOwnershipGuard flock; defect #2 (truncating endpoint-file write) is eliminated because the file publication and read machinery are deleted; defect #3 (unconditional Drop deletion) is eliminated because receiver Drop no longer removes a shared artifact and the registry lifecycle remains owner-generation checked. Merge-forward commit 78a3d739bcceea706e54da7fb5ba49b2283411dd and implementation commit a8ccbbe874ee4ca433060dca3436d0d733499ed7 are ancestry-verified: git merge-base --is-ancestor 78a3d739bcceea706e54da7fb5ba49b2283411dd a8ccbbe874ee4ca433060dca3436d0d733499ed7 passed, and git merge-base --is-ancestor 1c74392a8c62c522907dddbe82194c74ab0ff8e1 a8ccbbe874ee4ca433060dca3436d0d733499ed7 passed on the AQ1.8 branch. The accepted cold-start residual risk is recorded in ADR-056: a receiver binding while the daemon is down has no registry lease until the next successful refresh tick and delivery reports receiver-not-registered during that window. I12 capability parity is retained: the registry uses the existing LocalCapability base64url encoding and shared SQLite file-level protection, with no new 0o600 database guarantee claimed." ;
+  triage:closureNote "Developer evidence: feature/aq-1-8-graft-file-record-retirement @ a8ccbbe874ee4ca433060dca3436d0d733499ed7 removes the file endpoint schema, path builders, read/write/republish lifecycle, and listener Drop cleanup; bind retains the historical .atm/graft/<team>/<agent>.lock flock and removes one orphaned legacy .json artifact. cargo test --workspace --all-targets, clippy -D warnings, fmt, boundary lint, function-length lint, and Python ownership integration were run on the branch." .
 
 <urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE/bind-overwrite>
   a triage:Occurrence ;
@@ -37,7 +37,7 @@
   triage:status "fixed" ;
   triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
-  triage:headSha "a8ccbbe874ee4ca433060dca3436d0d733499ed" ;
+  triage:headSha "a8ccbbe874ee4ca433060dca3436d0d733499ed7" ;
   triage:resolution "Fixed by the retained ReceiverOwnershipGuard flock, now acquired before stale-artifact cleanup and listener bind; the registry lease and owner generation provide the daemon-side ownership model." ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
 
@@ -49,7 +49,7 @@
   triage:status "fixed" ;
   triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
-  triage:headSha "a8ccbbe874ee4ca433060dca3436d0d733499ed" ;
+  triage:headSha "a8ccbbe874ee4ca433060dca3436d0d733499ed7" ;
   triage:resolution "Fixed by deleting the endpoint-file schema and truncating write path; endpoint and capability publication now uses the registry registration API with the existing base64url capability encoding." ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
 
@@ -61,7 +61,7 @@
   triage:status "fixed" ;
   triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
-  triage:headSha "a8ccbbe874ee4ca433060dca3436d0d733499ed" ;
+  triage:headSha "a8ccbbe874ee4ca433060dca3436d0d733499ed7" ;
   triage:resolution "Fixed by removing the listener's artifact-cleanup Drop path; RegisteredGraftReceiver remains the sole best-effort owner-generation-checked registry unregister path." ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
 
