@@ -166,6 +166,7 @@ jobs:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
           WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           set -euo pipefail
           failures=()
@@ -176,6 +177,12 @@ jobs:
             case "${check_kind}" in
               github)
                 command=(curl --fail --silent --show-error --header "Authorization: Bearer ${token}" --header "Accept: application/vnd.github+json" https://api.github.com/user)
+                ;;
+              crates_io)
+                # Release-branch fix (v1.4.4, upstream sc-publish#68): read-only
+                # authenticated probe; crates.io expects the raw token in the
+                # Authorization header.
+                command=(curl --fail --silent --show-error --header "Authorization: ${token}" --header "User-Agent: release-preflight (github-actions)" https://crates.io/api/v1/me)
                 ;;
               *)
                 failures+=("Unsupported credential liveness check kind: ${check_kind}")
@@ -252,6 +259,7 @@ jobs:
 
       - id: manifest
         name: Validate manifest completeness
+        if: ${{ always() }}
         continue-on-error: true
         run: |
           python3 .github/scripts/release_artifacts.py validate-manifest \
@@ -260,6 +268,7 @@ jobs:
 
       - id: publish_order
         name: Validate publish_order dependency graph
+        if: ${{ always() }}
         continue-on-error: true
         run: |
           python3 .github/scripts/release_artifacts.py validate-publish-order \
@@ -268,6 +277,7 @@ jobs:
 
       - id: helpers
         name: Verify release helper files exist
+        if: ${{ always() }}
         continue-on-error: true
         run: |
           test -f .github/scripts/release_gate.sh
@@ -284,6 +294,7 @@ jobs:
 
       - id: version_lockstep
         name: Verify release version lockstep
+        if: ${{ always() }}
         continue-on-error: true
         run: |
           python3 .github/scripts/release_artifacts.py verify-version-lockstep \
@@ -384,6 +395,7 @@ jobs:
 
       - id: github_release_permissions
         name: Verify GitHub Release workflow permissions
+        if: ${{ always() }}
         continue-on-error: true
         shell: bash
         run: |
