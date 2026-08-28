@@ -71,7 +71,13 @@ impl AtmError {
 
     #[must_use]
     pub fn is_validation(&self) -> bool {
-        self.code == AtmErrorCode::MessageValidationFailed
+        matches!(
+            self.code,
+            AtmErrorCode::MessageValidationFailed
+                | AtmErrorCode::PeerWireModeInvalid
+                | AtmErrorCode::PeerWireModeSourceForbidden
+                | AtmErrorCode::PeerWirePlaintextAuthenticationRequired
+        )
     }
 
     #[must_use]
@@ -161,12 +167,47 @@ impl AtmError {
         Self::new(AtmErrorCode::RemoteDeliveryUnconfirmed, message)
     }
 
+    /// Reports an unsupported daemon peer-wire launch argument.
+    pub fn peer_wire_mode_invalid(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::PeerWireModeInvalid, message)
+    }
+
+    /// Reports an unsupported durable or environment peer-wire selector.
+    pub fn peer_wire_mode_source_forbidden(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::PeerWireModeSourceForbidden, message)
+    }
+
+    /// Reports an attempt to treat untrusted plaintext diagnostics as
+    /// authenticated peer transport.
+    pub fn peer_wire_plaintext_authentication_required(message: impl Into<String>) -> Self {
+        Self::new(
+            AtmErrorCode::PeerWirePlaintextAuthenticationRequired,
+            message,
+        )
+    }
+
     pub fn peer_config_validation(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::PeerConfigValidationFailed, message)
     }
 
     pub fn certificate_operation(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::CertificateOperationFailed, message)
+    }
+
+    /// Reports a fail-closed mismatch between a configured peer authority and
+    /// the certificate presented during mutual TLS.
+    pub fn peer_authentication(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::PeerAuthenticationFailed, message)
+    }
+
+    /// Reports a bounded peer transport operation that exceeded its deadline.
+    pub fn transport_timeout(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::TransportTimeout, message)
+    }
+
+    /// Reports a non-authentication peer transport handshake failure.
+    pub fn transport_protocol(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::TransportProtocolFailed, message)
     }
 
     pub fn bind_preflight(message: impl Into<String>) -> Self {
@@ -266,7 +307,9 @@ impl AtmError {
     pub fn agent_not_found(agent: &str, team: &str) -> Self {
         Self::new(
             AtmErrorCode::AgentNotFound,
-            format!("agent '{agent}' was not found in team '{team}'"),
+            format!(
+                "agent '{agent}' was not found in team '{team}'; add it with `atm teams add-member {team} {agent}`"
+            ),
         )
     }
 
@@ -508,6 +551,18 @@ mod tests {
     }
 
     #[test]
+    fn agent_not_found_names_the_roster_repair_command() {
+        let error = AtmError::agent_not_found("test-agent", "test-team");
+
+        assert_eq!(error.code(), AtmErrorCode::AgentNotFound);
+        assert!(
+            error
+                .message()
+                .contains("atm teams add-member test-team test-agent")
+        );
+    }
+
+    #[test]
     fn remote_delivery_unconfirmed_has_its_stable_wire_code() {
         let error = AtmError::remote_delivery_unconfirmed("peer response deadline elapsed");
 
@@ -516,6 +571,41 @@ mod tests {
             "REMOTE_DELIVERY_UNCONFIRMED".parse::<AtmErrorCode>(),
             Ok(AtmErrorCode::RemoteDeliveryUnconfirmed)
         ));
+    }
+
+    #[test]
+    fn peer_wire_policy_errors_keep_structured_codes_and_actionable_recovery() {
+        let cases = [
+            (
+                AtmError::peer_wire_mode_invalid("unsupported value"),
+                "ATM_PEER_WIRE_MODE_INVALID",
+                "mutual-tls",
+            ),
+            (
+                AtmError::peer_wire_mode_source_forbidden("ATM_PEER_WIRE_SECURITY"),
+                "ATM_PEER_WIRE_MODE_SOURCE_FORBIDDEN",
+                "daemon launch argument",
+            ),
+            (
+                AtmError::peer_wire_plaintext_authentication_required("authenticated proof"),
+                "ATM_PEER_WIRE_PLAINTEXT_AUTHENTICATION_REQUIRED",
+                "mutual-TLS mode",
+            ),
+        ];
+
+        for (error, code, recovery) in cases {
+            assert_eq!(error.code().as_str(), code);
+            assert!(
+                error.is_validation(),
+                "peer-wire policy errors are launch validation failures"
+            );
+            assert!(error.message().contains(recovery));
+            assert!(
+                serde_json::to_string(&error)
+                    .expect("serialize structured peer-wire error")
+                    .contains(code)
+            );
+        }
     }
 
     #[test]

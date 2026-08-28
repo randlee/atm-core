@@ -19,6 +19,19 @@ STATE_RE = re.compile(
     r"triage:(?P<field>status|findingAggregate|branchStatus|branchR[A-Za-z0-9_.-]+Status)\s+"
     r"(?:\"(?P<quoted>[^\"]+)\"|triage:(?P<qualified>[A-Za-z0-9_.-]+))"
 )
+SPRINT_FIELD_RE = re.compile(
+    r"^\s*(?P<predicate>triage:(?:foundIn|aich_sprint|aichSprint|sprint_id|sprint))\s+"
+    r"(?:triage:)?(?:\"(?P<quoted>[^\"]+)\"|(?P<bare>[A-Za-z0-9_.-]+))"
+)
+CANONICAL_SPRINT_RE = re.compile(r"^(?P<phase>[A-Za-z][A-Za-z0-9]*)\.(?P<number>[1-9][0-9]*)$")
+LEGACY_DASH_SPRINT_RE = re.compile(
+    r"^(?P<phase>[A-Za-z][A-Za-z0-9]*)-S(?P<number>[0-9]+)$", re.IGNORECASE
+)
+LEGACY_DASH_NUMBER_SPRINT_RE = re.compile(
+    r"^(?P<phase>[A-Za-z][A-Za-z0-9]*)-(?P<number>[1-9][0-9]*)$", re.IGNORECASE
+)
+LEGACY_COMPACT_SPRINT_RE = re.compile(r"^(?P<phase>[A-Za-z][A-Za-z0-9]*?)(?P<number>[0-9]+)$")
+SPRINT_LIKE_RE = re.compile(r"^[A-Za-z]{2}(?:\.\d+|-S?\d+)$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -38,6 +51,28 @@ def iter_ttl_files(repo_root: Path) -> list[Path]:
     if not triage_root.exists():
         return []
     return sorted(triage_root.rglob("*.ttl"))
+
+
+def load_legacy_allowlist(repo_root: Path) -> list[tuple[str, str]]:
+    allowlist_path = repo_root / ".just/ttl-naming-legacy-allowlist.txt"
+    if not allowlist_path.exists():
+        return []
+    entries: list[tuple[str, str]] = []
+    for raw_line in allowlist_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        path, separator, raw_value = line.partition("\t")
+        if separator and path and raw_value:
+            entries.append((path, raw_value))
+    return entries
+
+
+def is_allowlisted_legacy(allowlist: list[tuple[str, str]], path: str, raw_value: str) -> bool:
+    return any(
+        path == allowed_path and raw_value == allowed_value
+        for allowed_path, allowed_value in allowlist
+    )
 
 
 def extract_finding_block(text: str) -> tuple[list[str], int] | None:
@@ -64,8 +99,47 @@ def normalize_state(match: re.Match[str]) -> str:
     return value.strip().lower()
 
 
+def canonical_sprint_id(raw_value: str) -> tuple[str | None, str]:
+    """Return the canonical sprint key and its diagnostic class.
+
+    Comparison is deliberately case-insensitive, but persistence is not: a
+    canonical match with different casing is reported so ingestion callers can
+    normalize before writing.  Legacy separators and compact keys are mapped
+    only when the phase/number split is unambiguous.
+    """
+
+    value = raw_value.strip()
+    match = CANONICAL_SPRINT_RE.fullmatch(value)
+    if match:
+        phase = match.group("phase").upper()
+        number = str(int(match.group("number")))
+        canonical = f"{phase}.{number}"
+        return canonical, "ok" if value == canonical else "NAMING.NON_CANONICAL"
+
+    match = LEGACY_DASH_SPRINT_RE.fullmatch(value)
+    if match:
+        return (
+            f"{match.group('phase').upper()}.{int(match.group('number'))}",
+            "TTL.QA_RUN_KEY_MISMATCH",
+        )
+
+    match = LEGACY_DASH_NUMBER_SPRINT_RE.fullmatch(value)
+    if match:
+        return (
+            f"{match.group('phase').upper()}.{int(match.group('number'))}",
+            "TTL.QA_RUN_KEY_MISMATCH",
+        )
+
+    match = LEGACY_COMPACT_SPRINT_RE.fullmatch(value)
+    if match:
+        return f"{match.group('phase').upper()}.{int(match.group('number'))}", "NAMING.LEGACY_IDENTIFIER"
+
+    return None, "NAMING.UNKNOWN_SPRINT_FORMAT"
+
+
 def collect_ttl_triage_violations(repo_root: Path) -> list[TriageConsistencyViolation]:
     violations: list[TriageConsistencyViolation] = []
+    legacy_allowlist = load_legacy_allowlist(repo_root)
     for ttl_path in iter_ttl_files(repo_root):
         rel_path = ttl_path.relative_to(repo_root).as_posix()
         finding_block = extract_finding_block(ttl_path.read_text(encoding="utf-8"))
@@ -75,6 +149,35 @@ def collect_ttl_triage_violations(repo_root: Path) -> list[TriageConsistencyViol
         top_statuses: list[tuple[str, int]] = []
         aggregate_statuses: list[tuple[str, int]] = []
         branch_statuses: list[tuple[str, int]] = []
+
+        for offset, line in enumerate(lines, start=start_line):
+            for match in SPRINT_FIELD_RE.finditer(line):
+                raw_value = match.group("quoted") or match.group("bare") or ""
+                if match.group("predicate") == "triage:foundIn" and not SPRINT_LIKE_RE.fullmatch(
+                    raw_value.strip()
+                ):
+                    # `foundIn` also names non-sprint artifacts (for example
+                    # HERMES-SMOKE-QA-1). Only sprint-shaped values participate
+                    # in the naming contract; explicit sprint fields are
+                    # always validated below.
+                    continue
+                canonical, diagnostic = canonical_sprint_id(raw_value)
+                if diagnostic == "ok":
+                    continue
+                if is_allowlisted_legacy(legacy_allowlist, rel_path, raw_value.strip()):
+                    continue
+                candidate = f"; canonical candidate={canonical}" if canonical else ""
+                violations.append(
+                    TriageConsistencyViolation(
+                        path=rel_path,
+                        line_number=offset,
+                        message=(
+                            f"{diagnostic}: {match.group('predicate')} value {raw_value!r} "
+                            f"is not persisted in canonical sprint form{candidate}; "
+                            "normalize at ingestion and retain the raw value in diagnostics"
+                        ),
+                    )
+                )
 
         for offset, line in enumerate(lines, start=start_line):
             for match in STATE_RE.finditer(line):

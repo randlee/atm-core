@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use std::sync::mpsc::TrySendError;
 
@@ -27,6 +27,34 @@ use crate::{
 pub(crate) const RECEIVE_LOOP_READY_DEADLINE: Duration = Duration::from_secs(3);
 const HOST_NUDGE_INJECTION_DEADLINE: Duration = Duration::from_millis(250);
 const GRAFT_RECEIVER_IO_DEADLINE: Duration = Duration::from_secs(3);
+/// A live listener checks its published record at this cadence so an external
+/// record deletion is repaired without adding filesystem work to every poll.
+const GRAFT_RECEIVER_RECORD_RECHECK_INTERVAL: Duration = Duration::from_secs(1);
+/// Each recovery cycle makes a small, bounded number of bind attempts before
+/// yielding to the slower re-arm cadence below.
+const GRAFT_RECEIVER_REBIND_MAX_ATTEMPTS: usize = 3;
+/// The first rebind delay is short enough for interactive recovery; later
+/// attempts increase linearly so a persistently bad socket does not spin.
+const GRAFT_RECEIVER_REBIND_INITIAL_DELAY: Duration = Duration::from_millis(100);
+/// Cool down after a successful rebind before polling again, preventing a
+/// repeated hard accept failure from becoming a tight rebind loop.
+const GRAFT_RECEIVER_REBIND_CYCLE_DELAY: Duration = Duration::from_millis(100);
+/// Wait between exhausted rebind cycles. The receiver remains armed and never
+/// starts a daemon; it only retries its own loopback listener publication.
+const GRAFT_RECEIVER_REARM_DELAY: Duration = Duration::from_secs(1);
+/// Stop a failed recovery burst after this interval, emit a distinct degraded
+/// signal, then enter a slower half-open retry cycle instead of retrying
+/// indefinitely without escalation.
+const GRAFT_RECEIVER_RECOVERY_MAX_DURATION: Duration = Duration::from_secs(30);
+/// Give a persistently unavailable endpoint time to recover before a new
+/// bounded recovery burst begins after the circuit opens.
+const GRAFT_RECEIVER_RECOVERY_CIRCUIT_DELAY: Duration = Duration::from_secs(5);
+/// Repeated receiver failures are initially reported after this delay, then
+/// exponentially backed off to retain useful diagnostics without log storms.
+const GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY: Duration = Duration::from_secs(1);
+/// Cap the warning backoff so a long-lived outage still leaves a periodic,
+/// actionable diagnostic trail.
+const GRAFT_RECEIVER_RECOVERY_WARN_MAX_DELAY: Duration = Duration::from_secs(30);
 const MAX_HOST_NUDGE_HELPERS: usize = 8;
 
 type ReceiveLoopJoinHelper = (
@@ -36,16 +64,53 @@ type ReceiveLoopJoinHelper = (
 );
 
 #[derive(Debug)]
+struct ReceiverRecoveryCircuit {
+    began_at: Instant,
+    next_warning_at: Instant,
+    warning_delay: Duration,
+}
+
+impl ReceiverRecoveryCircuit {
+    fn new(now: Instant) -> Self {
+        Self {
+            began_at: now,
+            next_warning_at: now + GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY,
+            warning_delay: GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY,
+        }
+    }
+
+    fn warning_due(&mut self, now: Instant) -> bool {
+        if now < self.next_warning_at {
+            return false;
+        }
+        self.next_warning_at = now + self.warning_delay;
+        self.warning_delay = self
+            .warning_delay
+            .saturating_mul(2)
+            .min(GRAFT_RECEIVER_RECOVERY_WARN_MAX_DELAY);
+        true
+    }
+
+    fn is_exhausted(&self, now: Instant) -> bool {
+        now.duration_since(self.began_at) >= GRAFT_RECEIVER_RECOVERY_MAX_DURATION
+    }
+
+    fn reset(&mut self, now: Instant) {
+        *self = Self::new(now);
+    }
+}
+
+#[derive(Debug)]
 struct HelperThreadBudget {
     max_inflight: usize,
-    inflight: AtomicUsize,
+    inflight: Arc<AtomicUsize>,
 }
 
 impl HelperThreadBudget {
-    const fn new(max_inflight: usize) -> Self {
+    fn new(max_inflight: usize) -> Self {
         Self {
             max_inflight,
-            inflight: AtomicUsize::new(0),
+            inflight: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -71,7 +136,7 @@ impl HelperThreadBudget {
             ) {
                 Ok(_) => {
                     return Some(HelperThreadPermit {
-                        budget: Arc::clone(self),
+                        inflight: Arc::clone(&self.inflight),
                     });
                 }
                 Err(observed) => current = observed,
@@ -81,12 +146,12 @@ impl HelperThreadBudget {
 }
 
 struct HelperThreadPermit {
-    budget: Arc<HelperThreadBudget>,
+    inflight: Arc<AtomicUsize>,
 }
 
 impl Drop for HelperThreadPermit {
     fn drop(&mut self) {
-        self.budget.inflight.fetch_sub(1, Ordering::SeqCst);
+        self.inflight.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -151,19 +216,6 @@ struct BoundedHostNudgeInjector {
 
 impl crate::HostNudgeInjector for BoundedHostNudgeInjector {
     fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError> {
-        Self::inject_nudge(self, nudge)
-    }
-}
-
-impl BoundedHostNudgeInjector {
-    fn spawn(injector: Arc<dyn HostNudgeInjector>) -> Self {
-        Self {
-            injector,
-            helper_budget: Arc::new(HelperThreadBudget::new(MAX_HOST_NUDGE_HELPERS)),
-        }
-    }
-
-    fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError> {
         let helper_permit = acquire_host_nudge_helper_permit(&self.helper_budget)?;
         let (result_tx, result_rx) = mpsc::sync_channel(1);
         spawn_host_nudge_helper(
@@ -173,6 +225,15 @@ impl BoundedHostNudgeInjector {
             result_tx,
         )?;
         receive_host_nudge_result(result_rx, &self.helper_budget)
+    }
+}
+
+impl BoundedHostNudgeInjector {
+    fn spawn(injector: Arc<dyn HostNudgeInjector>) -> Self {
+        Self {
+            injector,
+            helper_budget: Arc::new(HelperThreadBudget::new(MAX_HOST_NUDGE_HELPERS)),
+        }
     }
 }
 
@@ -430,62 +491,7 @@ pub(crate) struct GraftReceiverLoopContext {
 
 pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(), AtmError> {
     let injector = BoundedHostNudgeInjector::spawn(Arc::clone(&ctx.injector));
-    let result = (|| {
-        let listener =
-            match GraftReceiverListener::bind(&ctx.endpoint_path, ctx.owner_chat_id.clone()) {
-                Ok(listener) => {
-                    let snapshot = read_snapshot(&ctx.snapshot)?;
-                    ctx.observability.receiver_ownership(
-                        &snapshot,
-                        "activate_receiver_owner",
-                        "ok",
-                    );
-                    listener
-                }
-                Err(error) => {
-                    let snapshot = read_snapshot(&ctx.snapshot)?;
-                    let outcome = if error.code() == AtmErrorCode::GraftReceiverAlreadyActive {
-                        "conflict"
-                    } else {
-                        "error"
-                    };
-                    ctx.observability.receiver_ownership(
-                        &snapshot,
-                        "activate_receiver_owner",
-                        outcome,
-                    );
-                    return Err(error);
-                }
-            };
-        if let Some(ready_tx) = ctx.ready_tx.as_ref() {
-            signal_ready_sender(ready_tx)?;
-        }
-        // Non-blocking accept + poll: the loop re-checks its stop signal every
-        // ACCEPT_POLL_INTERVAL instead of parking in a blocking accept, so no
-        // wake-by-connect machinery is needed to unblock shutdown.
-        loop {
-            if stop_requested(&ctx.stop_rx) {
-                return Ok(());
-            }
-            match listener.poll_accept()? {
-                Some(mut stream) => {
-                    if stop_requested(&ctx.stop_rx) {
-                        return Ok(());
-                    }
-                    if let Err(error) =
-                        handle_graft_receiver_connection(&ctx, &injector, &listener, &mut stream)
-                    {
-                        warn_runtime_error(
-                            "handle_graft_receiver_connection",
-                            Some(&ctx.endpoint_path),
-                            &error,
-                        );
-                    }
-                }
-                None => thread::sleep(GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL),
-            }
-        }
-    })();
+    let result = listen_for_graft_nudges(&ctx, &injector);
     let terminal_state = if result.is_ok() {
         GraftSessionState::Closed
     } else {
@@ -500,6 +506,212 @@ pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(
         warn_runtime_error("set_session_state", Some(&ctx.endpoint_path), &state_error);
     }
     result
+}
+
+fn listen_for_graft_nudges(
+    ctx: &GraftReceiverLoopContext,
+    injector: &BoundedHostNudgeInjector,
+) -> Result<(), AtmError> {
+    let mut listener = activate_graft_receiver(ctx)?;
+    if let Some(ready_tx) = ctx.ready_tx.as_ref() {
+        signal_ready_sender(ready_tx)?;
+    }
+    // Non-blocking accept + poll: the loop re-checks its stop signal every
+    // ACCEPT_POLL_INTERVAL instead of parking in a blocking accept, so no
+    // wake-by-connect machinery is needed to unblock shutdown.
+    let mut last_record_recheck = Instant::now();
+    loop {
+        if stop_requested(&ctx.stop_rx) {
+            return Ok(());
+        }
+        match listener.poll_accept() {
+            Ok(Some(mut stream)) => {
+                if stop_requested(&ctx.stop_rx) {
+                    return Ok(());
+                }
+                if let Err(error) =
+                    handle_graft_receiver_connection(ctx, injector, &listener, &mut stream)
+                {
+                    warn_runtime_error(
+                        "handle_graft_receiver_connection",
+                        Some(&ctx.endpoint_path),
+                        &error,
+                    );
+                }
+            }
+            Ok(None) => handle_idle_graft_receiver(ctx, &listener, &mut last_record_recheck)?,
+            Err(error) => {
+                match recover_after_poll_accept_error(ctx, listener, &error)? {
+                    Some(rebound_listener) => listener = rebound_listener,
+                    None => return Ok(()),
+                }
+                last_record_recheck = Instant::now();
+            }
+        }
+    }
+}
+
+fn activate_graft_receiver(
+    ctx: &GraftReceiverLoopContext,
+) -> Result<GraftReceiverListener, AtmError> {
+    match GraftReceiverListener::bind(&ctx.endpoint_path, ctx.owner_chat_id.clone()) {
+        Ok(listener) => {
+            let snapshot = read_snapshot(&ctx.snapshot)?;
+            ctx.observability
+                .receiver_ownership(&snapshot, "activate_receiver_owner", "ok");
+            Ok(listener)
+        }
+        Err(error) => {
+            let snapshot = read_snapshot(&ctx.snapshot)?;
+            let outcome = if error.code() == AtmErrorCode::GraftReceiverAlreadyActive {
+                "conflict"
+            } else {
+                "error"
+            };
+            ctx.observability
+                .receiver_ownership(&snapshot, "activate_receiver_owner", outcome);
+            Err(error)
+        }
+    }
+}
+
+fn handle_idle_graft_receiver(
+    ctx: &GraftReceiverLoopContext,
+    listener: &GraftReceiverListener,
+    last_record_recheck: &mut Instant,
+) -> Result<(), AtmError> {
+    if last_record_recheck.elapsed() >= GRAFT_RECEIVER_RECORD_RECHECK_INTERVAL {
+        *last_record_recheck = Instant::now();
+        match listener.republish_if_missing() {
+            Ok(true) => {
+                let snapshot = read_snapshot(&ctx.snapshot)?;
+                ctx.observability
+                    .receiver_ownership(&snapshot, "restore_receiver_record", "ok");
+            }
+            Ok(false) => {}
+            Err(error) => {
+                let snapshot = read_snapshot(&ctx.snapshot)?;
+                ctx.observability
+                    .receiver_ownership(&snapshot, "restore_receiver_record", "error");
+                return Err(error);
+            }
+        }
+    }
+    thread::sleep(GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL);
+    Ok(())
+}
+
+fn recover_after_poll_accept_error(
+    ctx: &GraftReceiverLoopContext,
+    listener: GraftReceiverListener,
+    error: &AtmError,
+) -> Result<Option<GraftReceiverListener>, AtmError> {
+    warn_runtime_error("poll_graft_receiver", Some(&ctx.endpoint_path), error);
+    drop(listener);
+    recover_graft_receiver(ctx)
+}
+
+fn recover_graft_receiver(
+    ctx: &GraftReceiverLoopContext,
+) -> Result<Option<GraftReceiverListener>, AtmError> {
+    set_session_state(
+        &ctx.snapshot,
+        GraftSessionState::Degraded,
+        ctx.observability.as_ref(),
+    )?;
+    let mut recovery_circuit = ReceiverRecoveryCircuit::new(Instant::now());
+    loop {
+        if stop_requested(&ctx.stop_rx) {
+            return Ok(None);
+        }
+        match rebind_graft_receiver(ctx) {
+            Ok(Some(listener)) => {
+                set_session_state(
+                    &ctx.snapshot,
+                    GraftSessionState::Listening,
+                    ctx.observability.as_ref(),
+                )?;
+                if wait_for_stop_or_delay(&ctx.stop_rx, GRAFT_RECEIVER_REBIND_CYCLE_DELAY) {
+                    return Ok(None);
+                }
+                return Ok(Some(listener));
+            }
+            Ok(None) => return Ok(None),
+            Err(error) => {
+                let now = Instant::now();
+                let snapshot = read_snapshot(&ctx.snapshot)?;
+                if recovery_circuit.warning_due(now) {
+                    warn_runtime_error("rearm_graft_receiver", Some(&ctx.endpoint_path), &error);
+                }
+                if recovery_circuit.is_exhausted(now) {
+                    ctx.observability.receiver_ownership(
+                        &snapshot,
+                        "rebind_receiver_owner",
+                        "circuit_open",
+                    );
+                    ctx.observability.session_error(
+                        &snapshot,
+                        "graft_receiver_recovery_circuit_open",
+                        &error,
+                    );
+                    warn_runtime_error(
+                        "graft_receiver_recovery_circuit_open",
+                        Some(&ctx.endpoint_path),
+                        &error,
+                    );
+                    if wait_for_stop_or_delay(&ctx.stop_rx, GRAFT_RECEIVER_RECOVERY_CIRCUIT_DELAY) {
+                        return Ok(None);
+                    }
+                    recovery_circuit.reset(Instant::now());
+                } else {
+                    ctx.observability.receiver_ownership(
+                        &snapshot,
+                        "rebind_receiver_owner",
+                        "retry",
+                    );
+                    if wait_for_stop_or_delay(&ctx.stop_rx, GRAFT_RECEIVER_REARM_DELAY) {
+                        return Ok(None);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn rebind_graft_receiver(
+    ctx: &GraftReceiverLoopContext,
+) -> Result<Option<GraftReceiverListener>, AtmError> {
+    let mut last_error = None;
+    for attempt in 1..=GRAFT_RECEIVER_REBIND_MAX_ATTEMPTS {
+        match GraftReceiverListener::bind(&ctx.endpoint_path, ctx.owner_chat_id.clone()) {
+            Ok(listener) => {
+                let snapshot = read_snapshot(&ctx.snapshot)?;
+                ctx.observability
+                    .receiver_ownership(&snapshot, "rebind_receiver_owner", "ok");
+                return Ok(Some(listener));
+            }
+            Err(error) => {
+                last_error = Some(error);
+                if attempt < GRAFT_RECEIVER_REBIND_MAX_ATTEMPTS {
+                    let delay = GRAFT_RECEIVER_REBIND_INITIAL_DELAY.saturating_mul(attempt as u32);
+                    if wait_for_stop_or_delay(&ctx.stop_rx, delay) {
+                        return Ok(None);
+                    }
+                }
+            }
+        }
+    }
+    let snapshot = read_snapshot(&ctx.snapshot)?;
+    ctx.observability
+        .receiver_ownership(&snapshot, "rebind_receiver_owner", "error");
+    Err(last_error.expect("at least one graft receiver rebind attempt"))
+}
+
+fn wait_for_stop_or_delay(stop_rx: &Receiver<()>, delay: Duration) -> bool {
+    matches!(
+        stop_rx.recv_timeout(delay),
+        Ok(()) | Err(RecvTimeoutError::Disconnected)
+    )
 }
 
 fn stop_requested(stop_rx: &Receiver<()>) -> bool {
@@ -518,11 +730,13 @@ fn handle_graft_receiver_connection(
     let request = listener.read_request(stream, GRAFT_RECEIVER_IO_DEADLINE)?;
     let event = request.event;
     let rendered_nudge = request.rendered_nudge;
+    let message_body = request.message_body;
     let dispatch = BuiltInPostSendDispatch {
         target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
             recipient: event.recipient.clone(),
             recipient_team: event.recipient_team.clone(),
             rendered_nudge,
+            message_body,
         }),
         event,
     };
@@ -546,7 +760,8 @@ mod tests {
     use atm_core::boundary::PostSendHookEvent;
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::graft::{
-        GraftPostSendRequest, GraftPostSendResponse, GraftReceiverListener, deliver_graft_post_send,
+        GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendRequest, GraftPostSendResponse,
+        GraftReceiverListener, deliver_graft_post_send,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::test_support::{TEST_LEAD, TEST_QA, TEST_TEAM};
@@ -555,16 +770,19 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
-    use std::sync::{Arc, Mutex, RwLock};
-    use std::time::Duration;
+    use std::sync::{Arc, Barrier, Mutex, RwLock};
+    use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
     use crate::{GraftObservability, HostNudge, HostNudgeInjector};
 
     use super::{
-        BoundedHostNudgeInjector, GraftReceiverLoopContext, MAX_HOST_NUDGE_HELPERS,
-        RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch, join_receive_loop_with_deadline,
-        load_graft_config, read_snapshot, run_graft_receiver_loop,
+        BoundedHostNudgeInjector, GRAFT_RECEIVER_RECOVERY_MAX_DURATION,
+        GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY, GraftReceiverLoopContext, HelperThreadBudget,
+        MAX_HOST_NUDGE_HELPERS, RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch,
+        ReceiverRecoveryCircuit, handle_graft_receiver_connection, join_receive_loop_with_deadline,
+        load_graft_config, read_snapshot, recover_after_poll_accept_error, recover_graft_receiver,
+        run_graft_receiver_loop, wait_for_stop_or_delay,
     };
     use crate::{GraftSessionState, SessionSnapshot};
 
@@ -596,6 +814,16 @@ mod tests {
     struct NoopObservability;
 
     impl GraftObservability for NoopObservability {}
+
+    struct StateObservability {
+        states: mpsc::SyncSender<GraftSessionState>,
+    }
+
+    impl GraftObservability for StateObservability {
+        fn session_state_changed(&self, snapshot: &SessionSnapshot) {
+            let _ = self.states.try_send(snapshot.state);
+        }
+    }
 
     #[derive(Debug)]
     struct FirstCallBlocksInjector {
@@ -670,6 +898,7 @@ mod tests {
             &GraftPostSendRequest {
                 event,
                 rendered_nudge: "<atm>test nudge</atm>".to_string(),
+                message_body: "full immutable body".to_string(),
             },
             DELIVER_CONNECT_DEADLINE,
             DELIVER_IO_DEADLINE,
@@ -766,6 +995,13 @@ mod tests {
     }
 
     #[test]
+    fn receiver_recovery_delays_observe_stop_without_waiting_for_backoff() {
+        let (stop_tx, stop_rx) = mpsc::channel();
+        stop_tx.send(()).expect("request stop");
+        assert!(wait_for_stop_or_delay(&stop_rx, Duration::from_secs(1)));
+    }
+
+    #[test]
     fn receiver_listener_binds_at_expected_endpoint() {
         let paths = test_paths();
         let endpoint_path = receiver_endpoint_path(&paths);
@@ -799,6 +1035,71 @@ mod tests {
             .expect("second delivery should use a fresh helper thread");
 
         gate_tx.send(()).expect("release blocked first helper");
+    }
+
+    #[test]
+    fn helper_budget_failed_acquire_leaves_inflight_unchanged() {
+        let budget = Arc::new(HelperThreadBudget::new(0));
+        assert!(budget.try_acquire().is_none());
+        assert_eq!(budget.inflight(), 0);
+    }
+
+    #[test]
+    fn helper_budget_concurrent_acquires_never_exceed_limit() {
+        let budget = Arc::new(HelperThreadBudget::new(MAX_HOST_NUDGE_HELPERS));
+        let workers = MAX_HOST_NUDGE_HELPERS * 4;
+        let start = Arc::new(Barrier::new(workers + 1));
+        let release = Arc::new(Barrier::new(workers + 1));
+        let (result_tx, result_rx) = mpsc::channel();
+        let mut handles = Vec::with_capacity(workers);
+        for _ in 0..workers {
+            let budget = Arc::clone(&budget);
+            let start = Arc::clone(&start);
+            let release = Arc::clone(&release);
+            let result_tx = result_tx.clone();
+            handles.push(std::thread::spawn(move || {
+                start.wait();
+                let permit = budget.try_acquire();
+                result_tx
+                    .send(permit.is_some())
+                    .expect("send acquire result");
+                release.wait();
+                drop(permit);
+            }));
+        }
+        start.wait();
+        drop(result_tx);
+        let acquired = (0..workers)
+            .map(|_| result_rx.recv().expect("receive acquire result"))
+            .filter(|acquired| *acquired)
+            .count();
+        assert!(acquired <= MAX_HOST_NUDGE_HELPERS);
+        assert_eq!(budget.inflight(), acquired);
+        release.wait();
+        for handle in handles {
+            handle.join().expect("join acquire worker");
+        }
+        assert_eq!(budget.inflight(), 0);
+    }
+
+    #[test]
+    fn helper_permit_drop_releases_exactly_one_slot() {
+        let budget = Arc::new(HelperThreadBudget::new(2));
+        let permit = budget.try_acquire().expect("first permit");
+        assert_eq!(budget.inflight(), 1);
+        drop(permit);
+        assert_eq!(budget.inflight(), 0);
+    }
+
+    #[test]
+    fn helper_permit_survives_budget_drop() {
+        let budget = Arc::new(HelperThreadBudget::new(1));
+        let inflight = Arc::clone(&budget.inflight);
+        let permit = budget.try_acquire().expect("permit");
+        drop(budget);
+        assert_eq!(inflight.load(Ordering::SeqCst), 1);
+        drop(permit);
+        assert_eq!(inflight.load(Ordering::SeqCst), 0);
     }
 
     #[test]
@@ -854,11 +1155,187 @@ mod tests {
         let nudges = injector.nudges.lock().expect("nudges lock");
         assert_eq!(nudges.len(), 100);
         assert_eq!(
+            nudges[0].body,
+            "<atm>test nudge</atm>\n\nfull immutable body"
+        );
+        assert_eq!(
             read_snapshot(&snapshot).expect("snapshot").state,
             GraftSessionState::Listening
         );
 
         stop_receiver(stop_tx, join);
+    }
+
+    #[test]
+    fn receiver_loop_restores_a_missing_endpoint_record_before_the_next_delivery() {
+        let paths = test_paths();
+        let endpoint_path = receiver_endpoint_path(&paths);
+        let injector = Arc::new(RecordingInjector::default());
+        let (stop_tx, join, _snapshot) = spawn_receiver(
+            endpoint_path.clone(),
+            injector.clone() as Arc<dyn HostNudgeInjector>,
+        );
+
+        fs::remove_file(&endpoint_path).expect("remove published endpoint record");
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        let (_poll_wait_tx, poll_wait_rx) = mpsc::channel();
+        while !endpoint_path.exists() && std::time::Instant::now() < deadline {
+            assert!(
+                !wait_for_stop_or_delay(&poll_wait_rx, GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL),
+                "test-only wait channel must remain open until the endpoint record is restored"
+            );
+        }
+        assert!(
+            endpoint_path.exists(),
+            "receiver must restore a record deleted by an external lifecycle event"
+        );
+
+        assert_eq!(
+            deliver_request(&endpoint_path, request_event()),
+            GraftPostSendResponse::Delivered
+        );
+        assert_eq!(injector.nudges.lock().expect("nudges lock").len(), 1);
+        stop_receiver(stop_tx, join);
+    }
+
+    #[test]
+    fn hard_accept_failure_rebinds_and_resumes_authenticated_delivery() {
+        let paths = test_paths();
+        let endpoint_path = receiver_endpoint_path(&paths);
+        let injector = Arc::new(RecordingInjector::default());
+        let (_stop_tx, stop_rx) = mpsc::channel();
+        let snapshot = Arc::new(RwLock::new(SessionSnapshot {
+            team: TeamName::from_validated(TEST_TEAM),
+            agent: AgentName::from_validated(TEST_QA),
+            state: GraftSessionState::Degraded,
+        }));
+        let ctx = GraftReceiverLoopContext {
+            endpoint_path: endpoint_path.clone(),
+            owner_chat_id: None,
+            snapshot: Arc::clone(&snapshot),
+            injector: injector.clone() as Arc<dyn HostNudgeInjector>,
+            observability: Arc::new(NoopObservability),
+            stop_rx,
+            ready_tx: None,
+        };
+        let listener =
+            GraftReceiverListener::bind(&endpoint_path, None).expect("bind initial listener");
+        let initial_record = fs::read_to_string(&endpoint_path).expect("read initial record");
+
+        let listener = recover_after_poll_accept_error(
+            &ctx,
+            listener,
+            &AtmError::daemon_unavailable("simulated hard accept failure"),
+        )
+        .expect("recover after hard accept failure")
+        .expect("rebind after hard accept failure");
+        assert_eq!(
+            read_snapshot(&snapshot)
+                .expect("read post-rebind snapshot")
+                .state,
+            GraftSessionState::Listening,
+            "only a successful rebind returns the session to Listening"
+        );
+        assert_ne!(
+            fs::read_to_string(&endpoint_path).expect("read rebound record"),
+            initial_record,
+            "rebind must republish a fresh capability record"
+        );
+
+        let sender = std::thread::spawn({
+            let endpoint_path = endpoint_path.clone();
+            move || deliver_request(&endpoint_path, request_event())
+        });
+        let mut stream = loop {
+            if let Some(stream) = listener.poll_accept().expect("poll rebound listener") {
+                break stream;
+            }
+            std::thread::yield_now();
+        };
+        let bounded_injector = BoundedHostNudgeInjector::spawn(injector.clone());
+        handle_graft_receiver_connection(&ctx, &bounded_injector, &listener, &mut stream)
+            .expect("deliver through rebound listener");
+        assert_eq!(
+            sender.join().expect("join sender"),
+            GraftPostSendResponse::Delivered
+        );
+        assert_eq!(injector.nudges.lock().expect("nudges lock").len(), 1);
+    }
+
+    #[test]
+    fn receiver_recovery_marks_session_degraded_while_rebind_is_blocked() {
+        let paths = test_paths();
+        let endpoint_path = receiver_endpoint_path(&paths);
+        let initial_listener =
+            GraftReceiverListener::bind(&endpoint_path, None).expect("bind initial listener");
+        drop(initial_listener);
+        let blocker =
+            GraftReceiverListener::bind(&endpoint_path, None).expect("bind competing listener");
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let (state_tx, state_rx) = mpsc::sync_channel(2);
+        let snapshot = Arc::new(RwLock::new(SessionSnapshot {
+            team: TeamName::from_validated(TEST_TEAM),
+            agent: AgentName::from_validated(TEST_QA),
+            state: GraftSessionState::Listening,
+        }));
+        let ctx = GraftReceiverLoopContext {
+            endpoint_path,
+            owner_chat_id: None,
+            snapshot: Arc::clone(&snapshot),
+            injector: Arc::new(RecordingInjector::default()),
+            observability: Arc::new(StateObservability { states: state_tx }),
+            stop_rx,
+            ready_tx: None,
+        };
+        let recovery = std::thread::spawn(move || recover_graft_receiver(&ctx));
+
+        assert_eq!(
+            state_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("recovery must publish its degraded state"),
+            GraftSessionState::Degraded
+        );
+        assert_eq!(
+            read_snapshot(&snapshot).expect("read retry snapshot").state,
+            GraftSessionState::Degraded
+        );
+
+        stop_tx.send(()).expect("stop recovery");
+        assert!(
+            recovery
+                .join()
+                .expect("join recovery")
+                .expect("recover result")
+                .is_none(),
+            "stop must end the rebind loop without a false Listening state"
+        );
+        drop(blocker);
+    }
+
+    #[test]
+    fn receiver_recovery_circuit_escalates_after_a_bounded_recovery_window() {
+        let started = Instant::now();
+        let mut circuit = ReceiverRecoveryCircuit::new(started);
+
+        assert!(!circuit.is_exhausted(started));
+        assert!(!circuit.warning_due(started));
+        assert!(circuit.warning_due(started + GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY));
+        assert!(!circuit.warning_due(
+            started
+                + GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY
+                + GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY
+                - Duration::from_millis(1)
+        ));
+        assert!(circuit.warning_due(
+            started
+                + GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY
+                + GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY
+        ));
+        assert!(circuit.is_exhausted(started + GRAFT_RECEIVER_RECOVERY_MAX_DURATION));
+
+        circuit.reset(started + GRAFT_RECEIVER_RECOVERY_MAX_DURATION);
+        assert!(!circuit.is_exhausted(started + GRAFT_RECEIVER_RECOVERY_MAX_DURATION));
+        assert!(!circuit.warning_due(started + GRAFT_RECEIVER_RECOVERY_MAX_DURATION));
     }
 
     #[test]

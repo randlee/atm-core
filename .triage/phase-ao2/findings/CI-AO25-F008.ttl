@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CI-AO25-F008>
+  a triage:Finding ;
+  triage:findingId "CI-AO25-F008" ;
+  triage:title "PR #978 Windows lint job real CI failure: SID lookup mismatch and CLI arg regression" ;
+  triage:description "PR #978 (fix/benchmark-primary-db-safety, head 726d3a75) CI job 'Just lint (windows-latest)' completed with conclusion=failure. Two distinct failure classes: (1) pytest FAIL test_windows_owner_lookup_matches_executing_account_sid -- AssertionError: 'sid:s-1-5-32-544' (Administrators group) != actual executing-account SID; 13 errors, 10 skipped suggesting fixture/setup issue cascading. (2) CLI arg parsing: unrecognized arguments: --managed-service x (expected behavior test failing)." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-regression" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/smoke/ (Windows-specific owner-lookup test and run_admission_capacity.py CLI arg parsing)" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-22T07:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed on fix/benchmark-primary-db-safety commit a74615f82 (fix(smoke): honor Windows token default owner): rewrote _windows_current_principal() to use ctypes OpenProcessToken/GetTokenInformation(TokenOwner) instead of whoami-based SID lookup. A parallel divergent commit 5d290ae9f (PowerShell owner-set approach) was superseded/discarded at the self-merge 08a725b99 -- confirmed via inspection of the final merged file state, with zero dangling references to the discarded approach. PR #978 merged to integrate/phase-ao2 at 85b041cf9 (2026-08-22T06:15:47Z). quality-mgr independently verified 'Just lint (windows-latest)' PASS in real GitHub CI (job 96986939683, 5m19s) via gh CLI/API, not local re-run; PR #978 CI fully green (19/19 checks)." ;
+  triage:triagedAt "2026-08-22T05:28:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.5 ;
+  triage:foundAt "2026-08-22T05:23:38Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-AO25-F008/F001> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-AO25-F008/F002> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CI-AO25-F008/F001>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_benchmark_account.py" ;
+  triage:line 96 ;
+  triage:snippet "def test_windows_owner_lookup_matches_executing_account_sid(self):" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/benchmark-primary-db-safety" ;
+  triage:headSha "726d3a75" ;
+  triage:occursIn <urn:atm:triage:worktree/primary-db-safety/726d3a75> .
+
+<urn:atm:triage:occurrence/CI-AO25-F008/F002>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 390 ;
+  triage:snippet "mock.patch.object(sys, argv, [run_admission_capacity.py, --managed-service, x])" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/benchmark-primary-db-safety" ;
+  triage:headSha "726d3a75" ;
+  triage:occursIn <urn:atm:triage:worktree/primary-db-safety/726d3a75> .
+
+<urn:atm:triage:worktree/primary-db-safety/726d3a75>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-benchmark-primary-db-safety" ;
+  triage:branch "fix/benchmark-primary-db-safety" ;
+  triage:headSha "726d3a75" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/snapshot-restore-mandatory/56b1166a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-benchmark-snapshot-restore-mandatory" ;
+  triage:branch "fix/benchmark-snapshot-restore-mandatory" ;
+  triage:headSha "56b1166a17d8e416647fe160a8d3559dbc9e30ce" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/batching-regression/f3e39913>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-admission-writer-batching-regression" ;
+  triage:branch "fix/admission-writer-batching-regression" ;
+  triage:headSha "f3e39913" ;
+  triage:orderIndex 7 .

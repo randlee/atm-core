@@ -1,11 +1,17 @@
 # ADR-034 — Minimal Cross-Host HTTPS Transport
 
+> **Forward reconciliation:** ADR-047 partially supersedes this ADR's
+> peer-wire mode-selection wording. Its single-router, canonical-request, and
+> stream-adapter constraints remain in force.
+
 | Field | Value |
 | --- | --- |
 | ID | ADR-034 |
 | Status | Accepted |
 | Scope | Repository-wide |
 | Relates to | ADR-018, ADR-028, ADR-029, ADR-030, ADR-033, Phase AI |
+
+*Terminology note (Phase AQ): 'nudge' below means the steer (immediate) kind; see the nudge taxonomy in docs/requirements.md.*
 
 ## Decision
 

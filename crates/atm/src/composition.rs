@@ -539,20 +539,19 @@ mod tests {
     #[derive(Clone, Default)]
     struct SharedLogBuffer(Arc<Mutex<Vec<u8>>>);
 
-    struct SharedLogWriter(SharedLogBuffer);
+    struct SharedLogWriter(Arc<Mutex<Vec<u8>>>);
 
     impl<'a> MakeWriter<'a> for SharedLogBuffer {
         type Writer = SharedLogWriter;
 
         fn make_writer(&'a self) -> Self::Writer {
-            SharedLogWriter(self.clone())
+            SharedLogWriter(Arc::clone(&self.0))
         }
     }
 
     impl Write for SharedLogWriter {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
             self.0
-                .0
                 .lock()
                 .expect("log buffer lock")
                 .extend_from_slice(buf);
@@ -1008,8 +1007,8 @@ mod tests {
     async fn cli_graft_daemon_and_read_preserve_one_chat_identity_contract() {
         let chat_id = "chat-42".parse::<ChatId>().expect("chat id");
         let send_request = SendRequest::new(
-            std::path::PathBuf::from("/tmp/home"),
-            std::path::PathBuf::from("/tmp/current"),
+            std::env::temp_dir().join("atm-test-home"),
+            std::env::temp_dir().join("atm-test-current"),
             TEST_SENDER.parse().expect("caller"),
             "recipient:target-chat@test-team",
             TEST_TEAM.parse().expect("team"),
@@ -1096,8 +1095,8 @@ mod tests {
         );
 
         let read = ReadQuery::new(
-            std::path::PathBuf::from("/tmp/home"),
-            std::path::PathBuf::from("/tmp/current"),
+            std::env::temp_dir().join("atm-test-home"),
+            std::env::temp_dir().join("atm-test-current"),
             TEST_SENDER.parse().expect("caller"),
             None,
             TEST_TEAM.parse().expect("team"),

@@ -3,6 +3,7 @@
 use std::fmt;
 use std::path::PathBuf;
 
+use sc_lint_attributes::sc_lint;
 use serde::de::Error as DeError;
 use serde::ser::{Error as SerError, SerializeMap};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -333,6 +334,7 @@ impl<'de> Deserialize<'de> for AtmJsonNumber {
 }
 
 /// ATM-owned recursive JSON-value wrapper used by the observability boundary.
+#[sc_lint(boundary.allow("cycle.recursive_value_container"))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LogFieldValue {
     Null,
@@ -432,6 +434,7 @@ impl<'de> Deserialize<'de> for LogFieldValue {
 }
 
 /// ATM-owned map wrapper used by public observability record projections.
+#[sc_lint(boundary.allow("cycle.recursive_value_container"))]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LogFieldMap {
     entries: Vec<(LogFieldKey, LogFieldValue)>,

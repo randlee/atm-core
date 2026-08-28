@@ -19,9 +19,17 @@ from lint_common import workspace_crate_section_lines
 from lint_common import write_log
 
 
+if sys.platform == "win32":
+    # Cross-host diagnostics may contain Unicode that the legacy Windows
+    # console code page cannot encode.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+
 PYTHON_LINT_ORDER = (
     "version",
     "boundaries",
+    "adr-index",
     "unix-gating",
     "same-host-portability",
     "runtime-waits",
@@ -110,6 +118,7 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "lines": LintTask("lines", [*python_command, str(repo_root / ".just/check_line_counts.py")]),
         "boundaries": LintTask("boundaries", [*python_command, str(repo_root / ".just/lint_boundaries.py")]),
+        "adr-index": LintTask("adr-index", [*python_command, str(repo_root / ".just/check_adr_index.py")]),
         "unix-gating": LintTask(
             "unix-gating", [*python_command, str(repo_root / ".just/lint_unix_gating.py")]
         ),
@@ -188,7 +197,7 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
 
 def resolve_task_names(target: str) -> list[str]:
     if target == "all":
-        return [*CARGO_LINT_ORDER, *PYTHON_LINT_ORDER]
+        return [*CARGO_LINT_ORDER, *PYTHON_LINT_ORDER, *EXTRA_LINTS]
     if target == "fast":
         return list(FAST_LINT_ORDER)
     valid = {"all", "fast", *CARGO_LINT_ORDER, *PYTHON_LINT_ORDER, *EXTRA_LINTS}
@@ -326,29 +335,49 @@ def run_task(task: LintTask, repo_root: Path) -> LintResult:
     return result
 
 
+def console_safe_text(text: str, encoding: str | None) -> str:
+    """Return text that can be written to a console with *encoding*.
+
+    Subprocess output is deliberately decoded as UTF-8 with replacement so
+    diagnostic logs are portable.  Windows CI's default console encoding can
+    still be a legacy code page, though, and cannot render every replacement
+    character.  Preserve the diagnostic by escaping only characters that the
+    console cannot encode instead of letting the lint reporter crash.
+    """
+    selected_encoding = encoding or "utf-8"
+    return text.encode(selected_encoding, errors="backslashreplace").decode(selected_encoding)
+
+
+def print_console_line(text: str, output: object | None = None) -> None:
+    """Print a diagnostic line without assuming a UTF-8 terminal."""
+    stream = sys.stdout if output is None else output
+    encoding = getattr(stream, "encoding", None)
+    print(console_safe_text(text, encoding), file=stream)
+
+
 def print_result(result: LintResult, repo_root: Path) -> None:
     if result.returncode == 0:
-        print(f"{result.task.name} passed [{format_duration(result.duration_seconds)}]")
+        print_console_line(f"{result.task.name} passed [{format_duration(result.duration_seconds)}]")
         return
 
     lines = preview_lines_for_task(result.task.name, interesting_lines("\n".join((result.stdout or "", result.stderr or ""))))
     log_display = relative_log_path(repo_root, result.log_path)
-    print(f"{result.task.name} failed")
+    print_console_line(f"{result.task.name} failed")
     if result.task.name in HIGH_VOLUME_LINTS:
         preview = preview_lines_for_task(result.task.name, lines)[:2]
         for line in preview:
-            print(f"  {line}")
+            print_console_line(f"  {line}")
         count = extract_count(lines)
         if count is not None:
-            print(f"  [{count}] errors in {log_display}")
+            print_console_line(f"  [{count}] errors in {log_display}")
         else:
-            print(f"  full log: {log_display}")
+            print_console_line(f"  full log: {log_display}")
         return
 
     preview = failure_preview(result.task.name, lines)
     for line in preview:
-        print(f"  {line}")
-    print(f"  full log: {log_display}")
+        print_console_line(f"  {line}")
+    print_console_line(f"  full log: {log_display}")
 
 
 def run_parallel(tasks: list[LintTask], repo_root: Path) -> list[LintResult]:
@@ -375,7 +404,7 @@ def main(argv: list[str]) -> int:
     try:
         task_names = resolve_task_names(target)
     except ValueError as error:
-        print(str(error), file=sys.stderr)
+        print_console_line(str(error), sys.stderr)
         return 2
 
     tasks = build_tasks(repo_root)
@@ -406,10 +435,10 @@ def main(argv: list[str]) -> int:
 
     failures = [result for result in results if result.returncode != 0]
     if failures:
-        print(f"lint failed: {len(failures)} check(s) failed")
+        print_console_line(f"lint failed: {len(failures)} check(s) failed")
         return 1
 
-    print(f"lint passed: {len(results)} check(s) succeeded")
+    print_console_line(f"lint passed: {len(results)} check(s) succeeded")
     return 0
 
 

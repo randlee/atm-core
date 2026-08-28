@@ -111,6 +111,11 @@ Every sprint follows this pattern:
 5. **Commit/Push/PR** to phase integration branch
 6. **Agent-teams review** documenting what worked/didn't
 
+** team-lead only - PR/QA is immediate, CI is a merge gate only — never a dispatch gate:**
+- Open the PR and dispatch `quality-mgr` for review immediately when dev pushes. Do NOT hold off sending j2 task to `quality-mgr` to wait for CI.
+- The only thing to check for on a PR before/independent of QA is `mergeable == false` (a real merge conflict) — that needs action (rebase/resolve). A failing CI check on its own must be addressed by idle or background agent, do not interrupt dev agent mid task to fix ci.
+- CI green is required only at actual merge time, never as a precondition for opening a PR or dispatching QA.
+
 ### Phase Integration Branch Strategy
 
 Each phase gets a dedicated integration branch off `develop`:
@@ -197,21 +202,21 @@ atm read
 atm inbox
 ```
 
-**Nudge ARCH-CTM to check inbox** (when he hasn't replied):
+**Re-dispatch ARCH-CTM** (when he hasn't replied):
 
-ARCH-CTM runs in a tmux pane. Discover the pane, then send-keys:
-```bash
-# Find arch-ctm's pane
-tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_current_command}'
-
-# Send nudge (use the correct pane ID from above)
-tmux send-keys -t <pane-id> -l "You have unread ATM messages. Run: atm read --team atm-dev" && sleep 0.5 && tmux send-keys -t <pane-id> Enter
-```
+- Never `tmux send-keys`. Resend via `atm send`, including the current j2
+  template task assignment (same rendered content).
+- ⚠️ **A codex agent-idle nudge is not informational — it is a stop condition.**
+  A codex agent (e.g. arch-ctm) WILL NOT resume or restart work on its own
+  after going idle. Do not treat idle as "still working" or defer action —
+  the ONLY way it does more work is if team-lead sends a task assignment via
+  `atm send`. Ignoring or deferring on an idle nudge stalls the agent
+  indefinitely.
 
 ### Communication Rules
 
 1. **No broadcast messages** — all communications are direct (team-lead ↔ specific agent)
-2. **Poll for replies** — after sending to arch-ctm, wait 30-60s then `atm read`. If no reply after 2 minutes, nudge via tmux send-keys
+2. **Poll for replies** — after sending to arch-ctm, wait 30-60s then `atm read`. If no reply after 2 minutes, resend the task assignment via `atm send`
 3. **arch-ctm is async** — he processes messages on his next turn. Do not block waiting; continue other work and check back
 
 ### ATM CLI Quick Reference

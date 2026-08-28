@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO22-ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "AO22-ATM-QA-003" ;
+  triage:title "required hostname-mismatch negative test is not actually exercised" ;
+  triage:description "Deliverable 4 requires a distinct \"hostname mismatch\" negative test, separate from \"missing/disabled interface.\" The only hostname-named test, disabled_or_hostname_mismatched_peer_fails_before_tcp_or_http_work (lib.rs:399-413), only constructs a disabled-peer scenario -- both sides use the literal \"localhost\"; no case configures a trusted peer under one hostname and connects/looks up a different one. The dedicated hostname-mismatch negative is not actually exercised. Remediation: add or extend a test that configures a trusted peer under one hostname and attempts connect/lookup against a different hostname, asserting fail-closed behavior before any bytes flow." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T16:48:28+00:00"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.2 ;
+  triage:foundAt "2026-08-20T16:45:46+00:00"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO22-ATM-QA-003/AO2.2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO22-ATM-QA-003/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-20T22:53:43Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AO22-ATM-QA-003/AO2.2-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 399 ;
+  triage:snippet "disabled_or_hostname_mismatched_peer_fails_before_tcp_or_http_work test" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s2/c30d2444> .
+
+<urn:atm:triage:occurrence/AO22-ATM-QA-003/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 399 ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2" ;
+  triage:headSha "03bf9e4742763fd40667e19cfdf3381ec58a006c" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pao-s2/03bf9e4742763fd40667e19cfdf3381ec58a006c> .
+
+<urn:atm:triage:worktree/pao-s2/c30d2444>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s2" ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature-pao-s2/03bf9e4742763fd40667e19cfdf3381ec58a006c>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2" ;
+  triage:branch "feature/pao-s2" ;
+  triage:headSha "03bf9e4742763fd40667e19cfdf3381ec58a006c" ;
+  triage:orderIndex 3 .

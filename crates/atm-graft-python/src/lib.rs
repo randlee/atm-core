@@ -83,6 +83,13 @@ fn atm_error(error: AtmError) -> PyErr {
     })
 }
 
+fn poisoned_lock_error(lock_name: &'static str) -> PyErr {
+    atm_error(AtmError::new(
+        AtmErrorCode::InternalError,
+        format!("{lock_name} lock poisoned"),
+    ))
+}
+
 fn python_callback_error(error: PyErr) -> AtmError {
     AtmError::new(
         AtmErrorCode::InternalError,
@@ -139,20 +146,17 @@ pub struct PyGraftSessionOptions {
     agent: String,
     #[pyo3(get)]
     team: String,
+    typed_team: TeamName,
+    typed_agent: AgentName,
 }
 
 impl PyGraftSessionOptions {
-    fn to_typed(&self) -> PyResult<GraftSessionOptions> {
-        if self.workspace_root.trim().is_empty() {
-            return Err(atm_error(AtmError::validation(
-                "workspace_root must not be blank",
-            )));
-        }
-        Ok(GraftSessionOptions::new(
+    fn to_typed(&self) -> GraftSessionOptions {
+        GraftSessionOptions::new(
             &self.workspace_root,
-            self.team.parse::<TeamName>().map_err(atm_error)?,
-            self.agent.parse::<AgentName>().map_err(atm_error)?,
-        ))
+            self.typed_team.clone(),
+            self.typed_agent.clone(),
+        )
     }
 }
 
@@ -160,13 +164,20 @@ impl PyGraftSessionOptions {
 impl PyGraftSessionOptions {
     #[new]
     fn new(workspace_root: String, agent: String, team: String) -> PyResult<Self> {
-        let options = Self {
+        if workspace_root.trim().is_empty() {
+            return Err(atm_error(AtmError::validation(
+                "workspace_root must not be blank",
+            )));
+        }
+        let typed_team = team.parse::<TeamName>().map_err(atm_error)?;
+        let typed_agent = agent.parse::<AgentName>().map_err(atm_error)?;
+        Ok(Self {
             workspace_root,
             agent,
             team,
-        };
-        options.to_typed()?;
-        Ok(options)
+            typed_team,
+            typed_agent,
+        })
     }
 }
 
@@ -399,24 +410,17 @@ impl PyGraftSession {
     fn client(&self) -> PyResult<GraftClient> {
         self.client
             .lock()
-            .map_err(|_| {
-                atm_error(AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "ATM graft session lock poisoned",
-                ))
-            })?
+            .map_err(|_| poisoned_lock_error("ATM graft session"))?
             .clone()
             .ok_or_else(|| atm_error(AtmError::daemon_unavailable("ATM graft session is closed")))
     }
 
     fn reconnect_client(&self) -> PyResult<()> {
         {
-            let client = self.client.lock().map_err(|_| {
-                atm_error(AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "ATM graft session lock poisoned",
-                ))
-            })?;
+            let client = self
+                .client
+                .lock()
+                .map_err(|_| poisoned_lock_error("ATM graft session"))?;
             if client.is_none() {
                 return Err(atm_error(AtmError::daemon_unavailable(
                     "ATM graft session is closed",
@@ -433,12 +437,7 @@ impl PyGraftSession {
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             self.reconnect_replacement
                 .lock()
-                .map_err(|_| {
-                    atm_error(AtmError::new(
-                        AtmErrorCode::InternalError,
-                        "ATM graft reconnect lock poisoned",
-                    ))
-                })?
+                .map_err(|_| poisoned_lock_error("ATM graft reconnect"))?
                 .clone()
                 .map(Ok)
                 .unwrap_or_else(|| {
@@ -449,12 +448,10 @@ impl PyGraftSession {
         };
         #[cfg(not(test))]
         let replacement = GraftClient::connect_existing().map_err(atm_error)?;
-        let mut client = self.client.lock().map_err(|_| {
-            atm_error(AtmError::new(
-                AtmErrorCode::InternalError,
-                "ATM graft session lock poisoned",
-            ))
-        })?;
+        let mut client = self
+            .client
+            .lock()
+            .map_err(|_| poisoned_lock_error("ATM graft session"))?;
         if client.is_none() {
             return Err(atm_error(AtmError::daemon_unavailable(
                 "ATM graft session is closed",
@@ -540,12 +537,7 @@ impl PyGraftSession {
         let client = self.client()?;
         python_extension_runtime()?
             .lock()
-            .map_err(|_| {
-                atm_error(AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "ATM Python extension runtime lock poisoned",
-                ))
-            })?
+            .map_err(|_| poisoned_lock_error("ATM Python extension runtime"))?
             .block_on(client.write_message(request))
             .map(AtmSendResult::from)
             .map_err(atm_error)
@@ -807,12 +799,10 @@ impl PyGraftSession {
         on_nudge: Py<PyAny>,
     ) -> PyResult<()> {
         let client = self.client()?;
-        let mut receiver = self.receiver.lock().map_err(|_| {
-            atm_error(AtmError::new(
-                AtmErrorCode::InternalError,
-                "ATM graft receiver lock poisoned",
-            ))
-        })?;
+        let mut receiver = self
+            .receiver
+            .lock()
+            .map_err(|_| poisoned_lock_error("ATM graft receiver"))?;
         if receiver.is_some() {
             return Err(atm_error(AtmError::new(
                 AtmErrorCode::GraftReceiverAlreadyActive,
@@ -822,7 +812,7 @@ impl PyGraftSession {
         let session = client
             .activate_session(
                 options
-                    .to_typed()?
+                    .to_typed()
                     .with_owner_chat_id(self.caller.chat_id().cloned()),
                 Arc::new(PythonNudgeInjector { callback: on_nudge }),
             )
@@ -832,12 +822,10 @@ impl PyGraftSession {
     }
 
     fn snapshot(&self) -> PyResult<PyGraftSessionSnapshot> {
-        let receiver = self.receiver.lock().map_err(|_| {
-            atm_error(AtmError::new(
-                AtmErrorCode::InternalError,
-                "ATM graft receiver lock poisoned",
-            ))
-        })?;
+        let receiver = self
+            .receiver
+            .lock()
+            .map_err(|_| poisoned_lock_error("ATM graft receiver"))?;
         receiver
             .as_ref()
             .ok_or_else(|| {
@@ -854,24 +842,14 @@ impl PyGraftSession {
         let receiver = self
             .receiver
             .lock()
-            .map_err(|_| {
-                atm_error(AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "ATM graft receiver lock poisoned",
-                ))
-            })?
+            .map_err(|_| poisoned_lock_error("ATM graft receiver"))?
             .take();
         if let Some(receiver) = receiver {
             receiver.close().map_err(atm_error)?;
         }
         self.client
             .lock()
-            .map_err(|_| {
-                atm_error(AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "ATM graft session lock poisoned",
-                ))
-            })?
+            .map_err(|_| poisoned_lock_error("ATM graft session"))?
             .take();
         Ok(())
     }
@@ -912,7 +890,6 @@ mod tests {
     use atm_graft::{GraftClient, HostNudge, HostNudgeInjector, MailboxWorkCounts};
     use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
-    use std::fs;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
@@ -1144,6 +1121,9 @@ mod tests {
 
     #[test]
     fn closed_python_session_rejects_reconnect() {
+        // reconnect_client converts the closed-session error into PyErr, so
+        // this test must not rely on another parallel test initializing PyO3.
+        Python::initialize();
         let caller = PyAgentAddress::new(TEST_SENDER.to_string(), TEST_TEAM.to_string(), None)
             .expect("caller");
         let session = PyGraftSession {
@@ -1677,11 +1657,6 @@ mod tests {
     fn python_session_rejects_a_second_receiver_activation() {
         Python::initialize();
         let tempdir = TempDir::new().expect("tempdir");
-        fs::write(
-            tempdir.path().join(".atm.toml"),
-            "[graft]\nenabled = true\n",
-        )
-        .expect("graft config");
         let caller = PyAgentAddress::new(
             TEST_RECIPIENT.to_string(),
             TEST_TEAM.to_string(),
@@ -1700,11 +1675,12 @@ mod tests {
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
         };
-        let options = PyGraftSessionOptions {
-            workspace_root: tempdir.path().display().to_string(),
-            agent: TEST_RECIPIENT.to_string(),
-            team: TEST_TEAM.to_string(),
-        };
+        let options = PyGraftSessionOptions::new(
+            tempdir.path().display().to_string(),
+            TEST_RECIPIENT.to_string(),
+            TEST_TEAM.to_string(),
+        )
+        .expect("receiver options");
 
         Python::attach(|py| {
             let callback = PyModule::from_code(
@@ -1719,7 +1695,11 @@ mod tests {
             .unbind();
             session
                 .activate_receiver(options.clone(), callback.clone_ref(py))
-                .expect("first receiver activation");
+                .expect("bare workspace receiver activation");
+            assert_eq!(
+                session.snapshot().expect("active snapshot").state,
+                "listening"
+            );
             let error = session
                 .activate_receiver(options, callback)
                 .expect_err("second activation must be rejected at the Python API boundary");

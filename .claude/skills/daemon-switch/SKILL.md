@@ -20,6 +20,13 @@ worktree binary directly.
    is healthy again.
 6. When peer-interface or trust configuration changes, use `restart` to reload
    the one selected daemon; never launch an extra process.
+7. On macOS, `switch` and `restart` fail closed unless both selected `atm` and
+   `atm-daemon` strictly verify with the stable Apple Development identifiers
+   and the configured Apple team identifier. Build with `just build` (or
+   explicitly run `python3 .just/sign_daemon_dev.py`) before switching. This
+   enforces a matched, signed local build; it is separate from macOS Local
+   Network Privacy authorization. Windows currently warns and skips signing;
+   other platforms are no-ops.
 
 ## Commands
 

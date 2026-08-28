@@ -47,6 +47,7 @@ allowed_paths = [
   "crates/atm-core/src/read/mod.rs",
   "crates/atm-core/src/read/request.rs",
   "crates/atm-core/src/send/mod.rs",
+  "crates/atm-core/src/write/mod.rs",
   "crates/atm-http-runtime/src/runtime_health.rs",
   "crates/atm/src/commands/members.rs",
 ]
@@ -122,11 +123,17 @@ allowed_dependencies = ["anyhow", "async-trait", "atm-core", "atm-daemon-bootstr
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-core/Cargo.toml"
-allowed_dependencies = ["async-trait", "atm-error", "atm-runtime-test-support", "atm-storage", "base64", "chrono", "fs4", "getrandom", "interprocess", "libc", "parking_lot", "semver", "serde", "serde_json", "serial_test", "tempfile", "toml", "tracing", "tracing-subscriber", "ulid", "windows-sys"]
+allowed_dependencies = ["async-trait", "atm-error", "atm-runtime-test-support", "atm-storage", "base64", "chrono", "fs4", "getrandom", "interprocess", "libc", "parking_lot", "sc-lint-attributes", "semver", "serde", "serde_json", "serial_test", "tempfile", "toml", "tracing", "tracing-subscriber", "ulid", "windows-sys"]
+
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-error/Cargo.toml"
+boundary_record_path = "boundaries/atm-error/error-codes.toml"
+allowed_dependencies = ["serde", "serde_json"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-bootstrap/Cargo.toml"
-allowed_dependencies = ["atm-core", "atm-http-runtime", "atm-runtime", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "fs4", "serde_json", "tempfile", "tokio", "ulid"]
+boundary_record_path = "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"
+allowed_dependencies = ["atm-core", "atm-http-runtime", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "fs4", "peer-tls", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-client/Cargo.toml"
@@ -146,7 +153,7 @@ allowed_dependencies = ["atm-storage", "atm-storage-rusqlite", "pyo3", "tempfile
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
-allowed_dependencies = ["async-trait", "atm-core", "atm-runtime-test-support", "atm-storage", "axum", "base64", "fs4", "hyper", "hyper-util", "reqwest", "serde", "serde_json", "serde_yaml", "tempfile", "tokio", "tower", "tracing", "ulid", "windows-sys"]
+allowed_dependencies = ["async-trait", "atm-core", "atm-runtime-test-support", "atm-storage", "axum", "base64", "fs4", "http-body-util", "hyper", "hyper-util", "reqwest", "serde", "serde_json", "serde_yaml", "tempfile", "tokio", "tower", "tracing", "ulid", "windows-sys"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-runtime/Cargo.toml"
@@ -154,11 +161,16 @@ allowed_dependencies = ["atm-core", "atm-storage", "serde_json", "tokio", "traci
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-storage/Cargo.toml"
-allowed_dependencies = ["async-trait", "atm-error", "chrono", "rustls", "serde", "serde_json", "sha2", "toml", "ulid"]
+allowed_dependencies = ["async-trait", "atm-error", "chrono", "rustls", "serde", "serde_json", "sha2", "toml", "ulid", "x509-parser", "zeroize"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-storage-rusqlite/Cargo.toml"
 allowed_dependencies = ["async-trait", "atm-storage", "chrono", "rusqlite", "serde", "serde_json", "tempfile", "tokio", "tracing"]
+
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/peer-tls/Cargo.toml"
+boundary_record_path = "boundaries/peer-tls/mtls-peer-stream-adapter.toml"
+allowed_dependencies = ["atm-storage", "rcgen", "rustls", "tempfile", "tokio", "tokio-rustls"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-template-sc-compose/Cargo.toml"
@@ -207,11 +219,9 @@ installer_url_field = "InstallerUrl"
 enabled = true
 file = ".github/workflows/release.yml"
 required_fragments = [
-  "update-homebrew:",
-  "repository: randlee/homebrew-tap",
-  "python3 scripts/release_artifacts.py update-homebrew-formulas \\",
-  "python3 scripts/release_artifacts.py validate-homebrew-formulas \\",
-  "--release-dir release \\",
-  "--formula homebrew-tap/Formula/agent-team-mail.rb \\",
-  "--formula homebrew-tap/Formula/atm.rb",
+  "RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml",
+  "release_artifacts.py build-plan",
+  "release_artifacts.py verify-version-lockstep",
+  "release_gate.sh final origin/main \"release-candidate-",
+  "release-target-matrix",
 ]

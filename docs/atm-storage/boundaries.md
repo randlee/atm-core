@@ -86,6 +86,12 @@ route, retry, or daemon lifecycle. The inactive
 proof; its dependency is explicitly allowed by the helper boundary and it has
 no production delivery capability.
 
+AO2.2 landed `peer-tls` as the sole production stream consumer of these
+helpers, with its boundary-TOML, manifest, and architecture guard reviewed
+and merged. That explicit exception promotes neither the interop fixture nor
+any legacy daemon code, and it does not authorize a second certificate
+parser, pinning verifier, or transport implementation.
+
 ## PeerConfigStore
 
 Canonical machine-readable boundary source:

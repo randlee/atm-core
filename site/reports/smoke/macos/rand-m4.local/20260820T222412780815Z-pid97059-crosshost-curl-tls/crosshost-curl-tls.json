@@ -1,0 +1,17 @@
+{
+  "feature": "crosshost-curl-tls",
+  "host": "rand-m4.local",
+  "platform": "macos",
+  "run_id": "20260820T222412780815Z",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "expected=1.4.4; cli=1.4.3; daemon=1.4.3",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 1
+    }
+  ]
+}

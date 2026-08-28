@@ -21,9 +21,10 @@ graft-specific protocol, frame codec, write path, or chat-address parser.
 - same-host daemon-client integration for linked Rust host-agent executables
 - graft lifecycle activation and lifecycle
 - automatic graft-backed post-send receipt when graft mode is active
-- automatic between-tool-call nudge injection bridge for the embedding host
-- host wake/event signaling when a new nudge arrives while the host is idle
-- graft-mode activation rules based on discovered `.atm.toml`
+- automatic between-tool-call steer-nudge injection bridge for the embedding host
+- host wake/event signaling when a new steer nudge arrives while the host is idle
+- identity-driven graft receiver activation with optional ATM-owned `.atm.toml`
+  configuration
 - graft-side observability through an ATM-owned injected boundary supplied by
   the embedding host
 
@@ -62,10 +63,12 @@ Initial crate requirement IDs:
 - `REQ-GRAFT-CLIENT-001` `atm-graft` owns the embedded same-host daemon client
   surface for first-party Rust host agents. Satisfies:
   `REQ-P-GRAFT-001`, `REQ-CORE-TRANSPORT-001`.
-- `REQ-GRAFT-NOTIFY-001` `atm-graft` owns the host-facing post-send nudge
+- `REQ-GRAFT-NOTIFY-001` `atm-graft` owns the host-facing post-send steer-nudge
   delivery
   contract and structured payload rendering used for between-tool-call
-  injection. Satisfies:
+  injection. (Phase AQ adds a second, independent queue-shaped nudge channel
+  to `atm-graft`; whether and how it lands is the harness integration's
+  decision, not specified here.) Satisfies:
   `REQ-P-GRAFT-001`.
 - `REQ-GRAFT-OBS-001` `atm-graft` owns graft-side structured observability
   emission for activation, connectivity, receiver handoff, and
@@ -87,9 +90,9 @@ Initial crate requirement IDs:
   replace a live receiver. Close may remove a record only when it still owns
   the published generation. A crashed owner must be reclaimable without an
   operator deleting a stale file.
-- `REQ-GRAFT-NOTIFY-002` Graft nudges are bounded wake-up signals only. They
-  are never mail storage, a durable retry queue, a conversation manager, or a
-  second mailbox. The daemon mailbox remains the source of truth.
+- `REQ-GRAFT-NOTIFY-002` Graft steer nudges are bounded wake-up signals only.
+  They are never mail storage, a durable retry queue, a conversation manager,
+  or a second mailbox. The daemon mailbox remains the source of truth.
 - `REQ-GRAFT-HERMES-002` One Hermes profile binds one ATM identity and its
   configured ADR-037 `ChatId` host session. Live and recovery wake-ups must
   enter that host session through its non-interrupting steer path, not through
@@ -177,7 +180,7 @@ AI.38 evidence note: the reference adapter calls only the injected Hermes
 visible failures with no normal-message fallback, retry loop, or mail mutation.
 The adapter fails closed when Hermes has not registered a runtime session, and
 never sends the platform chat id as `session_id`. The checked-in fixture proves
-this for both a live nudge and the AI.37 recovery summary.
+this for both a live steer nudge and the AI.37 recovery summary.
 
 ## 4. Required References
 
@@ -206,8 +209,9 @@ Requirement IDs:
 - `REQ-GRAFT-OBS-001`
 
 Required rules:
-- if no `.atm.toml` is discovered, `atm-graft` remains inactive and performs no
-  daemon interaction or post-send handoff work
+- a valid `ATM_IDENTITY` and `ATM_TEAM` activation envelope starts the receiver
+  regardless of whether `.atm.toml` is present; activation may not
+  successfully return with an inert receiver
 - the `atm-graft` crate must rely on ATM-owned config loading via
   `atm_core::load_atm_config`; it must not privately reparse `.atm.toml`
 - if graft mode is active, runtime identity comes from `ATM_IDENTITY`; graft
@@ -219,8 +223,10 @@ Required rules:
   and the standard same-host daemon endpoint can be derived from ATM-owned
   config/environment inputs, `atm-graft` may attempt the standard supervised
   daemon auto-start path instead of requiring the daemon to be pre-running
-- graft mode is enabled by default when active and may be disabled only by
-  explicit config or runtime opt-out
+- `.atm.toml` is optional configuration only. Its absence and legacy
+  `[atm.graft].enabled` values must not gate receiver activation; malformed
+  configuration, an invalid workspace root, ownership conflict, or bind
+  failure must surface as an error
 - `atm-graft` must use the same-host daemon API for:
   - `send`
   - `read`
@@ -238,25 +244,25 @@ Required rules:
 - `GraftReceiveHook` is the graft-backed concrete receiver hook behind the shared
   post-send capability seam; it is a sibling of `TmuxNudgeSink`, not a daemon
   subsystem
-- the host-facing nudge payload is structured and must contain at least:
+- the host-facing steer-nudge payload is structured and must contain at least:
   - `from`
   - `message_id`
   - `task_id` when the selected template kind is task-scoped
-- delivery-family nudges must additionally carry `description`
-- acknowledge-family nudges must preserve the compact built-in envelope shape
-  and must not add delivery-only body text
+- delivery-family steer nudges must additionally carry `description`
+- acknowledge-family steer nudges must preserve the compact built-in envelope
+  shape and must not add delivery-only body text
 - in embedded mode, `atm-graft` must automatically surface daemon-originated
-  nudges into the host's between-tool-call context flow; manual polling is not
-  sufficient for `atm-graft` acceptance
+  steer nudges into the host's between-tool-call context flow; manual
+  polling is not sufficient for `atm-graft` acceptance
 - same-host host-nudge delivery tests must use explicit receiver-readiness
   signaling before asserting injection success; acceptance must not depend on
   scheduler luck or on a shorter `#[cfg(test)]` delivery deadline than the
   accepted production path
-- if the host is idle when a nudge arrives, `atm-graft` must deliver one
+- if the host is idle when a steer nudge arrives, `atm-graft` must deliver one
   bounded receiver-local wake-up through its host injection seam and fire the
   host wake/event signal promptly. Any receiver-local buffer is transient,
-  bounded, and contains only nudge metadata; it must not become mail storage
-  or a durable retry queue.
+  bounded, and contains only steer-nudge metadata; it must not become mail
+  storage or a durable retry queue.
 - the exact task/thread/callback mechanism used for that behavior is private to
   `atm-graft` and is not fixed by this requirement doc
 - production `atm-graft` acceptance must not depend on `tmux send-keys`,
@@ -270,7 +276,7 @@ Required rules:
   full CLI:
   - daemon client operations for `send` and `read`
   - minimal graft activation/lifecycle entrypoints
-  - host-facing automatic nudge-delivery integration points
+  - host-facing automatic steer-nudge-delivery integration points
 - the concrete `U.9` public surface must include:
   - `GraftClient`
   - `GraftSession`
@@ -292,14 +298,14 @@ Required rules:
 - `atm-graft` compatibility with the primary `atm` install is defined by the
   documented same-host HTTP API, not by a requirement that both crates ship
   in lockstep versions
-- any hook-facing command that renders insertion-ready nudge text belongs on
+- any hook-facing command that renders insertion-ready steer-nudge text belongs on
   the `atm` CLI surface and must call the same daemon API used by `atm-graft`,
   but it is not a production substitute for embedded-mode automatic injection
 - `atm-graft` must emit structured observability for:
   - active / inactive graft mode
   - daemon connect / reconnect
   - receiver activation success / failure
-  - nudge received / host handoff
+  - steer nudge received / host handoff
   - receiver-local buffering/backpressure signals
   - the observability boundary must be injected by the host binary; `atm-graft`
     must not require a direct public dependency on `sc-observability`
@@ -326,7 +332,7 @@ Remaining prerequisites specific to `atm-graft`:
 
 Scope-simplification rule for the first implementation pass:
 - `atm-graft` v1 should keep its public API to `send`, `read`,
-  `GraftSession`, and automatic host-facing nudge injection integration
+  `GraftSession`, and automatic host-facing steer-nudge injection integration
 - runtime heartbeat / activity reporting is explicitly deferred unless host
   integration proves it is needed in the same sprint
 
@@ -335,14 +341,16 @@ Scope-simplification rule for the first implementation pass:
 `req-qa` should treat these as fail-closed presence checks:
 
 - `REQ-GRAFT-CONFIG-001`
-  - `[atm.graft].enabled` exists in ATM-owned config models and config loading
+  - optional ATM configuration is loaded through ATM-owned config models and
+    config loading
   - `atm_core::load_atm_config` is the public loader consumed by `atm-graft`
-  - `atm-graft` remains inert when `.atm.toml` is absent
+  - a bare workspace receiver either reaches `listening` and publishes its
+    endpoint record or returns an error; it never successfully no-ops
 - `REQ-GRAFT-RUNTIME-001`
   - the concrete `GraftSession` lifecycle type exists once `U.9` lands
-  - embedded mode automatically surfaces post-send nudges to the host and
-    triggers a host wake/event signal when new nudges arrive while the host is
-    idle
+  - embedded mode automatically surfaces post-send steer nudges to the host
+    and triggers a host wake/event signal when new steer nudges arrive while
+    the host is idle
   - receiver-local buffering and shutdown behavior are test-covered at the
     crate-consumer layer
 - `REQ-GRAFT-CLIENT-001`
@@ -355,12 +363,13 @@ Scope-simplification rule for the first implementation pass:
     `atm-runtime` or `atm-storage-rusqlite` solely to support same-host daemon
     bootstrap convenience
 - `REQ-GRAFT-NOTIFY-001`
-  - daemon-originated nudge receipt is automatic in embedded mode
-  - the host-facing nudge payload exposes at least `from` and `message_id`
-  - the client runtime delivers bounded transient nudges through the host
-    injection seam and emits a host wake/event signal on arrival; durable mail
-    recovery is supplied by the ordinary daemon read contract, not a graft
-    queue
+  - daemon-originated steer-nudge receipt is automatic in embedded mode
+  - the host-facing steer-nudge payload exposes at least `from` and
+    `message_id`
+  - the client runtime delivers bounded transient steer nudges through the
+    host injection seam and emits a host wake/event signal on arrival;
+    durable mail recovery is supplied by the ordinary daemon read contract,
+    not a graft queue
   - no acceptance path relies on `tmux send-keys` or external terminal key
     injection as the delivery mechanism
 - `REQ-GRAFT-OBS-001`
@@ -378,5 +387,5 @@ Scope-simplification rule for the first implementation pass:
     seam and never ordinary user-message ingress
   - a restart test proves exactly one summary steer after ten seconds when
     durable `bucket_counts.unread` or `bucket_counts.pending_ack` is non-zero
-  - a zero-count restart emits no steer; a live nudge during the delay remains
-    a normal one-event wake-up
+  - a zero-count restart emits no steer; a live steer nudge during the delay
+    remains a normal one-event wake-up

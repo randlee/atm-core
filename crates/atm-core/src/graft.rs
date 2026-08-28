@@ -46,6 +46,8 @@ pub struct GraftPostSendRequest {
     /// Canonical database-resolved `<atm …>` nudge text. The receiver must
     /// inject this text, never substitute the stored message description.
     pub rendered_nudge: String,
+    /// Immutable message content associated with `rendered_nudge`.
+    pub message_body: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -88,6 +90,7 @@ where
         recipient,
         recipient_team,
         rendered_nudge,
+        message_body,
     }) = &dispatch.target
     else {
         return Err(AtmError::validation(
@@ -113,6 +116,7 @@ where
         &GraftPostSendRequest {
             event: dispatch.event.clone(),
             rendered_nudge: rendered_nudge.clone(),
+            message_body: message_body.clone(),
         },
         deadline,
     )? {
@@ -192,13 +196,13 @@ pub struct GraftPostSendWireRequest {
 /// Owner-readable publication describing where an embedded agent listens for
 /// post-send nudges.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftReceiverEndpointRecord {
-    pub schema_version: u8,
-    pub owner_generation: String,
+struct GraftReceiverEndpointRecord {
+    schema_version: u8,
+    owner_generation: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub owner_chat_id: Option<ChatId>,
-    pub loopback: SocketAddr,
-    pub capability_base64url: String,
+    owner_chat_id: Option<ChatId>,
+    loopback: SocketAddr,
+    capability_base64url: String,
 }
 
 impl GraftReceiverEndpointRecord {
@@ -298,6 +302,7 @@ pub struct GraftReceiverListener {
     record_path: PathBuf,
     owner_generation: String,
     capability: LocalCapability,
+    record: GraftReceiverEndpointRecord,
     _ownership: ReceiverOwnershipGuard,
 }
 
@@ -402,8 +407,45 @@ impl GraftReceiverListener {
             record_path: record_path.to_path_buf(),
             owner_generation,
             capability,
+            record,
             _ownership: ownership,
         })
+    }
+
+    /// Restore this listener's endpoint record when an external lifecycle
+    /// event removed it. A successor record is never overwritten: ownership
+    /// remains fail-closed and process-lifetime exclusive.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when record publication fails or a different owner has
+    /// published a record at this path.
+    pub fn republish_if_missing(&self) -> Result<bool, AtmError> {
+        match fs::exists(&self.record_path).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to inspect graft receiver record at {}",
+                self.record_path.display()
+            ))
+            .with_cause(source)
+        })? {
+            false => {
+                prepare_receiver_record_parent(&self.record_path)?;
+                write_receiver_record(&self.record_path, &self.record)?;
+                tracing::info!(record_path = %self.record_path.display(), action = "receiver_record_republish", outcome = "restored", "graft receiver restored its missing endpoint record");
+                Ok(true)
+            }
+            true => {
+                let current = read_receiver_record(&self.record_path)?;
+                if current.owner_generation == self.owner_generation {
+                    Ok(false)
+                } else {
+                    Err(AtmError::new(
+                        AtmErrorCode::GraftReceiverAlreadyActive,
+                        graft_receiver_identity(&self.record_path),
+                    ))
+                }
+            }
+        }
     }
 
     /// Poll for one pending loopback connection without blocking.
@@ -797,6 +839,7 @@ mod tests {
         let request = GraftPostSendRequest {
             event: test_event(),
             rendered_nudge: "<atm>test nudge</atm>".to_string(),
+            message_body: "full immutable body".to_string(),
         };
         let sender = std::thread::spawn({
             let record_path = record_path.clone();
@@ -820,6 +863,7 @@ mod tests {
             .read_request(&mut stream, Duration::from_secs(3))
             .expect("read request");
         assert_eq!(received.rendered_nudge, "<atm>test nudge</atm>");
+        assert_eq!(received.message_body, "full immutable body");
         assert_eq!(received.event.description, "loopback graft transport");
         listener
             .write_response(&mut stream, &GraftPostSendResponse::Delivered)
@@ -827,6 +871,34 @@ mod tests {
 
         let response = sender.join().expect("join sender").expect("deliver");
         assert_eq!(response, GraftPostSendResponse::Delivered);
+    }
+
+    #[test]
+    fn receiver_republishes_its_record_after_external_removal() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let record_path = graft_receiver_record_path_from_home(
+            tempdir.path(),
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(TEST_QA),
+        );
+        let listener = GraftReceiverListener::bind(&record_path, None).expect("bind listener");
+        let expected = read_receiver_record(&record_path).expect("read published record");
+
+        fs::remove_file(&record_path).expect("remove endpoint record");
+        assert!(
+            listener
+                .republish_if_missing()
+                .expect("restore missing endpoint record")
+        );
+        assert_eq!(
+            read_receiver_record(&record_path).expect("read restored record"),
+            expected
+        );
+        assert!(
+            !listener
+                .republish_if_missing()
+                .expect("existing owner record is unchanged")
+        );
     }
 
     #[test]
@@ -847,6 +919,7 @@ mod tests {
                 request: GraftPostSendRequest {
                     event: test_event(),
                     rendered_nudge: "<atm>test nudge</atm>".to_string(),
+                    message_body: "full immutable body".to_string(),
                 },
             };
             super::write_graft_post_send_message(&mut stream, &wire, "write", "oversized")

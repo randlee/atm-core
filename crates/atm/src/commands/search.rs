@@ -181,12 +181,9 @@ impl SearchCommand {
             cursor: self.cursor.clone(),
             per_mailbox: self.per_mailbox,
             aggregate: self.aggregate(),
-        }
-        .into_request();
-        let mut request = atm_core::search::SearchRequest {
-            lifecycle,
-            ..request
         };
+        let mut request = atm_core::search::SearchRequest::from(request);
+        request.lifecycle = lifecycle;
         // Fail before opening a daemon connection while keeping the exact
         // same core compiler authoritative for HTTP ingress.
         let query = request.compile_query()?;

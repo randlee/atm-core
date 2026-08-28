@@ -14,17 +14,24 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
-
-env:
-  RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml
-  STAGED_INSTALL_ROOT: target/phase-ae/staged-install-root
 
 jobs:
   preflight:
     runs-on: ubuntu-latest
+    outputs:
+      channel_preflight_results: ${{ steps.channel_results.outputs.channel_preflight_results }}
+    env:
+      RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml
     steps:
-      - name: Enforce publisher ownership input
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: ownership
+        name: Enforce publisher ownership input
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -34,93 +41,444 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - id: secret_plan
+        name: Read non-disclosing credential plan from release manifest
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "plan=$(python3 .github/scripts/release_artifacts.py preflight-secret-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")" >> "$GITHUB_OUTPUT"
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.94.1"
-          components: clippy, rustfmt
+      - id: build_plan
+        name: Read build plan from release manifest
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan="$(python3 .github/scripts/release_artifacts.py build-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
+          {
+            echo "has_crates=$(jq -r '.has_crates' <<<"${plan}")"
+            echo "workspace_toml=$(jq -r '.workspace_toml' <<<"${plan}")"
+            echo "rust_toolchain=$(jq -r '.rust_toolchain' <<<"${plan}")"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Install Python
+      - id: repository_secrets
+        name: Verify required release secrets are available
+        if: ${{ always() && steps.secret_plan.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          SECRET_PLAN: ${{ steps.secret_plan.outputs.plan }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=()
+          channel_outcomes='{}'
+          while IFS=$'\t' read -r channel secret_names; do
+            channel_status=success
+            while IFS= read -r secret_name; do
+              if [[ -z "${!secret_name:-}" ]]; then
+                missing+=("${channel}:${secret_name}")
+                channel_status=failure
+              fi
+            done < <(tr ',' '\n' <<<"${secret_names}")
+            channel_outcomes="$(jq -c --arg channel "${channel}" --arg status "${channel_status}" '.[$channel]=$status' <<<"${channel_outcomes}")"
+          done < <(jq -r '.repository_secret_channels[] | [.name, (.secrets | join(","))] | @tsv' <<<"${SECRET_PLAN}")
+          {
+            echo "channel_outcomes=${channel_outcomes}"
+          } >> "${GITHUB_OUTPUT}"
+          if [[ "${#missing[@]}" -gt 0 ]]; then
+            echo "Missing required GitHub Actions release secret(s): ${missing[*]}" >&2
+            exit 1
+          fi
+          echo "All manifest-required repository secrets are available."
+
+      - id: environment_secrets
+        name: Verify protected Python environment secret metadata
+        if: ${{ always() && steps.secret_plan.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SECRET_PLAN: ${{ steps.secret_plan.outputs.plan }}
+        run: |
+          set -euo pipefail
+          failures=()
+          while IFS=$'\t' read -r environment_name secret_name; do
+            if ! names="$(gh api "repos/${REPOSITORY}/environments/${environment_name}/secrets" --jq '.secrets[].name')"; then
+              failures+=("Could not inspect secret metadata for protected environment ${environment_name}.")
+            elif ! grep -Fxq -- "${secret_name}" <<<"${names}"; then
+              failures+=("GitHub Actions environment ${environment_name} is missing required secret ${secret_name}.")
+            fi
+          done < <(jq -r '.environment_secrets[] | [.environment, .name] | @tsv' <<<"${SECRET_PLAN}")
+          if [[ "${#failures[@]}" -gt 0 ]]; then
+            printf '%s\n' "${failures[@]}" >&2
+            exit 1
+          fi
+          echo "All manifest-required protected-environment secret names are present."
+
+      - id: github_environments
+        name: Verify contract-declared GitHub environments exist
+        if: ${{ always() && steps.secret_plan.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SECRET_PLAN: ${{ steps.secret_plan.outputs.plan }}
+        run: |
+          set -euo pipefail
+          failures=()
+          while IFS= read -r environment_name; do
+            [[ -z "${environment_name}" ]] && continue
+            if ! gh api "repos/${REPOSITORY}/environments/${environment_name}" >/dev/null 2>&1; then
+              failures+=("GitHub Actions environment ${environment_name} is declared by the channel contracts but does not exist.")
+            fi
+          done < <(jq -r '.github_environments[]?' <<<"${SECRET_PLAN}")
+          if [[ "${#failures[@]}" -gt 0 ]]; then
+            printf '%s\n' "${failures[@]}" >&2
+            exit 1
+          fi
+          echo "All contract-declared GitHub environments exist."
+
+      - id: credential_liveness
+        name: Verify repository credential liveness
+        if: ${{ always() && steps.secret_plan.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          SECRET_PLAN: ${{ steps.secret_plan.outputs.plan }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          failures=()
+          channel_outcomes='{}'
+          while IFS=$'\t' read -r channel secret_name check_kind; do
+            token="${!secret_name:-}"
+            channel_status=success
+            case "${check_kind}" in
+              crates_io)
+                command=(curl --fail --silent --show-error --header "Authorization: ${token}" https://crates.io/api/v1/me)
+                ;;
+              github)
+                command=(curl --fail --silent --show-error --header "Authorization: Bearer ${token}" --header "Accept: application/vnd.github+json" https://api.github.com/user)
+                ;;
+              *)
+                failures+=("Unsupported credential liveness check kind: ${check_kind}")
+                channel_status=failure
+                continue
+                ;;
+            esac
+            if ! "${command[@]}" >/dev/null; then
+              failures+=("GitHub Actions secret ${secret_name} is present but rejected by its publish service; rotate or replace it.")
+              channel_status=failure
+            fi
+            channel_outcomes="$(jq -c --arg channel "${channel}" --arg status "${channel_status}" '.[$channel]=$status' <<<"${channel_outcomes}")"
+          done < <(jq -r '.liveness_channel_checks[] | [.channel, .name, .kind] | @tsv' <<<"${SECRET_PLAN}")
+          echo "channel_outcomes=${channel_outcomes}" >> "${GITHUB_OUTPUT}"
+          if [[ "${#failures[@]}" -gt 0 ]]; then
+            printf '%s\n' "${failures[@]}" >&2
+            exit 1
+          fi
+          echo "All manifest-required repository credentials are accepted by their publish services."
+
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-      - name: Install Python validation dependencies
-        run: python -m pip install codespell 'pydantic>=2.12,<3'
+      - name: Set up lint toolchain
+        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
+        uses: ./.github/actions/setup-lint-toolchain
 
-      - name: Install sc-compose CLI
-        # Template JSON escaping requires the released sc-compose 1.4.0 API.
-        # Keep this pin aligned with .github/workflows/ci.yml.
-        run: cargo install --git https://github.com/randlee/sc-compose.git --rev 6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661 --locked --bin sc-compose
-
-      - name: Install just
-        uses: taiki-e/install-action@just
-
-      - name: Install cargo-deny
-        uses: taiki-e/install-action@v2
+      - name: Install Rust toolchain
+        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
+        uses: dtolnay/rust-toolchain@master
         with:
-          tool: cargo-deny@0.19.9
-
-      - name: Install cargo-audit
-        uses: taiki-e/install-action@cargo-audit
-
-      - name: Install cargo-shear
-        uses: taiki-e/install-action@cargo-shear
-
-      - name: Install cargo-binstall
-        uses: taiki-e/install-action@cargo-binstall
-
-      - name: Install cargo-modules
-        run: cargo binstall cargo-modules@0.26.0 --no-confirm
+          toolchain: ${{ steps.build_plan.outputs.rust_toolchain }}
+          components: rustfmt, clippy
 
       - name: Normalize version input
         id: meta
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           raw='${{ github.event.inputs.version }}'
           tag="$raw"
           [[ "$tag" == v* ]] || tag="v${tag}"
-          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
-            echo "Invalid version: '$raw' (expected strict SemVer X.Y.Z[-prerelease][+build] or v-prefixed)" >&2
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version: '$raw' (expected X.Y.Z or vX.Y.Z)" >&2
             exit 1
           fi
-          version="${tag#v}"
           echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "release_version=$version" >> "$GITHUB_OUTPUT"
+          echo "release_version=${tag#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Stage installed docs for validation
-        shell: bash
+      - id: formatting
+        name: Check formatting
+        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
+        continue-on-error: true
+        run: cargo fmt --all --check
+
+      - id: clippy
+        name: Run clippy
+        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
+        continue-on-error: true
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - id: workspace_tests
+        name: Run workspace tests
+        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
+        continue-on-error: true
+        run: cargo test --workspace
+
+      - id: manifest
+        name: Validate manifest completeness
+        continue-on-error: true
         run: |
-          set -euo pipefail
-          rm -rf "${STAGED_INSTALL_ROOT}"
-          python3 scripts/release_artifacts.py stage-install-docs \
+          python3 .github/scripts/release_artifacts.py validate-manifest \
             --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
-            --output-root "${STAGED_INSTALL_ROOT}"
+            --workspace-toml '${{ steps.build_plan.outputs.workspace_toml }}'
 
-      - name: Run canonical retained release validation suite + user-doc freshness gate
-        id: validate
+      - id: publish_order
+        name: Validate publish_order dependency graph
+        continue-on-error: true
+        run: |
+          python3 .github/scripts/release_artifacts.py validate-publish-order \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --workspace-toml '${{ steps.build_plan.outputs.workspace_toml }}'
+
+      - id: helpers
+        name: Verify release helper files exist
+        continue-on-error: true
+        run: |
+          test -f .github/scripts/release_gate.sh
+
+      - id: version
+        name: Verify requested version matches workspace
+        if: ${{ always() && steps.meta.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          python3 .github/scripts/release_artifacts.py verify-version \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --workspace-toml '${{ steps.build_plan.outputs.workspace_toml }}' \
+            --version '${{ steps.meta.outputs.release_version }}'
+
+      - id: version_lockstep
+        name: Verify release version lockstep
+        continue-on-error: true
+        run: |
+          python3 .github/scripts/release_artifacts.py verify-version-lockstep \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --workspace-toml '${{ steps.build_plan.outputs.workspace_toml }}'
+
+      - id: release_candidate_provenance
+        name: Verify release-candidate provenance
+        if: ${{ always() && steps.meta.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          .github/scripts/release_gate.sh readiness HEAD "release-candidate-${{ steps.meta.outputs.release_tag }}" \
+            '${{ steps.meta.outputs.release_version }}' "${RELEASE_ARTIFACT_MANIFEST}" \
+            '${{ steps.build_plan.outputs.workspace_toml }}'
+
+      - id: unpublished
+        name: Verify release version is unpublished on crates.io
+        if: ${{ always() && steps.meta.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          python3 .github/scripts/release_artifacts.py check-version-unpublished \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --version '${{ steps.meta.outputs.release_version }}'
+
+      - id: registry_state
+        name: Verify registry versions and new names
+        if: ${{ always() && steps.meta.outcome == 'success' }}
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/validate_release.py all \
+          failures=()
+          status_code() {
+            local status
+            status="$(curl --location --max-time 20 --silent --show-error --output /dev/null \
+              --write-out '%{http_code}' "$1" || true)"
+            case "${status}" in
+              200|404) printf '%s' "${status}" ;;
+              *) printf '000' ;;
+            esac
+          }
+
+          while IFS=$'\t' read -r channel agent registry name normalized_name expected_version project_url version_url version_policy; do
+            project_status="$(status_code "${project_url}")"
+            version_status="$(status_code "${version_url}")"
+            case "${project_status}:${version_status}:${version_policy}" in
+              404:404:*)
+                printf '%s: %s name %s is apparently available (not a reservation).\n' \
+                  "${agent}" "${registry}" "${normalized_name}"
+                ;;
+              200:404:*)
+                printf '%s: %s project %s exists; version %s is not published.\n' \
+                  "${agent}" "${registry}" "${normalized_name}" "${expected_version}"
+                ;;
+              200:200:must_be_absent)
+                failures+=("${channel}/${registry}: ${normalized_name}@${expected_version} is already published.")
+                ;;
+              200:200:informational)
+                printf '%s: %s rehearsal version %s@%s already exists (informational).\n' \
+                  "${agent}" "${registry}" "${normalized_name}" "${expected_version}"
+                ;;
+              *)
+                failures+=("${channel}/${registry}: registry state for ${normalized_name}@${expected_version} is indeterminate (project=${project_status}, version=${version_status}).")
+                ;;
+            esac
+          done < <(python3 .github/scripts/release_artifacts.py public-registry-check-plan \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
             --version '${{ steps.meta.outputs.release_version }}' \
-            --staged-install-root "${STAGED_INSTALL_ROOT}" \
-            --findings release-findings.json
+            | jq -r '.checks[] | [.channel, .agent, .registry, .name, .normalized_name, .expected_version, .project_lookup_url, .version_lookup_url, .version_policy] | @tsv')
 
-      - name: Upload release findings
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-findings
-          path: release-findings.json
+          if [[ "${#failures[@]}" -gt 0 ]]; then
+            printf '%s\n' "${failures[@]}" >&2
+            exit 1
+          fi
 
-      - name: Fail if canonical validation failed
-        if: steps.validate.outcome != 'success'
+      - id: package_checks
+        name: Run dependency-aware package checks
+        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
+        continue-on-error: true
         shell: bash
-        run: exit 1
+        run: |
+          set -euo pipefail
+          while IFS='|' read -r package _; do
+            cargo package -p "$package" --locked --allow-dirty
+          done < <(python3 .github/scripts/release_artifacts.py list-publish-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")
+
+      - id: github_release_permissions
+        name: Verify GitHub Release workflow permissions
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
+          if "contents: write" not in workflow:
+              raise SystemExit("GitHub Release workflow must declare contents: write")
+          PY
+
+      - id: channel_results
+        name: Emit manifest-derived per-channel preflight results
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: bash
+        env:
+          OWNERSHIP: ${{ steps.ownership.outcome }}
+          RELEASE_METADATA: ${{ steps.meta.outcome }}
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+          REPOSITORY_SECRETS: ${{ steps.repository_secrets.outcome }}
+          REPOSITORY_SECRET_CHANNELS: ${{ steps.repository_secrets.outputs.channel_outcomes }}
+          ENVIRONMENT_SECRETS: ${{ steps.environment_secrets.outcome }}
+          CREDENTIAL_LIVENESS: ${{ steps.credential_liveness.outcome }}
+          CREDENTIAL_LIVENESS_CHANNELS: ${{ steps.credential_liveness.outputs.channel_outcomes }}
+          REGISTRY_STATE: ${{ steps.registry_state.outcome }}
+          GITHUB_RELEASE_PERMISSIONS: ${{ steps.github_release_permissions.outcome }}
+        run: |
+          set -euo pipefail
+          outcomes="$(jq -nc \
+            --arg ownership "${OWNERSHIP}" \
+            --arg release_metadata "${RELEASE_METADATA}" \
+            --arg repository_secrets "${REPOSITORY_SECRETS}" \
+            --argjson repository_secret_channels "${REPOSITORY_SECRET_CHANNELS:-{}}" \
+            --arg environment_secrets "${ENVIRONMENT_SECRETS}" \
+            --arg credential_liveness "${CREDENTIAL_LIVENESS}" \
+            --argjson credential_liveness_channels "${CREDENTIAL_LIVENESS_CHANNELS:-{}}" \
+            --arg registry_state "${REGISTRY_STATE}" \
+            --arg github_release_permissions "${GITHUB_RELEASE_PERMISSIONS}" \
+            '{ownership: $ownership, release_metadata: $release_metadata, repository_secrets: $repository_secrets, repository_secret_channels: $repository_secret_channels, environment_secrets: $environment_secrets, credential_liveness: $credential_liveness, credential_liveness_channels: $credential_liveness_channels, registry_state: $registry_state, github_release_permissions: $github_release_permissions}')"
+          results="$(python3 .github/scripts/release_artifacts.py channel-preflight-results \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --outcomes "${outcomes}" \
+            --tag "${RELEASE_TAG}")"
+          {
+            echo 'channel_preflight_results<<EOF'
+            echo "${results}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+          printf '%s\n' "${results}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Deny release after complete preflight summary
+        if: ${{ always() }}
+        shell: bash
+        env:
+          OWNERSHIP: ${{ steps.ownership.outcome }}
+          SECRET_PLAN: ${{ steps.secret_plan.outcome }}
+          BUILD_PLAN: ${{ steps.build_plan.outcome }}
+          HAS_CRATES: ${{ steps.build_plan.outputs.has_crates }}
+          REPOSITORY_SECRETS: ${{ steps.repository_secrets.outcome }}
+          ENVIRONMENT_SECRETS: ${{ steps.environment_secrets.outcome }}
+          GITHUB_ENVIRONMENTS: ${{ steps.github_environments.outcome }}
+          CREDENTIAL_LIVENESS: ${{ steps.credential_liveness.outcome }}
+          REGISTRY_STATE: ${{ steps.registry_state.outcome }}
+          META: ${{ steps.meta.outcome }}
+          FORMATTING: ${{ steps.formatting.outcome }}
+          CLIPPY: ${{ steps.clippy.outcome }}
+          WORKSPACE_TESTS: ${{ steps.workspace_tests.outcome }}
+          MANIFEST: ${{ steps.manifest.outcome }}
+          PUBLISH_ORDER: ${{ steps.publish_order.outcome }}
+          HELPERS: ${{ steps.helpers.outcome }}
+          VERSION: ${{ steps.version.outcome }}
+          VERSION_LOCKSTEP: ${{ steps.version_lockstep.outcome }}
+          RELEASE_CANDIDATE_PROVENANCE: ${{ steps.release_candidate_provenance.outcome }}
+          UNPUBLISHED: ${{ steps.unpublished.outcome }}
+          PACKAGE_CHECKS: ${{ steps.package_checks.outcome }}
+          GITHUB_RELEASE_PERMISSIONS: ${{ steps.github_release_permissions.outcome }}
+          CHANNEL_RESULTS: ${{ steps.channel_results.outcome }}
+        run: |
+          set -euo pipefail
+          failed=()
+          blocked=()
+          record() {
+            local name="$1" outcome="$2"
+            case "${outcome}" in
+              success) ;;
+              skipped) blocked+=("${name}") ;;
+              *) failed+=("${name}") ;;
+            esac
+          }
+          record ownership "${OWNERSHIP}"
+          record secret-plan "${SECRET_PLAN}"
+          record build-plan "${BUILD_PLAN}"
+          record repository-secrets "${REPOSITORY_SECRETS}"
+          record environment-secrets "${ENVIRONMENT_SECRETS}"
+          record github-environments "${GITHUB_ENVIRONMENTS}"
+          record credential-liveness "${CREDENTIAL_LIVENESS}"
+          record registry-state "${REGISTRY_STATE}"
+          record version-input "${META}"
+          # Cargo checks only apply when the manifest declares [[crates]].
+          if [[ "${HAS_CRATES}" == "true" ]]; then
+            record formatting "${FORMATTING}"
+            record clippy "${CLIPPY}"
+            record workspace-tests "${WORKSPACE_TESTS}"
+            record package-checks "${PACKAGE_CHECKS}"
+          fi
+          record manifest "${MANIFEST}"
+          record publish-order "${PUBLISH_ORDER}"
+          record helpers "${HELPERS}"
+          record version "${VERSION}"
+          record version-lockstep "${VERSION_LOCKSTEP}"
+          record release-candidate-provenance "${RELEASE_CANDIDATE_PROVENANCE}"
+          record unpublished-version "${UNPUBLISHED}"
+          record github-release-permissions "${GITHUB_RELEASE_PERMISSIONS}"
+          record channel-results "${CHANNEL_RESULTS}"
+          printf 'Preflight complete: failed=[%s] blocked=[%s]\n' \
+            "$(IFS=,; echo "${failed[*]}")" "$(IFS=,; echo "${blocked[*]}")"
+          if [[ "${#failed[@]}" -gt 0 || "${#blocked[@]}" -gt 0 ]]; then
+            exit 1
+          fi

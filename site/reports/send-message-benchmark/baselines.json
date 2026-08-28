@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "revision": 5,
+  "entries": [
+    {
+      "host_label": "rand-m5",
+      "target": "sqlite",
+      "p50_floor": 35000.0,
+      "approved_by": "quality-mgr: AO2.10 seed review",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "rand-m5",
+      "target": "uds",
+      "p50_floor": 18000.0,
+      "approved_by": "quality-mgr: AO2.10 seed review",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "rand-m5",
+      "target": "tcp",
+      "p50_floor": 17500.0,
+      "approved_by": "quality-mgr: AO2.10 seed review",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "rand-m5",
+      "target": "tcp-tls",
+      "p50_floor": 17500.0,
+      "approved_by": "quality-mgr: AO2.10 seed review",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "m5-atmbench",
+      "target": "sqlite",
+      "p50_floor": 35000.0,
+      "approved_by": "quality-mgr: AO2.10 seed review (isolated M5 benchmark account)",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "m5-atmbench",
+      "target": "uds",
+      "p50_floor": 18000.0,
+      "approved_by": "quality-mgr: AO2.10 seed review (isolated M5 benchmark account)",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "m5-atmbench",
+      "target": "tcp",
+      "p50_floor": 17000.0,
+      "approved_by": "Rand via D3 ratchet exception",
+      "effective_from": "2026-08-26T00:00:00Z",
+      "rationale": "Three-run m5-atmbench dataset (20260825T045840Z, 20260826T001441Z, 20260826T002410Z) and Rand sign-off; the original floor was above the observed range."
+    },
+    {
+      "host_label": "m5-atmbench",
+      "target": "tcp-tls",
+      "p50_floor": 13500.0,
+      "approved_by": "Rand via D3 ratchet exception",
+      "effective_from": "2026-08-26T00:00:00Z",
+      "rationale": "Three-run m5-atmbench dataset (20260825T045840Z, 20260826T001441Z, 20260826T002410Z) and Rand sign-off; the original TCP+TLS floor was mis-seeded equal to TCP and had never been achieved."
+    },
+    {
+      "host_label": "windows-x64-01",
+      "target": "sqlite",
+      "p50_floor": 16035.345045815106,
+      "approved_by": "historical migration seed; pending quality review",
+      "effective_from": "2026-08-26T16:42:49.272003Z",
+      "rationale": "First clean Windows f8 diagnostic on the current AO2 integration revision; provisional floor pending quality review and replacement by three clean official runs."
+    },
+    {
+      "host_label": "windows-x64-01",
+      "target": "tcp",
+      "p50_floor": 8793.914612253,
+      "approved_by": "historical migration seed; pending quality review",
+      "effective_from": "2026-08-01T21:13:05.279797Z"
+    },
+    {
+      "host_label": "windows-x64-01",
+      "target": "tcp-tls",
+      "p50_floor": 6891.680319866575,
+      "approved_by": "historical migration seed; pending quality review",
+      "effective_from": "2026-08-21T01:37:53.253097Z"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-AO2END-006>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AO2END-006" ;
+  triage:title ".ao2.14-checklist.md items 9-10 unchecked despite AO2.14 code/tests/ADR being landed" ;
+  triage:description "Items 9 and 10 of the AO2.14 checklist (.ao2.14-checklist.md) are still unchecked even though the underlying AO2.14 code (PeerConnectionPool in atm-http-runtime), tests, and ADR-057 have already landed on integrate/phase-ao2. Items must be checked off to reflect completed state." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T05:22:39Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T04:57:42Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AO2END-006/AO2END-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AO2END-006/AO2END-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-AO2END-006/AO2END-1>
+  a triage:Occurrence ;
+  triage:file ".ao2.14-checklist.md" ;
+  triage:line 27 ;
+  triage:snippet "- [ ] 9. Run all AO2.14 acceptance tests: reuse, peer isolation, eviction," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "4d661e2600d33ea129b36e55c5adebacd92b211f" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2END/4d661e2600d33ea129b36e55c5adebacd92b211f> .
+
+<urn:atm:triage:occurrence/ATM-QA-AO2END-006/AO2END-2>
+  a triage:Occurrence ;
+  triage:file ".ao2.14-checklist.md" ;
+  triage:line 31 ;
+  triage:snippet "- [ ] 10. Run full validation (`just test`, lint/clippy as applicable), then the" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "4d661e2600d33ea129b36e55c5adebacd92b211f" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2END/4d661e2600d33ea129b36e55c5adebacd92b211f> .
+
+<urn:atm:triage:worktree/AO2END/4d661e2600d33ea129b36e55c5adebacd92b211f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ao2-integration" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "4d661e2600d33ea129b36e55c5adebacd92b211f" ;
+  triage:orderIndex 1 .

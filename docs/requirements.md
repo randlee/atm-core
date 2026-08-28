@@ -286,6 +286,48 @@ Satisfied by:
   - if cleanup cannot complete safely, fail closed rather than publishing an
     ambiguous ownership state
 
+- `REQ-P-DAEMON-SWITCH-001` The `daemon-switch` control plane must provide a
+  typed, temporary managed-service launch overlay for the selected matched ATM
+  CLI/daemon pair.
+
+  Required behavior:
+  - it may select only `mutual-tls` or `plaintext-test` peer-wire security;
+    raw daemon arguments, environment selection, durable plaintext settings,
+    alternate endpoints/roots, and generic service-editing interfaces are
+    forbidden
+  - before any service/configuration mutation it must validate the explicitly
+    selected CLI/daemon pair and named managed service, capture the accepted
+    original launch specification, and atomically persist owner-only recovery
+    state with service/pair identity, requested mode, original and overlay
+    digests, and transaction phase
+  - it must follow the bounded transaction `capture -> stop proof -> typed
+    overlay -> paired start/doctor proof -> exact restore -> paired normal
+    start/doctor proof`; a crash or failure must preserve enough state for an
+    explicit recovery command rather than guessing or silently repairing
+  - an incomplete overlay session blocks normal pair switching/restart and a
+    second overlay session until explicit recovery validates and restores the
+    captured original configuration; ambiguous, missing, changed, or
+    unsupported service configuration fails closed before an unsafe mutation
+  - adapters must preserve platform-native ownership: an owned macOS
+    LaunchAgent plist copy, exact Windows SCM `BINARY_PATH_NAME` round trip,
+    or an owned systemd `--user` drop-in.  They must not rewrite an unknown
+    source configuration or start a direct child daemon as fallback
+  - after successful restoration, the same selected pair starts through the
+    ordinary managed service without the temporary argument and doctor proves
+    normal mTLS/default state; selected-pair and applicable signing gates
+    remain mandatory for every lifecycle-changing operation
+  - evidence may expose redacted service metadata, pair identity, mode,
+    digests, phase durations, and recovery outcome, but never private keys,
+    certificate contents, raw trust records, or primary-database state
+  - implementation is outside `atm-http-runtime`, the canonical HTTP/router/
+    persistence path, direct-peer connector, and benchmark timed profile;
+    it must launch only the Tokio/Axum daemon target and must not modify the
+    frozen synchronous legacy daemon
+
+  This requirement is governed by ADR-053 and composes with ADR-026,
+  ADR-047, ADR-052, `REQ-P-BENCHMARK-001`, and
+  `REQ-CORE-TRANSPORT-002B1`.
+
 - `REQ-P-DAEMON-DISPATCHER-001` Request work accepted by the daemon must remain
   tracked by runtime-owned drain accounting until it finishes or is cancelled.
   Detached untracked request execution is forbidden even when the transport
@@ -316,6 +358,12 @@ Satisfied by:
     observable product behavior, error semantics, and test obligations
   - a feature that lacks one supported-operating-system implementation is
     incomplete and must not be documented as production-ready
+  - peer authority canonicalization is platform-identical. DNS/DDNS is the
+    portable baseline; a `.local` authority is available on any supported OS
+    only when that OS has an mDNS resolver. When mDNS is unavailable (including
+    a Windows installation without the facility enabled), resolution fails
+    closed with actionable recovery to use DNS/DDNS or enable mDNS; it must not
+    fall back to a durable or inferred IP alias
 
 ### 2.1 In Scope
 
@@ -385,10 +433,13 @@ Product requirement ID:
   `agent-team-mail` and `agent-team-mail-core` while keeping the installed CLI
   binary name `atm`.
 
-- `REQ-P-RELEASE-004` This repo must own the release-process control surface
-  needed to ship and verify the replacement release, including the release
-  workflows, artifact manifest, supporting scripts, and `publisher` agent
-  instructions.
+- `REQ-P-RELEASE-004` **Superseded in part by ADR-050.** ATM owns its release
+  manifest, declared artifacts and destinations, and release evidence. The
+  shared release-process implementation — workflows, actions, helpers,
+  publisher/channel-agent prompts, bootstrap, and tests — is owned only by
+  `sc-publish` and installed into ATM byte-for-byte through its canonical
+  installer. ATM must repair a shared defect upstream rather than locally
+  modifying a synchronized shared file.
 
 - `REQ-P-RELEASE-005` Windows installation must be first-class for `1.0`
   without requiring Rust tooling or manual archive extraction; `winget` is
@@ -553,8 +604,8 @@ Required behavior:
   address
 - for `atm send`, `--host <host>` qualifies the resolved recipient as
   `agent@team.host`; it is equivalent to spelling that host in the recipient
-  address, and supplying both forms with different hosts fails before daemon
-  dispatch
+  address, passes through ADR-040 trusted-host canonicalization, and supplying
+  both forms with different canonical hosts fails before daemon dispatch
 - caller chat-id resolution is ordered: qualified `--as <agent>:<chat-id>`,
   then `--chat-id`, then `ATM_CHAT_ID`, then a chat-id embedded in
   `ATM_IDENTITY=<agent>:<chat-id>`, then no chat-id. An explicit unqualified
@@ -943,22 +994,29 @@ command identity.
 
 Product requirement ID:
 - `REQ-P-ADDRESS-001` Address resolution must support the documented
-  `agent`/`agent@team` forms and precedence rules.
+  local-team and CLI-only cross-host convenience forms and precedence rules.
 
-Satisfied by:
-- `REQ-CORE-CONFIG-002` for address parsing, alias rewrite, and
-  team/member validation policy
+The canonical precedence, trusted-host matching, completion exclusions, and
+error/recovery contract are defined by ADR-040. This requirement intentionally
+does not re-derive those rules; implementations must follow ADR-040.
 
 Supported address forms:
 - `agent`
 - `agent@team`
+- `agent@team.host`
+- `agent@host` (CLI same-team cross-host shorthand only)
 
-Resolution order:
-1. explicit `agent@team`
-2. bare `agent` plus `--team`
-3. bare `agent` plus configured default team
+ADR-040 defines this order: explicit `agent@team.host`, exact known
+`agent@team`, same-team `agent@host` shorthand, then the existing bare-agent
+team/default resolution. It also defines `.local`-only completion,
+ASCII-case-insensitive host comparison, canonical-host persistence, and the
+fail-closed structured recovery for unknown or ambiguous authorities. An
+explicit `@team` suffix takes precedence over `--team`.
 
-An explicit `@team` suffix takes precedence over `--team`.
+`--host <host>` uses the same CLI-only trusted-authority canonicalization as
+an inline host. Before HTTP dispatch, either form becomes the existing
+fully-qualified `agent@team.canonical-host` request; it adds no daemon-side
+resolution path, HTTP/wire field, storage field, or graft/native-tool API.
 
 Aliases are resolved after splitting `agent@team`, so only the agent token is
 rewritten.
@@ -1102,7 +1160,8 @@ Write one message into one target inbox.
 
 ### 6.2 Required Flags And Inputs
 
-- positional target: `agent` or `agent@team`
+- positional target: `agent`, `agent@team`, `agent@team.host`, or the
+  ADR-040 same-team shorthand `agent@host`
 - optional positional message text
 - `--team <name>`
 - `--file <path>`
@@ -1267,6 +1326,8 @@ Dry-run JSON output must include:
 - `task_id`
 
 ## 7. Queue Inspection Surfaces (`atm list`, `atm peek`, and `atm read`)
+
+('queue' here = the mailbox/query surface, unrelated to queue-kind nudges)
 
 Product requirement IDs:
 - `REQ-P-LIST-001` `atm list` must satisfy the bounded queue/search contract.
@@ -2843,6 +2904,35 @@ Required testing architecture:
   - ordinary runtime logging must remain quiet enough that routine send/read/
     ack success does not clutter normal operator logs
 
+- `REQ-P-BENCHMARK-001` Physical performance benchmarks must preserve the
+  interactive OS user's canonical ATM state.
+
+  Required behavior:
+  - a physical benchmark runs only as a dedicated, disposable benchmark OS
+    account whose `HostRuntimeScope` is independently derived for that account;
+    it must not select an alternate root, endpoint, lock, or daemon through
+    `ATM_HOME`, environment variables, symlinks, a workspace path, or a
+    second daemon for the interactive account
+  - the benchmark runner must refuse before daemon-switch, SQLite open,
+    destructive filesystem work, or daemon start unless the executing account
+    proves its benchmark-account contract and canonical state policy
+  - the current interactive OS user's `~/.atm/db` tree must never be renamed,
+    replaced, deleted, restored, or used as a physical benchmark fixture
+  - destructive benchmark-account reset or restore requires a completed,
+    verified SQLite-consistent snapshot made with the SQLite backup API; the
+    snapshot manifest records integrity evidence and incomplete snapshots are
+    never restore candidates
+  - setup, snapshot verification, reset, daemon lifecycle, and post-run
+    restoration occur outside the timed benchmark interval; evidence records
+    their durations separately and invalidates a result if they contaminate a
+    timed sample
+  - `atm teams backup` is selected-team recovery material, not a whole-host
+    database backup and not authorization for a benchmark to mutate the
+    interactive user's durable SQLite state
+
+  This requirement is governed by ADR-052 and composes with ADR-026's one
+  `HostRuntimeScope` per OS user.
+
 - `REQ-P-COVERAGE-001` Coverage reporting must remain separate from ordinary
   test execution.
 
@@ -3852,9 +3942,11 @@ mail correctness.
     - whitespace
     - wildcard or pattern characters that could be interpreted by current or
       future parsers, including at minimum `*`, `?`, `[` and `]`
-  - the supported remote-send CLI form is exactly
+  - the canonical remote-send CLI form is
     `atm send <agent>@<team>.<host> ...`; host qualification is part of the
-    typed address grammar, not a second flag or alternate route
+    typed address grammar. Per ADR-040, `agent@host` and `--host <host>` are
+    CLI-only same-team aliases that normalize to that exact form before the
+    existing request is constructed; they are not a second route
   - because team names cannot contain `.`, the inline form splits at the first
     `.` after `@`; the remainder is the host and may be a DNS name or IP
     address containing additional periods
@@ -3868,8 +3960,10 @@ mail correctness.
     is adapter work before that resource, never a second write endpoint,
     persistence path, ACK path, or nudge path
   - every canonical write orders idempotent persistence, optional receiver-side
-    acknowledgement mutation, and exactly one post-write router dispatch;
-    nudge or peer delivery must never occur before persistence
+    acknowledgement mutation, and exactly one post-write router dispatch:
+    persist, then emit the steer nudge; queue-kind nudges defer emission
+    until harness readiness (ADR-054); neither kind ever precedes
+    persistence
   - a destination host is consumed as an origin-side routing selector before
     an authenticated peer request reaches receiver-side routing; source host is
     durable provenance shown by read/nudge/ack projections
@@ -3899,20 +3993,24 @@ mail correctness.
   - if no enabled interface rows exist, no cross-host listener binds
   - environment variables must not configure cross-host networking or trust
 
-- `REQ-CORE-TRANSPORT-002D` A peer authority is one durable registered DNS
+- `REQ-CORE-TRANSPORT-002D` A peer authority is one durable registered
   hostname, HTTPS port, and pinned certificate fingerprint.
 
   Required behavior:
-  - a hostname target exact-matches one registered authority name; its durable
-    HTTPS port selects the endpoint
-  - a literal IP target is accepted only when a bounded fresh DNS lookup of
+  - a canonical hostname target exact-matches one registered authority name;
+    its durable HTTPS port selects the endpoint. CLI input may omit the
+    terminal `.local` only as specified by `REQ-P-ADDRESS-001`, and must be
+    canonicalized before request construction
+  - a literal IP target is accepted only when a bounded fresh DNS/mDNS lookup of
     exactly one registered hostname contains that address
   - resolved addresses are not stored in SQLite or another durable alias store
   - zero or multiple matching registered names fail closed before TLS or route
   - reverse DNS is forbidden; an IP-only registration never authorizes a name
   - every registered hostname must be forward-resolvable by the peers that
-    use it; a changing VPN or Wi-Fi address is updated by the host's normal
-    DNS/DDNS mechanism, never by ATM reverse lookup or a SQLite IP alias
+    use it through ordinary DNS/DDNS or local-network mDNS. A changing VPN,
+    Wi-Fi, Ethernet, DHCP, or VPS address is updated by the host's normal
+    name-resolution mechanism, never by ATM reverse lookup or a SQLite IP
+    alias
   - several account-owned daemons may use the same current host IP only when
     each authority has a distinct `(hostname, port)` endpoint and certificate
     pin; an OS bind collision fails closed and must not select another port
@@ -3933,6 +4031,8 @@ mail correctness.
 
 - `REQ-CORE-TRANSPORT-002B1` A daemon may run an explicit, process-local
   plaintext peer-wire profile only for debug/smoke diagnosis.
+
+  Mode ownership and the layered-stream constraint are defined by ADR-047.
 
   Required behavior:
   - default and every normal release invocation use mTLS plus the exact peer
@@ -4144,9 +4244,11 @@ mail correctness.
     immutable SQLite records and enabled peer policy
   - the throughput requirement applies while the destination peer is
     unavailable as well as healthy. Release evidence runs ten consecutive
-    one-second admission intervals against one release-built daemon using a
-    disposable isolated `ATM_HOME` and SQLite database; it must never run
-    against a shared or production ATM store. Each interval has at least 1,000
+    one-second admission intervals against one release-built daemon under the
+    dedicated disposable benchmark OS account required by
+    `REQ-P-BENCHMARK-001`; `ATM_HOME` and any other path/config setting must
+    not select its SQLite root. It must never run against a shared or
+    interactive-production ATM store. Each interval has at least 1,000
     accepted requests and responses. Mock routers, direct dispatcher calls,
     and disabled peer delivery do not satisfy this evidence
   - Unix release evidence records HTTP/UDS and loopback-TCP results separately;
@@ -4272,14 +4374,25 @@ mail correctness.
     not replay mail, mutate mail, create a retry loop, or persist recovery
     state outside the ATM mailbox
 
+> **Nudge taxonomy (Phase AQ).** "nudge" is the umbrella term for any
+> post-delivery recipient notification. "steer" (steer nudge) is the
+> immediate kind, emitted right after durable persistence — this is the
+> only kind that existed before Phase AQ, so legacy text below that says
+> plain "nudge" for the immediate case means steer nudge. "queue" (queue
+> nudge) is the deferred kind, introduced by Phase AQ, delivered when the
+> recipient harness is ready. Persistence ordering is unchanged for both
+> kinds: neither kind ever precedes durable persistence.
+
 - `REQ-CORE-COMPAT-003` Post-send behavior must use one direct post-persist
   emitter seam.
 
   Required behavior:
   - `atm send` persists the message to durable ATM state
   - `atm ack` persists the reply to durable ATM state
-  - after successful persistence, ATM emits post-send behavior only when the
-    recipient exposes that capability
+  - after successful persistence, ATM emits the steer nudge only when the
+    recipient exposes that capability; queue-kind nudges defer emission
+    until harness readiness (ADR-054), and neither kind ever precedes
+    persistence
   - the shipped default post-send path is the built-in in-process
     implementation
   - teams may override any subset of the six built-in nudge template bodies
@@ -4312,7 +4425,8 @@ mail correctness.
   `recipient_pane_id` payload/roster data or an explicit operator-provided
   `--pane`; they must not revive committed `.atm.toml` pane lookup
 
-- `REQ-CORE-COMPAT-005` `NotificationSink`, queued notifier runtimes, and
+- `REQ-CORE-COMPAT-005` `NotificationSink`, queued notifier runtimes
+  (retired internal worker queue — unrelated to queue-kind nudges), and
   typed delivery-plan execution are not the governing send-path contract.
 
   Required behavior:

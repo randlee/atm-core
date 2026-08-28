@@ -21,6 +21,9 @@ estimated_scope: focused new Python host adapter plus checked-in reference evide
 
 ## Goal
 
+(Hermes `mode="queue"|"steer"` is Hermes's session-dispatch mode; ATM's
+Phase-AQ queue/steer *nudge kinds* align with but are distinct from it.)
+
 Deliver live graft nudges and AI.37's one-shot recovery summary through the
 configured Hermes profile's non-interrupting steer path so an active agent sees
 ATM work at its next safe API/tool-loop boundary without normal user-message

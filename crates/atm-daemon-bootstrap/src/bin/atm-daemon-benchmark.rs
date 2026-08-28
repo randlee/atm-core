@@ -5,6 +5,7 @@
 //! an explicit subcommand on its command line.
 
 use std::num::NonZeroUsize;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
@@ -31,10 +32,14 @@ enum BenchmarkInvocation {
     DirectStorageAdmission {
         messages: NonZeroUsize,
         workers: NonZeroUsize,
+        minimum_intervals: NonZeroUsize,
+        target_duration_seconds: u64,
     },
     DirectCoreWrite {
         messages: NonZeroUsize,
         workers: NonZeroUsize,
+        minimum_intervals: NonZeroUsize,
+        target_duration_seconds: u64,
     },
 }
 
@@ -44,11 +49,33 @@ async fn main() {
         Ok(BenchmarkInvocation::Daemon(mode)) => {
             atm_daemon_bootstrap::run_benchmark_daemon(mode).await
         }
-        Ok(BenchmarkInvocation::DirectStorageAdmission { messages, workers }) => {
-            run_direct_storage_admission(messages, workers).await
+        Ok(BenchmarkInvocation::DirectStorageAdmission {
+            messages,
+            workers,
+            minimum_intervals,
+            target_duration_seconds,
+        }) => {
+            run_direct_storage_admission(
+                messages,
+                workers,
+                minimum_intervals,
+                target_duration_seconds,
+            )
+            .await
         }
-        Ok(BenchmarkInvocation::DirectCoreWrite { messages, workers }) => {
-            run_direct_core_write(messages, workers).await
+        Ok(BenchmarkInvocation::DirectCoreWrite {
+            messages,
+            workers,
+            minimum_intervals,
+            target_duration_seconds,
+        }) => {
+            run_direct_core_write(
+                messages,
+                workers,
+                minimum_intervals,
+                target_duration_seconds,
+            )
+            .await
         }
         Err(error) => Err(error),
     };
@@ -83,41 +110,73 @@ fn parse_benchmark_invocation(
             BenchmarkHookMode::parse(&mode).map(BenchmarkInvocation::Daemon)
         }
         Some("--direct-storage-admission") => {
-            let (messages, workers) = parse_concurrent_arguments(
-                args,
-                "direct-storage",
-                "usage: atm-daemon-benchmark --direct-storage-admission <count> --workers <count>",
-            )?;
-            Ok(BenchmarkInvocation::DirectStorageAdmission { messages, workers })
+            let (messages, workers, minimum_intervals, target_duration_seconds) =
+                parse_timed_write_arguments(
+                    args,
+                    "direct-storage",
+                    "usage: atm-daemon-benchmark --direct-storage-admission <count> --workers <count>",
+                )?;
+            Ok(BenchmarkInvocation::DirectStorageAdmission {
+                messages,
+                workers,
+                minimum_intervals,
+                target_duration_seconds,
+            })
         }
         Some("--direct-core-write") => {
-            let (messages, workers) = parse_concurrent_arguments(
-                args,
-                "direct-core-write",
-                "usage: atm-daemon-benchmark --direct-core-write <count> --workers <count>",
-            )?;
-            Ok(BenchmarkInvocation::DirectCoreWrite { messages, workers })
+            let (messages, workers, minimum_intervals, target_duration_seconds) =
+                parse_timed_write_arguments(
+                    args,
+                    "direct-core-write",
+                    "usage: atm-daemon-benchmark --direct-core-write <count> --workers <count>",
+                )?;
+            Ok(BenchmarkInvocation::DirectCoreWrite {
+                messages,
+                workers,
+                minimum_intervals,
+                target_duration_seconds,
+            })
         }
         _ => Err(AtmError::config(
-            "usage: atm-daemon-benchmark --hook-mode <active|disabled> | --direct-storage-admission <count> --workers <count> | --direct-core-write <count> --workers <count>",
+            "usage: atm-daemon-benchmark --hook-mode <active|disabled> | --direct-storage-admission <count> --workers <count> [--intervals <count> --seconds <count>] | --direct-core-write <count> --workers <count> [--intervals <count> --seconds <count>]",
         )),
     }
 }
 
-fn parse_concurrent_arguments(
+fn parse_timed_write_arguments(
     mut args: impl Iterator<Item = String>,
     mode: &str,
     usage: &str,
-) -> Result<(NonZeroUsize, NonZeroUsize), AtmError> {
+) -> Result<(NonZeroUsize, NonZeroUsize, NonZeroUsize, u64), AtmError> {
     let messages = parse_nonzero_argument(args.next(), &format!("{mode} message count"))?;
     if args.next().as_deref() != Some("--workers") {
         return Err(AtmError::config(usage));
     }
     let workers = parse_nonzero_argument(args.next(), &format!("{mode} worker count"))?;
+    let Some(option) = args.next() else {
+        return Ok((messages, workers, NonZeroUsize::MIN, 0));
+    };
+    if option != "--intervals" {
+        return Err(AtmError::config(usage));
+    }
+    let minimum_intervals = parse_nonzero_argument(args.next(), &format!("{mode} interval count"))?;
+    if args.next().as_deref() != Some("--seconds") {
+        return Err(AtmError::config(usage));
+    }
+    let target_duration_seconds = args
+        .next()
+        .ok_or_else(|| AtmError::config(format!("{mode} duration is required")))?
+        .parse::<u64>()
+        .map_err(|_| AtmError::config(format!("{mode} duration must be a non-negative integer")))?;
     if args.next().is_some() {
         return Err(AtmError::config(usage));
     }
-    Ok((messages, workers))
+    Ok((
+        messages,
+        workers,
+        minimum_intervals,
+        target_duration_seconds,
+    ))
 }
 
 fn parse_nonzero_argument(value: Option<String>, name: &str) -> Result<NonZeroUsize, AtmError> {
@@ -141,11 +200,67 @@ fn parse_nonzero_argument(value: Option<String>, name: &str) -> Result<NonZeroUs
 async fn run_direct_storage_admission(
     messages: NonZeroUsize,
     workers: NonZeroUsize,
+    minimum_intervals: NonZeroUsize,
+    target_duration_seconds: u64,
 ) -> Result<(), AtmError> {
     let runtime = atm_daemon_bootstrap::assemble_default_runtime()?
         .for_daemon()
         .service_runtime;
     let run_id = env::var("ATM_CAPACITY_RUN_ID").unwrap_or_else(|_| process::id().to_string());
+    let target = DirectStorageTarget::from_environment()?;
+    let started = Instant::now();
+    let mut accepted = 0_usize;
+    let mut intervals = Vec::new();
+    while intervals.len() < minimum_intervals.get()
+        || started.elapsed().as_secs() < target_duration_seconds
+    {
+        let (interval_accepted, interval_seconds) = run_direct_storage_admission_interval(
+            runtime.clone(),
+            target.clone(),
+            run_id.clone(),
+            messages,
+            workers,
+            intervals.len() * messages.get(),
+        )
+        .await?;
+        accepted += interval_accepted;
+        intervals.push(serde_json::json!({
+            "requested_count": messages.get(),
+            "accepted_count": interval_accepted,
+            "elapsed_seconds": interval_seconds,
+            "admissions_per_second": interval_accepted as f64 / interval_seconds,
+        }));
+    }
+    let elapsed_seconds = started.elapsed().as_secs_f64();
+    let requested = messages.get() * intervals.len();
+    if accepted != requested {
+        return Err(AtmError::daemon_unavailable(format!(
+            "direct storage benchmark accepted {accepted} of {requested} messages"
+        )));
+    }
+    println!(
+        "{}",
+        serde_json::json!({
+            "kind": "async_storage_admission",
+            "requested_count": requested,
+            "accepted_count": accepted,
+            "worker_count": workers.get(),
+            "elapsed_seconds": elapsed_seconds,
+            "admissions_per_second": accepted as f64 / elapsed_seconds,
+            "intervals": intervals,
+        })
+    );
+    Ok(())
+}
+
+async fn run_direct_storage_admission_interval(
+    runtime: atm_core::LocalServiceRuntime,
+    target: DirectStorageTarget,
+    run_id: String,
+    messages: NonZeroUsize,
+    workers: NonZeroUsize,
+    sequence_offset: usize,
+) -> Result<(usize, f64), AtmError> {
     let next = Arc::new(AtomicUsize::new(0));
     let started = Instant::now();
     let mut tasks = JoinSet::new();
@@ -154,6 +269,7 @@ async fn run_direct_storage_admission(
         let runtime = runtime.clone();
         let next = Arc::clone(&next);
         let run_id = run_id.clone();
+        let target = target.clone();
         tasks.spawn(async move {
             let mut accepted = 0_usize;
             loop {
@@ -162,7 +278,11 @@ async fn run_direct_storage_admission(
                     return Ok::<usize, AtmError>(accepted);
                 }
                 let duplicate = runtime
-                    .save_message_if_absent_async(direct_storage_message(&run_id, sequence))
+                    .save_message_if_absent_async(direct_storage_message(
+                        &target,
+                        &run_id,
+                        sequence_offset + sequence,
+                    ))
                     .await?;
                 if duplicate.is_some() {
                     return Err(AtmError::daemon_unavailable(
@@ -180,41 +300,62 @@ async fn run_direct_storage_admission(
             AtmError::daemon_unavailable(format!("direct storage benchmark task failed: {error}"))
         })??;
     }
-    let elapsed_seconds = started.elapsed().as_secs_f64();
     if accepted != messages.get() {
         return Err(AtmError::daemon_unavailable(format!(
             "direct storage benchmark accepted {accepted} of {} messages",
-            messages
+            messages.get()
         )));
     }
-    println!(
-        "{}",
-        serde_json::json!({
-            "kind": "async_storage_admission",
-            "requested_count": messages.get(),
-            "accepted_count": accepted,
-            "worker_count": workers.get(),
-            "elapsed_seconds": elapsed_seconds,
-            "admissions_per_second": accepted as f64 / elapsed_seconds,
-        })
-    );
-    Ok(())
+    Ok((accepted, started.elapsed().as_secs_f64()))
 }
 
-fn direct_storage_message(run_id: &str, sequence: usize) -> Message {
-    let team = TeamName::from_validated(DIRECT_STORAGE_TEAM);
+#[derive(Clone)]
+struct DirectStorageTarget {
+    team: TeamName,
+    recipient: AgentName,
+    sender: AgentName,
+}
+
+impl DirectStorageTarget {
+    fn from_environment() -> Result<Self, AtmError> {
+        let team = env::var("ATM_CAPACITY_STORAGE_TEAM")
+            .unwrap_or_else(|_| DIRECT_STORAGE_TEAM.to_owned());
+        let recipient = env::var("ATM_CAPACITY_STORAGE_RECIPIENT")
+            .unwrap_or_else(|_| DIRECT_STORAGE_RECIPIENT.to_owned());
+        let sender = env::var("ATM_CAPACITY_STORAGE_SENDER")
+            .unwrap_or_else(|_| DIRECT_STORAGE_SENDER.to_owned());
+        Ok(Self {
+            team: parse_capacity_team("ATM_CAPACITY_STORAGE_TEAM", &team)?,
+            recipient: parse_capacity_agent("ATM_CAPACITY_STORAGE_RECIPIENT", &recipient)?,
+            sender: parse_capacity_agent("ATM_CAPACITY_STORAGE_SENDER", &sender)?,
+        })
+    }
+}
+
+fn parse_capacity_team(variable: &str, value: &str) -> Result<TeamName, AtmError> {
+    TeamName::from_str(value)
+        .map_err(|error| AtmError::config(format!("{variable} must be a valid team name: {error}")))
+}
+
+fn parse_capacity_agent(variable: &str, value: &str) -> Result<AgentName, AtmError> {
+    AgentName::from_str(value).map_err(|error| {
+        AtmError::config(format!("{variable} must be a valid agent name: {error}"))
+    })
+}
+
+fn direct_storage_message(target: &DirectStorageTarget, run_id: &str, sequence: usize) -> Message {
     Message {
-        team: team.clone(),
-        agent: AgentName::from_validated(DIRECT_STORAGE_RECIPIENT),
+        team: target.team.clone(),
+        agent: target.recipient.clone(),
         message_key: MessageKey::new(format!("atm:capacity-direct-{run_id}-{sequence}"))
             .expect("nonempty key"),
         envelope: MessageEnvelope {
-            from: AgentName::from_validated(DIRECT_STORAGE_SENDER),
+            from: target.sender.clone(),
             source_chat_id: None,
             text: format!("capacity-direct-{run_id}-{sequence}"),
             timestamp: IsoTimestamp::now(),
             read: false,
-            source_team: Some(team),
+            source_team: Some(target.team.clone()),
             destination_chat_id: None,
             summary: None,
             message_id: None,
@@ -238,15 +379,67 @@ fn direct_storage_message(run_id: &str, sequence: usize) -> Message {
 async fn run_direct_core_write(
     messages: NonZeroUsize,
     workers: NonZeroUsize,
+    minimum_intervals: NonZeroUsize,
+    target_duration_seconds: u64,
 ) -> Result<(), AtmError> {
     let runtime = atm_daemon_bootstrap::assemble_default_runtime()?
         .for_daemon()
         .service_runtime;
     let home = atm_core::home::atm_home()?;
+    let started = Instant::now();
+    let mut accepted = 0_usize;
+    let mut intervals = Vec::new();
+    while intervals.len() < minimum_intervals.get()
+        || started.elapsed().as_secs() < target_duration_seconds
+    {
+        let (interval_accepted, interval_seconds) = run_direct_core_write_interval(
+            runtime.clone(),
+            home.clone(),
+            messages,
+            workers,
+            intervals.len() * messages.get(),
+        )
+        .await?;
+        accepted += interval_accepted;
+        intervals.push(serde_json::json!({
+            "requested_count": messages.get(),
+            "accepted_count": interval_accepted,
+            "elapsed_seconds": interval_seconds,
+            "admissions_per_second": interval_accepted as f64 / interval_seconds,
+        }));
+    }
+    let elapsed_seconds = started.elapsed().as_secs_f64();
+    let requested = messages.get() * intervals.len();
+    if accepted != requested {
+        return Err(AtmError::daemon_unavailable(format!(
+            "direct core-write benchmark accepted {accepted} of {requested} messages"
+        )));
+    }
+    println!(
+        "{}",
+        serde_json::json!({
+            "kind": "canonical_core_write",
+            "requested_count": requested,
+            "accepted_count": accepted,
+            "worker_count": workers.get(),
+            "elapsed_seconds": elapsed_seconds,
+            "admissions_per_second": accepted as f64 / elapsed_seconds,
+            "intervals": intervals,
+        })
+    );
+    Ok(())
+}
+
+async fn run_direct_core_write_interval(
+    runtime: atm_core::LocalServiceRuntime,
+    home: std::path::PathBuf,
+    messages: NonZeroUsize,
+    workers: NonZeroUsize,
+    sequence_offset: usize,
+) -> Result<(usize, f64), AtmError> {
     let next = Arc::new(AtomicUsize::new(0));
     let started = Instant::now();
     let mut tasks = JoinSet::new();
-
     for _ in 0..workers.get() {
         let runtime = runtime.clone();
         let home = home.clone();
@@ -259,7 +452,7 @@ async fn run_direct_core_write(
                     return Ok::<usize, AtmError>(accepted);
                 }
                 prepare_write_with_async_runtime(
-                    direct_core_write_request(&home, sequence)?,
+                    direct_core_write_request(&home, sequence_offset + sequence)?,
                     &NullObservability,
                     &runtime,
                 )
@@ -268,7 +461,6 @@ async fn run_direct_core_write(
             }
         });
     }
-
     let mut accepted = 0_usize;
     while let Some(result) = tasks.join_next().await {
         accepted += result.map_err(|error| {
@@ -277,25 +469,13 @@ async fn run_direct_core_write(
             ))
         })??;
     }
-    let elapsed_seconds = started.elapsed().as_secs_f64();
     if accepted != messages.get() {
         return Err(AtmError::daemon_unavailable(format!(
             "direct core-write benchmark accepted {accepted} of {} messages",
             messages.get()
         )));
     }
-    println!(
-        "{}",
-        serde_json::json!({
-            "kind": "canonical_core_write",
-            "requested_count": messages.get(),
-            "accepted_count": accepted,
-            "worker_count": workers.get(),
-            "elapsed_seconds": elapsed_seconds,
-            "admissions_per_second": accepted as f64 / elapsed_seconds,
-        })
-    );
-    Ok(())
+    Ok((accepted, started.elapsed().as_secs_f64()))
 }
 
 fn direct_core_write_request(
@@ -307,12 +487,15 @@ fn direct_core_write_request(
         env::var("ATM_CAPACITY_CORE_AGENT").unwrap_or_else(|_| CORE_WRITE_SENDER.to_owned());
     let recipient =
         env::var("ATM_CAPACITY_CORE_RECIPIENT").unwrap_or_else(|_| CORE_WRITE_RECIPIENT.to_owned());
+    let team = parse_capacity_team("ATM_CAPACITY_CORE_TEAM", &team)?;
+    let sender = parse_capacity_agent("ATM_CAPACITY_CORE_AGENT", &sender)?;
+    let recipient = parse_capacity_agent("ATM_CAPACITY_CORE_RECIPIENT", &recipient)?;
     WriteRequest::new(
         home.to_path_buf(),
         home.to_path_buf(),
-        AgentName::from_validated(&sender),
+        sender,
         &format!("{recipient}@{team}"),
-        TeamName::from_validated(&team),
+        team,
         SendMessageSource::Inline(format!("capacity-core-{sequence}")),
         None,
         false,
@@ -332,31 +515,38 @@ fn replacement_exit_code(error: &AtmError) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        BenchmarkHookMode, BenchmarkInvocation, direct_core_write_request, direct_storage_message,
-        parse_benchmark_invocation, parse_nonzero_argument,
+        BenchmarkHookMode, BenchmarkInvocation, DirectStorageTarget, direct_core_write_request,
+        direct_storage_message, parse_benchmark_invocation, parse_capacity_agent,
+        parse_capacity_team, parse_nonzero_argument,
     };
+    use atm_core::types::{AgentName, TeamName};
 
     #[test]
     fn direct_storage_messages_are_unique_and_target_the_capacity_recipient() {
-        let first = direct_storage_message("test-run", 1);
-        let second = direct_storage_message("test-run", 2);
+        let target = DirectStorageTarget {
+            team: TeamName::from_validated("capacity-team"),
+            recipient: AgentName::from_validated("capacity-recipient"),
+            sender: AgentName::from_validated("capacity-sender"),
+        };
+        let first = direct_storage_message(&target, "test-run", 1);
+        let second = direct_storage_message(&target, "test-run", 2);
         assert_ne!(first.message_key, second.message_key);
-        assert_eq!(first.team.as_str(), "capacity-direct-team");
-        assert_eq!(first.agent.as_str(), "capacity-direct-recipient");
+        assert_eq!(first.team.as_str(), "capacity-team");
+        assert_eq!(first.agent.as_str(), "capacity-recipient");
         assert_eq!(
             first
                 .envelope
                 .source_team
                 .as_ref()
                 .map(|team| team.as_str()),
-            Some("capacity-direct-team")
+            Some("capacity-team")
         );
     }
 
     #[test]
     fn direct_core_writes_use_the_canonical_capacity_address() {
-        let home = std::path::Path::new("/tmp/atm-capacity");
-        let request = direct_core_write_request(home, 7).expect("core request");
+        let home = std::env::temp_dir().join("atm-capacity");
+        let request = direct_core_write_request(&home, 7).expect("core request");
         assert_eq!(request.caller_identity.as_str(), "capacity-core-agent");
         assert_eq!(request.caller_team.as_str(), "capacity-core-team");
         assert_eq!(
@@ -364,6 +554,39 @@ mod tests {
             "capacity-core-recipient@capacity-core-team"
         );
         assert_eq!(request.home_dir, home);
+    }
+
+    #[test]
+    fn capacity_environment_identifiers_reject_path_like_values() {
+        let storage_team = parse_capacity_team("ATM_CAPACITY_STORAGE_TEAM", "../outside")
+            .expect_err("storage team must preserve the TeamName path invariant");
+        assert!(storage_team.message().contains("ATM_CAPACITY_STORAGE_TEAM"));
+        assert!(storage_team.message().contains("valid team name"));
+
+        let storage_recipient =
+            parse_capacity_agent("ATM_CAPACITY_STORAGE_RECIPIENT", "bad recipient")
+                .expect_err("storage recipient must preserve the AgentName path invariant");
+        assert!(
+            storage_recipient
+                .message()
+                .contains("ATM_CAPACITY_STORAGE_RECIPIENT")
+        );
+
+        let core_team = parse_capacity_team("ATM_CAPACITY_CORE_TEAM", "team/escape")
+            .expect_err("core team must preserve the TeamName path invariant");
+        assert!(core_team.message().contains("ATM_CAPACITY_CORE_TEAM"));
+
+        let core_agent = parse_capacity_agent("ATM_CAPACITY_CORE_AGENT", "..")
+            .expect_err("core agent must preserve the AgentName path invariant");
+        assert!(core_agent.message().contains("ATM_CAPACITY_CORE_AGENT"));
+
+        let core_recipient = parse_capacity_agent("ATM_CAPACITY_CORE_RECIPIENT", "bad/recipient")
+            .expect_err("core recipient must preserve the AgentName path invariant");
+        assert!(
+            core_recipient
+                .message()
+                .contains("ATM_CAPACITY_CORE_RECIPIENT")
+        );
     }
 
     #[test]
@@ -391,8 +614,31 @@ mod tests {
         .expect("direct-storage invocation parses");
         assert!(matches!(
             direct,
-            BenchmarkInvocation::DirectStorageAdmission { messages, workers }
-                if messages.get() == 10_000 && workers.get() == 64
+            BenchmarkInvocation::DirectStorageAdmission {
+                messages, workers, minimum_intervals, target_duration_seconds,
+            }
+                if messages.get() == 10_000
+                    && workers.get() == 64
+                    && minimum_intervals.get() == 1
+                    && target_duration_seconds == 0
+        ));
+
+        let intervalled_storage = parse_benchmark_invocation([
+            "--direct-storage-admission".to_owned(),
+            "1000".to_owned(),
+            "--workers".to_owned(),
+            "64".to_owned(),
+            "--intervals".to_owned(),
+            "10".to_owned(),
+            "--seconds".to_owned(),
+            "20".to_owned(),
+        ])
+        .expect("intervalled storage invocation parses");
+        assert!(matches!(
+            intervalled_storage,
+            BenchmarkInvocation::DirectStorageAdmission {
+                minimum_intervals, target_duration_seconds, ..
+            } if minimum_intervals.get() == 10 && target_duration_seconds == 20
         ));
 
         let core = parse_benchmark_invocation([
@@ -404,8 +650,31 @@ mod tests {
         .expect("core invocation parses");
         assert!(matches!(
             core,
-            BenchmarkInvocation::DirectCoreWrite { messages, workers }
-                if messages.get() == 10_000 && workers.get() == 64
+            BenchmarkInvocation::DirectCoreWrite {
+                messages, workers, minimum_intervals, target_duration_seconds,
+            }
+                if messages.get() == 10_000
+                    && workers.get() == 64
+                    && minimum_intervals.get() == 1
+                    && target_duration_seconds == 0
+        ));
+
+        let intervalled = parse_benchmark_invocation([
+            "--direct-core-write".to_owned(),
+            "1000".to_owned(),
+            "--workers".to_owned(),
+            "64".to_owned(),
+            "--intervals".to_owned(),
+            "10".to_owned(),
+            "--seconds".to_owned(),
+            "20".to_owned(),
+        ])
+        .expect("intervalled core invocation parses");
+        assert!(matches!(
+            intervalled,
+            BenchmarkInvocation::DirectCoreWrite {
+                minimum_intervals, target_duration_seconds, ..
+            } if minimum_intervals.get() == 10 && target_duration_seconds == 20
         ));
     }
 
@@ -414,6 +683,16 @@ mod tests {
         for arguments in [
             vec!["--direct-storage-admission", "100"],
             vec!["--direct-storage-admission", "100", "--workers", "0"],
+            vec![
+                "--direct-storage-admission",
+                "100",
+                "--workers",
+                "2",
+                "--intervals",
+                "0",
+                "--seconds",
+                "20",
+            ],
             vec![
                 "--direct-storage-admission",
                 "100",

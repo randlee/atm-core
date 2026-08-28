@@ -1,0 +1,297 @@
+# PRD Brief: ATM "Send To" Shell Integration
+
+**Status:** Draft · **Owner:** Rand · **Date:** 2026-08-22
+**Scope:** Phase 1 = `atm send` + `atm queue` (deferred-nudge send). Phase 2 = agent-assisted note drafting + non-ATM session launch. `atm queue` and `atm launch/spawn` remain follow-ons, but Phase 2 lays their groundwork.
+
+---
+
+## 1. Problem
+
+Getting a file or folder from the OS file manager into a running agent's context requires: knowing which agent, knowing its host and cwd, copying the file somewhere it can read, and hand-typing an `atm send`. This is friction at exactly the moment a human wants to hand an artifact to a fleet member.
+
+## 2. Goal
+
+Right-click (Finder / Explorer) → pick one or more team members → the file(s) arrive in their inbox with a note, on any host. One gesture, no terminal.
+
+## 2a. User Stories
+
+**US-1 — Brief a new team member.** A planning agent has just been spawned onto a team. The human selects the plan and three background files in Finder, picks the new agent, and the drafter (forked from the briefing session) writes a kickoff note explaining what the files are and what's expected. Human edits one line, sends. *Exercises: multi-file, fork-session drafter, `note_source: drafted`.*
+
+**US-2 — Fill a gap in a running agent's context.** A dev agent is stuck because a skill doc never made it into the repo. The human finds it in another repo, right-clicks, picks the agent, types "this is the convention you're missing — see §3". Sent in under ten seconds; no terminal. *Exercises: single file, existing member, human-authored note, same- or cross-host pull.*
+
+**US-3 — Discuss a document, no team.** The human wants to think through a PDF with an agent that isn't on any ATM team. Right-click → "Open session" → Wyvern chat window opens with the file attached. No `atm send` at the end; the session *is* the destination. *Exercises: non-ATM path, Wyvern chat integration as a terminal stage.*
+
+**US-4 — Chain.** US-3 produces a summary document. The human saves it, right-clicks it, sends it to a team member (US-2). Later that member's output gets sent on to a third. Every hop is the same gesture; nothing in the pipeline knows it's part of a chain. *Exercises: composability — the reason the pipeline must stay one-shot and side-effect-free except for the final send.*
+
+## 3. Non-Goals
+
+- Spawning agents on a folder (`atm spawn`) — different UX, folder is a workdir.
+- Replacing the OS-native Share sheet; we add an entry, we don't own the sheet.
+- Binary transport inside the message bus. Messages carry references, not bytes.
+- Designing Wyvern's chat/session integration. Phase 2b *consumes* it with a minimal contract; it does not define it.
+
+## 4. Design
+
+### 4.1 Pipeline (the whole product)
+
+```
+atm teams --json --members \
+  | wyvern pick-member.html --stdin-json --out-json \
+  | atm send --attach "$@" --from-json
+```
+
+Wyvern is used as a `dialog`/`zenity`-class picker: CLI-hosted webview, custom HTML/JS, no business logic. File paths never enter the UI; they ride `$@` directly into `atm send`.
+
+### 4.2 Contracts
+
+**Input to picker** (`atm teams --json --members`, the AQ4 projection; plain
+`atm teams --json` remains the existing team-count output):
+```json
+{ "schema_version": 1,
+  "teams": [ { "id": "…", "name": "…",
+    "members": [ { "id": "…", "name": "…", "host": "…", "cwd": "…",
+                   "status": "active|idle|dead" } ] } ] }
+```
+`status` drives greying-out so a human can't send into a void.
+
+`host` is an optional durable roster binding, written by the existing
+`atm teams add-member`/`update-member --host` path and validated against the
+enabled trusted-peer configuration. It is not inferred from heartbeat, DNS,
+socket addresses, or the current process. A null host is displayed as
+unroutable; `--from-json` rejects that recipient until an operator registers a
+host or supplies an explicit canonical `agent@team.host` target.
+
+**Output from picker** (stdout):
+```json
+{ "schema_version": 1, "recipients": ["member-id", "…"],
+  "note": "optional one-liner" }
+```
+Multi-select over recipients. `note` is a free-text "why" that travels with the
+attachment. `schema_version` is the compatibility gate between `atm` and any
+out-of-tree picker (notably Wyvern): a picker declares the version it emits,
+and a version the consuming stage does not recognize is treated exactly like a
+missing picker (fall back, record why) rather than a parse error. The same
+field appears on `PickerInput`.
+
+**Cancel:** Wyvern exits non-zero, emits no JSON, pipeline halts. No partial sends.
+
+### 4.3 No envelope change (Phase 1)
+
+Phase 1 changes **nothing** in `MessageEnvelope` and adds no new verb. The
+landed file path travels in the message *text* via a small, documented
+template ("Attached files (on this host): <path> …"). Structured
+`attachments` metadata and `note_source` are Phase-2 candidates, adopted only
+if agents demonstrably need machine-readable refs.
+
+### 4.4 Transport: user-configured transfer scripts, not daemon machinery
+
+Cross-host file transfer is an **environment concern** (SSH keys, Tailscale,
+IT policy), not something the daemon can plan around. The design:
+
+- **Same host:** `atm send --attach` copies into `$ATM_TEMP/send-to/<transfer-id>/`
+  and the message text names the landed paths.
+- **Cross-host:** `atm send --attach` resolves a **specifically named,
+  user-provided transfer script for the destination host**
+  (`~/.atm/transfer/<host>`), runs it, and sends an ordinary message naming
+  the landed remote paths. The repo ships modifiable **examples**
+  (sftp default, Tailscale, rsync) that a human or agent adapts to their
+  environment, plus a setup document.
+- **Not configured:** the send **fails closed** with the exact error the user
+  must see: `File transfer to <host> not enabled. Read
+  docs/cross-host-file-transfer.md to set up cross-host file transfer.`
+  No daemon endpoint, no fetch/push state machine, no envelope semantics —
+  the daemon carries only the ordinary message.
+- **Fan-out:** N recipients → N ordinary messages client-side; remote
+  recipients sharing a host share one transfer. Recipient/attachment shape
+  validates for the whole batch before anything is staged (a malformed
+  request stages and sends nothing — R5/R13). A *live* transfer or send
+  failure partway through a multi-host batch is different: it is real I/O
+  after validation already passed, so it cannot be pre-flighted away.
+  Policy (AQ4 decision (g)): abort every not-yet-attempted host and report
+  a partial result — recipients already delivered stay delivered,
+  recipients on or after the failed host are reported not-delivered by id.
+  This is fail-forward, not fail-atomic, across hosts in one `--from-json`
+  batch; the single-invocation "zero sends on failure" guarantee in §5a
+  covers pre-flight validation, not live transfer I/O.
+
+### 4.5 Lifecycle: ATM_TEMP as a system-level contract
+
+`ATM_TEMP` is a **system-level environment variable** defining the ATM
+scratch area for *all* features, resolved by one shared `resolve_atm_temp`
+that the daemon calls at startup and the CLI calls lazily at first
+scratch-space use. It is not a hard boot requirement: **unset** resolves to
+a documented per-OS default (`<std::env::temp_dir()>/atm`, created if
+missing) with a single startup warning, so every already-installed daemon
+keeps booting unmodified (AQ4 decision (a) — rollout story). **Set but
+invalid** (relative, unresolvable, unwritable) fails closed with an
+actionable error at daemon startup and at CLI first scratch use. A periodic
+daemon sweep removes anything under `$ATM_TEMP` older than **30 days**
+(TTL-only; no ack coupling, no storage traits). With that contract in
+place, per-feature temp layouts are a non-issue.
+
+### 4.5a `atm queue` — deferred-nudge send
+
+`atm queue` is `atm send` with one difference: the post-write nudge is
+deferred until the recipient harness is ready. The message is written
+durably and immediately through the unchanged canonical path; a
+`nudge_pending_at` marker on the message state derives a restart-safe
+per-recipient FIFO (unread + pending, ULID order). When the harness
+transitions to idle (heartbeat surface), the daemon nudges the NEXT unread
+queued message — one per idle transition; reading a message first clears its
+marker. atm-graft wires both channels independently — immediate on the
+steer-shaped channel, queued on the queue-shaped channel — and the harness
+integration decides where nudges land (Hermes `/steer` + `/queue`:
+integration complete). The deferred queue + idle-drain applies only to the
+tmux received-hook path.
+
+### 4.6 Shell integration (thin glue only)
+
+| Platform | Mechanism | Cost |
+|---|---|---|
+| macOS (first) | Shortcuts / Quick Action invoking the pipeline script | Low |
+| macOS (later) | Share Extension — requires signed app bundle + extension target; depends on atm-daemon code-signing work | High |
+| Windows (first) | `%APPDATA%\Microsoft\Windows\SendTo\*.lnk` | Trivial |
+| Windows (later) | Win11 context menu (sparse MSIX) | High |
+| Linux/Ubuntu (first) | Nautilus script (`~/.local/share/nautilus-scripts/`) + XDG `.desktop` "Open With" entry | Trivial |
+| Linux (later) | KDE Dolphin service menus, other file managers | Low |
+
+## 4a. Phase 2 — Agent-Assisted Drafting and Sessions
+
+### 2a. One-shot prefill (fits the existing pipe)
+
+```
+atm teams --json --members \
+  | atm draft --attach "$@" --model <fast> --merge \
+  | wyvern pick-member.html --stdin-json --out-json \
+  | atm send --attach "$@" --from-json
+```
+
+`atm draft` reads the attachment(s) with a fast model and adds `{summary, suggested_note}` to the picker input. The picker prefills the note field. The human edits or accepts. The model never runs inside Wyvern's JS.
+
+Constraints:
+- **Non-blocking.** Picker opens immediately; draft streams into the field. The ~1 s context-menu budget is not spent on inference.
+- **Text-only sniff, byte cap.** Directories, binaries, and oversized files get a metadata-only summary (names, sizes, types).
+- **Local model default** (Ollama/MLX on the Mac Studio), cloud fast model (Haiku) opt-in. Arbitrary files must not leave the machine by default.
+- **Envelope `note_source: "human" | "drafted" | "edited"`** so recipients can weight it.
+
+### 2b. Interactive drafting (first consumer of Wyvern chat integration)
+
+Wyvern's planned chat window (fork a session or launch new) replaces the text field with a conversation. **Minimal contract this feature needs, and no more:**
+
+| Op | Direction | Payload |
+|---|---|---|
+| `open_session` | page → host | `{ mode: "new" \| "fork", from_session?: id, attachments: [...] }` |
+| `send_turn` | page → host | `{ text }` |
+| `stream` | host → page | token/chunk events |
+| `done` | page → host | `{ note }` — merged into output JSON |
+
+Session-mode mapping:
+- **Send to existing member → `new`.** The file is the only context; an ephemeral drafter session is correct.
+- **Brief a freshly spawned agent → `fork`** from the session doing the briefing, so the kickoff inherits context. *This is the justification for fork existing at all.*
+
+### 2c. Non-ATM session (US-3)
+
+A second shell entry, "Open with agent", that skips `atm teams` and `atm send` entirely:
+
+```
+wyvern chat.html --attach "$@"
+```
+
+Same Wyvern capability, same attachment handling, no message bus. This is the simplest possible consumer and should probably ship *before* 2b as the integration smoke test.
+
+### 2d. Chaining (US-4)
+
+No new machinery. The guarantee that makes it work: **every stage is one-shot, reads stdin, writes stdout, and has no side effects except the final `atm send`.** Any stage that breaks this (a picker that sends on its own, a drafter that writes to the inbox) breaks chaining. Treat it as an invariant, enforced by `sc-lint` if it can be expressed.
+
+## 5. Requirements
+
+| ID | Requirement | Priority |
+|---|---|---|
+| R1 | One gesture from file manager to delivered message, macOS + Windows + Linux (Ubuntu/GNOME first) | Must |
+| R2 | Multi-select recipients; multi-file via `$@` | Must |
+| R3 | Cross-host delivery via configured per-host transfer script; unconfigured → fail closed with the setup-doc error shown to the user | Must |
+| R4 | Dead/idle members visibly disabled in picker | Must |
+| R5 | Cancel never results in a send | Must |
+| R6 | `atm teams --json --members` and `atm send --from-json` usable without Wyvern (TUI, Raycast, scripts) | Must |
+| R7 | Periodic sweep of `$ATM_TEMP` removes entries older than 30 days | Should |
+| R8 | Attachment contents flagged as untrusted in agent conventions (CLAUDE.md) | Should |
+| R9 | Phase 2: draft never blocks picker open | Must (P2) |
+| R10 | Phase 2: local model default; cloud requires explicit flag | Must (P2) |
+| R11 | Phase 2: `note_source` on envelope | Should (P2) |
+| R12 | Phase 2: "Open with agent" entry works with zero ATM daemons running | Must (P2) |
+| R13 | Pipeline stages are side-effect-free except final send (chaining invariant) | Must |
+| R14 | `atm queue` mirrors the full `atm send` surface; message durable+readable immediately; no immediate nudge | Must |
+| R15 | Deferred nudges drain one-per-idle-transition, oldest unread first; read-first messages never nudged; pending markers survive daemon restart | Must |
+
+### 5a. Phase-1 command and envelope contract
+
+The phase-1 shell contract is executable without Wyvern:
+
+```text
+atm teams --json --members -> PickerInput JSON
+picker(PickerInput, "$@") -> PickerOutput JSON or non-zero/no output
+atm send --attach PATH... --from-json < PickerOutput
+```
+
+`PickerInput` is the nested team/member object above. `PickerOutput` is
+`{"schema_version":1,"recipients":["member-id",...],"note":"optional"}` —
+those three keys and no others at this version; unknown keys, empty
+recipients, malformed JSON, or a cancelled picker are hard failures and must
+not stage files or invoke the daemon. An unrecognized `schema_version` is
+not a hard failure at the picker-selection stage: the pipeline falls back to
+the native picker (AQ5 deliverable 3a). Additive evolution happens by
+incrementing `schema_version`, never by silently widening this shape. `atm send
+--from-json` performs client-side fan-out through the existing canonical write
+path, one immutable message per recipient. AQ4 (ADR-055) owns message-id
+allocation versus staging order and tests it rather than inventing a
+second rule (corrected 2026-08-26: previously mis-attributed to AQ1/AQ2,
+which are queue sprints).
+
+All attachment bytes remain outside the message bus. The message carries the
+landed path in its text; staging (local copy or transfer-script invocation)
+completes before the send. For a single recipient, any transfer failure
+aborts that invocation with zero sends. For a multi-recipient `--from-json`
+batch, a live transfer/send failure on host N aborts every host after N
+without rolling back hosts already delivered before N — see §4.4's Fan-out
+bullet (AQ4 decision (g)) for the full partial-fan-out policy. This is the
+production boundary for both same-host and cross-host paths.
+
+## 6. Open Questions (block ADR, not prototype)
+
+1. Directories: transfer recursively as a directory, or tar first? (Default:
+   whatever the example scripts do — likely recursive `sftp -r`/`scp -r`.)
+2. Size limit: none beyond the transfer mechanism's own; revisit only if it
+   bites.
+3. Sweeper policy: **decided** — TTL-only, 30 days, over all of `$ATM_TEMP`.
+4. Team-level addressing in atm-core, or stay with client-side fan-out?
+5. Wyvern cold-start latency — is it under the ~1 s context-menu tolerance? **Measure before committing Wyvern as the picker.**
+6. Which registration fields supply member `cwd`? Host sourcing is no longer
+   open: AQ4 decision (e) owns the explicit roster `host` binding and AQ4
+   implements its projection/resolution without heartbeat changes
+   (corrected 2026-08-26: "AQ1 decision (h)" did not exist).
+7. (P2) Which local model is the drafter default, and what is "Luna"? Does it run on the Mac Studio via Ollama/MLX?
+8. (P2) Does `fork` in the Wyvern chat integration fork the *session transcript* or the *agent process*? Send-To only needs transcript.
+9. (P2) Byte cap for the drafter — and does a directory get a tree listing or nothing?
+
+## 7. Milestones
+
+1. **`atm queue` + ADR-054 taxonomy** — verb, kind-aware dispatch,
+   `PendingNudgeStore`, code renames (queue ships before the Send-To work).
+2. **Graft dual-channel** (Hermes `/steer`+`/queue`), then **tmux
+   idle-drain**.
+3. **ADR-055 `ATM_TEMP` + transfer-script seam** — system temp contract,
+   30-day sweep, per-host script resolution + error contract, message-text
+   path convention.
+4. **`atm teams --json --members` + `atm send --attach --from-json`** — testable with `echo '{"recipients":[…]}' |`; transfer example scripts + setup doc; `$ATM_TEMP` sweeper.
+5. **macOS Shortcuts prototype** using `osascript choose from list` — validates the workflow with zero UI work.
+6. **`pick-member.html` in Wyvern** — replace step 5's picker; measure latency.
+7. **Windows SendTo `.lnk`** + Nautilus script; phase evidence.
+8. **(P2)** `wyvern chat.html --attach` — "Open with agent", no ATM. Integration smoke test for chat window.
+9. **(P2)** `atm draft` one-shot prefill, local model.
+10. **(P2)** Interactive drafting via chat contract; `new` then `fork`.
+
+## 8. Success
+
+**Phase 1:** a file dropped on the shortcut appears in the right agent's inbox on another host, with its note, within a few seconds, and the human never opened a terminal. Nothing under `$ATM_TEMP` survives past its 30-day TTL.
+
+**Phase 2:** US-1 through US-4 each complete in one gesture plus at most one edit. A chain of three hops works with no stage aware it's in a chain.

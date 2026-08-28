@@ -7,7 +7,7 @@ use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 #[cfg(unix)]
 use std::num::NonZeroU32;
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU16, NonZeroUsize};
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
 use std::time::Duration;
@@ -19,15 +19,23 @@ use atm_core::error::AtmError;
 use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
 use atm_core::home::current_host_runtime_scope;
 use atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME;
-use atm_core::observability::{NullObservability, ObservabilityPort};
+use atm_core::observability::{
+    CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
+};
+use atm_core::peer_wire::{PeerWireMode, PeerWireSecurity};
 use atm_core::send::input::DEFAULT_MESSAGE_MAX_BYTES;
+use atm_core::types::HostName;
 use atm_core::types::{AgentName, TeamName};
 use atm_http_runtime::{
-    DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration,
-    RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
+    AcceptedPeerStream, DirectPeerTcpConfig, EstablishedPeerStream, HttpRuntimeBuilder,
+    HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, PeerConnectionPool, PeerPoolConfig,
+    PeerStreamAdapter, PeerStreamFuture, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
+    StorageAndNudgeRouter, shared_direct_peer_client,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage_rusqlite::SqliteStorageFactory;
+use peer_tls::MtlsPeerStreamAdapter;
+use tokio::net::TcpStream;
 
 mod owner_gate;
 mod received_hook_selector;
@@ -47,6 +55,14 @@ pub const REPLACEMENT_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 /// remaining a bounded admission limit. The wire request's `max_message_bytes`
 /// can only lower the body policy; it cannot raise this server ceiling.
 const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
+
+/// The bootstrap-owned peer transport selection passed as one coherent unit
+/// into replacement-daemon composition. Runtime code receives only the
+/// opaque established-stream adapter and validated pool bounds.
+struct SelectedPeerAdapterSelection {
+    adapter: Option<Arc<dyn PeerStreamAdapter>>,
+    pool_config: PeerPoolConfig,
+}
 
 /// Identity values captured once at the daemon bootstrap boundary.
 ///
@@ -69,6 +85,298 @@ pub fn resolve_daemon_launch_identity() -> DaemonLaunchIdentity {
         identity: atm_core::caller_context::read_cli_identity_from_env_or_warn(
             "atm_daemon_bootstrap::resolve_daemon_launch_identity",
         ),
+    }
+}
+
+/// Parse the sole non-durable peer-wire launch policy before composition.
+///
+/// The process mode deliberately has no environment, database, or adapter
+/// availability source: those inputs can cause a startup error but cannot
+/// select plaintext.
+pub fn parse_peer_wire_mode(
+    arguments: impl IntoIterator<Item = std::ffi::OsString>,
+) -> Result<PeerWireMode, AtmError> {
+    if std::env::var_os("ATM_PEER_WIRE_SECURITY").is_some() {
+        return Err(AtmError::peer_wire_mode_source_forbidden(
+            "ATM_PEER_WIRE_SECURITY is forbidden; use --peer-wire-security at daemon launch",
+        ));
+    }
+    let mut arguments = arguments.into_iter();
+    let _program = arguments.next();
+    let mut mode = None;
+    while let Some(argument) = arguments.next() {
+        let argument = argument.into_string().map_err(|_| {
+            AtmError::peer_wire_mode_invalid("daemon launch arguments must be valid UTF-8")
+        })?;
+        let value = if argument == "--peer-wire-security" {
+            Some(arguments.next().ok_or_else(|| {
+                AtmError::peer_wire_mode_invalid(
+                    "--peer-wire-security requires `mutual-tls` or `plaintext-test`",
+                )
+            })?)
+        } else {
+            argument
+                .strip_prefix("--peer-wire-security=")
+                .map(std::ffi::OsString::from)
+        };
+        let Some(value) = value else {
+            continue;
+        };
+        let value = value.into_string().map_err(|_| {
+            AtmError::peer_wire_mode_invalid("peer-wire launch mode must be valid UTF-8")
+        })?;
+        let parsed = match value.as_str() {
+            "mutual-tls" => PeerWireMode::mtls(),
+            "plaintext-test" => PeerWireMode::plaintext_test(),
+            _ => {
+                return Err(AtmError::peer_wire_mode_invalid(
+                    "--peer-wire-security accepts only `mutual-tls` or `plaintext-test`",
+                ));
+            }
+        };
+        if mode.replace(parsed).is_some() {
+            return Err(AtmError::peer_wire_mode_invalid(
+                "--peer-wire-security may be supplied only once",
+            ));
+        }
+    }
+    Ok(mode.unwrap_or_default())
+}
+
+/// Selects the direct-peer listener port from the immutable daemon launch.
+///
+/// The fixed protocol port remains the service default. An explicit value is
+/// useful for a dedicated physical benchmark account that shares a host with
+/// another account's live daemon; it is not peer identity or wire policy.
+pub fn parse_direct_peer_port(
+    arguments: impl IntoIterator<Item = std::ffi::OsString>,
+) -> Result<NonZeroU16, AtmError> {
+    let mut arguments = arguments.into_iter();
+    let _program = arguments.next();
+    let mut port = None;
+    while let Some(argument) = arguments.next() {
+        let argument = argument
+            .into_string()
+            .map_err(|_| AtmError::config("direct-peer launch arguments must be valid UTF-8"))?;
+        let value = if argument == "--direct-peer-port" {
+            Some(arguments.next().ok_or_else(|| {
+                AtmError::config("--direct-peer-port requires a non-zero TCP port")
+            })?)
+        } else {
+            argument
+                .strip_prefix("--direct-peer-port=")
+                .map(std::ffi::OsString::from)
+        };
+        let Some(value) = value else {
+            continue;
+        };
+        let value = value
+            .into_string()
+            .map_err(|_| AtmError::config("direct-peer launch port must be valid UTF-8"))?;
+        let parsed = value
+            .parse::<u16>()
+            .ok()
+            .and_then(NonZeroU16::new)
+            .ok_or_else(|| AtmError::config("--direct-peer-port requires a non-zero TCP port"))?;
+        if port.replace(parsed).is_some() {
+            return Err(AtmError::config(
+                "--direct-peer-port may be supplied only once",
+            ));
+        }
+    }
+    Ok(port.unwrap_or_else(|| {
+        NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT)
+            .expect("the protocol direct-peer port is non-zero")
+    }))
+}
+
+/// Resolves bounded outbound peer-pool settings before daemon composition.
+/// Environment values provide deployment defaults; an explicit launch flag
+/// overrides the matching environment value without changing peer identity or
+/// wire-security policy.
+pub fn parse_peer_pool_config(
+    arguments: impl IntoIterator<Item = std::ffi::OsString>,
+) -> Result<PeerPoolConfig, AtmError> {
+    parse_peer_pool_config_with_environment(arguments, |name| std::env::var_os(name))
+}
+
+fn parse_peer_pool_config_with_environment(
+    arguments: impl IntoIterator<Item = std::ffi::OsString>,
+    mut environment: impl FnMut(&str) -> Option<std::ffi::OsString>,
+) -> Result<PeerPoolConfig, AtmError> {
+    let mut config = PeerPoolConfig::default();
+    apply_peer_pool_environment(&mut config, &mut environment)?;
+    apply_peer_pool_launch_overrides(&mut config, arguments)?;
+    config.validate()?;
+    Ok(config)
+}
+
+fn apply_peer_pool_environment(
+    config: &mut PeerPoolConfig,
+    environment: &mut impl FnMut(&str) -> Option<std::ffi::OsString>,
+) -> Result<(), AtmError> {
+    if let Some(value) = environment("ATM_PEER_POOL_MAX_PER_PEER") {
+        config.max_per_peer = parse_pool_usize("ATM_PEER_POOL_MAX_PER_PEER", value)?;
+    }
+    if let Some(value) = environment("ATM_PEER_POOL_MAX_POOLED_TOTAL") {
+        config.max_pooled_total = parse_pool_usize("ATM_PEER_POOL_MAX_POOLED_TOTAL", value)?;
+    }
+    if let Some(value) = environment("ATM_PEER_POOL_IDLE_TIMEOUT_MS") {
+        config.idle_timeout =
+            Duration::from_millis(parse_pool_u64("ATM_PEER_POOL_IDLE_TIMEOUT_MS", value)?);
+    }
+    Ok(())
+}
+
+fn apply_peer_pool_launch_overrides(
+    config: &mut PeerPoolConfig,
+    arguments: impl IntoIterator<Item = std::ffi::OsString>,
+) -> Result<(), AtmError> {
+    let mut arguments = arguments.into_iter();
+    let _program = arguments.next();
+    let mut max_per_peer_seen = false;
+    let mut max_total_seen = false;
+    let mut idle_timeout_seen = false;
+    while let Some(argument) = arguments.next() {
+        let Some((name, value)) = peer_pool_launch_argument(&mut arguments, argument)? else {
+            continue;
+        };
+        match name {
+            "--peer-pool-max-per-peer" => {
+                if max_per_peer_seen {
+                    return Err(AtmError::config(
+                        "--peer-pool-max-per-peer may be supplied only once",
+                    ));
+                }
+                max_per_peer_seen = true;
+                config.max_per_peer = parse_pool_usize(name, value)?;
+            }
+            "--peer-pool-max-pooled-total" => {
+                if max_total_seen {
+                    return Err(AtmError::config(
+                        "--peer-pool-max-pooled-total may be supplied only once",
+                    ));
+                }
+                max_total_seen = true;
+                config.max_pooled_total = parse_pool_usize(name, value)?;
+            }
+            "--peer-pool-idle-timeout-ms" => {
+                if idle_timeout_seen {
+                    return Err(AtmError::config(
+                        "--peer-pool-idle-timeout-ms may be supplied only once",
+                    ));
+                }
+                idle_timeout_seen = true;
+                config.idle_timeout = Duration::from_millis(parse_pool_u64(name, value)?);
+            }
+            _ => unreachable!("selected flag name is exhaustive"),
+        }
+    }
+    Ok(())
+}
+
+fn peer_pool_launch_argument(
+    arguments: &mut impl Iterator<Item = std::ffi::OsString>,
+    argument: std::ffi::OsString,
+) -> Result<Option<(&'static str, std::ffi::OsString)>, AtmError> {
+    let argument = argument
+        .into_string()
+        .map_err(|_| AtmError::config("peer-pool launch arguments must be valid UTF-8"))?;
+    let selected = match argument.as_str() {
+        "--peer-pool-max-per-peer" => Some((
+            "--peer-pool-max-per-peer",
+            next_pool_argument(arguments, &argument)?,
+        )),
+        "--peer-pool-max-pooled-total" => Some((
+            "--peer-pool-max-pooled-total",
+            next_pool_argument(arguments, &argument)?,
+        )),
+        "--peer-pool-idle-timeout-ms" => Some((
+            "--peer-pool-idle-timeout-ms",
+            next_pool_argument(arguments, &argument)?,
+        )),
+        _ => argument
+            .strip_prefix("--peer-pool-max-per-peer=")
+            .map(|value| ("--peer-pool-max-per-peer", std::ffi::OsString::from(value)))
+            .or_else(|| {
+                argument
+                    .strip_prefix("--peer-pool-max-pooled-total=")
+                    .map(|value| {
+                        (
+                            "--peer-pool-max-pooled-total",
+                            std::ffi::OsString::from(value),
+                        )
+                    })
+            })
+            .or_else(|| {
+                argument
+                    .strip_prefix("--peer-pool-idle-timeout-ms=")
+                    .map(|value| {
+                        (
+                            "--peer-pool-idle-timeout-ms",
+                            std::ffi::OsString::from(value),
+                        )
+                    })
+            }),
+    };
+    Ok(selected)
+}
+
+fn next_pool_argument(
+    arguments: &mut impl Iterator<Item = std::ffi::OsString>,
+    flag: &str,
+) -> Result<std::ffi::OsString, AtmError> {
+    arguments
+        .next()
+        .ok_or_else(|| AtmError::config(format!("{flag} requires a positive integer")))
+}
+
+fn parse_pool_usize(name: &str, value: std::ffi::OsString) -> Result<usize, AtmError> {
+    let value = value
+        .into_string()
+        .map_err(|_| AtmError::config(format!("{name} must be valid UTF-8")))?;
+    value
+        .parse::<usize>()
+        .ok()
+        .filter(|value| *value > 0)
+        .ok_or_else(|| AtmError::config(format!("{name} requires a positive integer")))
+}
+
+fn parse_pool_u64(name: &str, value: std::ffi::OsString) -> Result<u64, AtmError> {
+    let value = value
+        .into_string()
+        .map_err(|_| AtmError::config(format!("{name} must be valid UTF-8")))?;
+    value
+        .parse::<u64>()
+        .ok()
+        .filter(|value| *value > 0)
+        .ok_or_else(|| AtmError::config(format!("{name} requires a positive integer")))
+}
+
+struct BootstrapMtlsStreamAdapter {
+    adapter: Arc<MtlsPeerStreamAdapter>,
+}
+
+impl PeerStreamAdapter for BootstrapMtlsStreamAdapter {
+    fn connect<'a>(
+        &'a self,
+        stream: TcpStream,
+        peer: &'a HostName,
+    ) -> PeerStreamFuture<'a, EstablishedPeerStream> {
+        Box::pin(async move {
+            let stream: EstablishedPeerStream = Box::new(self.adapter.connect(stream, peer).await?);
+            Ok(stream)
+        })
+    }
+
+    fn accept<'a>(&'a self, stream: TcpStream) -> PeerStreamFuture<'a, AcceptedPeerStream> {
+        Box::pin(async move {
+            let (stream, source_host) = self.adapter.accept_with_peer(stream).await?;
+            Ok(AcceptedPeerStream {
+                source_host,
+                stream: Box::new(stream),
+            })
+        })
     }
 }
 
@@ -154,10 +462,16 @@ pub async fn run_replacement_daemon() -> Result<(), AtmError> {
 pub async fn run_replacement_daemon_with_observability(
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
 ) -> Result<(), AtmError> {
+    let peer_wire_mode = parse_peer_wire_mode(std::env::args_os())?;
+    let direct_peer_port = parse_direct_peer_port(std::env::args_os())?;
+    let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         observability,
         active_received_hook_selector,
         resolve_daemon_launch_identity(),
+        peer_wire_mode,
+        DirectPeerTcpConfig::configured(direct_peer_port),
+        peer_pool_config,
     )
     .await
 }
@@ -165,13 +479,20 @@ pub async fn run_replacement_daemon_with_observability(
 /// Starts the separately compiled benchmark daemon with an explicit hook mode.
 ///
 /// This symbol is unavailable to the shipped `atm-daemon` binary because it
-/// exists only behind the `benchmark-harness` feature.
+/// exists only behind the `benchmark-harness` feature. It retains the same
+/// explicit peer-wire launch mode as the production Tokio/Axum daemon.
 #[cfg(feature = "benchmark-harness")]
 pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), AtmError> {
+    let peer_wire_mode = parse_peer_wire_mode(std::env::args_os())?;
+    let direct_peer_port = parse_direct_peer_port(std::env::args_os())?;
+    let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         Arc::new(NullObservability),
         move |service_runtime| benchmark_received_hook_selector(service_runtime, hook_mode),
         resolve_daemon_launch_identity(),
+        peer_wire_mode,
+        DirectPeerTcpConfig::configured(direct_peer_port),
+        peer_pool_config,
     )
     .await
 }
@@ -183,57 +504,86 @@ fn build_replacement_handler(
         atm_core::LocalServiceRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: &DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
+    peer_adapter_selection: SelectedPeerAdapterSelection,
     runtime_health: RuntimeHealth,
 ) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
     let selector = selector_factory(assembly.service_runtime.clone());
-    Ok(Arc::new(
-        StorageAndNudgeRouter::new(
-            assembly.service_runtime,
-            observability,
-            selector,
-            atm_core::home::atm_home()?,
-        )
-        .with_runtime_health(runtime_health, assembly.doctor_ports)
-        .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
-            team: daemon_launch_identity.team.clone(),
-            identity: daemon_launch_identity.identity.clone(),
-            version: Some(atm_core::protocol::ReleaseVersion::current()),
-            cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
-            http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
-        }),
-    ))
+    let handler = StorageAndNudgeRouter::new(
+        assembly.service_runtime,
+        observability,
+        selector,
+        atm_core::home::atm_home()?,
+    )
+    .with_runtime_health(runtime_health, assembly.doctor_ports)
+    .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
+        team: daemon_launch_identity.team.clone(),
+        identity: daemon_launch_identity.identity.clone(),
+        version: Some(atm_core::protocol::ReleaseVersion::current()),
+        cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
+        http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
+        peer_wire_security: Some(peer_wire_mode.security().into()),
+    })
+    .with_shared_direct_peer_client(shared_direct_peer_client()?);
+    let handler = match peer_adapter_selection.adapter {
+        Some(adapter) => handler.with_peer_connection_pool(PeerConnectionPool::new(
+            peer_adapter_selection.pool_config,
+            adapter,
+        )),
+        None => handler,
+    };
+    Ok(Arc::new(handler))
 }
 
-async fn run_replacement_daemon_with_selector(
-    observability: Arc<dyn ObservabilityPort + Send + Sync>,
-    selector_factory: impl FnOnce(
-        atm_core::LocalServiceRuntime,
-    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
-    daemon_launch_identity: DaemonLaunchIdentity,
-) -> Result<(), AtmError> {
-    install_sqlite_retained_runtime_factory();
-    let scope = current_host_runtime_scope()?;
-    let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
-    let runtime_health = RuntimeHealth::with_owner(std::process::id());
-    let assembly = assemble_daemon_runtime()?;
-    let workflow_telemetry = assembly.workflow_telemetry.clone();
-    // The shipped daemon always keeps the injected receiver hook active.
-    // Benchmark-only selection is available only from the separate binary.
-    let handler = build_replacement_handler(
-        assembly,
-        observability,
-        selector_factory,
-        &daemon_launch_identity,
-        runtime_health.clone(),
-    )?;
+/// Selects the optional mTLS stream adapter from the immutable daemon launch
+/// mode.  Plaintext-test mode must not inspect, validate, or depend on the
+/// TLS control-plane state: it keeps the existing direct-peer HTTP pipeline
+/// intact without a stream wrapper.
+fn peer_stream_adapter_for_mode(
+    peer_wire_mode: PeerWireMode,
+    build_mtls_adapter: impl FnOnce() -> Result<Arc<dyn PeerStreamAdapter>, AtmError>,
+) -> Result<Option<Arc<dyn PeerStreamAdapter>>, AtmError> {
+    match peer_wire_mode.security() {
+        PeerWireSecurity::Mtls => build_mtls_adapter().map(Some),
+        PeerWireSecurity::PlaintextTest => Ok(None),
+    }
+}
+
+fn replacement_runtime_config(
+    scope: &atm_core::home::HostRuntimeScope,
+    owner: &DaemonOwnerGuard,
+    direct_peer_tcp: DirectPeerTcpConfig,
+    peer_stream_adapter: &Option<Arc<dyn PeerStreamAdapter>>,
+    peer_pool_config: PeerPoolConfig,
+) -> Result<HttpRuntimeConfig, AtmError> {
     let loopback = LoopbackTcpConfig::new(
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
         scope.runtime_root.as_ref().join(LOCAL_HTTP_RECORD_FILENAME),
-        _owner.instance_id(),
+        owner.instance_id(),
     );
+    Ok(replacement_runtime_config_with_direct_peer(
+        loopback,
+        unix_socket_config(scope)?,
+        direct_peer_tcp,
+        peer_stream_adapter,
+        peer_pool_config,
+    ))
+}
+
+/// Builds the maintained runtime configuration after bootstrap has selected
+/// its one wire mode. Production supplies the fixed direct-peer port; tests
+/// may supply an isolated ephemeral listener while exercising this exact
+/// composition path.
+fn replacement_runtime_config_with_direct_peer(
+    loopback: LoopbackTcpConfig,
+    unix_socket: Option<atm_http_runtime::UnixSocketConfig>,
+    direct_peer_tcp: DirectPeerTcpConfig,
+    peer_stream_adapter: &Option<Arc<dyn PeerStreamAdapter>>,
+    peer_pool_config: PeerPoolConfig,
+) -> HttpRuntimeConfig {
     let config = HttpRuntimeConfig::new(
         loopback,
-        unix_socket_config(&scope)?,
+        unix_socket,
         RuntimeLimits::new(
             NonZeroUsize::new(DEFAULT_MESSAGE_MAX_BYTES + CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES)
                 .expect("non-zero body limit"),
@@ -243,9 +593,96 @@ async fn run_replacement_daemon_with_selector(
             NonZeroDuration::new(Duration::from_secs(3)).expect("non-zero request timeout"),
             NonZeroDuration::new(REPLACEMENT_DRAIN_DEADLINE).expect("non-zero shutdown timeout"),
         ),
+    )
+    .with_direct_peer_tcp(direct_peer_tcp)
+    .with_peer_pool_config(peer_pool_config);
+    match peer_stream_adapter {
+        Some(adapter) => config.with_peer_stream_adapter(Arc::clone(adapter)),
+        None => config,
+    }
+}
+
+fn record_peer_wire_mode_selection(
+    observability: &dyn ObservabilityPort,
+    daemon_launch_identity: &DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
+    peer_stream_adapter: &Option<Arc<dyn PeerStreamAdapter>>,
+) {
+    tracing::info!(
+        peer_wire_security = peer_wire_mode.security().as_launch_value(),
+        mtls_ready = peer_stream_adapter.is_some(),
+        "replacement daemon selected peer-wire mode"
     );
-    let config = config.with_direct_peer_tcp(DirectPeerTcpConfig::standard());
-    let mut running = HttpRuntimeBuilder::new(config, handler)
+    // A retained startup record carries only the selected public mode. The
+    // concrete adapter remains opaque; never emit certificates, pins, keys,
+    // or trust records from this composition boundary.
+    if let (Some(team), Some(identity)) = (
+        daemon_launch_identity.team.clone(),
+        daemon_launch_identity.identity.clone(),
+    ) && let Err(error) = observability.emit(CommandEvent {
+        command: "atm-daemon",
+        action: action_name("peer_wire_mode_selected"),
+        outcome: outcome_label(peer_wire_mode.security().as_launch_value()),
+        team,
+        agent: identity.clone(),
+        sender: identity,
+        message_id: None,
+        requires_ack: false,
+        dry_run: false,
+        task_id: None,
+        error_code: None,
+        error_message: None,
+    }) {
+        tracing::warn!(%error, "failed to retain peer-wire mode startup observability event");
+    }
+}
+
+async fn run_replacement_daemon_with_selector(
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    selector_factory: impl FnOnce(
+        atm_core::LocalServiceRuntime,
+    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    daemon_launch_identity: DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
+    direct_peer_tcp: DirectPeerTcpConfig,
+    peer_pool_config: PeerPoolConfig,
+) -> Result<(), AtmError> {
+    install_sqlite_retained_runtime_factory();
+    let scope = current_host_runtime_scope()?;
+    let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
+    let runtime_health = RuntimeHealth::with_owner(std::process::id());
+    let assembly = assemble_daemon_runtime()?;
+    let workflow_telemetry = assembly.workflow_telemetry.clone();
+    let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
+    // The shipped daemon always keeps the injected receiver hook active.
+    // Benchmark-only selection is available only from the separate binary.
+    let handler = build_replacement_handler(
+        assembly,
+        Arc::clone(&observability),
+        selector_factory,
+        &daemon_launch_identity,
+        peer_wire_mode,
+        SelectedPeerAdapterSelection {
+            adapter: peer_stream_adapter.clone(),
+            pool_config: peer_pool_config,
+        },
+        runtime_health.clone(),
+    )?;
+    let config = replacement_runtime_config(
+        &scope,
+        &_owner,
+        direct_peer_tcp,
+        &peer_stream_adapter,
+        peer_pool_config,
+    )?;
+    record_peer_wire_mode_selection(
+        observability.as_ref(),
+        &daemon_launch_identity,
+        peer_wire_mode,
+        &peer_stream_adapter,
+    );
+    let runtime_handler: Arc<dyn atm_http_runtime::CanonicalWriteHandler> = handler.clone();
+    let mut running = HttpRuntimeBuilder::new(config, runtime_handler)
         .with_runtime_health(runtime_health)
         .build()?
         .start()
@@ -253,8 +690,7 @@ async fn run_replacement_daemon_with_selector(
     if let Err(error) = emit_ready_signal_if_requested() {
         // The process has not advertised readiness, so it must not retain an
         // otherwise-live listener when its supervisor handshake fails.
-        let _ = running.begin_shutdown().finish().await;
-        workflow_telemetry.shutdown().await;
+        let _ = shutdown_replacement_daemon(running, handler.as_ref(), workflow_telemetry).await;
         return Err(error);
     }
     tokio::select! {
@@ -264,17 +700,44 @@ async fn run_replacement_daemon_with_selector(
         }
         _ = running.wait_for_server_stop() => {
             eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
-            let result = match running.begin_shutdown().finish().await {
+            let result = match shutdown_replacement_daemon(running, handler.as_ref(), workflow_telemetry).await {
                 Ok(_) => Err(AtmError::daemon_unavailable(
                     "replacement HTTP runtime server stopped unexpectedly",
                 )),
                 Err(error) => Err(error),
             };
-            workflow_telemetry.shutdown().await;
             return result;
         }
     }
+    shutdown_replacement_daemon(running, handler.as_ref(), workflow_telemetry).await
+}
+
+fn bootstrap_peer_stream_adapter(
+    assembly: &RuntimeAssembly,
+    peer_wire_mode: PeerWireMode,
+) -> Result<Option<Arc<dyn PeerStreamAdapter>>, AtmError> {
+    peer_stream_adapter_for_mode(peer_wire_mode, || {
+        Ok(Arc::new(BootstrapMtlsStreamAdapter {
+            adapter: Arc::new(MtlsPeerStreamAdapter::from_peer_config(
+                assembly.peer_config_store.as_ref(),
+            )?),
+        }) as Arc<dyn PeerStreamAdapter>)
+    })
+}
+
+/// Drain the Axum runtime before releasing outbound peer drivers and the
+/// best-effort workflow telemetry worker. Every terminal daemon path uses the
+/// same sequence so a failed ready handshake cannot leave either subsystem
+/// alive after the listener is gone.
+async fn shutdown_replacement_daemon(
+    running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
+    handler: &StorageAndNudgeRouter,
+    workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
+) -> Result<(), AtmError> {
     let stopped = running.begin_shutdown().finish().await;
+    handler
+        .shutdown_peer_connections(REPLACEMENT_DRAIN_DEADLINE)
+        .await;
     workflow_telemetry.shutdown().await;
     let _stopped = stopped?;
     Ok(())
@@ -426,18 +889,79 @@ pub fn with_default_peer_config_store<T>(
     f(assembly.peer_config_store().as_ref())
 }
 
+/// Open the canonical roster and durable peer-authority seams from one
+/// runtime assembly for CLI-only peer address normalization.
+///
+/// Keeping the two reads in the same assembly avoids accidentally composing
+/// a roster from one runtime snapshot with peer trust from another. The
+/// closure receives storage contracts only; no transport or daemon surface is
+/// exposed.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the default SQLite-backed retained runtime cannot
+/// assemble its canonical boundary state.
+pub fn with_default_peer_address_stores<T>(
+    f: impl FnOnce(
+        &(dyn atm_storage::RosterStore + Send + Sync),
+        &(dyn atm_storage::PeerConfigStore + Send + Sync),
+    ) -> Result<T, AtmError>,
+) -> Result<T, AtmError> {
+    let assembly = assemble_default_runtime()?;
+    let roster_store = assembly.shared_roster_store_arc();
+    let peer_config_store = assembly.peer_config_store();
+    f(roster_store.as_ref(), peer_config_store.as_ref())
+}
+
 #[cfg(test)]
 mod replacement_runtime_tests {
+    use std::collections::HashMap;
+    use std::ffi::OsString;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::num::NonZeroU16;
+    use std::sync::Arc;
     use std::time::Duration;
 
-    use atm_core::boundary::TemplateSource;
+    use atm_core::api::ApiRequest;
+    use atm_core::boundary::{
+        BuiltInPostSendDispatch, MessageReceivedHookSelector, RosterEntry, TemplateSource,
+    };
+    use atm_core::observability::NullObservability;
+    use atm_core::peer_wire::PeerWireMode;
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+    use atm_core::send::{SendMessageSource, WriteRequest};
+    use atm_core::types::{AgentName, ModelName, TeamName};
+    use atm_http_runtime::{
+        DirectPeerTcpConfig, HttpRuntimeBuilder, LoopbackTcpConfig, PeerPoolConfig, RuntimeHealth,
+        direct_peer_tcp_client,
+    };
+    use atm_runtime_test_support::open_isolated_sqlite_boundary;
+    use atm_storage::{MessageKey, RosterHarness, RosterMemberKind, RosterSnapshot};
     use atm_template_sc_compose::ScComposeTemplateComposer;
     use serde_json::Map;
 
     use super::{
-        REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal, assemble_host_runtime_with_template_composer,
+        DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, SelectedPeerAdapterSelection,
+        ShutdownSignal, assemble_host_runtime_with_template_composer, build_replacement_handler,
+        parse_direct_peer_port, parse_peer_pool_config_with_environment, parse_peer_wire_mode,
+        peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
         write_ready_signal_if_requested,
     };
+
+    /// Test-owned receiver selection prevents an external tmux/graft action
+    /// from obscuring the bootstrap's direct-peer persistence proof.
+    struct NoReceivedHookSelector;
+
+    impl atm_core::boundary::sealed::Sealed for NoReceivedHookSelector {}
+
+    impl MessageReceivedHookSelector for NoReceivedHookSelector {
+        fn select_emitter(
+            &self,
+            _dispatch: &BuiltInPostSendDispatch,
+        ) -> Option<&dyn atm_core::boundary::AsyncMessageReceivedHookEmitter> {
+            None
+        }
+    }
 
     #[test]
     fn ready_signal_is_absent_unless_requested() {
@@ -456,6 +980,278 @@ mod replacement_runtime_tests {
     #[test]
     fn replacement_runtime_uses_the_architecture_drain_deadline() {
         assert_eq!(REPLACEMENT_DRAIN_DEADLINE, Duration::from_secs(5));
+    }
+
+    #[test]
+    fn peer_wire_mode_defaults_to_mutual_tls_and_accepts_only_launch_values() {
+        let mutual_tls = parse_peer_wire_mode([OsString::from("atm-daemon")])
+            .expect("mTLS is the secure default");
+        assert_eq!(mutual_tls.security().as_launch_value(), "mutual-tls");
+
+        let plaintext = parse_peer_wire_mode([
+            OsString::from("atm-daemon"),
+            OsString::from("--peer-wire-security=plaintext-test"),
+        ])
+        .expect("explicit plaintext test mode");
+        assert_eq!(plaintext.security().as_launch_value(), "plaintext-test");
+
+        let invalid = parse_peer_wire_mode([
+            OsString::from("atm-daemon"),
+            OsString::from("--peer-wire-security"),
+            OsString::from("opportunistic"),
+        ])
+        .expect_err("no opportunistic or fallback mode exists");
+        assert!(invalid.message().contains("mutual-tls"));
+    }
+
+    #[test]
+    fn peer_wire_mode_rejects_duplicate_launch_values() {
+        let error = parse_peer_wire_mode([
+            OsString::from("atm-daemon"),
+            OsString::from("--peer-wire-security"),
+            OsString::from("mutual-tls"),
+            OsString::from("--peer-wire-security=plaintext-test"),
+        ])
+        .expect_err("one launch mode must select the whole runtime");
+        assert!(error.message().contains("only once"));
+    }
+
+    #[test]
+    fn direct_peer_port_defaults_and_accepts_one_explicit_nonzero_value() {
+        assert_eq!(
+            parse_direct_peer_port([OsString::from("atm-daemon")]).expect("standard port"),
+            NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT).expect("non-zero"),
+        );
+        assert_eq!(
+            parse_direct_peer_port([
+                OsString::from("atm-daemon"),
+                OsString::from("--direct-peer-port=43102"),
+            ])
+            .expect("explicit benchmark port"),
+            NonZeroU16::new(43102).expect("non-zero"),
+        );
+    }
+
+    #[test]
+    fn direct_peer_port_rejects_zero_and_duplicates() {
+        let zero = parse_direct_peer_port([
+            OsString::from("atm-daemon"),
+            OsString::from("--direct-peer-port"),
+            OsString::from("0"),
+        ])
+        .expect_err("zero cannot bind a durable launch port");
+        assert!(zero.message().contains("non-zero"));
+
+        let duplicate = parse_direct_peer_port([
+            OsString::from("atm-daemon"),
+            OsString::from("--direct-peer-port=43102"),
+            OsString::from("--direct-peer-port=43103"),
+        ])
+        .expect_err("one daemon has one direct-peer listener");
+        assert!(duplicate.message().contains("only once"));
+    }
+
+    #[test]
+    fn peer_pool_config_defaults_and_launch_flags_are_validated() {
+        let empty = HashMap::<String, OsString>::new();
+        let defaults =
+            parse_peer_pool_config_with_environment([OsString::from("atm-daemon")], |name| {
+                empty.get(name).cloned()
+            })
+            .expect("pool defaults are valid");
+        assert_eq!(defaults, PeerPoolConfig::default());
+
+        let explicit = parse_peer_pool_config_with_environment(
+            [
+                OsString::from("atm-daemon"),
+                OsString::from("--peer-pool-max-per-peer=7"),
+                OsString::from("--peer-pool-max-pooled-total"),
+                OsString::from("19"),
+                OsString::from("--peer-pool-idle-timeout-ms=250"),
+            ],
+            |name| empty.get(name).cloned(),
+        )
+        .expect("positive explicit pool values are valid");
+        assert_eq!(explicit.max_per_peer, 7);
+        assert_eq!(explicit.max_pooled_total, 19);
+        assert_eq!(explicit.idle_timeout, Duration::from_millis(250));
+
+        for argument in [
+            "--peer-pool-max-per-peer=0",
+            "--peer-pool-max-pooled-total=-1",
+            "--peer-pool-idle-timeout-ms=garbage",
+        ] {
+            assert!(
+                parse_peer_pool_config_with_environment(
+                    [OsString::from("atm-daemon"), OsString::from(argument)],
+                    |name| empty.get(name).cloned(),
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn peer_pool_launch_flags_override_environment_and_duplicates_fail() {
+        let environment = HashMap::from([
+            (
+                String::from("ATM_PEER_POOL_MAX_PER_PEER"),
+                OsString::from("3"),
+            ),
+            (
+                String::from("ATM_PEER_POOL_MAX_POOLED_TOTAL"),
+                OsString::from("11"),
+            ),
+            (
+                String::from("ATM_PEER_POOL_IDLE_TIMEOUT_MS"),
+                OsString::from("700"),
+            ),
+        ]);
+        let overridden = parse_peer_pool_config_with_environment(
+            [
+                OsString::from("atm-daemon"),
+                OsString::from("--peer-pool-max-per-peer=5"),
+            ],
+            |name| environment.get(name).cloned(),
+        )
+        .expect("launch flag overrides environment");
+        assert_eq!(overridden.max_per_peer, 5);
+        assert_eq!(overridden.max_pooled_total, 11);
+        assert_eq!(overridden.idle_timeout, Duration::from_millis(700));
+
+        let duplicate = parse_peer_pool_config_with_environment(
+            [
+                OsString::from("atm-daemon"),
+                OsString::from("--peer-pool-max-per-peer=2"),
+                OsString::from("--peer-pool-max-per-peer=3"),
+            ],
+            |name| environment.get(name).cloned(),
+        )
+        .expect_err("one launch value must control each pool setting");
+        assert!(duplicate.message().contains("only once"));
+    }
+
+    #[test]
+    fn plaintext_test_release_mode_never_reads_invalid_tls_configuration() {
+        let adapter = peer_stream_adapter_for_mode(
+            atm_core::peer_wire::PeerWireMode::plaintext_test(),
+            || -> Result<_, atm_core::error::AtmError> {
+                panic!("plaintext-test must not inspect TLS peer configuration")
+            },
+        )
+        .expect("plaintext-test directly preserves the peer HTTP pipeline");
+
+        assert!(adapter.is_none());
+    }
+
+    #[tokio::test]
+    async fn plaintext_test_bootstrap_runs_direct_peer_write_without_tls_configuration() {
+        let temporary_root = tempfile::tempdir().expect("temporary bootstrap runtime root");
+        let assembly = open_isolated_sqlite_boundary(temporary_root.path())
+            .expect("assemble isolated daemon runtime")
+            .for_daemon();
+        let team: TeamName = "test-team".parse().expect("team");
+        assembly
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: ["recipient", "sender"]
+                    .into_iter()
+                    .map(|agent_name| RosterEntry {
+                        team_name: team.clone(),
+                        agent_name: agent_name.parse().expect("agent"),
+                        member_kind: RosterMemberKind::Permanent,
+                        harness: RosterHarness::PythonGraft,
+                        agent_type: atm_core::schema::AgentType::default(),
+                        model: ModelName::default(),
+                        recipient_pane_id: None,
+                        metadata_json: Map::new(),
+                    })
+                    .collect(),
+                refreshed_at: None,
+            })
+            .expect("seed direct-peer recipient roster");
+        let message_store = assembly.message_store_arc();
+        let peer_stream_adapter =
+            peer_stream_adapter_for_mode(PeerWireMode::plaintext_test(), || {
+                panic!("plaintext bootstrap must not inspect invalid TLS peer configuration")
+            })
+            .expect("plaintext bootstrap selects no TLS stream adapter");
+        let runtime_health = RuntimeHealth::with_owner(std::process::id());
+        let handler = build_replacement_handler(
+            assembly,
+            Arc::new(NullObservability),
+            |_| Arc::new(NoReceivedHookSelector),
+            &DaemonLaunchIdentity::default(),
+            PeerWireMode::plaintext_test(),
+            SelectedPeerAdapterSelection {
+                adapter: peer_stream_adapter.clone(),
+                pool_config: PeerPoolConfig::default(),
+            },
+            runtime_health.clone(),
+        )
+        .expect("compose the replacement daemon handler");
+        let config = replacement_runtime_config_with_direct_peer(
+            LoopbackTcpConfig::new(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                temporary_root.path().join("local-http.json"),
+                ulid::Ulid::new(),
+            ),
+            None,
+            DirectPeerTcpConfig::ephemeral_for_test(),
+            &peer_stream_adapter,
+            PeerPoolConfig::default(),
+        );
+        let running = HttpRuntimeBuilder::new(config, handler)
+            .with_runtime_health(runtime_health)
+            .build()
+            .expect("validate plaintext bootstrap runtime")
+            .start()
+            .await
+            .expect("start plaintext direct-peer listener");
+        let peer_port = running
+            .direct_peer_address()
+            .expect("ephemeral direct peer listener bound")
+            .port();
+        let client = direct_peer_tcp_client(
+            "127.0.0.1".parse().expect("direct peer host"),
+            NonZeroU16::new(peer_port).expect("non-zero direct peer port"),
+            Duration::from_secs(3),
+        )
+        .expect("direct peer client");
+        let request = WriteRequest::new(
+            temporary_root.path().join("home"),
+            temporary_root.path().join("workspace"),
+            "sender".parse::<AgentName>().expect("sender"),
+            "recipient@test-team",
+            team,
+            SendMessageSource::Inline("bootstrap plaintext direct-peer proof".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("direct peer write request");
+        let response = client
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+            .await
+            .expect("plaintext direct peer write response")
+            .into_inner();
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
+            panic!("plaintext direct peer write must return the canonical send response");
+        };
+        assert!(
+            message_store
+                .load_message(&MessageKey::from(outcome.message_id))
+                .expect("inspect durable direct peer message")
+                .is_some(),
+            "plaintext mode reaches the same durable storage pipeline without TLS configuration"
+        );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("plaintext bootstrap runtime drains");
     }
 
     #[test]

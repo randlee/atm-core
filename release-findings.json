@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-08-17T17:14:42.724952Z",
-  "branch": "release/v1.4.3",
-  "version": "1.4.3",
+  "generatedAt": "2026-08-27T23:52:44.266827Z",
+  "branch": "chore/changelog-1.4.4",
+  "version": "1.4.4",
   "status": "pass",
   "findings": [
     {

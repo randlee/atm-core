@@ -143,11 +143,14 @@ Rust boundary rules:
 
 ## 2.4 Activation And Config Boundary
 
-`atm-graft` is active only inside an ATM-configured project.
+`atm-graft` receiver activation is identity-driven, not project-config-driven.
 
 Architectural rules:
-- `.atm.toml` discovery gates whether graft mode is active at all
-- if `.atm.toml` is absent, `atm-graft` remains inert
+- a valid caller-provided `ATM_IDENTITY` and `ATM_TEAM` envelope activates the
+  receiver; a clean activation return means the receiver is listening and its
+  endpoint record is published
+- `.atm.toml` is optional ATM-owned configuration. Its absence must not leave
+  a graft receiver inert or silently suppress activation
 - runtime identity comes from `ATM_IDENTITY`; graft mode does not add a second
   identity-resolution scheme
 - if graft mode is active and identity/team resolution succeeds, the standard
@@ -157,12 +160,13 @@ Architectural rules:
   not a reason to forbid daemon startup
 - optional graft-specific config remains ATM-owned config semantics rather than
   host-private settings
-- the initial graft config surface must stay small:
-  - `[atm.graft].enabled = true|false`
+- a legacy `[atm.graft].enabled` value may remain parseable for compatibility,
+  but it is not an activation gate
 
 Architectural consequence:
-- `atm-core` config loading must own the `[atm.graft]` model before
-  `atm-graft` activation logic can be implemented cleanly
+- `atm-core` config loading remains the source of optional ATM configuration;
+  malformed configuration is an activation error, while absent configuration
+  uses built-in defaults
 - the concrete `atm-graft` crate consumes the public `atm_core::load_atm_config`
   helper rather than reparsing `.atm.toml` privately
 - the standard convenience path must collect those ATM-owned inputs and pass
@@ -218,7 +222,13 @@ State-model rule:
 
 ## 2.6 Nudge Delivery Model
 
-Nudges originate from the daemon, not from local shell hooks.
+> This section describes the steer-nudge path specifically: immediate,
+> in-session delivery right after durable persistence. Phase AQ adds a
+> second, independent queue-shaped nudge channel to `atm-graft`; whether and
+> how that channel lands here is the harness integration's decision and is
+> not specified by this section.
+
+Steer nudges originate from the daemon, not from local shell hooks.
 
 Concrete runtime shape:
 
@@ -244,11 +254,11 @@ Architectural rules:
 - the host-facing payload is structured and contains at least:
   - `from`
   - `message_id`
-- acknowledge-family nudges use the compact built-in envelope:
+- acknowledge-family steer nudges use the compact built-in envelope:
   - `<atm kind="ack" from="..." message-id="..."/>`
   - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
-- task-bearing delivery or acknowledge nudges may carry `task_id`; delivery
-  nudges may additionally carry `description`
+- task-bearing delivery or acknowledge steer nudges may carry `task_id`;
+  delivery steer nudges may additionally carry `description`
 - the accepted same-host host-nudge race closure uses deterministic
   receiver-readiness signaling in the test harness:
   - tests wait on an explicit ready latch after the receiver listener binds
@@ -269,18 +279,18 @@ Architectural rules:
     typed ATM error and emit `tracing::warn!` with
     `subsystem` / `action` / `outcome` fields so repeated hangs are observable
     without custom host instrumentation
-- nudge receipt and injection must be automatic in embedded mode; manual
+- steer-nudge receipt and injection must be automatic in embedded mode; manual
   polling alone is insufficient for `atm-graft`
 - the exact transport or callback mechanism used for that handoff is private to
   the graft implementation and is not part of the shared daemon packet
   registry
 - any temporary receiver-local buffering must stay private to `atm-graft`
-- nudges are advisory delivery signals, not durable mail truth; authoritative
-  message state remains behind daemon-backed `read` calls
+- steer nudges are advisory delivery signals, not durable mail truth;
+  authoritative message state remains behind daemon-backed `read` calls
 
 Non-production companion rule:
-- any debugging or migration helper that renders graft-directed nudges on the
-  `atm` CLI surface is non-production support only
+- any debugging or migration helper that renders graft-directed steer nudges
+  on the `atm` CLI surface is non-production support only
 - that helper path must not be treated as production-complete `atm-graft`
   behavior or allowed to reintroduce shared daemon session/stream protocol
   families
@@ -339,14 +349,14 @@ not true:
 - any receiver-private buffering or idle wakeup state stays inside
   `atm-graft`; the daemon owns post-send emission, not graft-private pending
   queue mechanics
-- the hook/push nudge path uses the same documented post-send event family as
-  any embedded receive path and must not require a separate advisory
-  register/fetch/drain surface
+- the hook/push steer-nudge path uses the same documented post-send event
+  family as any embedded receive path and must not require a separate
+  advisory register/fetch/drain surface
 - embedded mode includes one required receive task/thread and automatic
-  between-tool-call nudge injection
+  between-tool-call steer-nudge injection
 - embedded mode may use request/response wakeups or another thin
   receiver-private mechanism; the architecture must not require one persistent
-  shared daemon connection for nudge delivery
+  shared daemon connection for steer-nudge delivery
 - production graft delivery does not rely on `tmux send-keys` or equivalent
   external terminal automation
 - the public `atm-graft` API remains limited to the documented thin embedded

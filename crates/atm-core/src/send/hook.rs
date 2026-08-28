@@ -18,6 +18,7 @@ pub(crate) fn build_built_in_dispatch<R>(
     runtime: &R,
     delivery_snapshot: &DeliveryRecipientSnapshot,
     event: &PostSendHookEvent,
+    message_body: &str,
 ) -> Option<BuiltInPostSendDispatch>
 where
     R: RetainedServiceRuntime + ?Sized,
@@ -44,6 +45,7 @@ where
                 recipient: event.recipient.clone(),
                 recipient_team: event.recipient_team.clone(),
                 rendered_nudge,
+                message_body: message_body.to_owned(),
             }),
         });
     }

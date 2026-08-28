@@ -1,14 +1,28 @@
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
-python_cmd := if os_family() == "windows" { "python" } else { "python3" }
-clippy_cmd := if os_family() == "windows" { "cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings" } else { "cargo clippy --workspace --all-targets -- -D warnings" }
+# Homebrew is absent from non-interactive macOS account PATHs. Append its
+# standard location as a developer-account fallback, never ahead of the
+# interpreter selected by CI (for example actions/setup-python's 3.14.7).
+# The bootstrap script verifies the exact patch release before doing any work.
+seed_python_cmd := if os_family() == "windows" { "python" } else { "env PATH=\"$PATH:/opt/homebrew/bin\" python3.14" }
+# Keep the bootstrap venv first in PATH as well as executing its Python
+# directly. The path is absolute so helpers remain pinned after changing cwd;
+# PyO3 additionally receives its interpreter explicitly.
+python_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; & \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" \"$PWD/.bootstrap-venv/bin/python\"" }
+clippy_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; $env:PYO3_PYTHON = \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"; cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" PYO3_PYTHON=\"$PWD/.bootstrap-venv/bin/python\" cargo clippy --workspace --all-targets -- -D warnings" }
 
 # Show the curated repo task help.
 default: help
 
 # Show the curated repo task help.
 help:
-    {{python_cmd}} .just/print_help.py
+    {{seed_python_cmd}} .just/print_help.py
+
+# Install and verify the exact toolchain/dependency contract shared by CI and
+# deterministic benchmark accounts. The seed Python, Rust, and Just versions
+# must already match tools/bootstrap.toml; this recipe never selects "latest".
+bootstrap *args:
+    {{seed_python_cmd}} tools/bootstrap.py {{args}}
 
 [private]
 _fmt-write:
@@ -137,6 +151,7 @@ build:
 # Run the full workspace test suite or explicit coverage reporting.
 test mode='default':
     {{python_cmd}} .just/run_tests.py {{mode}}
+    {{python_cmd}} .just/sign_daemon_dev.py
 
 # Validate and plan a bounded adversarial-fuzz campaign (no real execution).
 fuzz *args:
@@ -149,6 +164,10 @@ reports-index *args:
 # Build the PyO3 extension with Maturin and prove Python can import it.
 test-graft-python:
     {{python_cmd}} scripts/test_atm_graft_python.py
+
+# Run the benchmark-runner unit tests with the repository bootstrap Python.
+test-admission-capacity:
+    {{python_cmd}} -m unittest scripts/smoke/test_run_admission_capacity.py
 
 # Build the PyO3 extension and run the Hermes graft reference-adapter tests.
 test-hermes-graft-bridge:
@@ -182,21 +201,41 @@ validate target='all':
 smoke feature='normal' *args:
     {{python_cmd}} .just/run_smoke.py {{feature}} {{args}}
 
-# Run one isolated, release-built local admission benchmark. On Unix choose
-# UDS or loopback TCP; Windows accepts TCP only. The runner rejects ambient
-# daemon/database state and writes one report-compatible JSON artifact per run.
+# Bootstrap the dedicated disposable benchmark OS account. This action writes
+# only that account's manifest and refuses an account with existing ATM state.
+benchmark-bootstrap:
+    {{python_cmd}} scripts/smoke/run_admission_capacity.py --bootstrap-benchmark-account
+
+# Run one release-built local admission benchmark from a pre-bootstrapped,
+# dedicated OS account. On Unix choose UDS or loopback TCP; Windows accepts TCP
+# only. The runner rejects ambient daemon/database state and writes one
+# report-compatible JSON artifact per run.
 benchmark *args:
     cargo build --release -p agent-team-mail -p atm-daemon
-    # The isolated capacity runner launches this feature-gated bootstrap binary.
-    cargo build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark
     {{python_cmd}} .just/sign_daemon_dev.py
-    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}
-    # Publish all captured variants into the canonical report site.
+    # The wrapper preserves the runner verdict while rebuilding reports on
+    # both POSIX shells and PowerShell.
+    {{python_cmd}} .just/run_benchmark.py {{args}}
+
+# Rebuild immutable benchmark panels, phase reports, and the report index from JSON.
+benchmark-report:
     {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild
 
-# Persist AI.40 benchmark JSON and render the aggregate public report.
-benchmark-report *args:
-    {{python_cmd}} scripts/smoke/benchmark_report.py {{args}}
+# Render/copy the newest XHTML campaign panel to an HTML twin and open it in Wyvern.
+benchmark-show:
+    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild
+    {{python_cmd}} scripts/smoke/benchmark_show.py
+
+# Verify the report index and stage exactly the public benchmark-report artifacts.
+benchmark-publish:
+    {{python_cmd}} scripts/smoke/benchmark_publish.py
+
+# Run the complete, unattended official benchmark contract from the dedicated
+# benchmark account. It synchronizes an integrate/phase-* checkout, builds,
+# measures, renders, publishes, and pushes public evidence with exit 0/1/2.
+benchmark-official *args:
+    just bootstrap
+    {{python_cmd}} scripts/smoke/benchmark_official.py {{args}}
 
 # Generate architecture visualization artifacts.
 view target='all':

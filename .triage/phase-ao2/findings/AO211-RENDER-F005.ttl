@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO211-RENDER-F005>
+  a triage:Finding ;
+  triage:findingId "AO211-RENDER-F005" ;
+  triage:title "AC8 AO2.12-contract cross-reference is module comment, not per-class docstrings" ;
+  triage:description "Sprint AO2.11 Acceptance Criterion 8 (docs/plans/phase-ao2/sprint-AO2-11-benchmark-rendering-pipeline.md line 134-135) requires HistoricalRecord classes in benchmark_schema.py to be field-for-field equal to AO2.12\'s normative contract (docstring cross-references it). Found by req-qa (ATM-QA-005): the cross-reference is implemented as a module-level comment rather than per-class docstrings. quality-mgr independently cross-checked the fields against sprint-AO2-12-historical-data-migration.md and confirmed they match exactly — this is cosmetic documentation-placement, not a contract violation." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RENDER" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-25T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed by commit 8788090d6 (docs(benchmark): clarify historical model ownership), merged to integrate/phase-ao2. scripts/smoke/benchmark_schema.py now carries per-class docstrings naming the AO2.12 contract (RatchetPoint, result wrapper, campaign entry, and HistoricalRecord itself all say \"AO2.12 ... contract\" directly in their docstrings) rather than a single module-level comment. quality-mgr independently re-verified against current code at HEAD." ;
+  triage:triagedAt "2026-08-24T05:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.11 ;
+  triage:foundAt "2026-08-24T05:14:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO211-RENDER-F005/AO211-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO211-RENDER-F005/AO212-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AO211-RENDER-F005/AO211-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_schema.py" ;
+  triage:line 331 ;
+  triage:snippet "# The historical-record contract is owned by AO2.12\'s plan, but these models" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:headSha "3249c4460d255f73b1c59b002a2d3a98b39eae67" ;
+  triage:occursIn <urn:atm:triage:worktree/AO211/3249c44> .
+
+<urn:atm:triage:occurrence/AO211-RENDER-F005/AO212-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_schema.py" ;
+  triage:line 331 ;
+  triage:snippet "# The historical-record contract is owned by AO2.12\'s plan, but these models" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "5f40e9fee5f1481fb98523f974828d526022ce58" ;
+  triage:occursIn <urn:atm:triage:worktree/AO212/5f40e9f> .
+
+<urn:atm:triage:worktree/AO210/ea953ac4>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/ao2-10" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "ea953ac445f23c5269012575be03791de1af1631" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/AO211/3249c44>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/ao2-11" ;
+  triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:headSha "3249c4460d255f73b1c59b002a2d3a98b39eae67" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/AO212/5f40e9f>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/ao2-12" ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "5f40e9fee5f1481fb98523f974828d526022ce58" ;
+  triage:orderIndex 13 .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-003>
+  a triage:Finding ;
+  triage:findingId "FTQ-003" ;
+  triage:title "Fixed-sleep lint gate has zero coverage for tokio::time::sleep, only matches std::thread::sleep" ;
+  triage:description ".just/check_fixed_sleep_hygiene.py:23's SLEEP_RE regex only matches `std::thread::sleep` calls, giving zero coverage for `tokio::time::sleep` usage. This means FTQ-002's exact pattern (a real tokio::time::sleep race in a test that should use paused-clock + time::advance) — and any future occurrence of the same anti-pattern — is invisible to the lint gate specifically meant to catch fixed-sleep hygiene violations. Fix: extend SLEEP_RE (or add a second pattern) to also match `tokio::time::sleep` call sites, consistent with the existing gate's intent." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "flaky-test" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T06:25:22Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T06:25:22Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/FTQ3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FTQ-003/FTQ3-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_fixed_sleep_hygiene.py" ;
+  triage:line 23 ;
+  triage:snippet "SLEEP_RE = re.compile(r'\\b(?:std::)?thread::sleep\\s*\\(')" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "91b0b272e2dbbd5f1a4380740c2a1256c01515ba" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ao2/91b0b27> .
+
+<urn:atm:triage:worktree/integrate-ao2/91b0b27>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "91b0b272e2dbbd5f1a4380740c2a1256c01515ba" ;
+  triage:orderIndex 16 .

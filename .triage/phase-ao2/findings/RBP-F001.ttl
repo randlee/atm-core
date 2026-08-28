@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-F001" ;
+  triage:title "PeerWireMode.security field is public, bypassing named constructors" ;
+  triage:description "crates/atm-core/src/peer_wire.rs (~lines 36-40) exposes PeerWireMode.security as a public field, allowing callers to bypass the intended named mtls()/plaintext_test() constructors and construct invalid/unvalidated mode values directly." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "resolved" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T21:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.1 ;
+  triage:foundAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pao-s1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pao-s3-close> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBP-F001/pao-s1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/peer_wire.rs" ;
+  triage:line 39 ;
+  triage:snippet "pub security: PeerWireSecurity," ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1/d137ab8d> .
+
+<urn:atm:triage:occurrence/RBP-F001/pao-s3-close>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/peer_wire.rs" ;
+  triage:line 39 ;
+  triage:snippet "security: PeerWireSecurity, (field now private, accessed only via const method)" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "ae3232d340f003b0ab2521006c7a82e20ad1e92d" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/ae3232d3> .
+
+<urn:atm:triage:worktree/pao-s1/d137ab8d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s1-peer-wire-policy" ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pao-s3/ae3232d3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "ae3232d340f003b0ab2521006c7a82e20ad1e92d" ;
+  triage:orderIndex 3 .

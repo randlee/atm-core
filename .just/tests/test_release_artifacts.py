@@ -1,3 +1,5 @@
+"""Temporary legacy coverage retained pending the first kit-release receipt."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -24,11 +26,9 @@ class ReleaseArtifactsTests(unittest.TestCase):
         workspace_toml = self.root / "Cargo.toml"
         manifest_toml = self.root / "release" / "publish-artifacts.toml"
         crate_toml = self.root / "crates" / "demo-crate" / "Cargo.toml"
-        docs_readme = self.root / "docs" / "user-documents" / "README.md"
 
         manifest_toml.parent.mkdir(parents=True, exist_ok=True)
         crate_toml.parent.mkdir(parents=True, exist_ok=True)
-        docs_readme.parent.mkdir(parents=True, exist_ok=True)
 
         workspace_toml.write_text(
             textwrap.dedent(
@@ -67,11 +67,6 @@ class ReleaseArtifactsTests(unittest.TestCase):
 
                 [[release_binaries]]
                 name = "atm"
-
-                [installed_docs]
-                source_root = "docs/user-documents"
-                install_root = "share/doc/atm"
-                entrypoint = "share/doc/atm/README.md"
                 """
             ).strip()
             + "\n",
@@ -82,7 +77,6 @@ class ReleaseArtifactsTests(unittest.TestCase):
             textwrap.dedent(crate_package_block).strip() + "\n",
             encoding="utf-8",
         )
-        docs_readme.write_text("# Demo ATM Docs\n", encoding="utf-8")
         return workspace_toml, manifest_toml
 
     def write_homebrew_fixture(self) -> tuple[Path, Path]:
@@ -275,6 +269,13 @@ class ReleaseArtifactsTests(unittest.TestCase):
             "demo-crate has runtime/build path dependency private-crate whose Cargo.toml sets publish = false",
             completed.stdout,
         )
+
+    def test_help_omits_retired_document_staging_commands(self) -> None:
+        completed = self.run_release_artifacts("--help")
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertNotIn("list-installed-doc-members", completed.stdout)
+        self.assertNotIn("stage-install-docs", completed.stdout)
 
     def test_update_homebrew_formulas_rewrites_each_platform_block_to_its_own_asset(self) -> None:
         release_dir, formula_path = self.write_homebrew_fixture()

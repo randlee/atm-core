@@ -4,6 +4,7 @@ use atm_core::schema::AtmMessageId;
 use clap::Args;
 
 use crate::commands::caller_context::{CallerTeamOverride, resolve_cli_mutation_caller_context};
+use crate::commands::sender_roster::unrostered_sender_warning;
 use crate::composition::{
     AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
 };
@@ -35,7 +36,13 @@ impl AckCommand {
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
         )?;
-        let outcome = composition.ack(request).await?;
+        let caller_identity = request.caller_identity.clone();
+        let caller_team = request.caller_team.clone();
+        let mut outcome = composition.ack(request).await?;
+
+        if let Some(warning) = unrostered_sender_warning(&caller_identity, &caller_team) {
+            outcome.warnings.push(warning);
+        }
 
         output::print_ack_result(&outcome, json)
     }

@@ -1025,7 +1025,7 @@ Implementation Branches:
 | `AI.50` | `complete` | `feature/pAI-s50-fuzz-report` | sc-compose-template fuzz report renderer |
 | `AI.51` | `complete` | `feature/pAI-s51-local-http-framing-adversarial-campaign` | bounded local HTTP framing campaign |
 | `AI.52` | `complete` | `feature/pAI-s52-windows-transport-benchmark` | cwin Windows TCP confirmation after accepted M5 performance evidence |
-| `AI3152-TOOLING` | `complete` | `feature/daemon-devcert-signing` | silent macOS `atm-daemon-dev` signing hook for local daemon builds |
+| `AI3152-TOOLING` | `complete` | `feature/daemon-devcert-signing` | retired self-signed macOS development-signing hook for local daemon builds |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 
@@ -1285,6 +1285,223 @@ Sprint line:
   [`sprint-AN13-sc-compose-141-checked-render.md`](./plans/phase-an/sprint-AN13-sc-compose-141-checked-render.md),
   [`sprint-AN14-sc-compose-141-checked-emission.md`](./plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md),
   and [`sprint-AN15-adversarial-fuzzing.md`](./plans/phase-an/sprint-AN15-adversarial-fuzzing.md).
+
+## 46. Phase AO — Optional mTLS for the Canonical HTTP Peer Path [COMPLETE — DELIVERED VIA PHASE AO2]
+
+Phase AO replans opt-in mTLS for the active Tokio/Axum peer HTTP path.  The
+normal plaintext direct-peer listener and client remain the compatibility
+pipeline and must be structurally unchanged when TLS is not selected.  An
+explicit runtime mode selects plaintext or mTLS in one shipped daemon build;
+mTLS is fail-closed, requiring exact hostname/SNI, certificate pin, trusted
+client certificate, and enabled interface configuration, and it never falls
+back to plaintext.  Both modes retain one canonical HTTP request, storage,
+acknowledgement, and nudge path.  The existing TLS interop crate remains
+quarantined fixture/reference material; production runtime code must not
+depend on it.
+
+Implementation begins only after the accepted Tokio/Axum runtime line is
+active. Phase AM's explicit AO TLS exception preserves the existing TLS helper
+boundary while AO is decided; it is not an additional AO entry gate.  AO work
+integrates through `integrate/phase-ao2`; the earlier AO plan is retained only
+as [archived reference](./archive/phase-ao/).  The authoritative plan is
+[Phase AO plan](./plans/phase-ao/plan-phase-ao.md).
+
+Sprint line (all four merged into `integrate/phase-ao2` 2026-08-20 under
+AO2.1–AO2.4 titles; landed on `develop` with PR #966 on 2026-08-26):
+- `AO.1` `feature/pao-s1-peer-wire-policy` [COMPLETE — PR #961] — ADR-047,
+  typed `PeerWireMode` (mTLS default), peer-wire error/recovery contracts,
+  boundary records, and executable guards proving the plaintext arm stays on
+  the existing direct-peer canonical HTTP pipeline
+- `AO.2` `feature/pao-s2-isolated-mtls-stream-adapter` [COMPLETE — PR #965] —
+  bounded `peer-tls` adapter with positive and negative stream evidence
+- `AO.3` `feature/pao-s3-runtime-peer-wire-mode` [COMPLETE — PR #967] — one
+  daemon build selects the original plaintext or mTLS stream establishment
+  without application drift
+- `AO.4` `feature/pao-s4-peer-wire-proof` [COMPLETE — PR #968] —
+  shipped-daemon plaintext/mTLS proof and compatible-baseline performance
+  evidence
+
+## 47. Phase AP — Outbound-Only Corporate Network Peer Connectivity [PROPOSED — ENTRY GATE UNBLOCKED]
+
+Phase AP investigates support for a firewalled daemon that may initiate an
+outbound connection but cannot accept unsolicited peer TCP. The preferred
+direction is an mTLS-authenticated HTTP/1.1 SSE session from the restricted
+host to a reachable peer plus ordinary authenticated POST for correlated
+responses. It remains online-only: no outbox, retry/replay, or durable relay
+is introduced.
+
+AP.1 is mandatory and must execute first on the actual CWin, M4, and M5
+machines. It proves—or records a block for—the real outbound DNS/TLS/SSE/POST
+path without SSH tunneling, localhost simulation, raw-IP substitution, or a
+third-party relay. No AP product implementation begins if that physical proof
+does not pass. The authoritative outline is
+[Phase AP plan](./plans/phase-ap/plan-phase-ap.md).
+
+Status 2026-08-26: AP's precondition (Phase AO's mTLS runtime line active) is
+satisfied — AO merged to `develop` via the AO2 integration (PR #966). AP.1's
+physical hardware proof remains the mandatory entry gate; no AP dispatch has
+occurred.
+
+## 48. Phase AQ — ATM Send-To Shell Integration [PROPOSED — PLAN HARDENED, READY TO START]
+
+Phase AQ delivers PRD Phase 1 of ATM "Send To": one gesture from the OS file
+manager (Finder / Explorer / Nautilus) to a delivered message whose text
+names files landed under the recipient host's `$ATM_TEMP`. Cross-host bytes
+move via user-configured per-host transfer scripts (sftp default over fleet
+SSH; unconfigured hosts fail closed with a setup-doc error) — no envelope
+change, no daemon transfer machinery. ADR-055 defines the system-level
+`ATM_TEMP` contract (mandatory env var, 30-day TTL sweep) and the
+transfer-script seam; thin per-OS shell glue drives the pipeline
+`atm teams --json --members | <picker> | atm send --attach "$@" --from-json`.
+Phase 1 also delivers `atm queue` — `atm send` with the nudge deferred until
+the recipient harness is ready (nudge taxonomy: steer = immediate, queue =
+deferred; ADR-054) — via a `nudge_pending_at` marker, a `PendingNudgeStore`
+storage capability, graft dual-channel wiring (harness owns landing; Hermes
+`/steer`+`/queue` complete), and a tmux idle-drain, under the ADR-054 nudge
+taxonomy (nudge = umbrella; steer/queue = kinds) with its code-rename
+inventory. Queue ships first; trait foundation first, Herdr second
+(reordered 2026-08-26 per Rand). Fourteen sprints: AQ1 trait foundation +
+`atm queue` CLI verb + ADR-054 taxonomy + `PendingNudgeStore`; AQ2.6/AQ2.7
+Herdr local-steer backend + lifecycle-gated queue wake (most urgent);
+AQ1.5–AQ1.9 graft push-registration (ADR-056), parallel with Herdr; AQ2
+graft dual-channel; AQ2.5 queue delivery triggers (heartbeat hooks,
+bare-CLI FIFO); AQ3 tmux idle-drain + recovery sweep; AQ4 Send-To core
+(ATM_TEMP ADR-055, CLI surface, transfer scripts, sweeper); AQ5 surface +
+phase evidence; AQ6 sc-ecosystem dependency preflight (pin-latest
+Wyvern/sc-compose/sc-observability + integration tests) + Wyvern
+contract-test issue. Plan status (2026-08-26): the earlier plan-QA PASS was
+retracted after a whole-tree critical review (FAIL, 10 blocking); all
+findings were closed in a finalization pass and the re-entry critical review
+PASSed on round 3 (`ea990a8dd`); quality-mgr gate on PR #1019 in progress.
+ADR-058 (Herdr local steer backend contract) is the phase's fourth ADR. Branches `feature/aq-N-<slug>` off
+`integrate/phase-aq`, all PRs target `integrate/phase-aq`. The authoritative
+plan is [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md); source PRD is
+[prd-atm-send-to](./plans/phase-aq/prd-atm-send-to.md). PRD Phase 2
+(agent-assisted drafting, Wyvern chat sessions) is explicitly deferred.
+
+Status 2026-08-26: plan hardened (plan-QA PASS 2026-08-24, queue-first
+6-sprint structure with the AQ1.5–AQ1.9 graft-registration insertion and
+AQ2.5 delivery triggers). AQ's entry dependency — Phase AO2 merged to
+`develop` (ADR-047/ADR-053 on the cut head) — is satisfied as of PR #966.
+Ready to start on approval.
+
+## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
+
+Phase AO2 made physical admission benchmarks safe and repeatable, restored
+the bounded writer transaction-coalescing path, and established the benchmark
+data, rendering, history, and operator-workflow contracts. It retains the
+Tokio/Axum `atm-http-runtime` as the sole daemon path: snapshot/restore,
+reporting, and benchmark tooling do not create or preserve a legacy transport
+path.
+
+The accepted implementation line includes dedicated benchmark-account
+snapshot/restore safety (AO2.5/AO2.5.4), the typed temporary daemon-switch
+overlay (AO2.5.3b), writer batching (AO2.6), the four-target benchmark matrix
+(AO2.7), versioned JSON/report contracts and historical migration
+(AO2.10–AO2.13), peer connection pooling (AO2.14), and the headless official
+benchmark trigger (AO2.15). AO2.8 is explicitly descoped; it is not evidence
+of Windows coverage.
+
+The canonical operator procedure is the repository
+[`benchmark-run` skill](../.claude/skills/benchmark-run/SKILL.md). The phase is
+not release-closed until its proof matrix and accepted-line evidence are
+recorded in [Phase AO2 readiness](./plans/phase-ao2/readiness.md), including
+the required four-target macOS campaign and the separately required Windows
+TCP/TLS evidence.
+
+Status 2026-08-26: `integrate/phase-ao2` merged to `develop` via PR #966
+(merge commit `9923ef6cb`). Known deferred debt carried out of the phase
+gate: 22 pre-existing sc-boundary findings, waived for the AO2 gate as
+triage record `AO2-SCBOUNDARY-DEBT-001` and tracked in GH issue #1028 —
+these make `just validate` (and CI) red on `develop` until Phase AU retires
+them. Post-merge follow-ups (post-mortem finalization, deferred findings
+QA-AO215-I003 / AO2-REPORT-F001) are tracked in the readiness doc and
+triage records, not here.
+
+## 50. Phase AR — codex-atm Host Integration [PLANNING — REQUIREMENTS DRAFT, OFF-INTEGRATION BRANCH]
+
+Phase AR plans atm-core's side of embedding native agent-team-mail into the
+codex CLI fork (`randlee/codex-atm`) — the second production host after
+hermes-agent and the first pure-Rust, crates.io-consuming one. The draft
+covers seven requirement areas: a publishable `atm-graft` crate (R1), a
+Rust-native two-channel (steer + queue) host embedding API with a durable,
+bounded, backpressured queue channel (R2), fail-loud activation via
+`ATM_IDENTITY`/`ATM_TEAM` replacing the `.atm.toml` silent no-op (R3, issue
+#900), a required protocol-sequencing ruling — file-rendezvous graft vs.
+daemon long-poll session protocol (R4, issue #899, the blocking
+architectural decision), packaged sc-lint boundary rules (R5), hermetic
+test/smoke support (R6), and release cadence/compatibility (R7).
+
+No sprints are cut. The plan exists only on branch `plan/phase-ar`
+(`docs/plans/phase-AR/`), pending arch-ctm review; it has not merged to
+`develop`. Note: the local worktree named `plan/phase-ar-graft-registration`
+does NOT contain this plan.
+
+## 51. Phase AS — Shared Publish-Kit Migration [SUPERSEDED — REVERTED, REPLACED BY PHASE AT]
+
+Phase AS attempted to adopt the shared `sc-publish` kit as an upstream-owned
+overlay for ATM's release pipeline (crates.io/PyPI/Homebrew/winget). Six
+sprints (AS.1–AS.6) were planned and work through AS.4/AS.5 merged into
+`integrate/phase-as`, but the entire line was reverted from `develop` via
+PR #960 (2026-08-19/20). Phase AT is its successor and explicitly carries
+forward no AS work, files, acceptance criteria, or release receipts. The AS
+artifacts remain only on `origin/integrate/phase-as` as historical
+reference; do not build on them.
+
+## 52. Phase AT — Manifest-Driven Publishing Recovery [COMPLETE — AT.1 MERGED, AT.2 DEFERRALS RECORDED]
+
+Phase AT restarts the publish-kit adoption from the post-AS-revert baseline
+(commit `d610b4c07`) under the ADR-050 ownership split: `sc-publish` owns
+generic publish mechanics; atm-core owns its own manifest, validation, and
+publish-order correctness. Two sprints: `AT.1` install one immutable,
+pinned `sc-publish` revision (never patched locally) driven by ATM's
+complete consumer JSON input, prove preflight/release parity, and perform
+the authorized publish proof; `AT.2` verify coverage, then delete the
+legacy publish surface — `release.yml`, `release-preflight.yml`,
+`hermes-atm-pypi-publish.yml`, root `scripts/` — that the kit now covers
+(must_follow AT.1), retaining rows whose gate receipt does not yet exist as
+`deferred-until-<gate>`. Integration branch: `integrate/phase-at`.
+
+**Amendment (2026-08-27, owner decision — forward-only publishing).** The
+originally planned TestPyPI→PyPI retry of the pre-kit 1.4.3 release is
+withdrawn: v1.4.3 is unpublishable via the kit (kit action absent at the
+tag; legacy manifest fails the kit schema), and Rand ruled pre-kit-tag
+republishing out of scope. The publish-proof leg is retargeted to the first
+kit-era tag (workspace version 1.4.4), cut after phase AT merges to
+`develop`; TestPyPI authorization carries over, production remains
+pending contemporaneous authorization. See
+`docs/plans/phase-at/receipts/AT.1-receipt.md`.
+
+AT.1 merged via PR #1044 (plus receipt amendments #1052/#1062); an AT.1
+dry-run rehearsal receipt exists on `smoke/phase-at-at1-rehearsal`. AT.2
+completed on `feature/pat-s2-legacy-publish-deletion`: it removed the
+unreachable pre-kit installed-doc validator path and recorded every remaining
+legacy publish candidate as a gate-bound deferral in its receipt. The first
+kit-era release is the follow-up deletion trigger.
+
+## 53. Phase AU — Boundary Debt Retirement ✅ COMPLETE
+
+Phase AU retires the 22 pre-existing sc-boundary findings exposed when
+QA-RUSTQA-AO2-001's fix armed the sc-boundary lint in `just validate`
+(waived at the AO2 gate as `AO2-SCBOUNDARY-DEBT-001`, tracked in GH #1028) —
+the findings currently making CI red on `develop`. Constraint: no boundary
+loosening — no rule removed from `just lint all`, no baseline/ignore file;
+the only suppressions permitted are the lint's own purpose-built per-type
+opt-in markers where they are the designed mechanism. Three sprints mapping
+to the analysis waves: `AU.1` mechanical code fixes clearing 9–10 findings
+(no lint changes, no design questions); `AU.2` sc-lint-boundary calibration
+— NodeId impl-discriminator bug fix, call-callee reference metadata, and
+narrowed self-loop/trait-impl classifiers with pinning tests — clearing 11
+findings; `AU.3` the one true architectural cycle, `atm_core::ack` ↔
+`send`, restructured via a narrow sibling write-contract module (design
+review + benchmark-parity gate on m5-atmbench required; mechanical
+relocation only on the hot path). Exit: sc-boundary reports 0 findings,
+`just validate` fully green, waiver retired, #1028 closed.
+
+The authoritative plan is
+[boundary-regression-plan](./plans/boundary-regression-plan.md) (arch-ctm
+critical review round 1 folded in); phase-au sprint docs are being cut from
+it under `docs/plans/phase-au/` on branch `plan/boundary-regression`.
 
 ## Publishing Improvements
 

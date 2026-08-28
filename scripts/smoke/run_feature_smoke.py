@@ -305,6 +305,33 @@ def add_dns_case(
         add_case(cases, name, False, str(error), origin=origin, destination=destination)
 
 
+def mtls_rejected_before_http(result: dict[str, Any]) -> bool:
+    """Return whether curl observed a TLS rejection with no HTTP response.
+
+    The negative smoke trusts the server certificate but supplies no client
+    certificate. A nonzero curl exit plus status 000 proves the connection
+    stopped in the mTLS handshake, before Hyper can parse an HTTP request or
+    the router can dispatch it.
+    """
+    return result["exit_code"] != 0 and result["stdout"].strip() == "000"
+
+
+def add_mtls_rejection_case(
+    cases: list[dict[str, Any]], name: str, result: dict[str, Any], origin: str, destination: str
+) -> None:
+    """Record a bounded, public pre-router mTLS negative result."""
+    passed = mtls_rejected_before_http(result)
+    if passed:
+        detail = "mTLS rejected the unauthenticated client before any HTTP status"
+    else:
+        http_status = result["stdout"].strip() or "no status marker"
+        detail = (
+            "expected a pre-router mTLS rejection "
+            f"(nonzero curl exit and HTTP status 000); got exit={result['exit_code']}, status={http_status}"
+        )
+    add_case(cases, name, passed, detail, origin=origin, destination=destination)
+
+
 def curl_doctor(
     cases: list[dict[str, Any]], peer: str, atm: str, remote_atm: str, remote_host: str, expected_version: str,
     *, plaintext: bool,
@@ -363,6 +390,39 @@ def curl_doctor(
                 local_result = command(local_curl)
                 local_report = parse_json(local_result, f"curl doctor to {peer}")
                 add_case(cases, f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor", doctor_ready(local_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not healthy/ready", origin=platform.node(), destination=peer)
+                if not plaintext:
+                    # Deliberately omit --cert but retain the peer CA and the
+                    # exact target address. --write-out emits 000 only when
+                    # no HTTP response exists, so this checks the live mTLS
+                    # admission gate rather than a router-level error.
+                    remote_negative = [
+                        "curl", "--silent", "--show-error", "--connect-timeout", "2", "--max-time", "5",
+                        "--write-out", "%{http_code}", "-X", "GET", *headers, "--cacert", remote_local_ca,
+                        "--resolve", f"{local_authority}:43101:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url,
+                    ]
+                    remote_negative_result = remote_shell(
+                        peer, " ".join(shlex.quote(value) for value in remote_negative)
+                    )
+                    add_mtls_rejection_case(
+                        cases,
+                        f"local rejects unauthenticated mTLS client from {peer} before HTTP",
+                        remote_negative_result,
+                        peer,
+                        platform.node(),
+                    )
+                    local_negative = [
+                        "curl", "--silent", "--show-error", "--connect-timeout", "2", "--max-time", "5",
+                        "--write-out", "%{http_code}", "-X", "GET", *headers, "--cacert", str(remote_public),
+                        "--resolve", f"{remote_authority}:43101:{remote_host}", "--data", DOCTOR_BODY, remote_url,
+                    ]
+                    local_negative_result = command(local_negative)
+                    add_mtls_rejection_case(
+                        cases,
+                        f"{peer} rejects unauthenticated mTLS client from local before HTTP",
+                        local_negative_result,
+                        platform.node(),
+                        peer,
+                    )
             # These checks use each host's ordinary DNS resolver. The mTLS
             # request below intentionally omits --resolve, proving that the
             # TCP connection follows DNS rather than the explicit-IP proof.

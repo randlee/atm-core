@@ -77,10 +77,13 @@ Current request/response packet families owned by the daemon transport line:
 Receiver-specific post-send handoff rule:
 - receiver implementation details are not modeled as daemon packet families
 - the accepted daemon line must not require graft session registration,
-  fetch/drain inspection, bounded per-session daemon nudge queues, or a
-  dedicated advisory-stream request/response family
-- daemon ownership ends at durable persistence plus post-send emission through
-  the accepted capability seam
+  fetch/drain inspection, bounded per-session daemon nudge queues (retired
+  internal worker queue — unrelated to queue-kind nudges), or a dedicated
+  advisory-stream request/response family
+- daemon ownership ends at durable persistence, then emission of the steer
+  nudge through the accepted capability seam; queue-kind nudges defer
+  emission until harness readiness (ADR-054), and neither kind ever precedes
+  persistence
 
 Current retained ATM surfaces not modeled as daemon request/response packets:
 - `atm log`
@@ -178,7 +181,8 @@ Initial crate requirement IDs:
   changing HTTP routing, canonical writes, persistence, or post-write routing;
   declared source-host data is untrusted smoke provenance. Normal startup is
   mTLS, never falls back to plaintext, and doctor/logs must expose the active
-  mode. Satisfies: `REQ-CORE-TRANSPORT-002B1`.
+  mode. ADR-047 owns the typed launch-mode selection and isolated stream
+  layering. Satisfies: `REQ-CORE-TRANSPORT-002B1`.
 - `REQ-DAEMON-TRANSPORT-002C` localhost and a daemon's own advertised address
   are ordinary HTTPS peer targets; no loopback-only transport branch exists.
   Satisfies:

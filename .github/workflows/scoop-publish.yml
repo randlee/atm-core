@@ -1,0 +1,181 @@
+name: Publish Scoop
+
+# This post-release channel reads its bucket, manifest path, installer asset,
+# and package metadata from release/publish-artifacts.toml. It may be safely
+# re-dispatched for the same published tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Published GitHub Release tag to publish (e.g. v1.4.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-scoop-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  verify-release:
+    runs-on: ubuntu-latest
+    outputs:
+      channel_config: ${{ steps.config.outputs.channel_config }}
+      asset_patterns: ${{ steps.config.outputs.asset_patterns }}
+      release_version: ${{ steps.meta.outputs.release_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - id: config
+        name: Read Scoop configuration from release manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="$(python3 .github/scripts/release_artifacts.py channel-config --manifest release/publish-artifacts.toml --channel scoop)"
+          echo "channel_config=${config}" >> "$GITHUB_OUTPUT"
+          {
+            echo 'asset_patterns<<EOF'
+            jq -r '.asset_patterns[]' <<<"${config}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/verify-published-release
+        with:
+          release_tag: ${{ inputs.tag }}
+          asset_patterns: ${{ steps.config.outputs.asset_patterns }}
+      - id: meta
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: echo "release_version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+
+  update-bucket:
+    needs: verify-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require Scoop bucket credential
+        shell: bash
+        env:
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SCOOP_BUCKET_TOKEN}" ]]; then
+            echo 'SCOOP_BUCKET_TOKEN is required to update the configured Scoop bucket.' >&2
+            exit 1
+          fi
+      - name: Checkout workflow support
+        uses: actions/checkout@v4
+      - name: Checkout immutable release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          path: release-source
+      - name: Checkout configured Scoop bucket
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.bucket_repository }}
+          token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          path: scoop-bucket
+      - name: Prepare checked-render variables from immutable release asset
+        shell: bash
+        env:
+          CHANNEL_CONFIG: ${{ needs.verify-release.outputs.channel_config }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_VERSION: ${{ needs.verify-release.outputs.release_version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          config = json.loads(os.environ["CHANNEL_CONFIG"])
+          project = config["project"]
+          channel = config["channel"]
+          def download(target):
+              filename = f"{project['archive_prefix']}_{os.environ['RELEASE_VERSION']}_{target['target']}.{target['archive']}"
+              url = f"https://github.com/{os.environ['RELEASE_REPOSITORY']}/releases/download/{os.environ['RELEASE_TAG']}/{filename}"
+              archive = Path(os.environ["RUNNER_TEMP"]) / filename
+              subprocess.run(
+                  ["curl", "-fsSL", "--retry", "5", "--retry-delay", "30", "--retry-all-errors", "-o", str(archive), url],
+                  check=True,
+              )
+              return url, archive
+
+          target = config["release_targets"][channel["installer_target"]]
+          url, archive = download(target)
+          renderer_target = config["release_targets"][channel["renderer_target"]]
+          _renderer_url, renderer_archive = download(renderer_target)
+          variables = {
+              "version": os.environ["RELEASE_VERSION"],
+              "description": project["description"],
+              "homepage": project["homepage"],
+              "license": project["license"],
+              "windows_url": url,
+              "windows_sha256": hashlib.file_digest(archive.open("rb"), "sha256").hexdigest(),
+              "extract_dir": f"{project['archive_prefix']}_{os.environ['RELEASE_VERSION']}_{target['target']}",
+              "binary": channel["binary"],
+          }
+          Path("scoop-vars.json").write_text(json.dumps(variables), encoding="utf-8")
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
+              env_file.write(f"PUBLISHED_RENDERER_ARCHIVE={renderer_archive}\n")
+              env_file.write(
+                  "PUBLISHED_RENDERER_EXTRACT_DIR="
+                  f"{project['archive_prefix']}_{os.environ['RELEASE_VERSION']}_{renderer_target['target']}\n"
+              )
+          PY
+      - name: Extract manifest-declared published renderer
+        uses: ./.github/actions/extract-published-renderer
+        with:
+          archive: ${{ env.PUBLISHED_RENDERER_ARCHIVE }}
+          extract-dir: ${{ env.PUBLISHED_RENDERER_EXTRACT_DIR }}
+          binary-path: ${{ fromJSON(needs.verify-release.outputs.channel_config).project.renderer_archive_path }}
+      - name: Render Scoop manifest with published renderer
+        shell: bash
+        env:
+          MANIFEST_PATH: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.manifest_path }}
+          MANIFEST_TEMPLATE: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.manifest_template }}
+        run: |
+          set -euo pipefail
+          workspace_root="$(pwd)"
+          mkdir -p "$(dirname "scoop-bucket/${MANIFEST_PATH}")"
+          "${PUBLISHED_RENDERER}" render --mode file --root release-source \
+            --file "${MANIFEST_TEMPLATE}" \
+            --var-file "${workspace_root}/scoop-vars.json" \
+            --output "${workspace_root}/scoop-bucket/${MANIFEST_PATH}"
+      - name: Validate Scoop manifest JSON
+        env:
+          MANIFEST_PATH: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.manifest_path }}
+        run: python3 -m json.tool "scoop-bucket/${MANIFEST_PATH}" > /dev/null
+      - name: Commit and push Scoop manifest update
+        shell: bash
+        env:
+          MANIFEST_PATH: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.manifest_path }}
+          PROJECT_NAME: ${{ fromJSON(needs.verify-release.outputs.channel_config).project.name }}
+          RELEASE_VERSION: ${{ needs.verify-release.outputs.release_version }}
+        run: |
+          set -euo pipefail
+          cd scoop-bucket
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add "${MANIFEST_PATH}"
+          git diff --cached --quiet && echo 'Scoop manifest already matches the release assets' && exit 0
+          git commit -m "chore: bump ${PROJECT_NAME} to v${RELEASE_VERSION}"
+          # Concurrency groups are per-tag, so two different tags can race the
+          # bucket push; fetch-rebase-retry instead of failing on the first reject.
+          bucket_branch="$(git rev-parse --abbrev-ref HEAD)"
+          for attempt in 1 2 3 4 5; do
+            if git push origin "${bucket_branch}"; then
+              exit 0
+            fi
+            echo "push rejected (attempt ${attempt}); rebasing onto origin/${bucket_branch}"
+            git pull --rebase origin "${bucket_branch}"
+          done
+          echo "failed to push Scoop manifest update after 5 attempts" >&2
+          exit 1

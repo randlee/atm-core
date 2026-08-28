@@ -27,7 +27,7 @@ The required runtime dependencies are:
 
 | Dependency | Minimum | Used for |
 |---|---:|---|
-| `sc-compose` CLI | **released v1.4.0 source revision `6a8af1f`** | Rendering fenced Jinja templates and agent prompts |
+| `sc-compose` CLI | **released v1.5.0 prebuilt release binary** | Rendering fenced Jinja templates and agent prompts |
 | `sc_compose` Python binding | **1.2.0** | Python/maturin rendering integrations and wrappers |
 | Python + `rdflib` | **3.11+** | RDF/Turtle parsing and SPARQL queries |
 | `jq` | any current release | Reading the JSON cursor contract |
@@ -71,11 +71,13 @@ The executable and Python binding are separate artifacts.  Installing the
 PyPI wheel does **not** guarantee that a `sc-compose` executable is on `PATH`.
 Install both and keep them at the same minimum version.
 
-For the CLI, use the pinned source revision required by the report templates:
+For the CLI, use the pinned prebuilt release asset required by the report templates:
 
 ```bash
-cargo install --git https://github.com/randlee/sc-compose.git \
-  --rev 6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661 --locked --bin sc-compose
+Download the platform-matching v1.5.0 archive from `randlee/sc-compose`,
+verify its SHA256 against `checksums.txt`, and unpack `sc-compose` into the
+bootstrap tools directory. `just bootstrap` performs this hard-fail check;
+never compile the CLI from source.
 ```
 
 For the Python/maturin binding (a one-time per-machine setup; no activation
@@ -101,7 +103,7 @@ sudo apt-get install jq                 # Debian/Ubuntu; use the native package 
 ```
 
 The PyPI package supplies the `sc_compose` Python binding, not the standalone
-CLI. Install the CLI from the pinned source revision above, then rerun
+CLI. Install the prebuilt CLI from the pinned release above, then rerun
 preflight.
 
 The pip wheel above is the Python binding and is not a CLI installation; use
@@ -113,7 +115,8 @@ one-time install command and in the preflight.
 
 ```powershell
 py -m pip install --user --break-system-packages "sc-compose>=1.2.0"
-cargo install --git https://github.com/randlee/sc-compose.git --rev 6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661 --locked --bin sc-compose
+Download and verify the platform-matching v1.5.0 release archive as described
+above; do not compile the CLI from source.
 winget install jqlang.jq
 ```
 
@@ -129,13 +132,13 @@ python3 -m pytest .claude/skills/graph-orchestration/scripts/test_validate_findi
 ```
 
 The first command must return `"success": true` and report
-the pinned released v1.4.0 `sc-compose` build. A test pass does not override a failed
+the pinned released v1.5.0 `sc-compose` build. A test pass does not override a failed
 preflight: dependency errors are distinct from expected validation failures.
 
 ## Known issues
 
 - **The v1.3.0 CLI is rejected for current templates.** Install the pinned
-  source revision above; the Python binding remains a separate `>=1.2.0`
+  v1.5.0 prebuilt release above; the Python binding remains a separate `>=1.2.0`
   artifact.
 - **`rdflib` import fails although it was installed.** `pip` and `python3`
   often point at different interpreters.  Compare `command -v python3` with

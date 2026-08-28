@@ -225,16 +225,18 @@ Initial crate requirement IDs:
   bound IP. Local CLI HTTP, same-host TCP HTTP, and remote peer HTTP decode the
   same `WriteRequest` through one HTTP write resource; adapter
   authentication/provenance cannot select another write, ACK, persistence, or
-  nudge path. A same-host duplicate preserves its origin metadata for a later
+  steer-nudge path. A same-host duplicate preserves its origin metadata for a later
   canonical ACK but produces neither a second hook nor peer wake-up. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - AI.23 shared-write convergence constraint: all local, same-host, and remote
   HTTP writes must enter `ApiRouter::route` with the same `WriteRequest`, then
   pass through `DaemonRequestDispatcher::route_write` and the canonical
-  `MessageWriter::write` persistence boundary. Persistence precedes exactly
-  one `PostWriteRouter::dispatch`; adapters may authenticate and label
-  provenance but may not implement a parallel write, acknowledgement, or
-  nudge path. This is the crate-level refinement of
+  `MessageWriter::write` persistence boundary: persist, then emit the steer
+  nudge through exactly one `PostWriteRouter::dispatch`; queue-kind nudges
+  defer emission until harness readiness (ADR-054), and neither kind ever
+  precedes persistence. Adapters may authenticate and label provenance but
+  may not implement a parallel write, acknowledgement, or nudge path. This is
+  the crate-level refinement of
   `REQ-CORE-TRANSPORT-001`/`002` and the shared-write-resource contract in
   [`../architecture.md`](../architecture.md).
 - `REQ-CORE-TRANSPORT-003` cross-host delivery owns no durable or in-memory
@@ -246,7 +248,7 @@ Initial crate requirement IDs:
   already-delivered remote duplicate is a no-op; the narrow same-host peer
   receipt of a retained origin record logs `peer_duplicate_write_skipped`
   with its ULID, source/destination host, `database_write=skipped`, and
-  `delivery=continued`; it continues the ordinary inbound nudge without a second record or peer
+  `delivery=continued`; it continues the ordinary inbound steer nudge without a second record or peer
   re-delivery. Satisfies `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-004` remote acceptance is a normal result of the same
   canonical write. A failed remote attempt creates no remote recipient row or

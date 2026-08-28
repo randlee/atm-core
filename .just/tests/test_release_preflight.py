@@ -1,3 +1,5 @@
+"""Temporary consumer-contract coverage retained pending the first kit release."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,27 +11,26 @@ WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-preflight.yml"
 
 
 class ReleasePreflightWorkflowTests(unittest.TestCase):
-    def test_release_preflight_stages_installed_docs_before_validation(self) -> None:
+    def test_release_preflight_validates_the_manifest_and_publish_order(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("python3 scripts/release_artifacts.py stage-install-docs", text)
-        self.assertIn("--output-root \"${STAGED_INSTALL_ROOT}\"", text)
+        self.assertIn('RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml', text)
+        self.assertIn("release_artifacts.py validate-manifest", text)
+        self.assertIn("release_artifacts.py validate-publish-order", text)
 
-    def test_release_preflight_passes_staged_install_root_to_validator(self) -> None:
+    def test_release_preflight_reports_channel_results_from_the_manifest(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("python3 scripts/validate_release.py all \\", text)
-        self.assertIn("--staged-install-root \"${STAGED_INSTALL_ROOT}\"", text)
+        self.assertIn("preflight-secret-plan", text)
+        self.assertIn("channel-preflight-results", text)
+        self.assertIn("Deny release after complete preflight summary", text)
 
-    def test_release_preflight_installs_validation_python_dependencies_before_validation(self) -> None:
+    def test_release_preflight_requires_release_candidate_provenance(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
 
-        install_python = text.index("- name: Install Python\n")
-        install_dependencies = text.index("- name: Install Python validation dependencies")
-        validate = text.index("- name: Run canonical retained release validation suite")
-        self.assertLess(install_python, install_dependencies)
-        self.assertLess(install_dependencies, validate)
-        self.assertIn("python -m pip install codespell 'pydantic>=2.12,<3'", text)
+        self.assertIn("Verify release-candidate provenance", text)
+        self.assertIn("release_gate.sh readiness HEAD", text)
+        self.assertIn('"release-candidate-${{ steps.meta.outputs.release_tag }}"', text)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CI-AO254-F009>
+  a triage:Finding ;
+  triage:findingId "CI-AO254-F009" ;
+  triage:title "PR #983 branch never received PR #978's Windows owner-SID fix; test_windows_owner_lookup_matches_executing_account_sid fails on elevated runners" ;
+  triage:description "fix/benchmark-snapshot-restore-mandatory (PR #983, head 9b08e8611) branches directly off integrate/phase-ao2 as a SIBLING of fix/benchmark-primary-db-safety (PR #978), not a descendant (confirmed: `git merge-base --is-ancestor 08a725b99 9b08e8611` = false). It therefore still carries the ORIGINAL pre-a74615f82 implementation: _windows_current_principal()/_windows_current_sid() in scripts/smoke/benchmark_account.py resolve the executing account via `whoami /user /fo csv /nh`, which returns the real per-runner user SID (e.g. s-1-5-21-...-500). _verify_manifest_owner() compares that against _windows_file_owner(), which reads the manifest file's actual on-disk owner via GetNamedSecurityInfoW(OWNER_SECURITY_INFORMATION). On GitHub's elevated Windows runners, files created by an elevated process default to owner BUILTIN\\Administrators (s-1-5-32-544), not the per-user SID -- so whoami-derived current_principal (s-1-5-21-...-500) never matches the file's actual Administrators-group owner (s-1-5-32-544), and test_windows_owner_lookup_matches_executing_account_sid fails with 14 cascading errors/skips. This is the SAME class of elevated-runner default-owner bug that a74615f82 fixed on fix/benchmark-primary-db-safety (PR #978) by switching the expected-owner computation to GetTokenInformation(TokenOwner) -- which reflects the same default-owner value Windows actually assigns at file-creation time. PR #983 needs that same TokenOwner-based fix ported onto its own branch (merge-forward or reimplementation), not a code change to fix/benchmark-primary-db-safety, since the vulnerable code here is a distinct, never-fixed copy, not a regression of a74615f82's change." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-regression" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-22T07:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed on fix/benchmark-snapshot-restore-mandatory commit a5767690 (fix(smoke): honor Windows token default owner, cherry-picked with -x from a74615f82): ported the ctypes GetTokenInformation(TokenOwner) fix onto this sibling branch, which had never received PR #978's fix since the two branches share only a common ancestor, not a fast-forward relationship. Merge-forward to 48fe6be2 (merging origin/integrate/phase-ao2, resolving one import-only conflict in test_run_admission_capacity.py) then merged as PR #983 to integrate/phase-ao2 at 82270cb26 (2026-08-22T06:41:18Z). quality-mgr independently diff-confirmed the cherry-pick was byte-identical to the working PR #978 fix, then independently verified 'Just lint (windows-latest)' PASS in real GitHub CI (job 96992274203, 6m59s/7m20s across two CI runs) via gh CLI/API; PR #983 CI fully green (19/19 checks)." ;
+  triage:triagedAt "2026-08-22T06:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.5.4 ;
+  triage:foundAt "2026-08-22T05:55:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-AO254-F009/AO254-F009-O1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CI-AO254-F009/AO254-F009-O1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_account.py" ;
+  triage:line 74 ;
+  triage:snippet "def _windows_current_sid() -> str: ... subprocess.run([\"whoami\", \"/user\", \"/fo\", \"csv\", \"/nh\"], ...)" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/benchmark-snapshot-restore-mandatory" ;
+  triage:headSha "9b08e8611dbcd9de1f8ae1bb6b9f933201105a98" ;
+  triage:occursIn <urn:atm:triage:worktree/AO254-O1-SnapRestore> .
+
+<urn:atm:triage:worktree/AO254-O1-DBSafety>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/benchmark-primary-db-safety" ;
+  triage:branch "fix/benchmark-primary-db-safety" ;
+  triage:headSha "08a725b99088abe8da9329e36d6601365b61dbc2" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AO254-O1-SnapRestore>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/benchmark-snapshot-restore-mandatory" ;
+  triage:branch "fix/benchmark-snapshot-restore-mandatory" ;
+  triage:headSha "9b08e8611dbcd9de1f8ae1bb6b9f933201105a98" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AO254-O1-AdminBatch>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/admission-writer-batching-regression" ;
+  triage:branch "fix/admission-writer-batching-regression" ;
+  triage:headSha "3798e676a53beca529aa9e49e65170ac2cbf942f" ;
+  triage:orderIndex 7 .

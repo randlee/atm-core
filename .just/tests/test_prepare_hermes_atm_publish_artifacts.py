@@ -1,3 +1,5 @@
+"""Temporary legacy artifact-staging coverage retained pending production proof."""
+
 from __future__ import annotations
 
 from pathlib import Path

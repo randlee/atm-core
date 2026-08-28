@@ -141,6 +141,42 @@ class GenerateReportIndexTests(unittest.TestCase):
             with self.assertRaisesRegex(ReportIndexError, "missing report HTML"):
                 build_index(reports)
 
+    def test_accepts_a_benchmark_index_inside_its_evidence_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            reports = Path(tempdir) / "site/reports"
+            evidence = reports / "send-message-benchmark"
+            evidence.mkdir(parents=True)
+            (evidence / "index.html").write_text("<html>benchmark index</html>\n", encoding="utf-8")
+            (reports / "send-message-benchmark.json").write_text(json.dumps({
+                "schema_version": 1, "report_type": "benchmark",
+                "generated_at": "2026-08-24T00:00:00Z", "host_label": "rand-m5",
+                "report_html": "send-message-benchmark/index.html",
+            }), encoding="utf-8")
+            index = build_index(reports)
+        self.assertIn('href="send-message-benchmark/index.html"', index)
+
+    def test_canonical_benchmark_index_supersedes_but_does_not_delete_run_sidecars(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            reports = Path(tempdir) / "site/reports"
+            evidence = reports / "send-message-benchmark"
+            evidence.mkdir(parents=True)
+            (evidence / "index.html").write_text("<html>index</html>\n", encoding="utf-8")
+            (reports / "send-message-benchmark.json").write_text(json.dumps({
+                "schema_version": 1, "report_type": "benchmark",
+                "generated_at": "2026-08-24T00:00:00Z", "host_label": "rand-m5",
+                "report_html": "send-message-benchmark/index.html",
+            }), encoding="utf-8")
+            old = evidence / "old.envelope.json"
+            old.write_text(json.dumps({
+                "schema_version": 1, "report_type": "benchmark",
+                "generated_at": "2026-08-01T00:00:00Z", "host_label": "rand-m5",
+                "report_html": "send-message-benchmark.html",
+            }), encoding="utf-8")
+            index = build_index(reports)
+            self.assertTrue(old.exists())
+        self.assertIn("send-message-benchmark/index.html", index)
+        self.assertNotIn("send-message-benchmark.html", index)
+
     def test_discovers_nested_run_envelope_without_treating_evidence_as_envelope(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
