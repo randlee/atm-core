@@ -53,12 +53,129 @@ class HermesAtmRestartMatrixTests(unittest.TestCase):
         self.assertEqual(argv, [str(Path("/fake/atm-daemon")), "--peer-wire-security", "plaintext-test"])
         self.assertNotIn("mutual-tls", argv)
 
-    def test_crash_recovery_bound_is_sub_tick(self) -> None:
-        # AC2 (sprint-AQ1-9) requires sub-tick recovery: strictly inside one
-        # GRAFT_LEASE_REFRESH_INTERVAL tick, not a padded multiple of it.
+    # Numbers from the failing Windows clean-runner record (docs/aq-closeout @
+    # 9674f64b7, merge b78c041f1): the product displaced the stale lease at
+    # +211 ms, the successor interpreter was `ready` at +933 ms, and delivery
+    # landed at +1364 ms -- the old one-tick wall-clock bound failed a row the
+    # product had actually passed at bind time.
+    WINDOWS_RESTART_AT_NS = 1787951528565134500
+    WINDOWS_READY_AT_NS = 1787951529498442200
+    WINDOWS_DELIVERED_AT_NS = 1787951529929181800
+    WINDOWS_PRE_CRASH_LEASE = {
+        "team": "aq1-9-hermes",
+        "agent": "aq1-9-receiver",
+        "endpoint": "127.0.0.1:51019",
+        "registered_at": "2026-08-28T21:11:57.052592Z",
+    }
+    WINDOWS_SUCCESSOR_LEASE = {
+        "team": "aq1-9-hermes",
+        "agent": "aq1-9-receiver",
+        "endpoint": "127.0.0.1:51039",
+        "registered_at": "2026-08-28T21:12:08.776418200Z",
+    }
+
+    def classify(self, module, **overrides: Any) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {
+            "pre_crash_lease": self.WINDOWS_PRE_CRASH_LEASE,
+            "leases_after": [self.WINDOWS_SUCCESSOR_LEASE],
+            "successor_ready_at_ns": self.WINDOWS_READY_AT_NS,
+            "restart_at_ns": self.WINDOWS_RESTART_AT_NS,
+            "delivered_at_ns": self.WINDOWS_DELIVERED_AT_NS,
+            "delivery_matched": True,
+        }
+        kwargs.update(overrides)
+        return module.classify_crash_recovery(**kwargs)
+
+    def test_no_wall_clock_recovery_bound_remains(self) -> None:
         module = load_module()
         self.assertEqual(module.LEASE_REFRESH_INTERVAL_SECONDS, 1.0)
-        self.assertEqual(module.CRASH_RECOVERY_LIMIT_SECONDS, module.LEASE_REFRESH_INTERVAL_SECONDS)
+        self.assertFalse(hasattr(module, "CRASH_RECOVERY_LIMIT_SECONDS"))
+
+    def test_parse_rfc3339_ns_handles_nanosecond_fraction_and_offsets(self) -> None:
+        module = load_module()
+        base = module.parse_rfc3339_ns("2026-08-28T21:12:08Z")
+        self.assertEqual(module.parse_rfc3339_ns("2026-08-28T21:12:08.776418200Z"), base + 776_418_200)
+        self.assertEqual(module.parse_rfc3339_ns("2026-08-28T21:12:08.5Z"), base + 500_000_000)
+        self.assertEqual(module.parse_rfc3339_ns("2026-08-28T23:12:08+02:00"), base)
+        with self.assertRaises(ValueError):
+            module.parse_rfc3339_ns("not a timestamp")
+
+    def test_crash_row_passes_on_windows_record_where_wall_clock_bound_tripped(self) -> None:
+        module = load_module()
+        verdict = self.classify(module)
+        self.assertTrue(verdict["displaced_at_bind"], verdict["error"])
+        self.assertIsNone(verdict["error"])
+        self.assertEqual(verdict["successor_lease_count"], 1)
+        self.assertEqual(verdict["pre_crash_endpoint"], "127.0.0.1:51019")
+        self.assertEqual(verdict["successor_endpoint"], "127.0.0.1:51039")
+        # Diagnostics only: recorded, never asserted by the harness.
+        self.assertAlmostEqual(verdict["lease_displaced_at_ms"], 211.284, places=2)
+        self.assertAlmostEqual(verdict["successor_spawn_to_ready_ms"], 933.308, places=2)
+        self.assertAlmostEqual(verdict["crash_recovery_ms"], 1364.047, places=2)
+        self.assertGreater(verdict["crash_recovery_ms"], module.LEASE_REFRESH_INTERVAL_SECONDS * 1000)
+
+    def test_crash_row_fails_when_lease_registered_after_successor_ready(self) -> None:
+        # registered_at later than the successor's `ready` event means the
+        # stale lease survived bind and was only displaced by a refresh tick.
+        module = load_module()
+        late = {**self.WINDOWS_SUCCESSOR_LEASE, "registered_at": "2026-08-28T21:12:10.000000000Z"}
+        verdict = self.classify(module, leases_after=[late])
+        self.assertFalse(verdict["displaced_at_bind"])
+        self.assertIn("refresh tick, not at bind", verdict["error"])
+        self.assertAlmostEqual(verdict["lease_displaced_at_ms"], 1434.866, places=2)
+
+    def test_crash_row_fails_when_endpoint_unchanged(self) -> None:
+        module = load_module()
+        stale = {**self.WINDOWS_SUCCESSOR_LEASE, "endpoint": self.WINDOWS_PRE_CRASH_LEASE["endpoint"]}
+        verdict = self.classify(module, leases_after=[stale])
+        self.assertFalse(verdict["displaced_at_bind"])
+        self.assertIn("not a fresh bind", verdict["error"])
+
+    def test_crash_row_fails_when_two_leases_remain(self) -> None:
+        module = load_module()
+        verdict = self.classify(
+            module, leases_after=[self.WINDOWS_PRE_CRASH_LEASE, self.WINDOWS_SUCCESSOR_LEASE]
+        )
+        self.assertFalse(verdict["displaced_at_bind"])
+        self.assertEqual(verdict["successor_lease_count"], 2)
+        self.assertIn("exactly one successor lease", verdict["error"])
+
+    def test_crash_row_fails_without_successor_delivery(self) -> None:
+        module = load_module()
+        verdict = self.classify(module, delivery_matched=False)
+        self.assertFalse(verdict["displaced_at_bind"])
+        self.assertIn("did not deliver", verdict["error"])
+
+    def test_receiver_leases_filters_doctor_payload_to_receiver_identity(self) -> None:
+        module = load_module()
+        other = {"team": "aq1-9-hermes", "agent": "aq1-9-sender", "endpoint": "127.0.0.1:1"}
+        payload = {"graft_receivers": {"receivers": [other, self.WINDOWS_SUCCESSOR_LEASE]}}
+        self.assertEqual(module.receiver_leases(payload), [self.WINDOWS_SUCCESSOR_LEASE])
+        self.assertEqual(module.receiver_lease(payload), self.WINDOWS_SUCCESSOR_LEASE)
+        self.assertEqual(module.receiver_leases({"graft_receivers": None}), [])
+        with self.assertRaises(RuntimeError):
+            module.receiver_lease({"graft_receivers": {"receivers": [other]}})
+
+    def test_successor_ready_at_ns_reads_transcript_then_start_result(self) -> None:
+        module = load_module()
+        transcript = [json.dumps({"kind": "ready", "at_ns": self.WINDOWS_READY_AT_NS}), "not json"]
+        self.assertEqual(module.successor_ready_at_ns({"receiver_transcript": transcript}), self.WINDOWS_READY_AT_NS)
+        self.assertEqual(
+            module.successor_ready_at_ns({"receiver_transcript": [], "receiver_after": {"ready_at_ns": 7}}), 7
+        )
+        with self.assertRaises(RuntimeError):
+            module.successor_ready_at_ns({"receiver_transcript": [], "receiver_after": {"pid": 1}})
+
+    def test_markdown_describes_bind_time_displacement_and_windows_returncode(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            args = SimpleNamespace(host="clean-runner-windows", evidence_dir=Path(temporary))
+            _, markdown_path = module.write_evidence(args, [])
+            markdown = markdown_path.read_text(encoding="utf-8")
+            self.assertIn("displaced_at_bind", markdown)
+            self.assertIn("diagnostics only", markdown)
+            self.assertIn("TerminateProcess", markdown)
+            self.assertNotIn("one-refresh-tick", markdown)
 
     def test_scoped_process_environment_restores_prior_values_and_absence(self) -> None:
         module = load_module()

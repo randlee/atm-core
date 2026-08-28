@@ -204,3 +204,11 @@ triage:m4 a triage:Merge ;
     triage:mergedAt "2026-08-28T10:30:00Z"^^xsd:dateTime ;
     triage:target "integrate/phase-aq" ;
     triage:note "AQ2.7 sprint #1056 merged to integration branch (QA-5 PASS closing gate; 12/14 sprints on integrate)" .
+
+triage:m5 a triage:Merge ;
+    triage:ofPR "#1076" ;
+    triage:mergeCommit "4b0d47e78" ;
+    triage:headCommit "1c13fd57c" ;
+    triage:mergedAt "2026-08-28T22:00:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "merge/develop-into-phase-aq #1076 (develop f99c85656) merged to integration branch (quality-mgr PASS-with-1-important: Wyvern pin not latest -> follow-up AQ6-wyvern-pin-bump)" .

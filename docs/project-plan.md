@@ -1416,6 +1416,12 @@ AQ5 Send-To surface implementation is complete on
 recorded in [the AQ validation register](./plans/phase-aq/validation-evidence.md),
 while the three physical file-manager runs and Wyvern six-case degradation
 transcript remain OPEN for their named host/QA owners.
+Phase AQ closeout follow-ups (registered in
+`plans/phase-aq/.audit/qa-evidence-master.json` `follow_ups[]`): `AQ1.9-m5`,
+`AQ5-gui-e2e`, `AQ4-tailscale-m5`, `AQ4-windows-loopback`, and
+`AQ6-wyvern-pin-bump` (Wyvern pin behind the latest upstream release,
+surfaced by ecosystem-preflight on PR #1076; bump before the next release,
+not a phase-merge blocker).
 
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 
