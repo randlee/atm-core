@@ -14,13 +14,16 @@
   triage:category "documentation" ;
   triage:severity "important" ;
   triage:repeatable false ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-28T03:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:RELPREP-1069 ;
   triage:foundAt "2026-08-28T03:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-018/REPIN-25668EC-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-018/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-28T03:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-018/REPIN-25668EC-1>
   a triage:Occurrence ;
@@ -37,3 +40,19 @@
   triage:branch "chore/sc-publish-repin-25668ec" ;
   triage:headSha "70739a990" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/ATM-QA-018/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "CHANGELOG.md" ;
+  triage:line 6 ;
+  triage:snippet "the installed `sc-publish` kit (pinned revision `25668ecc`, 54 byte-copied files guarded by ADR-050, recorded in `release/sc-publish-pin.toml`)" ;
+  triage:status "fixed" ; triage:closed true ;
+  triage:branch "chore/sc-publish-repin-25668ec" ; triage:headSha "0e4920961" ;
+  triage:occursIn <urn:atm:triage:worktree/REPIN-25668EC/0e4920961> .
+
+<urn:atm:triage:worktree/REPIN-25668EC/0e4920961>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/chore-sc-publish-repin-25668ec" ;
+  triage:branch "chore/sc-publish-repin-25668ec" ;
+  triage:headSha "0e4920961" ;
+  triage:orderIndex 2 .
