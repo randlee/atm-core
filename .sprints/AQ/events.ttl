@@ -123,3 +123,16 @@ triage:a13 a triage:Assignment ;
 triage:c13 a triage:Completion ;
     triage:ofSprint triage:AQ5 ;
     triage:at "2026-08-27T06:44:00Z"^^xsd:dateTime .
+
+triage:a14 a triage:Assignment ;
+    triage:ofSprint triage:AQ6 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T22:45:00Z"^^xsd:dateTime .
+
+triage:c14 a triage:Completion ;
+    triage:ofSprint triage:AQ6 ;
+    triage:at "2026-08-27T23:20:00Z"^^xsd:dateTime ;
+    triage:prNumber "#1066" ;
+    triage:prBranch "feature/aq-6-ecosystem-preflight" ;
+    triage:headCommit "08fa8fd04" ;
+    triage:note "PR merge gated on #1059 (AQ5)" .
