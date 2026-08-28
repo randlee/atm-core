@@ -77,10 +77,12 @@ import argparse
 import json
 import os
 from pathlib import Path
+import queue
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import traceback
 from typing import Any
@@ -285,6 +287,54 @@ def wait_for_pane(socket_name: str, pane: str, marker: str, timeout: float) -> s
     raise TimeoutError(f"tmux pane did not receive {marker!r} within {timeout}s; latest={latest!r}")
 
 
+def _drain_ready_lines(process: subprocess.Popen[str], timeout: float) -> tuple[list[str], bool]:
+    """Read `process.stdout` until `ATM_DAEMON_READY`, honoring `timeout` even
+    when the child produces no output at all (FTQ-001).
+
+    A plain blocking `readline()` call has no notion of an overall deadline:
+    if the child never writes a line (for example it hangs before its first
+    flush, or crashes without closing the pipe promptly), the caller blocks
+    past `timeout` waiting on that single call. The read runs on a daemon
+    background thread instead and this loop drains it through a queue with a
+    per-call `timeout=remaining`, so the deadline is enforced even against
+    the very first read.
+    """
+    line_queue: "queue.Queue[str | None]" = queue.Queue()
+
+    def _pump_stdout() -> None:
+        stream = process.stdout
+        if stream is None:
+            line_queue.put(None)
+            return
+        try:
+            for line in iter(stream.readline, ""):
+                line_queue.put(line)
+        finally:
+            line_queue.put(None)
+
+    reader = threading.Thread(target=_pump_stdout, daemon=True)
+    reader.start()
+
+    deadline = time.monotonic() + timeout
+    lines: list[str] = []
+    ready = False
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            line = line_queue.get(timeout=remaining)
+        except queue.Empty:
+            break
+        if line is None:
+            break
+        lines.append(line.rstrip("\n"))
+        if line.strip() == "ATM_DAEMON_READY":
+            ready = True
+            break
+    return lines, ready
+
+
 def start_daemon(daemon: Path, env: dict[str, str], timeout: float) -> dict[str, Any]:
     process = subprocess.Popen(
         [str(daemon), "--peer-wire-security", "plaintext-test"],
@@ -296,18 +346,7 @@ def start_daemon(daemon: Path, env: dict[str, str], timeout: float) -> dict[str,
         encoding="utf-8",
         errors="replace",
     )
-    deadline = time.monotonic() + timeout
-    lines: list[str] = []
-    ready = False
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            break
-        line = process.stdout.readline() if process.stdout is not None else ""
-        if line:
-            lines.append(line.rstrip("\n"))
-            if line.strip() == "ATM_DAEMON_READY":
-                ready = True
-                break
+    lines, ready = _drain_ready_lines(process, timeout)
     stderr_tail = ""
     if process.poll() is not None:
         stderr_tail = (process.stderr.read() if process.stderr is not None else "").strip()

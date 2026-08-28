@@ -3,7 +3,9 @@
   "host": "clean-runner-windows",
   "record": {
     "host": "clean-runner-windows",
+    "note": "tmux is not available on this runner (for example a Windows host); the tmux idle-drain scenario cannot execute without it. This is a fail-closed skip, not a failure.",
     "sprint": "AQ3",
+    "started_at_ns": 1787874494802600400,
     "status": "skipped_no_tmux"
   },
   "schema_version": 1,

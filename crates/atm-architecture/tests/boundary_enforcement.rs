@@ -344,7 +344,7 @@ fn ao4_benchmark_targets_cannot_introduce_an_alternate_daemon_pipeline() {
     let benchmark_daemon = bootstrap
         .split("pub async fn run_benchmark_daemon")
         .nth(1)
-        .and_then(|source| source.split("fn build_replacement_handler").next())
+        .and_then(|source| source.split("fn peer_stream_adapter_for_mode").next())
         .expect("feature-gated benchmark daemon must delegate through bootstrap");
 
     assert!(
@@ -3359,11 +3359,13 @@ fn herdr_constructors_have_one_composition_root_call_site() {
         "HerdrProcessInvoker must have one composition call site"
     );
 
-    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let bootstrap =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/replacement_handler.rs"));
+    // `build_replacement_handler` is the last item in this module, so its
+    // body runs to end-of-file; there is no following `fn ` to bound on.
     let composition = bootstrap
         .split_once("fn build_replacement_handler")
-        .and_then(|(_, tail)| tail.split_once("fn "))
-        .map(|(body, _)| body)
+        .map(|(_, tail)| tail)
         .expect("replacement handler composition function must exist");
     assert!(composition.contains("HerdrSpawnBreaker::new("));
     assert!(composition.contains("HerdrProcessInvoker::new("));
