@@ -24,6 +24,43 @@ def load_module():
     return module
 
 
+def _install_fake_ssh(bin_dir: Path, *, stderr_line: str, stdout_line: str | None, exit_code: int) -> Path:
+    """Writes a fake `ssh` into `bin_dir` for `run_ssh_vvv_diagnostic`
+    (production code, not under test here) to resolve via `shutil.which`.
+
+    A bare `#!/bin/sh` script is not executable on Windows -- there is no
+    kernel shebang interpreter, so `subprocess.run` there gets a launch
+    failure and `result["returncode"]` comes back `None` instead of the
+    fake's exit code. On `win32`, write a `ssh.cmd` shim instead: `.cmd` is
+    one of the extensions Windows' `CreateProcess` special-cases to launch
+    via `cmd.exe` even without `shell=True`, and it's the same extension
+    `shutil.which("ssh", path=...)` resolves via `PATHEXT` -- mirrors the
+    `.cmd`-shim pattern in `.just/tests/test_transfer_scripts.py`
+    (`_install_fake_bin`). `run_ssh_vvv_diagnostic` itself resolves `ssh` via
+    `shutil.which`, so it finds whichever fake this installs; only this
+    test's fixture branches on platform, not production behavior.
+    """
+    if sys.platform == "win32":
+        fake_ssh = bin_dir / "ssh.cmd"
+        lines = ["@echo off", f"echo {stderr_line} 1>&2"]
+        if stdout_line is not None:
+            lines.append(f"echo {stdout_line}")
+        lines.append(f"exit /b {exit_code}")
+        fake_ssh.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
+        return fake_ssh
+
+    import stat as stat_module
+
+    fake_ssh = bin_dir / "ssh"
+    body_lines = ["#!/bin/sh", f'echo "{stderr_line}" 1>&2']
+    if stdout_line is not None:
+        body_lines.append(f'echo "{stdout_line}"')
+    body_lines.append(f"exit {exit_code}")
+    fake_ssh.write_text("\n".join(body_lines) + "\n", encoding="utf-8")
+    fake_ssh.chmod(fake_ssh.stat().st_mode | stat_module.S_IXUSR)
+    return fake_ssh
+
+
 class Aq4TransferEvidenceTests(unittest.TestCase):
     def test_extract_landed_path_matches_the_real_format_attachment_note_shape(self) -> None:
         module = load_module()
@@ -474,19 +511,17 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             self.assertIn("LogLevel DEBUG1", content)
 
     def test_run_ssh_vvv_diagnostic_captures_argv_output_and_exit_code(self) -> None:
-        import stat as stat_module
-
         module = load_module()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             bin_dir = root / "bin"
             bin_dir.mkdir()
-            fake_ssh = bin_dir / "ssh"
-            fake_ssh.write_text(
-                "#!/bin/sh\necho \"fake ssh stderr: $*\" 1>&2\necho aq4-ssh-vvv-diagnostic-probe\nexit 0\n",
-                encoding="utf-8",
+            _install_fake_ssh(
+                bin_dir,
+                stderr_line="fake ssh stderr: probe invoked",
+                stdout_line="aq4-ssh-vvv-diagnostic-probe",
+                exit_code=0,
             )
-            fake_ssh.chmod(fake_ssh.stat().st_mode | stat_module.S_IXUSR)
             env = dict(os.environ)
             env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
             config_path = root / "ssh_client_config"
@@ -503,19 +538,17 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             )
 
     def test_run_ssh_vvv_diagnostic_surfaces_nonzero_exit_and_stderr(self) -> None:
-        import stat as stat_module
-
         module = load_module()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             bin_dir = root / "bin"
             bin_dir.mkdir()
-            fake_ssh = bin_dir / "ssh"
-            fake_ssh.write_text(
-                "#!/bin/sh\necho 'kex_exchange_identification: read: Connection aborted' 1>&2\nexit 255\n",
-                encoding="utf-8",
+            _install_fake_ssh(
+                bin_dir,
+                stderr_line="kex_exchange_identification: read: Connection aborted",
+                stdout_line=None,
+                exit_code=255,
             )
-            fake_ssh.chmod(fake_ssh.stat().st_mode | stat_module.S_IXUSR)
             env = dict(os.environ)
             env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
             config_path = root / "ssh_client_config"
