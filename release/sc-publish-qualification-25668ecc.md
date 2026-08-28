@@ -145,3 +145,39 @@ the exact fixed package-checks step verbatim (plan-derived multi-package
 `cargo package --locked --allow-dirty`), and the CLI surface contract test.
 The kit's own pytest expectations for `list-publish-plan` were not updated
 (consumer CI does not run them); flagged in sc-publish #70.
+
+### Round 3 (live release run 33198964299 from main e8a5b1c1b)
+
+The first live `release.yml` dispatch succeeded through gate-and-tag (tag
+`v1.4.4` created), all binary builds, and the full ordered crates.io publish
+(13/13 crates live). One more kit defect surfaced in the maturin Python
+artifact builds:
+
+9. **`setup-python-release-build` installs the Rust toolchain without the
+   consumer's declared components**: the kit composite's
+   `dtolnay/rust-toolchain` step passes no `components`, so maturin's nested
+   `cargo metadata` triggers rustup's auto-add of the components declared in
+   `rust-toolchain.toml` (`clippy`, `rustfmt`). That auto-add races the hosted
+   runner's preinstalled cargo-fmt and fails intermittently with
+   `failed to install component: 'rustfmt-preview-…', detected conflict:
+   'bin/cargo-fmt'` → `cargo metadata` fails → maturin aborts
+   (atm-graft-python and atm-query-python failed on some matrix runners,
+   passed on others — a race, not a deterministic failure; the setuptools
+   distribution was unaffected). This repo's own `ci.yml` maturin job already
+   documents and prevents exactly this race by passing
+   `components: clippy, rustfmt` to the same action — the fix applies that
+   proven pattern to the kit composite. Upstream:
+   [sc-publish #72](https://github.com/randlee/sc-publish/issues/72).
+   Because `release.yml` computes `build_ref` from the verified `origin/main`
+   tip (the immutable tag only needs to be an ancestor), merging this fix to
+   `main` and re-dispatching the same version/target picks it up without
+   touching tag `v1.4.4`; the idempotent crates.io publish job skips all
+   already-live crates.
+
+Round-3 rehearsal evidence: the fix is byte-for-byte the component list and
+rationale already running green on every sprint CI maturin job (`ci.yml`
+"Install Rust toolchain": `components: clippy, rustfmt` with the same race
+documented in its comment); the edited composite parses as valid YAML. The
+runner-image race itself is not reproducible on a local macOS host with a
+fully provisioned toolchain, so in-repo CI precedent is the rehearsal
+authority here.
