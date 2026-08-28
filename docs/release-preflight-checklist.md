@@ -49,7 +49,9 @@ The validator currently accepts these targets:
 - `release-binaries` — verify required release binaries are declared
 - `inventory` — generate and shape-check release inventory output
 - `cargo-lock-drift` — detect release-window `Cargo.lock` drift
-- `dependency-currency` — check dependency freshness
+- `dependency-currency` — run the generic dependency freshness warning and
+  the always-on blocking sc-ecosystem preflight
+- `ecosystem-preflight` — run only the blocking sc-ecosystem preflight
 - `phase-ad-readiness` — verify the retained Phase AD readiness boundary gates
 
 ## Checklist Coverage Matrix
@@ -66,7 +68,8 @@ The validator currently accepts these targets:
 | Validate required release binaries (`atm`, `atm-daemon`) | local | `validate_release.py release-binaries` |
 | Generate and shape-check release inventory | local | `validate_release.py inventory` |
 | Check `Cargo.lock` drift during the release window | local | `validate_release.py cargo-lock-drift` |
-| Check dependency currency | local | `validate_release.py dependency-currency` |
+| Check generic dependency currency | local | `ATMD_CHECK_DEP_CURRENCY=1 validate_release.py dependency-currency` (warn-only) |
+| Check sc-ecosystem currency and integration contracts | blocking local/CI | `validate_release.py ecosystem-preflight` |
 | Enforce retained Phase AD readiness gates | local | `validate_release.py phase-ad-readiness` |
 | Assert workflow dispatcher ownership (`run_by_agent=publisher`) | CI-only | `.github/workflows/release-preflight.yml` |
 | Normalize workflow version input to `vX.Y.Z` / `X.Y.Z` | CI-only | `.github/workflows/release-preflight.yml` |
@@ -76,6 +79,54 @@ The validator currently accepts these targets:
 | Confirm completed release notes were provided by `team-lead` | agent-specific, not script-covered | `.claude/agents/publisher.md` |
 | Download and inspect the workflow `release-findings` artifact after preflight | agent-specific, not script-covered | `.claude/agents/publisher.md` |
 | Confirm Homebrew / `winget` prerequisite coordination is in place before publish | agent-specific, not script-covered | `.claude/agents/publisher.md` |
+
+## Blocking sc-ecosystem preflight
+
+Every ATM release must run the following sequence through the
+`dependency-currency` target (or directly with the `ecosystem-preflight`
+target). The generic registry sweep above remains opt-in and warn-only.
+
+| Dependency | Latest-release lookup and exact pin | Named regression target |
+| --- | --- | --- |
+| sc-compose | `cargo search sc-composer --limit 1`; update `crates/atm-template-sc-compose/Cargo.toml`'s `sc-composer` pin (and its paired `sc-sha` pin when the release requires it) | `cargo test -p atm-template-sc-compose`, then `sc-compose render --file` against the codex-orchestration and plan-hardening `.j2` fixtures |
+| sc-observability | `cargo search sc-observability --limit 1` and `cargo search sc-observability-types --limit 1`; exact-pin both workspace dependencies | `cargo test -p agent-team-mail` (the `crates/atm` package) |
+| Wyvern | `gh release list --repo randlee/wyvern --limit 1` (REST fallback: `gh api repos/randlee/wyvern/releases/latest`); update the matching exact `WYVERN_PIN` in `scripts/send-to/atm-send-to.sh` and `.ps1`, and the paired `tools/bootstrap.toml` checksum entries; a release `checksums.txt`, when present, is an additional cross-check | `scripts/send-to/probe_wyvern.py` plus `scripts/send-to/run_wyvern_picker.py` (wizard JSON `config` input and `WizardResult.data` unwrap) and the shared `PickerInput`/`PickerOutput` fixture suite |
+
+The Cargo comparison strips a leading `=` from exact pins before comparing
+them with crates.io's bare version output. A stale pin, unresolved release,
+failed named target, incompatible picker schema, or missing Wyvern executable
+blocks release. The missing-binary error is actionable:
+`install wyvern before running preflight`. This requirement applies to the
+preflight host only; AQ5's `atm` build/test lanes must not acquire Wyvern as a
+Cargo or test dependency.
+
+Use this lookup-only transcript command when preparing release evidence:
+
+```bash
+python3 scripts/validate_release.py ecosystem-preflight --dry-run \
+  --findings target/aq6-ecosystem-preflight-findings.json
+```
+
+If a newest upstream release regresses the contract, fix forward when
+possible. Otherwise run the validator in the explicitly gated fix-forward
+mode, supplying the last-known-good map; the validator rewrites the exact
+Cargo/WYVERN pins while preserving manifest and script formatting, reuses the
+existing `maybe_file_dep_currency_issue` path, and appends the regression,
+pinned-back version, and issue URL to
+`docs/plans/phase-aq/evidence/AQ6/ecosystem-preflight.md`:
+
+```bash
+ATMD_ECOSYSTEM_FIX_FORWARD=1 \
+ATMD_ECOSYSTEM_KNOWN_GOOD='{"sc-composer":"1.4.1","sc-observability":"1.1.0","sc-observability-types":"1.1.0","wyvern":"0.4.0"}' \
+ATMD_GH_AUTOFIX_ISSUES=1 \
+python3 scripts/validate_release.py ecosystem-preflight \
+  --findings target/aq6-ecosystem-preflight-findings.json
+```
+
+Without `ATMD_ECOSYSTEM_FIX_FORWARD=1`, the validator reports the regression
+and leaves pins unchanged. Manual pin-back is the operator override when the
+automated fix-forward mode cannot be used; it must still record the same
+tracking issue and evidence before release continues.
 
 ## `just lint` Gate Breakdown
 
@@ -120,6 +171,7 @@ These steps happen in the release-preflight workflow but are not part of local
 
 - assert `run_by_agent` is exactly `publisher`
 - install the pinned Rust toolchain and required helper tools
+- verify the pinned ecosystem tools (`sc-compose` and `wyvern`) after bootstrap
 - normalize release version input
 - create `target/phase-ae/staged-install-root`
 - stage installed docs into that deterministic root

@@ -1906,9 +1906,9 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sc-composer"
-version = "1.4.1"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4415ff74a7f91a7505a7c9fc464908ed5e0e684d2648b5d731e0533c371edb2c"
+checksum = "2694e0078b543a65f17100acb0ff2e74e9310f1de3df6fe38762b6e7b9a50ba0"
 dependencies = [
  "minijinja",
  "quick-xml",
@@ -1985,9 +1985,9 @@ dependencies = [
 
 [[package]]
 name = "sc-sha"
-version = "1.4.1"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01502b8bda56eef5c2f445a88396d75cc223c8ce91709ac007dbb81f40e577ba"
+checksum = "ddbe342a6f2a9f64e0a9f24b94cc1539aa423afd7bd960480fa1ebea964f4119"
 dependencies = [
  "sha2",
 ]

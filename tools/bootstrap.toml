@@ -29,6 +29,15 @@ x86_64-apple-darwin = "618bf0d856aa00dcdfb271ca098db6c5a4c228c6778b2cf2c7d7dbc7f
 x86_64-pc-windows-msvc = "d1dcabae4f429483ce52d6821b293f4a4f40dd3884f99879e3c01c08d5b0a3ab"
 x86_64-unknown-linux-gnu = "1830bd70194832c5a6ef310c555e575a38922c6bb03141b51a2ab5ca1f3a509e"
 
+[wyvern]
+version = "0.5.0"
+
+[wyvern.checksums]
+"wyvern-linux.tar.gz" = "e6414ea22d9dd5635b752daa6f3a7752bde94126528dd764a6d524d461890437"
+"wyvern-macos-aarch64.tar.gz" = "740739df29448076b77dcc533feac1cfd3b4185191585d5df290f4d75e3aa4a3"
+"wyvern-macos-x86_64.tar.gz" = "1b0640c264e64393c6cb66ffa14ed6b3afabc2f6cf02888f573870a0c0372ff3"
+"wyvern-windows.zip" = "7db46bb2b2b65aad7c47db91777eaf45290cf64cbbbfaf0db8b4cf3c0fa27c12"
+
 [python]
 codespell = "2.4.3"
 maturin = "1.14.1"
