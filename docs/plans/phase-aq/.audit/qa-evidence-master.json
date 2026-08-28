@@ -2558,6 +2558,31 @@
    "minor": 0,
    "count_basis": "headline/reviewer",
    "evidence": "AQ6 #1066 @ 627f5ad3a: Revert of misplaced cross-platform harness fix ebd6610e0. Harness portability split: Windows fix (atm-send-to.ps1 + .cmd) re-applied on AQ5 #1059, AQ4 Unix findings (sftp.sh/sftp.ps1 behavior contract) folded into AQ4 #1055 fix pass. Platform-correct harness: sftp.ps1 on Windows, profile-containment record, scratch ssh -F config, honest skipped_no_sshd."
+  },
+  {
+   "run_id": "QA-AQ3-CI-33134101624",
+   "aich_sprint": "AQ3",
+   "phase_sprint": "AQ3",
+   "pass": null,
+   "run_type": "ci",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "ci-system",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ3 #1054 @ 50eb04544 CI 33134101624 lint/clippy/fmt/wheel lanes",
+   "result_time_utc": "2026-08-28T11:50:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "ci-system",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "ci-lanes",
+   "evidence": "AQ3 #1054 @ 50eb04544 CI 33134101624: lint/clippy/fmt/wheel lanes green. Hermes ATM release wheel (musllinux x86_64) smoke-test FAIL on Docker Hub registry timeout (exit 125, infrastructure issue). Test matrix skipped downstream. Failed job re-run initiated. QA-final5 (FENIX-QA) aggregation in progress."
   }
  ],
  "follow_ups": [
