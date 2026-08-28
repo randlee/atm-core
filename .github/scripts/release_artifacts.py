@@ -34,12 +34,12 @@ from release_manifest import (
     manifest_python_upload_tool,
     manifest_rust_toolchain,
     manifest_workspace_toml,
-    registry_version_state,
     package_name,
     workspace_members,
     workspace_version,
     validate_publish_order,
 )
+from release_registry import cmd_check_version_unpublished, cmd_registry_status
 
 
 def _channel_dispatch_config(manifest: dict, channel_name: str) -> tuple[str, dict[str, str]]:
@@ -850,22 +850,6 @@ def cmd_cargo_build_bin_args(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_check_version_unpublished(args: argparse.Namespace) -> int:
-    """Detect already-published crates via the contract's exact version_lookup_url."""
-    manifest = load_manifest(Path(args.manifest), with_channel_contracts=True)
-    published = []
-    for crate in manifest["crates"]:
-        check = _public_registry_checks(
-            manifest["channel_contracts"], "crates_io", crate["package"], args.version
-        )[0]
-        if registry_version_state(check["version_lookup_url"]) == "published":
-            published.append(crate["artifact"])
-    if published:
-        raise SystemExit("release version already published for: " + ", ".join(sorted(published)))
-    print(f"ok: no publishable artifacts found at version {args.version}")
-    return 0
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -942,6 +926,11 @@ def main() -> int:
     p.add_argument("--version")
     p.set_defaults(func=cmd_public_registry_inquiry_plan)
 
+    p = sub.add_parser("registry-status")
+    p.add_argument("--url", required=True)
+    p.add_argument("--timeout", type=int, default=20)
+    p.set_defaults(func=cmd_registry_status)
+
     p = sub.add_parser("verify-python-release-assets")
     p.add_argument("--manifest", required=True)
     p.add_argument("--asset-dir", required=True)
@@ -989,6 +978,7 @@ def main() -> int:
     p = sub.add_parser("check-version-unpublished")
     p.add_argument("--manifest", required=True)
     p.add_argument("--version", required=True)
+    p.add_argument("--already-published-channels", default="")
     p.set_defaults(func=cmd_check_version_unpublished)
 
     args = parser.parse_args()

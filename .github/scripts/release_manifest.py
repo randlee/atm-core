@@ -516,6 +516,26 @@ def registry_version_state(url: str, timeout: int = 20) -> str:
     raise SystemExit(f"registry state for {url} is indeterminate (status {status})")
 
 
+def check_version_publication(
+    manifest_path: Path, version: str, already_published_channels: str
+) -> tuple[list[str], list[str]]:
+    """Return unexpected and explicitly preserved published crate artifacts."""
+    manifest = load_manifest(manifest_path, with_channel_contracts=True)
+    preserved_channels = {
+        channel.strip() for channel in already_published_channels.split(",") if channel.strip()
+    }
+    unexpected, preserved = [], []
+    for crate in manifest["crates"]:
+        check = _public_registry_checks(
+            manifest["channel_contracts"], "crates_io", crate["package"], version
+        )[0]
+        if registry_version_state(check["version_lookup_url"]) == "published":
+            (preserved if check["channel"] in preserved_channels else unexpected).append(
+                crate["artifact"]
+            )
+    return unexpected, preserved
+
+
 def _channel_contract(manifest: dict, channel_name: str) -> dict:
     try:
         contract = manifest["channel_contracts"][channel_name]

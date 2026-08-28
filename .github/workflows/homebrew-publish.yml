@@ -67,6 +67,8 @@ jobs:
           fi
       - name: Checkout workflow support
         uses: actions/checkout@v4
+      - name: Bootstrap renderer
+        uses: ./.github/actions/setup-renderer
       - name: Checkout immutable release source
         uses: actions/checkout@v4
         with:
@@ -96,9 +98,7 @@ jobs:
 
           config = json.loads(os.environ["CHANNEL_CONFIG"])
           project = config["project"]
-          channel = config["channel"]
           assets = {}
-          archives_by_target = {}
 
           def download(target):
               filename = f"{project['archive_prefix']}_{os.environ['RELEASE_VERSION']}_{target['target']}.{target['archive']}"
@@ -108,7 +108,6 @@ jobs:
                   ["curl", "-fsSL", "--retry", "5", "--retry-delay", "30", "--retry-all-errors", "-o", str(path), url],
                   check=True,
               )
-              archives_by_target[target["target"]] = path
               return url, path
 
           for asset in config["channel"]["assets"]:
@@ -125,24 +124,8 @@ jobs:
               raise SystemExit(
                   "Homebrew assets must contain exactly: macos_arm, macos_intel, linux"
               )
-          renderer_target = config["release_targets"][channel["renderer_target"]]
-          renderer_archive = archives_by_target.get(renderer_target["target"])
-          if renderer_archive is None:
-              _url, renderer_archive = download(renderer_target)
           Path("homebrew-release-assets.json").write_text(json.dumps(assets), encoding="utf-8")
-          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
-              env_file.write(f"PUBLISHED_RENDERER_ARCHIVE={renderer_archive}\n")
-              env_file.write(
-                  "PUBLISHED_RENDERER_EXTRACT_DIR="
-                  f"{project['archive_prefix']}_{os.environ['RELEASE_VERSION']}_{renderer_target['target']}\n"
-              )
           PY
-      - name: Extract manifest-declared published renderer
-        uses: ./.github/actions/extract-published-renderer
-        with:
-          archive: ${{ env.PUBLISHED_RENDERER_ARCHIVE }}
-          extract-dir: ${{ env.PUBLISHED_RENDERER_EXTRACT_DIR }}
-          binary-path: ${{ fromJSON(needs.verify-release.outputs.channel_config).project.renderer_archive_path }}
       - name: Render manifest-selected formulas with the published renderer
         shell: bash
         env:
@@ -159,7 +142,7 @@ jobs:
           config = json.loads(os.environ["CHANNEL_CONFIG"])
           project = config["project"]
           channel = config["channel"]
-          assets = {asset["key"]: asset for asset in json.loads(Path("homebrew-release-assets.json").read_text())}
+          assets = json.loads(Path("homebrew-release-assets.json").read_text())
           renderer = os.environ["PUBLISHED_RENDERER"]
           for index, formula in enumerate(channel["formulas"]):
               binaries = formula["binaries"]

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import re
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 PACKAGE_ROOT = next(path for path in Path(__file__).resolve().parents if (path / "install.py").is_file())
@@ -156,6 +159,14 @@ class ReleaseScriptTests(unittest.TestCase):
             self._git(repo, "commit", "-m", "post-cut develop work")
             self._git(repo, "push", "origin", "develop")
             self._git(repo, "checkout", "main")
+            release_sha = subprocess.run(
+                ["git", "rev-parse", "origin/main"],
+                cwd=repo,
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout.strip()
+            gate_output = root / "github-output"
 
             result = subprocess.run(
                 [
@@ -169,13 +180,16 @@ class ReleaseScriptTests(unittest.TestCase):
                     "Cargo.toml",
                 ],
                 cwd=repo,
+                env={**os.environ, "GITHUB_OUTPUT": str(gate_output)},
                 text=True,
                 capture_output=True,
                 check=False,
             )
+            emitted_output = gate_output.read_text(encoding="utf-8")
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("PASS - release gate checks satisfied", result.stdout)
+        self.assertEqual(emitted_output, f"release_sha={release_sha}\n")
 
     def test_release_gate_rejects_candidate_outside_release_history(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -250,31 +264,114 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("public-registry-inquiry-plan", result.stdout)
         self.assertIn("preflight-secret-plan", result.stdout)
+        self.assertIn("registry-status", result.stdout)
 
-    def test_bootstrap_enforces_the_documented_renderer_version_floor(self) -> None:
+    def test_bootstrap_enforces_the_exact_documented_renderer_version(self) -> None:
         script = SCRIPTS / "bootstrap_sc_compose.py"
         text = script.read_text(encoding="utf-8")
-        probe = text[text.index("def installed_version"):text.index("def version_components")]
-        self.assertIn('SC_COMPOSE_VERSION = "1.4.1"', text)
-        self.assertIn("historical compatibility floor", text)
+        probe = text[text.index("def installed_version"):text.index("def require_pinned_version")]
+        self.assertEqual(BOOTSTRAP.SC_COMPOSE_VERSION, "1.5.0")
         self.assertIn('"venv"', text)
         self.assertIn('f"sc-compose=={SC_COMPOSE_VERSION}"', text)
         self.assertIn("from importlib.metadata import version", probe)
         self.assertNotIn("import sc_compose", probe)
-        self.assertNotIn("existing != SC_COMPOSE_VERSION", text)
-        self.assertIn("require_version_floor(existing)", text)
+        self.assertIn("if existing != SC_COMPOSE_VERSION", text)
+        self.assertIn("install_pinned_wheel(python)", text)
+        self.assertIn("require_pinned_version(existing)", text)
         self.assertIn("managed environment has incompatible sc-compose wheel", text)
+        self.assertIn("--write-cli", text)
+        self.assertIn("write_cli_wrapper", text)
 
-    def test_bootstrap_rejects_a_too_old_wheel(self) -> None:
+    def test_bootstrap_rejects_every_non_pinned_wheel(self) -> None:
         with self.assertRaisesRegex(
             SystemExit,
-            r"stale version '1\.4\.0'; required >= 1\.4\.1",
+            r"found '1\.4\.1'; required exactly 1\.5\.0",
         ):
-            BOOTSTRAP.require_version_floor("1.4.0")
+            BOOTSTRAP.require_pinned_version("1.4.1")
+        with self.assertRaisesRegex(
+            SystemExit,
+            r"found '1\.5\.1'; required exactly 1\.5\.0",
+        ):
+            BOOTSTRAP.require_pinned_version("1.5.1")
 
-    def test_bootstrap_accepts_the_floor_and_newer_wheels(self) -> None:
-        BOOTSTRAP.require_version_floor("1.4.1")
-        BOOTSTRAP.require_version_floor("1.5.0")
+    def test_bootstrap_accepts_only_the_pinned_wheel(self) -> None:
+        BOOTSTRAP.require_pinned_version("1.5.0")
+
+    def test_bootstrap_replaces_any_existing_non_pinned_wheel(self) -> None:
+        python = Path("/tmp/sc-compose-python")
+        with (
+            patch.object(BOOTSTRAP, "installed_version", side_effect=["1.4.1", "1.5.0"]),
+            patch.object(BOOTSTRAP, "install_pinned_wheel") as install,
+        ):
+            BOOTSTRAP.provision_pinned_wheel(python)
+        install.assert_called_once_with(python)
+
+    def test_bootstrap_does_not_reinstall_the_exact_pinned_wheel(self) -> None:
+        python = Path("/tmp/sc-compose-python")
+        with (
+            patch.object(BOOTSTRAP, "installed_version", return_value="1.5.0"),
+            patch.object(BOOTSTRAP, "install_pinned_wheel") as install,
+        ):
+            BOOTSTRAP.provision_pinned_wheel(python)
+        install.assert_not_called()
+
+    def test_write_cli_wrapper_emits_render_compatible_script(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            venv = Path(temporary)
+            python = venv / "bin" / "python"
+            wrapper = BOOTSTRAP.write_cli_wrapper(venv, python)
+            text = wrapper.read_text(encoding="utf-8")
+            self.assertEqual(wrapper, venv / "bin" / "renderer")
+            self.assertTrue(wrapper.stat().st_mode & 0o111)
+            self.assertIn("sc_compose.ComposeMode.file", text)
+            self.assertIn("--var-file", text)
+            self.assertIn('choices=["render"]', text)
+
+    def test_runtime_renderer_paths_use_the_bootstrapped_exact_pin(self) -> None:
+        """Guard every package Python-renderer path against independent pins."""
+        repository = PACKAGE_ROOT.parents[1]
+        bootstrap = (SCRIPTS / "bootstrap_sc_compose.py").read_text(encoding="utf-8")
+        ci = (repository / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        root_readme = (repository / "README.md").read_text(encoding="utf-8")
+        package_readme = (PACKAGE_ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertEqual(bootstrap.count('SC_COMPOSE_VERSION = "'), 1)
+        self.assertIn('SC_COMPOSE_VERSION = "1.5.0"', bootstrap)
+        self.assertIn("bootstrap_sc_compose.py", ci)
+        self.assertNotRegex(ci, r"sc-compose-[0-9]")
+        self.assertIn('"$SC_COMPOSE_PYTHON"', ci)
+        self.assertIn("bootstrap_sc_compose.py", root_readme)
+        self.assertNotRegex(root_readme, r"sc-publish-[0-9]")
+        self.assertIn("exact pinned sc-compose 1.5.0 renderer wheel", package_readme)
+
+        for path in repository.rglob("*"):
+            if not path.is_file() or ".git" in path.parts or "tests" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            for found in re.findall(r"sc-compose==([0-9][0-9.]*)", text):
+                self.assertEqual(found, BOOTSTRAP.SC_COMPOSE_VERSION, path)
+
+    def test_publisher_profiles_use_the_shared_cli_renderer_contract(self) -> None:
+        contract = (
+            PACKAGE_ROOT
+            / ".claude"
+            / "skills"
+            / "publishing"
+            / "ref"
+            / "renderer-contract.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("`sc-compose` CLI", contract)
+        self.assertIn("SC_COMPOSE_VERSION", contract)
+        self.assertIn("interpreter printed by `bootstrap_sc_compose.py`", contract)
+
+        for relative in (
+            ".claude/agents/publisher.md",
+            ".claude/agents/publisher-channel-protocol.md",
+            ".cursor/agents/publisher.md",
+        ):
+            text = (PACKAGE_ROOT / relative).read_text(encoding="utf-8")
+            self.assertIn("renderer-contract.md", text)
+            self.assertNotIn("import sc_compose", text)
 
 
 if __name__ == "__main__":

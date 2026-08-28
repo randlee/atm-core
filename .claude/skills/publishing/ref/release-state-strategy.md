@@ -13,6 +13,11 @@ the source of truth for artifacts, channels, and publish order.
   reuses it only after proving that it remains an ancestor of `origin/develop`.
 - The release branch starts from that release-candidate tag. A release fix may
   remain on `release/*` through publication and return to `develop` afterward.
+- The release-candidate tag is the minimum baseline the final release must
+  contain, not an exact snapshot of what ships. Every fix committed to
+  `release/*` after the candidate cut is mandatory final-release content: carry
+  it through the merge to `main`; never drop, reset, or bypass it by publishing
+  the originally tagged commit alone.
 - A readiness preflight before merging to `main` and the final preflight of the
   exact `main` commit are separate checks. Neither substitutes for the other.
 - The final release gate proves that `release-candidate-vX.Y.Z` is an ancestor
@@ -64,3 +69,10 @@ For a partial crates.io publication, keep the same tag and release ref. The
 manifest-ordered crates.io job skips crates already live and retries only the
 missing crate set. Do not bump a version or replay successful channels solely
 because a newly added crate was missing on the first attempt.
+
+For an authorized channel retry, the root Release workflow reuses an existing
+production tag only after proving that the tag is an ancestor of `origin/main`
+and descends from the matching release-candidate tag. The tag remains
+immutable; asset-building and remaining channel publication check out the
+newer authorized `origin/main` commit. Pass the exact prior successful channel
+set to both Release Preflight and Release as `already_published_channels`.

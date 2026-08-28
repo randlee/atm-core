@@ -29,7 +29,7 @@ class ReleaseHomebrewWorkflowTests(unittest.TestCase):
         text = WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn("HOMEBREW_TAP_TOKEN is required", text)
-        self.assertIn("./.github/actions/extract-published-renderer", text)
+        self.assertIn("./.github/actions/setup-renderer", text)
         self.assertIn("Render manifest-selected formulas with the published renderer", text)
 
 
