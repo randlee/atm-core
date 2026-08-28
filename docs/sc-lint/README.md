@@ -2,6 +2,15 @@
 
 This folder is the home for `sc-lint` design and planning material.
 
+> **Status note (2026-08-27):** this material is historical design/planning
+> for what is now the published `sc-lint` crate family on crates.io (`0.5.x`).
+> References below to in-tree scaffold crates predate that release. The
+> vendored `crates/sc-lint-attributes` copy was removed by PR #1068 — ATM now
+> consumes the published `sc-lint-attributes = "0.5"` — while
+> `crates/sc-lint-directives` and `crates/sc-lint-boundary` remain vendored
+> pending the migration plan in
+> [`docs/plans/sc-lint-migration/`](../plans/sc-lint-migration/plan.md).
+
 Current contents:
 
 - [`requirements.md`](./requirements.md) — consumer-neutral requirements for

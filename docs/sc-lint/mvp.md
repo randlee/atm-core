@@ -1,5 +1,11 @@
 # `sc-lint-boundary` MVP
 
+> **Historical design document.** The `sc-lint` family described here has
+> since shipped on crates.io (`0.5.x`); mentions of `sc-lint-attributes` as an
+> in-tree `0.1.0` scaffold predate that. ATM now consumes the published
+> `sc-lint-attributes = "0.5"` (vendored copy removed by PR #1068); see the
+> status note in [`README.md`](./README.md).
+
 ## Purpose
 
 `sc-lint-boundary` is the planned internal Rust analyzer for AST-sensitive
