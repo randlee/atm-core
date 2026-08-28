@@ -472,27 +472,29 @@ paths unchanged.
   and that the caller's own ambient environment is never mutated.
   `sftp.ps1` is covered the same way through `pwsh` when present (gated
   `win32 or pwsh found`, honest skip otherwise, mirroring this suite's
-  existing platform-gated tests).
-- AC 7 (live cross-host transcript): local development hosts cannot produce
-  this (an ambient daemon already owns the OS account's singleton runtime
-  lock on this machine, and the fleet's `m5` Hermes host is not reachable
-  from a routine dev/CI session), so
-  `scripts/phase-aq/run_aq4_transfer_evidence.py` — registered in
-  `.github/workflows/phase-aq-evidence.yml`'s harness list beside AQ1.9 and
-  AQ2.5 — drives a real `atm send --attach` over a real loopback `sshd` this
-  script starts (installing `openssh-server` on ubuntu if missing; macOS
-  uses the bundled `/usr/sbin/sshd`, honestly recording `skipped_no_sshd`
-  if it cannot run), through the real, unmodified `scripts/transfer/sftp.sh`
-  example, verifying the attached file lands under the receiver's real
-  mailbox-reported `$ATM_TEMP/send-to/<transfer-id>` path with byte-for-byte
-  content match. `scripts/phase-aq/test_run_aq4_transfer_evidence.py`
+  existing platform-gated tests). **SFTP leg satisfied:** run 33128348487
+  (linux+macos PASS) provides live cross-host loopback-SSH transcripts.
+- AC 7 (live cross-host transcript): the sftp.sh leg is complete via run
+  33128348487 (evidence table above); the Tailscale leg remains a
+  **FOLLOW-UP `AQ4-tailscale-m5`** (fleet `m5` host not reachable from
+  clean-runner CI lanes, and Tailscale enrollment is an operator/IT
+  environment concern this sprint documents but does not implement — see
+  Non-closure below). `scripts/phase-aq/run_aq4_transfer_evidence.py` —
+  registered in `.github/workflows/phase-aq-evidence.yml`'s harness list
+  beside AQ1.9 and AQ2.5 — drives a real `atm send --attach` over a real
+  loopback `sshd` the script starts (installing `openssh-server` on ubuntu
+  if missing; macOS uses the bundled `/usr/sbin/sshd`, honestly recording
+  `skipped_no_sshd` if it cannot run), through the real, unmodified
+  `scripts/transfer/sftp.sh` example, verifying the attached file lands
+  under the receiver's real mailbox-reported `$ATM_TEMP/send-to/<transfer-id>`
+  path with byte-for-byte content match. `scripts/phase-aq/test_run_aq4_transfer_evidence.py`
   covers the harness's pure launch/record-schema logic (argument defaults,
   evidence-writer output, exit-code mapping) without needing a live `sshd`.
 
 | Runner | Status | Run ID | Head | Files |
 |--------|--------|--------|------|-------|
-| ubuntu-latest | PENDING | — | — | dispatch via `.github/workflows/phase-aq-evidence.yml` (`workflow_dispatch`, `branch: feature/aq-4-send-to-core`) |
-| macOS | PENDING | — | — | dispatch via `.github/workflows/phase-aq-evidence.yml` (`workflow_dispatch`, `branch: feature/aq-4-send-to-core`) |
+| ubuntu-latest | PASS | 33128348487 | d0d54e004 | [transfer-clean-runner-linux.json](evidence/AQ4/transfer-clean-runner-linux.json) · [transfer-clean-runner-linux.md](evidence/AQ4/transfer-clean-runner-linux.md) |
+| macOS | PASS | 33128348487 | d0d54e004 | [transfer-clean-runner-macos.json](evidence/AQ4/transfer-clean-runner-macos.json) · [transfer-clean-runner-macos.md](evidence/AQ4/transfer-clean-runner-macos.md) |
 
 The Tailscale leg (`scripts/transfer/tailscale.sh`) cannot run on either
 clean-runner lane (Tailscale enrollment is an operator/IT environment
