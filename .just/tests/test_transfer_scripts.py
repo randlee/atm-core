@@ -192,15 +192,22 @@ FAKE_TRANSFER_LIB = textwrap.dedent(
 
     def strip_ssh_config_flag(argv: list[str]) -> list[str]:
         \"\"\"Strips a leading `-F <path>` pair (QA-2 B6's
-        ATM_TRANSFER_SSH_CONFIG passthrough) before host/positional
-        derivation, exactly like real OpenSSH's own flag parsing -- so
-        contract tests can assert on the pair's presence in the logged
-        argv while the rest of this fake's logic still finds the real
-        host/command/source/destination arguments regardless of whether
-        it is there.\"\"\"
-        if len(argv) >= 2 and argv[0] == "-F":
-            return argv[2:]
-        return argv
+        ATM_TRANSFER_SSH_CONFIG passthrough) and any leading boolean
+        client flags sftp.ps1/sftp.sh may put ahead of the host argument
+        (currently just `-n`, sftp.ps1's non-interactive-stdin fix -- run
+        33142976493 @ dcd3130f1 -- and `-T`, kept for parity since real
+        OpenSSH accepts it in the same no-value position) before
+        host/positional derivation, exactly like real OpenSSH's own flag
+        parsing -- so contract tests can assert on the `-F` pair's
+        presence in the logged argv while the rest of this fake's logic
+        still finds the real host/command/source/destination arguments
+        regardless of whether either is there.\"\"\"
+        remaining = argv
+        if len(remaining) >= 2 and remaining[0] == "-F":
+            remaining = remaining[2:]
+        while remaining and remaining[0] in ("-n", "-T"):
+            remaining = remaining[1:]
+        return remaining
     """
 )
 
@@ -613,6 +620,60 @@ class SftpPs1Tests(unittest.TestCase):
             self.assertIn("failed to copy", result.stderr)
             self.assertIn("scp exit 9", result.stderr)
             self.assertIn("fake scp: forced failure for test", result.stderr)
+
+    def test_remote_mkdir_failure_exit_code_and_stderr_survive_capture(self) -> None:
+        """Regression coverage for the exit-code/stderr capture order
+        itself (not just its downstream message, already covered by
+        `test_remote_mkdir_failure_surfaces_ssh_stderr_and_exit_code`
+        above): a distinct forced exit code (7, never reused by another
+        test in this class) must still show up as `ssh exit 7` with fake
+        ssh's own forced-failure text, and never fall back to the blank
+        "(ssh exit ): (no output)" run 33142976493 (dcd3130f1) recorded
+        live -- proof `Invoke-Transfer` reads `$LASTEXITCODE` on the
+        statement immediately after the native call that sets it, with
+        nothing else running in between, regardless of the hosting pwsh
+        version's `$PSNativeCommandUseErrorActionPreference` default."""
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            _bin_dir, log_path, env = self._fixture(tmp)
+            env["FAKE_SSH_EXIT_CODE"] = "7"
+            attach = tmp / "report.pdf"
+            attach.write_bytes(b"pdf-bytes")
+
+            result = self._invoke(["m5", "01J0000000000000000000004D", str(attach)], env, str(tmp))
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("ssh exit 7", result.stderr)
+            self.assertNotIn("(no output)", result.stderr)
+            self.assertIn("fake ssh: forced failure for test", result.stderr)
+            invocations = _read_log(log_path)
+            self.assertEqual([call["bin"] for call in invocations], ["ssh"], invocations)
+
+    def test_mkdir_call_is_non_interactive_no_stdin(self) -> None:
+        """sftp.ps1's mkdir call passes ssh `-n` (never scp -- OpenSSH's
+        `scp` has no such flag) so ssh never tries to read this script's
+        own closed stdin (ATM's contract, see the top-of-file comment):
+        run 33142976493 (dcd3130f1)'s live Windows evidence showed the
+        real OpenSSH client dropping the connection mid-handshake
+        (WSAECONNABORTED) when spawned with an invalid stdin handle and
+        no `-n`. Fake ssh never touches stdin, so it cannot reproduce
+        that live network symptom -- this only proves the exact flag
+        sftp.ps1 sends, and that adding it leaves the invoked-binary
+        sequence unchanged (still exactly `["ssh", "scp"]`)."""
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            _bin_dir, log_path, env = self._fixture(tmp)
+            attach = tmp / "report.pdf"
+            attach.write_bytes(b"pdf-bytes")
+
+            result = self._invoke(["m5", "01J0000000000000000000004E", str(attach)], env, str(tmp))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            invocations = _read_log(log_path)
+            self.assertEqual([call["bin"] for call in invocations], ["ssh", "scp"], invocations)
+            ssh_call, scp_call = invocations[0], invocations[1]
+            self.assertIn("-n", ssh_call["argv"])
+            self.assertNotIn("-n", scp_call["argv"])
 
 
 class PosixShellDiscoveryTests(unittest.TestCase):

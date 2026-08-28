@@ -429,6 +429,21 @@ def write_scratch_ssh_client_config(root: Path, port: int, identity: Path) -> Pa
     so a POSIX-style `/dev/null` there would create (and then try to
     parse as a known-hosts file) a literal file named `/dev/null` instead of
     discarding host-key state.
+
+    `BatchMode`/`LogLevel` live here, in the harness's own scratch config,
+    rather than as hardcoded `-o` flags in the shipped `sftp.sh`/
+    `sftp.ps1` examples: those scripts are user-modifiable installs (ADR-055
+    decision (c)), so the client policy this scenario needs for
+    reproducible, non-interactive evidence runs belongs in the throwaway
+    `-F` config it already threads through `ATM_TRANSFER_SSH_CONFIG`, not
+    baked into the example an operator is expected to adapt. `BatchMode
+    yes` disables any interactive prompt (passphrase, unknown host
+    confirmation) ssh/scp might otherwise attempt -- belt-and-suspenders
+    alongside sftp.ps1's own `-n` fix (run 33142976493 @ dcd3130f1) for the
+    same closed-stdin hazard. `LogLevel DEBUG1` puts the client's own
+    handshake diagnostics in `record["send"]["stderr_tail"]` (sftp.ps1
+    forwards ssh/scp's merged stderr there) without the `DEBUG3` volume the
+    scratch `sshd` already logs server-side.
     """
     known_hosts_sink = "NUL" if IS_WINDOWS else "/dev/null"
     config_path = root / "ssh_client_config"
@@ -443,6 +458,8 @@ def write_scratch_ssh_client_config(root: Path, port: int, identity: Path) -> Pa
             "    StrictHostKeyChecking no",
             f"    UserKnownHostsFile {known_hosts_sink}",
             "    PasswordAuthentication no",
+            "    BatchMode yes",
+            "    LogLevel DEBUG1",
             "",
         ]
     )
@@ -450,6 +467,55 @@ def write_scratch_ssh_client_config(root: Path, port: int, identity: Path) -> Pa
     if not IS_WINDOWS:
         config_path.chmod(0o600)
     return config_path
+
+
+def run_ssh_vvv_diagnostic(env: dict[str, str], ssh_config_path: Path, timeout: float) -> dict[str, Any]:
+    """Windows-only, failure-only diagnostic (run 33142976493 @ dcd3130f1):
+    runs one trivial, harmless remote command through the SAME scratch
+    `-F` config the real `atm send --attach` invocation used, directly
+    from this harness process (never through `pwsh`/`sftp.ps1`) with
+    `-vvv`, so a live-evidence failure carries the ssh CLIENT's own
+    handshake-level debug output even when `sftp.ps1`'s own captured
+    diagnostic comes back empty (that run's "(ssh exit ): (no output)").
+    `stdin=subprocess.DEVNULL` is explicit and deliberate: this harness
+    fully controls this one-off invocation's stdio, unlike the closed-
+    stdin handle ATM's own restricted environment leaves `sftp.ps1`'s
+    child ssh/scp processes to inherit, so this diagnostic call cannot
+    itself reproduce dcd3130f1's stdin-handle hazard -- it exists purely
+    to capture the ssh client's own debug log for a failed live run.
+    Diagnostics only: this return value is recorded but never asserted
+    against.
+    """
+    ssh_bin = shutil.which("ssh", path=env.get("PATH")) or str(
+        Path(env.get("SystemRoot", "C:\\Windows")) / "System32" / "OpenSSH" / "ssh.exe"
+    )
+    argv = [ssh_bin, "-F", str(ssh_config_path), "-vvv", "-n", TRANSFER_HOST, "echo aq4-ssh-vvv-diagnostic-probe"]
+    try:
+        completed = subprocess.run(
+            argv,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+        return {
+            "argv": argv,
+            "returncode": completed.returncode,
+            "stdout": completed.stdout.strip(),
+            "stderr_tail": completed.stderr.strip()[-4000:],
+        }
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+        return {
+            "argv": argv,
+            "returncode": None,
+            "stdout": stdout.strip(),
+            "stderr_tail": stderr.strip()[-4000:],
+            "error": f"timed out after {timeout}s",
+        }
 
 
 def fixture_environment(root: Path) -> dict[str, str]:
@@ -1160,6 +1226,13 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
             # on failure, and only the tail, to avoid bloating the
             # evidence file on the (overwhelmingly common) success path.
             record["sshd_debug_log_tail"] = PipeDrain.tail(sshd_drain.stdout_lines)
+        if not send_ok and IS_WINDOWS:
+            # Same rationale as the sshd-side capture above, from the
+            # opposite end: the ssh CLIENT's own handshake debug output
+            # (`-vvv`), which no server-side log or `sftp.ps1`-forwarded
+            # stderr can carry when the client aborts before ever writing
+            # anything of its own (run 33142976493 @ dcd3130f1).
+            record["ssh_vvv_diagnostic"] = run_ssh_vvv_diagnostic(env, ssh_config_path, args.timeout)
         landed_path: str | None = None
         landed_matches_convention = False
         landed_file_exists = False

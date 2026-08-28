@@ -29,6 +29,23 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# pwsh 7.3+ defaults `$PSNativeCommandUseErrorActionPreference` to `$true`:
+# a native command that exits non-zero is turned into a terminating
+# `NativeCommandExitException` governed by `$ErrorActionPreference` above.
+# That preference is meant for this script's OWN logic, not for ssh/scp's
+# exit codes, which are inspected manually via `$LASTEXITCODE` immediately
+# below each call -- left at its default, the exception fires between the
+# native call and that `$LASTEXITCODE` read, so the assignment that was
+# supposed to capture ssh/scp's output never completes and `$LASTEXITCODE`
+# is never populated (run 33142976493 @ dcd3130f1: "(ssh exit ): (no
+# output)", both blank). Disabling it here restores this script's own
+# manual, non-throwing exit-code handling regardless of the hosting pwsh
+# version; guarded by `Get-Variable` because the setting does not exist on
+# Windows PowerShell 5.1.
+if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
+
 # Resolve ssh/scp explicitly rather than relying on bare `ssh`/`scp` calls
 # to be found on whatever `PATH` this process happens to start with: ATM
 # invokes this script's `pwsh` host with a deliberately minimal, synthesized
@@ -135,20 +152,70 @@ function Format-CapturedOutput {
     return $joined
 }
 
-$mkdirOutput = & $Ssh @SshExtraArgs $HostName "umask 077 && mkdir -p '$RemoteDir'" 2>&1
-$mkdirExitCode = $LASTEXITCODE
-if ($mkdirExitCode -ne 0) {
-    $detail = Format-CapturedOutput $mkdirOutput
-    [Console]::Error.WriteLine("failed to create $RemoteDir on $HostName (ssh exit ${mkdirExitCode}): $detail")
+# Runs `$Binary @Arguments`, capturing its merged stdout+stderr and exit
+# code (`$LASTEXITCODE` is read on the statement immediately after the
+# call assigns `Output` -- pwsh can reset/clobber it on any later
+# statement, including a failed comparison, so nothing else may run
+# in between). Wrapped in try/catch because a native-command invocation
+# can also fail at the PowerShell level rather than exiting non-zero on
+# its own terms -- e.g. a `NativeCommandExitException`
+# (`$PSNativeCommandUseErrorActionPreference`, disabled above but kept
+# defensive here for whatever pwsh version this script ends up running
+# under) or the binary failing to start at all -- in which case
+# `$LASTEXITCODE` was never (reliably) populated by this call and the
+# exception's own message is the only diagnostic available; surfacing it
+# instead of silently falling through to a blank "(ssh exit ): (no
+# output)" is the whole point of this wrapper (run 33142976493 @
+# dcd3130f1).
+function Invoke-Transfer {
+    param(
+        [Parameter(Mandatory = $true)][string]$Binary,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+    try {
+        $output = & $Binary @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+        return [pscustomobject]@{ Output = $output; ExitCode = $exitCode; Exception = $null }
+    } catch {
+        return [pscustomobject]@{ Output = $null; ExitCode = $LASTEXITCODE; Exception = $_.Exception.Message }
+    }
+}
+
+function Format-TransferFailure {
+    param(
+        [Parameter(Mandatory = $true)][pscustomobject]$Result
+    )
+    if ($Result.Exception) {
+        $exitCodeText = if ($null -ne $Result.ExitCode) { "$($Result.ExitCode)" } else { "unknown" }
+        return "$($Result.Exception) (exit $exitCodeText)"
+    }
+    return Format-CapturedOutput $Result.Output
+}
+
+# `-n` (ssh only; scp has no equivalent flag) redirects ssh's stdin from
+# a null source instead of leaving it on whatever handle this script's own
+# closed stdin (ATM's contract, see the top of this file) left the child
+# process with. Windows OpenSSH's client polls stdin as part of its own
+# I/O multiplexing from the very start of a connection -- before identity
+# exchange even completes -- so an invalid/closed stdin handle there can
+# abort the TCP connection outright (`kex_exchange_identification: read:
+# Connection aborted`, `WSARecv() ERROR 10053`: run 33142976493 @
+# dcd3130f1's live Windows evidence) rather than merely fail cleanly. The
+# mkdir call needs no stdin at all, so `-n` is always safe here.
+$mkdirResult = Invoke-Transfer -Binary $Ssh -Arguments ($SshExtraArgs + @("-n", $HostName, "umask 077 && mkdir -p '$RemoteDir'"))
+if ($mkdirResult.ExitCode -ne 0 -or $mkdirResult.Exception) {
+    $detail = Format-TransferFailure $mkdirResult
+    $exitCodeText = if ($null -ne $mkdirResult.ExitCode) { "$($mkdirResult.ExitCode)" } else { "unknown" }
+    [Console]::Error.WriteLine("failed to create $RemoteDir on $HostName (ssh exit ${exitCodeText}): $detail")
     exit 1
 }
 
 foreach ($file in $Files) {
-    $copyOutput = & $Scp @SshExtraArgs -q $file "${HostName}:${RemoteDir}/" 2>&1
-    $copyExitCode = $LASTEXITCODE
-    if ($copyExitCode -ne 0) {
-        $detail = Format-CapturedOutput $copyOutput
-        [Console]::Error.WriteLine("failed to copy $file to $HostName`:$RemoteDir (scp exit ${copyExitCode}): $detail")
+    $copyResult = Invoke-Transfer -Binary $Scp -Arguments ($SshExtraArgs + @("-q", $file, "${HostName}:${RemoteDir}/"))
+    if ($copyResult.ExitCode -ne 0 -or $copyResult.Exception) {
+        $detail = Format-TransferFailure $copyResult
+        $exitCodeText = if ($null -ne $copyResult.ExitCode) { "$($copyResult.ExitCode)" } else { "unknown" }
+        [Console]::Error.WriteLine("failed to copy $file to $HostName`:$RemoteDir (scp exit ${exitCodeText}): $detail")
         exit 1
     }
 }

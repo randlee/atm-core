@@ -457,6 +457,75 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
         finally:
             module.IS_WINDOWS = original
 
+    def test_write_scratch_ssh_client_config_disables_prompts_and_sets_debug_logging(self) -> None:
+        # run 33142976493 @ dcd3130f1's fix moved these two client options
+        # into the harness's own scratch `-F` config instead of hardcoding
+        # them into the shipped sftp.sh/sftp.ps1 examples: BatchMode
+        # (belt-and-suspenders alongside sftp.ps1's own `-n` fix for the
+        # same closed-stdin hazard) and LogLevel DEBUG1 (so a failed live
+        # run's ssh/scp client stderr, forwarded by sftp.ps1 into
+        # record["send"]["stderr_tail"], carries handshake diagnostics).
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = module.write_scratch_ssh_client_config(root, 1, root / "identity")
+            content = config_path.read_text(encoding="utf-8")
+            self.assertIn("BatchMode yes", content)
+            self.assertIn("LogLevel DEBUG1", content)
+
+    def test_run_ssh_vvv_diagnostic_captures_argv_output_and_exit_code(self) -> None:
+        import stat as stat_module
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            fake_ssh = bin_dir / "ssh"
+            fake_ssh.write_text(
+                "#!/bin/sh\necho \"fake ssh stderr: $*\" 1>&2\necho aq4-ssh-vvv-diagnostic-probe\nexit 0\n",
+                encoding="utf-8",
+            )
+            fake_ssh.chmod(fake_ssh.stat().st_mode | stat_module.S_IXUSR)
+            env = dict(os.environ)
+            env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+            config_path = root / "ssh_client_config"
+            config_path.write_text("Host localhost\n", encoding="utf-8")
+
+            result = module.run_ssh_vvv_diagnostic(env, config_path, timeout=5)
+
+            self.assertEqual(result["returncode"], 0)
+            self.assertEqual(result["stdout"], "aq4-ssh-vvv-diagnostic-probe")
+            self.assertIn("fake ssh stderr", result["stderr_tail"])
+            self.assertEqual(
+                result["argv"][1:],
+                ["-F", str(config_path), "-vvv", "-n", module.TRANSFER_HOST, "echo aq4-ssh-vvv-diagnostic-probe"],
+            )
+
+    def test_run_ssh_vvv_diagnostic_surfaces_nonzero_exit_and_stderr(self) -> None:
+        import stat as stat_module
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            fake_ssh = bin_dir / "ssh"
+            fake_ssh.write_text(
+                "#!/bin/sh\necho 'kex_exchange_identification: read: Connection aborted' 1>&2\nexit 255\n",
+                encoding="utf-8",
+            )
+            fake_ssh.chmod(fake_ssh.stat().st_mode | stat_module.S_IXUSR)
+            env = dict(os.environ)
+            env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+            config_path = root / "ssh_client_config"
+            config_path.write_text("Host localhost\n", encoding="utf-8")
+
+            result = module.run_ssh_vvv_diagnostic(env, config_path, timeout=5)
+
+            self.assertEqual(result["returncode"], 255)
+            self.assertIn("kex_exchange_identification", result["stderr_tail"])
+
     # -- Windows install_transfer_script: profile-containment, not chmod --
 
     def test_install_transfer_script_installs_sftp_ps1_under_the_profile_home_on_windows(self) -> None:
