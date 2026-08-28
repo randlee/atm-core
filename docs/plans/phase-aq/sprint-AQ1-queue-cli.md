@@ -1,6 +1,6 @@
 # Sprint AQ1 — Trait Foundation + `atm queue`: CLI Verb, Taxonomy, and Storage Contract
 
-Status: draft · Branch: `feature/aq-1-queue-cli` off `integrate/phase-aq`
+Status: complete · Branch: `feature/aq-1-trait-foundation` off `integrate/phase-aq`
 (created from `develop` at phase start; mechanical precondition on the cut
 head: `test -f docs/adr/ADR-047-*.md && test -f docs/adr/ADR-053-*.md`) ·
 PR target: `integrate/phase-aq`

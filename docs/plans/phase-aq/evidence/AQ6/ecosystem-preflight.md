@@ -49,13 +49,23 @@ it writes `PickerInput` under the generated wizard JSON's `config`, invokes
 
 ## PR CI evidence
 
-Final implementation head: `a80d6b2ef93b957485351184c79ea056ef3e7719`.
+Final implementation head: `29ac4a7c58796f446f3cdd6725f265ea6db2a66a` (PR
+#1066). Previous implementation head (history):
+`a80d6b2ef93b957485351184c79ea056ef3e7719`. The diff between `a80d6b2ef9` and
+`29ac4a7c58` is merge-forwards only, with zero change to AQ6's own files
+(confirmed by quality-mgr QA-4 diff-scope check).
 
-- [Phase AQ Evidence run 33129163402](https://github.com/randlee/atm-core/actions/runs/33129163402) — concluded success, including the Ubuntu and macOS evidence lanes.
-- [CI run 33129163434](https://github.com/randlee/atm-core/actions/runs/33129163434) — current run for this head; all completed lanes are green and the macOS lint and macOS aarch64 wheel lanes remain queued.
+- [CI workflow run 33208724696](https://github.com/randlee/atm-core/actions/runs/33208724696) —
+  all jobs success: Format check (`98976354412`), Clippy (`98976437399`),
+  Just lint ubuntu (`98976354185`), macos (`98976354312`), windows
+  (`98976354419`), Test ubuntu (`98977494098`), macos (`98977493925`),
+  windows (`98977493977`).
+- [Phase AQ evidence workflow run 33208724703](https://github.com/randlee/atm-core/actions/runs/33208724703) —
+  all jobs success: ubuntu (`98976354582`), macos (`98976354619`), windows
+  (`98976354387`).
 
-These run IDs are the authoritative evidence for the current pushed head;
-lane completion status is tracked by the linked workflows.
+These run IDs are the authoritative evidence for PR #1066's final pushed
+head; lane completion status is tracked by the linked workflows.
 
 ## Fix-forward record
 
@@ -68,6 +78,13 @@ continues.
 
 ## CI evidence for final head
 
-- head: `a80d6b2ef93b957485351184c79ea056ef3e7719`
-- CI run: [33129163434](https://github.com/randlee/atm-core/actions/runs/33129163434), with macOS lint and macOS aarch64 wheel lanes queued at the time of this record
-- Phase AQ Evidence run: [33129163402](https://github.com/randlee/atm-core/actions/runs/33129163402), concluded success
+- head: `29ac4a7c58796f446f3cdd6725f265ea6db2a66a` (PR #1066)
+- previous implementation head (history): `a80d6b2ef93b957485351184c79ea056ef3e7719`
+- CI run: [33208724696](https://github.com/randlee/atm-core/actions/runs/33208724696) — all jobs
+  success: Format check (`98976354412`), Clippy (`98976437399`), Just lint
+  ubuntu (`98976354185`) / macos (`98976354312`) / windows (`98976354419`),
+  Test ubuntu (`98977494098`) / macos (`98977493925`) / windows
+  (`98977493977`)
+- Phase AQ Evidence run: [33208724703](https://github.com/randlee/atm-core/actions/runs/33208724703) —
+  all jobs success: ubuntu (`98976354582`), macos (`98976354619`), windows
+  (`98976354387`)
