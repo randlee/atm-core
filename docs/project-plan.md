@@ -1479,7 +1479,7 @@ unreachable pre-kit installed-doc validator path and recorded every remaining
 legacy publish candidate as a gate-bound deferral in its receipt. The first
 kit-era release is the follow-up deletion trigger.
 
-## 53. Phase AU — Boundary Debt Retirement [PLANNING ACTIVE]
+## 53. Phase AU — Boundary Debt Retirement ✅ COMPLETE
 
 Phase AU retires the 22 pre-existing sc-boundary findings exposed when
 QA-RUSTQA-AO2-001's fix armed the sc-boundary lint in `just validate`
