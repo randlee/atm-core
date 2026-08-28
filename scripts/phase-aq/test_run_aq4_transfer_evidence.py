@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -9,6 +10,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from types import SimpleNamespace
+from typing import Any
 
 
 SCRIPT = Path(__file__).with_name("run_aq4_transfer_evidence.py")
@@ -78,6 +80,149 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             markdown = markdown_path.read_text(encoding="utf-8")
             self.assertIn("SKIPPED_NO_SSHD", markdown)
             self.assertIn("honest, announced skip", markdown)
+
+    def test_write_evidence_harness_crashed_includes_error_and_traceback(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            args = SimpleNamespace(host="clean-runner-windows", evidence_dir=Path(temporary))
+            record = {
+                "status": "harness_crashed",
+                "error": "PermissionError: [WinError 32] boom",
+                "traceback": "Traceback (most recent call last):\n  ...\nPermissionError: boom\n",
+            }
+            _json_path, markdown_path = module.write_evidence(args, record)
+            markdown = markdown_path.read_text(encoding="utf-8")
+            self.assertIn("HARNESS_CRASHED", markdown)
+            self.assertIn("PermissionError: [WinError 32] boom", markdown)
+            self.assertIn("Traceback (most recent call last):", markdown)
+
+    def test_write_evidence_surfaces_a_cleanup_warning_without_changing_the_status(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            args = SimpleNamespace(host="clean-runner-windows", evidence_dir=Path(temporary))
+            record = {
+                "status": "pass",
+                "send": {"argv": ["atm", "send"], "returncode": 0},
+                "landed_path": "/tmp/atm-501/send-to/01J.../aq4-report.pdf",
+                "landed_matches_send_to_convention": True,
+                "landed_file_exists": True,
+                "landed_content_matches": True,
+                "cleanup_warning": "could not remove C:\\scratch after 6 attempts: boom",
+            }
+            _json_path, markdown_path = module.write_evidence(args, record)
+            markdown = markdown_path.read_text(encoding="utf-8")
+            self.assertIn("PASS", markdown)
+            self.assertIn("Cleanup warning", markdown)
+            self.assertIn("could not remove C:\\scratch", markdown)
+
+    def test_clear_stale_evidence_removes_pre_existing_files_and_tolerates_absence(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence_dir = Path(temporary)
+            json_path = evidence_dir / "transfer-clean-runner-windows.json"
+            markdown_path = evidence_dir / "transfer-clean-runner-windows.md"
+            json_path.write_text('{"stale": true}', encoding="utf-8")
+            markdown_path.write_text("stale", encoding="utf-8")
+
+            # Must not raise even when one of the two paths is already gone.
+            module._clear_stale_evidence(json_path, evidence_dir / "does-not-exist.md")
+
+            self.assertFalse(json_path.exists())
+            self.assertTrue(markdown_path.exists(), "only the passed-in paths are cleared")
+
+    def test_main_never_leaves_a_stale_evidence_file_when_run_scenario_crashes(self) -> None:
+        # Regression for evidence run 6 (33137262962 @ c510a4745): the
+        # Windows harness crashed inside run_scenario's tempdir cleanup
+        # before write_evidence ever ran, and the workflow's `if: always()`
+        # artifact-upload step then re-uploaded the previously-committed
+        # evidence file for this host as if it were fresh. This proves
+        # main() (a) always deletes any pre-existing file for this run
+        # before doing any real work, and (b) still writes a fresh,
+        # non-stale "harness_crashed" record -- with a traceback -- when
+        # run_scenario raises, so the output is never the old file
+        # untouched and never simply absent.
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence_dir = Path(temporary)
+            json_path = evidence_dir / "transfer-clean-runner-windows.json"
+            evidence_dir.mkdir(parents=True, exist_ok=True)
+            stale_payload = {"schema_version": 1, "sprint": "AQ4", "record": {"status": "pass", "stale": True}}
+            json_path.write_text(json.dumps(stale_payload), encoding="utf-8")
+
+            def _boom(_args: SimpleNamespace) -> dict[str, Any]:
+                raise PermissionError("[WinError 32] The process cannot access the file")
+
+            original_run_scenario = module.run_scenario
+            original_argv = sys.argv
+            module.run_scenario = _boom
+            sys.argv = [
+                "run_aq4_transfer_evidence.py",
+                "--host",
+                "clean-runner-windows",
+                "--evidence-dir",
+                str(evidence_dir),
+                "--daemon",
+                str(module.ROOT / "Cargo.toml"),
+                "--atm",
+                str(module.ROOT / "Cargo.toml"),
+            ]
+            try:
+                exit_code = module.main()
+            finally:
+                module.run_scenario = original_run_scenario
+                sys.argv = original_argv
+
+            self.assertEqual(exit_code, 1)
+            written = json.loads(json_path.read_text(encoding="utf-8"))
+            self.assertEqual(written["record"]["status"], "harness_crashed")
+            self.assertNotIn("stale", written["record"])
+            self.assertIn("PermissionError", written["record"]["error"])
+            self.assertIn("Traceback", written["record"]["traceback"])
+
+    def test_remove_tree_tolerant_removes_a_real_directory(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "victim"
+            (target / "nested").mkdir(parents=True)
+            (target / "nested" / "file.txt").write_text("x", encoding="utf-8")
+
+            result = module._remove_tree_tolerant(target)
+
+            self.assertIsNone(result)
+            self.assertFalse(target.exists())
+
+    def test_remove_tree_tolerant_returns_none_for_an_already_missing_path(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            missing = Path(temporary) / "never-created"
+            self.assertIsNone(module._remove_tree_tolerant(missing))
+
+    def test_remove_tree_tolerant_reports_a_warning_instead_of_raising_when_removal_never_succeeds(
+        self,
+    ) -> None:
+        # Simulates the observed Windows failure mode (WinError 32/5
+        # sharing violation that never clears) without needing an actual
+        # locked directory: shutil.rmtree always raises for this path.
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "locked"
+            target.mkdir()
+
+            original_rmtree = module.shutil.rmtree
+
+            def _always_fails(path: object, *args: object, **kwargs: object) -> None:
+                raise PermissionError("[WinError 32] The process cannot access the file")
+
+            module.shutil.rmtree = _always_fails
+            try:
+                result = module._remove_tree_tolerant(target, attempts=2, initial_delay=0.0)
+            finally:
+                module.shutil.rmtree = original_rmtree
+
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertIn("could not remove", result)
+            self.assertIn("WinError 32", result)
 
     def test_write_evidence_blocked_ambient_daemon_names_the_pids(self) -> None:
         module = load_module()

@@ -83,6 +83,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from typing import Any
 
 
@@ -652,6 +653,43 @@ def install_transfer_script(home: Path) -> dict[str, Any]:
     }
 
 
+def _remove_tree_tolerant(path: Path, *, attempts: int = 6, initial_delay: float = 0.15) -> str | None:
+    """Best-effort recursive removal of a scenario's scratch directory.
+
+    Windows can lag briefly between a child process (or this scenario's own
+    `atm send`/`atm peek` invocations, which already ran to completion and
+    were fully waited on via `subprocess.run`) exiting and the OS actually
+    releasing every handle it held on a directory that was ever used as a
+    process's current working directory (observed live: WinError 32/5
+    sharing violations against `sender-cwd`, raised only *after* the
+    scenario's real work -- and its result -- had already been computed).
+    Retrying with backoff absorbs that transient lag; if the directory still
+    will not budge, this reports a warning string instead of raising, so an
+    OS-level cleanup race can never discard or crash the evidence this
+    scenario already collected (the previous behavior: relying on
+    `tempfile.TemporaryDirectory`'s automatic `__exit__` cleanup, whose
+    exception propagated straight out of `run_scenario` -- past its own
+    `except Exception` -- discarding the already-computed `record`
+    entirely). Returns `None` on success, or a description of the final
+    failure.
+    """
+    delay = initial_delay
+    last_error: OSError | None = None
+    for attempt in range(attempts):
+        try:
+            shutil.rmtree(path)
+            return None
+        except FileNotFoundError:
+            return None
+        except OSError as error:
+            last_error = error
+            if attempt == attempts - 1:
+                break
+            time.sleep(delay)
+            delay *= 2
+    return f"could not remove {path} after {attempts} attempts: {last_error}"
+
+
 def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
     started_at = time.time_ns()
     record: dict[str, Any] = {
@@ -686,186 +724,225 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
         return record
 
     port = free_loopback_port()
-    with tempfile.TemporaryDirectory(prefix="aq4-evidence-") as directory:
-        root = Path(directory)
-        env = fixture_environment(root)
-        home = Path(env["HOME"])
-        sshd_root = root / "sshd"
-        sshd_root.mkdir()
-        daemon_process: subprocess.Popen[str] | None = None
-        daemon_drain: PipeDrain | None = None
-        sshd_process: subprocess.Popen[str] | None = None
-        sshd_drain: PipeDrain | None = None
-        remote_landing_dir: Path | None = None
-        try:
-            keys = generate_ssh_keys(sshd_root)
-            config_path = write_sshd_config(sshd_root, port, keys)
-            sshd = start_sshd(sshd_bin, config_path, port)
-            sshd_process = sshd.pop("process")
-            sshd_drain = sshd.pop("drain")
-            record["sshd_start"] = {**sshd, "port": port}
-            if not sshd["ready"]:
-                record["status"] = "blocked_sshd_start_failed"
-                record["error"] = sshd.get("log_tail") or "sshd did not open its loopback port"
-                return record
+    # A manually-managed `mkdtemp` (not `tempfile.TemporaryDirectory`'s
+    # `with`-block auto-cleanup) deliberately: that context manager's
+    # `__exit__` calls `cleanup()`, which on Windows can raise a
+    # PermissionError (WinError 32/5) if any handle -- this scenario's own
+    # `sender_cwd`, used as an `atm send` child's cwd, included -- has not
+    # yet been released by the OS. Because `__exit__` runs while unwinding
+    # the `return record` below, that exception previously propagated
+    # straight out of this function, discarding the already-computed
+    # `record` entirely and crashing the harness with no evidence written.
+    # Cleanup now happens explicitly in `finally`, below, through
+    # `_remove_tree_tolerant`, which can never raise past this function.
+    directory = tempfile.mkdtemp(prefix="aq4-evidence-")
+    root = Path(directory)
+    env = fixture_environment(root)
+    home = Path(env["HOME"])
+    sshd_root = root / "sshd"
+    sshd_root.mkdir()
+    daemon_process: subprocess.Popen[str] | None = None
+    daemon_drain: PipeDrain | None = None
+    sshd_process: subprocess.Popen[str] | None = None
+    sshd_drain: PipeDrain | None = None
+    remote_landing_dir: Path | None = None
+    try:
+        keys = generate_ssh_keys(sshd_root)
+        config_path = write_sshd_config(sshd_root, port, keys)
+        sshd = start_sshd(sshd_bin, config_path, port)
+        sshd_process = sshd.pop("process")
+        sshd_drain = sshd.pop("drain")
+        record["sshd_start"] = {**sshd, "port": port}
+        if not sshd["ready"]:
+            record["status"] = "blocked_sshd_start_failed"
+            record["error"] = sshd.get("log_tail") or "sshd did not open its loopback port"
+            return record
 
-            sender_cwd = root / "sender-cwd"
-            sender_cwd.mkdir()
-            sender_config_path = write_sender_atm_config(sender_cwd, SENDER_LOCAL_HOST)
-            record["sender_atm_config"] = {
-                "path": str(sender_config_path),
-                "local_host": SENDER_LOCAL_HOST,
-            }
+        sender_cwd = root / "sender-cwd"
+        sender_cwd.mkdir()
+        sender_config_path = write_sender_atm_config(sender_cwd, SENDER_LOCAL_HOST)
+        record["sender_atm_config"] = {
+            "path": str(sender_config_path),
+            "local_host": SENDER_LOCAL_HOST,
+        }
 
-            # QA-2 B6: a scratch ssh client config, never the real
-            # ~/.ssh/config -- threaded to the transfer script's spawned
-            # ssh/scp children through ATM_TRANSFER_SSH_CONFIG, an opt-in
-            # entry in TRANSFER_SCRIPT_ALLOWED_ENV_KEYS every ordinary
-            # install leaves unset.
-            ssh_config_path = write_scratch_ssh_client_config(root, port, keys["identity"])
-            env["ATM_TRANSFER_SSH_CONFIG"] = str(ssh_config_path)
-            record["scratch_ssh_client_config"] = str(ssh_config_path)
+        # QA-2 B6: a scratch ssh client config, never the real
+        # ~/.ssh/config -- threaded to the transfer script's spawned
+        # ssh/scp children through ATM_TRANSFER_SSH_CONFIG, an opt-in
+        # entry in TRANSFER_SCRIPT_ALLOWED_ENV_KEYS every ordinary
+        # install leaves unset.
+        ssh_config_path = write_scratch_ssh_client_config(root, port, keys["identity"])
+        env["ATM_TRANSFER_SSH_CONFIG"] = str(ssh_config_path)
+        record["scratch_ssh_client_config"] = str(ssh_config_path)
 
-            record["roster"] = {
-                "sender": add_roster_member(args.atm, env, home, SENDER, args.timeout),
-                # Decision (e): register the receiver's roster host as
-                # the same literal "localhost" the send below targets
-                # with --host, so the recipient this scenario delivers
-                # to is consistently recorded as reachable at that host,
-                # not merely accepted through the send-time override.
-                "receiver": add_roster_member(args.atm, env, home, RECEIVER, args.timeout, host=TRANSFER_HOST),
-            }
+        record["roster"] = {
+            "sender": add_roster_member(args.atm, env, home, SENDER, args.timeout),
+            # Decision (e): register the receiver's roster host as
+            # the same literal "localhost" the send below targets
+            # with --host, so the recipient this scenario delivers
+            # to is consistently recorded as reachable at that host,
+            # not merely accepted through the send-time override.
+            "receiver": add_roster_member(args.atm, env, home, RECEIVER, args.timeout, host=TRANSFER_HOST),
+        }
 
-            record["transfer_script"] = install_transfer_script(home)
-            # Diagnosability only (never asserted against): what the real
-            # `atm send --attach` invocation below should synthesize for
-            # the transfer-script child's environment (ADR-055 decision
-            # (c) amendment).
-            record["transfer_script"]["synthesized_env"] = _synthesized_transfer_script_path(env)
-            # Not a bare `assert` (stripped under `python -O`): the
-            # whole point of installing at 0700 (Unix) / under the
-            # profile home (Windows) explicitly is to make the safety
-            # check pass, so a mismatch here must be a loud,
-            # unconditional harness failure, not a silently skippable
-            # assertion.
-            if IS_WINDOWS:
-                containment = record["transfer_script"]["windows_profile_containment"]
-                if not (containment["transfer_dir_contained"] and containment["script_contained"]):
+        record["transfer_script"] = install_transfer_script(home)
+        # Diagnosability only (never asserted against): what the real
+        # `atm send --attach` invocation below should synthesize for
+        # the transfer-script child's environment (ADR-055 decision
+        # (c) amendment).
+        record["transfer_script"]["synthesized_env"] = _synthesized_transfer_script_path(env)
+        # Not a bare `assert` (stripped under `python -O`): the
+        # whole point of installing at 0700 (Unix) / under the
+        # profile home (Windows) explicitly is to make the safety
+        # check pass, so a mismatch here must be a loud,
+        # unconditional harness failure, not a silently skippable
+        # assertion.
+        if IS_WINDOWS:
+            containment = record["transfer_script"]["windows_profile_containment"]
+            if not (containment["transfer_dir_contained"] and containment["script_contained"]):
+                raise RuntimeError(
+                    f"install_transfer_script did not land under the resolved profile "
+                    f"home on Windows: {containment}"
+                )
+            if containment["transfer_dir_is_reparse_point"] or containment["script_is_reparse_point"]:
+                raise RuntimeError(
+                    f"install_transfer_script produced a reparse point, which the real "
+                    f"Windows safety check refuses outright: {containment}"
+                )
+        else:
+            for mode_key in ("atm_dir_mode", "transfer_dir_mode", "script_mode"):
+                recorded_mode = record["transfer_script"][mode_key]
+                if recorded_mode != "0o700":
                     raise RuntimeError(
-                        f"install_transfer_script did not land under the resolved profile "
-                        f"home on Windows: {containment}"
+                        f"install_transfer_script did not achieve 0700 for {mode_key}: "
+                        f"got {recorded_mode} (record: {record['transfer_script']})"
                     )
-                if containment["transfer_dir_is_reparse_point"] or containment["script_is_reparse_point"]:
-                    raise RuntimeError(
-                        f"install_transfer_script produced a reparse point, which the real "
-                        f"Windows safety check refuses outright: {containment}"
-                    )
-            else:
-                for mode_key in ("atm_dir_mode", "transfer_dir_mode", "script_mode"):
-                    recorded_mode = record["transfer_script"][mode_key]
-                    if recorded_mode != "0o700":
-                        raise RuntimeError(
-                            f"install_transfer_script did not achieve 0700 for {mode_key}: "
-                            f"got {recorded_mode} (record: {record['transfer_script']})"
-                        )
 
-            daemon = start_daemon(args.daemon, env, args.timeout)
-            daemon_process = daemon.pop("process")
-            daemon_drain = daemon.pop("drain")
-            record["daemon_start"] = daemon
-            if not daemon["ready"]:
-                record["status"] = "blocked_daemon_start_failed"
-                record["error"] = daemon.get("stderr_tail") or "daemon did not report ready"
-                return record
+        daemon = start_daemon(args.daemon, env, args.timeout)
+        daemon_process = daemon.pop("process")
+        daemon_drain = daemon.pop("drain")
+        record["daemon_start"] = daemon
+        if not daemon["ready"]:
+            record["status"] = "blocked_daemon_start_failed"
+            record["error"] = daemon.get("stderr_tail") or "daemon did not report ready"
+            return record
 
-            attach_source_dir = root / "attach-source"
-            attach_source_dir.mkdir()
-            attach_path = attach_source_dir / ATTACHMENT_FILE_NAME
-            attach_path.write_bytes(ATTACHMENT_BODY)
+        attach_source_dir = root / "attach-source"
+        attach_source_dir.mkdir()
+        attach_path = attach_source_dir / ATTACHMENT_FILE_NAME
+        attach_path.write_bytes(ATTACHMENT_BODY)
 
-            # cwd=sender_cwd: `atm send` resolves `.atm.toml`'s
-            # `local_host` (decision (f)) by walking upward from the
-            # process's current directory, so the sender-side config
-            # written above is only found if this invocation actually
-            # runs from there -- unlike every other command in this
-            # scenario, which has no need for `local_host` and keeps
-            # running from ROOT.
-            send_completed = run_cli(
+        # cwd=sender_cwd: `atm send` resolves `.atm.toml`'s
+        # `local_host` (decision (f)) by walking upward from the
+        # process's current directory, so the sender-side config
+        # written above is only found if this invocation actually
+        # runs from there -- unlike every other command in this
+        # scenario, which has no need for `local_host` and keeps
+        # running from ROOT.
+        send_completed = run_cli(
+            args.atm,
+            env,
+            ["send", f"{RECEIVER}@{TEAM}", MESSAGE_TEXT, "--host", TRANSFER_HOST, "--attach", str(attach_path)],
+            identity=SENDER,
+            timeout=args.timeout,
+            cwd=sender_cwd,
+        )
+        record["send"] = {
+            "argv": send_completed.args,
+            "returncode": send_completed.returncode,
+            "stdout": send_completed.stdout.strip(),
+            "stderr_tail": send_completed.stderr.strip()[-2000:],
+        }
+
+        send_ok = send_completed.returncode == 0
+        landed_path: str | None = None
+        landed_matches_convention = False
+        landed_file_exists = False
+        landed_content_matches = False
+
+        if send_ok:
+            peek_completed = run_cli(
                 args.atm,
                 env,
-                ["send", f"{RECEIVER}@{TEAM}", MESSAGE_TEXT, "--host", TRANSFER_HOST, "--attach", str(attach_path)],
-                identity=SENDER,
+                ["peek", "--json", "--all", "--team", TEAM, "--as", RECEIVER],
+                identity=RECEIVER,
                 timeout=args.timeout,
-                cwd=sender_cwd,
             )
-            record["send"] = {
-                "argv": send_completed.args,
-                "returncode": send_completed.returncode,
-                "stdout": send_completed.stdout.strip(),
-                "stderr_tail": send_completed.stderr.strip()[-2000:],
+            record["peek"] = {
+                "returncode": peek_completed.returncode,
+                "stdout": peek_completed.stdout,
+                "stderr_tail": peek_completed.stderr.strip()[-2000:],
             }
-
-            send_ok = send_completed.returncode == 0
-            landed_path: str | None = None
-            landed_matches_convention = False
-            landed_file_exists = False
-            landed_content_matches = False
-
-            if send_ok:
-                peek_completed = run_cli(
-                    args.atm,
-                    env,
-                    ["peek", "--json", "--all", "--team", TEAM, "--as", RECEIVER],
-                    identity=RECEIVER,
-                    timeout=args.timeout,
+            landed_path = extract_landed_path(peek_completed.stdout, ATTACHMENT_FILE_NAME)
+            if landed_path is not None:
+                remote_landing_dir = Path(landed_path).parent
+                # Containment (ADR-055's send_to_staging_dir convention,
+                # mirrored by sftp.sh's fixed remote_atm_temp choice):
+                # the landed directory must be exactly
+                # <remote atm-temp root>/send-to/<transfer-id>, never
+                # anywhere else on the receiving filesystem.
+                landed_matches_convention = bool(
+                    re.fullmatch(r".*/send-to/[0-9A-Za-z]+", str(remote_landing_dir))
                 )
-                record["peek"] = {
-                    "returncode": peek_completed.returncode,
-                    "stdout": peek_completed.stdout,
-                    "stderr_tail": peek_completed.stderr.strip()[-2000:],
-                }
-                landed_path = extract_landed_path(peek_completed.stdout, ATTACHMENT_FILE_NAME)
-                if landed_path is not None:
-                    remote_landing_dir = Path(landed_path).parent
-                    # Containment (ADR-055's send_to_staging_dir convention,
-                    # mirrored by sftp.sh's fixed remote_atm_temp choice):
-                    # the landed directory must be exactly
-                    # <remote atm-temp root>/send-to/<transfer-id>, never
-                    # anywhere else on the receiving filesystem.
-                    landed_matches_convention = bool(
-                        re.fullmatch(r".*/send-to/[0-9A-Za-z]+", str(remote_landing_dir))
-                    )
-                    landed_file = Path(landed_path)
-                    landed_file_exists = landed_file.is_file()
-                    if landed_file_exists:
-                        landed_content_matches = landed_file.read_bytes() == ATTACHMENT_BODY
+                landed_file = Path(landed_path)
+                landed_file_exists = landed_file.is_file()
+                if landed_file_exists:
+                    landed_content_matches = landed_file.read_bytes() == ATTACHMENT_BODY
 
-            record["landed_path"] = landed_path
-            record["landed_matches_send_to_convention"] = landed_matches_convention
-            record["landed_file_exists"] = landed_file_exists
-            record["landed_content_matches"] = landed_content_matches
-            record["status"] = (
-                "pass"
-                if send_ok and landed_matches_convention and landed_file_exists and landed_content_matches
-                else "fail"
-            )
-        except Exception as error:  # noqa: BLE001 - evidence must retain the failure
-            record["error"] = f"{type(error).__name__}: {error}"
-            record["status"] = "fail"
-        finally:
-            stop_daemon(daemon_process, daemon_drain)
-            stop_sshd(sshd_process, sshd_drain)
-            if remote_landing_dir is not None and remote_landing_dir.exists():
-                shutil.rmtree(remote_landing_dir, ignore_errors=True)
-            record["finished_at_ns"] = time.time_ns()
+        record["landed_path"] = landed_path
+        record["landed_matches_send_to_convention"] = landed_matches_convention
+        record["landed_file_exists"] = landed_file_exists
+        record["landed_content_matches"] = landed_content_matches
+        record["status"] = (
+            "pass"
+            if send_ok and landed_matches_convention and landed_file_exists and landed_content_matches
+            else "fail"
+        )
+    except Exception as error:  # noqa: BLE001 - evidence must retain the failure
+        record["error"] = f"{type(error).__name__}: {error}"
+        record["status"] = "fail"
+    finally:
+        # Stop and fully wait() on every child this scenario owns, and
+        # join its pipe-drain reader threads, before ever touching `root`
+        # -- `atm send`/`atm peek` above already ran through the blocking
+        # `subprocess.run` (via `run_cli`), so only the long-lived daemon
+        # and sshd children can still be holding anything under `root`
+        # open at this point.
+        stop_daemon(daemon_process, daemon_drain)
+        stop_sshd(sshd_process, sshd_drain)
+        if remote_landing_dir is not None and remote_landing_dir.exists():
+            shutil.rmtree(remote_landing_dir, ignore_errors=True)
+        cleanup_warning = _remove_tree_tolerant(root)
+        if cleanup_warning is not None:
+            record["cleanup_warning"] = cleanup_warning
+        record["finished_at_ns"] = time.time_ns()
     return record
 
 
-def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Path, Path]:
+def _evidence_output_paths(args: argparse.Namespace) -> tuple[Path, Path]:
     evidence_dir = args.evidence_dir or ROOT / "docs" / "plans" / "phase-aq" / "evidence" / "AQ4"
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    json_path = evidence_dir / f"transfer-{args.host}.json"
-    markdown_path = evidence_dir / f"transfer-{args.host}.md"
+    return evidence_dir / f"transfer-{args.host}.json", evidence_dir / f"transfer-{args.host}.md"
+
+
+def _clear_stale_evidence(*paths: Path) -> None:
+    """Deletes any pre-existing evidence file at these exact output paths
+    before the scenario runs. Evidence directories are committed to the
+    repo, so without this a harness that crashes before `write_evidence`
+    ever runs (see `main`'s top-level guard) would otherwise leave the
+    previous, stale run's committed file in place -- and a CI workflow's
+    `if: always()` artifact-upload step would then publish that stale file
+    as if it were fresh for this run. Deleting first means a genuine crash
+    the guard itself cannot recover from (for example the interpreter being
+    killed outright) leaves this run's evidence *missing*, never *stale* --
+    an honest signal `if-no-files-found: warn` already tolerates.
+    """
+    for path in paths:
+        path.unlink(missing_ok=True)
+
+
+def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Path, Path]:
+    json_path, markdown_path = _evidence_output_paths(args)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema_version": 1,
         "sprint": "AQ4",
@@ -909,6 +986,21 @@ def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Pa
             json.dumps(record.get("sshd_probe", {}), indent=2),
             "```",
         ]
+    elif record["status"] == "harness_crashed":
+        lines += [
+            "The harness raised an unhandled exception before it could "
+            "finish running the scenario. This transcript is written by a "
+            "top-level guard specifically so a crash can never leave this "
+            "run's evidence stale (a previous run's committed file, "
+            "reused unchanged) or missing (no file at all) -- see "
+            "`main`'s top-level `try`/`except` around `run_scenario`.",
+            "",
+            f"Error: `{record.get('error')}`",
+            "",
+            "```",
+            record.get("traceback", "").rstrip(),
+            "```",
+        ]
     else:
         send = record.get("send", {})
         lines += [
@@ -924,19 +1016,38 @@ def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Pa
         ]
         if record["status"] != "pass":
             lines += ["", f"Error: `{record.get('error')}`"]
+    if record.get("cleanup_warning"):
+        lines += [
+            "",
+            "**Cleanup warning** (best-effort only; does not affect the "
+            f"result above): `{record['cleanup_warning']}`",
+        ]
     markdown_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return json_path, markdown_path
 
 
 def main() -> int:
     args = parse_args()
+    # Deleted before any other work: a harness crash the guard below
+    # cannot itself recover from must leave this run's evidence missing,
+    # never a stale copy of a previous run's committed file.
+    _clear_stale_evidence(*_evidence_output_paths(args))
     if args.timeout <= 0:
         raise SystemExit("--timeout must be positive")
     if not args.daemon.is_file():
         raise SystemExit(f"owned daemon binary does not exist: {args.daemon}")
     if not args.atm.is_file():
         raise SystemExit(f"matched atm binary does not exist: {args.atm}")
-    record = run_scenario(args)
+    try:
+        record = run_scenario(args)
+    except Exception as error:  # noqa: BLE001 - a crash must still produce evidence, not none
+        record = {
+            "sprint": "AQ4",
+            "host": args.host,
+            "status": "harness_crashed",
+            "error": f"{type(error).__name__}: {error}",
+            "traceback": traceback.format_exc(),
+        }
     json_path, markdown_path = write_evidence(args, record)
     print(f"{record['status'].upper()} AQ4 transfer evidence: {json_path}")
     print(f"transcript: {markdown_path}")
