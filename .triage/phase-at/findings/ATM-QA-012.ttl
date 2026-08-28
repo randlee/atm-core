@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-012>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-012" ;
+  triage:title "AT.2-receipt.md's zero-dangling-reference claim doesn't name the reports/smoke/ historical-proof exclusion category" ;
+  triage:description "AT2-FIX-R2 widened the ATM-QA-009 reference sweep to the whole repo and the AT.2-receipt.md now claims zero remaining scripts/verify_user_docs.py references, excluding only 'immutable historical plans, receipts, and triage evidence.' A whole-repo grep still finds reports/smoke/phase-AE-installed-docs-proof.md:89, a dated Phase AE smoke-proof snapshot recording that verify_user_docs.py was run for that historical proof. This is legitimately the same genre of frozen, dated evidence as the already-exempted categories (it records a past validation run, not current behavior), but the receipt's exclusion list doesn't literally name 'reports/smoke/' or this file, so the receipt's zero-reference claim is imprecise as written. Reported by req-qa (ATM-QA-009-R2) in QA pass AT2-QA-R2 on PR #1064; the underlying live-doc defect ATM-QA-009 targeted (release/publish-surface-scope.md's present-tense description of a deleted script) is independently confirmed fixed by arch-qa, ruthless-boundary-qa, and req-qa — this is a narrower, purely-documentary residual gap, not a reopening of ATM-QA-009." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-at/receipts/AT.2-receipt.md reference-scan exclusion list" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-27T21:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT2 ;
+  triage:foundAt "2026-08-27T21:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-012/PAT-S2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-012/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-27T21:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-012/PAT-S2-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-at/receipts/AT.2-receipt.md" ;
+  triage:line 48 ;
+  triage:snippet "It excludes only immutable historical plans, receipts, and triage evidence." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "a9697994ada4bd00b84b971269ead48d897808ba" ;
+  triage:occursIn <urn:atm:triage:worktree/PAT-S2/a9697994> .
+
+<urn:atm:triage:worktree/PAT-S2/a9697994>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature-pat-s2-legacy-publish-deletion" ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "a9697994ada4bd00b84b971269ead48d897808ba" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/ATM-QA-012/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-at/receipts/AT.2-receipt.md" ;
+  triage:line 48 ;
+  triage:snippet "quality-mgr AT-PHASECLOSE-QA-R2 re-verification: AT.2-receipt.md's exclusion-list prose now explicitly names dated smoke-proof snapshots under reports/smoke/ (e.g. reports/smoke/phase-AE-installed-docs-proof.md) alongside the immutable historical plans/receipts/triage-evidence categories; confirmed independently by arch-qa, ruthless-boundary-qa, and req-qa on integrate/phase-at @ 5c8cbf760" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "5c8cbf760" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760> .
+
+<urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate-phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "5c8cbf760" ;
+  triage:orderIndex 2 .

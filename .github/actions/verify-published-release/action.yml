@@ -1,0 +1,111 @@
+name: Verify published release
+description: Validate a release tag, its published GitHub Release, and required assets.
+
+inputs:
+  release_tag:
+    description: Published release tag to verify (vX.Y.Z, optionally with SemVer prerelease/build metadata).
+    required: true
+  asset_patterns:
+    description: Optional newline-separated regular expressions that must each match a release asset.
+    required: false
+    default: ""
+  probe:
+    description: >-
+      When "true", run as a fail-closed probe instead of a hard gate: emit
+      release_state (complete, incomplete, or absent) for confirmed states and
+      fail only when the release state cannot be determined. When "false"
+      (the default), anything other than a complete published release fails.
+    required: false
+    default: "false"
+
+outputs:
+  release_state:
+    description: >-
+      Confirmed release state: "complete" (published, not draft, every
+      required asset present), "incomplete" (probe mode only: draft or
+      missing assets), or "absent" (probe mode only: confirmed not found).
+      Never set from an indeterminate probe result - the step fails instead.
+    value: ${{ steps.verify.outputs.release_state }}
+
+runs:
+  using: composite
+  steps:
+    - id: verify
+      name: Verify published release and required assets
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_REPOSITORY: ${{ github.repository }}
+        RELEASE_TAG: ${{ inputs.release_tag }}
+        REQUIRED_ASSET_PATTERNS: ${{ inputs.asset_patterns }}
+        PROBE_MODE: ${{ inputs.probe }}
+      run: |
+        set -euo pipefail
+
+        if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+          echo "Invalid tag: '${RELEASE_TAG}' (expected vX.Y.Z with optional SemVer prerelease/build metadata)" >&2
+          exit 1
+        fi
+
+        emit_state() {
+          echo "release_state=$1" >> "${GITHUB_OUTPUT}"
+        }
+
+        # Fail closed: only an explicit not-found result is treated as an
+        # absent release. Any other lookup failure (auth, rate limit,
+        # transient API error) fails this step instead of being read as
+        # "absent" and silently triggering a rebuild or resubmission.
+        view_stderr="$(mktemp)"
+        if release_json="$(gh release view "${RELEASE_TAG}" --repo "${RELEASE_REPOSITORY}" --json isDraft,assets 2>"${view_stderr}")"; then
+          release_found=true
+        elif grep -Eqi 'release not found|HTTP 404' "${view_stderr}"; then
+          release_found=false
+        else
+          echo "GitHub Release lookup for ${RELEASE_TAG} is indeterminate (not a confirmed not-found):" >&2
+          cat "${view_stderr}" >&2
+          exit 1
+        fi
+
+        if [[ "${release_found}" == "false" ]]; then
+          if [[ "${PROBE_MODE}" == "true" ]]; then
+            echo "GitHub Release ${RELEASE_TAG} is confirmed absent"
+            emit_state absent
+            exit 0
+          fi
+          echo "No published GitHub Release found for tag ${RELEASE_TAG}" >&2
+          exit 1
+        fi
+
+        is_draft="$(python3 -c 'import json,sys; print("true" if json.load(sys.stdin).get("isDraft") else "false")' <<<"${release_json}")"
+        if [[ "${is_draft}" != "false" ]]; then
+          if [[ "${PROBE_MODE}" == "true" ]]; then
+            echo "GitHub Release ${RELEASE_TAG} is still a draft; treating as incomplete"
+            emit_state incomplete
+            exit 0
+          fi
+          echo "GitHub Release ${RELEASE_TAG} is still a draft" >&2
+          exit 1
+        fi
+
+        assets="$(python3 -c 'import json,sys; print("\n".join(asset["name"] for asset in json.load(sys.stdin).get("assets", [])))' <<<"${release_json}")"
+        missing_asset=false
+        while IFS= read -r asset_pattern || [[ -n "${asset_pattern}" ]]; do
+          [[ -z "${asset_pattern}" ]] && continue
+          if ! grep -Eq -- "${asset_pattern}" <<<"${assets}"; then
+            missing_asset=true
+            echo "GitHub Release ${RELEASE_TAG} is missing an asset matching ${asset_pattern}" >&2
+            echo "Assets found:" >&2
+            echo "${assets}" >&2
+            if [[ "${PROBE_MODE}" != "true" ]]; then
+              exit 1
+            fi
+          fi
+        done <<<"${REQUIRED_ASSET_PATTERNS}"
+
+        if [[ "${missing_asset}" == "true" ]]; then
+          emit_state incomplete
+          exit 0
+        fi
+
+        emit_state complete
+        echo "Verified published GitHub Release ${RELEASE_TAG}"

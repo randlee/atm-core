@@ -1,3 +1,5 @@
+"""Temporary legacy gate coverage retained until kit release evidence exists."""
+
 from __future__ import annotations
 
 from pathlib import Path

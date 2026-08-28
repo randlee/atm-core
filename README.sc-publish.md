@@ -1,0 +1,120 @@
+# sc-publish Publish Kit
+
+sc-publish is a vendorable release/publish kit: standardized publisher agents
+plus standardized per-channel GitHub workflows, all driven by one
+repository-specific release manifest. Every kit file is installed
+**byte-for-byte** into the consumer repository — copied files are never
+hand-edited. If an installed file looks wrong for your repository, the fix is
+either your consumer input JSON (which drives the two rendered manifests) or
+an issue/PR against the upstream kit; local drift is a defect, not a
+customization mechanism.
+
+> In consumer repositories this document is installed as
+> `README.sc-publish.md` so it never overwrites the repository's own README.
+
+## The install contract
+
+Installation is three commands, run from the consumer repository root:
+
+```bash
+# 1. Provision the exact pinned sc-compose 1.5.0 renderer wheel into a virtualenv.
+python plugins/sc-publish/.github/scripts/bootstrap_sc_compose.py --venv <venv>
+
+# 2. Install: copy every kit file byte-for-byte and render the two release
+#    manifests from your complete, caller-owned consumer input JSON.
+<venv>/bin/python plugins/sc-publish/install.py --input <consumer-input.json> <repo>
+
+# 3. Verify: a repeat dry-run must report no drift (exit 0).
+<venv>/bin/python plugins/sc-publish/install.py --dry-run --input <consumer-input.json> <repo>
+```
+
+The consumer input JSON is the single reviewable declaration of everything
+repository-specific: project identity, release targets, crates, release
+binaries, Python distributions, and the post-release channels the repository
+actually uses. Only two files are rendered from it —
+`release/publish-artifacts.toml` and `release/publish-channel-contracts.toml`;
+everything else is a shared verbatim copy. Re-running the installer after a
+kit upgrade re-synchronizes the copies; `--dry-run` exits 1 and prints a diff
+whenever a consumer file differs from the kit.
+
+## Pinning, bootstrap, and qualification
+
+Consumers never track a moving sc-publish branch. The org model is one
+blessed, qualified kit revision that every consumer repository adopts
+together:
+
+- **Pin manifest.** Each consumer records the qualified upstream revision in
+  `release/sc-publish-pin.toml` (full 40-character SHA; see the installed
+  `release/sc-publish-pin.toml.example`). The pin is the only statement of
+  which kit a repository runs; a consumer tree that differs from its pin is
+  drift.
+- **Isolated bootstrap.** To install or re-sync, clone the kit **at the
+  pinned revision** into a repository-local, gitignored cache (for example
+  `.sc-publish-kit/`) and run the install contract from that clone. Never
+  run the installer from a shared mutable checkout (such as a sibling
+  `../sc-publish` working tree used by other repositories or agents) — a
+  branch switch there silently changes what every consumer installs.
+- **Consumer input path.** The `--input` JSON path is the consumer's choice —
+  `release/sc-publish-consumer-input.json` and `release/install.json` are
+  both in use across consumers. The filename is not part of the kit
+  contract; only the schema is.
+- **Qualification before a pin advance.** A new kit revision is blessed for
+  the org only after, on at least one real consumer repository: a clean
+  install from the candidate revision, a clean repeat `--dry-run` (exit 0,
+  no drift), a passing kit test suite
+  (`pytest .github/scripts/tests/` with the pinned renderer), a live
+  release-candidate tag cut, and one post-release channel leg retry.
+  Record the evidence in a receipt, then advance every consumer's pin to the
+  blessed SHA together.
+
+## Runtime profiles
+
+The kit ships two publisher runtime profiles that share the same manifests,
+scripts, and workflows:
+
+- **Claude/Codex sessions** run the publisher as a named ATM teammate. The
+  agent definition is `.claude/agents/publisher.md`, launched through the
+  publishing skill (`.claude/skills/publishing/SKILL.md`). It is a full ATM
+  team member (`ATM_TEAM`/`ATM_IDENTITY`) and reports channel blockers to its
+  assignment's named recipient.
+- **The Cursor IDE** runs the publisher inline via `.cursor/` (agent,
+  command, and skill). It performs the channel steps in-session rather than
+  through ATM teammates.
+
+The Claude/Codex publisher spawns the role-specific background channel workers
+(`crates-io-publisher`, `github-release-publisher`, `pypi-publisher`,
+`homebrew-publisher`, `scoop-publisher`, `winget-publisher`). Cursor executes
+the same channel playbooks inline and sequentially. Both profiles consume the
+same non-disclosing credential preflight before any publication.
+
+## The channel model
+
+Each publish channel — `github_release`, `crates_io`, `pypi`, `homebrew`,
+`scoop`, `winget` — is a separate, idempotent leg:
+
+- Root legs run inside `release.yml` (build, crates.io publication, GitHub
+  Release creation). Post-release legs are standalone `workflow_dispatch`
+  workflows (`crates-publish.yml`, `pypi-publish.yml`, `homebrew-publish.yml`,
+  `scoop-publish.yml`, `winget-publish.yml`) anchored on the already-published
+  GitHub Release for a tag.
+- Every leg detects already-published state and skips instead of
+  republishing, so a failed leg is independently retryable **by tag** without
+  touching the channels that already succeeded.
+- Channel identity, standardized secret names, and public registry endpoints
+  come from the vendored `release/publish-channel-contracts.toml`; the
+  repository-specific destinations come from `release/publish-artifacts.toml`.
+- The post-release workflows check out the release tag's tree for kit
+  actions/scripts and release config, so the tag must have been created
+  **after** the kit was installed in the consumer repository. Re-publishing a
+  pre-kit tag is unsupported; cut a new release from a kit-installed tree
+  instead.
+
+## Where to look next
+
+- `.claude/skills/publishing/ref/publish-kit-requirements.md` — normative
+  requirements for the kit.
+- `.claude/skills/publishing/ref/channel-contracts.md` — per-channel worker
+  contracts and inquiry protocol.
+- `.claude/skills/publishing/ref/release-state-strategy.md` — release state
+  machine (develop → release candidate → release → main), provenance gate,
+  and post-cut drift handling.
