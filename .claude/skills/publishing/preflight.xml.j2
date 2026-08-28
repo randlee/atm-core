@@ -27,6 +27,7 @@ required_variables:
     <starting-state>{{ starting_state }}</starting-state>
     <stage>{{ preflight_stage }}</stage>
     <manifest>{{ manifest_path }}</manifest>
+    <already-published-channels>{{ already_published_channels | default('') }}</already-published-channels>
   </release>
   <references>
     <policy>.claude/skills/publishing/ref/release-state-strategy.md</policy>

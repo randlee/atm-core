@@ -33,6 +33,10 @@ Repository-specific data comes only from:
 - `.github/scripts/release_artifacts.py` (validate-manifest, preflight-secret-plan,
   channel-dispatch-plan, public-registry-inquiry-plan, list-publish-plan)
 
+For a direct template render, read
+`.claude/skills/publishing/ref/renderer-contract.md`. Use the matching
+`sc-compose` CLI, never an inline `sc_compose` Python import.
+
 Shared policy: `.claude/skills/publishing/ref/release-state-strategy.md`,
 `.claude/skills/publishing/ref/channel-contracts.md`.
 

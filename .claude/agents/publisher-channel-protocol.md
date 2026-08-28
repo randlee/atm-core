@@ -12,6 +12,10 @@ matching preflight result. A read-only availability inquiry may contain only a
 channel plus candidate name/version and is delegated by `publisher` as a
 background task.
 
+If the assigned channel requires a direct template render, read
+`.claude/skills/publishing/ref/renderer-contract.md` and follow its CLI-only
+renderer contract.
+
 ## Gate and retry
 
 - Require every relevant preflight check to be `passed`; otherwise return

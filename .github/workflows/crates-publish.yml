@@ -57,6 +57,9 @@ jobs:
         with:
           toolchain: ${{ steps.build_plan.outputs.rust_toolchain }}
 
+      - name: Install Linux native build deps
+        uses: ./.github/actions/install-linux-native-deps
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -81,13 +84,12 @@ jobs:
             url="$(python3 .github/scripts/release_artifacts.py public-registry-inquiry-plan \
               --contracts "${contracts}" --channel crates_io --name "${crate}" --version "${version}" \
               | jq -r '.checks[0].version_lookup_url')"
-            status="$(curl --location --max-time 20 --silent --show-error --output /dev/null \
-              --write-out '%{http_code}' --user-agent 'sc-publish-kit' "${url}" || true)"
-            case "${status}" in
-              200) return 0 ;;
-              404) return 1 ;;
+            state="$(python3 .github/scripts/release_artifacts.py registry-status --url "${url}")"
+            case "${state}" in
+              published) return 0 ;;
+              absent) return 1 ;;
               *)
-                echo "crates.io state for ${crate}@${version} is indeterminate (status ${status})" >&2
+                echo "crates.io state for ${crate}@${version} is indeterminate (state ${state})" >&2
                 exit 1
                 ;;
             esac
