@@ -100,6 +100,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import socket
 import stat
 import subprocess
@@ -122,6 +123,27 @@ SSHD_READY_TIMEOUT_SECONDS = 10.0
 ATTACHMENT_FILE_NAME = "aq4-report.pdf"
 ATTACHMENT_BODY = b"%PDF-1.4\naq4 live evidence attachment\n"
 MESSAGE_TEXT = "AQ4 live transfer evidence: see attached file"
+
+# atm's own transfer-script deadline
+# (`crates/atm-core/src/transfer_script.rs::DEFAULT_TRANSFER_SCRIPT_TIMEOUT`,
+# currently `Duration::from_secs(60)`) -- kept here as a plain literal (not
+# imported) because this harness never links against the Rust crate; update
+# this constant if that Rust constant ever changes.
+#
+# The real `atm send --attach` subprocess this harness runs must be given a
+# timeout comfortably longer than that deadline. Before this constant
+# existed, the harness's own subprocess timeout (15s, `READY_TIMEOUT_SECONDS`,
+# shared with unrelated daemon-readiness/CLI round-trip calls) was *shorter*
+# than atm's internal 60s deadline, so a wedged transfer script (observed
+# live: a hung Windows `sftp.ps1`) got the harness's `TimeoutExpired` first --
+# discarding `atm`'s partial stdout/stderr and skipping every later
+# diagnostic (the `-vvv` probe, the sshd debug log tail) before atm's own
+# deadline ever had a chance to fire and produce a real, diagnosable error.
+_ATM_TRANSFER_SCRIPT_DEADLINE_SECONDS = 60.0
+_SEND_SUBPROCESS_TIMEOUT_MARGIN_SECONDS = 30.0
+SEND_SUBPROCESS_TIMEOUT_SECONDS = (
+    _ATM_TRANSFER_SCRIPT_DEADLINE_SECONDS + _SEND_SUBPROCESS_TIMEOUT_MARGIN_SECONDS
+)  # 90.0
 
 # The trivial remote command `run_ssh_vvv_diagnostic` runs, and the exact
 # stdout line a genuinely-reachable-and-answering loopback sshd echoes back
@@ -644,6 +666,134 @@ def run_cli(
         timeout=timeout,
         check=False,
     )
+
+
+def _kill_process_tree(pid: int) -> None:
+    """Best-effort termination of `pid` and any descendants it spawned (for
+    example a wedged `atm send --attach`'s `pwsh.exe -> sftp.ps1 ->
+    ssh.exe`/`scp.exe` chain on Windows, or the equivalent
+    `sftp.sh -> ssh`/`scp` chain on Unix). Never raises: this only runs from
+    an already-abnormal timeout path, and a failure here must never mask or
+    replace the `TimeoutExpired` evidence `run_send_with_timeout` is already
+    recording.
+
+    Windows: `taskkill /T` walks the OS-tracked parent/child chain, which
+    Windows retains regardless of process groups.
+
+    POSIX: `run_send_with_timeout` starts the child with
+    `start_new_session=True`, so the child is its own process-group leader
+    (pgid == pid) -- `killpg` therefore reaches only that child and its
+    descendants, never this harness's own process group.
+    """
+    try:
+        if IS_WINDOWS:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                capture_output=True,
+                check=False,
+                timeout=10,
+            )
+            return
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+    except Exception:  # noqa: BLE001 - cleanup must never raise
+        pass
+
+
+def run_send_with_timeout(
+    atm: Path,
+    env: dict[str, str],
+    args: list[str],
+    *,
+    identity: str,
+    timeout: float,
+    cwd: Path,
+) -> dict[str, Any]:
+    """Runs `atm send --attach` (the one call this scenario needs a generous,
+    atm-deadline-aware timeout for -- see `SEND_SUBPROCESS_TIMEOUT_SECONDS`)
+    and returns a `record["send"]`-shaped dict either way.
+
+    Unlike a bare `subprocess.run(..., timeout=...)` (which only kills the
+    immediate `atm` process on timeout -- fine for every other call in this
+    scenario, none of which spawn a further transfer-script child), this
+    starts `atm` in its own session/process group so a genuine harness-level
+    timeout (atm itself wedged, not merely its transfer-script child, which
+    atm's own `SEND_SUBPROCESS_TIMEOUT_SECONDS`-shorter internal deadline
+    should already have caught) can be cleaned up with `_kill_process_tree`
+    instead of leaving orphaned `ssh`/`scp`/`pwsh` descendants behind.
+
+    On a normal exit, `record["send"]["timed_out"]` is `False` and the
+    shape matches every other `run_cli`-built record. On a timeout,
+    `timed_out` is `True`, `returncode` may be `None` (if the tree could not
+    be confirmed reaped in time), and `stdout`/`stderr_tail` carry whatever
+    partial output the child had produced before being killed -- never
+    silently discarded.
+    """
+    argv = [str(atm), *args]
+    popen_kwargs: dict[str, Any] = {}
+    if IS_WINDOWS:
+        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        popen_kwargs["start_new_session"] = True
+    process = subprocess.Popen(
+        argv,
+        cwd=cwd,
+        env={**env, "ATM_IDENTITY": identity},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        **popen_kwargs,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+        return {
+            "argv": argv,
+            "returncode": process.returncode,
+            "stdout": stdout.strip(),
+            "stderr_tail": stderr.strip()[-2000:],
+            "timed_out": False,
+        }
+    except subprocess.TimeoutExpired as exc:
+        _kill_process_tree(process.pid)
+        try:
+            stdout, stderr = process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            stdout, stderr = "", ""
+        partial_stdout = stdout or (exc.stdout if isinstance(exc.stdout, str) else "") or ""
+        partial_stderr = stderr or (exc.stderr if isinstance(exc.stderr, str) else "") or ""
+        return {
+            "argv": argv,
+            "returncode": process.returncode,
+            "stdout": partial_stdout.strip(),
+            "stderr_tail": partial_stderr.strip()[-2000:],
+            "timed_out": True,
+            "error": f"atm send did not exit within {timeout}s; process tree killed",
+        }
+
+
+def send_ok_from_record(send_record: dict[str, Any]) -> bool:
+    """Whether `record["send"]` (as built by `run_send_with_timeout`)
+    represents a genuinely successful `atm send --attach`: exit code `0`
+    *and* not a harness-level timeout. Pulled out as its own small,
+    independently testable function -- rather than an inline boolean
+    expression in `run_scenario` -- specifically so "a timeout is never
+    success" stays true even in the (never actually observed, but not
+    provably impossible) case a killed-mid-flight child's `returncode`
+    happens to read back as `0`; `run_scenario` gates every later
+    diagnostic (the `-vvv` probe, the sshd debug log tail,
+    `classify_windows_transfer_failure`) on `not send_ok_from_record(...)`,
+    so this function returning `False` for a timeout is exactly what keeps
+    those diagnostics running instead of being skipped.
+    """
+    return send_record["returncode"] == 0 and not send_record["timed_out"]
 
 
 def add_roster_member(
@@ -1320,22 +1470,22 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
         # runs from there -- unlike every other command in this
         # scenario, which has no need for `local_host` and keeps
         # running from ROOT.
-        send_completed = run_cli(
+        # SEND_SUBPROCESS_TIMEOUT_SECONDS, not args.timeout (15s default):
+        # this call is the one that can wedge inside atm's own 60s
+        # transfer-script deadline, and needs a subprocess timeout that
+        # outlives that deadline -- see SEND_SUBPROCESS_TIMEOUT_SECONDS's
+        # docstring-comment. A caller-supplied `--timeout` larger than the
+        # margin-padded default still wins.
+        record["send"] = run_send_with_timeout(
             args.atm,
             env,
             ["send", f"{RECEIVER}@{TEAM}", MESSAGE_TEXT, "--host", TRANSFER_HOST, "--attach", str(attach_path)],
             identity=SENDER,
-            timeout=args.timeout,
+            timeout=max(args.timeout, SEND_SUBPROCESS_TIMEOUT_SECONDS),
             cwd=sender_cwd,
         )
-        record["send"] = {
-            "argv": send_completed.args,
-            "returncode": send_completed.returncode,
-            "stdout": send_completed.stdout.strip(),
-            "stderr_tail": send_completed.stderr.strip()[-2000:],
-        }
 
-        send_ok = send_completed.returncode == 0
+        send_ok = send_ok_from_record(record["send"])
         if not send_ok and sshd_drain is not None:
             # `sftp.ps1` now forwards ssh/scp's own stderr into
             # `record["send"]["stderr_tail"]` above, but that alone is

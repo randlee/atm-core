@@ -23,8 +23,8 @@ use atm_herdr::{
     HerdrSpawnBreaker,
 };
 use atm_http_runtime::{
-    PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, RuntimeHealth, StorageAndNudgeRouter,
-    shared_direct_peer_client,
+    HerdrQueueWakePump, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, RuntimeHealth,
+    StorageAndNudgeRouter, shared_direct_peer_client,
 };
 use atm_runtime::RuntimeAssembly;
 
@@ -225,21 +225,8 @@ pub(crate) fn build_replacement_handler(
         bare_cli,
         herdr_process,
     } = config;
-    let herdr_process = match herdr_process {
-        Some(process) => process,
-        None => {
-            let herdr_breaker = Arc::new(HerdrSpawnBreaker::new());
-            let process: Arc<dyn HerdrProcessAdapter> =
-                Arc::new(HerdrProcessInvoker::new(Arc::clone(&herdr_breaker)));
-            assembly.doctor_ports.herdr_breaker = Arc::new(HerdrBreakerDoctorAdapter {
-                breaker: Arc::clone(&herdr_breaker),
-            });
-            assembly.doctor_ports.herdr_presence = Arc::new(HerdrPresenceDoctorAdapter {
-                process: Arc::clone(&process),
-            });
-            process
-        }
-    };
+    let herdr_process = resolve_herdr_process(&mut assembly, herdr_process);
+    let queue_wake_process = Arc::clone(&herdr_process);
     let (selector, recovery_sweep) = compose_queue_workers(
         assembly.service_runtime.clone(),
         selector_factory,
@@ -253,12 +240,19 @@ pub(crate) fn build_replacement_handler(
         runtime_health.clone(),
         recovery_sweep.transition_tracker(),
     );
+    let queue_wake_pump = Arc::new(HerdrQueueWakePump::new(
+        assembly.service_runtime.clone(),
+        Arc::clone(&selector),
+        runtime_health.clone(),
+        queue_wake_process,
+    ));
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,
         selector,
         atm_core::home::atm_home()?,
     )
+    .with_maintenance(queue_wake_pump)
     .with_runtime_health(runtime_health, assembly.doctor_ports)
     .with_member_state_transition_sink(transition_sink)
     .with_bare_cli_fifo(bare_cli.fifo(), bare_cli.queue_full_drops())
@@ -279,4 +273,25 @@ pub(crate) fn build_replacement_handler(
         None => handler,
     };
     Ok((Arc::new(handler), recovery_sweep))
+}
+
+fn resolve_herdr_process(
+    assembly: &mut RuntimeAssembly,
+    herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
+) -> Arc<dyn HerdrProcessAdapter> {
+    match herdr_process {
+        Some(process) => process,
+        None => {
+            let herdr_breaker = Arc::new(HerdrSpawnBreaker::new());
+            let process: Arc<dyn HerdrProcessAdapter> =
+                Arc::new(HerdrProcessInvoker::new(Arc::clone(&herdr_breaker)));
+            assembly.doctor_ports.herdr_breaker = Arc::new(HerdrBreakerDoctorAdapter {
+                breaker: Arc::clone(&herdr_breaker),
+            });
+            assembly.doctor_ports.herdr_presence = Arc::new(HerdrPresenceDoctorAdapter {
+                process: Arc::clone(&process),
+            });
+            process
+        }
+    }
 }

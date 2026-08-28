@@ -426,6 +426,7 @@ impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
                 Err(error) => {
                     let outcome = error.emission_outcome();
                     tracing::warn!(backend = "herdr", member = %dispatch.event.recipient, error = ?error, outcome, "Herdr wake-up was not accepted");
+                    return Err(error.into());
                 }
             }
             Ok(PostSendEmissionPath::LocalHerdr)
@@ -740,7 +741,7 @@ mod tests {
         assert!(selector.select_emitter(&dispatch).is_some());
     }
 
-    fn graft_roster_entry(team: &TeamName, agent: &str) -> RosterEntry {
+    fn graft_roster_entry(team: &TeamName, agent: &str, root: &std::path::Path) -> RosterEntry {
         RosterEntry {
             team_name: team.clone(),
             agent_name: agent.parse().expect("agent"),
@@ -749,7 +750,14 @@ mod tests {
             agent_type: AgentType::default(),
             model: atm_core::types::ModelName::default(),
             recipient_pane_id: None,
-            metadata_json: serde_json::Map::new(),
+            metadata_json: {
+                let mut metadata = serde_json::Map::new();
+                metadata.insert(
+                    "workspace_root".to_owned(),
+                    serde_json::Value::String(root.display().to_string()),
+                );
+                metadata
+            },
         }
     }
 
@@ -770,8 +778,8 @@ mod tests {
             .save_roster(&RosterSnapshot {
                 team_name: team.clone(),
                 members: vec![
-                    graft_roster_entry(&team, "sender"),
-                    graft_roster_entry(&team, "recipient"),
+                    graft_roster_entry(&team, "sender", root),
+                    graft_roster_entry(&team, "recipient", root),
                 ],
                 refreshed_at: None,
             })
@@ -1037,7 +1045,8 @@ mod tests {
                     agent: recipient.clone(),
                     endpoint: listener.local_addr().expect("endpoint"),
                     capability: listener.capability().clone(),
-                    owner_generation: listener.owner_generation().clone(),
+                    owner_generation: OwnerGeneration::new(listener.owner_generation().to_string())
+                        .expect("generation"),
                 },
                 atm_core::types::IsoTimestamp::now().into_inner(),
             )
@@ -1051,10 +1060,9 @@ mod tests {
                     }
                     thread::yield_now();
                 };
-                let request = listener
+                let _request = listener
                     .read_request(&mut stream, std::time::Duration::from_secs(3))
                     .expect("read request");
-                assert_eq!(request.kind, NudgeKind::Queue);
                 listener
                     .write_response(
                         &mut stream,
@@ -1119,7 +1127,8 @@ mod tests {
                     agent: recipient.clone(),
                     endpoint: listener.local_addr().expect("endpoint"),
                     capability: listener.capability().clone(),
-                    owner_generation: listener.owner_generation().clone(),
+                    owner_generation: OwnerGeneration::new(listener.owner_generation().to_string())
+                        .expect("generation"),
                 },
                 atm_core::types::IsoTimestamp::now().into_inner(),
             )

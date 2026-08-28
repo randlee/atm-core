@@ -137,11 +137,41 @@ triage:c14 a triage:Completion ;
     triage:headCommit "08fa8fd04" ;
     triage:note "PR merge gated on #1059 (AQ5)" .
 
+triage:c15 a triage:Completion ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:at "2026-08-28T09:30:00Z"^^xsd:dateTime ;
+    triage:headCommit "bd3fbe923" ;
+    triage:note "AQ2.7 cycle-4 QA-4 complete: FAIL on 2 unrouted blockers (AC12 second fixture; ADR-054 addendum) + 1 minor (qa2-validation.md count)" .
+
+triage:a16 a triage:Assignment ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-28T10:00:00Z"^^xsd:dateTime ;
+    triage:note "cycle-5 task assignment (rendered from cycle-4 findings)" .
+
+triage:c16 a triage:Completion ;
+    triage:ofSprint triage:AQ4 ;
+    triage:at "2026-08-28T06:00:00Z"^^xsd:dateTime ;
+    triage:headCommit "55822f32b" ;
+    triage:note "AQ4 QA-3 complete: PASS-with-deferral, 7/9 AC closed, 2 deferred by ruling (AQ4-windows-loopback, AQ4-tailscale-m5); AC7 doc-sync closed at 491e6067d" .
+
+triage:a17 a triage:Assignment ;
+    triage:ofSprint triage:AQ5 ;
+    triage:assignedTo "quality-mgr" ;
+    triage:assignedAt "2026-08-28T08:00:00Z"^^xsd:dateTime ;
+    triage:note "AQ5 QA-3 re-verify assignment @ 2eaa3d99f (Windows pytest fix: test_send_to_surface JSONDecodeError from fake atm.cmd stdin)" .
+
+triage:a18 a triage:Assignment ;
+    triage:ofSprint triage:AQ6 ;
+    triage:assignedTo "quality-mgr" ;
+    triage:assignedAt "2026-08-28T09:00:00Z"^^xsd:dateTime ;
+    triage:note "AQ6 targeted re-verify assignment @ e4bc3a3f3 (inherited #1059 Windows test; carry-forward items clean)" .
+
 triage:a15 a triage:Assignment ;
     triage:ofSprint triage:AQ2-7 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-08-28T05:30:00Z"^^xsd:dateTime ;
-    triage:note "cycle-4 re-dispatch: merge-forward #1055 fix d0d54e004 into #1056 (stale-base resolve)" .
+    triage:note "cycle-4 re-dispatch: merge-forward origin/integrate/phase-aq (26fb5bc4d) into #1056 (stale-base resolve)" .
 
 triage:m1 a triage:Merge ;
     triage:ofPR "#1054" ;
