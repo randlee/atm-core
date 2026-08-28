@@ -43,6 +43,7 @@ class BootstrapManifest:
     sc_compose: str
     sc_compose_checksums: tuple[tuple[str, str], ...]
     wyvern: str
+    wyvern_checksums: tuple[tuple[str, str], ...]
     python_packages: tuple[tuple[str, str], ...]
 
 
@@ -80,6 +81,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
         sc_compose=sc_compose["version"],
         sc_compose_checksums=tuple(sorted(sc_compose["checksums"].items())),
         wyvern=wyvern["version"],
+        wyvern_checksums=tuple(sorted(wyvern["checksums"].items())),
         python_packages=tuple(sorted(python.items())),
     )
 
@@ -289,13 +291,13 @@ def _release_checksum(manifest: BootstrapManifest, target: str) -> str:
         raise BootstrapError(f"sc-compose manifest has no checksum for release target {target}.") from error
 
 
-def _download_release(url: str) -> bytes:
+def _download_release(url: str, *, label: str = "release asset") -> bytes:
     """Download one release asset without invoking a shell or package manager."""
     try:
         with urllib.request.urlopen(url, timeout=120) as response:
             return response.read()
     except (OSError, urllib.error.URLError) as error:
-        raise BootstrapError(f"unable to download pinned sc-compose release asset {url}: {error}") from error
+        raise BootstrapError(f"unable to download pinned {label} {url}: {error}") from error
 
 
 def _safe_member_name(name: str) -> str:
@@ -347,14 +349,14 @@ def install_sc_compose_release(manifest: BootstrapManifest, *, dry_run: bool) ->
     print(f"+ download {url} -> {destination}")
     if dry_run:
         return
-    archive = _download_release(url)
+    archive = _download_release(url, label="sc-compose release asset")
     actual = hashlib.sha256(archive).hexdigest()
     if actual != expected:
         raise BootstrapError(
             f"sc-compose release checksum mismatch for {asset}: expected {expected}, found {actual}."
         )
     checksums_url = sc_compose_release_url(manifest.sc_compose, "checksums.txt")
-    checksums = _download_release(checksums_url).decode("utf-8", errors="strict")
+    checksums = _download_release(checksums_url, label="sc-compose checksums").decode("utf-8", errors="strict")
     listed = next((parts[0] for line in checksums.splitlines() if (parts := line.split()) and len(parts) >= 2 and parts[-1] == asset), None)
     if listed != expected:
         raise BootstrapError(f"checksums.txt does not confirm the pinned checksum for {asset}.")
@@ -484,6 +486,16 @@ def wyvern_install_command(version: str, target: str) -> tuple[str, str]:
     return asset, wyvern_release_url(version, asset)
 
 
+def _wyvern_release_checksum(manifest: BootstrapManifest, target: str) -> str:
+    """Return the manifest checksum for one pinned Wyvern release asset."""
+    asset = wyvern_asset_name(target)
+    checksums = dict(manifest.wyvern_checksums)
+    try:
+        return checksums[asset]
+    except KeyError as error:
+        raise BootstrapError(f"Wyvern manifest has no checksum for release asset {asset}.") from error
+
+
 def _extract_wyvern(archive: bytes, asset: str, destination: Path) -> None:
     """Extract only the Wyvern CLI from a verified release archive."""
     executable_name = "wyvern.exe" if asset.endswith(".zip") else "wyvern"
@@ -524,11 +536,26 @@ def install_wyvern_release(manifest: BootstrapManifest, *, dry_run: bool) -> Non
     """Install the pinned Wyvern CLI release without compiling or guessing."""
     target = sc_compose_target()
     asset, url = wyvern_install_command(manifest.wyvern, target)
+    expected = _wyvern_release_checksum(manifest, target)
     destination = cargo_bin_path("wyvern")
     print(f"+ download {url} -> {destination}")
     if dry_run:
         return
-    _extract_wyvern(_download_release(url), asset, destination)
+    archive = _download_release(url, label="Wyvern release asset")
+    actual = hashlib.sha256(archive).hexdigest()
+    if actual != expected:
+        raise BootstrapError(
+            f"Wyvern release checksum mismatch for {asset}: expected {expected}, found {actual}."
+        )
+    checksums_url = wyvern_release_url(manifest.wyvern, "checksums.txt")
+    checksums = _download_release(checksums_url, label="Wyvern checksums").decode("utf-8", errors="strict")
+    listed = next(
+        (parts[0] for line in checksums.splitlines() if (parts := line.split()) and len(parts) >= 2 and parts[-1] == asset),
+        None,
+    )
+    if listed != expected:
+        raise BootstrapError(f"checksums.txt does not confirm the pinned Wyvern checksum for {asset}.")
+    _extract_wyvern(archive, asset, destination)
 
 
 def wyvern_matches(manifest: BootstrapManifest) -> bool:

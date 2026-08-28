@@ -90,7 +90,7 @@ target). The generic registry sweep above remains opt-in and warn-only.
 | --- | --- | --- |
 | sc-compose | `cargo search sc-composer --limit 1`; update `crates/atm-template-sc-compose/Cargo.toml`'s `sc-composer` pin (and its paired `sc-sha` pin when the release requires it) | `cargo test -p atm-template-sc-compose`, then `sc-compose render --file` against the codex-orchestration and plan-hardening `.j2` fixtures |
 | sc-observability | `cargo search sc-observability --limit 1` and `cargo search sc-observability-types --limit 1`; exact-pin both workspace dependencies | `cargo test -p agent-team-mail` (the `crates/atm` package) |
-| Wyvern | `gh release list --repo randlee/wyvern --limit 1` (REST fallback: `gh api repos/randlee/wyvern/releases/latest`); update the matching exact `WYVERN_PIN` in `scripts/send-to/atm-send-to.sh` and `.ps1` | `scripts/send-to/probe_wyvern.py` plus `scripts/send-to/run_wyvern_picker.py` (wizard JSON `config` input and `WizardResult.data` unwrap) and the shared `PickerInput`/`PickerOutput` fixture suite |
+| Wyvern | `gh release list --repo randlee/wyvern --limit 1` (REST fallback: `gh api repos/randlee/wyvern/releases/latest`); update the matching exact `WYVERN_PIN` in `scripts/send-to/atm-send-to.sh` and `.ps1`, the paired `tools/bootstrap.toml` checksum entries, and the release `checksums.txt` | `scripts/send-to/probe_wyvern.py` plus `scripts/send-to/run_wyvern_picker.py` (wizard JSON `config` input and `WizardResult.data` unwrap) and the shared `PickerInput`/`PickerOutput` fixture suite |
 
 The Cargo comparison strips a leading `=` from exact pins before comparing
 them with crates.io's bare version output. A stale pin, unresolved release,
@@ -171,6 +171,7 @@ These steps happen in the release-preflight workflow but are not part of local
 
 - assert `run_by_agent` is exactly `publisher`
 - install the pinned Rust toolchain and required helper tools
+- verify the pinned ecosystem tools (`sc-compose` and `wyvern`) after bootstrap
 - normalize release version input
 - create `target/phase-ae/staged-install-root`
 - stage installed docs into that deterministic root

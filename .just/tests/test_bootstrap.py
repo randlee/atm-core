@@ -42,6 +42,19 @@ class BootstrapTests(unittest.TestCase):
             url,
             "https://github.com/randlee/wyvern/releases/download/v0.5.0/wyvern-macos-aarch64.tar.gz",
         )
+        self.assertEqual(
+            dict(manifest.wyvern_checksums)[asset],
+            "740739df29448076b77dcc533feac1cfd3b4185191585d5df290f4d75e3aa4a3",
+        )
+
+    def test_wyvern_checksum_mismatch_is_a_hard_failure(self) -> None:
+        manifest = bootstrap.load_manifest()
+        with (
+            mock.patch.object(bootstrap, "sc_compose_target", return_value="aarch64-apple-darwin"),
+            mock.patch.object(bootstrap, "_download_release", return_value=b"tampered"),
+        ):
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "Wyvern release checksum mismatch"):
+                bootstrap.install_wyvern_release(manifest, dry_run=False)
 
     def test_sc_compose_checksum_mismatch_is_a_hard_failure(self) -> None:
         manifest = bootstrap.load_manifest()
