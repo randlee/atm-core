@@ -210,3 +210,19 @@ triage:m4 a triage:Merge ;
     triage:mergedAt "2026-08-28T10:30:00Z"^^xsd:dateTime ;
     triage:target "integrate/phase-aq" ;
     triage:note "AQ2.7 sprint #1056 merged to integration branch (QA-5 PASS closing gate; 12/14 sprints on integrate)" .
+
+triage:m5 a triage:Merge ;
+    triage:ofPR "#1059" ;
+    triage:mergeCommit "53921169e" ;
+    triage:headCommit "23b3e4a1a" ;
+    triage:mergedAt "2026-08-28T12:00:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ5 sprint #1059 merged to integration branch (QA-3-b PASS; 13/14 sprints on integrate)" .
+
+triage:m6 a triage:Merge ;
+    triage:ofPR "#1066" ;
+    triage:mergeCommit "edb1a5381" ;
+    triage:headCommit "29ac4a7c5" ;
+    triage:mergedAt "2026-08-28T13:00:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ6 sprint #1066 merged to integration branch (re-verify-b PASS; 14/14 sprints on integrate, Phase AQ complete)" .

@@ -1342,7 +1342,7 @@ satisfied — AO merged to `develop` via the AO2 integration (PR #966). AP.1's
 physical hardware proof remains the mandatory entry gate; no AP dispatch has
 occurred.
 
-## 48. Phase AQ — ATM Send-To Shell Integration [IN PROGRESS — 13/14 sprints merged to integrate/phase-aq; AQ6 QA-verified and CI green, merge pending]
+## 48. Phase AQ — ATM Send-To Shell Integration [COMPLETE — integrate/phase-aq → develop PR pending]
 
 Phase AQ delivers PRD Phase 1 of ATM "Send To": one gesture from the OS file
 manager (Finder / Explorer / Nautilus) to a delivered message whose text
@@ -1384,7 +1384,10 @@ plan is [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md); source PRD is
 [prd-atm-send-to](./plans/phase-aq/prd-atm-send-to.md). PRD Phase 2
 (agent-assisted drafting, Wyvern chat sessions) is explicitly deferred.
 
-Status 2026-08-28: 13 of the phase's 14 sprints are merged to
+Phase AQ complete on `integrate/phase-aq` (14/14 sprints) — integrate →
+develop PR pending.
+
+Status 2026-08-28: all 14 of the phase's sprints are merged to
 `integrate/phase-aq`:
 
 - AQ1 trait foundation + `atm queue` CLI verb/taxonomy — PR #1040
@@ -1408,10 +1411,9 @@ Status 2026-08-28: 13 of the phase's 14 sprints are merged to
   loopback and tailscale legs deferred by ruling)
 - AQ5 Send-To surface + phase evidence — PR #1059, merged `53921169e` on
   2026-08-28
-
-Not yet merged: AQ6 (sc-ecosystem dependency preflight + Wyvern contract
-issue, PR #1066, final head `29ac4a7c58796f446f3cdd6725f265ea6db2a66a`) is
-QA-verified with CI green; merge to `integrate/phase-aq` is pending.
+- AQ6 sc-ecosystem dependency preflight + Wyvern contract issue — PR #1066,
+  final head `29ac4a7c58796f446f3cdd6725f265ea6db2a66a`, merged `edb1a5381`
+  on 2026-08-28
 
 Tracked follow-ups (owner in parentheses): AQ1.9-m5 — live m5 restart matrix
 and hermes-atm suite run (Phase AQ closeout/AQ6); AQ4-tailscale-m5 — live

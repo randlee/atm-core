@@ -1,6 +1,6 @@
 # Sprint AQ5 — Send-To Surface and Phase Evidence
 
-Status: implementation complete; host/QA evidence pending · Branch: `feature/aq-5-surface-evidence` off
+Status: complete (AQ5-gui-e2e follow-up open, owner Rand) · Branch: `feature/aq-5-surface-evidence` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
 recommended_agent: Cipher-311d · recommended_model: fast
 
