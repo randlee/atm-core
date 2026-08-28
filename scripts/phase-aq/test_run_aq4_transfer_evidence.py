@@ -685,15 +685,29 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
         one key, raising `FileNotFoundError` for a missing key/value and
         `PermissionError` when `deny_writes` is set -- exactly the two
         failure shapes `_read_windows_default_shell`/
-        `_write_windows_default_shell` must handle."""
+        `_write_windows_default_shell` must handle.
+
+        `view_mismatch` models the failure `prepare_windows_posix_shell`'s
+        post-write readback exists to catch: a `SetValueEx` call that
+        raises nothing (so the caller has no exception to observe) yet
+        does not land where `QueryValueEx` looks -- the observable shape
+        of a 32-bit-vs-64-bit registry view split (`WOW6432Node`), without
+        this fake needing to model two separate hives."""
 
         HKEY_LOCAL_MACHINE = object()
         KEY_SET_VALUE = object()
         REG_SZ = object()
 
-        def __init__(self, *, key_exists: bool = True, deny_writes: bool = False) -> None:
+        def __init__(
+            self,
+            *,
+            key_exists: bool = True,
+            deny_writes: bool = False,
+            view_mismatch: bool = False,
+        ) -> None:
             self.key_exists = key_exists
             self.deny_writes = deny_writes
+            self.view_mismatch = view_mismatch
             self.values: dict[str, str] = {}
 
         def OpenKey(self, _hive: object, _key: str, *_args: object) -> "Aq4TransferEvidenceTests._FakeWinreg._Key":
@@ -722,6 +736,10 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
         ) -> None:
             if key.store.deny_writes:
                 raise PermissionError("access is denied")
+            if key.store.view_mismatch:
+                # Silently "succeeds" without updating what QueryValueEx
+                # returns -- see the class docstring.
+                return
             key.store.values[name] = value
 
         def DeleteValue(self, key: "Aq4TransferEvidenceTests._FakeWinreg._Key", name: str) -> None:
@@ -822,6 +840,30 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
         finally:
             module.find_windows_posix_shell = original_find
             module.winreg = original_winreg
+
+    def test_prepare_windows_posix_shell_skips_when_readback_does_not_match(self) -> None:
+        """run 33141941621 @ 21f00edb1: the scenario reported `"outcome":
+        "configured"` for `windows_default_shell`, yet the scratch sshd it
+        started still could not run `sftp.ps1`'s POSIX remote commands --
+        a registry write that raised nothing but did not durably land
+        where `sshd.exe` reads it (see `_FakeWinreg.view_mismatch`). This
+        must be caught and reported as `skipped_no_posix_receiver`, never
+        as a false `configured`."""
+        module = load_module()
+        original_find = module.find_windows_posix_shell
+        original_winreg = module.winreg
+        fake_winreg = self._FakeWinreg(key_exists=False, view_mismatch=True)
+        module.find_windows_posix_shell = lambda env=None: Path(r"C:\Git\bin\bash.exe")
+        module.winreg = fake_winreg
+        try:
+            result = module.prepare_windows_posix_shell()
+            # Never left claiming a value it could not confirm.
+            self.assertIsNone(module._read_windows_default_shell())
+        finally:
+            module.find_windows_posix_shell = original_find
+            module.winreg = original_winreg
+        self.assertEqual(result["outcome"], "skipped_no_posix_receiver")
+        self.assertIn("registry-view mismatch", result["reason"])
 
 
 if __name__ == "__main__":

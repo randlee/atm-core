@@ -777,13 +777,27 @@ def prepare_windows_posix_shell(env: dict[str, str] | None = None) -> dict[str, 
 
     Never raises. Returns one of:
     - `{"outcome": "skipped_no_posix_receiver", "reason": ...}` when no
-      bash was found, or the registry write was denied (for example, not
-      running elevated) -- an honest, announced skip, mirroring
+      bash was found, the registry write was denied (for example, not
+      running elevated), or a post-write readback of the value does not
+      match what was just written -- an honest, announced skip, mirroring
       `ensure_sshd_available`'s shape.
     - `{"outcome": "configured", "bash_path": ..., "before": ..., "after": ...}`
-      on success. The caller must restore `before` via
-      `_write_windows_default_shell` once the scratch sshd this enables
-      has stopped.
+      on success, `after` having been independently re-read from the
+      registry (not merely assumed from the value passed to
+      `_write_windows_default_shell`). The caller must restore `before`
+      via `_write_windows_default_shell` once the scratch sshd this
+      enables has stopped.
+
+    The readback (run 33141941621 @ 21f00edb1: this scenario reported
+    `"outcome": "configured"` yet the scratch sshd still ran the remote
+    command under a shell that could not execute `umask`/`mkdir -p`) is
+    the only way this function can tell a genuine write from one that
+    silently landed in the wrong registry view (for example a 32-bit
+    Python process's default WOW6432Node redirection) or was otherwise
+    not durably applied -- `_write_windows_default_shell` returning
+    without raising is not by itself proof the value was actually
+    persisted where `sshd.exe` reads it; `winreg` surfaces no
+    partial-write signal beyond raising `OSError`.
     """
     shell = find_windows_posix_shell(env)
     if shell is None:
@@ -806,7 +820,30 @@ def prepare_windows_posix_shell(env: dict[str, str] | None = None) -> dict[str, 
                 f"{shell} (likely denied administrator access): {error}"
             ),
         }
-    return {"outcome": "configured", "bash_path": str(shell), "before": before, "after": str(shell)}
+    after = _read_windows_default_shell()
+    if after != str(shell):
+        # The write call did not raise, yet reading the value straight
+        # back does not match what was just written -- most plausibly a
+        # registry-view mismatch (this harness's Python process reading
+        # or writing a different `SOFTWARE\OpenSSH` than the one the
+        # 64-bit `sshd.exe` service consults). Restore whatever was there
+        # before this call touched it (best-effort; a second denied write
+        # here is not actionable) and fail closed rather than reporting a
+        # false "configured".
+        try:
+            _write_windows_default_shell(before)
+        except OSError:
+            pass
+        return {
+            "outcome": "skipped_no_posix_receiver",
+            "reason": (
+                f"wrote {shell} to the OpenSSH DefaultShell registry value "
+                f"but reading it back returned {after!r} instead -- likely "
+                "a registry-view mismatch (32-bit vs. 64-bit); refusing to "
+                "proceed as if the scratch sshd will actually honor it"
+            ),
+        }
+    return {"outcome": "configured", "bash_path": str(shell), "before": before, "after": after}
 
 
 def install_transfer_script(home: Path, env: dict[str, str]) -> dict[str, Any]:
@@ -1113,6 +1150,16 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
         }
 
         send_ok = send_completed.returncode == 0
+        if not send_ok and sshd_drain is not None:
+            # `sftp.ps1` now forwards ssh/scp's own stderr into
+            # `record["send"]["stderr_tail"]` above, but that alone is
+            # not always enough to root-cause a Windows exec-session
+            # failure (a `LogLevel DEBUG3` scratch sshd, started above,
+            # logs which shell it actually invoked for each session,
+            # information no client-side stream carries). Captured only
+            # on failure, and only the tail, to avoid bloating the
+            # evidence file on the (overwhelmingly common) success path.
+            record["sshd_debug_log_tail"] = PipeDrain.tail(sshd_drain.stdout_lines)
         landed_path: str | None = None
         landed_matches_convention = False
         landed_file_exists = False

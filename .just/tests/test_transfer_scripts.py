@@ -577,6 +577,43 @@ class SftpPs1Tests(unittest.TestCase):
             invocations = _read_log(log_path)
             self.assertEqual([call["bin"] for call in invocations], ["ssh", "scp"], invocations)
 
+    def test_remote_mkdir_failure_surfaces_ssh_stderr_and_exit_code(self) -> None:
+        """run 33141941621 @ 21f00edb1: the previous "failed to create ..."
+        message never included ssh's own diagnostic text or exit code,
+        making the real remote failure unrecoverable from the caller's
+        side. `fake ssh`'s forced-failure branch always writes "fake ssh:
+        forced failure for test" to its own stderr before exiting
+        non-zero (see `FAKE_SSH` above); that text, and the exit code,
+        must both now appear in sftp.ps1's own failure message."""
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            _bin_dir, _log_path, env = self._fixture(tmp)
+            env["FAKE_SSH_EXIT_CODE"] = "17"
+            attach = tmp / "report.pdf"
+            attach.write_bytes(b"pdf-bytes")
+
+            result = self._invoke(["m5", "01J0000000000000000000004B", str(attach)], env, str(tmp))
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("failed to create", result.stderr)
+            self.assertIn("ssh exit 17", result.stderr)
+            self.assertIn("fake ssh: forced failure for test", result.stderr)
+
+    def test_copy_failure_surfaces_scp_stderr_and_exit_code(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            _bin_dir, _log_path, env = self._fixture(tmp)
+            env["FAKE_SCP_EXIT_CODE"] = "9"
+            attach = tmp / "report.pdf"
+            attach.write_bytes(b"pdf-bytes")
+
+            result = self._invoke(["m5", "01J0000000000000000000004C", str(attach)], env, str(tmp))
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("failed to copy", result.stderr)
+            self.assertIn("scp exit 9", result.stderr)
+            self.assertIn("fake scp: forced failure for test", result.stderr)
+
 
 class PosixShellDiscoveryTests(unittest.TestCase):
     """Direct unit coverage for `posix_shell()`'s discovery order, mocking

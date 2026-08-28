@@ -110,16 +110,45 @@ $RemoteDir = "$RemoteAtmTemp/send-to/$TransferId"
 # raises a terminating exception whose default rendering (call stack,
 # `+ CategoryInfo`, `+ FullyQualifiedErrorId`) is not the "short
 # diagnostic" the contract at the top of this file promises.
-& $Ssh @SshExtraArgs $HostName "umask 077 && mkdir -p '$RemoteDir'"
-if ($LASTEXITCODE -ne 0) {
-    [Console]::Error.WriteLine("failed to create $RemoteDir on $HostName")
+#
+# `2>&1` merges ssh/scp's own stderr into this call's captured output
+# instead of letting it stream straight through: an unredirected native
+# stderr write here can itself become a terminating error under
+# `$ErrorActionPreference = "Stop"`, aborting the script before the
+# `$LASTEXITCODE` check below ever runs -- and even when it doesn't, the
+# failure messages below previously reported only a generic "failed to
+# create"/"failed to copy" line with none of ssh/scp's own diagnostic
+# text (run 33141941621 @ 21f00edb1: the real remote failure reason was
+# never recorded anywhere reachable from the caller). Capturing it here
+# keeps the ssh/scp argv itself unchanged; it only changes what happens
+# to their output.
+function Format-CapturedOutput {
+    param([object[]]$Captured)
+    if (-not $Captured) {
+        return "(no output)"
+    }
+    $lines = $Captured | ForEach-Object { $_.ToString() }
+    $joined = ($lines -join "; ").Trim()
+    if ([string]::IsNullOrEmpty($joined)) {
+        return "(no output)"
+    }
+    return $joined
+}
+
+$mkdirOutput = & $Ssh @SshExtraArgs $HostName "umask 077 && mkdir -p '$RemoteDir'" 2>&1
+$mkdirExitCode = $LASTEXITCODE
+if ($mkdirExitCode -ne 0) {
+    $detail = Format-CapturedOutput $mkdirOutput
+    [Console]::Error.WriteLine("failed to create $RemoteDir on $HostName (ssh exit ${mkdirExitCode}): $detail")
     exit 1
 }
 
 foreach ($file in $Files) {
-    & $Scp @SshExtraArgs -q $file "${HostName}:${RemoteDir}/"
-    if ($LASTEXITCODE -ne 0) {
-        [Console]::Error.WriteLine("failed to copy $file to $HostName`:$RemoteDir")
+    $copyOutput = & $Scp @SshExtraArgs -q $file "${HostName}:${RemoteDir}/" 2>&1
+    $copyExitCode = $LASTEXITCODE
+    if ($copyExitCode -ne 0) {
+        $detail = Format-CapturedOutput $copyOutput
+        [Console]::Error.WriteLine("failed to copy $file to $HostName`:$RemoteDir (scp exit ${copyExitCode}): $detail")
         exit 1
     }
 }
