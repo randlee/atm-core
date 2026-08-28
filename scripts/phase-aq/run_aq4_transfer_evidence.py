@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Run the AQ4 cross-host file-transfer live evidence scenario.
 
-Drives the real, committed `scripts/transfer/sftp.sh` example (unmodified,
-exactly as an operator would install it) through a real `atm send --attach`
+Drives the real, committed `scripts/transfer/sftp.sh` or `sftp.ps1` example
+(unmodified, exactly as an operator would install it) through a real `atm send --attach`
 invocation against a real loopback `sshd` this script starts on a scratch
 port, proving end to end that a file attached on the sending side lands
 under the receiving side's `$ATM_TEMP` staging convention
@@ -294,6 +294,7 @@ class SshClientConfigOverride:
         if self._had_config:
             self._backup_path = self._ssh_dir / "config.aq4-evidence-backup"
             shutil.move(str(self._config_path), str(self._backup_path))
+        known_hosts = "NUL" if os.name == "nt" else "/dev/null"
         stanza = "\n".join(
             [
                 f"Host {TRANSFER_HOST}",
@@ -303,7 +304,7 @@ class SshClientConfigOverride:
                 f"    IdentityFile {self._identity}",
                 "    IdentitiesOnly yes",
                 "    StrictHostKeyChecking no",
-                "    UserKnownHostsFile /dev/null",
+                f"    UserKnownHostsFile {known_hosts}",
                 "    PasswordAuthentication no",
                 "",
             ]
@@ -465,13 +466,15 @@ def _mode_octal(path: Path) -> str:
 
 
 def install_transfer_script(home: Path) -> dict[str, Any]:
-    """Installs the unmodified `scripts/transfer/sftp.sh` example at
-    `<home>/.atm/transfer/localhost`, explicitly enforcing 0700 on the
-    `.atm` and `.atm/transfer` directories (`check_transfer_root_metadata`,
-    `crates/atm-core/src/transfer_script.rs`) and the script file itself
-    (`check_script_safety`) -- the only two paths ADR-055's Unix
-    transfer-script safety check inspects; nothing else under `home` is on
-    that check's path.
+    """Installs the platform-native unmodified transfer example.
+
+    Unix uses `scripts/transfer/sftp.sh` at `<home>/.atm/transfer/localhost`
+    and explicitly enforces 0700 on the `.atm`, `.atm/transfer`, and script
+    paths (`check_transfer_root_metadata`/`check_script_safety`). Windows
+    uses `scripts/transfer/sftp.ps1` at `<home>/.atm/transfer/localhost.ps1`;
+    its production safety check is profile containment rather than POSIX
+    mode bits, so the record identifies that Windows safety model instead of
+    asserting meaningless NTFS chmod results.
 
     `os.makedirs(..., mode=0o700)`'s `mode` argument governs only the leaf
     directory it creates (`transfer`), never any parent it also creates
@@ -487,16 +490,28 @@ def install_transfer_script(home: Path) -> dict[str, Any]:
     atm_dir = home / ".atm"
     transfer_dir = atm_dir / "transfer"
     os.makedirs(transfer_dir, mode=0o700, exist_ok=True)
+    if os.name == "nt":
+        installed = transfer_dir / f"{TRANSFER_HOST}.ps1"
+        source = ROOT / "scripts" / "transfer" / "sftp.ps1"
+        shutil.copyfile(source, installed)
+        return {
+            "installed_at": str(installed),
+            "source": str(source),
+            "script_kind": "powershell",
+            "safety_model": "windows-profile-containment",
+        }
+
     os.chmod(atm_dir, 0o700)
     os.chmod(transfer_dir, 0o700)
-
     installed = transfer_dir / TRANSFER_HOST
-    shutil.copyfile(ROOT / "scripts" / "transfer" / "sftp.sh", installed)
+    source = ROOT / "scripts" / "transfer" / "sftp.sh"
+    shutil.copyfile(source, installed)
     os.chmod(installed, 0o700)
 
     return {
         "installed_at": str(installed),
-        "source": str(ROOT / "scripts" / "transfer" / "sftp.sh"),
+        "source": str(source),
+        "script_kind": "direct",
         "atm_dir_mode": _mode_octal(atm_dir),
         "transfer_dir_mode": _mode_octal(transfer_dir),
         "script_mode": _mode_octal(installed),
@@ -582,13 +597,14 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
                 # the safety check pass, so a mode mismatch here must be a
                 # loud, unconditional harness failure, not a silently
                 # skippable assertion.
-                for mode_key in ("atm_dir_mode", "transfer_dir_mode", "script_mode"):
-                    recorded_mode = record["transfer_script"][mode_key]
-                    if recorded_mode != "0o700":
-                        raise RuntimeError(
-                            f"install_transfer_script did not achieve 0700 for {mode_key}: "
-                            f"got {recorded_mode} (record: {record['transfer_script']})"
-                        )
+                if os.name != "nt":
+                    for mode_key in ("atm_dir_mode", "transfer_dir_mode", "script_mode"):
+                        recorded_mode = record["transfer_script"][mode_key]
+                        if recorded_mode != "0o700":
+                            raise RuntimeError(
+                                f"install_transfer_script did not achieve 0700 for {mode_key}: "
+                                f"got {recorded_mode} (record: {record['transfer_script']})"
+                            )
 
                 daemon = start_daemon(args.daemon, env, args.timeout)
                 daemon_process = daemon.pop("process")
