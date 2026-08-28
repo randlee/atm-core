@@ -90,15 +90,15 @@ impl From<HerdrError> for AtmError {
                 "Herdr agent was not found".to_owned(),
             ),
             HerdrError::AgentNotReady => (
-                AtmErrorCode::HerdrPromptFailed,
+                AtmErrorCode::HerdrAgentNotVisible,
                 "Herdr agent is not ready".to_owned(),
             ),
             HerdrError::AgentTargetAmbiguous => (
-                AtmErrorCode::HerdrPromptFailed,
+                AtmErrorCode::HerdrAgentNotVisible,
                 "Herdr agent target is ambiguous".to_owned(),
             ),
             HerdrError::AgentNotRunning => (
-                AtmErrorCode::HerdrUnavailable,
+                AtmErrorCode::HerdrAgentNotVisible,
                 "Herdr agent is not running".to_owned(),
             ),
             HerdrError::AgentPromptStalled => (
@@ -790,9 +790,11 @@ pub mod testing {
     struct FakeState {
         calls: Vec<FakeHerdrCall>,
         prompt_results: VecDeque<Result<HerdrPromptOutcome, HerdrError>>,
+        prompt_gate: Option<Arc<tokio::sync::Notify>>,
         wait_results: VecDeque<Result<HerdrWaitOutcome, HerdrError>>,
         get_results: VecDeque<Result<HerdrGetOutcome, HerdrError>>,
         list_results: VecDeque<Result<HerdrListOutcome, HerdrError>>,
+        list_gate: Option<Arc<tokio::sync::Notify>>,
     }
 
     #[derive(Debug, Default, Clone)]
@@ -815,6 +817,15 @@ pub mod testing {
             }
         }
 
+        /// Blocks the next prompt until the returned notifier is woken.
+        pub fn block_next_prompt(&self) -> Arc<tokio::sync::Notify> {
+            let gate = Arc::new(tokio::sync::Notify::new());
+            if let Ok(mut state) = self.state.lock() {
+                state.prompt_gate = Some(Arc::clone(&gate));
+            }
+            gate
+        }
+
         pub fn queue_wait_result(&self, result: Result<HerdrWaitOutcome, HerdrError>) {
             if let Ok(mut state) = self.state.lock() {
                 state.wait_results.push_back(result);
@@ -831,6 +842,15 @@ pub mod testing {
             if let Ok(mut state) = self.state.lock() {
                 state.list_results.push_back(result);
             }
+        }
+
+        /// Blocks the next list call until the returned notifier is woken.
+        pub fn block_next_list(&self) -> Arc<tokio::sync::Notify> {
+            let gate = Arc::new(tokio::sync::Notify::new());
+            if let Ok(mut state) = self.state.lock() {
+                state.list_gate = Some(Arc::clone(&gate));
+            }
+            gate
         }
     }
 
@@ -850,7 +870,7 @@ pub mod testing {
             _deadline: RequestDeadline,
         ) -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>>
         {
-            let result = self
+            let (gate, result) = self
                 .state
                 .lock()
                 .map(|mut state| {
@@ -858,12 +878,18 @@ pub mod testing {
                         agent: agent.to_string(),
                         session: session.cloned(),
                     });
-                    state.prompt_results.pop_front()
+                    (state.prompt_gate.take(), state.prompt_results.pop_front())
                 })
                 .ok()
-                .flatten()
-                .unwrap_or_else(|| Ok(HerdrPromptOutcome::Accepted(default_snapshot(agent))));
-            Box::pin(async move { result })
+                .unwrap_or((None, None));
+            let result =
+                result.unwrap_or_else(|| Ok(HerdrPromptOutcome::Accepted(default_snapshot(agent))));
+            Box::pin(async move {
+                if let Some(gate) = gate {
+                    gate.notified().await;
+                }
+                result
+            })
         }
 
         fn wait<'a>(
@@ -932,19 +958,24 @@ pub mod testing {
             _deadline: RequestDeadline,
         ) -> Pin<Box<dyn Future<Output = Result<HerdrListOutcome, HerdrError>> + Send + 'a>>
         {
-            let result = self
+            let (gate, result) = self
                 .state
                 .lock()
                 .map(|mut state| {
                     state.calls.push(FakeHerdrCall::List {
                         session: session.cloned(),
                     });
-                    state.list_results.pop_front()
+                    (state.list_gate.take(), state.list_results.pop_front())
                 })
                 .ok()
-                .flatten()
-                .unwrap_or_else(|| Ok(HerdrListOutcome { agents: Vec::new() }));
-            Box::pin(async move { result })
+                .unwrap_or((None, None));
+            let result = result.unwrap_or_else(|| Ok(HerdrListOutcome { agents: Vec::new() }));
+            Box::pin(async move {
+                if let Some(gate) = gate {
+                    gate.notified().await;
+                }
+                result
+            })
         }
     }
 }
@@ -953,39 +984,30 @@ pub mod testing {
 mod tests {
     use super::*;
 
-    /// A fixed-instant [`BreakerClock`] used by tests that assert on the
-    /// breaker's cooldown state immediately after a recorded failure.
-    ///
-    /// Without this, `Instant::now()` is sampled once when the failure is
-    /// recorded and again when the state is asserted a moment later. Under a
-    /// loaded, fully parallel `cargo test` run, real process spawn/wait
-    /// latency between those two samples can exceed the first-failure
-    /// backoff window (1s), flipping the breaker from `Open` to `HalfOpen`
-    /// and failing the assertion. Freezing the clock removes that race
-    /// without changing production breaker semantics.
-    ///
-    /// Only used by the `#[cfg(unix)]` tests below, which spawn a real
-    /// child process; gated the same way so it isn't dead code elsewhere
-    /// (e.g. on Windows).
-    #[cfg(unix)]
+    /// A manually controlled clock used by tests that assert on the
+    /// breaker's cooldown state. Keeping the instant behind a mutex allows
+    /// the same fixture to cover synchronous state transitions and async
+    /// process-backed calls without relying on scheduler timing.
     #[derive(Debug)]
     struct TestBreakerClock {
-        now: Instant,
+        now: Mutex<Instant>,
     }
 
-    #[cfg(unix)]
     impl TestBreakerClock {
-        fn frozen() -> Self {
+        fn new() -> Self {
             Self {
-                now: Instant::now(),
+                now: Mutex::new(Instant::now()),
             }
+        }
+
+        fn advance(&self, duration: Duration) {
+            *self.now.lock().expect("test clock lock") += duration;
         }
     }
 
-    #[cfg(unix)]
     impl BreakerClock for TestBreakerClock {
         fn now(&self) -> Instant {
-            self.now
+            *self.now.lock().expect("test clock lock")
         }
     }
 
@@ -1098,10 +1120,8 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_bypass_get_does_not_open_the_shared_breaker() {
-        // Frozen clock: the final `Open` assertion below must not race real
-        // process spawn/wait latency under a loaded parallel test run.
         let breaker = Arc::new(HerdrSpawnBreaker::with_clock(Arc::new(
-            TestBreakerClock::frozen(),
+            TestBreakerClock::new(),
         )));
         breaker.record_infrastructure_failure();
         let failures = breaker.consecutive_failures();
@@ -1123,10 +1143,8 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_list_opens_the_shared_breaker() {
-        // Frozen clock: the final `Open` assertion below must not race real
-        // process spawn/wait latency under a loaded parallel test run.
         let breaker = Arc::new(HerdrSpawnBreaker::with_clock(Arc::new(
-            TestBreakerClock::frozen(),
+            TestBreakerClock::new(),
         )));
         let result = execute_list(
             "/usr/bin/false",
@@ -1229,12 +1247,18 @@ mod tests {
 
     #[test]
     fn breaker_opens_with_exponential_backoff_and_half_open_probe() {
-        let breaker = HerdrSpawnBreaker::default();
+        let clock = Arc::new(TestBreakerClock::new());
+        let breaker = HerdrSpawnBreaker::with_clock(clock.clone());
         assert_eq!(breaker.state(), HerdrBreakerState::Closed);
         assert!(breaker.permits_spawn());
         breaker.record_infrastructure_failure();
         assert!(matches!(breaker.state(), HerdrBreakerState::Open { .. }));
         assert!(!breaker.permits_spawn());
+        clock.advance(Duration::from_secs(1));
+        assert!(
+            breaker.permits_spawn(),
+            "the injected clock reached the probe window"
+        );
         breaker.record_success();
         assert_eq!(breaker.state(), HerdrBreakerState::Closed);
     }
