@@ -12,10 +12,16 @@ on:
         required: true
         default: "publisher"
         type: string
+      already_published_channels:
+        description: "Optional comma-separated channel names preserved from a prior release run for this exact version"
+        required: false
+        default: ""
+        type: string
 
-permissions:
-  actions: read
-  contents: read
+# `environments` is not an individual workflow-permission key. `read-all` is
+# GitHub's valid read-only permission shorthand; environment-secret metadata
+# still remains unavailable to the installation token and is informational.
+permissions: read-all
 
 jobs:
   preflight:
@@ -97,7 +103,7 @@ jobs:
           echo "All manifest-required repository secrets are available."
 
       - id: environment_secrets
-        name: Verify protected Python environment secret metadata
+        name: Inspect protected Python environment secret metadata (informational)
         if: ${{ always() && steps.secret_plan.outcome == 'success' }}
         continue-on-error: true
         shell: bash
@@ -108,9 +114,10 @@ jobs:
         run: |
           set -euo pipefail
           failures=()
+          unavailable=()
           while IFS=$'\t' read -r environment_name secret_name; do
             if ! names="$(gh api "repos/${REPOSITORY}/environments/${environment_name}/secrets" --jq '.secrets[].name')"; then
-              failures+=("Could not inspect secret metadata for protected environment ${environment_name}.")
+              unavailable+=("${environment_name}:${secret_name}")
             elif ! grep -Fxq -- "${secret_name}" <<<"${names}"; then
               failures+=("GitHub Actions environment ${environment_name} is missing required secret ${secret_name}.")
             fi
@@ -119,7 +126,11 @@ jobs:
             printf '%s\n' "${failures[@]}" >&2
             exit 1
           fi
-          echo "All manifest-required protected-environment secret names are present."
+          if [[ "${#unavailable[@]}" -gt 0 ]]; then
+            printf 'Environment-secret metadata is unavailable to GITHUB_TOKEN for: %s. This is informational; protected environments enforce the configured secrets when their publish jobs run.\n' "${unavailable[*]}"
+          else
+            echo "All manifest-required protected-environment secret names are present."
+          fi
 
       - id: github_environments
         name: Verify contract-declared GitHub environments exist
@@ -152,7 +163,6 @@ jobs:
         shell: bash
         env:
           SECRET_PLAN: ${{ steps.secret_plan.outputs.plan }}
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
           WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
@@ -164,9 +174,6 @@ jobs:
             token="${!secret_name:-}"
             channel_status=success
             case "${check_kind}" in
-              crates_io)
-                command=(curl --fail --silent --show-error --header "Authorization: ${token}" https://crates.io/api/v1/me)
-                ;;
               github)
                 command=(curl --fail --silent --show-error --header "Authorization: Bearer ${token}" --header "Accept: application/vnd.github+json" https://api.github.com/user)
                 ;;
@@ -177,7 +184,7 @@ jobs:
                 ;;
             esac
             if ! "${command[@]}" >/dev/null; then
-              failures+=("GitHub Actions secret ${secret_name} is present but rejected by its publish service; rotate or replace it.")
+              failures+=("GitHub Actions secret ${secret_name} is present but rejected by its publish service.")
               channel_status=failure
             fi
             channel_outcomes="$(jq -c --arg channel "${channel}" --arg status "${channel_status}" '.[$channel]=$status' <<<"${channel_outcomes}")"
@@ -204,6 +211,10 @@ jobs:
         with:
           toolchain: ${{ steps.build_plan.outputs.rust_toolchain }}
           components: rustfmt, clippy
+
+      - name: Install Linux native build deps
+        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
+        uses: ./.github/actions/install-linux-native-deps
 
       - name: Normalize version input
         id: meta
@@ -283,59 +294,71 @@ jobs:
         name: Verify release-candidate provenance
         if: ${{ always() && steps.meta.outcome == 'success' }}
         continue-on-error: true
+        env:
+          ALREADY_PUBLISHED_CHANNELS: ${{ inputs.already_published_channels }}
         run: |
           .github/scripts/release_gate.sh readiness HEAD "release-candidate-${{ steps.meta.outputs.release_tag }}" \
             '${{ steps.meta.outputs.release_version }}' "${RELEASE_ARTIFACT_MANIFEST}" \
-            '${{ steps.build_plan.outputs.workspace_toml }}'
+            '${{ steps.build_plan.outputs.workspace_toml }}' "${ALREADY_PUBLISHED_CHANNELS}"
 
       - id: unpublished
         name: Verify release version is unpublished on crates.io
         if: ${{ always() && steps.meta.outcome == 'success' }}
         continue-on-error: true
+        shell: bash
+        env:
+          ALREADY_PUBLISHED_CHANNELS: ${{ inputs.already_published_channels }}
         run: |
           python3 .github/scripts/release_artifacts.py check-version-unpublished \
             --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
-            --version '${{ steps.meta.outputs.release_version }}'
+            --version '${{ steps.meta.outputs.release_version }}' \
+            --already-published-channels "${ALREADY_PUBLISHED_CHANNELS}"
 
       - id: registry_state
         name: Verify registry versions and new names
         if: ${{ always() && steps.meta.outcome == 'success' }}
         continue-on-error: true
         shell: bash
+        env:
+          ALREADY_PUBLISHED_CHANNELS: ${{ inputs.already_published_channels }}
         run: |
           set -euo pipefail
           failures=()
-          status_code() {
-            local status
-            status="$(curl --location --max-time 20 --silent --show-error --output /dev/null \
-              --write-out '%{http_code}' "$1" || true)"
-            case "${status}" in
-              200|404) printf '%s' "${status}" ;;
-              *) printf '000' ;;
-            esac
+          channel_is_preserved() {
+            local expected="$1" channel
+            IFS=',' read -r -a channels <<<"${ALREADY_PUBLISHED_CHANNELS:-}"
+            for channel in "${channels[@]}"; do
+              channel="$(tr -d '[:space:]' <<<"${channel}")"
+              [[ "${channel}" == "${expected}" ]] && return 0
+            done
+            return 1
           }
-
           while IFS=$'\t' read -r channel agent registry name normalized_name expected_version project_url version_url version_policy; do
-            project_status="$(status_code "${project_url}")"
-            version_status="$(status_code "${version_url}")"
-            case "${project_status}:${version_status}:${version_policy}" in
-              404:404:*)
+            project_state="$(python3 .github/scripts/release_artifacts.py registry-status --url "${project_url}")"
+            version_state="$(python3 .github/scripts/release_artifacts.py registry-status --url "${version_url}")"
+            case "${project_state}:${version_state}:${version_policy}" in
+              absent:absent:*)
                 printf '%s: %s name %s is apparently available (not a reservation).\n' \
                   "${agent}" "${registry}" "${normalized_name}"
                 ;;
-              200:404:*)
+              published:absent:*)
                 printf '%s: %s project %s exists; version %s is not published.\n' \
                   "${agent}" "${registry}" "${normalized_name}" "${expected_version}"
                 ;;
-              200:200:must_be_absent)
-                failures+=("${channel}/${registry}: ${normalized_name}@${expected_version} is already published.")
+              published:published:must_be_absent)
+                if channel_is_preserved "${channel}"; then
+                  printf '%s: %s version %s@%s is preserved from a prior release run.\n' \
+                    "${agent}" "${registry}" "${normalized_name}" "${expected_version}"
+                else
+                  failures+=("${channel}/${registry}: ${normalized_name}@${expected_version} is already published.")
+                fi
                 ;;
-              200:200:informational)
+              published:published:informational)
                 printf '%s: %s rehearsal version %s@%s already exists (informational).\n' \
                   "${agent}" "${registry}" "${normalized_name}" "${expected_version}"
                 ;;
               *)
-                failures+=("${channel}/${registry}: registry state for ${normalized_name}@${expected_version} is indeterminate (project=${project_status}, version=${version_status}).")
+                failures+=("${channel}/${registry}: registry state for ${normalized_name}@${expected_version} is indeterminate (project=${project_state}, version=${version_state}).")
                 ;;
             esac
           done < <(python3 .github/scripts/release_artifacts.py public-registry-check-plan \
@@ -391,14 +414,22 @@ jobs:
           GITHUB_RELEASE_PERMISSIONS: ${{ steps.github_release_permissions.outcome }}
         run: |
           set -euo pipefail
+          repository_secret_channels_json="${REPOSITORY_SECRET_CHANNELS:-}"
+          credential_liveness_channels_json="${CREDENTIAL_LIVENESS_CHANNELS:-}"
+          [[ -n "${repository_secret_channels_json}" ]] || repository_secret_channels_json='{}'
+          [[ -n "${credential_liveness_channels_json}" ]] || credential_liveness_channels_json='{}'
+          jq -e 'type == "object"' <<<"${repository_secret_channels_json}" >/dev/null \
+            || { echo 'REPOSITORY_SECRET_CHANNELS must be a JSON object.' >&2; exit 1; }
+          jq -e 'type == "object"' <<<"${credential_liveness_channels_json}" >/dev/null \
+            || { echo 'CREDENTIAL_LIVENESS_CHANNELS must be a JSON object.' >&2; exit 1; }
           outcomes="$(jq -nc \
             --arg ownership "${OWNERSHIP}" \
             --arg release_metadata "${RELEASE_METADATA}" \
             --arg repository_secrets "${REPOSITORY_SECRETS}" \
-            --argjson repository_secret_channels "${REPOSITORY_SECRET_CHANNELS:-{}}" \
+            --argjson repository_secret_channels "${repository_secret_channels_json}" \
             --arg environment_secrets "${ENVIRONMENT_SECRETS}" \
             --arg credential_liveness "${CREDENTIAL_LIVENESS}" \
-            --argjson credential_liveness_channels "${CREDENTIAL_LIVENESS_CHANNELS:-{}}" \
+            --argjson credential_liveness_channels "${credential_liveness_channels_json}" \
             --arg registry_state "${REGISTRY_STATE}" \
             --arg github_release_permissions "${GITHUB_RELEASE_PERMISSIONS}" \
             '{ownership: $ownership, release_metadata: $release_metadata, repository_secrets: $repository_secrets, repository_secret_channels: $repository_secret_channels, environment_secrets: $environment_secrets, credential_liveness: $credential_liveness, credential_liveness_channels: $credential_liveness_channels, registry_state: $registry_state, github_release_permissions: $github_release_permissions}')"

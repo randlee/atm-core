@@ -54,7 +54,9 @@ jobs:
               || { echo "${candidate_tag} is not an ancestor of origin/develop" >&2; exit 1; }
             echo "Reusing ${candidate_tag} at ${candidate_sha}; origin/develop is ${develop_sha}."
           else
-            git tag -a "${candidate_tag}" origin/develop -m "Release candidate ${release_tag}"
+            git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              tag -a "${candidate_tag}" origin/develop -m "Release candidate ${release_tag}"
             git push origin "refs/tags/${candidate_tag}"
             candidate_sha="${develop_sha}"
             echo "Created ${candidate_tag} at origin/develop (${candidate_sha})."

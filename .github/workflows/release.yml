@@ -20,6 +20,11 @@ on:
         required: false
         type: boolean
         default: false
+      already_published_channels:
+        description: "Optional comma-separated channel names preserved from a prior release run for this exact version"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -34,7 +39,7 @@ jobs:
       release_tag: ${{ steps.meta.outputs.release_tag }}
       release_version: ${{ steps.meta.outputs.release_version }}
       release_target: ${{ steps.meta.outputs.release_target }}
-      release_ref: ${{ steps.release-ref.outputs.release_ref }}
+      build_ref: ${{ steps.release-ref.outputs.build_ref }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -91,7 +96,10 @@ jobs:
             --workspace-toml '${{ steps.build_plan.outputs.workspace_toml }}'
 
       - name: Run release gate
-        run: .github/scripts/release_gate.sh final origin/main "release-candidate-${{ steps.meta.outputs.release_tag }}" '${{ steps.meta.outputs.release_version }}' "${RELEASE_ARTIFACT_MANIFEST}" '${{ steps.build_plan.outputs.workspace_toml }}'
+        id: release_gate
+        env:
+          ALREADY_PUBLISHED_CHANNELS: ${{ inputs.already_published_channels }}
+        run: .github/scripts/release_gate.sh final origin/main "release-candidate-${{ steps.meta.outputs.release_tag }}" '${{ steps.meta.outputs.release_version }}' "${RELEASE_ARTIFACT_MANIFEST}" '${{ steps.build_plan.outputs.workspace_toml }}' "${ALREADY_PUBLISHED_CHANNELS}"
 
       - name: Ensure tag is correct or create it
         id: release-ref
@@ -101,25 +109,29 @@ jobs:
           git fetch origin --prune --tags
           tag='${{ steps.meta.outputs.release_tag }}'
           target='${{ steps.meta.outputs.release_target }}'
-          main_sha="$(git rev-parse origin/main)"
+          main_sha='${{ steps.release_gate.outputs.release_sha }}'
+          git rev-parse --verify "${main_sha}^{commit}" >/dev/null
+          candidate_tag="release-candidate-${tag}"
           if [[ "$target" == "production" ]]; then
-            remote_tag_sha="$(git ls-remote --tags origin "refs/tags/${tag}" | awk '{print $1}' || true)"
-            if [[ -n "$remote_tag_sha" ]]; then
-              if [[ "$remote_tag_sha" == "$main_sha" ]]; then
-                echo "Tag ${tag} already exists and points to origin/main (${main_sha}), skipping creation"
-                echo "release_ref=$tag" >> "$GITHUB_OUTPUT"
-                exit 0
+            if git ls-remote --exit-code --refs origin "refs/tags/${tag}" >/dev/null; then
+              remote_tag_sha="$(git rev-parse "refs/tags/${tag}^{commit}")"
+              if ! git merge-base --is-ancestor "$remote_tag_sha" origin/main; then
+                echo "Tag ${tag} exists at ${remote_tag_sha} but is not an ancestor of origin/main (${main_sha})" >&2
+                exit 1
               fi
-              echo "Tag ${tag} exists but points to ${remote_tag_sha}, not origin/main (${main_sha})" >&2
-              exit 1
+              if ! git merge-base --is-ancestor "$candidate_tag" "$remote_tag_sha"; then
+                echo "Tag ${tag} exists at ${remote_tag_sha} but does not descend from ${candidate_tag}" >&2
+                exit 1
+              fi
+              echo "Tag ${tag} already exists at verified ancestor ${remote_tag_sha}; reusing immutable tag while building from origin/main (${main_sha})"
+            else
+              git tag "$tag" "$main_sha"
+              git push origin "$tag"
             fi
-            git tag "$tag" origin/main
-            git push origin "$tag"
-            echo "release_ref=$tag" >> "$GITHUB_OUTPUT"
-            exit 0
+          else
+            echo "Rehearsal mode: validating release tag ${tag} locally only; not pushing any tag to origin"
           fi
-          echo "Rehearsal mode: validating release tag ${tag} locally only; not pushing any tag to origin"
-          echo "release_ref=$main_sha" >> "$GITHUB_OUTPUT"
+          echo "build_ref=$main_sha" >> "$GITHUB_OUTPUT"
 
   build:
     needs: [gate-and-tag, release-plan]
@@ -130,7 +142,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.gate-and-tag.outputs.release_ref }}
+          ref: ${{ needs.gate-and-tag.outputs.build_ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -140,6 +152,9 @@ jobs:
 
       - name: Ensure cross-compilation target
         run: rustup target add ${{ matrix.target }}
+
+      - name: Install Linux native build deps
+        uses: ./.github/actions/install-linux-native-deps
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -193,7 +208,7 @@ jobs:
               shutil.rmtree(stage)
           (stage / "bin").mkdir(parents=True)
           for binary in config["binaries"]:
-              filename = binary["name"] + (".exe" if target_name.endswith("windows-msvc") else "")
+              filename = binary["name"] + (".exe" if "windows" in target_name else "")
               shutil.copy2(Path("target") / target_name / "release" / filename, stage / "bin" / filename)
               for bundled_path in binary.get("bundled_paths", []):
                   source = Path(bundled_path["source"])
@@ -229,12 +244,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.gate-and-tag.outputs.release_ref }}
+          ref: ${{ needs.gate-and-tag.outputs.build_ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ needs.release-plan.outputs.rust_toolchain }}
+
+      - name: Install Linux native build deps
+        uses: ./.github/actions/install-linux-native-deps
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -259,13 +277,12 @@ jobs:
             url="$(python3 .github/scripts/release_artifacts.py public-registry-inquiry-plan \
               --contracts "${contracts}" --channel crates_io --name "${crate}" --version "${version}" \
               | jq -r '.checks[0].version_lookup_url')"
-            status="$(curl --location --max-time 20 --silent --show-error --output /dev/null \
-              --write-out '%{http_code}' --user-agent 'sc-publish-kit' "${url}" || true)"
-            case "${status}" in
-              200) return 0 ;;
-              404) return 1 ;;
+            state="$(python3 .github/scripts/release_artifacts.py registry-status --url "${url}")"
+            case "${state}" in
+              published) return 0 ;;
+              absent) return 1 ;;
               *)
-                echo "crates.io state for ${crate}@${version} is indeterminate (status ${status})" >&2
+                echo "crates.io state for ${crate}@${version} is indeterminate (state ${state})" >&2
                 exit 1
                 ;;
             esac
@@ -304,7 +321,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.gate-and-tag.outputs.release_ref }}
+          ref: ${{ needs.gate-and-tag.outputs.build_ref }}
       - id: manifest
         name: Read Python distribution matrices from release manifest
         shell: bash
@@ -333,10 +350,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.gate-and-tag.outputs.release_ref }}
+          ref: ${{ needs.gate-and-tag.outputs.build_ref }}
       - uses: ./.github/actions/setup-python-release-build
         with:
-          release_ref: ${{ needs.gate-and-tag.outputs.release_ref }}
+          release_ref: ${{ needs.gate-and-tag.outputs.build_ref }}
           release_version: ${{ needs.gate-and-tag.outputs.release_version }}
           pyproject: ${{ matrix.pyproject }}
           build_system: ${{ matrix.build_system }}
@@ -365,10 +382,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.gate-and-tag.outputs.release_ref }}
+          ref: ${{ needs.gate-and-tag.outputs.build_ref }}
       - uses: ./.github/actions/setup-python-release-build
         with:
-          release_ref: ${{ needs.gate-and-tag.outputs.release_ref }}
+          release_ref: ${{ needs.gate-and-tag.outputs.build_ref }}
           release_version: ${{ needs.gate-and-tag.outputs.release_version }}
           pyproject: ${{ matrix.pyproject }}
           build_system: ${{ matrix.build_system }}
@@ -402,7 +419,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.gate-and-tag.outputs.release_ref }}
+          ref: ${{ needs.gate-and-tag.outputs.build_ref }}
       - uses: actions/download-artifact@v4
         with:
           pattern: 'python-wheel-*'
@@ -458,7 +475,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.gate-and-tag.outputs.release_tag }}
+          ref: ${{ needs.gate-and-tag.outputs.build_ref }}
 
       - id: expected_assets
         name: Read expected release asset patterns from manifest

@@ -35,6 +35,9 @@ readiness preflight before a `main` merge from the final preflight on the exact
 `main` commit that will publish, and defines the required release-candidate
 provenance plus post-cut drift report.
 
+If a release task requires a direct template render, also read
+`.claude/skills/publishing/ref/renderer-contract.md` before doing so.
+
 ## Output Format
 
 Send the assignment's named recipient one concise ATM completion message
@@ -182,6 +185,10 @@ exist; run `Release Preflight` and report its sanitized result.
    preflight, record `git diff --name-status release-candidate-vX.Y.Z..<release-ref>`.
    Flag non-trivial implementation or dependency changes to the named
    coordinator; do not silently classify them as release metadata.
+   The candidate tag is the release's minimum baseline, not its exact shipping
+   snapshot: every fix committed to `release/*` after the candidate cut is
+   mandatory content for the final `main` release. Never drop, reset, or bypass
+   such a fix by publishing the originally tagged commit alone.
 2. Validate the manifest and candidate tag, then run `Release Preflight` with
    the assigned version. A candidate-tag validation failure is a failed
    `release_authorization` check for every affected channel. Launch the
@@ -193,6 +200,13 @@ exist; run `Release Preflight` and report its sanitized result.
    child-task and result references, and stop. A completed
    passed preflight without explicit release authorization follows that same
    read-only fanout path; it is `blocked`, not `failed`.
+   For an authorized `channel_retry`, derive `already_published_channels` only
+   from manifest channels that are absent from the assignment's
+   `failed_channels` list and have a passed result for this exact tag from a
+   prior root release. Pass that comma-separated value to both the Release
+   Preflight and root Release `already_published_channels` workflow inputs.
+   Do not infer it from a registry lookup or include a channel without that
+   prior passed evidence; leave the input empty when no channel qualifies.
 3. Run the root release workflow only when explicitly assigned and only after
    the shared release-state policy's final `main` preflight passes. It owns tag
    creation and produces the immutable GitHub Release assets.
