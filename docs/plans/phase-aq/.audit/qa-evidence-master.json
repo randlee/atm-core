@@ -2608,6 +2608,31 @@
    "minor": 0,
    "count_basis": "headline/reviewer",
    "evidence": "AQ3 #1054 @ 50eb04544 QA-final5 (FENIX-QA): 13/14 PASS. All QA-final4 blockers verified fixed (ATM-QA-101 artifact byte-identical; ARCH-001 lib.rs 761 via replacement_handler.rs PASS; ATM-QA-102 AC8 run 33128710126 verified; ATM-QA-104 orphan removed; FTQ-001 deterministic). Sole blocker ATM-QA-105 doc accuracy: deliverable 4 cites emit_daemon_event; code uses tracing:: structured events. Docs-only fix pushed by fenix. QA-final6 targeted re-verify next. Non-blocking: RBQA-F001/F002/F003."
+  },
+  {
+   "run_id": "QA-AQ3-QA-final6",
+   "aich_sprint": "AQ3",
+   "phase_sprint": "AQ3",
+   "pass": true,
+   "run_type": "qa",
+   "assignment_time_utc": "2026-08-28T12:50:00Z",
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "team-lead",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ3 #1054 QA-final6 (FENIX-QA)",
+   "result_time_utc": "2026-08-28T12:50:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "PASS",
+   "blockers": 0,
+   "important": 0,
+   "minor": 0,
+   "count_basis": "headline/reviewer",
+   "evidence": "AQ3 #1054 @ e7a488e5a QA-final6 (FENIX-QA): 14/14 PASS. ATM-QA-105 resolved (docs-only delta verified): daemon_event comment now correctly cites structured events. Non-blocking tracked: RBQA-F001/F002/F003. Merge-ready pending CI."
   }
  ],
  "follow_ups": [
