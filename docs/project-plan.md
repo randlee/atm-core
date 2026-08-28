@@ -1342,7 +1342,7 @@ satisfied — AO merged to `develop` via the AO2 integration (PR #966). AP.1's
 physical hardware proof remains the mandatory entry gate; no AP dispatch has
 occurred.
 
-## 48. Phase AQ — ATM Send-To Shell Integration [COMPLETE — integrate/phase-aq → develop PR pending]
+## 48. Phase AQ — ATM Send-To Shell Integration [COMPLETE ON DEVELOP (PR #1079) — 5 open follow-ups, 2 tied to Must PRD requirements (R1 GUI E2E, R15 m5); see qa-evidence-master.json follow_ups]
 
 Phase AQ delivers PRD Phase 1 of ATM "Send To": one gesture from the OS file
 manager (Finder / Explorer / Nautilus) to a delivered message whose text
@@ -1354,8 +1354,11 @@ change, no daemon transfer machinery. ADR-055 defines the system-level
 transfer-script seam; thin per-OS shell glue drives the pipeline
 `atm teams --json --members | <picker> | atm send --attach "$@" --from-json`.
 Phase 1 also delivers `atm queue` — `atm send` with the nudge deferred until
-the recipient harness is ready (nudge taxonomy: steer = immediate, queue =
-deferred; ADR-054) — via a `nudge_pending_at` marker, a `PendingNudgeStore`
+the recipient harness is ready (nudge taxonomy: steer and queue are message
+*kinds*, not delivery timings — the physical mechanism may itself defer a
+steer-kind notification until the next bare-CLI Stop pull, and mechanism
+timing never changes the kind; ADR-054, AQ2.5 addendum) — via a
+`nudge_pending_at` marker, a `PendingNudgeStore`
 storage capability, graft dual-channel wiring (harness owns landing; Hermes
 `/steer`+`/queue` complete), and a tmux idle-drain, under the ADR-054 nudge
 taxonomy (nudge = umbrella; steer/queue = kinds) with its code-rename
@@ -1384,8 +1387,8 @@ plan is [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md); source PRD is
 [prd-atm-send-to](./plans/phase-aq/prd-atm-send-to.md). PRD Phase 2
 (agent-assisted drafting, Wyvern chat sessions) is explicitly deferred.
 
-Phase AQ complete on `integrate/phase-aq` (14/14 sprints) — integrate →
-develop PR pending.
+Phase AQ complete on `develop` (14/14 sprints) — `integrate/phase-aq` →
+`develop` merged via PR #1079 (`1f5666fa5`).
 
 Status 2026-08-28: all 14 of the phase's sprints are merged to
 `integrate/phase-aq`:

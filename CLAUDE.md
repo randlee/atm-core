@@ -70,7 +70,7 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 - Agent team execution: Scrum Master → Dev(s) + QA(s), Opus Architect on escalation
 - All work on dedicated worktrees via `sc-git-worktree`
 
-**Current Status**: Phase AQ complete on integrate/phase-aq (14/14 sprints) — integrate → develop PR pending
+**Current Status**: Phase AQ merged to develop (PR #1079, 14/14 sprints; 5 follow-ups open incl. R1/R15 Must items)
 
 ---
 
