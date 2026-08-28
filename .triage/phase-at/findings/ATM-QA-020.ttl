@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-020>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-020" ;
+  triage:title "SKILL.md's new pre-approval rehearsal rule requires rehearsing against \"the published release assets\", which cannot exist yet at that point in the documented release sequence, and publisher.md has no step that operationalizes the rule" ;
+  triage:description "SKILL.md's new 'Full-pipeline rehearsal before the single approval' bullet (line ~121) requires, before the release -> main PR is put up for approval, 'a real local brew install from the rendered formula in a throwaway local tap against the published release assets.' Per publisher.md's own Release Execution sequence, the immutable GitHub Release and its binary assets are produced only by step 3 ('Run the root release workflow only when explicitly assigned and only after the shared release-state policy's final main preflight passes... produces the immutable GitHub Release assets'), i.e. after approval. release-candidate.yml (the only workflow publisher runs pre-approval) creates a provenance tag only and builds no release assets (confirmed by direct read of .github/workflows/release-candidate.yml and release.yml). The rule as written therefore cannot be literally satisfied at the point it mandates -- 'published release assets' do not exist pre-approval -- and is readable two contradictory ways (rehearse against local stand-in artifacts, with 'published' simply wrong; or an actual publish must happen before approval, which would violate the single-approval goal). Separately, publisher.md's numbered Release Execution steps have no corresponding proactive step for this rehearsal: step 2 only runs Release Preflight (registry/name/secret checks, not tooling/runtime rehearsal), and the only rehearsal language in publisher.md (step 6) is reactive, gated on 'When any channel's workflow fails on a tooling defect' -- i.e. only after a failure has already occurred. A fresh publisher agent following publisher.md literally would never perform the mandated proactive rehearsal. Found independently by req-qa (ATM-QA-001, ATM-QA-003) and arch-qa (ARCH-001, ARCH-002); consolidated here as one finding since both cite the same root cause (the new rehearsal rule is actor/timing-ambiguous and not reflected in publisher.md's actual execution steps). Independently verified by quality-mgr via direct read of SKILL.md:115-129, publisher.md:180-251, release-candidate.yml, and release.yml on commit 682949bc5." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cross-doc-conflict" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-28T05:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:PUB-1085 ;
+  triage:foundAt "2026-08-28T04:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-020/PUB-1085-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-020/PUB-1085-1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/publishing/SKILL.md" ;
+  triage:line 121 ;
+  triage:snippet "a real local `brew install` from the rendered formula in a throwaway local tap against the published release assets" ;
+  triage:status "open" ; triage:closed false ;
+  triage:branch "skill/publishing-rehearsal-parallel" ; triage:headSha "682949bc5" ;
+  triage:occursIn <urn:atm:triage:worktree/PUB-1085/682949bc5> .
+
+<urn:atm:triage:worktree/PUB-1085/682949bc5>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/skill-publishing-rehearsal-parallel" ;
+  triage:branch "skill/publishing-rehearsal-parallel" ;
+  triage:headSha "682949bc5" ;
+  triage:orderIndex 1 .

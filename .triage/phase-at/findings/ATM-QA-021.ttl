@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-021>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-021" ;
+  triage:title "\"Batch, never trickle\" rule mandates \"one main merge\" even for a post-tag tooling defect, which contradicts the unqualified single-approval Goal statement" ;
+  triage:description "SKILL.md's new 'On any pipeline failure, batch — never trickle' bullet (line ~130) requires collecting every defect into 'one fix round and one main merge', and explicitly names the case where 'a workflow whose checkout is pinned to the immutable tag never picks up fixes' -- i.e. a tooling defect discovered after the release tag/GitHub Release already exists (post-approval, since release.yml's tag/asset creation is gated on the final main preflight passing per publisher.md step 3). Fixing a tag-pinned workflow requires cutting a new release candidate and a second release/* -> main PR, which under this repo's branch-management rules is a second merge to main requiring a second human approval. This directly contradicts the unqualified Goal statement at the top of the same file: 'one skill invocation, one human approval... A release assignment runs end-to-end with exactly one human gate' (SKILL.md:8-11), which carves out no exception for post-tag tooling-defect recovery. The identical 'one main merge' wording is reproduced in publisher.md step 6, so this is a doubly-encoded contradiction, not a wording slip local to one file. Found by req-qa (ATM-QA-002). Independently verified by quality-mgr via direct read of SKILL.md:8-17 and SKILL.md:130-134 on commit 682949bc5 -- the Goal text contains no exception clause of any kind." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cross-doc-conflict" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-28T05:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:PUB-1085 ;
+  triage:foundAt "2026-08-28T04:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-021/PUB-1085-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-021/PUB-1085-1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/publishing/SKILL.md" ;
+  triage:line 130 ;
+  triage:snippet "collect every defect into one fix round and one `main` merge, and verify the re-dispatch will actually execute the fixed tooling (a workflow whose checkout is pinned to the immutable tag never picks up fixes)" ;
+  triage:status "open" ; triage:closed false ;
+  triage:branch "skill/publishing-rehearsal-parallel" ; triage:headSha "682949bc5" ;
+  triage:occursIn <urn:atm:triage:worktree/PUB-1085/682949bc5-b> .
+
+<urn:atm:triage:worktree/PUB-1085/682949bc5-b>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/skill-publishing-rehearsal-parallel" ;
+  triage:branch "skill/publishing-rehearsal-parallel" ;
+  triage:headSha "682949bc5" ;
+  triage:orderIndex 1 .
