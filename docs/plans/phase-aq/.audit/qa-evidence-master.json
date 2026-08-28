@@ -1966,6 +1966,16 @@
     "live tailscale transfer transcript"
    ],
    "tracked_at": "2026-08-27T22:50:00Z"
+  },
+  {
+   "id": "AQ4-windows-loopback",
+   "owner": "Phase AQ closeout",
+   "prerequisite": "real Windows host with a real POSIX receiver, outside CI",
+   "items": [
+    "reproduce ssh-under-pwsh-under-atm handle/console behavior (candidate: console/handle inheritance of the transfer child process)",
+    "runs isolating the gap: 33144153970 (run 10, committed FAIL record at 9c9f9918a), 33145261567 (run 11, pull_request merge ref of 431e6ad4e)"
+   ],
+   "tracked_at": "2026-08-28T00:00:00Z"
   }
  ]
 }
