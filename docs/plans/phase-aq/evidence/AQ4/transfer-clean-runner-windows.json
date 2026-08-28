@@ -2,27 +2,33 @@
   "schema_version": 1,
   "sprint": "AQ4",
   "host": "clean-runner-windows",
-  "commit": "7f677480222aaf3b1b2c055086e74f7d6e88efa8",
+  "commit": "21f00edb1efb43bff894cfffd0bb7f2a5d1847bd",
   "record": {
     "sprint": "AQ4",
     "host": "clean-runner-windows",
-    "started_at_ns": 1787890253652739200,
+    "started_at_ns": 1787891931444475700,
     "status": "fail",
     "sshd_probe": {
       "found": true,
       "path": "C:\\Windows\\System32\\OpenSSH\\sshd.EXE"
     },
+    "windows_default_shell": {
+      "outcome": "configured",
+      "bash_path": "C:\\Program Files\\Git\\bin\\bash.EXE",
+      "before": null,
+      "after": "C:\\Program Files\\Git\\bin\\bash.EXE"
+    },
     "sshd_start": {
       "ready": true,
-      "pid": 9176,
+      "pid": 6644,
       "log_tail": "",
-      "port": 58790
+      "port": 50399
     },
     "sender_atm_config": {
-      "path": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\sender-cwd\\.atm.toml",
+      "path": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\sender-cwd\\.atm.toml",
       "local_host": "aq4-sender"
     },
-    "scratch_ssh_client_config": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\ssh_client_config",
+    "scratch_ssh_client_config": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\ssh_client_config",
     "roster": {
       "sender": {
         "argv": [
@@ -32,7 +38,7 @@
           "aq4-transfer-evidence",
           "aq4-sender",
           "--home-dir",
-          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\home",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\home",
           "--json"
         ],
         "stdout": "{\n  \"action\": \"add-member\",\n  \"team\": \"aq4-transfer-evidence\",\n  \"member\": \"aq4-sender\",\n  \"created_inbox\": true\n}"
@@ -45,7 +51,7 @@
           "aq4-transfer-evidence",
           "aq4-receiver",
           "--home-dir",
-          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\home",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\home",
           "--host",
           "localhost",
           "--json"
@@ -54,10 +60,15 @@
       }
     },
     "transfer_script": {
-      "installed_at": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\home\\.atm\\transfer\\localhost.ps1",
+      "installed_at": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\home\\.atm\\transfer\\localhost.ps1",
       "source": "D:\\a\\atm-core\\atm-core\\scripts\\transfer\\sftp.ps1",
+      "receiver_atm_temp": {
+        "windows_native": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\tmp\\atm",
+        "posix_msys": "/c/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-yz3e2chp/tmp/atm",
+        "substituted": "C:/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-yz3e2chp/tmp/atm"
+      },
       "windows_profile_containment": {
-        "profile_home": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\home",
+        "profile_home": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\home",
         "transfer_dir_contained": true,
         "script_contained": true,
         "transfer_dir_is_reparse_point": false,
@@ -67,12 +78,12 @@
         "PATH": "C:\\Windows\\System32;C:\\Windows\\System32\\OpenSSH;C:\\Program Files\\PowerShell\\7",
         "SystemRoot": "C:\\Windows",
         "SYSTEMROOT": "C:\\Windows",
-        "TEMP": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\tmp"
+        "TEMP": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\tmp"
       }
     },
     "daemon_start": {
       "ready": true,
-      "pid": 6384,
+      "pid": 2812,
       "stdout_tail": [
         "ATM_DAEMON_READY"
       ],
@@ -89,16 +100,16 @@
         "--host",
         "localhost",
         "--attach",
-        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\attach-source\\aq4-report.pdf"
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\attach-source\\aq4-report.pdf"
       ],
       "returncode": 3,
       "stdout": "",
-      "stderr_tail": "transfer script for host 'localhost' failed (exit code: 1): failed to create /tmp/atm-REPLACE_WITH_DESTINATION_UID/send-to/01M1390MRA1SJMS5ET3FZB0FC1 on localhost\n\n  Recovery: Check the transfer script's stderr output above and retry."
+      "stderr_tail": "transfer script for host 'localhost' failed (exit code: 1): failed to create C:/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-yz3e2chp/tmp/atm/send-to/01M13AKVAEE3FMSCN5RJ123TZB on localhost\n\n  Recovery: Check the transfer script's stderr output above and retry."
     },
     "landed_path": null,
     "landed_matches_send_to_convention": false,
     "landed_file_exists": false,
     "landed_content_matches": false,
-    "finished_at_ns": 1787890266094894300
+    "finished_at_ns": 1787891943647423600
   }
 }

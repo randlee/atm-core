@@ -2,11 +2,11 @@
   "schema_version": 1,
   "sprint": "AQ4",
   "host": "clean-runner-macos",
-  "commit": "7f677480222aaf3b1b2c055086e74f7d6e88efa8",
+  "commit": "21f00edb1efb43bff894cfffd0bb7f2a5d1847bd",
   "record": {
     "sprint": "AQ4",
     "host": "clean-runner-macos",
-    "started_at_ns": 1787889997060759000,
+    "started_at_ns": 1787891515191547000,
     "status": "pass",
     "sshd_probe": {
       "found": true,
@@ -14,15 +14,15 @@
     },
     "sshd_start": {
       "ready": true,
-      "pid": 34784,
+      "pid": 34394,
       "log_tail": "",
-      "port": 49236
+      "port": 49243
     },
     "sender_atm_config": {
-      "path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq4-evidence-jwe7mult/sender-cwd/.atm.toml",
+      "path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq4-evidence-ngq0laad/sender-cwd/.atm.toml",
       "local_host": "aq4-sender"
     },
-    "scratch_ssh_client_config": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq4-evidence-jwe7mult/ssh_client_config",
+    "scratch_ssh_client_config": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq4-evidence-ngq0laad/ssh_client_config",
     "roster": {
       "sender": {
         "argv": [
@@ -32,7 +32,7 @@
           "aq4-transfer-evidence",
           "aq4-sender",
           "--home-dir",
-          "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq4-evidence-jwe7mult/home",
+          "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq4-evidence-ngq0laad/home",
           "--json"
         ],
         "stdout": "{\n  \"action\": \"add-member\",\n  \"team\": \"aq4-transfer-evidence\",\n  \"member\": \"aq4-sender\",\n  \"created_inbox\": true\n}"
@@ -45,7 +45,7 @@
           "aq4-transfer-evidence",
           "aq4-receiver",
           "--home-dir",
-          "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq4-evidence-jwe7mult/home",
+          "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq4-evidence-ngq0laad/home",
           "--host",
           "localhost",
           "--json"
@@ -54,7 +54,7 @@
       }
     },
     "transfer_script": {
-      "installed_at": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq4-evidence-jwe7mult/home/.atm/transfer/localhost",
+      "installed_at": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq4-evidence-ngq0laad/home/.atm/transfer/localhost",
       "source": "/Users/runner/work/atm-core/atm-core/scripts/transfer/sftp.sh",
       "atm_dir_mode": "0o700",
       "transfer_dir_mode": "0o700",
@@ -65,7 +65,7 @@
     },
     "daemon_start": {
       "ready": true,
-      "pid": 34788,
+      "pid": 34398,
       "stdout_tail": [
         "ATM_DAEMON_READY"
       ],
@@ -82,21 +82,21 @@
         "--host",
         "localhost",
         "--attach",
-        "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq4-evidence-jwe7mult/attach-source/aq4-report.pdf"
+        "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq4-evidence-ngq0laad/attach-source/aq4-report.pdf"
       ],
       "returncode": 0,
-      "stdout": "Sent to aq4-receiver@aq4-transfer-evidence [message_id: 01M138RNVSY0HVKG9G58312K95]",
+      "stdout": "Sent to aq4-receiver@aq4-transfer-evidence [message_id: 01M13A70CR0PPQW4HKD416W4V4]",
       "stderr_tail": ""
     },
     "peek": {
       "returncode": 0,
-      "stdout": "{\n  \"action\": \"peek\",\n  \"team\": \"aq4-transfer-evidence\",\n  \"agent\": \"aq4-receiver\",\n  \"selection_mode\": \"all\",\n  \"mutation_applied\": false,\n  \"count\": 1,\n  \"message\": {\n    \"bucket\": \"unread\",\n    \"class\": \"unread\",\n    \"from\": \"aq4-sender\",\n    \"text\": \"AQ4 live transfer evidence: see attached file\\n\\nAttached files (on this host):\\n- /tmp/atm-501/send-to/01M138RNKDSZ2V6GRYKA4C1EBA/aq4-report.pdf\",\n    \"timestamp\": \"2026-08-28T04:06:37.689565Z\",\n    \"read\": false,\n    \"source_team\": \"aq4-transfer-evidence\",\n    \"summary\": \"AQ4 live transfer evidence: see attached file\\n\\nAttached files (on this host):\\n-...\",\n    \"message_id\": \"01M138RNVSY0HVKG9G58312K95\",\n    \"requires_ack\": false,\n    \"peerOutbound\": {\n      \"host\": \"localhost\"\n    }\n  },\n  \"selected_message_id\": \"01M138RNVSY0HVKG9G58312K95\",\n  \"match_count\": 1,\n  \"additional_match_count\": 0,\n  \"bucket_counts\": {\n    \"unread\": 1,\n    \"pending_ack\": 0,\n    \"history\": 0\n  }\n}\n",
+      "stdout": "{\n  \"action\": \"peek\",\n  \"team\": \"aq4-transfer-evidence\",\n  \"agent\": \"aq4-receiver\",\n  \"selection_mode\": \"all\",\n  \"mutation_applied\": false,\n  \"count\": 1,\n  \"message\": {\n    \"bucket\": \"unread\",\n    \"class\": \"unread\",\n    \"from\": \"aq4-sender\",\n    \"text\": \"AQ4 live transfer evidence: see attached file\\n\\nAttached files (on this host):\\n- /tmp/atm-501/send-to/01M13A704NPZTPHQTMWGWKM59A/aq4-report.pdf\",\n    \"timestamp\": \"2026-08-28T04:31:55.800139Z\",\n    \"read\": false,\n    \"source_team\": \"aq4-transfer-evidence\",\n    \"summary\": \"AQ4 live transfer evidence: see attached file\\n\\nAttached files (on this host):\\n-...\",\n    \"message_id\": \"01M13A70CR0PPQW4HKD416W4V4\",\n    \"requires_ack\": false,\n    \"peerOutbound\": {\n      \"host\": \"localhost\"\n    }\n  },\n  \"selected_message_id\": \"01M13A70CR0PPQW4HKD416W4V4\",\n  \"match_count\": 1,\n  \"additional_match_count\": 0,\n  \"bucket_counts\": {\n    \"unread\": 1,\n    \"pending_ack\": 0,\n    \"history\": 0\n  }\n}\n",
       "stderr_tail": ""
     },
-    "landed_path": "/tmp/atm-501/send-to/01M138RNKDSZ2V6GRYKA4C1EBA/aq4-report.pdf",
+    "landed_path": "/tmp/atm-501/send-to/01M13A704NPZTPHQTMWGWKM59A/aq4-report.pdf",
     "landed_matches_send_to_convention": true,
     "landed_file_exists": true,
     "landed_content_matches": true,
-    "finished_at_ns": 1787889997738260000
+    "finished_at_ns": 1787891515886670000
   }
 }
