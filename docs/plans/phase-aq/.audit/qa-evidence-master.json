@@ -3220,7 +3220,7 @@
    "assignment_message_id": null,
    "assignment_from": null,
    "assignment_shared_path": null,
-   "assignment_summary": "AQ4 #1055 evidence run 8 (head-verified @ 21f00edb1): Windows leg — POSIX-shell sshd, ATM_TEMP substitution, harness tests, pytests, lint",
+   "assignment_summary": "AQ4 #1055 evidence run 8 (head-verified @ 21f00edb1): Windows leg \u2014 POSIX-shell sshd, ATM_TEMP substitution, harness tests, pytests, lint",
    "result_time_utc": "2026-08-29T00:10:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -3232,7 +3232,32 @@
    "important": 0,
    "minor": 0,
    "count_basis": "evidence",
-   "evidence": "AQ4 #1055 @ 21f00edb1 evidence run 8 (head-verified): Windows leg. Scratch sshd given POSIX shell via HKLM\\SOFTWARE\\OpenSSH DefaultShell → Git Bash (restored in finally; before/after recorded). Installed sftp.ps1 copy gets receiver's real ATM_TEMP (C:/… hybrid valid for Path::is_absolute + MSYS mkdir -p + pathlib; strict /c/… recorded). Absent shell/denied registry → skipped_no_posix_receiver via write path. sftp.ps1 unchanged. 48 harness tests PASS, 809 pytests PASS, lint 32/32 PASS."
+   "evidence": "AQ4 #1055 @ 21f00edb1 evidence run 8 (head-verified): Windows leg. Scratch sshd given POSIX shell via HKLM\\SOFTWARE\\OpenSSH DefaultShell \u2192 Git Bash (restored in finally; before/after recorded). Installed sftp.ps1 copy gets receiver's real ATM_TEMP (C:/\u2026 hybrid valid for Path::is_absolute + MSYS mkdir -p + pathlib; strict /c/\u2026 recorded). Absent shell/denied registry \u2192 skipped_no_posix_receiver via write path. sftp.ps1 unchanged. 48 harness tests PASS, 809 pytests PASS, lint 32/32 PASS."
+  },
+  {
+   "run_id": "CI-AQ4-HARNESS-R8-EVIDENCE",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": null,
+   "run_type": "evidence",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": null,
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 evidence run 8 (head-verified @ 21f00edb1): linux + macOS + Windows legs (33141941621)",
+   "result_time_utc": "2026-08-29T00:40:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "PARTIAL",
+   "blockers": 1,
+   "important": 0,
+   "minor": 0,
+   "count_basis": "evidence",
+   "evidence": "AQ4 #1055 @ 21f00edb1 (GHA run 33141941621) evidence run 8 (head-verified): linux PASS, macOS PASS, Windows FAIL (fresh record; POSIX-shell sshd + ATM_TEMP substitution under test); diagnosis in progress; artifacts being committed."
   }
  ],
  "follow_ups": [
