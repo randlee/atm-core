@@ -4,7 +4,10 @@ import importlib.util
 from pathlib import Path
 import sys
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 from unittest import mock
+import hashlib
 
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "bootstrap.py"
@@ -54,6 +57,36 @@ class BootstrapTests(unittest.TestCase):
             mock.patch.object(bootstrap, "_download_release", return_value=b"tampered"),
         ):
             with self.assertRaisesRegex(bootstrap.BootstrapError, "Wyvern release checksum mismatch"):
+                bootstrap.install_wyvern_release(manifest, dry_run=False)
+
+    def test_wyvern_missing_checksums_file_warns_and_uses_pinned_hash(self) -> None:
+        manifest = bootstrap.load_manifest()
+        archive = b"verified archive"
+        with (
+            mock.patch.object(bootstrap, "sc_compose_target", return_value="aarch64-apple-darwin"),
+            mock.patch.object(bootstrap, "_wyvern_release_checksum", return_value=hashlib.sha256(archive).hexdigest()),
+            mock.patch.object(
+                bootstrap,
+                "_download_release",
+                side_effect=[archive, bootstrap.BootstrapError("404 Not Found")],
+            ),
+            mock.patch.object(bootstrap, "_extract_wyvern") as extract,
+        ):
+            stderr = StringIO()
+            with redirect_stderr(stderr):
+                bootstrap.install_wyvern_release(manifest, dry_run=False)
+        self.assertIn("upstream checksums.txt missing; verified against pinned SHA256 only", stderr.getvalue())
+        extract.assert_called_once_with(archive, "wyvern-macos-aarch64.tar.gz", bootstrap.cargo_bin_path("wyvern"))
+
+    def test_wyvern_present_checksums_file_disagreement_is_a_hard_failure(self) -> None:
+        manifest = bootstrap.load_manifest()
+        archive = b"verified archive"
+        with (
+            mock.patch.object(bootstrap, "sc_compose_target", return_value="aarch64-apple-darwin"),
+            mock.patch.object(bootstrap, "_wyvern_release_checksum", return_value=hashlib.sha256(archive).hexdigest()),
+            mock.patch.object(bootstrap, "_download_release", side_effect=[archive, b"bad-hash  wyvern-macos-aarch64.tar.gz\n"]),
+        ):
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "checksums.txt does not confirm"):
                 bootstrap.install_wyvern_release(manifest, dry_run=False)
 
     def test_sc_compose_checksum_mismatch_is_a_hard_failure(self) -> None:

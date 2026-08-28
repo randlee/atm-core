@@ -548,13 +548,26 @@ def install_wyvern_release(manifest: BootstrapManifest, *, dry_run: bool) -> Non
             f"Wyvern release checksum mismatch for {asset}: expected {expected}, found {actual}."
         )
     checksums_url = wyvern_release_url(manifest.wyvern, "checksums.txt")
-    checksums = _download_release(checksums_url, label="Wyvern checksums").decode("utf-8", errors="strict")
-    listed = next(
-        (parts[0] for line in checksums.splitlines() if (parts := line.split()) and len(parts) >= 2 and parts[-1] == asset),
-        None,
-    )
-    if listed != expected:
-        raise BootstrapError(f"checksums.txt does not confirm the pinned Wyvern checksum for {asset}.")
+    try:
+        checksums = _download_release(checksums_url, label="Wyvern checksums").decode(
+            "utf-8", errors="strict"
+        )
+    except BootstrapError:
+        print(
+            "warning: upstream checksums.txt missing; verified against pinned SHA256 only",
+            file=sys.stderr,
+        )
+    else:
+        listed = next(
+            (
+                parts[0]
+                for line in checksums.splitlines()
+                if (parts := line.split()) and len(parts) >= 2 and parts[-1] == asset
+            ),
+            None,
+        )
+        if listed != expected:
+            raise BootstrapError(f"checksums.txt does not confirm the pinned Wyvern checksum for {asset}.")
     _extract_wyvern(archive, asset, destination)
 
 

@@ -33,6 +33,11 @@ The detailed Wyvern CI contract-test request is filed at:
 
 <https://github.com/randlee/wyvern/issues/139>
 
+The release packaging follow-up for the optional archive checksum manifest is
+tracked at [Wyvern #141](https://github.com/randlee/wyvern/issues/141); the
+atm-core bootstrap pins the archive SHA-256 values in `tools/bootstrap.toml`
+and treats `checksums.txt` as an optional cross-check.
+
 The issue specifies the version-1 `PickerInput` and `PickerOutput` schemas,
 schema-version rejection semantics, diagnostics/cancel behavior, bounded
 parseable `--version`, approximately one-second cold start, and the shared
