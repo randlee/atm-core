@@ -408,6 +408,17 @@ default scratch root (decision (a)), it does not error.
 7. Example-script contract tests (loopback SSH where available, filesystem
    fake otherwise — skips announced, never silent); one live cross-host
    transfer transcript (Mac → second host) committed.
+   (QA-3 correction, recorded 2026-08-28: the acceptance evidence actually
+   standing in for the true Mac → second-host transfer is the loopback
+   clean-runner transfer transcripts — linux+macOS PASS, run 33144153970
+   (cited in the evidence table below) — not a real cross-host run. This
+   substitution was approved by ruling at QA-1 (fenix,
+   `docs/plans/phase-aq/.audit/qa-evidence-master.json` run `QA-AQ4-R2`:
+   "sftp leg evidenced via clean-runner loopback harness; tailscale leg →
+   follow-up AQ4-tailscale-m5 (paired with AQ1.9-m5)") and deferred to
+   **FOLLOW-UP `AQ4-tailscale-m5`** (`qa-evidence-master.json`'s
+   `follow_ups`); the ruling itself was previously recorded only in
+   `qa-evidence-master.json`, never in this sprint doc.)
 8. Single-owner architecture test green. `just test` all three lanes; no
    clippy warnings in touched crates.
 
@@ -556,7 +567,13 @@ prerequisite: `m5` reachable), in
   in the evidence table above; run 11 reproduces the same failure signature
   one layer deeper (harness-level ssh succeeds, `sftp.ps1`-level ssh does
   not) and is not separately committed as an evidence file. No PASS is
-  claimed for the Windows lane.
+  claimed for the Windows lane. `run_aq4_transfer_evidence.py` now
+  classifies exactly this documented symptom (successful vvv probe, the
+  `sftp.ps1: invoking` line present, failure at the mkdir/ssh step) as a
+  non-fatal `deferred_windows_loopback` evidence status with every
+  diagnostic field preserved unchanged, so CI no longer goes red on this
+  known follow-up; the previously committed FAIL record (run 10, head
+  `9c9f9918a`) in the evidence table above remains as-is.
 
 ## Non-closure / out of scope
 
