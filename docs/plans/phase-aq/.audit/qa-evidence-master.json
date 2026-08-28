@@ -3133,6 +3133,31 @@
    "minor": null,
    "count_basis": "evidence",
    "evidence": "AQ4 #1055 @ 7f6774802 evidence-harness integrity: Windows run-6 crash root cause = TemporaryDirectory.__exit__ WinError 32/5 on sender-cwd after atm send, discarding the computed record. Fix: record written before teardown, tolerant mkdtemp cleanup with cleanup_warning. All four run_*_evidence.py harnesses clear their own outputs at start and emit a harness_crashed record with traceback on exception (+ tests). Follow-up: run_hermes_atm_restart_matrix.py lacks the guard. Evidence run 7 dispatched on 7f6774802 (head-verified)."
+  },
+  {
+   "run_id": "CI-AQ4-R7",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": null,
+   "run_type": "evidence",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": null,
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 evidence run 7 (33140616718 @ 7f6774802, head-verified): linux + macOS PASS; Windows fresh record with POSIX-receiver ruling",
+   "result_time_utc": "2026-08-28T22:40:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "evidence",
+   "evidence": "AQ4 #1055 @ 7f6774802 evidence run 7 (GHA 33140616718, head-verified). Linux + macOS PASS. Windows record fresh (harness integrity fix works): synthesized PATH correct; failure at remote step\u2014sftp.ps1 runs POSIX umask && mkdir -p on loopback Windows sshd (cmd.exe shell) and harness did not substitute .ps1 ATM_TEMP placeholder. Ruling (fenix): shipped contract is Windows-sender POSIX-receiver; harness to give scratch sshd POSIX shell (DefaultShell Git Bash, restored) + substitute ATM_TEMP, else record skipped_no_posix_receiver via harness. Fix dispatched; run-7 linux/macOS artifacts being committed."
   }
  ],
  "follow_ups": [
