@@ -2708,6 +2708,31 @@
    "minor": null,
    "count_basis": "headline/reviewer",
    "evidence": "AQ4 #1055 @ 930338434 run-4 artifacts committed byte-for-byte (cmp-verified): linux PASS, macOS PASS, windows FAIL. Windows root cause: transfer_script.rs spawns transfer script with cleared env (4-key allow-list, no PATH) so pwsh child cannot resolve ssh/scp (\"The term 'ssh' is not recognized\"). Fix in progress: synthesized minimal per-platform PATH (ADR-055 (c) amendment) + sftp.ps1 explicit OpenSSH resolution. Evidence run 5 next."
+  },
+  {
+   "run_id": "CI-AQ3-RUNNER-GREEN",
+   "aich_sprint": "AQ3",
+   "phase_sprint": "AQ3",
+   "pass": true,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "quality-mgr",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ3 #1054 CI run 33134101624 fully GREEN; docs-only head e7a488e5a CI 33134839611 in progress; QA-final6 PASS; merge requested (sprint 10/14)",
+   "result_time_utc": "2026-08-28T14:30:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "PASS",
+   "blockers": 0,
+   "important": 0,
+   "minor": 0,
+   "count_basis": "headline/reviewer",
+   "evidence": "AQ3 #1054 @ 50eb04544: CI run 33134101624 fully GREEN after musllinux Docker Hub rerun (all Test lanes ran: linux PASS, macos PASS, windows PASS). Docs-only head e7a488e5a CI 33134839611 in progress. QA-final6 PASS (ATM-QA-105 docs-only fix verified). Merge requested from team-lead (sprint 10/14)."
   }
  ],
  "follow_ups": [
