@@ -1297,19 +1297,76 @@ mod tests {
                 workspace_id: None,
             })
             .collect();
-        let (_root, _runtime, fake, pump, _health, _key) =
-            build_test_pump_with_agents(agents.clone());
+        let (root, runtime, fake, pump, _health, _key) = build_test_pump_with_agents(agents);
         pump.tick_once().await;
         assert_eq!(pump.cursor_position(), HERDR_MAX_PROMPTS_PER_TICK);
-        fake.queue_list_result(Ok(HerdrListOutcome { agents }));
+
+        let changed_agents: Vec<AgentSnapshot> = (0..22)
+            .map(|index| AgentSnapshot {
+                name: Some(if index == 0 {
+                    "aq27-agent".to_owned()
+                } else {
+                    format!("aq27-agent-{index:02}")
+                }),
+                status: HerdrAgentStatus::Idle,
+                workspace_id: None,
+            })
+            .collect();
+        let team: TeamName = "aq27-team".parse().expect("team");
+        let members = (0..22)
+            .map(|index| {
+                let agent = if index == 0 {
+                    "aq27-agent".to_owned()
+                } else {
+                    format!("aq27-agent-{index:02}")
+                };
+                herdr_member(&team, &agent)
+            })
+            .collect();
+        runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members,
+                refreshed_at: None,
+            })
+            .expect("changed roster");
+        runtime.clear_roster_cache();
+        queue_message(root.path(), &runtime, &team, "aq27-agent");
+        queue_message(root.path(), &runtime, &team, "aq27-agent-20");
+        queue_message(root.path(), &runtime, &team, "aq27-agent-21");
+        fake.queue_list_result(Ok(HerdrListOutcome {
+            agents: changed_agents,
+        }));
         pump.tick_once().await;
-        assert_eq!(
-            fake.calls()
-                .iter()
-                .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
-                .count(),
-            20
-        );
+        let prompted: Vec<String> = fake
+            .calls()
+            .into_iter()
+            .filter_map(|call| match call {
+                atm_herdr::testing::FakeHerdrCall::Prompt { agent, .. } => Some(agent),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(prompted.len(), 23);
+        for index in 0..22 {
+            let agent = if index == 0 {
+                "aq27-agent".to_owned()
+            } else {
+                format!("aq27-agent-{index:02}")
+            };
+            let expected = usize::from(index == 0) + 1;
+            assert_eq!(
+                prompted
+                    .iter()
+                    .filter(|prompted| **prompted == agent)
+                    .count(),
+                expected,
+                "prompt count for {agent}"
+            );
+        }
+        assert_eq!(pump.stats().pending_members, 7);
+        assert_eq!(pump.stats().prompted, 7);
+        assert_eq!(pump.cursor_position(), 2);
     }
 
     #[test]

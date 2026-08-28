@@ -411,3 +411,18 @@ consumes an attempt. Outcomes after input was injected or ambiguous
 (`agent_prompt_stalled`, post-write errors/timeouts) use
 `requeue_pending`. This keeps the (f) stuck signal reachable for Herdr
 members. Normative text: sprint-AQ2-7 deliverable 3.
+
+## Addendum (2026-08-28): Herdr poll semantics (AQ2.7)
+
+AQ2.7 acknowledges the list→prompt race described by ADR-058 D7: a member
+observed as `idle` by `herdr agent list` may be working again by the time the
+prompt reaches the terminal. This is an accepted limitation of polling, not
+an idle-delivery guarantee. The pump's lifecycle-aware refusal remains the
+relevant safety property; it does not promise that every prompt lands during
+the exact idle interval observed by `list`.
+
+Herdr has no native queue for deferred ATM messages. The AQ2.7 pump is the
+only Herdr queue/drain mechanism: it polls the Herdr roster and prompts from
+the durable ATM pending-marker store. A prompt being accepted does not mean
+that the message was read. Only `atm read`, which clears the pending marker,
+means read; the durable ATM mailbox remains the source of truth.

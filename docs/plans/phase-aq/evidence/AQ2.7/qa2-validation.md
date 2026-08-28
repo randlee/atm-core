@@ -23,7 +23,7 @@ cargo fmt --all
 cargo test -p atm-http-runtime herdr_queue_wake::tests -- --nocapture
 ```
 
-Result: PASS — 14 tests passed, including all 12 AC-named tests and the
+Result: PASS — 16 tests passed, including all 14 AC-named tests and the
 exact `ac04_shutdown_send_stops_pump_before_drain_completes` test.
 
 ## Broad gates
