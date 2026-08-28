@@ -65,6 +65,30 @@ directory and script to sit under the resolved profile home
 a reparse point. `install_transfer_script` mirrors that check on Windows and
 records its result under `windows_profile_containment` instead of POSIX
 mode strings; the `0o700` assertions remain Unix-only.
+
+Why the Windows leg also substitutes `sftp.ps1`'s `$RemoteAtmTemp`
+placeholder and repoints the scratch sshd's shell (fenix's ruling, run 7,
+33140616718 @ 7f6774802): `sftp.ps1`'s comments direct an operator to
+replace the fixed-value placeholder
+`$RemoteAtmTemp = "/tmp/atm-REPLACE_WITH_DESTINATION_UID"` once, by hand,
+before install -- unlike `sftp.sh`, which computes its equivalent
+(`remote_atm_temp="/tmp/atm-$(id -u)"`) at runtime because a Unix sender
+has a local uid to read. A Windows sender has no such local value, so
+`install_transfer_script` performs the one substitution an operator would
+have (`windows_receiver_atm_temp`/`_substitute_windows_remote_atm_temp`),
+never leaving the literal placeholder in the installed script. Separately,
+`sftp.ps1`'s remote commands (`umask 077 && mkdir -p ...`) are POSIX shell
+syntax; the shipped contract is a Windows *sender* talking to a POSIX
+*receiver*, so this scenario's scratch loopback sshd (started fresh by
+this harness, not the OS account's real sshd) must run a POSIX shell, not
+the Windows OpenSSH default `cmd.exe`. `prepare_windows_posix_shell`
+points the account-wide `HKLM\\SOFTWARE\\OpenSSH\\DefaultShell` registry
+value at a discovered `bash.exe` for the duration of this scenario only,
+restoring the prior value (or absence) once the scratch sshd stops; if no
+bash is found or the registry write is denied (not running elevated), the
+scenario records an honest `skipped_no_posix_receiver` outcome through the
+normal `write_evidence` path rather than either crashing or silently
+running against the wrong shell.
 """
 
 from __future__ import annotations
@@ -105,6 +129,43 @@ MESSAGE_TEXT = "AQ4 live transfer evidence: see attached file"
 # identified: which example script ships, how its safety check is proven,
 # and the `UserKnownHostsFile` sink OpenSSH accepts.
 IS_WINDOWS = sys.platform == "win32"
+
+# `winreg` is stdlib-but-Windows-only; imported here (module scope, not
+# inside a function) so tests on every platform can monkeypatch
+# `module.winreg` with a fake object to exercise
+# `_read_windows_default_shell`/`_write_windows_default_shell` without a
+# real registry, exactly like `module.shutil.rmtree` is monkeypatched
+# elsewhere in this scenario's test suite.
+if IS_WINDOWS:
+    import winreg
+else:  # pragma: no cover - exercised only via mocking on non-Windows
+    winreg = None  # type: ignore[assignment]
+
+# The fixed-value placeholder `sftp.ps1` ships with, documented there as a
+# "fill in once, by hand" constant a Unix sender's `id -u` equivalent
+# cannot compute for a Windows sender.
+_WINDOWS_REMOTE_ATM_TEMP_PLACEHOLDER_LINE = (
+    '$RemoteAtmTemp = "/tmp/atm-REPLACE_WITH_DESTINATION_UID"'
+)
+
+# Where the OpenSSH server's per-account default shell is configured
+# (`Computer\HKEY_LOCAL_MACHINE\SOFTWARE\OpenSSH\DefaultShell`, REG_SZ).
+_OPENSSH_REGISTRY_KEY = r"SOFTWARE\OpenSSH"
+_DEFAULT_SHELL_VALUE_NAME = "DefaultShell"
+
+# Known Git for Windows install locations, checked only after `bash` is
+# not found on `PATH` (`shutil.which`, the `where`-equivalent) -- mirrors
+# `sftp.ps1`'s own `ssh`/`scp` resolution fallback shape
+# (`Resolve-TransferBinary`), never assumed to be the *only* possible
+# location.
+# Forward slashes deliberately, not backslashes: `pathlib.Path` on Windows
+# (`WindowsPath`) treats either separator as a path boundary, but on the
+# POSIX hosts this repo's test suite also runs `find_windows_posix_shell`
+# on (mac/Linux CI, unit-testing this pure lookup without a real Windows
+# box), `PosixPath` treats `\` as an ordinary filename character -- a
+# backslash-joined suffix here would silently never match any real file
+# there. Forward slashes are correct on both.
+_KNOWN_GIT_BASH_LOCATIONS = ("Git/bin/bash.exe", "Git/usr/bin/bash.exe")
 
 
 def parse_args() -> argparse.Namespace:
@@ -582,10 +643,180 @@ def _synthesized_transfer_script_path(env: dict[str, str]) -> dict[str, Any]:
     return {"PATH": "/usr/bin:/bin:/usr/local/bin"}
 
 
-def install_transfer_script(home: Path) -> dict[str, Any]:
+def windows_receiver_atm_temp(env: dict[str, str]) -> dict[str, str]:
+    """Computes the receiver-side `ATM_TEMP` scratch root this scenario's
+    Windows daemon process resolves to when `ATM_TEMP` is unset
+    (`windows_default_scratch_root`, `crates/atm-core/src/atm_temp.rs`:
+    `<TEMP>\\atm`, no uid suffix -- `%TEMP%` is already per-user), in the
+    representations `install_transfer_script`'s Windows leg needs:
+
+    - `windows_native`: backslash-separated, exactly what
+      `windows_default_scratch_root` would produce -- recorded for
+      diagnosability only, never fed to a subprocess (Git-Bash/MSYS's path
+      heuristic reliably recognizes forward-slash Windows paths, not
+      backslash ones, so a raw backslash form risks silent
+      misinterpretation by the MSYS runtime the scratch sshd's
+      `DefaultShell` now points at).
+    - `posix_msys`: strict `/c/Users/...` POSIX form, also diagnostic-only
+      (recorded so a divergence between this and `substituted` is
+      visible, never itself fed to a subprocess or printed by the
+      installed script).
+    - `substituted`: drive-letter-plus-forward-slash hybrid
+      (`C:/Users/...`) -- the single value actually written into the
+      installed `sftp.ps1`'s `$RemoteAtmTemp`. This form is
+      simultaneously absolute per `Path::is_absolute` on Windows (has a
+      drive prefix, so `atm send`'s `validate_landed_dir_stdout` accepts
+      the script's printed stdout -- a bare `/c/...` POSIX path is
+      *rooted* but not *absolute* there and would be rejected), correctly
+      recognized by Git-Bash/MSYS's `mkdir -p`, and accepted as-is by
+      Python's `pathlib.Path.is_file()` on Windows (which normalizes
+      either separator) -- so no runtime translation is needed once this
+      one value is used consistently through the unmodified script's
+      single `$RemoteAtmTemp` variable.
+    """
+    # Backslash-joined explicitly, not via `pathlib.Path` (`PurePath`
+    # joining is host-OS-dependent -- a `PosixPath` join on this repo's
+    # non-Windows test hosts would use `/`, silently producing a value
+    # that does not match what `windows_default_scratch_root` computes
+    # when this actually runs on Windows): mirrors that Rust function's
+    # `<TEMP>\atm` shape byte-for-byte on every host this runs on.
+    temp_root = (env.get("TEMP") or env.get("TMP") or tempfile.gettempdir()).rstrip("\\/")
+    native = f"{temp_root}\\atm"
+    hybrid = native.replace("\\", "/")
+    posix = re.sub(r"^([A-Za-z]):", lambda match: f"/{match.group(1).lower()}", hybrid)
+    return {"windows_native": native, "posix_msys": posix, "substituted": hybrid}
+
+
+def _substitute_windows_remote_atm_temp(source_text: str, receiver_atm_temp: str) -> str:
+    """Replaces `sftp.ps1`'s fixed-value `$RemoteAtmTemp` placeholder line
+    with `receiver_atm_temp`, exactly once.
+
+    Raises `RuntimeError` (never silently no-ops) if the placeholder line
+    is not found exactly once: the shipped `scripts/transfer/sftp.ps1` is
+    committed, human-editable example content, so a future edit to its
+    placeholder line's exact text must fail this harness loudly rather
+    than silently install a script whose `$RemoteAtmTemp` was never
+    substituted (the exact regression `fix(aq4): windows evidence leg`
+    exists to fix, run 7, 33140616718 @ 7f6774802).
+    """
+    occurrences = source_text.count(_WINDOWS_REMOTE_ATM_TEMP_PLACEHOLDER_LINE)
+    if occurrences != 1:
+        raise RuntimeError(
+            "scripts/transfer/sftp.ps1's $RemoteAtmTemp placeholder line "
+            f"was found {occurrences} time(s), expected exactly 1; its "
+            "placeholder contract may have changed and "
+            "run_aq4_transfer_evidence.py's substitution needs updating to match"
+        )
+    replacement = f'$RemoteAtmTemp = "{receiver_atm_temp}"'
+    return source_text.replace(_WINDOWS_REMOTE_ATM_TEMP_PLACEHOLDER_LINE, replacement)
+
+
+def find_windows_posix_shell(env: dict[str, str] | None = None) -> Path | None:
+    """Locates a POSIX shell (`bash`) for the OpenSSH `DefaultShell`
+    registry value: first via `PATH` (`shutil.which`, the `where`
+    equivalent), then via the known Git for Windows install locations
+    (`_KNOWN_GIT_BASH_LOCATIONS`) under each of the usual per-machine
+    program-files environment variables. Returns `None` (never raises) if
+    no bash is found anywhere -- an honest input to the
+    `skipped_no_posix_receiver` decision, not a script failure.
+    """
+    env = env if env is not None else dict(os.environ)
+    found = shutil.which("bash", path=env.get("PATH"))
+    if found:
+        return Path(found)
+    for root_var in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "LocalAppData"):
+        root = env.get(root_var)
+        if not root:
+            continue
+        for suffix in _KNOWN_GIT_BASH_LOCATIONS:
+            candidate = Path(root) / suffix
+            if candidate.is_file():
+                return candidate
+    return None
+
+
+def _read_windows_default_shell() -> str | None:
+    """Reads the current `HKLM\\SOFTWARE\\OpenSSH\\DefaultShell` value, or
+    `None` if the key/value does not exist (the OpenSSH-shipped default:
+    no override, sessions get `cmd.exe`)."""
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, _OPENSSH_REGISTRY_KEY) as key:
+            value, _ = winreg.QueryValueEx(key, _DEFAULT_SHELL_VALUE_NAME)
+            return str(value)
+    except FileNotFoundError:
+        return None
+
+
+def _write_windows_default_shell(value: str | None) -> None:
+    """Sets (`value` is a path string) or deletes (`value` is `None`) the
+    `DefaultShell` registry value. Raises `OSError` (for example
+    `PermissionError` when not running elevated) rather than swallowing a
+    failed write -- callers must treat that as `skipped_no_posix_receiver`,
+    never as "configured but silently still `cmd.exe`"."""
+    if value is None:
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE, _OPENSSH_REGISTRY_KEY, 0, winreg.KEY_SET_VALUE
+            ) as key:
+                winreg.DeleteValue(key, _DEFAULT_SHELL_VALUE_NAME)
+        except FileNotFoundError:
+            pass
+        return
+    with winreg.CreateKeyEx(
+        winreg.HKEY_LOCAL_MACHINE, _OPENSSH_REGISTRY_KEY, 0, winreg.KEY_SET_VALUE
+    ) as key:
+        winreg.SetValueEx(key, _DEFAULT_SHELL_VALUE_NAME, 0, winreg.REG_SZ, value)
+
+
+def prepare_windows_posix_shell(env: dict[str, str] | None = None) -> dict[str, Any]:
+    """Locates a POSIX shell and points the OpenSSH `DefaultShell` registry
+    value at it, so this scenario's scratch sshd executes `sftp.ps1`'s
+    POSIX remote commands (`umask`, `mkdir -p`) under bash instead of the
+    account's default `cmd.exe` (fenix ruling, run 7: the shipped contract
+    is a Windows *sender* talking to a POSIX *receiver*).
+
+    Never raises. Returns one of:
+    - `{"outcome": "skipped_no_posix_receiver", "reason": ...}` when no
+      bash was found, or the registry write was denied (for example, not
+      running elevated) -- an honest, announced skip, mirroring
+      `ensure_sshd_available`'s shape.
+    - `{"outcome": "configured", "bash_path": ..., "before": ..., "after": ...}`
+      on success. The caller must restore `before` via
+      `_write_windows_default_shell` once the scratch sshd this enables
+      has stopped.
+    """
+    shell = find_windows_posix_shell(env)
+    if shell is None:
+        return {
+            "outcome": "skipped_no_posix_receiver",
+            "reason": (
+                "no POSIX shell (git-bash) found on this Windows runner; the "
+                "scratch sshd's default cmd.exe shell cannot execute "
+                "sftp.ps1's POSIX remote commands (umask/mkdir -p)"
+            ),
+        }
+    before = _read_windows_default_shell()
+    try:
+        _write_windows_default_shell(str(shell))
+    except OSError as error:
+        return {
+            "outcome": "skipped_no_posix_receiver",
+            "reason": (
+                f"could not set the OpenSSH DefaultShell registry value to "
+                f"{shell} (likely denied administrator access): {error}"
+            ),
+        }
+    return {"outcome": "configured", "bash_path": str(shell), "before": before, "after": str(shell)}
+
+
+def install_transfer_script(home: Path, env: dict[str, str]) -> dict[str, Any]:
     """Installs the unmodified `scripts/transfer/sftp.sh` example (or, on
-    Windows, `scripts/transfer/sftp.ps1`) at
-    `<home>/.atm/transfer/localhost[.ps1]`.
+    Windows, `scripts/transfer/sftp.ps1` with its `$RemoteAtmTemp`
+    placeholder substituted -- see `windows_receiver_atm_temp`) at
+    `<home>/.atm/transfer/localhost[.ps1]`. `env` supplies the `TEMP`
+    entry that substitution is computed from; it is unused on Unix, where
+    the script's own `remote_atm_temp="/tmp/atm-$(id -u)"` needs no
+    harness-side substitution.
 
     Unix: explicitly enforces `0700` on the `.atm` and `.atm/transfer`
     directories (`check_transfer_root_metadata`,
@@ -623,11 +854,19 @@ def install_transfer_script(home: Path) -> dict[str, Any]:
 
     if IS_WINDOWS:
         installed = transfer_dir / f"{TRANSFER_HOST}.ps1"
-        shutil.copyfile(ROOT / "scripts" / "transfer" / "sftp.ps1", installed)
+        source_path = ROOT / "scripts" / "transfer" / "sftp.ps1"
+        receiver_atm_temp = windows_receiver_atm_temp(env)
+        installed.write_text(
+            _substitute_windows_remote_atm_temp(
+                source_path.read_text(encoding="utf-8"), receiver_atm_temp["substituted"]
+            ),
+            encoding="utf-8",
+        )
         profile_home = home.resolve()
         return {
             "installed_at": str(installed),
-            "source": str(ROOT / "scripts" / "transfer" / "sftp.ps1"),
+            "source": str(source_path),
+            "receiver_atm_temp": receiver_atm_temp,
             "windows_profile_containment": {
                 "profile_home": str(profile_home),
                 "transfer_dir_contained": _is_within_profile(transfer_dir.resolve(), profile_home),
@@ -723,6 +962,25 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
         )
         return record
 
+    # `sftp.ps1`'s shipped contract is a Windows sender talking to a POSIX
+    # receiver (`umask 077 && mkdir -p ...`); the scratch sshd this
+    # scenario is about to start must therefore run a POSIX shell, not the
+    # Windows OpenSSH default `cmd.exe` (fenix ruling, run 7). Decided
+    # before any scratch state exists, so a `skipped_no_posix_receiver`
+    # outcome here needs no cleanup beyond the early `return` already used
+    # by the two skip branches above.
+    windows_posix_shell: dict[str, Any] | None = None
+    if IS_WINDOWS:
+        windows_posix_shell = prepare_windows_posix_shell()
+        record["windows_default_shell"] = windows_posix_shell
+        if windows_posix_shell["outcome"] == "skipped_no_posix_receiver":
+            record["status"] = "skipped_no_posix_receiver"
+            record["error"] = (
+                "Windows-sender -> POSIX-receiver live evidence needs a POSIX "
+                f"shell on the scratch sshd: {windows_posix_shell['reason']}"
+            )
+            return record
+
     port = free_loopback_port()
     # A manually-managed `mkdtemp` (not `tempfile.TemporaryDirectory`'s
     # `with`-block auto-cleanup) deliberately: that context manager's
@@ -785,7 +1043,7 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
             "receiver": add_roster_member(args.atm, env, home, RECEIVER, args.timeout, host=TRANSFER_HOST),
         }
 
-        record["transfer_script"] = install_transfer_script(home)
+        record["transfer_script"] = install_transfer_script(home, env)
         # Diagnosability only (never asserted against): what the real
         # `atm send --attach` invocation below should synthesize for
         # the transfer-script child's environment (ADR-055 decision
@@ -910,6 +1168,15 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
         # open at this point.
         stop_daemon(daemon_process, daemon_drain)
         stop_sshd(sshd_process, sshd_drain)
+        # Restore the OpenSSH `DefaultShell` registry value this scenario
+        # changed above -- an account-wide setting, so it must never be
+        # left pointed at this scenario's discovered `bash.exe` once the
+        # scratch sshd it was configured for has stopped, success or not.
+        if windows_posix_shell is not None and windows_posix_shell["outcome"] == "configured":
+            try:
+                _write_windows_default_shell(windows_posix_shell["before"])
+            except OSError as error:
+                record["windows_default_shell"]["restore_error"] = str(error)
         if remote_landing_dir is not None and remote_landing_dir.exists():
             shutil.rmtree(remote_landing_dir, ignore_errors=True)
         cleanup_warning = _remove_tree_tolerant(root)
@@ -986,6 +1253,21 @@ def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Pa
             json.dumps(record.get("sshd_probe", {}), indent=2),
             "```",
         ]
+    elif record["status"] == "skipped_no_posix_receiver":
+        lines += [
+            "No POSIX shell (`bash`, for example Git for Windows) was found "
+            "on this Windows runner, or the OpenSSH `DefaultShell` registry "
+            "value could not be set (most likely not running elevated). "
+            "This is an honest, announced skip: `sftp.ps1`'s shipped "
+            "contract is a Windows *sender* talking to a POSIX *receiver* "
+            "(`umask`/`mkdir -p`), which the scratch sshd's default "
+            "`cmd.exe` shell cannot execute -- there is no meaningful fake "
+            "for this live-evidence deliverable.",
+            "",
+            "```json",
+            json.dumps(record.get("windows_default_shell", {}), indent=2),
+            "```",
+        ]
     elif record["status"] == "harness_crashed":
         lines += [
             "The harness raised an unhandled exception before it could "
@@ -1051,7 +1333,12 @@ def main() -> int:
     json_path, markdown_path = write_evidence(args, record)
     print(f"{record['status'].upper()} AQ4 transfer evidence: {json_path}")
     print(f"transcript: {markdown_path}")
-    return 0 if record["status"] in ("pass", "blocked_ambient_daemon", "skipped_no_sshd") else 1
+    return (
+        0
+        if record["status"]
+        in ("pass", "blocked_ambient_daemon", "skipped_no_sshd", "skipped_no_posix_receiver")
+        else 1
+    )
 
 
 if __name__ == "__main__":

@@ -238,12 +238,36 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             ("pass", 0),
             ("blocked_ambient_daemon", 0),
             ("skipped_no_sshd", 0),
+            ("skipped_no_posix_receiver", 0),
             ("fail", 1),
             ("blocked_sshd_start_failed", 1),
             ("blocked_daemon_start_failed", 1),
         ):
             with self.subTest(status=status):
-                self.assertEqual(0 if status in ("pass", "blocked_ambient_daemon", "skipped_no_sshd") else 1, expected)
+                success_statuses = (
+                    "pass",
+                    "blocked_ambient_daemon",
+                    "skipped_no_sshd",
+                    "skipped_no_posix_receiver",
+                )
+                self.assertEqual(0 if status in success_statuses else 1, expected)
+
+    def test_write_evidence_skipped_no_posix_receiver_is_an_honest_non_silent_skip(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            args = SimpleNamespace(host="clean-runner-windows", evidence_dir=Path(temporary))
+            record = {
+                "status": "skipped_no_posix_receiver",
+                "windows_default_shell": {
+                    "outcome": "skipped_no_posix_receiver",
+                    "reason": "no POSIX shell (git-bash) found on this Windows runner",
+                },
+            }
+            _json_path, markdown_path = module.write_evidence(args, record)
+            markdown = markdown_path.read_text(encoding="utf-8")
+            self.assertIn("SKIPPED_NO_POSIX_RECEIVER", markdown)
+            self.assertIn("honest, announced skip", markdown)
+            self.assertIn("no POSIX shell (git-bash) found", markdown)
 
     @unittest.skipUnless(
         sys.platform != "win32",
@@ -270,7 +294,7 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             # what this test actually exercises.
             previous_umask = os.umask(0o022)
             try:
-                info = module.install_transfer_script(home)
+                info = module.install_transfer_script(home, {"TEMP": temporary})
             finally:
                 os.umask(previous_umask)
 
@@ -296,9 +320,10 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
         module = load_module()
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary) / "home"
-            module.install_transfer_script(home)
+            env = {"TEMP": temporary}
+            module.install_transfer_script(home, env)
             (home / ".atm" / "transfer").chmod(0o755)
-            info = module.install_transfer_script(home)
+            info = module.install_transfer_script(home, env)
             self.assertEqual(info["transfer_dir_mode"], "0o700")
 
     def test_write_sender_atm_config_writes_the_local_host_key_directly_into_cwd(self) -> None:
@@ -442,14 +467,28 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as temporary:
                 home = Path(temporary) / "home"
                 home.mkdir()
-                info = module.install_transfer_script(home)
+                env = {"TEMP": str(Path(temporary) / "tmp")}
+                info = module.install_transfer_script(home, env)
 
                 installed = home / ".atm" / "transfer" / f"{module.TRANSFER_HOST}.ps1"
                 self.assertEqual(info["installed_at"], str(installed))
                 self.assertTrue(installed.is_file())
+                source_text = (module.ROOT / "scripts" / "transfer" / "sftp.ps1").read_text(
+                    encoding="utf-8"
+                )
+                installed_text = installed.read_text(encoding="utf-8")
+                # The placeholder is substituted, not left verbatim; every
+                # other line of the shipped example is otherwise unchanged.
+                self.assertNotIn(
+                    module._WINDOWS_REMOTE_ATM_TEMP_PLACEHOLDER_LINE, installed_text
+                )
+                self.assertIn(info["receiver_atm_temp"]["substituted"], installed_text)
                 self.assertEqual(
-                    installed.read_bytes(),
-                    (module.ROOT / "scripts" / "transfer" / "sftp.ps1").read_bytes(),
+                    installed_text.replace(
+                        f'$RemoteAtmTemp = "{info["receiver_atm_temp"]["substituted"]}"',
+                        module._WINDOWS_REMOTE_ATM_TEMP_PLACEHOLDER_LINE,
+                    ),
+                    source_text,
                 )
                 self.assertNotIn("atm_dir_mode", info)
                 self.assertNotIn("transfer_dir_mode", info)
@@ -537,6 +576,252 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
         self.assertIn(r"D:\CustomWindows\System32", result["PATH"])
         self.assertIn(r"D:\CustomWindows\System32\OpenSSH", result["PATH"])
         self.assertEqual(result["SystemRoot"], r"D:\CustomWindows")
+
+    # -- fenix ruling (run 7, 33140616718 @ 7f6774802): $RemoteAtmTemp
+    # placeholder substitution --
+
+    def test_windows_receiver_atm_temp_produces_three_consistent_representations(self) -> None:
+        module = load_module()
+        result = module.windows_receiver_atm_temp({"TEMP": r"C:\Users\runner\AppData\Local\Temp"})
+        self.assertEqual(result["windows_native"], r"C:\Users\runner\AppData\Local\Temp\atm")
+        self.assertEqual(result["posix_msys"], "/c/Users/runner/AppData/Local/Temp/atm")
+        self.assertEqual(result["substituted"], "C:/Users/runner/AppData/Local/Temp/atm")
+        # `substituted` is absolute per `Path::is_absolute` on Windows (a
+        # drive prefix, unlike `posix_msys`'s bare-rooted `/c/...` form,
+        # which `validate_landed_dir_stdout` -- crates/atm-core/src/send_to.rs
+        # -- rejects there).
+        self.assertRegex(result["substituted"], r"^[A-Za-z]:/")
+
+    def test_windows_receiver_atm_temp_lowercases_the_posix_drive_letter(self) -> None:
+        module = load_module()
+        result = module.windows_receiver_atm_temp({"TEMP": r"D:\Temp"})
+        self.assertEqual(result["posix_msys"], "/d/Temp/atm")
+
+    def test_windows_receiver_atm_temp_falls_back_to_tmp_then_gettempdir(self) -> None:
+        module = load_module()
+        self.assertEqual(
+            module.windows_receiver_atm_temp({"TMP": r"C:\Fallback"})["windows_native"],
+            r"C:\Fallback\atm",
+        )
+        result = module.windows_receiver_atm_temp({})
+        self.assertTrue(result["windows_native"])
+
+    def test_substitute_windows_remote_atm_temp_replaces_the_placeholder_line_exactly_once(
+        self,
+    ) -> None:
+        module = load_module()
+        source = (module.ROOT / "scripts" / "transfer" / "sftp.ps1").read_text(encoding="utf-8")
+        substituted = module._substitute_windows_remote_atm_temp(source, "C:/Users/x/tmp/atm")
+        self.assertNotIn(module._WINDOWS_REMOTE_ATM_TEMP_PLACEHOLDER_LINE, substituted)
+        self.assertIn('$RemoteAtmTemp = "C:/Users/x/tmp/atm"', substituted)
+        # Every other line is untouched.
+        self.assertEqual(
+            substituted.replace(
+                '$RemoteAtmTemp = "C:/Users/x/tmp/atm"',
+                module._WINDOWS_REMOTE_ATM_TEMP_PLACEHOLDER_LINE,
+            ),
+            source,
+        )
+
+    def test_substitute_windows_remote_atm_temp_raises_when_the_placeholder_is_absent(self) -> None:
+        # Contract-drift guard: a future edit to sftp.ps1's placeholder
+        # text must fail this harness loudly rather than silently install
+        # an unsubstituted script.
+        module = load_module()
+        with self.assertRaises(RuntimeError) as raised:
+            module._substitute_windows_remote_atm_temp("no placeholder here", "C:/x/atm")
+        self.assertIn("found 0 time(s)", str(raised.exception))
+
+    def test_substitute_windows_remote_atm_temp_raises_when_the_placeholder_repeats(self) -> None:
+        module = load_module()
+        doubled = "\n".join(
+            [module._WINDOWS_REMOTE_ATM_TEMP_PLACEHOLDER_LINE] * 2
+        )
+        with self.assertRaises(RuntimeError) as raised:
+            module._substitute_windows_remote_atm_temp(doubled, "C:/x/atm")
+        self.assertIn("found 2 time(s)", str(raised.exception))
+
+    # -- fenix ruling: POSIX-shell sshd for the Windows-sender ->
+    # POSIX-receiver contract (mocked `where`/registry, runs on every
+    # platform) --
+
+    def test_find_windows_posix_shell_prefers_path(self) -> None:
+        module = load_module()
+        original_which = module.shutil.which
+        module.shutil.which = lambda name, path=None: (
+            "/usr/bin/bash" if name == "bash" else None
+        )
+        try:
+            found = module.find_windows_posix_shell({"PATH": "/usr/bin"})
+        finally:
+            module.shutil.which = original_which
+        self.assertEqual(found, module.Path("/usr/bin/bash"))
+
+    def test_find_windows_posix_shell_falls_back_to_known_git_for_windows_locations(self) -> None:
+        module = load_module()
+        original_which = module.shutil.which
+        module.shutil.which = lambda name, path=None: None
+        try:
+            with tempfile.TemporaryDirectory() as temporary:
+                git_bash = Path(temporary) / "Git" / "bin" / "bash.exe"
+                git_bash.parent.mkdir(parents=True)
+                git_bash.write_text("", encoding="utf-8")
+                found = module.find_windows_posix_shell({"ProgramFiles": temporary})
+                self.assertEqual(found, git_bash)
+        finally:
+            module.shutil.which = original_which
+
+    def test_find_windows_posix_shell_returns_none_when_nothing_is_found(self) -> None:
+        module = load_module()
+        original_which = module.shutil.which
+        module.shutil.which = lambda name, path=None: None
+        try:
+            self.assertIsNone(module.find_windows_posix_shell({}))
+        finally:
+            module.shutil.which = original_which
+
+    class _FakeWinreg:
+        """Minimal `winreg` stand-in: an in-memory `{name: value}` store for
+        one key, raising `FileNotFoundError` for a missing key/value and
+        `PermissionError` when `deny_writes` is set -- exactly the two
+        failure shapes `_read_windows_default_shell`/
+        `_write_windows_default_shell` must handle."""
+
+        HKEY_LOCAL_MACHINE = object()
+        KEY_SET_VALUE = object()
+        REG_SZ = object()
+
+        def __init__(self, *, key_exists: bool = True, deny_writes: bool = False) -> None:
+            self.key_exists = key_exists
+            self.deny_writes = deny_writes
+            self.values: dict[str, str] = {}
+
+        def OpenKey(self, _hive: object, _key: str, *_args: object) -> "Aq4TransferEvidenceTests._FakeWinreg._Key":
+            if not self.key_exists:
+                raise FileNotFoundError("key not found")
+            return Aq4TransferEvidenceTests._FakeWinreg._Key(self)
+
+        def CreateKeyEx(self, _hive: object, _key: str, *_args: object) -> "Aq4TransferEvidenceTests._FakeWinreg._Key":
+            if self.deny_writes:
+                raise PermissionError("access is denied")
+            self.key_exists = True
+            return Aq4TransferEvidenceTests._FakeWinreg._Key(self)
+
+        def QueryValueEx(self, key: "Aq4TransferEvidenceTests._FakeWinreg._Key", name: str) -> tuple[str, object]:
+            if name not in key.store.values:
+                raise FileNotFoundError("value not found")
+            return key.store.values[name], None
+
+        def SetValueEx(
+            self,
+            key: "Aq4TransferEvidenceTests._FakeWinreg._Key",
+            name: str,
+            _reserved: int,
+            _value_type: object,
+            value: str,
+        ) -> None:
+            if key.store.deny_writes:
+                raise PermissionError("access is denied")
+            key.store.values[name] = value
+
+        def DeleteValue(self, key: "Aq4TransferEvidenceTests._FakeWinreg._Key", name: str) -> None:
+            if name not in key.store.values:
+                raise FileNotFoundError("value not found")
+            del key.store.values[name]
+
+        class _Key:
+            def __init__(self, store: "Aq4TransferEvidenceTests._FakeWinreg") -> None:
+                self.store = store
+
+            def __enter__(self) -> "Aq4TransferEvidenceTests._FakeWinreg._Key":
+                return self
+
+            def __exit__(self, *_exc: object) -> None:
+                return None
+
+    def test_read_windows_default_shell_returns_none_when_the_key_is_absent(self) -> None:
+        module = load_module()
+        original_winreg = module.winreg
+        module.winreg = self._FakeWinreg(key_exists=False)
+        try:
+            self.assertIsNone(module._read_windows_default_shell())
+        finally:
+            module.winreg = original_winreg
+
+    def test_write_then_read_windows_default_shell_round_trips(self) -> None:
+        module = load_module()
+        original_winreg = module.winreg
+        module.winreg = self._FakeWinreg(key_exists=False)
+        try:
+            module._write_windows_default_shell(r"C:\Program Files\Git\bin\bash.exe")
+            self.assertEqual(
+                module._read_windows_default_shell(), r"C:\Program Files\Git\bin\bash.exe"
+            )
+            module._write_windows_default_shell(None)
+            self.assertIsNone(module._read_windows_default_shell())
+        finally:
+            module.winreg = original_winreg
+
+    def test_write_windows_default_shell_raises_when_writes_are_denied(self) -> None:
+        module = load_module()
+        original_winreg = module.winreg
+        module.winreg = self._FakeWinreg(key_exists=False, deny_writes=True)
+        try:
+            with self.assertRaises(PermissionError):
+                module._write_windows_default_shell(r"C:\Git\bin\bash.exe")
+        finally:
+            module.winreg = original_winreg
+
+    def test_prepare_windows_posix_shell_skips_when_no_bash_is_found(self) -> None:
+        module = load_module()
+        original_find = module.find_windows_posix_shell
+        module.find_windows_posix_shell = lambda env=None: None
+        try:
+            result = module.prepare_windows_posix_shell()
+        finally:
+            module.find_windows_posix_shell = original_find
+        self.assertEqual(result["outcome"], "skipped_no_posix_receiver")
+        self.assertIn("no POSIX shell", result["reason"])
+
+    def test_prepare_windows_posix_shell_skips_when_the_registry_write_is_denied(self) -> None:
+        module = load_module()
+        original_find = module.find_windows_posix_shell
+        original_winreg = module.winreg
+        module.find_windows_posix_shell = lambda env=None: Path(r"C:\Git\bin\bash.exe")
+        module.winreg = self._FakeWinreg(key_exists=False, deny_writes=True)
+        try:
+            result = module.prepare_windows_posix_shell()
+        finally:
+            module.find_windows_posix_shell = original_find
+            module.winreg = original_winreg
+        self.assertEqual(result["outcome"], "skipped_no_posix_receiver")
+        self.assertIn("denied administrator access", result["reason"])
+
+    def test_prepare_windows_posix_shell_configures_and_records_before_and_after(self) -> None:
+        module = load_module()
+        original_find = module.find_windows_posix_shell
+        original_winreg = module.winreg
+        fake_winreg = self._FakeWinreg(key_exists=True)
+        fake_winreg.values["DefaultShell"] = r"C:\Windows\System32\cmd.exe"
+        module.find_windows_posix_shell = lambda env=None: Path(r"C:\Git\bin\bash.exe")
+        module.winreg = fake_winreg
+        try:
+            result = module.prepare_windows_posix_shell()
+            self.assertEqual(result["outcome"], "configured")
+            self.assertEqual(result["bash_path"], r"C:\Git\bin\bash.exe")
+            self.assertEqual(result["before"], r"C:\Windows\System32\cmd.exe")
+            self.assertEqual(result["after"], r"C:\Git\bin\bash.exe")
+            self.assertEqual(
+                module._read_windows_default_shell(), r"C:\Git\bin\bash.exe"
+            )
+            # Caller-driven restore, mirroring run_scenario's `finally`.
+            module._write_windows_default_shell(result["before"])
+            self.assertEqual(
+                module._read_windows_default_shell(), r"C:\Windows\System32\cmd.exe"
+            )
+        finally:
+            module.find_windows_posix_shell = original_find
+            module.winreg = original_winreg
 
 
 if __name__ == "__main__":
