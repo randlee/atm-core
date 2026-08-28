@@ -302,7 +302,7 @@ fn sweep_dir(
         let age = age_source.age_of(&path, &metadata);
         let expired = is_expired(&age, ttl, now);
 
-        if metadata.file_type().is_symlink() {
+        if is_symlink_or_reparse_point(&metadata) {
             if expired {
                 reclaim_file(&path, &metadata, report);
             }
@@ -334,6 +334,35 @@ fn sweep_dir(
             reclaim_file(&path, &metadata, report);
         }
     }
+}
+
+/// Returns whether `metadata` is a reparse point that must never be
+/// descended into as an ordinary directory.
+///
+/// On Unix this is exactly [`std::fs::FileType::is_symlink`]. On Windows,
+/// `is_symlink()` only recognizes the `IO_REPARSE_TAG_SYMLINK` tag -- a
+/// junction (`IO_REPARSE_TAG_MOUNT_POINT`, created by `mklink /J` or a
+/// legacy directory-junction tool) reports `is_dir() == true` and
+/// `is_symlink() == false`, so relying on `is_symlink()` alone would let
+/// the sweeper recurse straight through a junction and out of the sweep
+/// root -- exactly the escape this module's "never follows symlinks out of
+/// the root" guarantee exists to prevent. Checked instead via the raw
+/// `FILE_ATTRIBUTE_REPARSE_POINT` bit
+/// (`std::os::windows::fs::MetadataExt::file_attributes`), which is set for
+/// every reparse-point kind, so a junction is refused the same way a
+/// symlink already is.
+#[cfg(windows)]
+fn is_symlink_or_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
+
+    metadata.file_type().is_symlink()
+        || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_symlink_or_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
 }
 
 fn reclaim_file(path: &Path, metadata: &std::fs::Metadata, report: &mut SweepReport) {
@@ -402,13 +431,39 @@ mod tests {
 
     const TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
-    #[cfg(unix)]
+    /// `File::set_modified` is a stable, cross-platform std API (no
+    /// platform cfg needed); this helper backdates a real file's mtime for
+    /// both the `#[cfg(unix)]` and `#[cfg(windows)]` reparse-point tests
+    /// below.
     fn age_file(path: &Path, age: Duration, now: SystemTime) {
         let modified = now
             .checked_sub(age)
             .expect("age must not underflow SystemTime");
-        let file = std::fs::File::open(path).expect("open for mtime rewrite");
+        let file = open_for_mtime_rewrite(path);
         file.set_modified(modified).expect("set mtime");
+    }
+
+    /// Opens `path` for an [`age_file`] mtime-only rewrite.
+    ///
+    /// Windows requires the handle to carry `FILE_WRITE_ATTRIBUTES`
+    /// (granted by `write(true)`) before `set_modified` is permitted; a
+    /// read-only `File::open` handle fails there with `PermissionDenied`
+    /// ("Access is denied.") even though the test process owns the file.
+    /// Unix instead permits mtime rewrites through a read-only fd for the
+    /// owning user, and *requires* the read-only open: `write(true)` fails
+    /// immediately with `EISDIR` when `path` is a directory (this helper's
+    /// unix-only callers do age directories, never just files).
+    #[cfg(unix)]
+    fn open_for_mtime_rewrite(path: &Path) -> std::fs::File {
+        std::fs::File::open(path).expect("open for mtime rewrite")
+    }
+
+    #[cfg(windows)]
+    fn open_for_mtime_rewrite(path: &Path) -> std::fs::File {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(path)
+            .expect("open for mtime rewrite")
     }
 
     /// Test-only [`EntryAgeSource`] that supplies an explicit [`EntryAge`]
@@ -580,6 +635,70 @@ mod tests {
         assert!(
             outside_target.exists(),
             "the escape target must never be visited or reclaimed"
+        );
+    }
+
+    /// Windows twin of `symlink_escape_is_never_followed`: a junction
+    /// (`mklink /J`, `IO_REPARSE_TAG_MOUNT_POINT`) pointing outside the
+    /// sweep root must never be recursed into or followed, exactly like a
+    /// Unix symlink. Uses a junction rather than
+    /// `std::os::windows::fs::symlink_dir` because junctions need no
+    /// `SeCreateSymbolicLinkPrivilege` (elevated/Developer Mode) on the CI
+    /// runner, and because a junction is exactly the case
+    /// `is_symlink_or_reparse_point` was added to catch (`is_symlink()`
+    /// alone does not recognize `IO_REPARSE_TAG_MOUNT_POINT`).
+    #[cfg(windows)]
+    #[test]
+    fn junction_escape_is_never_followed() {
+        let root = tempfile::tempdir().expect("root");
+        let outside = tempfile::tempdir().expect("outside");
+        let now = SystemTime::now();
+
+        // The junction target is deliberately old (well past TTL): if the
+        // sweeper ever followed the junction and evaluated the *target's*
+        // age instead of the junction entry's own age, this file would be
+        // reclaimed.
+        let outside_dir = outside.path().join("secret-dir");
+        std::fs::create_dir(&outside_dir).expect("create outside dir");
+        let outside_marker = outside_dir.join("secret.bin");
+        std::fs::write(&outside_marker, b"do-not-touch").expect("write outside marker");
+        age_file(&outside_marker, TTL + Duration::from_secs(60), now);
+
+        let link = root.path().join("escape-junction");
+        create_junction(&outside_dir, &link);
+        // The junction entry itself is fresh (just created), so a correct
+        // never-follow sweeper must neither remove it nor touch its target.
+
+        let report = sweep_once(root.path(), TTL, now).expect("sweep succeeds");
+        assert_eq!(report.scanned, 1);
+        assert!(
+            std::fs::symlink_metadata(&link).is_ok(),
+            "fresh junction must be kept, not followed (checked without following it)"
+        );
+        assert!(
+            outside_marker.exists(),
+            "the escape target must never be visited or reclaimed"
+        );
+    }
+
+    /// Creates a real NTFS junction at `link` pointing at `target` via the
+    /// `mklink /J` shell built-in (no admin/Developer Mode privilege
+    /// required, unlike a true directory symlink).
+    #[cfg(windows)]
+    fn create_junction(target: &Path, link: &Path) {
+        let status = std::process::Command::new("cmd")
+            .args([
+                "/C",
+                "mklink",
+                "/J",
+                &link.display().to_string(),
+                &target.display().to_string(),
+            ])
+            .status()
+            .expect("spawn mklink /J");
+        assert!(
+            status.success(),
+            "mklink /J must succeed to create the test junction"
         );
     }
 

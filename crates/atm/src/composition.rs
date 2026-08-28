@@ -187,8 +187,13 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    /// Exposed `pub(crate)` (rather than only `#[cfg(test)]`-private) so a
+    /// sibling command module's own tests can exercise a real, storage-backed
+    /// `CliComposition::send` without a live daemon process -- for example
+    /// `atm send --from-json`'s multi-recipient fan-out abort-on-failure
+    /// path, which needs more than one real send outcome to observe.
     #[cfg(test)]
-    fn from_loopback_transport(
+    pub(crate) fn from_loopback_transport(
         transport: Arc<atm_core::transport::testing::LoopbackClientTransport>,
         observability_port: &'a CliObservability,
     ) -> Self {

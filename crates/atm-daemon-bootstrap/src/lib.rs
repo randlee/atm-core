@@ -27,7 +27,7 @@ use atm_core::peer_wire::{PeerWireMode, PeerWireSecurity};
 use atm_core::send::input::DEFAULT_MESSAGE_MAX_BYTES;
 use atm_core::types::HostName;
 use atm_core::types::{AgentName, TeamName};
-use atm_core::{AtmConfig, resolve_atm_temp, validate_sweep_config};
+use atm_core::{resolve_atm_temp, validate_sweep_config};
 use atm_herdr::HerdrProcessAdapter;
 use atm_http_runtime::{
     AcceptedPeerStream, DirectPeerTcpConfig, EstablishedPeerStream, HttpRuntimeBuilder,
@@ -39,6 +39,7 @@ use atm_storage_rusqlite::SqliteStorageFactory;
 use peer_tls::MtlsPeerStreamAdapter;
 use tokio::net::TcpStream;
 
+mod atm_temp_config;
 mod atm_temp_sweeper_runtime;
 mod bare_cli_runtime;
 mod owner_gate;
@@ -47,6 +48,7 @@ mod queue_drain;
 mod received_hook_selector;
 mod replacement_handler;
 
+use atm_temp_config::daemon_atm_config;
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
 use bare_cli_runtime::BareCliRuntime;
 use replacement_handler::{
@@ -536,16 +538,9 @@ fn start_atm_temp_sweeper(
             "ATM_TEMP is unset; using the default scratch root (set ATM_TEMP to override)"
         );
     }
-    // Sweep interval/TTL configuration is not yet threaded from `.atm.toml`
-    // into daemon composition (the daemon's config doctor deliberately does
-    // not depend on a workspace-relative `.atm.toml` — see
-    // `assemble_daemon_runtime`'s doc comment); `AtmConfig::default()`'s
-    // sweep fields are the compiled-in ADR-055 defaults (1 hour / 30 days)
-    // until that threading lands.
-    let defaults = AtmConfig::default();
-    let sweep_config =
-        validate_sweep_config(defaults.sweep_interval_seconds, defaults.sweep_ttl_days)
-            .map_err(|error| AtmError::config(format!("$ATM_TEMP sweep config: {error}")))?;
+    let config = daemon_atm_config(&env).unwrap_or_default();
+    let sweep_config = validate_sweep_config(config.sweep_interval_seconds, config.sweep_ttl_days)
+        .map_err(|error| AtmError::config(format!("$ATM_TEMP sweep config: {error}")))?;
     Ok(AtmTempSweeperRuntime::start(
         atm_temp.path().to_path_buf(),
         sweep_config,
@@ -1179,6 +1174,7 @@ mod replacement_runtime_tests {
                 }),
                 home_dir: std::path::PathBuf::from("/tmp").into(),
                 live_cwd: None,
+                host: None,
                 extra: serde_json::Map::new(),
             }],
         };

@@ -101,6 +101,14 @@ jobs:
           test -n "$clippy_log"
           cat "$clippy_log"
 
+      - name: Upload lint logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: just-lint-logs-${{ matrix.os }}
+          path: .just/logs/**
+          retention-days: 7
+
       - name: Run cargo audit
         run: cargo audit
 

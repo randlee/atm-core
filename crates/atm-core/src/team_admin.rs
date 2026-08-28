@@ -15,7 +15,7 @@ use crate::boundary::{
 use crate::delivery_channel::LocalMessageReceivedBackend;
 use crate::error::AtmError;
 use crate::schema::HomeDirPath;
-use crate::types::{AgentName, ModelName, PaneId, TeamName};
+use crate::types::{AgentName, HostName, ModelName, PaneId, TeamName};
 
 #[path = "team_admin/filesystem.rs"]
 mod filesystem;
@@ -72,6 +72,10 @@ pub struct MemberSummary {
     pub home_dir: HomeDirPath,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub live_cwd: Option<String>,
+    /// This member's registered host (ADR-055 decision (e)), or `None` when
+    /// unset -- never inferred from heartbeat, DNS, or socket state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<HostName>,
     pub extra: serde_json::Map<String, Value>,
 }
 
@@ -520,7 +524,53 @@ mod tests {
     }
 
     impl boundary::sealed::Sealed for RecordingRosterStore {}
+    impl atm_storage::contract::sealed::Sealed for RecordingRosterStore {}
     impl atm_storage::contract::sealed::Sealed for RecordingNudgeTemplateOverrideStore {}
+
+    // RBQA-F001: `resolve_picker_recipient` now resolves through the
+    // canonical, non-deprecated `atm_storage::RosterStore`, not the
+    // deprecated `crate::boundary::RosterStore` this fixture also
+    // implements above (still exercised directly by this module's other
+    // roster-mutation tests).
+    impl atm_storage::RosterStore for RecordingRosterStore {
+        fn load_roster(
+            &self,
+            team: &TeamName,
+        ) -> Result<atm_storage::RosterSnapshot, crate::error::AtmError> {
+            Ok(atm_storage::RosterSnapshot {
+                team_name: team.clone(),
+                members: self
+                    .teams
+                    .lock()
+                    .expect("roster store lock")
+                    .get(team)
+                    .cloned()
+                    .unwrap_or_default(),
+                refreshed_at: None,
+            })
+        }
+
+        fn save_roster(
+            &self,
+            roster: &atm_storage::RosterSnapshot,
+        ) -> Result<(), crate::error::AtmError> {
+            self.teams
+                .lock()
+                .expect("roster store lock")
+                .insert(roster.team_name.clone(), roster.members.clone());
+            Ok(())
+        }
+
+        fn list_teams(&self) -> Result<Vec<TeamName>, crate::error::AtmError> {
+            Ok(self
+                .teams
+                .lock()
+                .expect("roster store lock")
+                .keys()
+                .cloned()
+                .collect())
+        }
+    }
 
     impl RosterStore for RecordingRosterStore {
         fn replace_roster(
@@ -817,6 +867,7 @@ mod tests {
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("7").expect("pane")),
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect("add member");
@@ -856,6 +907,7 @@ mod tests {
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("session:1.2").expect("pane")),
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect("add member");
@@ -983,6 +1035,7 @@ mod tests {
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%12").expect("pane")),
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect("add member");
@@ -1001,6 +1054,154 @@ mod tests {
                 .join(TEST_TEAM)
                 .join("config.json")
                 .exists()
+        );
+    }
+
+    /// ADR-055 decision (e) round trip: `--host` on `add-member` lands in
+    /// `metadata_json["host"]`, and the picker projection
+    /// (`list_members_with_roster_store`, the same path `atm teams --json
+    /// --members` uses) reports it back as `MemberSummary.host`.
+    #[test]
+    #[serial(team_config_write_env)]
+    fn add_member_with_host_round_trips_through_the_member_projection() {
+        let tempdir = tempdir().expect("tempdir");
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, ROLE_TEAM_LEAD)]);
+
+        let request = AddMemberRequest::new(
+            tempdir.path().to_path_buf(),
+            TEST_TEAM,
+            TEST_SENDER,
+            "worker".to_string(),
+            "gpt-5".to_string(),
+            tempdir.path().to_path_buf(),
+            None,
+        )
+        .expect("request")
+        .with_host(Some("rand-m5.local"))
+        .expect("valid host");
+
+        add_member_with_roster_store(&roster_store, request).expect("add member");
+
+        let members = list_members_with_roster_store(
+            &roster_store,
+            MembersQuery {
+                team: TEST_TEAM.parse().expect("team"),
+                caller_identity: None,
+                live_cwd: None,
+            },
+        )
+        .expect("list members");
+
+        let added = members
+            .members
+            .iter()
+            .find(|member| member.name.as_str() == TEST_SENDER)
+            .expect("added member is present");
+        assert_eq!(
+            added.host.as_ref().map(|host| host.as_str()),
+            Some("rand-m5.local")
+        );
+
+        // Close the full ADR-055 decision (e) loop: the picker projection
+        // (`atm teams --json --members`) emits an `id` that `--from-json`'s
+        // `resolve_picker_recipient` (the single canonical consumer) accepts
+        // and resolves back to the same registered host.
+        let team: crate::types::TeamName = TEST_TEAM.parse().expect("team");
+        let projection = crate::picker_projection::build_picker_members_projection(
+            &team,
+            &members.members,
+            &std::collections::BTreeMap::new(),
+        );
+        let picked = projection
+            .members
+            .iter()
+            .find(|member| member.name.as_str() == TEST_SENDER)
+            .expect("projected member is present");
+        assert_eq!(picked.id, format!("{TEST_SENDER}@{TEST_TEAM}"));
+        assert_eq!(
+            picked.host.as_ref().map(|host| host.as_str()),
+            Some("rand-m5.local")
+        );
+
+        let resolved = crate::send_to::resolve_picker_recipient(&picked.id, &roster_store)
+            .expect("--from-json consumer resolves the projected id");
+        assert_eq!(
+            resolved.host().map(crate::types::HostName::as_str),
+            Some("rand-m5.local")
+        );
+    }
+
+    /// `--host` on `add-member` rejects an invalid `HostName` before any
+    /// roster mutation occurs.
+    #[test]
+    fn add_member_rejects_an_invalid_host() {
+        let tempdir = tempdir().expect("tempdir");
+        let error = AddMemberRequest::new(
+            tempdir.path().to_path_buf(),
+            TEST_TEAM,
+            TEST_SENDER,
+            "worker".to_string(),
+            "gpt-5".to_string(),
+            tempdir.path().to_path_buf(),
+            None,
+        )
+        .expect("request")
+        .with_host(Some("has a space"))
+        .expect_err("invalid host must be rejected");
+        assert!(error.detail().to_lowercase().contains("host"));
+    }
+
+    /// ADR-055 decision (e) round trip on `update-member`: setting `--host`
+    /// on an existing member is visible in the next projection.
+    #[test]
+    #[serial(team_config_write_env)]
+    fn update_member_with_host_round_trips_through_the_member_projection() {
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(
+            TEST_TEAM,
+            vec![
+                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
+                roster_member(TEST_TEAM, TEST_SENDER),
+            ],
+        );
+
+        let request = UpdateMemberRequest::new(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            TEST_TEAM.parse().expect("caller team"),
+            TEST_TEAM,
+            TEST_SENDER,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("request")
+        .with_host(Some("fastpc4.local"))
+        .expect("valid host");
+
+        update_member_with_roster_store(&roster_store, request).expect("update member");
+
+        let members = list_members_with_roster_store(
+            &roster_store,
+            MembersQuery {
+                team: TEST_TEAM.parse().expect("team"),
+                caller_identity: None,
+                live_cwd: None,
+            },
+        )
+        .expect("list members");
+
+        let updated = members
+            .members
+            .iter()
+            .find(|member| member.name.as_str() == TEST_SENDER)
+            .expect("updated member is present");
+        assert_eq!(
+            updated.host.as_ref().map(|host| host.as_str()),
+            Some("fastpc4.local")
         );
     }
 
@@ -1033,6 +1234,7 @@ mod tests {
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("22").expect("pane")),
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect("update member");
@@ -1095,6 +1297,7 @@ mod tests {
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%0").expect("pane")),
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect("repair team-lead pane");
@@ -1114,6 +1317,7 @@ mod tests {
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%1").expect("pane")),
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect("repair secondary member pane");
@@ -1162,6 +1366,7 @@ mod tests {
                 tmux_pane_id: None,
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect_err("caller team mismatch");
@@ -1192,6 +1397,7 @@ mod tests {
                 tmux_pane_id: None,
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect_err("missing caller");
@@ -1222,6 +1428,7 @@ mod tests {
                 tmux_pane_id: None,
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect_err("missing member");

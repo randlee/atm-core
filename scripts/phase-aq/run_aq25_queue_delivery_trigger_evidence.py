@@ -37,6 +37,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 from typing import Any
 
 
@@ -441,11 +442,29 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
     return record
 
 
-def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Path, Path]:
+def _evidence_output_paths(args: argparse.Namespace) -> tuple[Path, Path]:
     evidence_dir = args.evidence_dir or ROOT / "docs" / "plans" / "phase-aq" / "evidence" / "AQ2.5"
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    json_path = evidence_dir / f"queue-delivery-trigger-{args.host}.json"
-    markdown_path = evidence_dir / f"queue-delivery-trigger-{args.host}.md"
+    return (
+        evidence_dir / f"queue-delivery-trigger-{args.host}.json",
+        evidence_dir / f"queue-delivery-trigger-{args.host}.md",
+    )
+
+
+def _clear_stale_evidence(*paths: Path) -> None:
+    """Deletes any pre-existing evidence file at these exact output paths
+    before the scenario runs, so a harness crash that never reaches
+    `write_evidence` leaves this run's evidence missing, never a stale
+    copy of a previous run's committed file (see AQ4 evidence run 6,
+    33137262962 @ c510a4745, for the concrete failure this guards
+    against).
+    """
+    for path in paths:
+        path.unlink(missing_ok=True)
+
+
+def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Path, Path]:
+    json_path, markdown_path = _evidence_output_paths(args)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema_version": 1,
         "sprint": "AQ2.5",
@@ -488,6 +507,21 @@ def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Pa
             "  --evidence-dir docs/plans/phase-aq/evidence/AQ2.5",
             "```",
         ]
+    elif record["status"] == "harness_crashed":
+        lines += [
+            "The harness raised an unhandled exception before it could "
+            "finish running the scenario. This transcript is written by a "
+            "top-level guard specifically so a crash can never leave this "
+            "run's evidence stale (a previous run's committed file, "
+            "reused unchanged) or missing (no file at all) -- see "
+            "`main`'s top-level `try`/`except` around `run_scenario`.",
+            "",
+            f"Error: `{record.get('error')}`",
+            "",
+            "```",
+            record.get("traceback", "").rstrip(),
+            "```",
+        ]
     else:
         queue_pulls = record.get("queue_kind_pulls", [])
         lines += [
@@ -514,13 +548,26 @@ def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Pa
 
 def main() -> int:
     args = parse_args()
+    # Deleted before any other work: a harness crash the guard below
+    # cannot itself recover from must leave this run's evidence missing,
+    # never a stale copy of a previous run's committed file.
+    _clear_stale_evidence(*_evidence_output_paths(args))
     if args.timeout <= 0:
         raise SystemExit("--timeout must be positive")
     if not args.daemon.is_file():
         raise SystemExit(f"owned daemon binary does not exist: {args.daemon}")
     if not args.atm.is_file():
         raise SystemExit(f"matched atm binary does not exist: {args.atm}")
-    record = run_scenario(args)
+    try:
+        record = run_scenario(args)
+    except Exception as error:  # noqa: BLE001 - a crash must still produce evidence, not none
+        record = {
+            "sprint": "AQ2.5",
+            "host": args.host,
+            "status": "harness_crashed",
+            "error": f"{type(error).__name__}: {error}",
+            "traceback": traceback.format_exc(),
+        }
     json_path, markdown_path = write_evidence(args, record)
     print(f"{record['status'].upper()} AQ2.5 queue delivery-trigger evidence: {json_path}")
     print(f"transcript: {markdown_path}")

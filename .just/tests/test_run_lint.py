@@ -16,6 +16,7 @@ from run_lint import build_tasks
 from run_lint import build_transcript
 from run_lint import console_safe_text
 from run_lint import extract_count
+from run_lint import extract_error_fail_preview
 from run_lint import failure_preview
 from run_lint import LintResult
 from run_lint import LintTask
@@ -120,8 +121,85 @@ resolver = "2"
 
         preview = failure_preview("pytests", lines)
 
-        self.assertEqual(preview, lines[-40:])
+        self.assertEqual(
+            preview,
+            [
+                "FAIL: test_expected_behavior",
+                "Traceback (most recent call last):",
+                "AssertionError: expected value",
+                "FAILED (failures=1)",
+            ],
+        )
         self.assertIn("FAIL: test_expected_behavior", preview)
+
+    def test_failure_preview_falls_back_to_tail_when_no_blocks_found(self) -> None:
+        lines = [f"setup {index}" for index in range(45)]
+        lines.append("Traceback (most recent call last):")
+        lines.append("ImportError: could not import test module")
+
+        preview = failure_preview("pytests", lines)
+
+        self.assertEqual(preview, lines[-40:])
+
+    def test_extract_error_fail_preview_surfaces_every_test_id(self) -> None:
+        # A realistic unittest.TextTestRunner failure report: every ERROR
+        # block prints before any FAIL block, and there are more blocks
+        # than would fit in a tail-only window.
+        lines = [
+            "======================================================================",
+            "ERROR: test_alpha (test_transfer_scripts.SftpShTests.test_alpha)",
+            "----------------------------------------------------------------------",
+            "Traceback (most recent call last):",
+            '  File "test_transfer_scripts.py", line 10, in test_alpha',
+            "    subprocess.run([str(self.SCRIPT), *args])",
+            "OSError: [WinError 193] %1 is not a valid Win32 application",
+            "======================================================================",
+            "ERROR: test_beta (test_transfer_scripts.SftpShTests.test_beta)",
+            "----------------------------------------------------------------------",
+            "Traceback (most recent call last):",
+            "OSError: [WinError 193] %1 is not a valid Win32 application",
+            "======================================================================",
+            "FAIL: test_gamma (test_transfer_scripts.SftpPs1Tests.test_gamma)",
+            "----------------------------------------------------------------------",
+            "Traceback (most recent call last):",
+            "AssertionError: 1 != 0",
+            "----------------------------------------------------------------------",
+            "Ran 776 tests in 56.680s",
+            "FAILED (failures=1, errors=2, skipped=14)",
+        ]
+
+        preview = extract_error_fail_preview(lines)
+
+        self.assertIn("ERROR: test_alpha (test_transfer_scripts.SftpShTests.test_alpha)", preview)
+        self.assertIn("ERROR: test_beta (test_transfer_scripts.SftpShTests.test_beta)", preview)
+        self.assertIn("FAIL: test_gamma (test_transfer_scripts.SftpPs1Tests.test_gamma)", preview)
+        # Traceback bodies stay attached to their own id, not bled into the
+        # neighboring block.
+        alpha_index = preview.index("ERROR: test_alpha (test_transfer_scripts.SftpShTests.test_alpha)")
+        beta_index = preview.index("ERROR: test_beta (test_transfer_scripts.SftpShTests.test_beta)")
+        self.assertLess(alpha_index, beta_index)
+        self.assertNotIn("Ran 776 tests in 56.680s", preview)
+        self.assertNotIn("FAILED (failures=1, errors=2, skipped=14)", preview)
+
+    def test_extract_error_fail_preview_bounds_each_traceback_and_total_lines(self) -> None:
+        long_traceback = [f"    frame {index}" for index in range(30)]
+        lines = ["ERROR: test_one (module.Case.test_one)", *long_traceback]
+
+        preview = extract_error_fail_preview(lines, block_lines=5, max_total_lines=400)
+
+        self.assertEqual(preview, ["ERROR: test_one (module.Case.test_one)", *long_traceback[:4]])
+
+    def test_extract_error_fail_preview_caps_total_output_across_many_blocks(self) -> None:
+        lines = []
+        for index in range(50):
+            lines.append(f"ERROR: test_{index} (module.Case.test_{index})")
+            lines.append("Traceback (most recent call last):")
+            lines.append(f"RuntimeError: failure {index}")
+
+        preview = extract_error_fail_preview(lines, block_lines=3, max_total_lines=30)
+
+        self.assertLessEqual(len(preview), 31)
+        self.assertTrue(any("truncated" in line for line in preview))
 
     def test_failure_preview_keeps_other_lints_concise(self) -> None:
         lines = ["progress", "error: one", "error: two", "error: three", "error: four", "error: five"]

@@ -136,6 +136,41 @@ impl fmt::Display for AtmTempError {
 
 impl std::error::Error for AtmTempError {}
 
+/// Maps an [`AtmTempError`] to the canonical `atm-core` error contract using
+/// ADR-055's `AtmTempError` recovery table verbatim, so every caller (CLI
+/// first-use, daemon startup, transfer-script resolution) surfaces the same
+/// actionable text for the same failure.
+impl From<AtmTempError> for crate::error::AtmError {
+    fn from(error: AtmTempError) -> Self {
+        let recovery = match &error {
+            AtmTempError::NotAbsolute => "Use an absolute path for ATM_TEMP.",
+            AtmTempError::Unresolvable => {
+                "Check for a broken symlink or a missing parent directory."
+            }
+            AtmTempError::NotWritable => "Fix permissions, or pick another directory.",
+            AtmTempError::AtmTempInsecure { .. } => {
+                "Remove or chown the directory, or set ATM_TEMP to a private path."
+            }
+            AtmTempError::TransferScriptUnsafe { host, .. } => {
+                return crate::error::AtmError::validation_with_recovery(
+                    error.to_string(),
+                    format!("chmod 700 ~/.atm/transfer/{host} and confirm ownership."),
+                );
+            }
+            AtmTempError::HomeDirUnavailable => {
+                "Set $HOME (or %USERPROFILE% on Windows) before retrying."
+            }
+            AtmTempError::TransferScriptUnreadable { host, .. } => {
+                return crate::error::AtmError::validation_with_recovery(
+                    error.to_string(),
+                    format!("Check permissions on ~/.atm/transfer/{host} and its ancestors."),
+                );
+            }
+        };
+        crate::error::AtmError::validation_with_recovery(error.to_string(), recovery)
+    }
+}
+
 /// Unset resolves to a documented per-OS default (created if missing);
 /// set-but-invalid fails closed. The daemon calls this once at startup; the
 /// CLI calls it lazily at first scratch-space use. One function, one

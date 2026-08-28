@@ -361,6 +361,17 @@ must never block a Stop loop. Codex lifecycle integration uses the same
 authenticated queue-get contract; a host-specific Codex drain adapter remains
 an explicit coordination gap rather than an invented daemon-side fallback.
 
+## Addendum (2026-08-27): Herdr retry partition (AQ2.7 ruling)
+
+ADR-058 D8 outcomes are partitioned for ADR-054 (f) retry accounting: outcomes
+where no input reached the agent (blocked, not-present family, infrastructure)
+use `release_pending` (no attempt consumed) bounded by a per-member
+consecutive-release cap (`HERDR_MAX_CONSECUTIVE_RELEASES = 10`, after which one
+`requeue_pending` consumes an attempt); outcomes after input was injected or
+ambiguous (`agent_prompt_stalled`, post-write errors/timeouts) use
+`requeue_pending`. This keeps the (f) stuck signal reachable for Herdr
+members. Normative text: sprint-AQ2-7 deliverable 3.
+
 A marker-clear failure after a successful bare-CLI FIFO append (the handoff)
 is never allowed to fail that delivery: it is routed through the same
 `clear_queue_marker_after_handoff` retry-once-and-count helper AQ2's graft

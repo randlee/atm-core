@@ -1901,6 +1901,36 @@ fn aq4_send_to_staging_dir_has_a_single_construction_site_and_atm_temp_is_read_o
 }
 
 #[test]
+fn aq4_resolve_picker_recipient_has_a_single_construction_site() {
+    // AQ4 deliverable 7 (dev-owned half, ADR-055 decision (e)): the
+    // companion assertion to
+    // `aq4_send_to_staging_dir_has_a_single_construction_site_...` above.
+    // `resolve_picker_recipient` is the sprint doc's declared "single
+    // canonical implementation" for turning a `--from-json` recipient id
+    // into a routable `AgentAddress`; nothing should be able to add a
+    // second, divergent resolver without this test failing.
+    let source_root = workspace_root().join("crates");
+    let mut files = Vec::new();
+    collect_rust_files(&source_root, &mut files);
+    files.retain(|path| {
+        !path
+            .components()
+            .any(|component| component.as_os_str() == "atm-architecture")
+    });
+
+    let mut definitions = 0usize;
+    for path in &files {
+        let source = read_source(path);
+        definitions += source.matches("fn resolve_picker_recipient(").count();
+    }
+
+    assert_eq!(
+        definitions, 1,
+        "resolve_picker_recipient() must have exactly one construction site in the workspace"
+    );
+}
+
+#[test]
 fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let root = workspace_root();
     let daemon_lib = root.join("crates/atm-daemon/src/main.rs");

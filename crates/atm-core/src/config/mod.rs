@@ -31,6 +31,7 @@ use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::{AgentMember, TeamConfig};
 #[cfg(test)]
 use crate::types::AgentName;
+use crate::types::HostName;
 use crate::types::TeamName;
 use discovery::normalize_post_send_hooks;
 use types::{
@@ -77,6 +78,7 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
             .atm
             .sweep_ttl_days
             .unwrap_or(types::DEFAULT_SWEEP_TTL_DAYS),
+        local_host: parse_local_host(parsed.atm.local_host, &path)?,
         config_root,
     }))
 }
@@ -101,6 +103,26 @@ fn parse_raw_config_file(path: &Path) -> Result<RawConfigFile, AtmError> {
             format!("failed to parse config at {}: {error}", path.display()),
         )
     })
+}
+
+/// Parses the optional `[atm] local_host` key (ADR-055 decision (f)): this
+/// machine's own routable host identity, used only to classify a Send-To
+/// recipient as same-host or remote.
+fn parse_local_host(raw_host: Option<String>, path: &Path) -> Result<Option<HostName>, AtmError> {
+    raw_host
+        .map(|host| {
+            host.parse::<HostName>().map_err(|error| {
+                AtmError::new(
+                    AtmErrorCode::ConfigParseFailed,
+                    format!(
+                        "invalid local_host in {}: {}",
+                        path.display(),
+                        error.detail()
+                    ),
+                )
+            })
+        })
+        .transpose()
 }
 
 fn parse_default_team(raw_team: Option<String>, path: &Path) -> Result<Option<TeamName>, AtmError> {
@@ -216,6 +238,8 @@ struct RawAtmSection {
     sweep_interval_seconds: Option<u64>,
     #[serde(default)]
     sweep_ttl_days: Option<u32>,
+    #[serde(default)]
+    local_host: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]

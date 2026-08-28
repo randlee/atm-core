@@ -1618,6 +1618,17 @@
         },
         {
           "has_default": false,
+          "id": "attach",
+          "long": "attach",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
           "id": "category",
           "long": "category",
           "num_args": {
@@ -1678,6 +1689,17 @@
           "num_args": {
             "max": 1,
             "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "from_json",
+          "long": "from-json",
+          "num_args": {
+            "max": 0,
+            "min": 0
           },
           "required": false,
           "short": null
@@ -1811,7 +1833,7 @@
             "max": 1,
             "min": 1
           },
-          "required": true,
+          "required": false,
           "short": null
         },
         {
@@ -2483,6 +2505,17 @@
         },
         {
           "has_default": false,
+          "id": "attach",
+          "long": "attach",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
           "id": "category",
           "long": "category",
           "num_args": {
@@ -2543,6 +2576,17 @@
           "num_args": {
             "max": 1,
             "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "from_json",
+          "long": "from-json",
+          "num_args": {
+            "max": 0,
+            "min": 0
           },
           "required": false,
           "short": null
@@ -2676,7 +2720,7 @@
             "max": 1,
             "min": 1
           },
-          "required": true,
+          "required": false,
           "short": null
         },
         {
@@ -2711,6 +2755,17 @@
           "has_default": true,
           "id": "json",
           "long": "json",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "members",
+          "long": "members",
           "num_args": {
             "max": 0,
             "min": 0
@@ -2760,6 +2815,17 @@
               "has_default": false,
               "id": "home_dir",
               "long": "home-dir",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "host",
+              "long": "host",
               "num_args": {
                 "max": 1,
                 "min": 1
@@ -3209,6 +3275,17 @@
               "has_default": false,
               "id": "home_dir",
               "long": "home-dir",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "host",
+              "long": "host",
               "num_args": {
                 "max": 1,
                 "min": 1
