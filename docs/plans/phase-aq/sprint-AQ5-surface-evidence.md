@@ -127,6 +127,11 @@ linked artifact.
 4. Manual E2E: Finder (macOS), Explorer SendTo (Windows), Nautilus
    (Ubuntu) each deliver to a live agent — transcript + screenshot
    committed. Cold-start numbers + method in the PR.
+   **Status: deferred to Phase AQ closeout by ruling** — tracked as
+   follow-up `AQ5-gui-e2e` (owner: Rand, macOS Finder first) in
+   [`validation-evidence.md`](validation-evidence.md)'s manual/deferred
+   register, with the exact operator steps recorded there; not fabricated
+   as closed on this sprint's head.
 5. Every Must requirement maps to a passing gate; any gap is a Blocking
    finding, not a footnote. Evidence file reviewable by req-qa directly.
 6. `just test` all three lanes green on the AQ5 head. (Phase closure — the
