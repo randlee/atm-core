@@ -3158,6 +3158,31 @@
    "minor": null,
    "count_basis": "evidence",
    "evidence": "AQ4 #1055 @ 7f6774802 evidence run 7 (GHA 33140616718, head-verified). Linux + macOS PASS. Windows record fresh (harness integrity fix works): synthesized PATH correct; failure at remote step\u2014sftp.ps1 runs POSIX umask && mkdir -p on loopback Windows sshd (cmd.exe shell) and harness did not substitute .ps1 ATM_TEMP placeholder. Ruling (fenix): shipped contract is Windows-sender POSIX-receiver; harness to give scratch sshd POSIX shell (DefaultShell Git Bash, restored) + substitute ATM_TEMP, else record skipped_no_posix_receiver via harness. Fix dispatched; run-7 linux/macOS artifacts being committed."
+  },
+  {
+   "run_id": "CI-AQ4-ARTIFACTS-R7",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": null,
+   "run_type": "evidence",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": null,
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 @ f9ddcfe9e \u2014 run-7 artifacts (33140616718) committed byte-for-byte",
+   "result_time_utc": "2026-08-28T23:00:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "evidence",
+   "evidence": "AQ4 #1055 @ f9ddcfe9e (run 33140616718) artifacts committed byte-for-byte with record commit fields verified = 7f6774802: linux PASS, macOS PASS, windows FAIL (fresh record; POSIX-receiver fix in progress). Also: fix/aq-restart-matrix-crash-guard PR (AQ1.9 harness integrity) in preparation."
   }
  ],
  "follow_ups": [
