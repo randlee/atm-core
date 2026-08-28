@@ -28,7 +28,9 @@ io_forbidden = [
 
 [dependencies]
 allowed_dependents = ["atm-graft-python"]
-allowed_dependencies = ["atm-core", "atm-daemon-client"]
+# atm-http-runtime: AL.9 (cc3ae58c4) routes atm-graft write-transport
+# selection through atm_http_runtime::preferred_local_client/selected_write_transport.
+allowed_dependencies = ["atm-core", "atm-daemon-client", "atm-http-runtime"]
 forbidden_edges = [
   "atm-graft -> atm-daemon-bootstrap",
   "atm-graft -> atm-daemon",
@@ -74,4 +76,5 @@ notes = [
   "session runtime and advisory stream ownership are deferred to U.9 and U.10",
   "AI.15/RBQA-F002: the graft post-send notification channel is loopback TCP plus a per-bind capability token; the 'atm-graft -> interprocess' forbidden_edge blocks any reintroduction of interprocess::local_socket / named-pipe backends inside atm-graft",
   "AI11/AI14 shared-client transport: interprocess is reachable transitively only through the approved atm-daemon-client facade; atm-graft must never add a direct interprocess Cargo dependency.",
+  "AL.9 (cc3ae58c4): atm-graft depends on atm-http-runtime for write-transport selection (preferred_local_client/selected_write_transport); this was a pre-existing Cargo.toml edge backfilled into allowed_dependencies during the AQ post-merge review.",
 ]
