@@ -3,7 +3,7 @@
  "timezone": "UTC (result_time_pst/assignment_time_pst omitted; verdict timestamps are GitHub PR comment times)",
  "audit_window": {
   "start": "2026-08-27T00:09:55Z",
-  "end": "2026-08-28T01:40:00Z"
+  "end": "2026-08-28T04:00:00Z"
  },
  "scope": "phase-aq sprints in landing order (structure.ttl). Runs recorded: AQ1 (3, final PASS, merged), AQ2.6 (2, latest FAIL, fix cycle 2 in progress), AQ1.5 (1, FAIL, fix in progress). AQ1.6 (#1046) QA-1 requested (pending run recorded, verdict null). Non-sprint lanes reviewed by quality-mgr but not sprint rows: lane A ADR-058 #1039 (PASS d6f4dd90f, merged 4805264a2) and lane C AQ4 groundwork #1043 (QA-1 FAIL a911abfd8 \u2192 QA-2 FAIL 23be719f3 \u2192 QA-3 PASS 28422190e, merge requested) \u2014 they roll into AQ2.6/AQ4 evidence at closeout.",
  "count_basis": "headline/reviewer",
@@ -1907,7 +1907,7 @@
    "important": 0,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "Clean-runner evidence run 2 (GHA 33126990425 @ 35a28588a): tmux idle-drain PASS on ubuntu and macOS. Steer immediate, FIFO order, one drain per idle transition; drained counter 1→2. Windows skipped_no_tmux by design. Job red only from restart-matrix harness on pre-#1050 tree. Transcript commit + integrate merge into #1054 in progress; QA-final4 pending."
+   "evidence": "Clean-runner evidence run 2 (GHA 33126990425 @ 35a28588a): tmux idle-drain PASS on ubuntu and macOS. Steer immediate, FIFO order, one drain per idle transition; drained counter 1\u21922. Windows skipped_no_tmux by design. Job red only from restart-matrix harness on pre-#1050 tree. Transcript commit + integrate merge into #1054 in progress; QA-final4 pending."
   },
   {
    "run_id": "QA-AQ4-R2",
@@ -1933,6 +1933,31 @@
    "minor": null,
    "count_basis": "headline/reviewer",
    "evidence": "AQ4 #1055 harness fix head d0d54e004 (transfer dir/script forced 0o700 \u2014 the exact paths transfer_script.rs safety check inspects; +2 tests incl. umask 022); evidence run 3 dispatched."
+  },
+  {
+   "run_id": "QA-AQ6-R3",
+   "aich_sprint": "AQ6",
+   "phase_sprint": "AQ6",
+   "pass": false,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": null,
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ6 #1066 QA-3 FAIL 8/9 @ b8ccdad8a (ATM-QA-010 confirmed fixed; timing blocker AC4 macOS CI)",
+   "result_time_utc": "2026-08-28T04:00:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "FAIL",
+   "blockers": 1,
+   "important": 2,
+   "minor": 2,
+   "count_basis": "headline/reviewer",
+   "evidence": "AQ6 #1066 QA-3 FAIL 8/9 @ b8ccdad8a: ATM-QA-010 confirmed fixed (real Wyvern installer with safe extraction + verify_installed_tools; count-guard; non-dry-run test; WYVERN_PIN pair test); sole blocker is timing (AC4: macOS CI lanes still queued); important: Wyvern download lacks SHA256 verification (sc-compose precedent), stale evidence-register citation; minor: checklist mention, frontmatter draft. Ruling: targeted re-verify of the delta + AC4 closure once macOS lanes conclude \u2014 no full re-gate. Fix bundled with the integrate merge into #1066 (cipher)."
   }
  ],
  "follow_ups": [
