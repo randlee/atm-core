@@ -57,3 +57,91 @@ suite, so no consumer CI impact. Filed upstream as
 [sc-publish #65](https://github.com/randlee/sc-publish/issues/65) for the next
 qualified revision; no kit change made mid-qualification per the multi-repo
 qualification rule.
+
+## Release-branch fixes (release/v1.4.4 only — documented kit drift)
+
+The v1.4.4 final Release Preflight (run 33150049684, main tip 78913af39)
+surfaced three defects in the kit's own workflows — the first real execution
+of these paths on a crates-publishing consumer. Per Rand's rulings
+(2026-08-28): sc-lint is a lint tool owned by repo CI (`just lint` runs it —
+the vendored workspace analyzer — extensively, every sprint); sc-publish is
+git workflows and agent prompts; the publish pipeline must run the same
+lint/build/test sprint CI runs plus only publish-specific checks, and there
+must be NO surprises at publish time. Fixes applied directly on
+`release/v1.4.4` (commit 9f5bae568), bypassing `develop` per the
+release-state strategy's release-fix path:
+
+1. Removed the sc-lint install/smoke gate from
+   `.github/actions/setup-lint-toolchain` — preflight was downloading
+   published sc-lint 0.4.0 while the repo runs the vendored workspace
+   analyzer (version/schema skew). Upstream deletion:
+   [sc-publish #67](https://github.com/randlee/sc-publish/issues/67).
+2. Implemented the `crates_io` credential-liveness arm in
+   `release-preflight.yml` (read-only probe of `https://crates.io/api/v1/me`).
+   Upstream: [sc-publish #68](https://github.com/randlee/sc-publish/issues/68).
+3. Added `if: always()` to the five evidence steps that skipped on an earlier
+   hard failure, so one run collects complete evidence. Upstream:
+   [sc-publish #69](https://github.com/randlee/sc-publish/issues/69).
+
+These are deliberate, temporary drift from pin 25668ecc, scoped to the
+release branch; `develop` stays byte-clean against the pin and re-converges
+on the next qualified sc-publish revision. All preflight gates were rehearsed
+locally green before any CI dispatch (fmt, clippy, workspace tests,
+validate-manifest, publish-order, verify-version, version-lockstep, helper
+presence; the crates_io liveness probe and registry-state checks execute
+first in CI since publish tokens exist only as Actions secrets).
+
+### Round 2 (readiness preflight run 33154250124 on the release branch)
+
+The first readiness preflight on `release/v1.4.4` collected complete evidence
+(the round-1 fixes worked) and surfaced four more defects — three reported by
+the run, one caught only by local rehearsal of the fix:
+
+4. **crates_io liveness probe is unsound by design** (revises fix 2):
+   crates.io API tokens are scope-restricted (RFC 2947) and no read-only
+   endpoint accepts them — `GET /api/v1/me` is session-only — so the probe
+   returns HTTP 403 for a correctly scoped publish token. The 403 in run
+   33154250124 is expected endpoint behavior, **not** a credential problem.
+   The arm now records presence-only liveness (presence is checked by the
+   required-secrets step; authorization is proven at publish time). Upstream:
+   [sc-publish #68](https://github.com/randlee/sc-publish/issues/68) (updated).
+5. **Preflight workspace tests ran in a preflight-only environment**: the
+   step never ran `just bootstrap`, so the pinned sc-compose CLI was missing
+   and the two compose-passthrough parity tests panicked. The workflow now
+   mirrors sprint CI exactly (cargo-bin PATH, just, cargo-binstall,
+   `just bootstrap`) and runs the exact CI test surface
+   (`cargo test --workspace --exclude atm-daemon` plus the CLI surface
+   contract test). Upstream:
+   [sc-publish #70](https://github.com/randlee/sc-publish/issues/70).
+6. **`list-publish-plan` emitted non-publishable crates in manifest order**:
+   `publish = false` crates (the PyPI-only maturin crates) were included and
+   `publish_order` was ignored. This also affected `crates-publish.yml`,
+   which would have aborted the live ordered publish on
+   `cargo publish -p atm-graft-python`. The helper now filters
+   `publish = false` and sorts by `publish_order`. Upstream:
+   [sc-publish #70](https://github.com/randlee/sc-publish/issues/70).
+7. **Per-crate `cargo package` cannot verify a coordinated version bump**:
+   packaging each crate independently resolves rewritten sibling deps against
+   the live index, which fails until siblings are published (chicken-and-egg;
+   `--no-verify` does not avoid it — resolution happens at lockfile
+   generation). The step now issues one multi-package `cargo package`
+   invocation so cargo verify-builds against its local overlay registry
+   (cargo >= 1.90; the manifest pins 1.94.1). Upstream:
+   [sc-publish #71](https://github.com/randlee/sc-publish/issues/71).
+8. **Product fix (release-blocking, found only in local rehearsal)**:
+   `crates/atm-daemon-bootstrap/Cargo.toml` declared its dev-dependency on
+   the never-published `atm-runtime-test-support` with an explicit
+   `version = "1.4.4"`, so cargo retained it in the packaged manifest and
+   required it on crates.io. `cargo publish -p atm-daemon-bootstrap` would
+   have hard-failed mid-release. The version key is removed (path-only
+   dev-deps are stripped at package time — the pattern the three sibling
+   consumers of this crate already use). One line; Cargo.lock unchanged.
+
+Round-2 local rehearsal, all green before CI dispatch: YAML parse of the
+edited workflow, `bash -n` of all three edited run blocks, functional run of
+the crates_io liveness arm (presence-only path, correct `channel_outcomes`),
+fixed `list-publish-plan` output (13 publishable crates in publish order),
+the exact fixed package-checks step verbatim (plan-derived multi-package
+`cargo package --locked --allow-dirty`), and the CLI surface contract test.
+The kit's own pytest expectations for `list-publish-plan` were not updated
+(consumer CI does not run them); flagged in sc-publish #70.
