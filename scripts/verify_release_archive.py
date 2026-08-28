@@ -3,19 +3,33 @@ from __future__ import annotations
 
 import argparse
 import tarfile
+import tomllib
 import zipfile
 from pathlib import Path
 
-from release_artifacts import installed_doc_members
-from release_artifacts import load_manifest
-
-
 def expected_members(manifest_path: Path, windows: bool) -> set[str]:
-    manifest = load_manifest(manifest_path)
+    """Return ATM-owned archive members declared by the consumer manifest."""
+
+    manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
     names = {entry["name"] for entry in manifest["release_binaries"]}
     binary_members = {f"bin/{name}.exe" if windows else f"bin/{name}" for name in names}
-    doc_members = {member.as_posix() for member in installed_doc_members(manifest_path)}
-    return binary_members | doc_members
+    bundled_members: set[str] = set()
+    repo_root = manifest_path.parent.parent
+    for binary in manifest["release_binaries"]:
+        for bundle in binary.get("bundled_paths", []):
+            source = repo_root / bundle["source"]
+            destination = Path(bundle["destination"])
+            if source.is_file():
+                bundled_members.add(destination.as_posix())
+                continue
+            if not source.is_dir():
+                raise SystemExit(f"bundled path source is missing: {source}")
+            bundled_members.update(
+                (destination / path.relative_to(source)).as_posix()
+                for path in source.rglob("*")
+                if path.is_file()
+            )
+    return binary_members | bundled_members
 
 
 def normalize_member(name: str) -> str:

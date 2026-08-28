@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AT1-QA-004>
+  a triage:Finding ;
+  triage:findingId "AT1-QA-004" ;
+  triage:title "just validate hard-fails pre-publish: cargo dry-run resolution of unpublished workspace version lacks the README's Expected/Proceed carve-out" ;
+  triage:description "scripts/validate_release.py's phase-ad-readiness stage runs cargo package / cargo publish --dry-run, which resolves intra-workspace ^1.4.4 path-dep requirements against the public crates.io index. crates.io only has 1.4.3/1.4.2 (1.4.4 not yet published), so 12/14 publishable crates fail and just validate exits nonzero. Pre-existing at 7df74a28b (same code, same severity=error classification) — previously unreached, unmasked by the AT1-QA-001 rewiring fix. The phase README Non-Blocking Outcomes table already classifies this outcome class (404 / not-yet-published version) as Expected/Proceed, but append_completed_findings in scripts/validate_release.py does not implement that carve-out for this cargo-resolution error shape, so just validate will hard-fail for every future coordinated version bump until the moment of actual publication." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "release-validation-gate" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-26T23:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT1 ;
+  triage:foundAt "2026-08-27T01:58:01Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-004/AT1-004-integrate-0> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-004/AT1-004-feature-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-004/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-27T02:12:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AT1-QA-004/AT1-004-integrate-0>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 402 ;
+  triage:snippet "cargo publish --dry-run" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "808397cce" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-at/808397cce> .
+
+<urn:atm:triage:occurrence/AT1-QA-004/AT1-004-feature-1>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 434 ;
+  triage:snippet "cargo publish --dry-run" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "63bdfeafc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pat-s1/63bdfeafc> .
+
+<urn:atm:triage:occurrence/AT1-QA-004/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 434 ;
+  triage:snippet "quality-mgr independent re-verification: is_expected_unpublished_workspace_resolution() reclassifies the unpublished-own-version cargo failure as warning/non-blocking; just validate exits 0, confirmed live on the merged fix" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "2b1dbaeed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-at/2b1dbaeed> .
+
+<urn:atm:triage:worktree/integrate-phase-at/2b1dbaeed>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "2b1dbaeed" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/integrate-phase-at/808397cce>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "808397cce" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/feature-pat-s1/63bdfeafc>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pat-s1-install-and-publish" ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "63bdfeafc" ;
+  triage:orderIndex 1 .

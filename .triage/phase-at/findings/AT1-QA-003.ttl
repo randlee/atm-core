@@ -1,0 +1,106 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AT1-QA-003>
+  a triage:Finding ;
+  triage:findingId "AT1-QA-003" ;
+  triage:title ".just/check_version_sync.py hand-duplicates version-lockstep logic already computed generically by kit release_artifacts.py" ;
+  triage:description ".just/check_version_sync.py re-implements version-lockstep verification that the kit-installed scripts/release_artifacts.py already computes generically from release/publish-artifacts.toml. Divergent duplicate logic is a boundary violation: the two can drift. Fix: make the .just check delegate to (or invoke) the kit validator's generic computation rather than duplicating it. Constraint: kit-installed files must NOT be edited; the fix lives entirely in consumer-owned .just/ code. Reported by ruthless-boundary-qa, confirmed by quality-mgr in AT1-QA-R1. Full report: PR #1044 comment 5433210488." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-duplication" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-27T02:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT1 ;
+  triage:foundAt "2026-08-27T01:31:34Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-003/at1-qa-003-integrate-ph-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-003/at1-qa-003-integrate-ph-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-003/at1-qa-003-feature-ph-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-003/at1-qa-003-feature-ph-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-003/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-27T02:12:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AT1-QA-003/at1-qa-003-integrate-ph-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_version_sync.py" ;
+  triage:line 89 ;
+  triage:snippet "def normalized_version_base(version: str, label: str) -> str:" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "2bad2812a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-at/2bad2812a> .
+
+<urn:atm:triage:occurrence/AT1-QA-003/at1-qa-003-integrate-ph-2>
+  a triage:Occurrence ;
+  triage:file ".just/check_version_sync.py" ;
+  triage:line 98 ;
+  triage:snippet "def validate_python_release_versions(repo_root: Path, workspace_version: str, manifests: tuple)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "2bad2812a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-at/2bad2812a> .
+
+<urn:atm:triage:occurrence/AT1-QA-003/at1-qa-003-feature-ph-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_version_sync.py" ;
+  triage:line 89 ;
+  triage:snippet "def normalized_version_base(version: str, label: str) -> str:" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "7df74a28b" ;
+  triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
+
+<urn:atm:triage:occurrence/AT1-QA-003/at1-qa-003-feature-ph-2>
+  a triage:Occurrence ;
+  triage:file ".just/check_version_sync.py" ;
+  triage:line 98 ;
+  triage:snippet "def validate_python_release_versions(repo_root: Path, workspace_version: str, manifests: tuple)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "7df74a28b" ;
+  triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
+
+<urn:atm:triage:occurrence/AT1-QA-003/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_version_sync.py" ;
+  triage:line 71 ;
+  triage:snippet "quality-mgr independent re-verification: validate_release_version_lockstep now delegates to the kit's verify-version-lockstep subcommand, confirmed live on the merged fix" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "2b1dbaeed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-at/2b1dbaeed> .
+
+<urn:atm:triage:worktree/integrate-phase-at/2b1dbaeed>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "2b1dbaeed" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/integrate-phase-at/2bad2812a>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "2bad2812a" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pat-s1/7df74a28b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pat-s1-install-and-publish" ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "7df74a28b" ;
+  triage:orderIndex 1 .

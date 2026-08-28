@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-014>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-014" ;
+  triage:title "tools/bootstrap-requirements.txt missing markupsafe pin breaks `just test coverage` on a clean bootstrap venv" ;
+  triage:description "jinja2==3.1.6 (pinned in tools/bootstrap-requirements.txt) requires markupsafe at import time, but the closure file omits it and is installed with `pip install --no-deps`, so a from-scratch bootstrap venv fails `python -c 'import jinja2'` with ModuleNotFoundError: No module named 'markupsafe', and scripts/coverage/run.py (which imports jinja2) cannot run `just test coverage` out of the box even though `just bootstrap` reports the pinned contract verified. Reported by rust-qa-agent (QA-001) in QA pass AT-PHASECLOSE-QA-R2 on PR #1065, reproduced from a genuinely clean venv." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "build" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-27T22:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT2 ;
+  triage:foundAt "2026-08-27T21:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-014/INTEGRATE-AT-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-014/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-27T22:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-014/INTEGRATE-AT-1>
+  a triage:Occurrence ;
+  triage:file "tools/bootstrap-requirements.txt" ;
+  triage:line 5 ;
+  triage:snippet "jinja2==3.1.6 (no markupsafe pin present in closure)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "5c8cbf760" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760> .
+
+<urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate-phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "5c8cbf760" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/ATM-QA-014/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "tools/bootstrap-requirements.txt" ;
+  triage:line 5 ;
+  triage:snippet "markupsafe==3.0.3" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "e5f750bc2" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE-AT/e5f750bc2> .
+
+<urn:atm:triage:worktree/INTEGRATE-AT/e5f750bc2>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate-phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "e5f750bc2" ;
+  triage:orderIndex 2 .

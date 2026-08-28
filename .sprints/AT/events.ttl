@@ -1,0 +1,17 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Provenance: Phase AT dispatched by fenix (team-lead delegate) on 2026-08-27.
+# AT.2 (legacy deletion) must_follow AT.1; no parallel sprints in phase AT.
+# Assignment time approximates the AT1-DEV-R1 dispatch (arch-ctm first ack
+# 2026-08-27T01:01:15Z); completion time is arch-ctm's dev-complete report
+# for PR #1044 (head 7df74a28b).
+
+triage:a1 a triage:Assignment ;
+    triage:ofSprint triage:AT1 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-27T01:00:00Z"^^xsd:dateTime .
+
+triage:c1 a triage:Completion ;
+    triage:ofSprint triage:AT1 ;
+    triage:at "2026-08-27T01:24:20Z"^^xsd:dateTime .
