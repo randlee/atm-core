@@ -6,7 +6,8 @@ worktree: ../atm-core-worktrees/feature/aq-4-send-to-core
 
 # Sprint AQ4 — Send-To Core: ATM_TEMP, CLI Surface, Transfer Scripts
 
-Status: complete · Branch: `feature/aq-4-send-to-core` off `integrate/phase-aq`
+Status: complete (follow-ups open: AQ4-windows-loopback, AQ4-tailscale-m5) ·
+Branch: `feature/aq-4-send-to-core` off `integrate/phase-aq`
 · Worktree: `../atm-core-worktrees/feature/aq-4-send-to-core` · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 
@@ -523,11 +524,11 @@ paths unchanged.
   covers the harness's pure launch/record-schema logic (argument defaults,
   evidence-writer output, exit-code mapping) without needing a live `sshd`.
 
-| Runner | Status | Run ID | Head | Files |
-|--------|--------|--------|------|-------|
-| ubuntu-latest | PASS | 33144153970 | 9c9f9918a | [transfer-clean-runner-linux.json](evidence/AQ4/transfer-clean-runner-linux.json) · [transfer-clean-runner-linux.md](evidence/AQ4/transfer-clean-runner-linux.md) |
-| macOS | PASS | 33144153970 | 9c9f9918a | [transfer-clean-runner-macos.json](evidence/AQ4/transfer-clean-runner-macos.json) · [transfer-clean-runner-macos.md](evidence/AQ4/transfer-clean-runner-macos.md) |
-| windows | FAIL | 33144153970 | 9c9f9918a | [transfer-clean-runner-windows.json](evidence/AQ4/transfer-clean-runner-windows.json) · [transfer-clean-runner-windows.md](evidence/AQ4/transfer-clean-runner-windows.md) · harness ssh -vvv probe succeeds; residual failure is ssh-under-pwsh-under-atm handshake behavior, not sshd/auth/config — tracked as **FOLLOW-UP `AQ4-windows-loopback`** (see below) |
+| Runner | Status | Run ID | Head | Files | Disposition |
+|--------|--------|--------|------|-------|--------------|
+| ubuntu-latest | PASS | 33144153970 | 9c9f9918a | [transfer-clean-runner-linux.json](evidence/AQ4/transfer-clean-runner-linux.json) · [transfer-clean-runner-linux.md](evidence/AQ4/transfer-clean-runner-linux.md) | Pass |
+| macOS | PASS | 33144153970 | 9c9f9918a | [transfer-clean-runner-macos.json](evidence/AQ4/transfer-clean-runner-macos.json) · [transfer-clean-runner-macos.md](evidence/AQ4/transfer-clean-runner-macos.md) | Deferred — loopback CI substitutes for Mac→second-host by ruling; see AQ4-tailscale-m5 |
+| windows | FAIL | 33144153970 | 9c9f9918a | [transfer-clean-runner-windows.json](evidence/AQ4/transfer-clean-runner-windows.json) · [transfer-clean-runner-windows.md](evidence/AQ4/transfer-clean-runner-windows.md) · harness ssh -vvv probe succeeds; residual failure is ssh-under-pwsh-under-atm handshake behavior, not sshd/auth/config — tracked as **FOLLOW-UP `AQ4-windows-loopback`** (see below) | Deferred — see FOLLOW-UP AQ4-windows-loopback |
 
 The Tailscale leg (`scripts/transfer/tailscale.sh`) cannot run on either
 clean-runner lane (Tailscale enrollment is an operator/IT environment

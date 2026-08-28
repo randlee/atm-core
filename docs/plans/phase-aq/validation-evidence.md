@@ -10,7 +10,7 @@ passed without a real transcript and screenshot.
 | Sprint | Verdict | Evidence head / artifact |
 | --- | --- | --- |
 | AQ1 trait foundation + queue CLI | PASS for the merged implementation line | [`a36e45faa456fabccbee53fc2787656b346dff30`](https://github.com/randlee/atm-core/commit/a36e45faa456fabccbee53fc2787656b346dff30) |
-| AQ1.5–AQ1.9 graft chain | PASS for automated/local evidence; AQ1.9 m5 restart row OPEN | [`bdeac0a2605df019bc859e3daa00b6273e642de8`](https://github.com/randlee/atm-core/commit/bdeac0a2605df019bc859e3daa00b6273e642de8) *(recorded short head was reconciled locally; live row remains pending)* |
+| AQ1.5–AQ1.9 graft chain | PASS for automated/local evidence; AQ1.9 m5 restart row OPEN | [`bdeac0a2605df019bc859e3daa00b6273e642de8`](https://github.com/randlee/atm-core/commit/bdeac0a2605df019bc859e3daa00b6273e642de8) *(live row remains pending — see AQ1.9-m5)* |
 | AQ2 queue graft | PASS | [`f41bead9e825655bf423acb90fa58f8784ed2538`](https://github.com/randlee/atm-core/commit/f41bead9e825655bf423acb90fa58f8784ed2538) |
 | AQ2.5 delivery triggers | PASS | [`01e69ed967c56c91824e1a44317ee97178c8324a`](https://github.com/randlee/atm-core/commit/01e69ed967c56c91824e1a44317ee97178c8324a) |
 | AQ2.6 Herdr steer | PASS / referenced upstream evidence | [`cfdcafcd49dc330a18dff6bddbcbb8f5145222e0`](https://github.com/randlee/atm-core/commit/cfdcafcd49dc330a18dff6bddbcbb8f5145222e0) |

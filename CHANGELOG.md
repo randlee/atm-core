@@ -1,6 +1,42 @@
 # Changelog
 
-## 1.4.5
+## Unreleased
+
+- add the `atm queue` CLI verb (mirrors `atm send`'s full surface, including
+  `--attach`, with the recipient nudge deferred rather than fired
+  immediately) plus the nudge taxonomy and `PendingNudgeStore` storage
+  contract that every later Phase AQ sprint builds on (ADR-054: nudge as the
+  umbrella term, steer/queue as the two kinds) (Phase AQ, AQ1)
+- wire `atm-graft` dual-channel queue delivery to an actual delivery
+  trigger: harness idle-signal heartbeats and a bare-CLI Stop-pull path
+  backed by a bounded, per-member in-memory FIFO, so a deferred queue nudge
+  is guaranteed to drain even for a receiver with no persistent daemon
+  session (Phase AQ, AQ2 + AQ2.5)
+- add Herdr as a second, selector-gated local steer backend (`atm-herdr`)
+  alongside retained tmux, with its own health/circuit breaker (ADR-058)
+  (Phase AQ, AQ2.6)
+- add the Herdr poll-gated queue-wake pump: a fixed-cadence, roster-wide
+  Herdr session poll that drains pending queue messages on `RuntimeHealth`
+  idle transitions (Phase AQ, AQ2.7)
+- add tmux idle-drain (one queued nudge per idle transition) plus a
+  kind-agnostic recovery sweep that catches missed or crashed drains
+  (Phase AQ, AQ3)
+- ship ATM Send-To core: `atm send --attach`/`--from-json`, the `ATM_TEMP`
+  scratch-directory contract with a 30-day TTL sweeper, and per-host
+  cross-host transfer scripts (`scripts/transfer/sftp.sh`, `sftp.ps1`)
+  (ADR-055) (Phase AQ, AQ4)
+- ship the ATM Send-To human-visible surface: one-gesture per-OS shell entry
+  points for Finder/Explorer/Nautilus, the reference and native member
+  pickers, and the upstream Wyvern contract-test filing (wyvern#139,
+  wyvern#140) (Phase AQ, AQ5)
+- add the sc-ecosystem dependency release-preflight gate: pin-latest checks
+  for Wyvern/sc-compose/sc-observability plus their integration tests, run
+  before every release (Phase AQ, AQ6)
+- add the hermes-atm wheel verification harness: rebuilt wheel plus an
+  automated restart-matrix crash-guard suite (the live m5 restart-matrix run
+  remains an open follow-up, `AQ1.9-m5`) (Phase AQ, AQ1.9)
+
+## 1.4.5 (graft-registration slice of Phase AQ only; see Unreleased for the remainder)
 
 - complete the Phase AQ graft registration cutover: `atm-graft` now uses the
   daemon registry lease and same-host flock instead of the retired endpoint
