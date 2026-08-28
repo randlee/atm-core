@@ -199,6 +199,22 @@ at head `9af3817b2704594bb6ef7f44d2670f552ca9eb10` (PR #1054):
 | Clippy | pass | — | — |
 | Format check | pass | — | — |
 
+### Live tmux idle-drain evidence (2026-08-27, ATM-QA-101)
+
+CI run [`33126990425`](https://github.com/randlee/atm-core/actions/runs/33126990425)
+at head `35a28588ab4aa319eabbb972ca68931d9a61f05e`:
+
+| Runner | Result | Evidence files |
+| --- | --- | --- |
+| clean-runner-linux | PASS | `AQ3/tmux-idle-drain-clean-runner-linux.json`, `.md` |
+| clean-runner-macos | PASS | `AQ3/tmux-idle-drain-clean-runner-macos.json`, `.md` |
+| clean-runner-windows | skipped_no_tmux | `AQ3/tmux-idle-drain-clean-runner-windows.json`, `.md` |
+
+Both Linux and macOS evidence transcripts confirm all live-evidence assertions:
+`fifo_order_confirmed=true`, `single_drain_per_transition_confirmed=true`,
+`status=pass`. Windows test self-records `skipped_no_tmux` — tmux is not available
+on Windows, and this sprint's drains are tmux-only by design. **ATM-QA-101 is satisfied.**
+
 The only red cell, `Test (windows-latest)`, was **not** an AQ3/Rust failure:
 `scripts/hooks/test_queue_hooks.py` (AQ2.5-owned Python Stop-hook test) failed
 4/7 cases on Windows only, unrelated to this sprint's daemon-side drain code.
