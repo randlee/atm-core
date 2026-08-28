@@ -3454,6 +3454,7 @@ fn guarded_boundary_files() -> Vec<PathBuf> {
         root.join("boundaries/atm/local-socket-client-transport.toml"),
         root.join("boundaries/atm-graft/shared-client-consumer.toml"),
         root.join("boundaries/atm-http-runtime/http-runtime.toml"),
+        root.join("boundaries/atm-http-runtime/member-state-transition-sink.toml"),
         root.join("boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"),
         root.join("boundaries/atm-runtime/runtime-composition.toml"),
         root.join("boundaries/atm-storage/tls.toml"),

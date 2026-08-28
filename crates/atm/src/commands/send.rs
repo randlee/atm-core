@@ -1203,9 +1203,15 @@ mod tests {
     use std::num::NonZeroU16;
     use std::path::{Path, PathBuf};
 
+    use super::{SendCommand, fan_out_result_json, resolve_trusted_ipv4_with_lookup};
+    // `FanOutRecipient`/`RecipientLocality`/`CliObservability` are only used
+    // by the `#[cfg(unix)]` fan-out integration test below, which exercises
+    // a real `#!/bin/sh` transfer-script invocation with no Windows
+    // equivalent -- gate the imports the same way so a Windows build does
+    // not see them as unused (matches the AQ4 precedent gating unix
+    // permission APIs).
     #[cfg(unix)]
     use super::{FanOutRecipient, RecipientLocality};
-    use super::{SendCommand, fan_out_result_json, resolve_trusted_ipv4_with_lookup};
     #[cfg(unix)]
     use crate::observability::CliObservability;
     use atm_core::roles::ROLE_TEAM_LEAD;
@@ -2310,6 +2316,13 @@ mod tests {
     /// `crate::composition::tests::LoopbackFixture`'s seeding shape (that
     /// fixture is private to `composition.rs`'s own test module and cannot
     /// be reused directly from this sibling module).
+    ///
+    /// Unix-only: this fixture exists solely to support the single
+    /// `#[cfg(unix)]` fan-out integration test below (real `#!/bin/sh`
+    /// transfer-script invocation, no Windows equivalent). Gating the
+    /// fixture itself, not just that one test, keeps a Windows build from
+    /// reporting it as dead code (matches the AQ4 precedent gating unix
+    /// permission APIs).
     #[cfg(unix)]
     #[allow(
         deprecated,

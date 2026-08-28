@@ -24,9 +24,35 @@ picker_output=
 if [ -n "$picker_override" ]; then
     picker_output=$(printf '%s\n' "$input" | "$picker_override")
 else
-    if picker_output=$(printf '%s\n' "$input" | python3 "$send_to_dir/run_wyvern_picker.py" --pin "$WYVERN_PIN" --asset "$wyvern_asset"); then
-        if ! printf '%s\n' "$picker_output" | python3 "$send_to_dir/picker.py" --validate >/dev/null; then
-            echo "send-to: Wyvern returned an incompatible PickerOutput; using native picker" >&2
+    if python3 "$send_to_dir/probe_wyvern.py" --pin "$WYVERN_PIN" --asset "$wyvern_asset" 2>/dev/null; then
+        # Wyvern has no `--picker <path>` flag: PickerInput travels as the
+        # generated wizard command's `config` field (a wizard page's only
+        # caller-data channel), and the terminal `WizardResult`'s `.data`
+        # (not bare stdout) is the PickerOutput. See
+        # docs/plans/phase-aq/fixtures/wyvern-pick-member-contract.md.
+        #
+        # The whole wizard-dir/wyvern-invocation sequence runs inside one
+        # command-substitution subshell with its own trap-based cleanup, so
+        # *any* failure here (a broken $ATM_TEMP, a copy failure, the
+        # binary itself) degrades to the native picker exactly like an
+        # unavailable/incompatible Wyvern does -- never a hard script abort.
+        if wizard_result=$(
+            set -eu
+            atm_temp_root=${ATM_TEMP:-${TMPDIR:-/tmp}/atm}
+            mkdir -p "$atm_temp_root/send-to"
+            wizard_dir=$(mktemp -d "$atm_temp_root/send-to/wyvern-wizard.XXXXXX")
+            trap 'rm -rf "$wizard_dir"' EXIT
+            mkdir -p "$wizard_dir/pages"
+            cp "$wyvern_asset" "$wizard_dir/pages/pick-member.html"
+            printf '%s\n' "$input" | python3 "$send_to_dir/picker.py" --make-wizard-json >"$wizard_dir/wizard.json"
+            "${ATM_SEND_TO_WYVERN_BIN:-wyvern}" "$wizard_dir/wizard.json" --ui-root "$wizard_dir"
+        ); then
+            if ! picker_output=$(printf '%s\n' "$wizard_result" | python3 "$send_to_dir/picker.py" --unwrap-wizard-result); then
+                echo "send-to: Wyvern returned an incompatible PickerOutput; using native picker" >&2
+                picker_output=
+            fi
+        else
+            echo "send-to: Wyvern picker failed; using native picker" >&2
             picker_output=
         fi
     else

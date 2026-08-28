@@ -27,6 +27,25 @@ linked artifact.
    field, `PickerOutput` on confirm, nonzero on cancel. **Cold-start
    gate**: measured launch-to-interactive; if > 1 s the fallback stays
    default and the finding is recorded.
+
+   Landed as [`randlee/wyvern#140`](https://github.com/randlee/wyvern/pull/140)
+   (references atm-core issue #139): `examples/wizards/atm-pick-member/pages/pick-member.html`
+   + the Playwright L2 contract test `tests/l2/wizard-atm-pick-member.spec.ts`,
+   both passing locally against a real `wyvern` build before the PR opened.
+   Building it found this section's `stdin JSON` sketch does not match
+   Wyvern's real CLI surface — no `--picker` flag; `PickerOutput` arrives
+   nested under a `WizardResult.data` envelope, not bare on stdout — and
+   that corrected shape is now **implemented**, not just documented:
+   `scripts/send-to/atm-send-to.sh`/`atm-send-to.ps1` generate a
+   `wizard.json` (`config` = `PickerInput`) into `$ATM_TEMP` scratch,
+   invoke `wyvern <wizard.json> --ui-root <dir>`, and unwrap `.data` via
+   `picker.py --unwrap-wizard-result`, verified end to end against the real
+   `wyvern#140` build
+   ([`evidence/AQ5/wyvern-real-invocation-local.md`](evidence/AQ5/wyvern-real-invocation-local.md)).
+   See [`wyvern-pick-member-contract.md`](fixtures/wyvern-pick-member-contract.md)
+   for the full shape and
+   [`validation-evidence.md`](validation-evidence.md) (Deliverable 3) for
+   the verdict. Cold-start measurement remains OPEN (`AQ5-gui-e2e`).
 3a. **Wyvern dependency contract** — Wyvern is an **optional runtime
    dependency**, never a build-time or packaging dependency of atm-core,
    and never required for any test lane:
@@ -108,6 +127,11 @@ linked artifact.
 4. Manual E2E: Finder (macOS), Explorer SendTo (Windows), Nautilus
    (Ubuntu) each deliver to a live agent — transcript + screenshot
    committed. Cold-start numbers + method in the PR.
+   **Status: deferred to Phase AQ closeout by ruling** — tracked as
+   follow-up `AQ5-gui-e2e` (owner: Rand, macOS Finder first) in
+   [`validation-evidence.md`](validation-evidence.md)'s manual/deferred
+   register, with the exact operator steps recorded there; not fabricated
+   as closed on this sprint's head.
 5. Every Must requirement maps to a passing gate; any gap is a Blocking
    finding, not a footnote. Evidence file reviewable by req-qa directly.
 6. `just test` all three lanes green on the AQ5 head. (Phase closure — the

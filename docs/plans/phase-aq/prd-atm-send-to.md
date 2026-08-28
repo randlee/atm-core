@@ -52,7 +52,7 @@ Wyvern is used as a `dialog`/`zenity`-class picker: CLI-hosted webview, custom H
     "members": [ { "id": "…", "name": "…", "host": "…", "cwd": "…",
                    "status": "active|idle|dead" } ] } ] }
 ```
-`status` drives greying-out so a human can't send into a void.
+`status` drives greying-out so a human can't send into a void (R4). "Greying-out" is literal for an HTML picker (a visibly `disabled` row); for CLI/native pickers, which cannot render a disabled-but-visible row, the accepted equivalent is exclusion from the selectable set plus a separate "unavailable" notice -- see R4 in §5 for the full contract and test references.
 
 `host` is an optional durable roster binding, written by the existing
 `atm teams add-member`/`update-member --host` path and validated against the
@@ -210,7 +210,7 @@ No new machinery. The guarantee that makes it work: **every stage is one-shot, r
 | R1 | One gesture from file manager to delivered message, macOS + Windows + Linux (Ubuntu/GNOME first) | Must |
 | R2 | Multi-select recipients; multi-file via `$@` | Must |
 | R3 | Cross-host delivery via configured per-host transfer script; unconfigured → fail closed with the setup-doc error shown to the user | Must |
-| R4 | Dead/idle members visibly disabled in picker | Must |
+| R4 | Dead/idle members never selectable in any picker. HTML (Wyvern) pickers render this literally -- a visibly `disabled` row (see `fixtures/wyvern-pick-member-contract.md`, `tests/l2/wizard-atm-pick-member.spec.ts` in the linked Wyvern PR). CLI/native pickers (`osascript`, `zenity`, `fzf`, `Out-GridView`) have no disabled-but-visible row concept, so the accepted equivalent there is: excluded from the selectable set, with a separate one-line "unavailable" notice (see `scripts/send-to/picker.py`'s `selectable_rows`/`notice_unavailable`, `scripts/send-to/picker-windows.ps1`, and `.just/tests/test_picker_exclusion.py`, which asserts both forms: never selectable, always still visible/announced to the human) | Must |
 | R5 | Cancel never results in a send | Must |
 | R6 | `atm teams --json --members` and `atm send --from-json` usable without Wyvern (TUI, Raycast, scripts) | Must |
 | R7 | Periodic sweep of `$ATM_TEMP` removes entries older than 30 days | Should |

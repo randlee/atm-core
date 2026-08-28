@@ -1,7 +1,13 @@
+---
+status: complete
+branch: feature/aq-4-send-to-core
+worktree: ../atm-core-worktrees/feature/aq-4-send-to-core
+---
+
 # Sprint AQ4 — Send-To Core: ATM_TEMP, CLI Surface, Transfer Scripts
 
-Status: draft · Branch: `feature/aq-4-send-to-core` off `integrate/phase-aq`
-· PR target: `integrate/phase-aq`
+Status: complete · Branch: `feature/aq-4-send-to-core` off `integrate/phase-aq`
+· Worktree: `../atm-core-worktrees/feature/aq-4-send-to-core` · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 
 Consolidation note (Rand, 2026-08-23; landing mechanism hardened 2026-08-26,
@@ -445,10 +451,68 @@ paths unchanged.
   and it goes in `env_var_boundary_allowlist.toml`, never
   `boundary_reader_functions`.
 
+## Evidence/validation
+
+- AC 6 (Windows): `crates/atm-core/src/atm_temp_sweeper.rs::junction_escape_is_never_followed`
+  (`#[cfg(windows)]`) exercises a real NTFS junction (`mklink /J`) alongside
+  the existing Unix `symlink_escape_is_never_followed` twin. Closing this
+  test surfaced a real gap in `sweep_dir`'s never-follow check
+  (`FileType::is_symlink()` does not recognize
+  `IO_REPARSE_TAG_MOUNT_POINT`, only `IO_REPARSE_TAG_SYMLINK`); fixed via
+  `is_symlink_or_reparse_point` (checks the raw
+  `FILE_ATTRIBUTE_REPARSE_POINT` bit on Windows), so a junction is now
+  refused exactly like a symlink on every platform.
+- AC 7 (example-script contract tests): `.just/tests/test_transfer_scripts.py`
+  (picked up by `python3 .just/run_lint.py pytests`) puts fake `ssh`/`scp`
+  executables (the only two external binaries `sftp.sh`/`tailscale.sh`
+  actually invoke — neither shells out to a literal `sftp` or `tailscale`
+  binary) on `PATH`, and asserts exact argv/single-line-stdout on the happy
+  path, fail-closed on a missing binary, an unreachable host, a nonzero
+  remote `mkdir`/copy exit, and a receiver-side path-containment refusal,
+  and that the caller's own ambient environment is never mutated.
+  `sftp.ps1` is covered the same way through `pwsh` when present (gated
+  `win32 or pwsh found`, honest skip otherwise, mirroring this suite's
+  existing platform-gated tests). **SFTP leg satisfied:** run 33128348487
+  (linux+macos PASS) provides live cross-host loopback-SSH transcripts.
+- AC 7 (live cross-host transcript): the sftp.sh leg is complete via run
+  33128348487 (evidence table above); the Tailscale leg remains a
+  **FOLLOW-UP `AQ4-tailscale-m5`** (fleet `m5` host not reachable from
+  clean-runner CI lanes, and Tailscale enrollment is an operator/IT
+  environment concern this sprint documents but does not implement — see
+  Non-closure below). `scripts/phase-aq/run_aq4_transfer_evidence.py` —
+  registered in `.github/workflows/phase-aq-evidence.yml`'s harness list
+  beside AQ1.9 and AQ2.5 — drives a real `atm send --attach` over a real
+  loopback `sshd` the script starts (installing `openssh-server` on ubuntu
+  if missing; macOS uses the bundled `/usr/sbin/sshd`, honestly recording
+  `skipped_no_sshd` if it cannot run), through the real, unmodified
+  `scripts/transfer/sftp.sh` example, verifying the attached file lands
+  under the receiver's real mailbox-reported `$ATM_TEMP/send-to/<transfer-id>`
+  path with byte-for-byte content match. `scripts/phase-aq/test_run_aq4_transfer_evidence.py`
+  covers the harness's pure launch/record-schema logic (argument defaults,
+  evidence-writer output, exit-code mapping) without needing a live `sshd`.
+
+| Runner | Status | Run ID | Head | Files |
+|--------|--------|--------|------|-------|
+| ubuntu-latest | PASS | 33128348487 | d0d54e004 | [transfer-clean-runner-linux.json](evidence/AQ4/transfer-clean-runner-linux.json) · [transfer-clean-runner-linux.md](evidence/AQ4/transfer-clean-runner-linux.md) |
+| macOS | PASS | 33128348487 | d0d54e004 | [transfer-clean-runner-macos.json](evidence/AQ4/transfer-clean-runner-macos.json) · [transfer-clean-runner-macos.md](evidence/AQ4/transfer-clean-runner-macos.md) |
+
+The Tailscale leg (`scripts/transfer/tailscale.sh`) cannot run on either
+clean-runner lane (Tailscale enrollment is an operator/IT environment
+concern this sprint documents but does not implement — see Non-closure
+below); a real cross-host Mac → `m5` transcript over Tailscale is tracked
+as **FOLLOW-UP `AQ4-tailscale-m5`**, paired with `AQ1.9-m5` (same
+prerequisite: `m5` reachable), in
+`docs/plans/phase-aq/.audit/qa-evidence-master.json`'s `follow_ups`.
+
 ## Non-closure / out of scope
 
 - Pickers/shell glue/R8 and phase evidence (AQ5). Managed SSH/Tailscale
   enrollment (environment/IT concern — documented, not implemented).
+- Live cross-host Tailscale transfer transcript against the fleet's `m5`
+  host — tracked as **FOLLOW-UP `AQ4-tailscale-m5`** (paired with
+  `AQ1.9-m5`) in `docs/plans/phase-aq/.audit/qa-evidence-master.json`;
+  neither clean-runner CI lane can reach `m5`, and this sprint does not
+  implement Tailscale enrollment itself (see above).
 - Structured `attachments` envelope metadata, `note_source` (Phase 2).
 - The rejected pull-based transfer design (fetch endpoints,
   delivery-gating, attachment storage traits) — see plan Non-closure.
