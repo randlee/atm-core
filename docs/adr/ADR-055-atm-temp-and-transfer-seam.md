@@ -371,6 +371,78 @@ mirrors decision (a)'s own Windows scratch-root check
 (`validate_existing_scratch_dir`), which likewise performs no ACL check and
 documents why rather than pretending the gap is closed.
 
+### Amendment (2026-08-27): synthesized transfer-script `PATH`
+
+Windows clean-runner CI (run 33135390308) surfaced the second real gap
+decision (c)'s child-environment contract shipped with: `atm send --attach
+--host localhost` installed `sftp.ps1`, the transfer-script safety check
+passed, `pwsh -File sftp.ps1 ...` started, and the script's own `ssh`
+invocation then failed with `The term 'ssh' is not recognized...`. The
+cause was the allow-list itself, not the script: `TRANSFER_SCRIPT_ALLOWED_
+ENV_KEYS` never included `PATH` (correctly — forwarding the caller's real
+`PATH` would leak whatever a developer's shell profile happens to have on
+it, exactly the ambient-authority leak the allow-list exists to refuse for
+every other variable), but `Command::env_clear()` followed by *no* `PATH`
+at all left the child unable to resolve `ssh`/`scp` by name on Windows.
+
+Unix had the identical gap in the allow-list and never noticed, for a
+platform reason, not a design one: POSIX `execvp` falls back to a
+`confstr(_CS_PATH)`-provided default search path (`/bin:/usr/bin` on most
+Unix libc implementations) when `PATH` is entirely absent from the child's
+own environment — this is what let `sftp.sh`'s bare `ssh`/`scp` calls keep
+resolving by accident. Windows has no equivalent fallback for a command
+lookup performed by the *child* process itself (as distinct from the
+initial `CreateProcess` search for `pwsh.exe` itself, which uses the
+*calling* process's own `PATH`, not the child environment this contract
+builds — that part already worked, which is why `pwsh` started at all
+before failing inside the script).
+
+**The fix: the allow-list stays exactly as it was — `PATH` is never added
+to it, and the caller's real `PATH` is never forwarded to the child, on
+any platform. Instead, a synthesized, deliberately narrow `PATH` is set
+alongside the allow-listed variables** (`atm_core::transfer_script::
+synthesized_transfer_script_env`, applied in `crates/atm/src/commands/
+send_to.rs::invoke_transfer_script` after `Command::env_clear()`, alongside
+— never instead of — the `TRANSFER_SCRIPT_ALLOWED_ENV_KEYS` loop):
+
+- **Unix**: `/usr/bin:/bin:/usr/local/bin`, plus `/opt/homebrew/bin` on
+  macOS — the fixed set of directories the shipped `sftp.sh`/`tailscale.sh`
+  examples' `ssh`/`scp` calls need, matching (and now making explicit,
+  rather than incidental) the platform's own `execvp` fallback.
+- **Windows**: `%SystemRoot%\System32;%SystemRoot%\System32\OpenSSH`, plus
+  `pwsh`'s own directory when it can be located (best-effort, searched
+  through the *caller's* `PATH` purely to find that one directory — that
+  lookup value itself is never forwarded onward as a whole, only the one
+  resolved directory it names). Windows additionally carries `SystemRoot`/
+  `SYSTEMROOT` (the .NET/PowerShell host needs one of these to start at
+  all) and, when the caller has one, `TEMP` (`pwsh`'s own temp-file needs)
+  — all sourced from the caller's real environment through the same
+  `EnvSource` seam `resolve_atm_temp` uses, never hardcoded, so an
+  operator's actual Windows install layout is respected without ever
+  forwarding their full `PATH`.
+
+`scripts/transfer/sftp.ps1` was hardened to match: rather than a bare `ssh`/
+`scp` call (which depended on whatever `PATH` its host process happened to
+receive), it now resolves both explicitly via `Get-Command -CommandType
+Application`, falling back to `$env:SystemRoot\System32\OpenSSH\ssh.exe`/
+`scp.exe` when `Get-Command` finds nothing, and fails closed with a clear
+stderr message (never a bare "term not recognized") when neither source
+resolves. The invocation contract (argv-array exec, `['ssh', 'scp']`) is
+unchanged — only how the script locates those two binaries changed.
+
+`crates/atm-core/src/transfer_script.rs`'s unit tests assert the exact
+synthesized `PATH` per platform and, independently, that a distinctively
+marked caller `PATH` never appears anywhere in the synthesized result —
+the "never inherited" half of this amendment's rule is tested directly,
+not just documented. `scripts/phase-aq/run_aq4_transfer_evidence.py`
+additionally records a Python mirror of the synthesized value under
+`record["transfer_script"]["synthesized_env"]` in its evidence JSON, purely
+for diagnosability (it is never asserted against — only
+`install_transfer_script`'s existing safety-check mirrors gate the
+scenario), so a future regression like this one is visible in the evidence
+transcript itself rather than requiring a second investigation to
+reconstruct what the child's environment actually was.
+
 ### (d)–(g): message-text convention, member-host sourcing, local-host identity, fan-out failure policy
 
 These four decisions govern the CLI/roster surface (`atm send --attach`,

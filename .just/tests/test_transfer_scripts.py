@@ -473,12 +473,26 @@ class SftpPs1Tests(unittest.TestCase):
             tmp = Path(raw_tmp)
             env = dict(os.environ)
             env["PATH"] = ""
+            # ADR-055 decision (c) amendment: sftp.ps1 now falls back to
+            # `%SystemRoot%\System32\OpenSSH\ssh.exe`/`scp.exe` when
+            # Get-Command finds nothing on PATH. On a real Windows runner
+            # (which normally ships OpenSSH there), leaving the real
+            # SystemRoot in place would let that fallback mask this test's
+            # intent -- repoint it at a directory that exists but was never
+            # given an OpenSSH client, so the fallback legitimately misses
+            # too, without leaving SystemRoot empty (pwsh itself needs a
+            # non-empty SystemRoot to start).
+            fake_system_root = tmp / "not-a-real-system-root"
+            fake_system_root.mkdir()
+            env["SystemRoot"] = str(fake_system_root)
+            env["SYSTEMROOT"] = str(fake_system_root)
             attach = tmp / "report.pdf"
             attach.write_bytes(b"pdf-bytes")
 
             result = self._invoke(["m5", "01J00000000000000000000049", str(attach)], env, str(tmp))
 
             self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("not found on PATH", result.stderr)
 
     def test_copy_failure_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmp:

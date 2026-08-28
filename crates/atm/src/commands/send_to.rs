@@ -17,7 +17,7 @@ use atm_core::send_to::{
 };
 use atm_core::transfer_script::{
     ConfiguredTransferScript, TRANSFER_SCRIPT_ALLOWED_ENV_KEYS, TransferScript,
-    resolve_transfer_script,
+    resolve_transfer_script, synthesized_transfer_script_env,
 };
 use atm_core::types::HostName;
 use ulid::Ulid;
@@ -133,11 +133,14 @@ async fn resolve_and_invoke_transfer_script(
 ///
 /// The child inherits **only** [`TRANSFER_SCRIPT_ALLOWED_ENV_KEYS`] from this
 /// process's environment (an explicit allow-list, never the full parent
-/// environment), has stdin closed, and is killed if it outlives `timeout`.
-/// Captured stdout/stderr are capped at [`MAX_CAPTURED_OUTPUT_BYTES`] with a
-/// truncation marker. Success is validated as untrusted input: exactly one
-/// absolute-path line, no control characters
-/// ([`validate_landed_dir_stdout`]).
+/// environment), plus a deliberately minimal, synthesized `PATH` (and, on
+/// Windows, a few process-startup variables) from
+/// [`synthesized_transfer_script_env`] -- never the caller's own `PATH`
+/// (ADR-055 decision (c) amendment). It has stdin closed, and is killed if
+/// it outlives `timeout`. Captured stdout/stderr are capped at
+/// [`MAX_CAPTURED_OUTPUT_BYTES`] with a truncation marker. Success is
+/// validated as untrusted input: exactly one absolute-path line, no control
+/// characters ([`validate_landed_dir_stdout`]).
 ///
 /// # Errors
 ///
@@ -158,6 +161,9 @@ pub(crate) async fn invoke_transfer_script(
         if let Ok(value) = std::env::var(key) {
             command.env(key, value);
         }
+    }
+    for (key, value) in synthesized_transfer_script_env(&ProcessEnvSource) {
+        command.env(key, value);
     }
     command.stdin(Stdio::null());
     command.stdout(Stdio::piped());
@@ -448,6 +454,65 @@ mod tests {
         assert_eq!(
             captured.trim(),
             "ATM_TRANSFER_SSH_CONFIG=/scratch/ssh_client_config"
+        );
+    }
+
+    /// ADR-055 decision (c) amendment: the child gets a synthesized,
+    /// deliberately minimal `PATH` (never the caller's own). This proves
+    /// both halves at once: the child's `PATH` is non-empty (the AQ4
+    /// Windows regression, run 33135390308, was a completely absent
+    /// `PATH`) and it is never the caller's real, distinctive `PATH`
+    /// value -- forwarding that would be exactly the ambient-authority
+    /// leak the rest of the allow-list already refuses.
+    #[tokio::test]
+    #[serial_test::serial(env)]
+    async fn invoke_transfer_script_child_gets_a_synthesized_path_never_the_callers() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let landed = dir.path().join("landed");
+        std::fs::create_dir_all(&landed).expect("landed dir");
+        let capture_file = dir.path().join("env-capture.txt");
+        let script_contents = format!(
+            "#!/bin/sh\nprintf '%s' \"$PATH\" > {}\necho {}\n",
+            capture_file.display(),
+            landed.display()
+        );
+        let script_path = write_script(dir.path(), "stub.sh", &script_contents);
+        let configured = fixture_configured_script(script_path, host("m5"));
+
+        let distinctive_caller_path = "/definitely-not-a-real-dir/atm-caller-path-marker";
+        let _env = atm_core::test_support::EnvGuard::set_many([
+            ("ATM_TEMP", Some("atm-temp-test-value")),
+            ("ATM_IDENTITY", Some("test-agent")),
+            ("ATM_TEAM", Some("test-team")),
+            ("PATH", Some(distinctive_caller_path)),
+        ]);
+
+        invoke_transfer_script(
+            &configured,
+            Ulid::new(),
+            &[PathBuf::from("/tmp/report.pdf")],
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("happy path succeeds");
+
+        let child_path = std::fs::read_to_string(&capture_file).expect("script captured PATH");
+        assert!(!child_path.is_empty(), "child PATH must never be empty");
+        assert!(
+            !child_path.contains(distinctive_caller_path),
+            "the caller's own PATH must never leak into the child: {child_path:?}"
+        );
+        assert_eq!(
+            child_path,
+            atm_core::transfer_script::synthesized_transfer_script_env(
+                &atm_core::atm_temp::ProcessEnvSource
+            )
+            .into_iter()
+            .find(|(key, _)| *key == "PATH")
+            .expect("synthesized env always includes PATH")
+            .1
+            .to_str()
+            .expect("synthesized PATH is UTF-8 in this test")
         );
     }
 

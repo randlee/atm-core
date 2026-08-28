@@ -29,6 +29,41 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Resolve ssh/scp explicitly rather than relying on bare `ssh`/`scp` calls
+# to be found on whatever `PATH` this process happens to start with: ATM
+# invokes this script's `pwsh` host with a deliberately minimal, synthesized
+# `PATH` (ADR-055 decision (c) amendment), never the caller's own, so a
+# bare unqualified call is not guaranteed to resolve even when OpenSSH is
+# installed in its usual location. `Get-Command` covers PATH (including the
+# synthesized OpenSSH directory ATM already includes) and any developer
+# override; the explicit `%SystemRoot%\System32\OpenSSH` fallback below
+# covers the case where neither this process's PATH is set up and OpenSSH's
+# canonical install location itself is what actually has the binary.
+function Resolve-TransferBinary {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+    $command = Get-Command -Name $Name -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($command) {
+        return $command.Source
+    }
+    if ($env:SystemRoot) {
+        $fallback = Join-Path $env:SystemRoot "System32\OpenSSH\$Name.exe"
+        if (Test-Path -LiteralPath $fallback -PathType Leaf) {
+            return $fallback
+        }
+    }
+    [Console]::Error.WriteLine(
+        "$Name not found on PATH and no fallback at `$env:SystemRoot\System32\OpenSSH\$Name.exe`; " +
+        "install the OpenSSH client (Settings > Optional Features > OpenSSH Client) or add it to PATH."
+    )
+    exit 1
+}
+
+$Ssh = Resolve-TransferBinary -Name "ssh"
+$Scp = Resolve-TransferBinary -Name "scp"
+
 # Optional: route ssh/scp through a scratch config (`ssh -F <path>`)
 # instead of the real `~/.ssh/config`. Ordinary installs never set
 # ATM_TRANSFER_SSH_CONFIG, so $SshExtraArgs stays empty and ssh/scp below
@@ -56,7 +91,7 @@ $RemoteAtmTemp = "/tmp/atm-<destination-uid>"
 #
 # (b) Ask the remote host what it actually resolved (uncomment instead --
 #     this adds one extra `ssh` round trip beyond the mkdir call below):
-# $RemoteAtmTemp = (ssh $HostName 'echo "$ATM_TEMP"').Trim()
+# $RemoteAtmTemp = (& $Ssh $HostName 'echo "$ATM_TEMP"').Trim()
 
 $RemoteDir = "$RemoteAtmTemp/send-to/$TransferId"
 
@@ -66,14 +101,14 @@ $RemoteDir = "$RemoteAtmTemp/send-to/$TransferId"
 # raises a terminating exception whose default rendering (call stack,
 # `+ CategoryInfo`, `+ FullyQualifiedErrorId`) is not the "short
 # diagnostic" the contract at the top of this file promises.
-ssh @SshExtraArgs $HostName "umask 077 && mkdir -p '$RemoteDir'"
+& $Ssh @SshExtraArgs $HostName "umask 077 && mkdir -p '$RemoteDir'"
 if ($LASTEXITCODE -ne 0) {
     [Console]::Error.WriteLine("failed to create $RemoteDir on $HostName")
     exit 1
 }
 
 foreach ($file in $Files) {
-    scp @SshExtraArgs -q $file "${HostName}:${RemoteDir}/"
+    & $Scp @SshExtraArgs -q $file "${HostName}:${RemoteDir}/"
     if ($LASTEXITCODE -ne 0) {
         [Console]::Error.WriteLine("failed to copy $file to $HostName`:$RemoteDir")
         exit 1

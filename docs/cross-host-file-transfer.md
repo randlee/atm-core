@@ -28,8 +28,9 @@ address that recipient with. ATM invokes it directly -- never through a
 shell -- as `<script> <host> <transfer-id> <file>...` (Windows: `pwsh -File
 <script> <host> <transfer-id> <file>...`), with a restricted environment
 (`ATM_TEMP`, `ATM_IDENTITY`, and `ATM_TEAM`, plus an opt-in
-`ATM_TRANSFER_SSH_CONFIG` left unset by every ordinary install -- see the
-table below), your current working directory, and closed stdin. On success,
+`ATM_TRANSFER_SSH_CONFIG` left unset by every ordinary install, and a
+deliberately minimal, synthesized `PATH` -- never your own real one -- see
+the table below), your current working directory, and closed stdin. On success,
 the script prints **exactly one
 line** to stdout: the absolute path of the directory the files now live in
 on `<host>`. On failure, it prints a short message to stderr and exits
@@ -119,5 +120,5 @@ closed stdin, and the one-line-absolute-path-on-success convention.
 |---|---|
 | `File transfer to <host> not enabled...` | No file exists at `~/.atm/transfer/<host>` (or `<host>.ps1` on Windows). Confirm the exact spelling of `<host>` matches the roster's `HostName`. |
 | Transfer refused as unsafe | The script fails the safety check. Run `chmod 700 ~/.atm/transfer/<host>` and confirm you own the file (`ls -l` should show your username, not root or another account). |
-| Script runs manually but ATM's invocation fails | The child process only inherits `ATM_TEMP`, `ATM_IDENTITY`, `ATM_TEAM`, and (only if you export it yourself) `ATM_TRANSFER_SSH_CONFIG` -- if your script depends on another environment variable (an SSH agent socket, a custom `PATH` entry), it needs to be self-contained instead (an absolute path to the SSH binary, a dedicated key file, and so on). |
+| Script runs manually but ATM's invocation fails | The child process only inherits `ATM_TEMP`, `ATM_IDENTITY`, `ATM_TEAM`, and (only if you export it yourself) `ATM_TRANSFER_SSH_CONFIG` -- plus a deliberately minimal, synthesized `PATH` (never your own real `PATH`): `/usr/bin:/bin:/usr/local/bin` (`+/opt/homebrew/bin` on macOS) on Unix, `%SystemRoot%\System32;%SystemRoot%\System32\OpenSSH` plus `pwsh`'s own directory on Windows. This covers `ssh`/`scp` from their usual install locations; if your script depends on another environment variable (an SSH agent socket) or a tool installed somewhere the synthesized `PATH` doesn't cover, it needs to be self-contained instead (an absolute path to the binary, a dedicated key file, and so on). |
 | Send hangs, then fails | The script exceeded its bounded deadline (default 60 seconds) and was killed. A remote host prompting for a password interactively is the usual cause -- confirm passwordless SSH actually works from an ordinary shell first. |

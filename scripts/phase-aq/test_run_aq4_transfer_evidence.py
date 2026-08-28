@@ -356,6 +356,25 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
         tail = module.PipeDrain.tail(sink, count=3)
         self.assertEqual(tail, "line-7\nline-8\nline-9")
 
+    def test_synthesized_transfer_script_path_always_has_a_path_entry(self) -> None:
+        # ADR-055 decision (c) amendment: this is a diagnostics-only mirror
+        # of `atm_core::transfer_script::synthesized_transfer_script_env`
+        # (never asserted against `atm send`'s real behavior); this only
+        # proves the mirror itself never raises and always reports the one
+        # entry the real function always returns on every platform.
+        module = load_module()
+        result = module._synthesized_transfer_script_path({})
+        self.assertIn("PATH", result)
+        self.assertTrue(result["PATH"])
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows-only synthesis rules")
+    def test_synthesized_transfer_script_path_windows_uses_system_root_and_openssh(self) -> None:
+        module = load_module()
+        result = module._synthesized_transfer_script_path({"SystemRoot": r"D:\CustomWindows"})
+        self.assertIn(r"D:\CustomWindows\System32", result["PATH"])
+        self.assertIn(r"D:\CustomWindows\System32\OpenSSH", result["PATH"])
+        self.assertEqual(result["SystemRoot"], r"D:\CustomWindows")
+
 
 if __name__ == "__main__":
     unittest.main()

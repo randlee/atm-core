@@ -4,9 +4,13 @@
 //! This module resolves `~/.atm/transfer/<host>` (or `<host>.ps1` on
 //! Windows), runs the executable-bit/owner-uid/not-group-or-other-accessible
 //! safety check (ADR-055's widened `mode & 0o077` rule), and builds the
-//! argv-array invocation. It deliberately does **not** execute anything:
-//! spawning the resolved script is the CLI-surface lane's job (`atm send
-//! --attach`), which lane C explicitly excludes. See
+//! argv-array invocation. It also exposes
+//! [`synthesized_transfer_script_env`], the deliberately minimal `PATH`
+//! (plus, on Windows, a small set of process-startup variables) a spawning
+//! caller sets on the child alongside [`TRANSFER_SCRIPT_ALLOWED_ENV_KEYS`]
+//! -- never the caller's own `PATH`. It deliberately does **not** execute
+//! anything itself: spawning the resolved script is the CLI-surface lane's
+//! job (`atm send --attach`), which lane C explicitly excludes. See
 //! `docs/adr/ADR-055-atm-temp-and-transfer-seam.md` for the full design
 //! rationale.
 
@@ -42,6 +46,117 @@ pub const TRANSFER_SCRIPT_ALLOWED_ENV_KEYS: [&str; 4] = [
 /// Default bounded deadline for one transfer-script invocation before the
 /// child is killed.
 pub const DEFAULT_TRANSFER_SCRIPT_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Synthesizes the additional environment variables a transfer-script
+/// child needs beyond [`TRANSFER_SCRIPT_ALLOWED_ENV_KEYS`] to actually run
+/// (ADR-055 decision (c) amendment, "PATH synthesis").
+///
+/// The allow-list above never included `PATH`, which is correct -- forwarding
+/// the caller's real `PATH` to a script would leak whatever a developer's
+/// shell profile happens to have on it, exactly the ambient-authority leak
+/// the allow-list already refuses for every other variable. But `env_clear`
+/// followed by *no* `PATH` at all left the shipped examples unable to
+/// resolve `ssh`/`scp` at all on Windows (clean-runner CI, run
+/// 33135390308): unlike POSIX `execvp`, which falls back to a
+/// `confstr(_CS_PATH)`-provided default search path when `PATH` is entirely
+/// absent from the child's environment -- the reason the Unix leg happened
+/// to keep working -- Windows has no such fallback for a plain command
+/// lookup performed by the *child* process itself (as opposed to the
+/// initial `CreateProcess` search for `pwsh.exe`, which uses the *calling*
+/// process's own `PATH`, not the argument this function builds).
+///
+/// The fix is a **synthesized**, deliberately narrow `PATH`, never the
+/// caller's own: `/usr/bin:/bin:/usr/local/bin` (`+/opt/homebrew/bin` on
+/// macOS) on Unix, and `%SystemRoot%\System32;%SystemRoot%\System32\
+/// OpenSSH` plus `pwsh`'s own directory (best-effort, located via the
+/// caller's `PATH` purely to find where `pwsh` lives -- that lookup value
+/// is never forwarded onward as a whole) on Windows. Windows additionally
+/// gets `SystemRoot`/`SYSTEMROOT` (the .NET/PowerShell host needs one of
+/// these to start at all) and, when the caller has one, `TEMP` (`pwsh`'s
+/// own temp-file needs) -- sourced from `env` rather than hardcoded, so an
+/// operator's real Windows install layout is respected without ever
+/// forwarding their full `PATH`.
+///
+/// Callers apply every returned pair with `Command::env` alongside (never
+/// instead of) the [`TRANSFER_SCRIPT_ALLOWED_ENV_KEYS`] allow-list, after
+/// `Command::env_clear()`.
+#[cfg(windows)]
+#[must_use]
+pub fn synthesized_transfer_script_env(env: &dyn EnvSource) -> Vec<(&'static str, OsString)> {
+    windows_synthesized_transfer_script_env(env)
+}
+
+/// Callers apply every returned pair with `Command::env` alongside (never
+/// instead of) the [`TRANSFER_SCRIPT_ALLOWED_ENV_KEYS`] allow-list, after
+/// `Command::env_clear()`. On this platform the result is always exactly
+/// one entry, a fixed `PATH`; `env` is accepted only to keep one call
+/// signature across platforms and is not consulted here.
+#[cfg(not(windows))]
+#[must_use]
+pub fn synthesized_transfer_script_env(env: &dyn EnvSource) -> Vec<(&'static str, OsString)> {
+    let _ = env;
+    vec![("PATH", unix_synthesized_transfer_script_path())]
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn unix_synthesized_transfer_script_path() -> OsString {
+    OsString::from("/usr/bin:/bin:/usr/local/bin")
+}
+
+#[cfg(target_os = "macos")]
+fn unix_synthesized_transfer_script_path() -> OsString {
+    OsString::from("/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin")
+}
+
+#[cfg(windows)]
+fn windows_synthesized_transfer_script_env(env: &dyn EnvSource) -> Vec<(&'static str, OsString)> {
+    let system_root = env
+        .var("SystemRoot")
+        .or_else(|| env.var("SYSTEMROOT"))
+        .unwrap_or_else(|| r"C:\Windows".to_string());
+    let mut vars = vec![
+        (
+            "PATH",
+            windows_synthesized_transfer_script_path(&system_root, env),
+        ),
+        ("SystemRoot", OsString::from(system_root.clone())),
+        ("SYSTEMROOT", OsString::from(system_root)),
+    ];
+    if let Some(temp) = env.var("TEMP").or_else(|| env.var("TMP")) {
+        vars.push(("TEMP", OsString::from(temp)));
+    }
+    vars
+}
+
+/// Builds the Windows synthesized `PATH` value: the OpenSSH client
+/// directories the shipped `sftp.ps1` example needs, plus `pwsh`'s own
+/// directory when it can be located.
+#[cfg(windows)]
+fn windows_synthesized_transfer_script_path(system_root: &str, env: &dyn EnvSource) -> OsString {
+    let mut parts = vec![
+        format!(r"{system_root}\System32"),
+        format!(r"{system_root}\System32\OpenSSH"),
+    ];
+    if let Some(pwsh_dir) = locate_pwsh_dir(env) {
+        parts.push(pwsh_dir.display().to_string());
+    }
+    OsString::from(parts.join(";"))
+}
+
+/// Best-effort lookup of the directory containing `pwsh.exe`, searched
+/// through the caller's own `PATH` (read once, here only, purely to find
+/// this one directory -- the caller's `PATH` value itself is never
+/// forwarded to the child). Returns `None` when `pwsh.exe` cannot be found
+/// on any `PATH` entry; the resulting synthesized `PATH` still contains the
+/// OpenSSH directories either way.
+#[cfg(windows)]
+fn locate_pwsh_dir(env: &dyn EnvSource) -> Option<PathBuf> {
+    let path_var = env.var("PATH")?;
+    std::env::split_paths(&path_var).find_map(|dir| {
+        let candidate = dir.join("pwsh.exe");
+        candidate.is_file().then_some(dir)
+    })
+}
 
 /// Outcome of resolving `~/.atm/transfer/<host>`.
 ///
@@ -1142,11 +1257,11 @@ mod tests {
         }
     }
 
-    struct FakeEnvSource(std::collections::HashMap<&'static str, &'static str>);
+    struct FakeEnvSource(std::collections::HashMap<&'static str, String>);
 
     impl EnvSource for FakeEnvSource {
         fn var(&self, key: &str) -> Option<String> {
-            self.0.get(key).map(|value| (*value).to_string())
+            self.0.get(key).cloned()
         }
     }
 
@@ -1167,7 +1282,7 @@ mod tests {
         // Unix home directory (`home_dir_from_env` does not validate path
         // shape at all).
         let mut vars = std::collections::HashMap::new();
-        vars.insert("HOME", "test-home-value");
+        vars.insert("HOME", "test-home-value".to_string());
         let env = FakeEnvSource(vars);
         let home = home_dir_from_env(&env).expect("HOME is set");
         assert_eq!(home, PathBuf::from("test-home-value"));
@@ -1176,9 +1291,147 @@ mod tests {
     #[test]
     fn userprofile_is_used_when_home_is_unset() {
         let mut vars = std::collections::HashMap::new();
-        vars.insert("USERPROFILE", r"C:\Users\rand");
+        vars.insert("USERPROFILE", r"C:\Users\rand".to_string());
         let env = FakeEnvSource(vars);
         let home = home_dir_from_env(&env).expect("USERPROFILE is set");
         assert_eq!(home, PathBuf::from(r"C:\Users\rand"));
+    }
+
+    fn path_entry(entries: &[(&'static str, OsString)], key: &str) -> Option<OsString> {
+        entries
+            .iter()
+            .find(|(entry_key, _)| *entry_key == key)
+            .map(|(_, value)| value.clone())
+    }
+
+    /// ADR-055 decision (c) amendment (AQ4 Windows regression, run
+    /// 33135390308): non-Windows platforms get exactly one synthesized
+    /// entry, a fixed, deliberately narrow `PATH` -- never the caller's own,
+    /// which this function's `env` parameter is not even consulted for on
+    /// this platform (see `unix_synthesized_transfer_script_path`).
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn unix_synthesized_env_is_exactly_the_fixed_minimal_path() {
+        let env = FakeEnvSource(std::collections::HashMap::new());
+        let entries = synthesized_transfer_script_env(&env);
+        assert_eq!(
+            entries,
+            vec![("PATH", OsString::from("/usr/bin:/bin:/usr/local/bin"))]
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_synthesized_env_is_exactly_the_fixed_minimal_path() {
+        let env = FakeEnvSource(std::collections::HashMap::new());
+        let entries = synthesized_transfer_script_env(&env);
+        assert_eq!(
+            entries,
+            vec![(
+                "PATH",
+                OsString::from("/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin")
+            )]
+        );
+    }
+
+    /// Even though the current Unix implementation does not read `env` at
+    /// all, this proves that contract at the call-site level rather than by
+    /// inspecting the implementation: a distinctive caller `PATH` must never
+    /// appear anywhere in the synthesized result.
+    #[cfg(unix)]
+    #[test]
+    fn unix_synthesized_env_never_forwards_the_callers_path() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert(
+            "PATH",
+            "/definitely-not-a-real-dir/atm-caller-path-marker".to_string(),
+        );
+        let env = FakeEnvSource(vars);
+        let entries = synthesized_transfer_script_env(&env);
+        let path = path_entry(&entries, "PATH").expect("PATH is always present");
+        assert!(
+            !path.to_string_lossy().contains("atm-caller-path-marker"),
+            "caller PATH must never leak: {path:?}"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_synthesized_env_defaults_system_root_when_unset() {
+        let env = FakeEnvSource(std::collections::HashMap::new());
+        let entries = synthesized_transfer_script_env(&env);
+        let path = path_entry(&entries, "PATH").expect("PATH is always present");
+        let path = path.to_string_lossy();
+        assert!(path.contains(r"C:\Windows\System32"), "{path}");
+        assert!(path.contains(r"C:\Windows\System32\OpenSSH"), "{path}");
+        assert_eq!(
+            path_entry(&entries, "SystemRoot"),
+            Some(OsString::from(r"C:\Windows"))
+        );
+        assert_eq!(
+            path_entry(&entries, "SYSTEMROOT"),
+            Some(OsString::from(r"C:\Windows"))
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_synthesized_env_uses_an_explicit_system_root_and_never_forwards_the_callers_path() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("SystemRoot", r"D:\CustomWindows".to_string());
+        vars.insert(
+            "PATH",
+            r"C:\definitely-not-a-real-dir\atm-caller-path-marker".to_string(),
+        );
+        let env = FakeEnvSource(vars);
+        let entries = synthesized_transfer_script_env(&env);
+        let path = path_entry(&entries, "PATH").expect("PATH is always present");
+        let path = path.to_string_lossy();
+        assert!(
+            path.starts_with(r"D:\CustomWindows\System32;D:\CustomWindows\System32\OpenSSH"),
+            "{path}"
+        );
+        assert!(
+            !path.contains("atm-caller-path-marker"),
+            "caller PATH must never leak: {path}"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_synthesized_env_includes_pwshs_own_directory_when_locatable() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("pwsh.exe"), b"").expect("write fake pwsh.exe");
+        let mut vars = std::collections::HashMap::new();
+        vars.insert(
+            "PATH",
+            dir.path().to_str().expect("utf8 tempdir path").to_string(),
+        );
+        let env = FakeEnvSource(vars);
+        let entries = synthesized_transfer_script_env(&env);
+        let path = path_entry(&entries, "PATH").expect("PATH is always present");
+        assert!(
+            path.to_string_lossy()
+                .contains(dir.path().to_str().expect("utf8 tempdir path")),
+            "expected pwsh's own directory in the synthesized PATH: {path:?}"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_synthesized_env_forwards_temp_only_when_the_caller_has_one() {
+        let env = FakeEnvSource(std::collections::HashMap::new());
+        assert_eq!(
+            path_entry(&synthesized_transfer_script_env(&env), "TEMP"),
+            None
+        );
+
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("TEMP", r"C:\Users\rand\AppData\Local\Temp".to_string());
+        let env = FakeEnvSource(vars);
+        assert_eq!(
+            path_entry(&synthesized_transfer_script_env(&env), "TEMP"),
+            Some(OsString::from(r"C:\Users\rand\AppData\Local\Temp"))
+        );
     }
 }

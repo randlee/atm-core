@@ -547,6 +547,40 @@ def _is_within_profile(path: Path, profile_home: Path) -> bool:
         return False
 
 
+def _synthesized_transfer_script_path(env: dict[str, str]) -> dict[str, Any]:
+    """Python mirror of `atm_core::transfer_script::
+    synthesized_transfer_script_env` (ADR-055 decision (c) amendment), for
+    evidence recording only -- this harness never calls into that Rust
+    function directly; it computes the same value here purely so the JSON
+    evidence records what the real `atm send --attach` invocation below
+    should have synthesized for its transfer-script child, for
+    diagnosability (run 33135390308 shipped with no visibility into what
+    `PATH`, if any, the child actually received). This never gates or
+    otherwise changes this harness's own behavior -- it is recorded
+    alongside `record["transfer_script"]`, exactly like
+    `windows_profile_containment` mirrors the Windows safety check for the
+    same reason.
+    """
+    if IS_WINDOWS:
+        system_root = env.get("SystemRoot") or env.get("SYSTEMROOT") or r"C:\Windows"
+        parts = [f"{system_root}\\System32", f"{system_root}\\System32\\OpenSSH"]
+        pwsh = shutil.which("pwsh", path=env.get("PATH"))
+        if pwsh:
+            parts.append(str(Path(pwsh).parent))
+        result: dict[str, Any] = {
+            "PATH": ";".join(parts),
+            "SystemRoot": system_root,
+            "SYSTEMROOT": system_root,
+        }
+        temp = env.get("TEMP") or env.get("TMP")
+        if temp:
+            result["TEMP"] = temp
+        return result
+    if sys.platform == "darwin":
+        return {"PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"}
+    return {"PATH": "/usr/bin:/bin:/usr/local/bin"}
+
+
 def install_transfer_script(home: Path) -> dict[str, Any]:
     """Installs the unmodified `scripts/transfer/sftp.sh` example (or, on
     Windows, `scripts/transfer/sftp.ps1`) at
@@ -703,6 +737,11 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
             }
 
             record["transfer_script"] = install_transfer_script(home)
+            # Diagnosability only (never asserted against): what the real
+            # `atm send --attach` invocation below should synthesize for
+            # the transfer-script child's environment (ADR-055 decision
+            # (c) amendment).
+            record["transfer_script"]["synthesized_env"] = _synthesized_transfer_script_path(env)
             # Not a bare `assert` (stripped under `python -O`): the
             # whole point of installing at 0700 (Unix) / under the
             # profile home (Windows) explicitly is to make the safety
