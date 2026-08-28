@@ -16,13 +16,30 @@ use atm_core::protocol::{
     TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
 };
 use atm_core::types::{IsoTimestamp, SessionId};
+use tokio::sync::watch;
 
 /// The bounded runtime-member projection is observability, not durable state.
 pub const MAX_RUNTIME_STATUS_MEMBERS: usize = 4096;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct RuntimeHealth {
     inner: Arc<Mutex<RuntimeHealthState>>,
+    /// Broadcasts every `record_herdr_queue_tick` observation so callers can
+    /// await the next Herdr queue-wake pump tick directly instead of polling
+    /// `snapshot()` on a fixed cadence. Sending never requires a live
+    /// subscriber: production runs with none, and `watch::Sender::send_replace`
+    /// only reports its previous value, never an error.
+    herdr_queue_tick: watch::Sender<Option<IsoTimestamp>>,
+}
+
+impl Default for RuntimeHealth {
+    fn default() -> Self {
+        let (herdr_queue_tick, _receiver) = watch::channel(None);
+        Self {
+            inner: Arc::default(),
+            herdr_queue_tick,
+        }
+    }
 }
 
 /// Best-effort notification of a genuine member lifecycle transition.
@@ -136,6 +153,19 @@ impl RuntimeHealth {
 
     pub fn record_herdr_queue_tick(&self, observed_at: Option<IsoTimestamp>) {
         self.lock().herdr_queue_last_tick_at = observed_at;
+        self.herdr_queue_tick.send_replace(observed_at);
+    }
+
+    /// Subscribes to Herdr queue-wake pump tick observations.
+    ///
+    /// The returned receiver's `changed()` future resolves the next time
+    /// [`RuntimeHealth::record_herdr_queue_tick`] runs anywhere this
+    /// `RuntimeHealth` (or one of its clones) is held, letting callers await
+    /// the pump's own completion signal instead of polling `snapshot()` on a
+    /// fixed interval.
+    #[must_use]
+    pub fn subscribe_herdr_queue_tick(&self) -> watch::Receiver<Option<IsoTimestamp>> {
+        self.herdr_queue_tick.subscribe()
     }
 
     pub fn record_queue_message_drained(&self) {
@@ -435,6 +465,22 @@ mod tests {
         let tick = IsoTimestamp::now();
         health.record_herdr_queue_tick(Some(tick));
         assert_eq!(health.snapshot().herdr_queue_last_tick_at, Some(tick));
+    }
+
+    #[tokio::test]
+    async fn herdr_queue_tick_subscribers_observe_the_recorded_value_without_polling() {
+        let health = RuntimeHealth::default();
+        let mut subscriber = health.subscribe_herdr_queue_tick();
+        assert_eq!(*subscriber.borrow(), None, "no tick has been recorded yet");
+
+        let tick = IsoTimestamp::now();
+        health.record_herdr_queue_tick(Some(tick));
+
+        subscriber
+            .changed()
+            .await
+            .expect("the sender stays alive for the health handle's lifetime");
+        assert_eq!(*subscriber.borrow_and_update(), Some(tick));
     }
 
     #[test]

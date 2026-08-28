@@ -1121,9 +1121,13 @@ mod replacement_runtime_tests {
     ///
     /// This test goes through the exact production entry point
     /// (`start_replacement_runtime`, not a hand-assembled
-    /// `HttpRuntimeBuilder`) and asserts the pump actually ran by polling
-    /// `RuntimeHealth::snapshot().herdr_queue_last_tick_at` until it becomes
-    /// `Some`, bounded by a timeout rather than any fixed wall-clock sleep.
+    /// `HttpRuntimeBuilder`) and asserts the pump actually ran by awaiting
+    /// `RuntimeHealth::subscribe_herdr_queue_tick()`'s own `changed()`
+    /// signal -- the pump's real completion event, fired from
+    /// `record_herdr_queue_tick` every time `tick_once` runs -- instead of
+    /// polling `snapshot()` on a fixed sleep cadence. The subscription is
+    /// created before the runtime starts so the pump's first (immediate)
+    /// tick cannot race ahead of it.
     #[tokio::test]
     async fn replacement_runtime_start_actually_runs_the_herdr_queue_wake_pump() {
         let temporary_root = tempfile::tempdir().expect("temporary bootstrap runtime root");
@@ -1136,6 +1140,7 @@ mod replacement_runtime_tests {
             })
             .expect("plaintext bootstrap selects no TLS stream adapter");
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
+        let mut herdr_queue_tick = runtime_health.subscribe_herdr_queue_tick();
         let (handler, _recovery_sweep) = build_replacement_handler(
             assembly,
             ReplacementHandlerConfig {
@@ -1174,10 +1179,13 @@ mod replacement_runtime_tests {
 
         let observed_tick = tokio::time::timeout(Duration::from_secs(10), async {
             loop {
-                if runtime_health.snapshot().herdr_queue_last_tick_at.is_some() {
+                if herdr_queue_tick.borrow_and_update().is_some() {
                     return;
                 }
-                tokio::time::sleep(Duration::from_millis(25)).await;
+                herdr_queue_tick
+                    .changed()
+                    .await
+                    .expect("the RuntimeHealth handle stays alive for the test's duration");
             }
         })
         .await;
@@ -1190,8 +1198,8 @@ mod replacement_runtime_tests {
 
         observed_tick.expect(
             "HerdrQueueWakePump must actually run through the production \
-             `start_replacement_runtime` path so `herdr_queue_last_tick_at` becomes \
-             observable without any fixed wall-clock sleep",
+             `start_replacement_runtime` path so its own `RuntimeHealth::record_herdr_queue_tick` \
+             completion signal fires, without any fixed wall-clock sleep",
         );
     }
 
