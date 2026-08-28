@@ -2458,6 +2458,31 @@
    "minor": 0,
    "count_basis": "audit/verification",
    "evidence": "Evidence-genuineness audit complete: all 18 committed clean-runner evidence pairs (AQ1.9 2/2, AQ2.5 2/2, AQ3 linux/macos/windows-after-fix 6/6, AQ4 2/2 from CI 33132789507 pytest failures) verified byte-identical to their CI artifacts. No evidence fabrication detected."
+  },
+  {
+   "run_id": "QA-AQ6-harness-fix-redirection",
+   "aich_sprint": "AQ6",
+   "phase_sprint": "AQ6",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "quality-mgr",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ6 #1066 @ 77fa9f1b1 CI regression \u2014 inherited AQ4/AQ5 harness Windows failures",
+   "result_time_utc": "2026-08-28T10:30:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "AQ6 #1066 @ 77fa9f1b1: CI red only on inherited AQ4/AQ5 harness Windows failures (not AQ6 code). Root causes: (1) AQ5 harness execs atm-send-to.sh directly on Windows \u2192 WinError 193 (not executable); (2) AQ4 harness installs Unix sftp.sh and enforces POSIX chmod on NTFS. Cipher pushed cross-platform harness fix ebd6610e0 on #1066 to address both. Resolution: harness fix reverted from #1066, AQ5 part re-applied on #1059, AQ4 findings folded into #1055 fix pass. Platform-correct harness: sftp.ps1 on Windows, profile-containment record, scratch ssh -F config + known-hosts sink, honest skipped_no_sshd. Merge order unchanged: #1054 \u2192 #1055 \u2192 #1059 \u2192 #1066 \u2192 #1056."
   }
  ],
  "follow_ups": [
