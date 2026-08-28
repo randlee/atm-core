@@ -42,6 +42,8 @@ class BootstrapManifest:
     cargo_allowed_strategies: tuple[tuple[str, tuple[str, ...]], ...]
     sc_compose: str
     sc_compose_checksums: tuple[tuple[str, str], ...]
+    wyvern: str
+    wyvern_checksums: tuple[tuple[str, str], ...]
     python_packages: tuple[tuple[str, str], ...]
 
 
@@ -52,6 +54,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
     cargo = raw["cargo"]
     cargo_allowed = raw["cargo-allowed-strategies"]
     sc_compose = raw["sc-compose"]
+    wyvern = raw["wyvern"]
     python = raw["python"]
     cargo_tools = (
         ("cargo-deny", cargo["cargo-deny"]),
@@ -77,6 +80,8 @@ def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
         ),
         sc_compose=sc_compose["version"],
         sc_compose_checksums=tuple(sorted(sc_compose["checksums"].items())),
+        wyvern=wyvern["version"],
+        wyvern_checksums=tuple(sorted(wyvern["checksums"].items())),
         python_packages=tuple(sorted(python.items())),
     )
 
@@ -286,13 +291,13 @@ def _release_checksum(manifest: BootstrapManifest, target: str) -> str:
         raise BootstrapError(f"sc-compose manifest has no checksum for release target {target}.") from error
 
 
-def _download_release(url: str) -> bytes:
+def _download_release(url: str, *, label: str = "release asset") -> bytes:
     """Download one release asset without invoking a shell or package manager."""
     try:
         with urllib.request.urlopen(url, timeout=120) as response:
             return response.read()
     except (OSError, urllib.error.URLError) as error:
-        raise BootstrapError(f"unable to download pinned sc-compose release asset {url}: {error}") from error
+        raise BootstrapError(f"unable to download pinned {label} {url}: {error}") from error
 
 
 def _safe_member_name(name: str) -> str:
@@ -344,14 +349,14 @@ def install_sc_compose_release(manifest: BootstrapManifest, *, dry_run: bool) ->
     print(f"+ download {url} -> {destination}")
     if dry_run:
         return
-    archive = _download_release(url)
+    archive = _download_release(url, label="sc-compose release asset")
     actual = hashlib.sha256(archive).hexdigest()
     if actual != expected:
         raise BootstrapError(
             f"sc-compose release checksum mismatch for {asset}: expected {expected}, found {actual}."
         )
     checksums_url = sc_compose_release_url(manifest.sc_compose, "checksums.txt")
-    checksums = _download_release(checksums_url).decode("utf-8", errors="strict")
+    checksums = _download_release(checksums_url, label="sc-compose checksums").decode("utf-8", errors="strict")
     listed = next((parts[0] for line in checksums.splitlines() if (parts := line.split()) and len(parts) >= 2 and parts[-1] == asset), None)
     if listed != expected:
         raise BootstrapError(f"checksums.txt does not confirm the pinned checksum for {asset}.")
@@ -454,6 +459,127 @@ def sc_compose_matches(manifest: BootstrapManifest) -> bool:
     return True
 
 
+WYVERN_RELEASE_REPOSITORY = "randlee/wyvern"
+
+
+def wyvern_asset_name(target: str) -> str:
+    """Return the pinned Wyvern release asset for one supported target."""
+    if target == "aarch64-apple-darwin":
+        return "wyvern-macos-aarch64.tar.gz"
+    if target == "x86_64-apple-darwin":
+        return "wyvern-macos-x86_64.tar.gz"
+    if target == "x86_64-pc-windows-msvc":
+        return "wyvern-windows.zip"
+    if target == "x86_64-unknown-linux-gnu":
+        return "wyvern-linux.tar.gz"
+    raise BootstrapError(f"Wyvern has no prebuilt release asset for target {target}.")
+
+
+def wyvern_release_url(version: str, asset: str) -> str:
+    """Return the immutable GitHub URL for one pinned Wyvern asset."""
+    return f"https://github.com/{WYVERN_RELEASE_REPOSITORY}/releases/download/v{version}/{asset}"
+
+
+def wyvern_install_command(version: str, target: str) -> tuple[str, str]:
+    """Describe the pinned Wyvern release install for dry-run/tests."""
+    asset = wyvern_asset_name(target)
+    return asset, wyvern_release_url(version, asset)
+
+
+def _wyvern_release_checksum(manifest: BootstrapManifest, target: str) -> str:
+    """Return the manifest checksum for one pinned Wyvern release asset."""
+    asset = wyvern_asset_name(target)
+    checksums = dict(manifest.wyvern_checksums)
+    try:
+        return checksums[asset]
+    except KeyError as error:
+        raise BootstrapError(f"Wyvern manifest has no checksum for release asset {asset}.") from error
+
+
+def _extract_wyvern(archive: bytes, asset: str, destination: Path) -> None:
+    """Extract only the Wyvern CLI from a verified release archive."""
+    executable_name = "wyvern.exe" if asset.endswith(".zip") else "wyvern"
+    with tempfile.TemporaryDirectory(prefix="atm-wyvern-") as temp_dir:
+        archive_path = Path(temp_dir) / asset
+        archive_path.write_bytes(archive)
+        if asset.endswith(".zip"):
+            with zipfile.ZipFile(archive_path) as package:
+                members = {_safe_member_name(name): name for name in package.namelist()}
+                member = next(
+                    (original for safe, original in members.items() if Path(safe).name == executable_name),
+                    None,
+                )
+                if member is None:
+                    raise BootstrapError(f"verified Wyvern archive does not contain {executable_name}.")
+                binary = package.read(member)
+        else:
+            with tarfile.open(archive_path, mode="r:gz") as package:
+                member = next(
+                    (item for item in package.getmembers() if Path(_safe_member_name(item.name)).name == executable_name),
+                    None,
+                )
+                if member is None or not member.isfile():
+                    raise BootstrapError(f"verified Wyvern archive does not contain {executable_name}.")
+                extracted = package.extractfile(member)
+                if extracted is None:
+                    raise BootstrapError("verified Wyvern executable could not be read from the archive.")
+                binary = extracted.read()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.tmp-{os.getpid()}")
+    temporary.write_bytes(binary)
+    if sys.platform != "win32":
+        temporary.chmod(0o755)
+    os.replace(temporary, destination)
+
+
+def install_wyvern_release(manifest: BootstrapManifest, *, dry_run: bool) -> None:
+    """Install the pinned Wyvern CLI release without compiling or guessing."""
+    target = sc_compose_target()
+    asset, url = wyvern_install_command(manifest.wyvern, target)
+    expected = _wyvern_release_checksum(manifest, target)
+    destination = cargo_bin_path("wyvern")
+    print(f"+ download {url} -> {destination}")
+    if dry_run:
+        return
+    archive = _download_release(url, label="Wyvern release asset")
+    actual = hashlib.sha256(archive).hexdigest()
+    if actual != expected:
+        raise BootstrapError(
+            f"Wyvern release checksum mismatch for {asset}: expected {expected}, found {actual}."
+        )
+    checksums_url = wyvern_release_url(manifest.wyvern, "checksums.txt")
+    try:
+        checksums = _download_release(checksums_url, label="Wyvern checksums").decode(
+            "utf-8", errors="strict"
+        )
+    except BootstrapError:
+        print(
+            "warning: upstream checksums.txt missing; verified against pinned SHA256 only",
+            file=sys.stderr,
+        )
+    else:
+        listed = next(
+            (
+                parts[0]
+                for line in checksums.splitlines()
+                if (parts := line.split()) and len(parts) >= 2 and parts[-1] == asset
+            ),
+            None,
+        )
+        if listed != expected:
+            raise BootstrapError(f"checksums.txt does not confirm the pinned Wyvern checksum for {asset}.")
+    _extract_wyvern(archive, asset, destination)
+
+
+def wyvern_matches(manifest: BootstrapManifest) -> bool:
+    """Prove the installed Wyvern binary reports the exact pinned version."""
+    try:
+        require_version("Wyvern", command_output([str(cargo_bin_path("wyvern")), "--version"]), manifest.wyvern)
+    except (BootstrapError, OSError):
+        return False
+    return True
+
+
 def cargo_binstall_available() -> bool:
     """Return whether the CI/local environment has the prebuilt installer."""
     return shutil.which("cargo-binstall") is not None
@@ -495,6 +621,10 @@ def verify_installed_tools(manifest: BootstrapManifest, python: Path) -> None:
     command_output([str(sc_compose), "--version"])
     if not sc_compose_matches(manifest):
         raise BootstrapError(f"sc-compose is not the exact pinned prebuilt release version {manifest.sc_compose}.")
+    wyvern = cargo_bin_path("wyvern")
+    command_output([str(wyvern), "--version"])
+    if not wyvern_matches(manifest):
+        raise BootstrapError(f"Wyvern is not the exact pinned prebuilt release version {manifest.wyvern}.")
     for package, version in manifest.python_packages:
         try:
             actual = python_package_version(python, package)
@@ -533,6 +663,8 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
             run(cargo_install_command(name, version, force=True), dry_run=dry_run)
     if not sc_compose_matches(manifest):
         install_sc_compose_release(manifest, dry_run=dry_run)
+    if not wyvern_matches(manifest):
+        install_wyvern_release(manifest, dry_run=dry_run)
     run(pip_install_command(python), dry_run=dry_run)
     if not dry_run:
         verify_installed_tools(manifest, python)

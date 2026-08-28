@@ -1,6 +1,6 @@
 # Sprint AQ6 — SC-Ecosystem Dependency Preflight and Wyvern Contract Issue
 
-Status: draft · Branch: `feature/aq-6-ecosystem-preflight` off
+Status: complete · Branch: `feature/aq-6-ecosystem-preflight` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
 recommended_agent: Cipher-311d · recommended_model: fast
 
@@ -154,6 +154,10 @@ regression-tested inside Wyvern's own CI.
    guarantee (no `atm` build/test lane requires Wyvern) remains
    independently verified and unaffected by this new preflight-host
    requirement.
+   The two platform Send-To entry points retain paired `WYVERN_PIN`
+   declarations; the preflight treats them as one logical source and fails
+   actionably if either declaration is missing, duplicated, or disagrees with
+   the other.
 1b. The fix-forward escape hatch: a simulated upstream regression (stale
    fixture/stub release) drives the preflight step to pin back to the
    last known-good version, file (or reuse, if `ATMD_GH_AUTOFIX_ISSUES=1`
@@ -184,6 +188,16 @@ None.
 - Preflight dry-run transcript committed on the branch.
 - quality-mgr review of the checklist step and the issue text against the
   PRD contract sections.
+
+## Acceptance evidence
+
+| Criterion | Evidence/status |
+| --- | --- |
+| AC1 / AC1a / AC1b | Blocking validator, exact pin comparison, actionable Wyvern prerequisite, paired `WYVERN_PIN` single-source check, gated pin-back mutation, regression tests, and evidence-register recording in `scripts/validate_release.py` and `.just/tests/test_ecosystem_pins.py`. |
+| AC2 | Dry-run transcript committed in `docs/plans/phase-aq/evidence/AQ6/ecosystem-preflight.md`. |
+| AC3 | Wyvern contract issue [#139](https://github.com/randlee/wyvern/issues/139), linked from the AQ6 evidence register. |
+| AC4 | PR #1066 final head `29ac4a7c58796f446f3cdd6725f265ea6db2a66a` CI lane run IDs recorded in the evidence file: CI workflow run [33208724696](https://github.com/randlee/atm-core/actions/runs/33208724696) and Phase AQ evidence workflow run [33208724703](https://github.com/randlee/atm-core/actions/runs/33208724703), all jobs success across ubuntu/macos/windows; local lint/test phases passed, with local macOS codesign requiring an interactive keychain and therefore not claimable here. |
+| AC5 | Verified at Phase AQ closeout (integrate→develop PR) — not claimable in this PR. |
 
 ## Non-closure / out of scope
 

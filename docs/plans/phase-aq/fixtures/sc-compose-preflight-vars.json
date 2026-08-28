@@ -1,0 +1,18 @@
+{
+  "task_id": "AQ6-PREFLIGHT-SMOKE",
+  "sprint": "AQ6",
+  "sprint_doc": "docs/plans/phase-aq/sprint-AQ6-ecosystem-preflight.md",
+  "description": "Preflight template rendering smoke",
+  "worktree_path": "/tmp/aq6-preflight",
+  "branch": "feature/aq-6-ecosystem-preflight",
+  "pr_target": "integrate/phase-aq",
+  "deliverables": "dependency preflight",
+  "acceptance_criteria": "render succeeds",
+  "references": "docs/plans/phase-aq/prd-atm-send-to.md",
+  "phase": "AQ",
+  "source_of_truth": "docs/plans/phase-aq/sprint-AQ6-ecosystem-preflight.md",
+  "round_id": "AQ6-PREFLIGHT",
+  "round_index": 1,
+  "replay_nonce": "aq6-preflight",
+  "review_mode": "standard"
+}

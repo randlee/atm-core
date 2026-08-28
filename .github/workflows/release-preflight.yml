@@ -80,6 +80,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify pinned ecosystem tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sc-compose --version
+          wyvern --version
+
       - name: Normalize version input
         id: meta
         shell: bash

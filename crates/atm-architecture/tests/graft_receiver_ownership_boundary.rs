@@ -58,6 +58,9 @@ fn receiver_registry_ownership_has_one_flock_owner_and_no_file_publication() {
         "the flock release owner must remain singular"
     );
 
+    // AQ1.6 QA-2 (RULE-003) split the registry lease lifecycle out of
+    // `runtime.rs` into `runtime/mod.rs` + `runtime/lease_client.rs`; read
+    // both so this guard survives code moving between the two.
     let runtime_source = format!(
         "{}\n{}",
         fs::read_to_string(root.join("crates/atm-graft/src/runtime/mod.rs"))

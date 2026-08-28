@@ -756,3 +756,64 @@ fn nonstandard_tmux_warning(
         Ok(None)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
+
+    fn roster_member(team: &str, agent: &str) -> RosterEntry {
+        RosterEntry {
+            team_name: team.parse().expect("team"),
+            agent_name: agent.parse().expect("agent"),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: AgentType::from("worker".to_string()),
+            model: ModelName::new("gpt-5").expect("model"),
+            recipient_pane_id: None,
+            metadata_json: serde_json::Map::new(),
+        }
+    }
+
+    /// Regression test: `apply_member_metadata_update` used to insert the
+    /// roster host twice -- once under a hardcoded `"host"` string literal,
+    /// once under `crate::send_to::ROSTER_HOST_METADATA_KEY` (the two
+    /// happened to share the same value, masking the duplication). Only the
+    /// constant-keyed insert remains, so a `--host` update must land exactly
+    /// one metadata entry under `ROSTER_HOST_METADATA_KEY`: the value is
+    /// correct, and the map does not silently grow past this single field.
+    #[test]
+    fn host_update_writes_roster_host_metadata_exactly_once() {
+        let mut member = roster_member(TEST_TEAM, "cipher");
+        let request = UpdateMemberRequest::new(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            TEST_TEAM.parse().expect("caller team"),
+            TEST_TEAM,
+            "cipher",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("request")
+        .with_host(Some("m5.local"))
+        .expect("valid host");
+
+        apply_member_metadata_update(&mut member, &request);
+
+        assert_eq!(
+            member.metadata_json.len(),
+            1,
+            "only the single host field should be written: {:?}",
+            member.metadata_json
+        );
+        assert_eq!(
+            member
+                .metadata_json
+                .get(crate::send_to::ROSTER_HOST_METADATA_KEY),
+            Some(&json!("m5.local"))
+        );
+    }
+}
