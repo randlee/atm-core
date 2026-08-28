@@ -9,3 +9,7 @@ fo
 
 # TTL predicate spelling.
 foundIn
+
+# AQ3 evidence transcript false positives (partial words from pane content).
+fals
+afte

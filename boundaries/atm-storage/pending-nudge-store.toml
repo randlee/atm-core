@@ -35,10 +35,10 @@ notes = ["MAX_NUDGE_ATTEMPTS bounds claim_next_pending eligibility; at or above 
 
 [testing]
 allowed_test_double_paths = [
-  "crate::contract::DummyPendingNudgeStore",
-  "atm_core::tests::nudge_mode::RecordingPendingNudgeStore",
-  "atm_daemon_bootstrap::received_hook_selector::tests::FailingClearPendingStore",
-  "atm_http_runtime::storage_and_nudge_router::tests::FailingMarkPendingStore",
+    "crate::contract::DummyPendingNudgeStore",
+    "atm_core::tests::nudge_mode::RecordingPendingNudgeStore",
+    "atm_daemon_bootstrap::received_hook_selector::tests::FailingClearPendingStore",
+    "atm_http_runtime::storage_and_nudge_router::tests::FailingMarkPendingStore",
 ]
 forbidden_test_bypasses = ["rusqlite::Connection"]
 

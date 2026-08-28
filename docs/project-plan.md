@@ -1400,6 +1400,17 @@ pending its host run.
 AQ2 graft dual-channel queue delivery is complete on
 `feature/aq-2-queue-graft`; its PR carries the additive wire kind, exact
 pending-marker handoff semantics, and Hermes `/queue`/`/steer` routing.
+AQ3 tmux idle-drain and recovery-sweep QA-1 remediation is implemented on
+`feature/aq-3-queue-tmux`: transition tasks are tracked and joined, interrupted
+claims are released, per-member sweep failures are isolated, and marker-clear
+ownership is mechanically gated in `atm-core`. The real daemon/tmux loopback
+transcript remains pending because the shared local daemon owner lock is
+occupied and the documented `m5` alias is not resolvable from this workstation.
+AQ2.5 queue delivery triggers (heartbeat CLI surface, reference Claude/Codex
+hook scripts, the RAM-only bare-CLI FIFO + Stop-pull drain route, the
+`QueuePull` classifier arm, and the ADR-054 delivery-trigger addendum) is on
+`feature/aq-2-5-queue-delivery-triggers`; its PR (#1053) targets
+`integrate/phase-aq` and its reconciled head is `72d413134`.
 
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "sprint": "AQ2.5",
+  "host": "local",
+  "commit": "bc88a6ce154d12e935eb2e2c15e449dba70a0df4",
+  "record": {
+    "sprint": "AQ2.5",
+    "host": "local",
+    "started_at_ns": 1787808900981537000,
+    "status": "blocked_ambient_daemon",
+    "ambient_daemon_pids": [
+      1816
+    ],
+    "error": "an ATM daemon already owns this OS account's singleton runtime root (current_host_runtime_scope ignores ATM_HOME/HOME by design); a second daemon cannot be safely started on this host without risking the ambient session. Run on a dedicated host / OS account with no ambient atm-daemon to produce positive-path evidence."
+  }
+}

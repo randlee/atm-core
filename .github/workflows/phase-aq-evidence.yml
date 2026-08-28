@@ -1,8 +1,10 @@
 name: Phase AQ Evidence
 
 # Runs the Phase AQ live-evidence harnesses (AQ1.9 restart matrix, AQ2.5
-# queue-delivery triggers, and any future AQ3 drain/sweep transcript) on a
-# clean runner with no ambient atm-daemon.
+# queue-delivery triggers, and AQ3's tmux idle-transition-drain transcript)
+# on a clean runner with no ambient atm-daemon. The AQ3 harness needs a real
+# tmux server, which is unavailable on Windows; it self-records a
+# `skipped_no_tmux` status there instead of failing the job.
 #
 # These harnesses fail closed by design: `atm_core::home::current_host_runtime_scope`
 # intentionally ignores `ATM_HOME`/`HOME` and always resolves the OS
@@ -34,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -113,7 +115,24 @@ jobs:
             brew install tmux
           fi
 
-      - name: Confirm this runner has no ambient atm-daemon
+      - name: Ensure tmux is available (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v tmux >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo apt-get install -y tmux
+          fi
+
+      - name: tmux is unavailable on Windows (AQ3 harness self-skips)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "tmux has no supported Windows build; run_aq3_tmux_idle_drain_evidence.py records a skipped_no_tmux status instead of failing this job."
+
+      - name: Confirm this runner has no ambient atm-daemon (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
@@ -128,6 +147,17 @@ jobs:
             exit 1
           fi
           echo "confirmed: no ambient atm-daemon on this runner"
+
+      - name: Confirm this runner has no ambient atm-daemon (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $existing = Get-Process -Name "atm-daemon" -ErrorAction SilentlyContinue
+          if ($existing) {
+            Write-Error "an ambient atm-daemon is already running on this runner; refusing to start the live-evidence harnesses"
+            exit 1
+          }
+          Write-Host "confirmed: no ambient atm-daemon on this runner"
 
       - name: Build workspace (release)
         run: cargo build --release --workspace --verbose
@@ -178,7 +208,11 @@ jobs:
           EVIDENCE_DIR_BY_SCRIPT = {
               "run_hermes_atm_restart_matrix.py": "AQ1.9",
               "run_aq25_queue_delivery_trigger_evidence.py": "AQ2.5",
+              "run_aq3_tmux_idle_drain_evidence.py": "AQ3",
           }
+
+          # Release binaries carry a `.exe` suffix on Windows.
+          exe_suffix = ".exe" if os.name == "nt" else ""
 
           # A harness's eligibility is decided by its own --help output, not
           # by substring-scraping its source text.
@@ -228,8 +262,8 @@ jobs:
                       python_bin,
                       str(script),
                       "--host", host_label,
-                      "--daemon", str(root / "target" / "release" / "atm-daemon"),
-                      "--atm", str(root / "target" / "release" / "atm"),
+                      "--daemon", str(root / "target" / "release" / f"atm-daemon{exe_suffix}"),
+                      "--atm", str(root / "target" / "release" / f"atm{exe_suffix}"),
                       "--evidence-dir", str(evidence_dir),
                   ],
                   cwd=root,

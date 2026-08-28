@@ -13,19 +13,22 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+import contextlib
 import json
 import os
 from pathlib import Path
 import queue
 import re
+import shutil
 import signal
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import traceback
 import uuid
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -33,9 +36,55 @@ TEAM = "aq1-9-hermes"
 SENDER = "aq1-9-sender"
 RECEIVER = "aq1-9-receiver"
 LEASE_REFRESH_INTERVAL_SECONDS = 1.0
-CRASH_RECOVERY_LIMIT_SECONDS = 1.5
+# AC2 (sprint-AQ1-9) requires *sub-tick* recovery: the successor must
+# register and deliver strictly inside one GRAFT_LEASE_REFRESH_INTERVAL
+# tick, not merely close to it. The bound is therefore the tick length
+# itself, not a padded multiple of it.
+CRASH_RECOVERY_LIMIT_SECONDS = LEASE_REFRESH_INTERVAL_SECONDS
 EVENT_TIMEOUT_SECONDS = 15.0
 HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+# `atm_graft`'s native PyO3 session runs in this process and reads its
+# configuration from the process environment directly -- unlike every other
+# child this runner starts, there is no per-call `env=` argument for it.
+NATIVE_SESSION_ENV_KEYS = (
+    "HOME",
+    "ATM_HOME",
+    "ATM_CONFIG_HOME",
+    "ATM_WORKSPACE_ROOT",
+    "ATM_TEAM",
+    "ATM_IDENTITY",
+    "ATM_DAEMON_BIN",
+    "ATM_LOG_DIR",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+)
+
+
+@contextlib.contextmanager
+def scoped_process_environment(overrides: dict[str, str]) -> Iterator[None]:
+    """Temporarily apply `overrides` to the ambient process environment.
+
+    Every subprocess this runner starts (the daemon, `atm`, the receiver
+    worker) receives its own explicit `env=` dict and never reads ambient
+    state. The one exception is the native `atm_graft` extension, which
+    shares this process and therefore this process's environment -- there is
+    no per-call env argument to give it instead. This context manager scopes
+    that one unavoidable mutation to exactly the block that constructs and
+    drives the native session, and restores every prior value (or absence)
+    on exit, including on exceptions, so one restart-matrix row never leaks
+    its fixture environment into a later row or into the caller's shell.
+    """
+    previous = {key: os.environ.get(key) for key in overrides}
+    os.environ.update(overrides)
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def parse_args() -> argparse.Namespace:
@@ -226,6 +275,23 @@ def worker_main(args: argparse.Namespace) -> int:
     return 0
 
 
+def daemon_launch_argv(binary: Path) -> list[str]:
+    """Return the argv used to start the runner's owned, scratch-home daemon.
+
+    The restart matrix verifies same-host graft receiver delivery, never
+    cross-host peer replication, so it deliberately runs the daemon with
+    `--peer-wire-security plaintext-test`: `mutual-tls` mode requires an
+    enabled peer HTTPS interface and a local certificate identity
+    (`crates/peer-tls/src/lib.rs`), which only exist in an operator's
+    already-provisioned home directory, not in this runner's disposable
+    `tempfile.TemporaryDirectory` home. Requiring real peer TLS material here
+    would make the matrix unrunnable on a clean host (exactly what CI hit),
+    without proving anything about the graft restart/crash-recovery
+    behavior this sprint's ACs actually cover.
+    """
+    return [str(binary), "--peer-wire-security", "plaintext-test"]
+
+
 class OwnedDaemon:
     def __init__(self, binary: Path, env: dict[str, str], timeout: float) -> None:
         self.binary = binary
@@ -238,7 +304,7 @@ class OwnedDaemon:
         if self.process is not None and process_alive(self.process):
             raise RuntimeError("owned daemon is already running")
         self.process = subprocess.Popen(
-            [str(self.binary), "--peer-wire-security", "mutual-tls"],
+            daemon_launch_argv(self.binary),
             cwd=ROOT,
             env={**self.env, "ATM_DAEMON_READY_STDOUT": "1"},
             stdout=subprocess.PIPE,
@@ -410,23 +476,69 @@ def doctor(atm: Path, env: dict[str, str]) -> dict[str, Any]:
     return payload
 
 
+def _remove_tree_tolerant(path: Path, *, attempts: int = 6, initial_delay: float = 0.15) -> str | None:
+    """Best-effort recursive removal of one row's scratch directory.
+
+    Mirrors `run_aq4_transfer_evidence.py`'s `_remove_tree_tolerant`. This
+    row previously relied on `tempfile.TemporaryDirectory`'s automatic
+    `__exit__` cleanup, whose exception (observed on Windows: WinError
+    32/5 sharing violations against a directory this row's own `atm` /
+    daemon / receiver-worker subprocesses -- already stopped and fully
+    waited on above -- briefly still held a handle on) unwound straight
+    past this row's own `try`/`except`/`finally` and the `return record`
+    that used to sit inside it, discarding the already-computed row
+    record entirely with no evidence written for that row at all.
+    Retrying with backoff absorbs that transient lag; if the directory
+    still will not budge, this reports a warning string instead of
+    raising, so an OS-level cleanup race can never discard or crash a
+    row's evidence. Returns `None` on success, or a description of the
+    final failure.
+    """
+    delay = initial_delay
+    last_error: OSError | None = None
+    for attempt in range(attempts):
+        try:
+            shutil.rmtree(path)
+            return None
+        except FileNotFoundError:
+            return None
+        except OSError as error:
+            last_error = error
+            if attempt == attempts - 1:
+                break
+            time.sleep(delay)
+            delay *= 2
+    return f"could not remove {path} after {attempts} attempts: {last_error}"
+
+
 def run_scenario(args: argparse.Namespace, row: str, action: str) -> dict[str, Any]:
     started_at = time.time_ns()
-    with tempfile.TemporaryDirectory(prefix=f"aq1-9-{row}-") as temporary:
-        root = Path(temporary)
-        env, workspace = fixture_environment(root, args.atm)
-        home = Path(env["HOME"])
-        daemon = OwnedDaemon(args.daemon, env, args.timeout)
-        receiver: ReceiverWorker | None = None
-        sender_session: Any | None = None
-        roster_members: list[str] = []
-        record: dict[str, Any] = {
-            "id": row,
-            "action": action,
-            "started_at_ns": started_at,
-            "status": "fail",
-            "host": args.host,
-        }
+    # A manually-managed `mkdtemp` (not `tempfile.TemporaryDirectory`'s
+    # `with`-block auto-cleanup) deliberately, mirroring
+    # `run_aq4_transfer_evidence.py`'s `run_scenario`: that context
+    # manager's `__exit__` calls `cleanup()`, which can raise while
+    # unwinding past this row's own `return record` below, discarding the
+    # already-computed record entirely. Cleanup now happens explicitly,
+    # below, through `_remove_tree_tolerant`, which can never raise past
+    # this function -- and only runs after the record is fully populated
+    # and every child process this row owns has already been stopped.
+    directory = tempfile.mkdtemp(prefix=f"aq1-9-{row}-")
+    root = Path(directory)
+    env, workspace = fixture_environment(root, args.atm)
+    home = Path(env["HOME"])
+    native_env = {key: env[key] for key in NATIVE_SESSION_ENV_KEYS}
+    daemon = OwnedDaemon(args.daemon, env, args.timeout)
+    receiver: ReceiverWorker | None = None
+    sender_session: Any | None = None
+    roster_members: list[str] = []
+    record: dict[str, Any] = {
+        "id": row,
+        "action": action,
+        "started_at_ns": started_at,
+        "status": "fail",
+        "host": args.host,
+    }
+    with scoped_process_environment(native_env):
         try:
             add_roster_member(args.atm, env, home, SENDER)
             roster_members.append(SENDER)
@@ -437,7 +549,6 @@ def run_scenario(args: argparse.Namespace, row: str, action: str) -> dict[str, A
             record["doctor_before"] = doctor(args.atm, env)
             receiver = ReceiverWorker(Path(__file__).resolve(), workspace, env, args.timeout)
             record["receiver_before"] = receiver.start()
-            os.environ.update({key: env[key] for key in ("HOME", "ATM_HOME", "ATM_CONFIG_HOME", "ATM_WORKSPACE_ROOT", "ATM_TEAM", "ATM_IDENTITY", "ATM_DAEMON_BIN", "ATM_LOG_DIR", "TMPDIR", "TMP", "TEMP")})
             import atm_graft
 
             sender_session = atm_graft.PyGraftSession(atm_graft.PyAgentAddress(SENDER, TEAM, None))
@@ -495,14 +606,42 @@ def run_scenario(args: argparse.Namespace, row: str, action: str) -> dict[str, A
             elif SENDER in roster_members:
                 remove_roster_member(args.atm, env, SENDER, caller=SENDER)
             record["finished_at_ns"] = time.time_ns()
-        return record
+    # Scratch-directory teardown happens last, strictly after the row's
+    # record is fully populated above -- a teardown failure can only ever
+    # attach a `cleanup_warning` to an already-complete record, never
+    # discard it.
+    cleanup_warning = _remove_tree_tolerant(root)
+    if cleanup_warning is not None:
+        record["cleanup_warning"] = cleanup_warning
+    return record
+
+
+def _evidence_output_paths(args: argparse.Namespace) -> tuple[Path, Path]:
+    evidence_dir = args.evidence_dir or ROOT / "docs" / "plans" / "phase-aq" / "evidence" / "AQ1.9"
+    return evidence_dir / f"restart-matrix-{args.host}.json", evidence_dir / f"restart-matrix-{args.host}.md"
+
+
+def _clear_stale_evidence(*paths: Path) -> None:
+    """Deletes any pre-existing evidence file at these exact output paths
+    before the matrix runs. Evidence directories are committed to the
+    repo, so without this a harness that crashes before `write_evidence`
+    ever runs (see `main`'s top-level guard around the three
+    `run_scenario` rows) would otherwise leave the previous, stale run's
+    committed file in place -- and a CI workflow's `if: always()`
+    artifact-upload step would then publish that stale file as if it were
+    fresh for this run. Deleting first means a genuine crash the guard
+    itself cannot recover from (for example the interpreter being killed
+    outright) leaves this run's evidence *missing*, never *stale* -- an
+    honest signal `if-no-files-found: warn` already tolerates. Mirrors
+    `run_aq4_transfer_evidence.py`'s `_clear_stale_evidence`.
+    """
+    for path in paths:
+        path.unlink(missing_ok=True)
 
 
 def write_evidence(args: argparse.Namespace, records: list[dict[str, Any]]) -> tuple[Path, Path]:
-    evidence_dir = args.evidence_dir or ROOT / "docs" / "plans" / "phase-aq" / "evidence" / "AQ1.9"
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    json_path = evidence_dir / f"restart-matrix-{args.host}.json"
-    markdown_path = evidence_dir / f"restart-matrix-{args.host}.md"
+    json_path, markdown_path = _evidence_output_paths(args)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema_version": 1,
         "sprint": "AQ1.9",
@@ -526,6 +665,27 @@ def write_evidence(args: argparse.Namespace, records: list[dict[str, Any]]) -> t
     for record in records:
         latency = record.get("delivery_latency_ms", "—")
         lines.append(f"| {record['id']} | {record['status'].upper()} | {latency} ms | `{json_path.name}` |")
+    crashed = [record for record in records if record.get("status") == "harness_crashed"]
+    if crashed:
+        lines += [
+            "",
+            "The harness raised an unhandled exception before it could "
+            "finish running every row. This transcript is written by a "
+            "top-level guard in `main` specifically so a crash can never "
+            "leave this run's evidence stale (a previous run's committed "
+            "file, reused unchanged) or missing (no file at all) -- see "
+            "`main`'s top-level `try`/`except` around the three "
+            "`run_scenario` rows.",
+        ]
+        for record in crashed:
+            lines += [
+                "",
+                f"Error: `{record.get('error')}`",
+                "",
+                "```",
+                record.get("traceback", "").rstrip(),
+                "```",
+            ]
     lines.extend(
         [
             "",
@@ -534,6 +694,13 @@ def write_evidence(args: argparse.Namespace, records: list[dict[str, Any]]) -> t
             "The m5 live run must be executed on m5; no remote result is inferred from this local artifact.",
         ]
     )
+    cleanup_warnings = [record["cleanup_warning"] for record in records if record.get("cleanup_warning")]
+    for warning in cleanup_warnings:
+        lines += [
+            "",
+            "**Cleanup warning** (best-effort only; does not affect the "
+            f"row status above): `{warning}`",
+        ]
     markdown_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return json_path, markdown_path
 
@@ -546,16 +713,40 @@ def main() -> int:
         raise SystemExit("--timeout must be positive")
     if args.worker:
         return worker_main(args)
+    # Deleted before any other work (and only for the top-level matrix
+    # invocation -- never a `--worker` subprocess, which never writes
+    # evidence and must not race the parent's own evidence files): a
+    # harness crash the top-level guard below cannot itself recover from
+    # must leave this run's evidence missing, never a stale copy of a
+    # previous run's committed file.
+    _clear_stale_evidence(*_evidence_output_paths(args))
     if not args.daemon.is_file():
         raise SystemExit(f"owned daemon binary does not exist: {args.daemon}")
     if not args.atm.is_file():
         raise SystemExit(f"matched atm binary does not exist: {args.atm}")
     require_clean_host()
-    records = [
-        run_scenario(args, "daemon-restart-live-receiver", "daemon_restart"),
-        run_scenario(args, "receiver-restart-live-daemon", "receiver_restart"),
-        run_scenario(args, "receiver-crash-within-window", "receiver_crash_within_window"),
-    ]
+    try:
+        records = [
+            run_scenario(args, "daemon-restart-live-receiver", "daemon_restart"),
+            run_scenario(args, "receiver-restart-live-daemon", "receiver_restart"),
+            run_scenario(args, "receiver-crash-within-window", "receiver_crash_within_window"),
+        ]
+    except Exception as error:  # noqa: BLE001 - a crash must still produce evidence, not none
+        # Per-row structure: a single crashed row stands in for the whole
+        # matrix here rather than three "fail" rows, since a harness crash
+        # (as opposed to an in-row `run_scenario` failure, already caught
+        # and recorded by that function's own try/except) means no row
+        # ever finished running.
+        records = [
+            {
+                "id": "harness_crashed",
+                "action": "harness_crashed",
+                "host": args.host,
+                "status": "harness_crashed",
+                "error": f"{type(error).__name__}: {error}",
+                "traceback": traceback.format_exc(),
+            }
+        ]
     json_path, markdown_path = write_evidence(args, records)
     passed = all(record.get("status") == "pass" for record in records)
     print(f"{'PASS' if passed else 'FAIL'} restart matrix evidence: {json_path}")

@@ -199,11 +199,22 @@ pub struct GraftNudgeTarget {
     pub message_body: String,
 }
 
+/// Target for a bare-CLI queue handoff into the daemon-owned RAM FIFO.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct QueuePullTarget {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub kind: NudgeKind,
+    pub msg_id: AtmMessageId,
+    pub body: String,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum PostSendBuiltInTarget {
     /// Local steer through the explicitly selected backend.
     LocalSteer(LocalSteerTarget),
     Graft(GraftNudgeTarget),
+    QueuePull(QueuePullTarget),
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -222,6 +233,7 @@ pub enum PostSendEmissionPath {
     LocalTmux,
     LocalHerdr,
     GraftPort,
+    QueuePull,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]

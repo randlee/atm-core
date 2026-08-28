@@ -49,6 +49,7 @@ use tokio::net::UnixListener;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
+mod bare_cli_fifo;
 mod client;
 mod herdr_queue_wake;
 mod http1_server;
@@ -79,6 +80,10 @@ use unix_socket::{
     UnixSocketPathGuard, UnixSocketStartupLock, bind_unix_listener, reclaim_stale_unix_socket,
 };
 
+pub use bare_cli_fifo::{
+    BARE_CLI_FIFO_CAPACITY, BareCliFifo, BareCliQueueFullDrops, append_bare_cli_message,
+    drain_bare_cli_messages,
+};
 #[cfg(unix)]
 pub use client::unix_socket_client;
 pub use client::{
@@ -99,7 +104,7 @@ pub use peer_stream::{
     AcceptedPeerStream, AuthenticatedPeerStream, EstablishedPeerStream, PeerStreamAdapter,
     PeerStreamFuture,
 };
-pub use runtime_health::RuntimeHealth;
+pub use runtime_health::{MemberStateTransitionSink, RuntimeHealth};
 pub use runtime_maintenance::{Draining, Running, RuntimeMaintenance, Stopped};
 use runtime_maintenance::{abort_and_join, finish_maintenance};
 pub use storage_and_nudge_router::StorageAndNudgeRouter;

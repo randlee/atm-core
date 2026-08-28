@@ -3,7 +3,7 @@ use tracing::warn;
 use super::{ResolvedRecipient, nudge_template};
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, HerdrNudgeTarget, LocalSteerTarget,
-    LocalTmuxNudgeTarget, NudgeKind, PostSendBuiltInTarget, PostSendHookEvent,
+    LocalTmuxNudgeTarget, NudgeKind, PostSendBuiltInTarget, PostSendHookEvent, QueuePullTarget,
     built_in_nudge_template_kind_from_post_send_event,
 };
 use crate::delivery_policy::DeliveryRecipientSnapshot;
@@ -62,6 +62,19 @@ where
                 recipient_team: event.recipient_team.clone(),
                 rendered_nudge,
                 message_body: message_body.to_owned(),
+            }),
+            kind,
+        });
+    }
+    if delivery_snapshot.bare_cli_post_send {
+        return Some(BuiltInPostSendDispatch {
+            event: event.clone(),
+            target: PostSendBuiltInTarget::QueuePull(QueuePullTarget {
+                team: event.recipient_team.clone(),
+                agent: event.recipient.clone(),
+                kind,
+                msg_id: event.message_id,
+                body: message_body.to_owned(),
             }),
             kind,
         });

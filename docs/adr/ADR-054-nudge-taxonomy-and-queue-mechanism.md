@@ -333,6 +333,72 @@ an optimization; AQ1's test suite proves it directly (duplicate write → zero
   (AC 3), including `--attach` parity arriving free from the shared
   `run_with_mode` implementation.
 
+## AQ2.5 addendum — delivery-trigger policy
+
+This addendum is normative for the AQ2.5 delivery-trigger implementation.
+"Steer" and "queue" remain kinds, while the physical mechanism may defer a
+steer-kind notification until a bare-CLI Stop pull; mechanism timing never
+changes the kind.
+
+| Kind | Classifier-owned channel | Delivery trigger | Mechanism |
+| --- | --- | --- | --- |
+| steer | Tmux, Herdr, or bare CLI | immediate post-persistence delivery, or next bare-CLI Stop pull | selected receiver hook or bounded RAM FIFO |
+| queue | Graft, Herdr, or bare CLI | receiver queue handoff, sweep, or next bare-CLI Stop pull | published receiver, Herdr queue, or bounded RAM FIFO |
+
+The `DeliveryChannel` classifier is the sole owner of channel selection; its
+call sites and selector tests enforce this matrix. Channel names must describe
+the positive mechanism (`QueuePull`, `Graft`, `Herdr`, or `Tmux`) rather than
+an absence of another backend. Heartbeats are produced by harness hooks and
+debounced there; the daemon records authenticated observations but owns no
+timer or harness lifecycle.
+
+Bare-CLI pull notifications are RAM-only daemon-lifetime state. The map is
+bounded to 32 messages *per member*, drops the oldest item on overflow, and
+reports the cumulative drop count through doctor. A daemon restart empties the
+FIFO; durable mailbox messages remain authoritative. Each pull drains all
+steer items and at most one oldest queue item. Empty pulls are successful and
+must never block a Stop loop. Codex lifecycle integration uses the same
+authenticated queue-get contract; a host-specific Codex drain adapter remains
+an explicit coordination gap rather than an invented daemon-side fallback.
+
+A marker-clear failure after a successful bare-CLI FIFO append (the handoff)
+is never allowed to fail that delivery: it is routed through the same
+`clear_queue_marker_after_handoff` retry-once-and-count helper AQ2's graft
+channel uses (`atm-daemon-bootstrap/src/received_hook_selector.rs`), so the
+failure is logged and counted while `emit_received_message` still returns
+`Success` (AQ25-CRIT-001). Because bare-CLI members are never swept by AQ3
+(only `TmuxSteer`/`Graft` members are), a marker that survives both clear
+attempts becomes a **permanently orphaned pending marker** for that member —
+there is no scheduler that will ever revisit it. This residual is disclosed,
+not silently accepted as impossible: no sweeper covers `BareCli` by design,
+and no one-shot clear-on-next-get retry is added either, per the sprint's
+simplicity mandate (no additional hook-side or daemon-side state machines).
+An operator can detect and clear the residual manually via the existing
+`graft_queue_marker_clear_failures_total` doctor counter and
+`PendingNudgeStore::clear_pending_on_read`, which any subsequent successful
+delivery or `atm read` already exercises for that member.
+
+### Accepted resilience tradeoffs (disclosed, not blocking)
+
+- The high-frequency `Heartbeat` and `QueueGetNext` routes share the same
+  single-permit `BlockingCoreBridge` bridge used by slower mailbox
+  operations. Under sustained load this can add queueing latency to a
+  heartbeat or queue-get call; it is not a correctness or fail-open risk
+  (the bounded connect/request deadline still governs), and is accepted
+  rather than given a dedicated admission lane in this sprint.
+- The bare-CLI FIFO's 32-message-per-member bound is enforced per member;
+  there is no additional cap on the aggregate memory used across all
+  bare-CLI members on one daemon. A daemon serving an unusually large
+  bare-CLI roster could accumulate proportionally more RAM. This is an
+  accepted, documented tradeoff consistent with the simplicity mandate
+  (RAM-only, restart-recoverable state); it is not a durability or
+  correctness concern since the mailbox remains the source of truth.
+
+### AQ2.5 quality-mgr sign-off
+
+| Sprint | Gate | Reviewer | Date | Verdict | Notes |
+| --- | --- | --- | --- | --- | --- |
+| AQ2.5 | ADR-054 addendum (delivery-trigger policy, AC 9) | quality-mgr | 2026-08-27 | PASS | QA-final3 @ cd48e7ffb: both blocking findings from the prior round closed -- scripts/hooks/README.md now has the exact ~/.claude/settings.json / ~/.codex/hooks.json install entries plus the schook-MVP-contract statement; AC8/AC11 wording corrected (AC11: 4 implementers, matching received_hook_selector.rs and the boundary manifest, verified by aq25_received_hook_manifest_matches_async_implementers). All substantive QA-1 through QA-final content independently confirmed across prior rounds. |
 
 ## Addendum (2026-08-27): Herdr retry partition (AQ2.7 ruling)
 

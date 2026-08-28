@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-MemberStateTransitionSink"
+owner_package = "atm-http-runtime"
+owner_crate_path = "atm_http_runtime"
+name = "MemberStateTransitionSink"
+
+[public]
+trait = "MemberStateTransitionSink"
+notes = "Best-effort post-heartbeat lifecycle notification. The runtime owns only the in-memory projection; durable queue correctness belongs to the daemon composition recovery sweep."
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = ["atm_daemon_bootstrap::run_replacement_daemon_with_selector"]
+
+[ownership]
+io_owns = ["lifecycle_transition_notification"]
+io_forbidden = ["database_io", "process_spawn", "daemon_request_dispatch"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap"]
+allowed_dependencies = ["atm-core", "tokio"]
+forbidden_edges = ["atm-http-runtime -> atm-daemon-bootstrap", "atm-http-runtime -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["atm_core::boundary::MemberKey", "RuntimeMemberState"]
+response_types = ["none"]
+error_types = ["none; notification is best effort"]
+notes = ["The callback is invoked only after the RuntimeHealth mutex guard is dropped.", "External implementation is limited to daemon composition and must keep durable work on a bounded blocking task."]
+
+[testing]
+allowed_test_double_paths = ["atm_http_runtime::runtime_health::tests"]
+forbidden_test_bypasses = ["inline_storage_claim"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-HTTP-RUNTIME-DEPENDENCIES"]
+review_gates = ["sealed_trait", "post_mutex_callback", "best_effort_only", "recovery_backstop"]
+
+[status]
+state = "concrete_landed"
+notes = ["AQ3 owns the daemon-composition implementation; Herdr and bare-CLI queue claimants remain outside this sink."]
