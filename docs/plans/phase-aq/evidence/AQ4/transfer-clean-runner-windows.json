@@ -2,11 +2,11 @@
   "schema_version": 1,
   "sprint": "AQ4",
   "host": "clean-runner-windows",
-  "commit": "21f00edb1efb43bff894cfffd0bb7f2a5d1847bd",
+  "commit": "dcd3130f100b64e542c8e0800565ebd88cb7271e",
   "record": {
     "sprint": "AQ4",
     "host": "clean-runner-windows",
-    "started_at_ns": 1787891931444475700,
+    "started_at_ns": 1787893248899984100,
     "status": "fail",
     "sshd_probe": {
       "found": true,
@@ -20,15 +20,15 @@
     },
     "sshd_start": {
       "ready": true,
-      "pid": 6644,
+      "pid": 8956,
       "log_tail": "",
-      "port": 50399
+      "port": 63803
     },
     "sender_atm_config": {
-      "path": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\sender-cwd\\.atm.toml",
+      "path": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\sender-cwd\\.atm.toml",
       "local_host": "aq4-sender"
     },
-    "scratch_ssh_client_config": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\ssh_client_config",
+    "scratch_ssh_client_config": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\ssh_client_config",
     "roster": {
       "sender": {
         "argv": [
@@ -38,7 +38,7 @@
           "aq4-transfer-evidence",
           "aq4-sender",
           "--home-dir",
-          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\home",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\home",
           "--json"
         ],
         "stdout": "{\n  \"action\": \"add-member\",\n  \"team\": \"aq4-transfer-evidence\",\n  \"member\": \"aq4-sender\",\n  \"created_inbox\": true\n}"
@@ -51,7 +51,7 @@
           "aq4-transfer-evidence",
           "aq4-receiver",
           "--home-dir",
-          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\home",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\home",
           "--host",
           "localhost",
           "--json"
@@ -60,15 +60,15 @@
       }
     },
     "transfer_script": {
-      "installed_at": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\home\\.atm\\transfer\\localhost.ps1",
+      "installed_at": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\home\\.atm\\transfer\\localhost.ps1",
       "source": "D:\\a\\atm-core\\atm-core\\scripts\\transfer\\sftp.ps1",
       "receiver_atm_temp": {
-        "windows_native": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\tmp\\atm",
-        "posix_msys": "/c/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-yz3e2chp/tmp/atm",
-        "substituted": "C:/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-yz3e2chp/tmp/atm"
+        "windows_native": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\tmp\\atm",
+        "posix_msys": "/c/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-y7co57m6/tmp/atm",
+        "substituted": "C:/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-y7co57m6/tmp/atm"
       },
       "windows_profile_containment": {
-        "profile_home": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\home",
+        "profile_home": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\home",
         "transfer_dir_contained": true,
         "script_contained": true,
         "transfer_dir_is_reparse_point": false,
@@ -78,12 +78,12 @@
         "PATH": "C:\\Windows\\System32;C:\\Windows\\System32\\OpenSSH;C:\\Program Files\\PowerShell\\7",
         "SystemRoot": "C:\\Windows",
         "SYSTEMROOT": "C:\\Windows",
-        "TEMP": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\tmp"
+        "TEMP": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\tmp"
       }
     },
     "daemon_start": {
       "ready": true,
-      "pid": 2812,
+      "pid": 9212,
       "stdout_tail": [
         "ATM_DAEMON_READY"
       ],
@@ -100,16 +100,17 @@
         "--host",
         "localhost",
         "--attach",
-        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-yz3e2chp\\attach-source\\aq4-report.pdf"
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-y7co57m6\\attach-source\\aq4-report.pdf"
       ],
       "returncode": 3,
       "stdout": "",
-      "stderr_tail": "transfer script for host 'localhost' failed (exit code: 1): failed to create C:/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-yz3e2chp/tmp/atm/send-to/01M13AKVAEE3FMSCN5RJ123TZB on localhost\n\n  Recovery: Check the transfer script's stderr output above and retry."
+      "stderr_tail": "transfer script for host 'localhost' failed (exit code: 1): failed to create C:/Users/RUNNER~1/AppData/Local/Temp/aq4-evidence-y7co57m6/tmp/atm/send-to/01M13BW1QRXNZZ2Q89RT283JBE on localhost (ssh exit ): (no output)\n\n  Recovery: Check the transfer script's stderr output above and retry."
     },
+    "sshd_debug_log_tail": "C:\\\\Users\\\\RUNNER~1\\\\AppData\\\\Local\\\\Temp\\\\aq4-evidence-y7co57m6\\\\sshd\\\\sshd_config line 6: Unsupported option UsePAM\ndebug2: fd 3 setting O_NONBLOCK\ndebug1: Bind to port 63803 on 127.0.0.1.\nServer listening on 127.0.0.1 port 63803.\ndebug3: pselect: installing signal handler for 3, previous 00007FF699EE81A0\ndebug3: pselect: installing signal handler for 6, previous 00007FF699EE80A0\ndebug3: pselect: installing signal handler for 7, previous 00007FF699EE8190\ndebug3: pselect: installing signal handler for 8, previous 00007FF699EE8190\ndebug3: pselect_notify_setup: initializing\ndebug2: fd 6 setting O_NONBLOCK\ndebug2: fd 4 setting O_NONBLOCK\ndebug3: pselect_notify_setup: pid 8956 saved 8956 pipe0 6 pipe1 4\ndebug3: fd 5 is not O_NONBLOCK\ndebug3: spawning \"C:\\\\Windows\\\\System32\\\\OpenSSH\\\\sshd.EXE\" -f C:\\\\Users\\\\RUNNER~1\\\\AppData\\\\Local\\\\Temp\\\\aq4-evidence-y7co57m6\\\\sshd\\\\sshd_config -D -e -R as subprocess\ndebug3: send_rexec_state: entering fd = 9 config len 448\ndebug3: ssh_msg_send: type 0\ndebug3: send_rexec_state: done\nrexec line 6: Unsupported option UsePAM\ndebug1: inetd sockets after dupping: 4, 4\ndebug3: process_channel_timeouts: setting 0 timeouts\ndebug3: channel_clear_timeouts: clearing\nConnection from 127.0.0.1 port 63805 on 127.0.0.1 port 63803\ndebug1: Local version string SSH-2.0-OpenSSH_for_Windows_9.5\ndebug3: WSARecv - WSARecv() ERROR: io:00000266CAAA9720 10053\nkex_exchange_identification: read: Connection aborted\nbanner exchange: Connection from 127.0.0.1 port 63805: Connection aborted\ndebug2: pselect_notify_done: reading",
     "landed_path": null,
     "landed_matches_send_to_convention": false,
     "landed_file_exists": false,
     "landed_content_matches": false,
-    "finished_at_ns": 1787891943647423600
+    "finished_at_ns": 1787893261656615600
   }
 }

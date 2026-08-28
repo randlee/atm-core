@@ -514,9 +514,9 @@ paths unchanged.
 
 | Runner | Status | Run ID | Head | Files |
 |--------|--------|--------|------|-------|
-| ubuntu-latest | pass | 33141941621 | 21f00edb1 | [transfer-clean-runner-linux.json](evidence/AQ4/transfer-clean-runner-linux.json) · [transfer-clean-runner-linux.md](evidence/AQ4/transfer-clean-runner-linux.md) |
-| macOS | pass | 33141941621 | 21f00edb1 | [transfer-clean-runner-macos.json](evidence/AQ4/transfer-clean-runner-macos.json) · [transfer-clean-runner-macos.md](evidence/AQ4/transfer-clean-runner-macos.md) |
-| windows | fail | 33141941621 | 21f00edb1 | [transfer-clean-runner-windows.json](evidence/AQ4/transfer-clean-runner-windows.json) · [transfer-clean-runner-windows.md](evidence/AQ4/transfer-clean-runner-windows.md) · harness-integrity fixed; record fresh |
+| ubuntu-latest | pass | 33142976493 | dcd3130f1 | [transfer-clean-runner-linux.json](evidence/AQ4/transfer-clean-runner-linux.json) · [transfer-clean-runner-linux.md](evidence/AQ4/transfer-clean-runner-linux.md) |
+| macOS | pass | 33142976493 | dcd3130f1 | [transfer-clean-runner-macos.json](evidence/AQ4/transfer-clean-runner-macos.json) · [transfer-clean-runner-macos.md](evidence/AQ4/transfer-clean-runner-macos.md) |
+| windows | fail | 33142976493 | dcd3130f1 | [transfer-clean-runner-windows.json](evidence/AQ4/transfer-clean-runner-windows.json) · [transfer-clean-runner-windows.md](evidence/AQ4/transfer-clean-runner-windows.md) · ssh client aborts at kex identification under sftp.ps1 invocation — fix in progress |
 
 The Tailscale leg (`scripts/transfer/tailscale.sh`) cannot run on either
 clean-runner lane (Tailscale enrollment is an operator/IT environment
