@@ -31,7 +31,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-import shutil
 import stat
 import subprocess
 import sys
@@ -39,7 +38,7 @@ import tempfile
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts" / "send-to" / ("atm-send-to.ps1" if os.name == "nt" else "atm-send-to.sh")
+SCRIPT = ROOT / "scripts" / "send-to" / "atm-send-to.sh"
 
 CASES = ("absent", "below", "unparsable", "hang", "missing-asset", "unknown-schema")
 
@@ -88,79 +87,50 @@ def parse_args() -> argparse.Namespace:
 
 
 def executable(path: Path) -> None:
-    if os.name != "nt":
-        path.chmod(path.stat().st_mode | stat.S_IXUSR)
-
-
-def script_path(directory: Path, stem: str) -> Path:
-    """Return a directly invocable fixture path for the current runner."""
-    return directory / (f"{stem}.cmd" if os.name == "nt" else stem)
-
-
-def invoke_script(script: Path, *args: Path) -> list[str]:
-    if os.name == "nt":
-        return [shutil.which("pwsh") or "pwsh", "-NoProfile", "-File", str(script), *(str(arg) for arg in args)]
-    return [str(script), *(str(arg) for arg in args)]
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
 
 
 def make_stub_atm(directory: Path, input_json: Path, send_log: Path) -> Path:
-    path = script_path(directory, "atm")
-    if os.name == "nt":
-        path.write_text(
-            "@echo off\r\n"
-            'if "%~1"=="teams" type "' + str(input_json) + '"\r\n'
-            'if "%~1"=="send" (type nul > "' + str(send_log) + '" & echo send-called 1>&2)\r\n',
-            encoding="utf-8",
-        )
-    else:
-        path.write_text(
-            "#!/bin/sh\n"
-            "if [ \"$1\" = teams ]; then\n"
-            f"  cat {input_json}\n"
-            "elif [ \"$1\" = send ]; then\n"
-            f"  cat > {send_log}\n"
-            "  echo send-called >&2\n"
-            "fi\n",
-            encoding="utf-8",
-        )
+    path = directory / "atm"
+    path.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = teams ]; then\n"
+        f"  cat {input_json}\n"
+        "elif [ \"$1\" = send ]; then\n"
+        f"  cat > {send_log}\n"
+        "  echo send-called >&2\n"
+        "fi\n"
+    )
     executable(path)
     return path
 
 
 def make_native_picker(directory: Path) -> Path:
-    path = script_path(directory, "native-picker")
-    if os.name == "nt":
-        path.write_text(
-            "@echo off\r\n"
-            'echo {"schema_version":1,"recipients":["cipher@atm-dev"]}\r\n',
-            encoding="utf-8",
-        )
-    else:
-        path.write_text(
-            "#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' "
-            "'{\"schema_version\":1,\"recipients\":[\"cipher@atm-dev\"]}'\n",
-            encoding="utf-8",
-        )
+    path = directory / "native-picker"
+    path.write_text(
+        "#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' "
+        "'{\"schema_version\":1,\"recipients\":[\"cipher@atm-dev\"]}'\n"
+    )
     executable(path)
     return path
 
 
 def make_wyvern_stub(directory: Path, case: str) -> Path:
-    path = script_path(directory, f"wyvern-{case}")
+    path = directory / f"wyvern-{case}"
     if case == "absent":
         # Never written: absent-from-PATH is simulated by pointing
         # ATM_SEND_TO_WYVERN_BIN at a path that does not exist.
         return path
     if case == "below":
-        version_body = "wyvern 0.4.0"
+        version_body = "printf 'wyvern 0.4.0\\n'\n"
     elif case == "unparsable":
-        version_body = "wyvern development"
+        version_body = "printf 'wyvern development\\n'\n"
     elif case == "hang":
         # Comfortably exceeds probe_wyvern.py's 1.5s bounded deadline;
         # subprocess's own timeout kills this before completion.
-        version_body = None
+        version_body = "sleep 30\n"
     else:
-        version_body = "wyvern 0.5.0"
+        version_body = "printf 'wyvern 0.5.0\\n'\n"
     # A real Wyvern wizard's terminal stdout is the full WizardResult
     # envelope (`{"button":"finish","data":<PickerOutput>,"stack":[...]}`),
     # not a bare PickerOutput object -- this stub mirrors that exact shape
@@ -170,28 +140,10 @@ def make_wyvern_stub(directory: Path, case: str) -> Path:
         if case == "unknown-schema"
         else '{"button":"finish","data":{"schema_version":1,"recipients":["cipher@atm-dev"]},"stack":[]}'
     )
-    if os.name == "nt":
-        if version_body is None:
-            version_command = 'pwsh -NoProfile -Command "Start-Sleep -Seconds 30"'
-        else:
-            version_command = f'echo {version_body}'
-        path.write_text(
-            "@echo off\r\n"
-            'if "%~1"=="--version" (' + version_command + ') else (\r\n'
-            f"echo {wizard_result}\r\n"
-            ")\r\n",
-            encoding="utf-8",
-        )
-    else:
-        if version_body is None:
-            version_command = "sleep 30"
-        else:
-            version_command = f"printf '%s\\n' '{version_body}'"
-        path.write_text(
-            "#!/bin/sh\nif [ \"$1\" = --version ]; then\n"
-            f"{version_command}\nelse\nprintf '%s\\n' '{wizard_result}'\nfi\n",
-            encoding="utf-8",
-        )
+    path.write_text(
+        f"#!/bin/sh\nif [ \"$1\" = --version ]; then\n{version_body}"
+        f"else\nprintf '%s\\n' '{wizard_result}'\nfi\n"
+    )
     executable(path)
     return path
 
@@ -217,7 +169,7 @@ def run_case(case: str, directory: Path) -> dict[str, Any]:
     env.pop("ATM_SEND_TO_PICKER", None)
 
     completed = subprocess.run(
-        invoke_script(SCRIPT, one_file),
+        [str(SCRIPT), str(one_file)],
         cwd=ROOT,
         env=env,
         text=True,

@@ -120,13 +120,6 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             finally:
                 os.umask(previous_umask)
 
-            if os.name == "nt":
-                installed = home / ".atm" / "transfer" / f"{module.TRANSFER_HOST}.ps1"
-                self.assertEqual(info["script_kind"], "powershell")
-                self.assertEqual(info["safety_model"], "windows-profile-containment")
-                self.assertEqual(installed.read_bytes(), (module.ROOT / "scripts" / "transfer" / "sftp.ps1").read_bytes())
-                return
-
             atm_dir = home / ".atm"
             transfer_dir = atm_dir / "transfer"
             installed = transfer_dir / module.TRANSFER_HOST
@@ -144,11 +137,6 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary) / "home"
             module.install_transfer_script(home)
-            if os.name == "nt":
-                info = module.install_transfer_script(home)
-                self.assertEqual(info["script_kind"], "powershell")
-                self.assertTrue((home / ".atm" / "transfer" / f"{module.TRANSFER_HOST}.ps1").is_file())
-                return
             (home / ".atm" / "transfer").chmod(0o755)
             info = module.install_transfer_script(home)
             self.assertEqual(info["transfer_dir_mode"], "0o700")

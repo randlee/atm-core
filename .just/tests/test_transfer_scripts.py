@@ -404,7 +404,7 @@ class SftpPs1Tests(unittest.TestCase):
             self.assertTrue(landed_dir.endswith("send-to/01J00000000000000000000048"), landed_dir)
 
             invocations = _read_log(log_path)
-            self.assertEqual([call["bin"] for call in invocations], ["ssh", "ssh", "scp"], invocations)
+            self.assertEqual([call["bin"] for call in invocations], ["ssh", "scp"], invocations)
 
     def test_missing_binary_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmp:
@@ -430,7 +430,7 @@ class SftpPs1Tests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0, result.stdout)
             invocations = _read_log(log_path)
-            self.assertEqual([call["bin"] for call in invocations], ["ssh", "ssh", "scp"], invocations)
+            self.assertEqual([call["bin"] for call in invocations], ["ssh", "scp"], invocations)
 
 
 if __name__ == "__main__":
