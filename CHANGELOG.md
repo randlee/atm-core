@@ -3,8 +3,9 @@
 ## 1.4.4
 
 - first kit-era release: the repository's publish surface is fully cut over to
-  the installed `sc-publish` kit (pinned revision `42e0fcea`, 49 byte-copied
-  files guarded by ADR-050); manifest-driven publishing recovery lands as
+  the installed `sc-publish` kit (pinned revision `25668ecc`, 54 byte-copied
+  files guarded by ADR-050, recorded in `release/sc-publish-pin.toml`);
+  manifest-driven publishing recovery lands as
   canonical consumer install plus parity proof (AT.1) and legacy
   publish-surface deletion with explicit `deferred-until-<gate>` dispositions
   for paths that outlive their first-release receipts (AT.2). Per the
