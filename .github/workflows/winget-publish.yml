@@ -25,9 +25,15 @@ jobs:
       channel_config: ${{ steps.config.outputs.channel_config }}
       asset_patterns: ${{ steps.config.outputs.asset_patterns }}
     steps:
+      # Release-branch fix (v1.4.4, upstream sc-publish#76): check out the
+      # dispatch ref, not the immutable tag. This workflow never builds from
+      # source — release assets stay tag-pinned via their download URLs and
+      # verify-published-release validates via the API — so the checkout
+      # exists solely to supply the verify tooling and manifest. Pinning it
+      # to the tag freezes any tooling defect into the release forever (the
+      # tag is immutable). Same model as release.yml: immutable tag for
+      # artifacts, dispatch ref for tooling.
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag }}
       - id: config
         name: Read Winget configuration from release manifest
         shell: bash

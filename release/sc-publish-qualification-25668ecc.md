@@ -271,3 +271,52 @@ documented in its comment); the edited composite parses as valid YAML. The
 runner-image race itself is not reproducible on a local macOS host with a
 fully provisioned toolchain, so in-repo CI precedent is the rehearsal
 authority here.
+
+### Round 4 (live homebrew channel run 33220372286 — workflow PASSED, formula runtime-broken)
+
+The homebrew channel run went green and pushed both formulas to the tap, but
+`brew install randlee/tap/atm` fails at runtime for every user
+(reported by publisher's post-push live verification):
+
+14. **`formula.rb.j2` renders Homebrew path-helper methods as string
+    literals**: every `bundled_paths` destination component goes through
+    `| tojson`, so `["pkgshare"]` renders as `("pkgshare").install Dir[...]`
+    — a String, not the `pkgshare` method →
+    `NoMethodError: undefined method 'install' for an instance of String`
+    during `brew install`. `ruby -c` (the workflow's only formula gate)
+    passes on the broken output, which is why both the workflow and the
+    round-3 local rehearsal (render + `ruby -c`) missed it — **syntax
+    validation is not runtime validation**. Fix: the first component
+    renders as the bare path-helper method, subsequent components as
+    quoted segments (the `pkgshare/"subdir"` idiom). Upstream:
+    [sc-publish #77](https://github.com/randlee/sc-publish/issues/77);
+    the missing runtime gate is
+    [sc-publish #78](https://github.com/randlee/sc-publish/issues/78).
+15. **Manifest `test_output` stale against the released binary** (found
+    only by the round-4 runtime rehearsal): all three formula entries
+    asserted `"CLI for local agent team mail workflows"`, but the v1.4.4
+    binary's `--help` prints `ATM CLI` — the formula `test do` block fails
+    for anyone running `brew test`. No gate ever executes the test block
+    (also #78). Fix: `test_output = "ATM CLI"` (the stable first line of
+    the real help output), verified against the released binary.
+
+This round also drops the `ref: ${{ inputs.tag }}` checkout pins from
+`homebrew-publish.yml`, `scoop-publish.yml`, and `winget-publish.yml` (the
+defect-13 / sc-publish #76 class): homebrew's render step read the formula
+template from a tag-pinned `release-source` checkout, so a re-dispatch after
+merging fix 14 would have re-pushed the tag's frozen broken template. All
+three now use the dispatch-ref checkout for tooling/templates; release
+assets stay tag-pinned via their download URLs and
+`verify-published-release` API validation (same model as `release.yml` and
+the fixed `pypi-publish.yml`).
+
+Round-4 runtime rehearsal (the new bar for this channel, per #78):
+`brew install` executed locally from the fixed rendered formula in a
+throwaway local tap against the real v1.4.4 release assets — install block
+runs clean (41 files incl. pkgshare docs in the keg), keg binary reports
+`atm 1.4.4`, and the test-block assertion (`--help` contains `ATM CLI`)
+passes against the real released binary. `ruby -c` both formulas OK; all
+three edited workflows YAML-parse; scoop manifest re-rendered under the new
+`--root .` model and JSON-validates. The scoop/winget artifacts themselves
+were already live-verified by publisher (bucket JSON content; winget-pkgs
+PR #425892) and are declarative — no analogous runtime DSL surface.
