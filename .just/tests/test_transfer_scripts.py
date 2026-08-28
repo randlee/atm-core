@@ -24,6 +24,7 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SFTP_SH = ROOT / "scripts" / "transfer" / "sftp.sh"
@@ -31,6 +32,35 @@ TAILSCALE_SH = ROOT / "scripts" / "transfer" / "tailscale.sh"
 SFTP_PS1 = ROOT / "scripts" / "transfer" / "sftp.ps1"
 
 PWSH = shutil.which("pwsh")
+
+
+def posix_shell() -> str | None:
+    """A POSIX shell to run `sftp.sh`/`tailscale.sh` with.
+
+    `CreateProcess` on Windows has no shebang interpretation:
+    `subprocess.run([str(a_dot_sh_file)])` there raises `OSError:
+    [WinError 193] %1 is not a valid Win32 application`, even though the
+    script's own logic is entirely portable `/bin/sh`. GitHub's
+    `windows-latest` runners ship Git for Windows, which puts `bash.exe` on
+    PATH -- use that (or a bare `sh`) instead of executing the file
+    directly. This mirrors `.just/tests/test_picker_exclusion.py`'s
+    `posix_shell()` for the same reason. This is a capability check, not a
+    platform check: the `.sh` contract tests below run wherever a POSIX
+    shell is found, on any OS, and skip with this exact reason only when
+    one genuinely is not available.
+    """
+    return shutil.which("bash") or shutil.which("sh")
+
+
+def sh_invocation(script: Path) -> list[str]:
+    """Argv prefix to invoke a `.sh` script portably; callers on Windows
+    must gate on `posix_shell()` first (see its docstring above)."""
+    if sys.platform == "win32":
+        shell = posix_shell()
+        if shell is None:  # pragma: no cover - guarded by class-level skip
+            raise AssertionError("posix_shell() must be checked before sh_invocation() on Windows")
+        return [shell, str(script)]
+    return [str(script)]
 
 FAKE_SSH = textwrap.dedent(
     """\
@@ -188,12 +218,23 @@ def _install_fake_bin(bin_dir: Path) -> None:
     exactly like the production OpenSSH client's `ssh.exe`/`scp.exe` would
     be found; the shim just re-execs this same Python source under the
     interpreter already running the test.
+
+    The bare, extension-less files are what a POSIX shell (`sftp.sh`/
+    `tailscale.sh` invoked via a discovered `bash`/`sh` on Windows, see
+    `posix_shell()`) actually resolves on `PATH` -- MSYS/Git-for-Windows
+    treats a PATH entry as executable by content-sniffing its shebang line,
+    which only works if that line is pure `\n`-terminated. `Path.write_text`
+    defaults to universal-newline translation, which would silently turn
+    every `\n` in these scripts into `\r\n` on Windows and corrupt the
+    shebang (`#!/usr/bin/env python3\r` is not a resolvable interpreter
+    name) -- pass `newline=""` throughout this function so every byte is
+    written exactly as authored, on every platform.
     """
     bin_dir.mkdir(parents=True, exist_ok=True)
-    (bin_dir / "fake_transfer_lib.py").write_text(FAKE_TRANSFER_LIB, encoding="utf-8")
+    (bin_dir / "fake_transfer_lib.py").write_text(FAKE_TRANSFER_LIB, encoding="utf-8", newline="")
     for name, body in (("ssh", FAKE_SSH), ("scp", FAKE_SCP)):
         script_path = bin_dir / name
-        script_path.write_text(body, encoding="utf-8")
+        script_path.write_text(body, encoding="utf-8", newline="")
         mode = script_path.stat().st_mode
         script_path.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         if sys.platform == "win32":
@@ -201,6 +242,7 @@ def _install_fake_bin(bin_dir: Path) -> None:
             cmd_path.write_text(
                 f'@echo off\r\n"{sys.executable}" "%~dp0{name}" %*\r\n',
                 encoding="utf-8",
+                newline="",
             )
 
 
@@ -220,7 +262,7 @@ class _TransferScriptContractTestsMixin:
 
     def _invoke(self, args, env, cwd):
         return subprocess.run(
-            [str(self.SCRIPT), *args],
+            [*sh_invocation(self.SCRIPT), *args],
             env=env,
             cwd=cwd,
             capture_output=True,
@@ -395,6 +437,10 @@ class _TransferScriptContractTestsMixin:
             self.assertEqual(before, after, "invoking a transfer script must never mutate this process's own environment")
 
 
+@unittest.skipIf(
+    sys.platform == "win32" and posix_shell() is None,
+    "no POSIX shell (bash/sh) found on PATH to run this .sh script on Windows",
+)
 class SftpShTests(_TransferScriptContractTestsMixin, unittest.TestCase):
     SCRIPT = SFTP_SH
 
@@ -403,6 +449,10 @@ class SftpShTests(_TransferScriptContractTestsMixin, unittest.TestCase):
         self.assertTrue(os.access(SFTP_SH, os.X_OK))
 
 
+@unittest.skipIf(
+    sys.platform == "win32" and posix_shell() is None,
+    "no POSIX shell (bash/sh) found on PATH to run this .sh script on Windows",
+)
 class TailscaleShTests(_TransferScriptContractTestsMixin, unittest.TestCase):
     SCRIPT = TAILSCALE_SH
 
@@ -524,6 +574,32 @@ class SftpPs1Tests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0, result.stdout)
             invocations = _read_log(log_path)
             self.assertEqual([call["bin"] for call in invocations], ["ssh", "scp"], invocations)
+
+
+class PosixShellDiscoveryTests(unittest.TestCase):
+    """Direct unit coverage for `posix_shell()`'s discovery order, mocking
+    `shutil.which` so these assertions never depend on what happens to be
+    on this machine's real `PATH`."""
+
+    def test_prefers_bash_when_both_bash_and_sh_are_on_path(self) -> None:
+        with mock.patch.object(
+            shutil,
+            "which",
+            side_effect=lambda name: f"/usr/bin/{name}" if name in ("bash", "sh") else None,
+        ):
+            self.assertEqual(posix_shell(), "/usr/bin/bash")
+
+    def test_falls_back_to_sh_when_bash_is_absent(self) -> None:
+        with mock.patch.object(
+            shutil,
+            "which",
+            side_effect=lambda name: "/bin/sh" if name == "sh" else None,
+        ):
+            self.assertEqual(posix_shell(), "/bin/sh")
+
+    def test_returns_none_when_neither_is_on_path(self) -> None:
+        with mock.patch.object(shutil, "which", return_value=None):
+            self.assertIsNone(posix_shell())
 
 
 if __name__ == "__main__":
