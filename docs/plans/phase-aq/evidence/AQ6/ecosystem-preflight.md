@@ -49,13 +49,13 @@ it writes `PickerInput` under the generated wizard JSON's `config`, invokes
 
 ## PR CI evidence
 
-Fix-pass head: `ff67655d1294a061a842e8a6040beb9144ec1cd7`.
+Final implementation head: `a80d6b2ef93b957485351184c79ea056ef3e7719`.
 
-- [CI run 33125908664](https://github.com/randlee/atm-core/actions/runs/33125908664)
-- [Phase AQ Evidence run 33125908632](https://github.com/randlee/atm-core/actions/runs/33125908632)
+- [Phase AQ Evidence run 33129163402](https://github.com/randlee/atm-core/actions/runs/33129163402) — concluded success, including the Ubuntu and macOS evidence lanes.
+- [CI run 33129163434](https://github.com/randlee/atm-core/actions/runs/33129163434) — current run for this head; all completed lanes are green and the macOS lint and macOS aarch64 wheel lanes remain queued.
 
-The fix-pass run IDs above are the authoritative CI evidence for the pushed
-QA-1 correction; lane completion status is tracked by the linked workflows.
+These run IDs are the authoritative evidence for the current pushed head;
+lane completion status is tracked by the linked workflows.
 
 ## Fix-forward record
 
@@ -65,3 +65,9 @@ pin back to the last known-good exact version, reuse
 `maybe_file_dep_currency_issue` with `ATMD_GH_AUTOFIX_ISSUES=1`, and append the
 regression, pinned-back version, and returned issue URL here before release
 continues.
+
+## CI evidence for final head
+
+- head: `a80d6b2ef93b957485351184c79ea056ef3e7719`
+- CI run: [33129163434](https://github.com/randlee/atm-core/actions/runs/33129163434), with macOS lint and macOS aarch64 wheel lanes queued at the time of this record
+- Phase AQ Evidence run: [33129163402](https://github.com/randlee/atm-core/actions/runs/33129163402), concluded success
