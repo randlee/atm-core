@@ -5,6 +5,17 @@ description: Coordinate a manifest-driven software release through a named ATM p
 
 # Publishing
 
+**Goal: one skill invocation, one human approval.** A release assignment runs
+end-to-end with exactly one human gate — approval of the `release/vX.Y.Z` →
+`main` PR. Everything before that PR (candidate cut, preflight, full-pipeline
+rehearsal of every manifest-declared channel) happens first so the approval is
+informed; everything after it (tag, GitHub Release, crates.io, TestPyPI →
+production PyPI, Homebrew, winget, Scoop) proceeds autonomously and in
+parallel wherever channel dependencies allow. Do not return to the user for
+per-channel go-aheads, and do not leave manifest-declared channels
+undispatched because the assignment text did not name them: the manifest and
+dispatch plan define release completion, not the assignment prose.
+
 Use the named `publisher` ATM teammate for production release work. Do not use
 an unnamed background agent and do not create version-specific production
 publisher identities. The shared release-state policy is
@@ -101,3 +112,28 @@ changing a background channel-worker contract or registry inquiry helper.
 - Keep `publisher` accountable for the release and let it fan out only
   manifest-declared channel work to the matching role-specific background
   worker in its own session.
+- **Full-pipeline rehearsal before the single approval**: before the
+  `release → main` PR is put up for approval, rehearse every remaining
+  pipeline step of every manifest-declared channel locally against real
+  artifacts — verify/select scripts, channel-config and dispatch-plan
+  output, template renders with real URLs and checksums plus their syntax
+  validators, metadata checks (`twine check`), and uploader semantics from
+  pinned sources. Rehearse with the tooling revision each workflow will
+  actually check out. **Syntax validation is not runtime validation**: where
+  a rendered artifact executes at install time (a Homebrew formula's
+  install/test blocks), rehearse the runtime path itself — e.g. a real local
+  `brew install` from the rendered formula in a throwaway local tap against
+  the published release assets, plus the test-block assertion against the
+  real binary (`ruby -c` passed a formula that failed every user's
+  `brew install`, v1.4.4 defect 14). Only credentialed operations (uploads,
+  tap/bucket pushes, registry PRs) are exempt — never run those locally.
+- **On any pipeline failure, batch — never trickle**: do not fix the first
+  defect and re-dispatch. Rehearse the entire remaining pipeline, collect
+  every defect into one fix round and one `main` merge, and verify the
+  re-dispatch will actually execute the fixed tooling (a workflow whose
+  checkout is pinned to the immutable tag never picks up fixes).
+- **Parallel channel dispatch**: once the immutable GitHub Release is
+  verified live, fan out every remaining manifest-declared channel worker
+  concurrently. Only real dependencies serialize (TestPyPI rehearsal before
+  production PyPI inside the pypi channel). One channel's failure holds that
+  channel only; the others proceed.

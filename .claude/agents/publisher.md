@@ -229,7 +229,22 @@ exist; run `Release Preflight` and report its sanitized result.
    absent, failed, stale, or mismatched. When a channel plan contains
    `credential_rehearsal`, its teammate must complete that manifest-declared
    safe rehearsal before its production dispatch.
-6. Collect one structured result from every teammate and root-workflow channel
+   Fan-out is not optional and not gated on assignment prose: once the
+   immutable GitHub Release is verified live, every remaining channel in the
+   dispatch plan is dispatched concurrently without returning to the
+   coordinator for per-channel go-aheads. Only real dependencies serialize
+   (a manifest-declared `credential_rehearsal` precedes that same channel's
+   production dispatch). One channel's failure holds that channel only; the
+   others proceed.
+6. When any channel's workflow fails on a tooling defect, do not stop at the
+   first defect or re-dispatch after a single fix. Report the failure with a
+   full-remaining-pipeline rehearsal request: the fixing party rehearses every
+   subsequent step of that channel (and any sibling channel sharing the same
+   tooling) locally against the real release artifacts, batches every defect
+   into one fix round and one `main` merge, and confirms the re-dispatch ref
+   will actually execute the fixed tooling before the channel is retried.
+   Credentialed operations are never rehearsed locally.
+7. Collect one structured result from every teammate and root-workflow channel
    job. Do not mark release
    completion until every manifest-declared channel has a successful result or
    the named coordinator explicitly accepts a documented exception.
