@@ -2832,7 +2832,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ4 #1055 @ f9eb08449 (GHA run 33136767284, dispatch/push race): Clean-runner matrix run 5 checked out f9eb08449 (previous head) instead of intended c510a4745. Results: ubuntu PASS (transfer tests 3/3), macos PASS (transfer tests 3/3); Windows FAIL (pytest-fixture NUL variant issues — expected on pre-fix f9eb08449 baseline, same as CI-AQ4-LINT-WINDOWS-PYTEST-R1). Not new information. Run 6 reshot with verified head c510a4745 checkout."
+   "evidence": "AQ4 #1055 @ f9eb08449 (GHA run 33136767284, dispatch/push race): Clean-runner matrix run 5 checked out f9eb08449 (previous head) instead of intended c510a4745. Results: ubuntu PASS (transfer tests 3/3), macos PASS (transfer tests 3/3); Windows FAIL (pytest-fixture NUL variant issues \u2014 expected on pre-fix f9eb08449 baseline, same as CI-AQ4-LINT-WINDOWS-PYTEST-R1). Not new information. Run 6 reshot with verified head c510a4745 checkout."
   },
   {
    "run_id": "QA-AQ4-R6",
@@ -2883,6 +2883,31 @@
    "minor": null,
    "count_basis": "headline/reviewer",
    "evidence": "AQ4 #1055 @ c510a4745 (GHA, head verified, reshot after run 5 raced f9eb08449): Clean-runner matrix run 6 on verified c510a4745 head with PATH fix. Pending results."
+  },
+  {
+   "run_id": "QA-AQ4-R2-FIXTURE-FIX",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "quality-mgr",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 @ 5e033b13e Windows pytest fixtures audit; hidden errors surfaced",
+   "result_time_utc": "2026-08-28T16:50:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "AQ4 #1055 @ 5e033b13e Windows pytest fixtures fixed: fake ssh/scp also installed as .cmd shims so pwsh Get-Command/PATHEXT resolves them; tests had silently fallen through to real OpenSSH; known_hosts test split unix //dev/null vs windows NUL. New finding: Windows pytest run reports errors=16 on every recent head, hidden because run_lint prints only last 40 lines and CI doesn't upload .just/logs. CI observability fix in progress (full ERROR/FAIL preview + logs artifact on failure). CI on 5e033b13e and evidence run 6 (c510a4745, head-verified) in flight."
   }
  ],
  "follow_ups": [
