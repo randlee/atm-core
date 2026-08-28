@@ -3,15 +3,15 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import stat
 import subprocess
-import sys
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts/send-to/atm-send-to.sh"
+SCRIPT = ROOT / "scripts/send-to" / ("atm-send-to.ps1" if os.name == "nt" else "atm-send-to.sh")
 PICKER = ROOT / "scripts/send-to/picker.py"
 COMMAND_WRAPPER = ROOT / "scripts/send-to/atm-send-to.command"
 NAUTILUS_WRAPPER = ROOT / "scripts/send-to/nautilus-atm-send-to.sh"
@@ -30,34 +30,59 @@ PICKER_INPUT = {
 
 
 def executable(path: Path) -> None:
-    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+    if os.name != "nt":
+        path.chmod(path.stat().st_mode | stat.S_IXUSR)
 
 
-@unittest.skipIf(
-    sys.platform == "win32",
-    "atm-send-to.sh is the macOS/Linux pipeline (bash + osascript/zenity/fzf); "
-    "Windows ships the separate atm-send-to.ps1 + picker-windows.ps1 pipeline, "
-    "validated by manual E2E per docs/plans/phase-aq/sprint-AQ5-surface-evidence.md",
-)
+def fixture_path(directory: Path, stem: str) -> Path:
+    return directory / (f"{stem}.cmd" if os.name == "nt" else stem)
+
+
+def invoke_script(script: Path, *args: Path) -> list[str]:
+    if os.name == "nt":
+        return [shutil.which("pwsh") or "pwsh", "-NoProfile", "-File", str(script), *(str(arg) for arg in args)]
+    return [str(script), *(str(arg) for arg in args)]
+
+
 class SendToSurfaceTests(unittest.TestCase):
     def make_atm(self, directory: Path, log: Path) -> Path:
-        path = directory / "atm"
-        path.write_text(
-            "#!/bin/sh\n"
-            "if [ \"$1\" = teams ]; then\n"
-            f"  cat {directory / 'input.json'}\n"
-            "elif [ \"$1\" = send ]; then\n"
-            f"  printf '%s\\n' \"$@\" > {log}.args\n"
-            f"  cat > {log}\n"
-            "  echo send-called >&2\n"
-            "fi\n"
-        )
+        path = fixture_path(directory, "atm")
+        if os.name == "nt":
+            path.write_text(
+                "@echo off\r\n"
+                'if "%~1"=="teams" type "' + str(directory / "input.json") + '"\r\n'
+                'if "%~1"=="send" (type nul > "' + str(log) + '" & echo send-called 1>&2)\r\n',
+                encoding="utf-8",
+            )
+        else:
+            path.write_text(
+                "#!/bin/sh\n"
+                "if [ \"$1\" = teams ]; then\n"
+                f"  cat {directory / 'input.json'}\n"
+                "elif [ \"$1\" = send ]; then\n"
+                f"  printf '%s\\n' \"$@\" > {log}.args\n"
+                f"  cat > {log}\n"
+                "  echo send-called >&2\n"
+                "fi\n",
+                encoding="utf-8",
+            )
         executable(path)
         return path
 
     def make_picker(self, directory: Path, output: str, code: int = 0) -> Path:
-        path = directory / ("picker-ok" if code == 0 else "picker-cancel")
-        path.write_text(f"#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '{output}'\nexit {code}\n")
+        path = fixture_path(directory, "picker-ok" if code == 0 else "picker-cancel")
+        if os.name == "nt":
+            path.write_text(
+                "@echo off\r\n"
+                f"echo {output}\r\n"
+                f"exit /b {code}\r\n",
+                encoding="utf-8",
+            )
+        else:
+            path.write_text(
+                f"#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '{output}'\nexit {code}\n",
+                encoding="utf-8",
+            )
         executable(path)
         return path
 
@@ -70,7 +95,7 @@ class SendToSurfaceTests(unittest.TestCase):
             env.pop("ATM_SEND_TO_PICKER", None)
         if extra:
             env.update(extra)
-        return subprocess.run([str(script), *(str(item) for item in files)], cwd=ROOT, env=env, text=True, capture_output=True)
+        return subprocess.run(invoke_script(script, *files), cwd=ROOT, env=env, text=True, capture_output=True)
 
     def test_cancel_exits_without_invoking_send(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -152,21 +177,21 @@ class SendToSurfaceTests(unittest.TestCase):
             for case in cases:
                 with self.subTest(case=case):
                     log.unlink(missing_ok=True)
-                    wyvern = directory / f"wyvern-{case}"
+                    wyvern = fixture_path(directory, f"wyvern-{case}")
                     if case != "absent":
                         if case == "below":
-                            body = "printf 'wyvern 0.4.0\\n'\n"
+                            body = "wyvern 0.4.0"
                         elif case == "unparsable":
-                            body = "printf 'wyvern development\\n'\n"
+                            body = "wyvern development"
                         elif case == "hang":
                             # Comfortably exceeds probe_wyvern.py's PROBE_SECONDS
                             # (1.5s) bounded deadline; subprocess.run's timeout
                             # kills this before it ever completes, so a larger
                             # margin costs nothing but removes any chance of a
                             # loaded CI runner racing the deadline closed.
-                            body = "sleep 30\n"
+                            body = None
                         else:
-                            body = "printf 'wyvern 0.5.0\\n'\n"
+                            body = "wyvern 0.5.0"
                         # A real Wyvern wizard's terminal stdout is the full
                         # WizardResult envelope (`{"button":"finish","data":
                         # <PickerOutput>,"stack":[...]}`), not a bare
@@ -180,10 +205,28 @@ class SendToSurfaceTests(unittest.TestCase):
                             if case == "unknown-schema"
                             else '{"button":"finish","data":{"schema_version":1,"recipients":["cipher@atm-dev"]},"stack":[]}'
                         )
-                        wyvern.write_text(
-                            f"#!/bin/sh\nif [ \"$1\" = --version ]; then\n{body}"
-                            f"else\nprintf '%s\\n' '{wizard_result}'\nfi\n"
-                        )
+                        if os.name == "nt":
+                            if body is None:
+                                version_command = 'pwsh -NoProfile -Command "Start-Sleep -Seconds 30"'
+                            else:
+                                version_command = f"echo {body}"
+                            wyvern.write_text(
+                                "@echo off\r\n"
+                                'if "%~1"=="--version" (' + version_command + ') else (\r\n'
+                                f"echo {wizard_result}\r\n"
+                                ")\r\n",
+                                encoding="utf-8",
+                            )
+                        else:
+                            if body is None:
+                                version_command = "sleep 30"
+                            else:
+                                version_command = f"printf '%s\\n' '{body}'"
+                            wyvern.write_text(
+                                "#!/bin/sh\nif [ \"$1\" = --version ]; then\n"
+                                f"{version_command}\nelse\nprintf '%s\\n' '{wizard_result}'\nfi\n",
+                                encoding="utf-8",
+                            )
                         executable(wyvern)
                     extra = {
                         "ATM_SEND_TO_WYVERN_BIN": str(wyvern),
@@ -198,15 +241,25 @@ class SendToSurfaceTests(unittest.TestCase):
 
     def make_noisy_failing_picker(self, directory: Path, code: int = 7) -> Path:
         """A picker that fails loudly on stderr, like the real `picker.py` does."""
-        path = directory / "picker-noisy-failure"
-        path.write_text(
-            "#!/bin/sh\ncat >/dev/null\n"
-            "echo 'send-to picker: at least one recipient must be selected' >&2\n"
-            f"exit {code}\n"
-        )
+        path = fixture_path(directory, "picker-noisy-failure")
+        if os.name == "nt":
+            path.write_text(
+                "@echo off\r\n"
+                "echo send-to picker: at least one recipient must be selected 1>&2\r\n"
+                f"exit /b {code}\r\n",
+                encoding="utf-8",
+            )
+        else:
+            path.write_text(
+                "#!/bin/sh\ncat >/dev/null\n"
+                "echo 'send-to picker: at least one recipient must be selected' >&2\n"
+                f"exit {code}\n",
+                encoding="utf-8",
+            )
         executable(path)
         return path
 
+    @unittest.skipIf(os.name == "nt", "the command wrapper is Unix-only")
     def test_command_wrapper_propagates_exit_code_and_forwards_stderr_on_failure(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             directory = Path(raw)
@@ -226,6 +279,7 @@ class SendToSurfaceTests(unittest.TestCase):
             self.assertFalse(log.exists(), result.stderr)
             self.assertIn("send-to picker", result.stderr)
 
+    @unittest.skipIf(os.name == "nt", "the command wrapper is Unix-only")
     def test_command_wrapper_exits_zero_on_success(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             directory = Path(raw)
@@ -238,6 +292,7 @@ class SendToSurfaceTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(log.exists(), result.stderr)
 
+    @unittest.skipIf(os.name == "nt", "the Nautilus wrapper is Unix-only")
     def test_nautilus_wrapper_propagates_exit_code_and_forwards_stderr_on_failure(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             directory = Path(raw)

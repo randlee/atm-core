@@ -20,7 +20,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--asset", required=True)
     args = parser.parse_args(argv[1:])
     binary = os.environ.get("ATM_SEND_TO_WYVERN_BIN", "wyvern")
-    if shutil.which(binary) is None:
+    resolved_binary = shutil.which(binary)
+    if resolved_binary is None:
         print("wyvern is absent from PATH", file=sys.stderr)
         return 1
     expected = VERSION.fullmatch(args.pin)
@@ -28,8 +29,14 @@ def main(argv: list[str]) -> int:
         print("Wyvern pin is not a complete semantic version", file=sys.stderr)
         return 1
     try:
+        command = [binary, "--version"]
+        if os.name == "nt" and Path(resolved_binary).suffix.lower() in {".cmd", ".bat"}:
+            # CreateProcess cannot execute a batch file directly.  Keep the
+            # probe bounded while using the Windows command interpreter for
+            # the same fixture and production shims PowerShell can invoke.
+            command = ["cmd", "/d", "/c", resolved_binary, "--version"]
         completed = subprocess.run(
-            [binary, "--version"], capture_output=True, text=True,
+            command, capture_output=True, text=True,
             timeout=PROBE_SECONDS, check=False,
         )
     except subprocess.TimeoutExpired:
