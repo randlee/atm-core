@@ -251,6 +251,14 @@ impl HerdrBreakerDoctor for ClosedHerdrBreakerDoctor {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct HerdrQueuePumpDoctorReport {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_tick_at: Option<crate::types::IsoTimestamp>,
+    #[serde(default)]
+    pub breaker: HerdrBreakerDoctorReport,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DoctorReport {
     pub summary: DoctorSummary,
@@ -268,6 +276,8 @@ pub struct DoctorReport {
     pub observability: AtmObservabilityHealth,
     #[serde(default)]
     pub herdr_breaker: HerdrBreakerDoctorReport,
+    #[serde(default)]
+    pub herdr_queue_pump: HerdrQueuePumpDoctorReport,
     #[serde(default)]
     pub post_send: PostSendDoctorReport,
     pub config: ConfigDoctorReport,

@@ -133,6 +133,7 @@ pub struct StorageAndNudgeRouter {
     direct_peer_port: NonZeroU16,
     peer_connection_pool: Option<PeerConnectionPool>,
     shared_direct_peer_client: Option<reqwest::Client>,
+    maintenance: Option<Arc<dyn crate::RuntimeMaintenance>>,
     bare_cli_fifo: BareCliFifo,
     bare_cli_queue_full_drops: BareCliQueueFullDrops,
     member_state_transition_sink: Option<Arc<dyn crate::MemberStateTransitionSink>>,
@@ -160,6 +161,7 @@ impl StorageAndNudgeRouter {
             direct_peer_port: crate::direct_peer_port(),
             peer_connection_pool: None,
             shared_direct_peer_client: None,
+            maintenance: None,
             bare_cli_fifo: Default::default(),
             bare_cli_queue_full_drops: Default::default(),
             member_state_transition_sink: None,
@@ -183,6 +185,13 @@ impl StorageAndNudgeRouter {
     ) -> Self {
         self.runtime_health = runtime_health;
         self.doctor_ports = Some(doctor_ports);
+        self
+    }
+
+    /// Attaches the process-owned maintenance task to this composition root.
+    #[must_use]
+    pub fn with_maintenance(mut self, maintenance: Arc<dyn crate::RuntimeMaintenance>) -> Self {
+        self.maintenance = Some(maintenance);
         self
     }
 
@@ -579,6 +588,8 @@ impl StorageAndNudgeRouter {
                 let mut runtime_status = runtime_health.snapshot();
                 runtime_status.bare_cli_queue_full_drops_total =
                     bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
+                report.herdr_queue_pump.last_tick_at = runtime_status.herdr_queue_last_tick_at;
+                report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
                 report.runtime_status = Some(runtime_status);
                 report.daemon_context = daemon_context;
                 Ok(report)
@@ -773,6 +784,15 @@ impl StorageAndNudgeRouter {
         }
         self.service_runtime.clear_roster_cache();
         Ok(ApiResponse::new(ResponseEnvelope::RuntimeViewReloaded))
+    }
+}
+
+impl crate::RuntimeMaintenance for StorageAndNudgeRouter {
+    fn start(&self, shutdown: tokio::sync::watch::Receiver<()>) -> tokio::task::JoinHandle<()> {
+        self.maintenance.as_ref().map_or_else(
+            || tokio::spawn(async {}),
+            |maintenance| maintenance.start(shutdown),
+        )
     }
 }
 
@@ -2104,10 +2124,14 @@ mod tests {
             )
             .await
             .expect("doctor response");
-        assert!(matches!(
-            response.into_inner(),
-            ResponseEnvelope::Doctor(report) if report.daemon_context == Some(daemon_context)
-        ));
+        match response.into_inner() {
+            ResponseEnvelope::Doctor(report) => {
+                assert_eq!(report.daemon_context, Some(daemon_context));
+                assert_eq!(report.herdr_queue_pump.last_tick_at, None);
+                assert_eq!(report.herdr_queue_pump.breaker, report.herdr_breaker);
+            }
+            other => panic!("expected doctor report, got {other:?}"),
+        }
     }
 
     async fn post_write(app: axum::Router, write: &WriteRequest) -> axum::response::Response {

@@ -1,8 +1,40 @@
 # Sprint AQ2.7 — Queue: Herdr Poll-Gated Mailbox Wake-Up
 
-Status: draft · Branch: `feature/aq-2-7-herdr-queue-wake` off
+Status: complete · Branch: `feature/aq-2-7-herdr-queue-wake` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
+
+Implementation status (2026-08-26): complete on the assigned branch; QA-1
+rework is included. The
+Tokio runtime owns one fixed-cadence `HerdrQueueWakePump`, roster-wide Herdr
+session polling, FIFO pending claims with a host-wide burst cap and rotating
+cursor, selector-based Queue dispatch, cancellation-safe claim release, and
+`RuntimeHealth` poll provenance. Runtime shutdown owns and joins the pump task.
+The pre-existing AQ2.6 breaker timing flake was made deterministic with an
+injected test clock before this sprint's implementation.
+
+QA-1 rework adds deterministic breaker coverage, runtime shutdown-signal
+selection, the documented release/requeue partition with a ten-release bound,
+failure propagation from the Herdr emitter, AC-named pump fixtures using the
+fake adapter, poll timestamp propagation into runtime status and doctor, and
+the `runtime_maintenance.rs` extraction that keeps the production runtime
+module below the architecture line limit.
+
+QA-2 rework (2026-08-27): the shutdown watch now cancels an in-flight poll
+tick, including a prompt future, and `ReleasePendingOnDrop` restores the
+claimed marker when that cancellation unwinds the dispatch scope. The former
+constant-only AC checks were replaced with real SQLite-backed fixtures using
+`atm_herdr::testing::FakeHerdrProcessAdapter`; the test-to-criterion map and
+command evidence are recorded in
+[`docs/plans/phase-aq/evidence/AQ2.7/ac-test-map.md`](evidence/AQ2.7/ac-test-map.md)
+and [`docs/plans/phase-aq/evidence/AQ2.7/qa2-validation.md`](evidence/AQ2.7/qa2-validation.md).
+
+QA-4 rework (2026-08-27): AC6 now has three real FakeHerdrAdapter pump
+fixtures covering blocked, not-present-family, and bounded consecutive-release
+semantics. The first ten no-input releases retain the marker without retry
+debt; the 11th spends one retry attempt through `requeue_pending` and resets
+the in-memory release counter. Evidence is in `evidence/AQ2.7/`, including a
+deterministic blocked-dialog transcript artifact.
 
 Implement deferred queue wake-ups for AQ2.6's `HerdrSteer` members without
 pretending that Herdr supplies a queue. The durable ATM mailbox is the queue:
@@ -279,11 +311,12 @@ for whichever sprint picks up the shared-drain follow-up.
 > infrastructure outcomes (`server_not_running`, `protocol_mismatch`, external
 > timeout, `list` failure → breaker): `release_pending` (no budget consumed)
 > **but bounded**: the pump keeps an in-memory per-member consecutive-release
-> counter; on the `HERDR_MAX_CONSECUTIVE_RELEASES = 10`th consecutive release
-> for the same member the pump calls `requeue_pending` instead (consumes one
-> attempt) and resets the counter, so a permanently blocked or absent agent
-> reaches `MAX_NUDGE_ATTEMPTS` and surfaces as stuck via AQ1's store — the
-> stuck-recovery signal is reachable for Herdr. (b) **Input injected or
+> counter; after `HERDR_MAX_CONSECUTIVE_RELEASES = 10` consecutive releases
+> for the same member, the 11th no-input outcome calls `requeue_pending`
+> instead (consumes one attempt) and resets the counter, so a permanently
+> blocked or absent agent reaches `MAX_NUDGE_ATTEMPTS` and surfaces as stuck
+> via AQ1's store — the stuck-recovery signal is reachable for Herdr. (b)
+> **Input injected or
 > ambiguous** — `agent_prompt_stalled`, a prompt error returned after the write,
 > or a timeout after the write: `requeue_pending` (consumes budget). In every
 > failure case the emit result is a **failure outcome**, never `Ok`; only a
@@ -595,6 +628,8 @@ for whichever sprint picks up the shared-drain follow-up.
 - Shutdown-cancellation fixture: a claim held mid-dispatch when the runtime's
   bounded shutdown timeout elapses is released via the `ReleasePendingOnDrop`
   guard (AC 11), not left stranded.
+- AQ3 drains tmux / graft-only: verified at integrate after #1054 merges (AQ3
+  tests …); this is not claimed as complete by AQ2.7.
 
 ## Non-closure / out of scope
 

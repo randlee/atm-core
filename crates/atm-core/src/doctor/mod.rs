@@ -30,9 +30,9 @@ pub use report::{
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
     DoctorSeverity, DoctorStatus, DoctorSummary, GraftReceiverLeaseDoctorReport,
     GraftReceiversDoctorReport, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
-    HerdrBreakerDoctorState, PeerAuthorityDoctorReport, PeerConfigDoctorReport,
-    PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
-    RecipientDeliveryPath, RecipientDeliveryPathReport,
+    HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport, PeerAuthorityDoctorReport,
+    PeerConfigDoctorReport, PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex,
+    PostSendHookRuleReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
 
 /// Async application port for the live Herdr visibility checks performed by
@@ -342,6 +342,10 @@ fn build_doctor_report(
         member_roster,
         graft_receivers,
         observability: observability_health,
+        herdr_queue_pump: HerdrQueuePumpDoctorReport {
+            breaker: herdr_breaker.clone(),
+            ..HerdrQueuePumpDoctorReport::default()
+        },
         herdr_breaker,
         post_send,
         config,
