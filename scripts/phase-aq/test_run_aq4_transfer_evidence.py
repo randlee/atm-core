@@ -61,6 +61,51 @@ def _install_fake_ssh(bin_dir: Path, *, stderr_line: str, stdout_line: str | Non
     return fake_ssh
 
 
+def _install_fake_slow_atm(bin_dir: Path, *, sleep_seconds: float, stderr_line: str) -> Path:
+    """Writes a fake `atm` binary that writes `stderr_line` to stderr
+    immediately, then sleeps well past `sleep_seconds` -- long enough for a
+    deliberately tiny `run_send_with_timeout` timeout in the tests below to
+    fire first, so the timeout path is exercised with a real wedged child
+    process rather than a mock.
+
+    Platform-safe, mirroring `_install_fake_ssh` above: a bare `#!/bin/sh`
+    script has no kernel shebang interpreter on Windows, so this installs a
+    `.cmd` shim there instead (launched directly by `CreateProcess`, no
+    `shell=True` needed, exactly like `ssh.cmd` above).
+    """
+    if sys.platform == "win32":
+        fake_atm = bin_dir / "atm.cmd"
+        fake_atm.write_text(
+            "\r\n".join(
+                [
+                    "@echo off",
+                    f"echo {stderr_line} 1>&2",
+                    f"ping -n {int(sleep_seconds) + 5} 127.0.0.1 >nul",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return fake_atm
+
+    import stat as stat_module
+
+    fake_atm = bin_dir / "atm"
+    fake_atm.write_text(
+        "\n".join(
+            [
+                "#!/bin/sh",
+                f'echo "{stderr_line}" 1>&2',
+                f"sleep {sleep_seconds}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    fake_atm.chmod(fake_atm.stat().st_mode | stat_module.S_IXUSR)
+    return fake_atm
+
+
 class Aq4TransferEvidenceTests(unittest.TestCase):
     def test_extract_landed_path_matches_the_real_format_attachment_note_shape(self) -> None:
         module = load_module()
@@ -1106,6 +1151,103 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
         ):
             with self.subTest(status=status):
                 self.assertEqual(0 if status in success_statuses else 1, expected)
+
+    # -- run_send_with_timeout: the harness's own send-subprocess timeout --
+
+    def test_run_send_with_timeout_captures_partial_output_and_kills_the_tree_on_timeout(
+        self,
+    ) -> None:
+        """A wedged `atm` (sleeps well past a deliberately tiny timeout)
+        must not vanish without a trace: `run_send_with_timeout` should
+        report `timed_out: True`, keep whatever stderr the child had
+        already written before being killed, and never raise
+        `TimeoutExpired` out to the caller -- exactly the AQ4 Windows
+        failure shape this fix addresses (15s harness timeout < atm's own
+        60s deadline: no send stdout/stderr, no later diagnostics)."""
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            fake_atm = _install_fake_slow_atm(
+                bin_dir, sleep_seconds=5.0, stderr_line="fake atm: about to wedge"
+            )
+            cwd = root / "cwd"
+            cwd.mkdir()
+            env = dict(os.environ)
+
+            result = module.run_send_with_timeout(
+                fake_atm,
+                env,
+                ["send", "aq4-receiver@aq4-transfer-evidence", "hi", "--host", "localhost"],
+                identity="aq4-sender",
+                timeout=0.5,
+                cwd=cwd,
+            )
+
+            self.assertTrue(result["timed_out"])
+            self.assertIn("about to wedge", result["stderr_tail"])
+            self.assertIn("did not exit within", result["error"])
+            self.assertEqual(result["argv"][0], str(fake_atm))
+            # A killed-mid-flight child's returncode is never treated as a
+            # green light for the "success" path (peek/landed-path checks)
+            # -- `send_ok_from_record` is what run_scenario actually gates
+            # on, exercised directly below.
+            self.assertFalse(module.send_ok_from_record(result))
+
+    def test_run_send_with_timeout_returns_a_normal_record_when_the_child_exits_in_time(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            fake_atm = _install_fake_slow_atm(bin_dir, sleep_seconds=0.0, stderr_line="fake atm: ok")
+            cwd = root / "cwd"
+            cwd.mkdir()
+            env = dict(os.environ)
+
+            result = module.run_send_with_timeout(
+                fake_atm,
+                env,
+                ["send", "aq4-receiver@aq4-transfer-evidence", "hi", "--host", "localhost"],
+                identity="aq4-sender",
+                timeout=10,
+                cwd=cwd,
+            )
+
+            self.assertFalse(result["timed_out"])
+            self.assertEqual(result["returncode"], 0)
+            self.assertNotIn("error", result)
+
+    def test_send_ok_from_record_treats_a_timeout_as_never_ok(self) -> None:
+        module = load_module()
+        self.assertFalse(
+            module.send_ok_from_record({"returncode": 0, "timed_out": True})
+        )
+        self.assertFalse(
+            module.send_ok_from_record({"returncode": 1, "timed_out": False})
+        )
+        self.assertTrue(
+            module.send_ok_from_record({"returncode": 0, "timed_out": False})
+        )
+
+    def test_send_subprocess_timeout_exceeds_atms_own_transfer_script_deadline(self) -> None:
+        """The whole point of this fix: the harness's send-subprocess
+        timeout must be strictly greater than atm's own transfer-script
+        deadline (`crates/atm-core/src/transfer_script.rs::
+        DEFAULT_TRANSFER_SCRIPT_TIMEOUT`, 60s), with a real margin -- not
+        merely equal to it -- so atm's own deadline always fires first."""
+        module = load_module()
+        self.assertGreater(
+            module.SEND_SUBPROCESS_TIMEOUT_SECONDS,
+            module._ATM_TRANSFER_SCRIPT_DEADLINE_SECONDS,
+        )
+        self.assertGreaterEqual(
+            module.SEND_SUBPROCESS_TIMEOUT_SECONDS - module._ATM_TRANSFER_SCRIPT_DEADLINE_SECONDS,
+            10.0,
+        )
 
 
 if __name__ == "__main__":
