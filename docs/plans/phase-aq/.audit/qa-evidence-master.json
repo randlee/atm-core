@@ -5,7 +5,7 @@
   "start": "2026-08-27T00:09:55Z",
   "end": "2026-08-28T15:20:00Z"
  },
- "scope": "phase-aq sprints in landing order (structure.ttl). Runs recorded: AQ1 (3, final PASS, merged), AQ2.6 (2, latest FAIL, fix cycle 2 in progress), AQ1.5 (1, FAIL, fix in progress). AQ1.6 (#1046) QA-1 requested (pending run recorded, verdict null). Non-sprint lanes reviewed by quality-mgr but not sprint rows: lane A ADR-058 #1039 (PASS d6f4dd90f, merged 4805264a2) and lane C AQ4 groundwork #1043 (QA-1 FAIL a911abfd8 \u2192 QA-2 FAIL 23be719f3 \u2192 QA-3 PASS 28422190e, merge requested) \u2014 they roll into AQ2.6/AQ4 evidence at closeout.",
+ "scope": "phase-aq sprints in landing order (structure.ttl). Runs recorded: AQ1 (3, final PASS, merged), AQ2.6 (2, latest FAIL, fix cycle 2 in progress), AQ1.5 (1, FAIL, fix in progress). AQ1.6 (#1046) QA-1 requested (pending run recorded, verdict null). Non-sprint lanes reviewed by quality-mgr but not sprint rows: lane A ADR-058 #1039 (PASS d6f4dd90f, merged 4805264a2) and lane C AQ4 groundwork #1043 (QA-1 FAIL a911abfd8 → QA-2 FAIL 23be719f3 → QA-3 PASS 28422190e, merge requested) — they roll into AQ2.6/AQ4 evidence at closeout.",
  "count_basis": "headline/reviewer",
  "path_notes": "Built from quality-mgr's PR review comments (the authoritative verdict artifacts for this phase) via gh; ATM message ids omitted (null) because verdicts were relayed by team-lead rather than dispatched via j2 QA assignments. No verdict or count fabricated; null means not recorded, not absent.",
  "runs": [
@@ -170,7 +170,7 @@
    "assignment_message_id": "01M10JFSKQDFTW63TCS2Y4HY3R",
    "assignment_from": "fenix",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ1.6 (cipher + bg fix agent), PR #1046 \u2014 QA-1 FAIL 5B (untested ACs, dead refresh path) \u2192 fixed; QA-2 target 44ed502da",
+   "assignment_summary": "AQ1.6 (cipher + bg fix agent), PR #1046 — QA-1 FAIL 5B (untested ACs, dead refresh path) → fixed; QA-2 target 44ed502da",
    "result_time_utc": null,
    "result_time_pst": null,
    "result_message_id": null,
@@ -182,7 +182,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "pending \u2014 quality-mgr QA-1 not yet returned"
+   "evidence": "pending — quality-mgr QA-1 not yet returned"
   },
   {
    "run_id": "QA-AQ2.6-R3",
@@ -220,7 +220,7 @@
    "assignment_message_id": null,
    "assignment_from": "fenix",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ1.7 (cipher + bg fix agent), PR #1048 \u2014 QA-1 FAIL 5B (untested ACs, file-record gating) \u2192 fixed; QA-2 target eb896d2b9",
+   "assignment_summary": "AQ1.7 (cipher + bg fix agent), PR #1048 — QA-1 FAIL 5B (untested ACs, file-record gating) → fixed; QA-2 target eb896d2b9",
    "result_time_utc": null,
    "result_time_pst": null,
    "result_message_id": null,
@@ -257,7 +257,7 @@
    "important": 1,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "14/14 deliverables, 0 blocking, 1 important (inert sealed-double allowlist entry \u2014 scanner never visits cfg(test) modules in src/); fix dispatched. https://github.com/randlee/atm-core/pull/1045#issuecomment-5433862555"
+   "evidence": "14/14 deliverables, 0 blocking, 1 important (inert sealed-double allowlist entry — scanner never visits cfg(test) modules in src/); fix dispatched. https://github.com/randlee/atm-core/pull/1045#issuecomment-5433862555"
   },
   {
    "run_id": "QA-AQ1.8-R1",
@@ -332,7 +332,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "7/9; AQ2-CRIT-001 handoff-clear failure masks delivery success (dup delivery), AQ2-CRIT-002 marker-set failure swallowed, ATM-QA-001 Hermes transcript missing; flaky atm-herdr test \u2192 AQ2.7. Fix dispatched to cipher. https://github.com/randlee/atm-core/pull/1051"
+   "evidence": "7/9; AQ2-CRIT-001 handoff-clear failure masks delivery success (dup delivery), AQ2-CRIT-002 marker-set failure swallowed, ATM-QA-001 Hermes transcript missing; flaky atm-herdr test → AQ2.7. Fix dispatched to cipher. https://github.com/randlee/atm-core/pull/1051"
   },
   {
    "run_id": "QA-AQ2.6-R4",
@@ -457,7 +457,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ3 head 35a28588a: First clean-runner idle-drain FAIL root-caused as a harness read race (counter read before the tmux hook's double-enter tail; macOS showed 0\u21921). Harness polls now. +2 tests. Evidence rerun dispatched. QA-2 pending. https://github.com/randlee/atm-core/pull/1054"
+   "evidence": "AQ3 head 35a28588a: First clean-runner idle-drain FAIL root-caused as a harness read race (counter read before the tmux hook's double-enter tail; macOS showed 0→1). Harness polls now. +2 tests. Evidence rerun dispatched. QA-2 pending. https://github.com/randlee/atm-core/pull/1054"
   },
   {
    "run_id": "QA-AQ2.7-R1",
@@ -482,7 +482,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "3/12; CRIT-001 retry contract (emit always Ok, requeue never called) \u2192 ruling committed; CRIT-002 shutdown doesn't stop pump; CRIT-003 flaky-fix half-done (sibling test); TEST-GAP 10/12 ACs untested; ARCH-002 lib.rs > 1000; doctor wiring dead. ATM-QA-001 (doc = old design) CONTESTED: branch doc is the polling version (20 polling refs). https://github.com/randlee/atm-core/pull/1056"
+   "evidence": "3/12; CRIT-001 retry contract (emit always Ok, requeue never called) → ruling committed; CRIT-002 shutdown doesn't stop pump; CRIT-003 flaky-fix half-done (sibling test); TEST-GAP 10/12 ACs untested; ARCH-002 lib.rs > 1000; doctor wiring dead. ATM-QA-001 (doc = old design) CONTESTED: branch doc is the polling version (20 polling refs). https://github.com/randlee/atm-core/pull/1056"
   },
   {
    "run_id": "QA-AQ1.6-R1-verdict",
@@ -1107,7 +1107,7 @@
    "important": 0,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "9/12 deliverables. All blockers m5-dependent. Scope ruling (fenix): m5 items tracked as follow-up AQ1.9-m5. Gate re-scoped to clean-runner linux+macos. Doc head e3e06d657 \u2192 d3bbd664c."
+   "evidence": "9/12 deliverables. All blockers m5-dependent. Scope ruling (fenix): m5 items tracked as follow-up AQ1.9-m5. Gate re-scoped to clean-runner linux+macos. Doc head e3e06d657 → d3bbd664c."
   },
   {
    "run_id": "CI-AQ1.9-RUNNER-2",
@@ -1307,7 +1307,7 @@
    "important": 4,
    "minor": 1,
    "count_basis": "headline/reviewer",
-   "evidence": "5/14 @ d56a28961: ATM-QA-AQ5-001 pickers don't exclude dead/idle members (R4 Must), -002 traceability table mismapped (R3/R6/R7), -003 Wyvern pick-member.html PR absent, -004 manual GUI E2E absent; Important: no OS notification for GUI-entry stderr, README Nautilus path drift, committed fixtures unused by harness, degradation harness lacks CI transcript; Minor (rust-qa): member_mutation.rs:558 duplicate host insert. Ruling (fenix): fix pass dispatched for code/doc items; Wyvern PR to randlee/wyvern (refs #139); manual GUI E2E \u2192 follow-up AQ5-gui-e2e (owner: Rand, macOS Finder first; then Explorer/Nautilus)."
+   "evidence": "5/14 @ d56a28961: ATM-QA-AQ5-001 pickers don't exclude dead/idle members (R4 Must), -002 traceability table mismapped (R3/R6/R7), -003 Wyvern pick-member.html PR absent, -004 manual GUI E2E absent; Important: no OS notification for GUI-entry stderr, README Nautilus path drift, committed fixtures unused by harness, degradation harness lacks CI transcript; Minor (rust-qa): member_mutation.rs:558 duplicate host insert. Ruling (fenix): fix pass dispatched for code/doc items; Wyvern PR to randlee/wyvern (refs #139); manual GUI E2E → follow-up AQ5-gui-e2e (owner: Rand, macOS Finder first; then Explorer/Nautilus)."
   },
   {
    "run_id": "QA-AQ3-R2",
@@ -1370,7 +1370,7 @@
    "assignment_message_id": null,
    "assignment_from": "quality-mgr",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ1.9 #1050: head 23e420ccd, QA PASS confirmed; merged e151f30e6 (graft chain AQ1.5\u20131.9 complete on integrate)",
+   "assignment_summary": "AQ1.9 #1050: head 23e420ccd, QA PASS confirmed; merged e151f30e6 (graft chain AQ1.5–1.9 complete on integrate)",
    "result_time_utc": "2026-08-28T00:30:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -1382,7 +1382,7 @@
    "important": 0,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ1.9 QA PASS @ 23e420ccd. Merged e151f30e6. Graft chain AQ1.5\u20131.9 complete on integrate."
+   "evidence": "AQ1.9 QA PASS @ 23e420ccd. Merged e151f30e6. Graft chain AQ1.5–1.9 complete on integrate."
   },
   {
    "run_id": "QA-AQ2.7-R3",
@@ -1432,7 +1432,7 @@
    "important": 11,
    "minor": 2,
    "count_basis": "headline/reviewer",
-   "evidence": "11/13 @ 9af3817b2: 0 blocking; ATM-QA-101 live tmux idle-drain transcript absent, ATM-QA-102 no AC8 multi-OS run id cited, ATM-QA-103 member-state-transition-sink.toml not mechanically enforced; ruling (fenix): no deferral \u2014 transcript produced via clean-runner harness (scripts/phase-aq/run_aq3_tmux_idle_drain_evidence.py, in progress)."
+   "evidence": "11/13 @ 9af3817b2: 0 blocking; ATM-QA-101 live tmux idle-drain transcript absent, ATM-QA-102 no AC8 multi-OS run id cited, ATM-QA-103 member-state-transition-sink.toml not mechanically enforced; ruling (fenix): no deferral — transcript produced via clean-runner harness (scripts/phase-aq/run_aq3_tmux_idle_drain_evidence.py, in progress)."
   },
   {
    "run_id": "QA-AQ4-R2",
@@ -1457,7 +1457,7 @@
    "important": 5,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "10/15 @ d8e2514b8: frontmatter draft/no worktree; no evidence/AQ4 transcript (AC7); no tests for scripts/transfer/{sftp.sh,tailscale.sh,sftp.ps1}; no cfg(windows) junction test (AC6); ruling (fenix): sftp leg evidenced via clean-runner loopback harness; tailscale leg \u2192 follow-up AQ4-tailscale-m5 (paired with AQ1.9-m5). Fix pass in progress."
+   "evidence": "10/15 @ d8e2514b8: frontmatter draft/no worktree; no evidence/AQ4 transcript (AC7); no tests for scripts/transfer/{sftp.sh,tailscale.sh,sftp.ps1}; no cfg(windows) junction test (AC6); ruling (fenix): sftp leg evidenced via clean-runner loopback harness; tailscale leg → follow-up AQ4-tailscale-m5 (paired with AQ1.9-m5). Fix pass in progress."
   },
   {
    "run_id": "QA-AQ6-R1",
@@ -1482,7 +1482,7 @@
    "important": 2,
    "minor": 1,
    "count_basis": "headline/reviewer",
-   "evidence": "6/10 @ 08fa8fd04: Blocking: AC1b no real pin-back write path (detection + issue filing only), AC5 phase-closure not satisfiable while rows unmerged. Important: no AC4 CI-lane citation, frontmatter draft. Minor: latest_wyvern_version lacks REST fallback. Ruling (fenix): AC5 is a phase-level gate evaluated at the integrate\u2192develop PR, scored \"deferred to phase closeout\" on #1066; fix pass dispatched to cipher for AC1b/AC4/frontmatter/REST fallback."
+   "evidence": "6/10 @ 08fa8fd04: Blocking: AC1b no real pin-back write path (detection + issue filing only), AC5 phase-closure not satisfiable while rows unmerged. Important: no AC4 CI-lane citation, frontmatter draft. Minor: latest_wyvern_version lacks REST fallback. Ruling (fenix): AC5 is a phase-level gate evaluated at the integrate→develop PR, scored \"deferred to phase closeout\" on #1066; fix pass dispatched to cipher for AC1b/AC4/frontmatter/REST fallback."
   },
   {
    "run_id": "QA-AQ2.7-R4",
@@ -1557,7 +1557,7 @@
    "important": 9,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "13/17 @ 4c3710bb1 (full-lifecycle re-verify): blocking ATM-QA-201 AC12 dynamic-composition fairness fixture missing; ATM-QA-202 list\u2192prompt race disclosure must be in ADR-054 addendum (only in ADR-058 D7); ATM-QA-203 AC10 pid_changed-after-poll fixture missing; ATM-QA-204 AC11 doc vs implementation (immediate cancel via inner select!) and no abort_and_join timeout fixture. Minor: stale MemberKey doc comment; retry-semantics wording. The three QA-4 AC6 fixtures confirmed real. Fix-cycle-4 (all six items) dispatched to arch-ctm."
+   "evidence": "13/17 @ 4c3710bb1 (full-lifecycle re-verify): blocking ATM-QA-201 AC12 dynamic-composition fairness fixture missing; ATM-QA-202 list→prompt race disclosure must be in ADR-054 addendum (only in ADR-058 D7); ATM-QA-203 AC10 pid_changed-after-poll fixture missing; ATM-QA-204 AC11 doc vs implementation (immediate cancel via inner select!) and no abort_and_join timeout fixture. Minor: stale MemberKey doc comment; retry-semantics wording. The three QA-4 AC6 fixtures confirmed real. Fix-cycle-4 (all six items) dispatched to arch-ctm."
   },
   {
    "run_id": "QA-AQ6-R2",
@@ -1582,7 +1582,7 @@
    "important": 0,
    "minor": 3,
    "count_basis": "headline/reviewer",
-   "evidence": "8/9 deliverables @ 2be7346c8. Blocking: ATM-QA-010 release-preflight.yml would fail every dispatch \u2014 no Wyvern install. Minors: subn count guard, dry-run-only happy-path test, AC4 run ids pending. Fix head b8ccdad8a: Wyvern install in release-preflight + bootstrap, exact-one-match guard, non-dry-run test, Windows lint fix, paired WYVERN_PIN agreement check. CI 33127761449 (linux/windows green, macOS queued). QA-3 pending."
+   "evidence": "8/9 deliverables @ 2be7346c8. Blocking: ATM-QA-010 release-preflight.yml would fail every dispatch — no Wyvern install. Minors: subn count guard, dry-run-only happy-path test, AC4 run ids pending. Fix head b8ccdad8a: Wyvern install in release-preflight + bootstrap, exact-one-match guard, non-dry-run test, Windows lint fix, paired WYVERN_PIN agreement check. CI 33127761449 (linux/windows green, macOS queued). QA-3 pending."
   },
   {
    "run_id": "QA-AQ3-R4",
@@ -1657,7 +1657,7 @@
    "important": 0,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "macOS hook-test teardown race fix confirmed genuine @ d99df87d2. Merge pending CI. AQ3 #1054 merge-forward \u2192 c00d8452d."
+   "evidence": "macOS hook-test teardown race fix confirmed genuine @ d99df87d2. Merge pending CI. AQ3 #1054 merge-forward → c00d8452d."
   },
   {
    "run_id": "CI-AQ3-RUNNER-1",
@@ -1732,7 +1732,7 @@
    "important": 0,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "Clean-runner GHA run 33125703487: ubuntu/macos FAIL (harness wiring \u2014 atm send --host localhost rc 3: scratch .atm.toml lacks local_host); fix in progress."
+   "evidence": "Clean-runner GHA run 33125703487: ubuntu/macos FAIL (harness wiring — atm send --host localhost rc 3: scratch .atm.toml lacks local_host); fix in progress."
   },
   {
    "run_id": "CI-AQ4-RUNNER-2",
@@ -1882,7 +1882,7 @@
    "important": 4,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "14/14 @ 02625b727: QA-2 minors fixed (docs wording: broken link + PRD R4 CLI exclude+notice equivalent blessed in rules table; AC4 deferred-by-ruling note added); Windows lint root-caused and fixed (.sh picker wrappers now run via discovered POSIX shell on Windows; sys.executable for picker.py fallback injection). CI 33128521856 queued. ATM-QA-AQ5-001 pickers exclude dead/idle members (real exclusion proven), ATM-QA-AQ5-002 traceability mapped (entry/exit confirmed), ATM-QA-AQ5-003 Wyvern pick-member.html vendored from randlee/wyvern#140 (real invocation contract proven), ATM-QA-AQ5-004 manual GUI E2E absent \u2014 ruling (fenix): deferred to AQ5-gui-e2e. Important (4): no OS notification for GUI-entry stderr, README Nautilus path drift, committed fixtures unused, degradation harness CI transcript missing. QA-3 pending: expected PASS-with-deferral AC4 \u2192 AQ5-gui-e2e."
+   "evidence": "14/14 @ 02625b727: QA-2 minors fixed (docs wording: broken link + PRD R4 CLI exclude+notice equivalent blessed in rules table; AC4 deferred-by-ruling note added); Windows lint root-caused and fixed (.sh picker wrappers now run via discovered POSIX shell on Windows; sys.executable for picker.py fallback injection). CI 33128521856 queued. ATM-QA-AQ5-001 pickers exclude dead/idle members (real exclusion proven), ATM-QA-AQ5-002 traceability mapped (entry/exit confirmed), ATM-QA-AQ5-003 Wyvern pick-member.html vendored from randlee/wyvern#140 (real invocation contract proven), ATM-QA-AQ5-004 manual GUI E2E absent — ruling (fenix): deferred to AQ5-gui-e2e. Important (4): no OS notification for GUI-entry stderr, README Nautilus path drift, committed fixtures unused, degradation harness CI transcript missing. QA-3 pending: expected PASS-with-deferral AC4 → AQ5-gui-e2e."
   },
   {
    "run_id": "QA-AQ3-R2",
@@ -1907,7 +1907,7 @@
    "important": 0,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "Clean-runner evidence run 2 (GHA 33126990425 @ 35a28588a): tmux idle-drain PASS on ubuntu and macOS. Steer immediate, FIFO order, one drain per idle transition; drained counter 1\u21922. Windows skipped_no_tmux by design. Job red only from restart-matrix harness on pre-#1050 tree. Transcript commit + integrate merge into #1054 in progress; QA-final4 pending."
+   "evidence": "Clean-runner evidence run 2 (GHA 33126990425 @ 35a28588a): tmux idle-drain PASS on ubuntu and macOS. Steer immediate, FIFO order, one drain per idle transition; drained counter 1→2. Windows skipped_no_tmux by design. Job red only from restart-matrix harness on pre-#1050 tree. Transcript commit + integrate merge into #1054 in progress; QA-final4 pending."
   },
   {
    "run_id": "QA-AQ3-final4",
@@ -1920,7 +1920,7 @@
    "assignment_message_id": null,
    "assignment_from": "fenix",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ3 #1054 head 8b8071793 \u2014 QA-final4 (fenix-run quality-mgr subagent)",
+   "assignment_summary": "AQ3 #1054 head 8b8071793 — QA-final4 (fenix-run quality-mgr subagent)",
    "result_time_utc": "2026-08-28T09:00:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -1957,7 +1957,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ4 #1055 harness fix head d0d54e004 (transfer dir/script forced 0o700 \u2014 the exact paths transfer_script.rs safety check inspects; +2 tests incl. umask 022); evidence run 3 dispatched."
+   "evidence": "AQ4 #1055 harness fix head d0d54e004 (transfer dir/script forced 0o700 — the exact paths transfer_script.rs safety check inspects; +2 tests incl. umask 022); evidence run 3 dispatched."
   },
   {
    "run_id": "QA-AQ6-R3",
@@ -1982,7 +1982,7 @@
    "important": 2,
    "minor": 2,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ6 #1066 QA-3 FAIL 8/9 @ b8ccdad8a: ATM-QA-010 confirmed fixed (real Wyvern installer with safe extraction + verify_installed_tools; count-guard; non-dry-run test; WYVERN_PIN pair test); sole blocker is timing (AC4: macOS CI lanes still queued); important: Wyvern download lacks SHA256 verification (sc-compose precedent), stale evidence-register citation; minor: checklist mention, frontmatter draft. Ruling: targeted re-verify of the delta + AC4 closure once macOS lanes conclude \u2014 no full re-gate. Fix bundled with the integrate merge into #1066 (cipher)."
+   "evidence": "AQ6 #1066 QA-3 FAIL 8/9 @ b8ccdad8a: ATM-QA-010 confirmed fixed (real Wyvern installer with safe extraction + verify_installed_tools; count-guard; non-dry-run test; WYVERN_PIN pair test); sole blocker is timing (AC4: macOS CI lanes still queued); important: Wyvern download lacks SHA256 verification (sc-compose precedent), stale evidence-register citation; minor: checklist mention, frontmatter draft. Ruling: targeted re-verify of the delta + AC4 closure once macOS lanes conclude — no full re-gate. Fix bundled with the integrate merge into #1066 (cipher)."
   },
   {
    "run_id": "QA-AQ5-R3",
@@ -2070,7 +2070,7 @@
    "assignment_message_id": null,
    "assignment_from": "quality-mgr",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ4 #1055 head acc2a88ac \u2014 QA-2 (evidence committed, #1054 merged)",
+   "assignment_summary": "AQ4 #1055 head acc2a88ac — QA-2 (evidence committed, #1054 merged)",
    "result_time_utc": "2026-08-28T05:20:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -2120,7 +2120,7 @@
    "assignment_message_id": null,
    "assignment_from": "cipher",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ5 #1059 head 2f63a29a2 \u2014 docs-only merge convergence PASS",
+   "assignment_summary": "AQ5 #1059 head 2f63a29a2 — docs-only merge convergence PASS",
    "result_time_utc": "2026-08-28T05:40:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -2132,7 +2132,7 @@
    "important": 0,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ5 #1059 head 2f63a29a2: docs-only merge of #1055 acc2a88ac. All five harness registrations unioned. Arch tests 78/78 PASS. Queue chain converged: #1054 8b8071793 \u2192 #1055 acc2a88ac \u2192 #1059 2f63a29a2. Planned merge order: #1054 \u2192 #1055 \u2192 #1059 \u2192 #1066 \u2192 #1056. MERGEABLE."
+   "evidence": "AQ5 #1059 head 2f63a29a2: docs-only merge of #1055 acc2a88ac. All five harness registrations unioned. Arch tests 78/78 PASS. Queue chain converged: #1054 8b8071793 → #1055 acc2a88ac → #1059 2f63a29a2. Planned merge order: #1054 → #1055 → #1059 → #1066 → #1056. MERGEABLE."
   },
   {
    "run_id": "QA-AQ6-targeted-reverify",
@@ -2145,7 +2145,7 @@
    "assignment_message_id": null,
    "assignment_from": "quality-mgr",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ6 #1066 head a80d6b2ef \u2014 targeted re-verify (SHA256 bootstrap.toml trust anchor; checksums.txt optional cross-check)",
+   "assignment_summary": "AQ6 #1066 head a80d6b2ef — targeted re-verify (SHA256 bootstrap.toml trust anchor; checksums.txt optional cross-check)",
    "result_time_utc": "2026-08-28T06:00:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -2157,7 +2157,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ6 #1066 head a80d6b2ef: Targeted re-verify of Wyvern ecosystem SHA256 trust anchor. Bootstrap.toml WYVERN_PIN pinned SHA256 is trust anchor for extracted archive verification. Checksums.txt optional cross-check: absent \u2192 warning; present-and-disagreeing \u2192 fail. v0.5.0 ships no checksums.txt (deferred). AC4 timing blocker closes when macOS CI lanes conclude. QA verdict pending macOS lane conclusion."
+   "evidence": "AQ6 #1066 head a80d6b2ef: Targeted re-verify of Wyvern ecosystem SHA256 trust anchor. Bootstrap.toml WYVERN_PIN pinned SHA256 is trust anchor for extracted archive verification. Checksums.txt optional cross-check: absent → warning; present-and-disagreeing → fail. v0.5.0 ships no checksums.txt (deferred). AC4 timing blocker closes when macOS CI lanes conclude. QA verdict pending macOS lane conclusion."
   },
   {
    "run_id": "QA-AQ2.7-fixcycle4-status",
@@ -2170,7 +2170,7 @@
    "assignment_message_id": null,
    "assignment_from": "team-lead",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ2.7 #1056 head 4c3710bb1 \u2014 fix-cycle-4 dispatch/ack status confirmation",
+   "assignment_summary": "AQ2.7 #1056 head 4c3710bb1 — fix-cycle-4 dispatch/ack status confirmation",
    "result_time_utc": "2026-08-28T06:00:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -2182,7 +2182,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ2.7 #1056 head unchanged 4c3710bb1: Fix-cycle-4 dispatch (6 items: ATM-QA-201 AC12, ATM-QA-202 ADR addendum, ATM-QA-203 AC10, ATM-QA-204 AC11+timeout, stale doc, wording) confirmed dispatched to arch-ctm. Ack and work-in-progress status pending. Possible codex idle \u2014 team-lead monitoring."
+   "evidence": "AQ2.7 #1056 head unchanged 4c3710bb1: Fix-cycle-4 dispatch (6 items: ATM-QA-201 AC12, ATM-QA-202 ADR addendum, ATM-QA-203 AC10, ATM-QA-204 AC11+timeout, stale doc, wording) confirmed dispatched to arch-ctm. Ack and work-in-progress status pending. Possible codex idle — team-lead monitoring."
   },
   {
    "run_id": "QA-AQ6-upstream-issue-1066",
@@ -2320,7 +2320,7 @@
    "assignment_message_id": null,
    "assignment_from": "fenix",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ3 #1054 head 50eb04544 \u2014 QA-final5 (fenix-run quality-mgr subagent, FENIX-QA)",
+   "assignment_summary": "AQ3 #1054 head 50eb04544 — QA-final5 (fenix-run quality-mgr subagent, FENIX-QA)",
    "result_time_utc": "2026-08-28T11:00:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -2332,7 +2332,7 @@
    "important": 0,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "QA-final5 PASS @ 50eb04544. AQ3 windows skipped_no_tmux artifact genuine (byte-identical to CI run 33126990425). atm-daemon-bootstrap lib.rs 1013\u2192761 non-test lines via new replacement_handler.rs. AC8 cites CI 33128710126 @ 8b8071793 (3 lanes green). Orphan sweep harness + local transcripts deleted. Deliverable 3 covered by named queue_drain.rs tests. Readiness wait honours --timeout (+2 tests). All gates green. FENIX-QA running."
+   "evidence": "QA-final5 PASS @ 50eb04544. AQ3 windows skipped_no_tmux artifact genuine (byte-identical to CI run 33126990425). atm-daemon-bootstrap lib.rs 1013→761 non-test lines via new replacement_handler.rs. AC8 cites CI 33128710126 @ 8b8071793 (3 lanes green). Orphan sweep harness + local transcripts deleted. Deliverable 3 covered by named queue_drain.rs tests. Readiness wait honours --timeout (+2 tests). All gates green. FENIX-QA running."
   },
   {
    "run_id": "QA-pending-dispatches",
@@ -2495,7 +2495,7 @@
    "assignment_message_id": null,
    "assignment_from": "quality-mgr",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ6 #1066 @ 77fa9f1b1 CI regression \u2014 inherited AQ4/AQ5 harness Windows failures",
+   "assignment_summary": "AQ6 #1066 @ 77fa9f1b1 CI regression — inherited AQ4/AQ5 harness Windows failures",
    "result_time_utc": "2026-08-28T10:30:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -2507,7 +2507,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ6 #1066 @ 77fa9f1b1: CI red only on inherited AQ4/AQ5 harness Windows failures (not AQ6 code). Root causes: (1) AQ5 harness execs atm-send-to.sh directly on Windows \u2192 WinError 193 (not executable); (2) AQ4 harness installs Unix sftp.sh and enforces POSIX chmod on NTFS. Cipher pushed cross-platform harness fix ebd6610e0 on #1066 to address both. Resolution: harness fix reverted from #1066, AQ5 part re-applied on #1059, AQ4 findings folded into #1055 fix pass. Platform-correct harness: sftp.ps1 on Windows, profile-containment record, scratch ssh -F config + known-hosts sink, honest skipped_no_sshd. Merge order unchanged: #1054 \u2192 #1055 \u2192 #1059 \u2192 #1066 \u2192 #1056."
+   "evidence": "AQ6 #1066 @ 77fa9f1b1: CI red only on inherited AQ4/AQ5 harness Windows failures (not AQ6 code). Root causes: (1) AQ5 harness execs atm-send-to.sh directly on Windows → WinError 193 (not executable); (2) AQ4 harness installs Unix sftp.sh and enforces POSIX chmod on NTFS. Cipher pushed cross-platform harness fix ebd6610e0 on #1066 to address both. Resolution: harness fix reverted from #1066, AQ5 part re-applied on #1059, AQ4 findings folded into #1055 fix pass. Platform-correct harness: sftp.ps1 on Windows, profile-containment record, scratch ssh -F config + known-hosts sink, honest skipped_no_sshd. Merge order unchanged: #1054 → #1055 → #1059 → #1066 → #1056."
   },
   {
    "run_id": "QA-AQ5-windows-portability",
@@ -2657,7 +2657,7 @@
    "important": 0,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ4 #1055 @ f9eb08449 QA-2 closure (evidence run 4): B1 cfg(unix) gating for Windows test code in send.rs confirmed; B2 sftp.ps1 local fixed-value option (argv ssh,scp) + [Console]::Error diagnostics for remote failures verified; B3 Windows-correct harness with profile-containment record, NUL known-hosts sink, unix-only modes confirmed; B4 send.rs refactored \u2192 commands/send_fan_out.rs (RULE-003 compliance); B6 scratch ssh -F config via opt-in ATM_TRANSFER_SSH_CONFIG allow-list entry per ADR-055 decision (c) amended, flagged for arch review; FTQ-002/003 pipe draining confirmed; RBQA-F001 canonical atm_storage::RosterStore confirmed. Original CI failures were test-infra (sftp.ps1 round-trip, age_file read-only open on Windows) \u2014 no production sweeper change. Gates green incl. pwsh pytests. https://github.com/randlee/atm-core/pull/1055"
+   "evidence": "AQ4 #1055 @ f9eb08449 QA-2 closure (evidence run 4): B1 cfg(unix) gating for Windows test code in send.rs confirmed; B2 sftp.ps1 local fixed-value option (argv ssh,scp) + [Console]::Error diagnostics for remote failures verified; B3 Windows-correct harness with profile-containment record, NUL known-hosts sink, unix-only modes confirmed; B4 send.rs refactored → commands/send_fan_out.rs (RULE-003 compliance); B6 scratch ssh -F config via opt-in ATM_TRANSFER_SSH_CONFIG allow-list entry per ADR-055 decision (c) amended, flagged for arch review; FTQ-002/003 pipe draining confirmed; RBQA-F001 canonical atm_storage::RosterStore confirmed. Original CI failures were test-infra (sftp.ps1 round-trip, age_file read-only open on Windows) — no production sweeper change. Gates green incl. pwsh pytests. https://github.com/randlee/atm-core/pull/1055"
   },
   {
    "run_id": "CI-AQ4-RUNNER-4",
@@ -2770,7 +2770,7 @@
    "assignment_message_id": null,
    "assignment_from": "team-lead",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ4 #1055 @ f9eb08449 evidence run 5 (dispatch/push race); unit/lint baseline \u2014 RACED OLD HEAD, did not exercise c510a4745 PATH fix",
+   "assignment_summary": "AQ4 #1055 @ f9eb08449 evidence run 5 (dispatch/push race); unit/lint baseline — RACED OLD HEAD, did not exercise c510a4745 PATH fix",
    "result_time_utc": "2026-08-28T15:20:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -2782,7 +2782,7 @@
    "important": 0,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ4 #1055 @ f9eb08449 (GHA dispatch/push race): Dispatch picked up f9eb08449 (previous head) instead of intended c510a4745; unit/lint tests PASS on f9eb08449 baseline but do not exercise the c510a4745 PATH fix. Test results: 55/55 test binaries PASS, run_lint 32/32 PASS \u2014 not new information vs baseline. Run 6 reshot on verified c510a4745."
+   "evidence": "AQ4 #1055 @ f9eb08449 (GHA dispatch/push race): Dispatch picked up f9eb08449 (previous head) instead of intended c510a4745; unit/lint tests PASS on f9eb08449 baseline but do not exercise the c510a4745 PATH fix. Test results: 55/55 test binaries PASS, run_lint 32/32 PASS — not new information vs baseline. Run 6 reshot on verified c510a4745."
   },
   {
    "run_id": "CI-AQ4-LINT-WINDOWS-PYTEST-R1",
@@ -2832,7 +2832,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ4 #1055 @ f9eb08449 (GHA run 33136767284, dispatch/push race): Clean-runner matrix run 5 checked out f9eb08449 (previous head) instead of intended c510a4745. Results: ubuntu PASS (transfer tests 3/3), macos PASS (transfer tests 3/3); Windows FAIL (pytest-fixture NUL variant issues \u2014 expected on pre-fix f9eb08449 baseline, same as CI-AQ4-LINT-WINDOWS-PYTEST-R1). Not new information. Run 6 reshot with verified head c510a4745 checkout."
+   "evidence": "AQ4 #1055 @ f9eb08449 (GHA run 33136767284, dispatch/push race): Clean-runner matrix run 5 checked out f9eb08449 (previous head) instead of intended c510a4745. Results: ubuntu PASS (transfer tests 3/3), macos PASS (transfer tests 3/3); Windows FAIL (pytest-fixture NUL variant issues — expected on pre-fix f9eb08449 baseline, same as CI-AQ4-LINT-WINDOWS-PYTEST-R1). Not new information. Run 6 reshot with verified head c510a4745 checkout."
   },
   {
    "run_id": "QA-AQ4-R6",
@@ -2908,6 +2908,31 @@
    "minor": null,
    "count_basis": "headline/reviewer",
    "evidence": "AQ4 #1055 @ 5e033b13e Windows pytest fixtures fixed: fake ssh/scp also installed as .cmd shims so pwsh Get-Command/PATHEXT resolves them; tests had silently fallen through to real OpenSSH; known_hosts test split unix //dev/null vs windows NUL. New finding: Windows pytest run reports errors=16 on every recent head, hidden because run_lint prints only last 40 lines and CI doesn't upload .just/logs. CI observability fix in progress (full ERROR/FAIL preview + logs artifact on failure). CI on 5e033b13e and evidence run 6 (c510a4745, head-verified) in flight."
+  },
+  {
+   "run_id": "CI-AQ4-WINDOWS-TEST-R6",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": true,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "quality-mgr",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 @ c510a4745 CI evidence run 6 (verified head); Windows Test lane PASS",
+   "result_time_utc": "2026-08-28T17:10:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "PASS",
+   "blockers": 0,
+   "important": 0,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "AQ4 #1055 @ c510a4745 (GHA, head verified, evidence run 6): Windows Test lane PASSED on real windows-latest runner. Confirms: (1) synthesized transfer-script PATH change (scripts/transfer-python-path.sh integration) working on Windows; (2) cfg(windows) junction test compiles and passes on Windows. All Test lanes green (linux PASS, macos PASS, windows PASS). Just lint (windows-latest) pytest fixtures remain on fixed baseline 5e033b13e (separate fixture correction). CI-AQ4-LINT-WINDOWS-PYTEST-R1 fixtures awaiting separate closure."
   }
  ],
  "follow_ups": [
