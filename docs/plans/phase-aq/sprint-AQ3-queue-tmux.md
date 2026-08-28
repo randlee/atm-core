@@ -136,9 +136,12 @@ pub trait MemberStateTransitionSink: atm_core::boundary::sealed::Sealed + Send +
    cancels and joins the task within the daemon deadline.
 4. **Observability**: per-drain structured event (`subsystem`/`action`/
    `outcome` + `{member, msg_id}`) and a cumulative drained counter on the
-   health report. Recorded exception: events emit via `emit_daemon_event`
-   for consistency with the maintenance-worker precedent; no license to
-   refactor it.
+   health report. Events are emitted with `tracing::info!`/`tracing::warn!`
+   carrying structured `subsystem`/`action`/`outcome` fields (see
+   `crates/atm-daemon-bootstrap/src/queue_drain.rs`), matching the
+   maintenance-worker precedent in `atm_temp_sweeper_runtime.rs`; the legacy
+   daemon's `emit_daemon_event` is not used (it is unreachable from
+   `atm-daemon-bootstrap`). No license to refactor the emission path.
 
 ## Acceptance criteria
 
