@@ -22,6 +22,26 @@
 | Live release-candidate tag cut | pending — satisfied by the atm-core v1.4.4 candidate cut with the fixed `release-candidate.yml` |
 | Post-release leg retry | pending — satisfied by a v1.4.4 post-release channel leg retry |
 
+## Deferred-leg authorization (ATM-QA-017)
+
+The README.sc-publish.md qualification gate requires a live release-candidate
+tag cut and one post-release channel leg retry before any pin advance. For this
+specific advance those two legs are circular by construction: the revision being
+qualified contains the `release-candidate.yml` git-identity fix, and no candidate
+tag can be cut on the broken previous pin (42e0fce fails closed, run
+33135181716). The gate text has no carve-out for a pin advance that itself
+unblocks the release; because README.sc-publish.md is a byte-copied kit file
+(ADR-050), the carve-out cannot be added in this consumer without creating
+drift — it is filed upstream for the next qualified revision (sc-publish #66).
+
+Disposition: the tag-cut and post-release-retry legs are **explicitly deferred**
+to the atm-core v1.4.4 release this pin unblocks; both results will be appended
+to this receipt when they complete. Authorization for the deferred-leg pin
+advance is Rand's approval of atm-core PR #1069 (develop merges require user
+approval; the approval act is recorded on the PR itself). If either deferred leg
+fails, the pin does not bless forward to other consumers until it is re-run
+clean.
+
 ## Recorded exception
 
 `test_publish_kit_scripts.py::ReleaseScriptTests::test_runtime_renderer_paths_use_the_bootstrapped_exact_pin`
