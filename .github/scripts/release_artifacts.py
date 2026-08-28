@@ -417,7 +417,14 @@ def cmd_validate_manifest(args: argparse.Namespace) -> int:
 
 def cmd_list_publish_plan(args: argparse.Namespace) -> int:
     manifest = load_manifest(Path(args.manifest))
-    for crate in manifest["crates"]:
+    # Only crates.io-publishable crates belong in the plan, and consumers
+    # (crates-publish.yml, release-preflight.yml) rely on the emitted order
+    # being the declared publish_order, not manifest file order.
+    crates = sorted(
+        (crate for crate in manifest["crates"] if crate.get("publish", True)),
+        key=lambda crate: crate["publish_order"],
+    )
+    for crate in crates:
         print(f"{crate['package']}|{crate['wait_after_publish_seconds']}")
     return 0
 
