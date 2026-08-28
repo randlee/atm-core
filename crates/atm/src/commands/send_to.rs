@@ -253,6 +253,19 @@ async fn read_capped(mut reader: impl tokio::io::AsyncRead + Unpin) -> Vec<u8> {
 // script directly (shebang exec, `sleep`, `env | cut`), which has no
 // Windows equivalent, so the whole module is gated rather than each
 // test individually.
+//
+// Every `invoke_transfer_script_*` test below is tagged
+// `#[serial_test::serial(transfer_script_spawn)]`: each one forks and reaps
+// a real child process (some killed mid-flight, e.g. the wedged-child
+// deadline test), and `cargo test`'s default parallel-thread execution was
+// observed to intermittently corrupt/stall sibling tests' captured
+// stdout when several ran concurrently in the same process (CI run
+// 33141901187: `invoke_transfer_script_rejects_multi_line_stdout` got an
+// error whose text didn't match its own script's output; reproduced
+// locally as a ~10% rate of 30s stalls on the wedged-child test *only*
+// when run alongside its siblings, never in isolation). Serializing this
+// module's real-subprocess tests removes the concurrent fork/reap window
+// entirely rather than chasing the exact interleaving.
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
@@ -280,6 +293,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial(transfer_script_spawn)]
     async fn invoke_transfer_script_happy_path_returns_the_landed_directory() {
         let dir = tempfile::tempdir().expect("tempdir");
         let landed = dir.path().join("landed");
@@ -304,6 +318,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial(transfer_script_spawn)]
     async fn invoke_transfer_script_propagates_bounded_stderr_on_failure() {
         let dir = tempfile::tempdir().expect("tempdir");
         let script_path = write_script(
@@ -326,6 +341,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial(transfer_script_spawn)]
     async fn invoke_transfer_script_kills_a_wedged_child_after_its_deadline() {
         let dir = tempfile::tempdir().expect("tempdir");
         let script_path = write_script(dir.path(), "stub.sh", "#!/bin/sh\nsleep 30\n");
@@ -344,6 +360,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial(transfer_script_spawn)]
     async fn invoke_transfer_script_rejects_multi_line_stdout() {
         let dir = tempfile::tempdir().expect("tempdir");
         let script_path = write_script(dir.path(), "stub.sh", "#!/bin/sh\necho /one\necho /two\n");
@@ -362,7 +379,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial(env)]
+    #[serial_test::serial(transfer_script_spawn)]
     async fn invoke_transfer_script_child_environment_is_restricted_to_the_allow_list() {
         let dir = tempfile::tempdir().expect("tempdir");
         let landed = dir.path().join("landed");
@@ -416,7 +433,7 @@ mod tests {
     /// does, to route `ssh`/`scp` through a scratch config instead of the
     /// real `~/.ssh/config`.
     #[tokio::test]
-    #[serial_test::serial(env)]
+    #[serial_test::serial(transfer_script_spawn)]
     async fn invoke_transfer_script_forwards_the_opt_in_ssh_config_override_when_set() {
         let dir = tempfile::tempdir().expect("tempdir");
         let landed = dir.path().join("landed");
@@ -465,7 +482,7 @@ mod tests {
     /// value -- forwarding that would be exactly the ambient-authority
     /// leak the rest of the allow-list already refuses.
     #[tokio::test]
-    #[serial_test::serial(env)]
+    #[serial_test::serial(transfer_script_spawn)]
     async fn invoke_transfer_script_child_gets_a_synthesized_path_never_the_callers() {
         let dir = tempfile::tempdir().expect("tempdir");
         let landed = dir.path().join("landed");
