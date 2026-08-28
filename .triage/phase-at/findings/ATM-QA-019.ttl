@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-019>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-019" ;
+  triage:title "just validate fails: .just/tests/test_release_homebrew_workflow.py still asserts the extract-published-renderer step this PR removed from homebrew-publish.yml" ;
+  triage:description "This PR's diff to .github/workflows/homebrew-publish.yml deletes the 'Extract manifest-declared published renderer' step (uses: ./.github/actions/extract-published-renderer) and replaces it with a 'Bootstrap renderer' step (uses: ./.github/actions/setup-renderer) -- confirmed via git diff origin/develop...HEAD. The repo-local, atm-core-owned test test_homebrew_job_requires_credential_and_published_renderer (.just/tests/test_release_homebrew_workflow.py:32) still asserts self.assertIn(\"./.github/actions/extract-published-renderer\", text), i.e. it was not updated to match the new setup-renderer bootstrap pattern. Running `just validate` on this branch fails at the pytests step (1 failure, 9 skipped) as a direct result. This is a real, reproducible regression in the repo's own required phase-end validation gate caused by this PR's own workflow edit, not a stale-checkout or environment artifact. Found by rust-qa-agent, independently confirmed by quality-mgr via direct git diff and grep on commit 70739a990." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-regression" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-28T03:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RELPREP-1069 ;
+  triage:foundAt "2026-08-28T03:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-019/REPIN-25668EC-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-019/REPIN-25668EC-1>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_release_homebrew_workflow.py" ;
+  triage:line 32 ;
+  triage:snippet "self.assertIn(\"./.github/actions/extract-published-renderer\", text)" ;
+  triage:status "open" ; triage:closed false ;
+  triage:branch "chore/sc-publish-repin-25668ec" ; triage:headSha "70739a990" ;
+  triage:occursIn <urn:atm:triage:worktree/REPIN-25668EC/70739a990-c> .
+
+<urn:atm:triage:worktree/REPIN-25668EC/70739a990-c>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/chore-sc-publish-repin-25668ec" ;
+  triage:branch "chore/sc-publish-repin-25668ec" ;
+  triage:headSha "70739a990" ;
+  triage:orderIndex 1 .
