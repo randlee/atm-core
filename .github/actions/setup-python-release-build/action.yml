@@ -42,6 +42,13 @@ runs:
       if: ${{ inputs.build_system == 'maturin' }}
       with:
         toolchain: ${{ inputs.rust_toolchain }}
+        # Release-branch fix (v1.4.4, upstream sc-publish#72): install the
+        # components declared by the consumer's rust-toolchain.toml up front.
+        # Without them, maturin's nested `cargo metadata` triggers rustup's
+        # component auto-add, which races the hosted runner's preinstalled
+        # cargo-fmt and fails with rustfmt-preview's `bin/cargo-fmt` conflict
+        # (same workaround as this repo's ci.yml maturin job).
+        components: clippy, rustfmt
     - name: Install maturin
       if: ${{ inputs.build_system == 'maturin' }}
       shell: bash

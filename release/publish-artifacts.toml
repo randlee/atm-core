@@ -201,7 +201,7 @@ class = "AgentTeamMail"
 binaries = ["atm", "atm-daemon"]
 test_binary = "atm"
 test_command = "--help"
-test_output = "CLI for local agent team mail workflows"
+test_output = "ATM CLI"
 release_track = "stable"
 [[channels.homebrew.formulas]]
 path = "Formula/atm.rb"
@@ -210,7 +210,7 @@ class = "Atm"
 binaries = ["atm", "atm-daemon"]
 test_binary = "atm"
 test_command = "--help"
-test_output = "CLI for local agent team mail workflows"
+test_output = "ATM CLI"
 release_track = "stable"
 [[channels.homebrew.formulas]]
 path = "Formula/atm-beta.rb"
@@ -219,7 +219,7 @@ class = "AtmBeta"
 binaries = ["atm", "atm-daemon"]
 test_binary = "atm"
 test_command = "--help"
-test_output = "CLI for local agent team mail workflows"
+test_output = "ATM CLI"
 release_track = "prerelease"
 
 [[channels.homebrew.assets]]
