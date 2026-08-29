@@ -3,25 +3,15 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+import sys
 import time
+from pathlib import Path
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
-def process_is_alive(pid: int) -> bool:
-    if os.name == "nt":
-        completed = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {pid}"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-        )
-        return completed.returncode == 0 and str(pid) in completed.stdout
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    return True
+from scripts.pid_liveness import process_is_alive  # noqa: E402 - path bootstrap above
 
 
 def count_atm_daemon_processes() -> list[int]:

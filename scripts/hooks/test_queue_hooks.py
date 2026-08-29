@@ -26,6 +26,11 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 HOOK = ROOT / "scripts" / "hooks" / "atm_queue_hook.py"
 
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.pid_liveness import process_is_alive  # noqa: E402 - path bootstrap above
+
 
 class HookTestHelpers:
     """Shared fixtures for the Claude-neutral and Codex-specific test
@@ -40,6 +45,7 @@ class HookTestHelpers:
         state: Path,
         harness: str = "claude",
         debounce_seconds: str = "0.02",
+        child_pidfile: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         env = {
             **os.environ,
@@ -52,6 +58,12 @@ class HookTestHelpers:
             "ATM_HOME": str(state.parent),
             "ATM_CONFIG_HOME": str(state.parent),
         }
+        if child_pidfile is not None:
+            # Ask the hook to record any detached debounce-expiry child's
+            # pid, so a test that genuinely needs the delayed path can
+            # wait for it to fully exit via wait_for_detached_child_exit
+            # instead of racing TemporaryDirectory teardown against it.
+            env["ATM_HOOK_DEBOUNCE_CHILD_PIDFILE"] = str(child_pidfile)
         return subprocess.run(
             [sys.executable, str(HOOK), "--event", event, "--harness", harness],
             capture_output=True,
@@ -59,6 +71,29 @@ class HookTestHelpers:
             env=env,
             check=False,
         )
+
+    def wait_for_detached_child_exit(self, pidfile: Path, deadline_seconds: float = 10.0) -> None:
+        """Block until the detached expiry child recorded at `pidfile`
+        (via ATM_HOOK_DEBOUNCE_CHILD_PIDFILE) has fully exited, or fail
+        loudly after `deadline_seconds`. A hang detector, not a sleep --
+        callers use this so nothing is still touching a
+        `tempfile.TemporaryDirectory()` when it tears down on Windows."""
+        deadline = time.monotonic() + deadline_seconds
+        pid_text = ""
+        while time.monotonic() < deadline:
+            if pidfile.exists():
+                pid_text = pidfile.read_text(encoding="utf-8").strip()
+                if pid_text:
+                    break
+            time.sleep(0.02)
+        if not pid_text:
+            raise AssertionError(f"detached expiry child pid was never recorded at {pidfile}")
+        pid = int(pid_text)
+        while time.monotonic() < deadline:
+            if not process_is_alive(pid):
+                return
+            time.sleep(0.02)
+        raise AssertionError(f"detached expiry child pid {pid} did not exit within {deadline_seconds}s")
 
     def fake_cli(self, root: Path, rows: list[dict[str, object]]) -> Path:
         fake = root / "fake-atm.py"
@@ -113,21 +148,25 @@ class QueueHookTests(HookTestHelpers, unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root, state = Path(directory), Path(directory) / "state"
             fake = self.fake_cli(root, [{"kind": "queue", "msg_id": "01TEST", "body": "read atm"}])
-            # Avoid leaving a detached expiry child behind while
-            # TemporaryDirectory is tearing down this fixture. Other tests
-            # cover the delayed expiry path and the worker also tolerates a
-            # vanished state directory.
-            result = self.run_hook("stop", fake, state, debounce_seconds="0")
+            pidfile = Path(directory) / "expiry-child.pid"
+            result = self.run_hook("stop", fake, state, child_pidfile=pidfile)
             self.assertEqual(result.returncode, 0)
             self.assertEqual(json.loads(result.stdout), {"decision": "block", "reason": "read atm"})
+            # Wait for the Stop's detached expiry child to fully exit
+            # before this TemporaryDirectory tears down on Windows.
+            self.wait_for_detached_child_exit(pidfile)
 
     def test_pre_tool_use_cancels_debounced_stop_timer(self):
         with tempfile.TemporaryDirectory() as directory:
             root, state = Path(directory), Path(directory) / "state"
             fake = self.fake_cli(root, [])
-            self.run_hook("stop", fake, state)
+            pidfile = Path(directory) / "expiry-child.pid"
+            self.run_hook("stop", fake, state, child_pidfile=pidfile)
             self.run_hook("pre-tool-use", fake, state)
             self.assertFalse((state / "pending-idle").exists())
+            # Wait for the Stop's detached expiry child to fully exit
+            # before this TemporaryDirectory tears down on Windows.
+            self.wait_for_detached_child_exit(pidfile)
 
     def test_idle_expiry_ignores_a_vanished_state_directory(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -143,7 +182,8 @@ class QueueHookTests(HookTestHelpers, unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root, state = Path(directory), Path(directory) / "state"
             fake = self.fake_cli(root, [])
-            result = self.run_hook("stop", fake, state)
+            pidfile = Path(directory) / "expiry-child.pid"
+            result = self.run_hook("stop", fake, state, child_pidfile=pidfile)
             self.assertEqual(result.returncode, 0)
             deadline = time.monotonic() + 2.0
             heartbeat_calls: list[str] = []
@@ -160,14 +200,25 @@ class QueueHookTests(HookTestHelpers, unittest.TestCase):
                 ["_internal-heartbeat --activity idle --as test-agent"],
                 "the debounced expiry must send exactly one idle heartbeat call",
             )
+            # The heartbeat call is written by a grandchild the expiry
+            # child spawns and waits on, so it is recorded slightly
+            # before the expiry child itself exits. Confirm the child
+            # has actually exited -- not merely emitted the call -- so
+            # nothing is still touching this TemporaryDirectory when it
+            # tears down on Windows.
+            self.wait_for_detached_child_exit(pidfile)
 
     def test_empty_stop_proceeds_without_output(self):
         with tempfile.TemporaryDirectory() as directory:
             root, state = Path(directory), Path(directory) / "state"
             fake = self.fake_cli(root, [])
-            result = self.run_hook("stop", fake, state)
+            pidfile = Path(directory) / "expiry-child.pid"
+            result = self.run_hook("stop", fake, state, child_pidfile=pidfile)
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout, "")
+            # Wait for the Stop's detached expiry child to fully exit
+            # before this TemporaryDirectory tears down on Windows.
+            self.wait_for_detached_child_exit(pidfile)
 
     def test_stop_fails_loudly_when_caller_context_is_missing(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -214,21 +265,36 @@ class QueueHookTests(HookTestHelpers, unittest.TestCase):
                     {"kind": "queue", "msg_id": "01SECOND", "body": "second queued message"},
                 ],
             )
-            first = self.run_hook("stop", fake, state)
+            # Each Stop spawns its own detached expiry child (schedule_idle
+            # runs it via subprocess.Popen for a nonzero debounce). Give
+            # each of the three calls its own pidfile and wait for that
+            # child to fully exit right after its call -- three unawaited
+            # detached children could still be reading/writing files under
+            # `directory` when TemporaryDirectory tears it down, which
+            # raced with rmtree on Windows CI.
+            first_pidfile = Path(directory) / "first-expiry-child.pid"
+            first = self.run_hook("stop", fake, state, child_pidfile=first_pidfile)
             self.assertEqual(first.returncode, 0)
             self.assertEqual(
                 json.loads(first.stdout),
                 {"decision": "block", "reason": "first queued message"},
             )
-            second = self.run_hook("stop", fake, state)
+            self.wait_for_detached_child_exit(first_pidfile)
+
+            second_pidfile = Path(directory) / "second-expiry-child.pid"
+            second = self.run_hook("stop", fake, state, child_pidfile=second_pidfile)
             self.assertEqual(second.returncode, 0)
             self.assertEqual(
                 json.loads(second.stdout),
                 {"decision": "block", "reason": "second queued message"},
             )
-            third = self.run_hook("stop", fake, state)
+            self.wait_for_detached_child_exit(second_pidfile)
+
+            third_pidfile = Path(directory) / "third-expiry-child.pid"
+            third = self.run_hook("stop", fake, state, child_pidfile=third_pidfile)
             self.assertEqual(third.returncode, 0)
             self.assertEqual(third.stdout, "", "the third Stop must proceed with no output")
+            self.wait_for_detached_child_exit(third_pidfile)
 
 
 @unittest.skipIf(
@@ -249,9 +315,13 @@ class CodexQueueHookTests(HookTestHelpers, unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root, state = Path(directory), Path(directory) / "state"
             fake = self.fake_cli(root, [{"kind": "steer", "msg_id": "01TEST", "body": "notice"}])
-            result = self.run_hook("stop", fake, state, "codex")
+            pidfile = Path(directory) / "expiry-child.pid"
+            result = self.run_hook("stop", fake, state, "codex", child_pidfile=pidfile)
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout, "")
+            # Wait for the Stop's detached expiry child to fully exit
+            # before this TemporaryDirectory tears down.
+            self.wait_for_detached_child_exit(pidfile)
 
 
 if __name__ == "__main__":
