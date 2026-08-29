@@ -20,6 +20,9 @@ dependency_relations:
   - prerequisite: WPERF.4
     dependent: WPERF.5
     relation: must_follow
+    scope: WPERF.4 items 1 and 3 only; item 2 (harness-model PR) is
+      independently tracked and does not gate WPERF.5 (see WPERF.4 ownership
+      note)
 ---
 
 # GH #1030 — Windows benchmark performance: investigation & remediation plan
@@ -115,7 +118,8 @@ Harness facts that shape every number:
   `frames_per_connection` amortizes connect/handshake cost across more
   batches on one connection (relevant to the H3 diagnostic).
 - **The headline p50 is a median of interval rates**, not per-message
-  latency (`benchmark_schema.py:516-529`; floor check
+  latency (`benchmark_schema.py:516-529`; the per-target result carries the
+  `baseline_p50_floor` used for its pass/fail evaluation,
   `run_admission_capacity.py:311-315`). `run_profile` (:1615-1642) runs
   until **both** ≥10 intervals and ≥20 s have elapsed, so a fast target
   accumulates far more samples than a slow one — the 2026-08-26 official
@@ -128,10 +132,15 @@ Harness facts that shape every number:
   `RLIMIT_NOFILE - 64`. Inert at f8 today (125 connections both ways) but
   a comparability trap for any profile change.
 - **Server concurrency ceiling sits just above the workload.** The
-  authenticated path's `ConcurrencyLimitLayer(128)`
-  (`http1_server.rs:110-119`) is only 3 above the 125 concurrent f8
-  connections official runs generate — near-saturation; any small change
-  in connection accounting could push runs into queuing.
+  accept-side connection semaphore `Semaphore::new(limits.max_connections)`
+  (`crates/atm-http-runtime/src/http1_server.rs:93`; default 128, set at
+  bootstrap `lib.rs:320`) is only 3 above the 125 concurrent f8 connections
+  official runs generate — near-saturation; any small change in connection
+  accounting could push runs into queuing. (The `ConcurrencyLimitLayer(128)`
+  inside `canonical_api_router` — `message_handler.rs:256,290` — bounds
+  in-flight requests *per connection*, since the authenticated path
+  rebuilds the router per connection; it is not the cross-connection
+  ceiling.)
 
 ## 3. Ranked hypotheses for cwin
 
@@ -184,7 +193,7 @@ number** (AO2.8 rule, `sprint-AO2-8-windows-tcp-benchmark-parity.md:132-145`).
 ### H2 — 1 ms batch window vs Windows ~15.6 ms timer resolution (primary; explains the extreme variance)
 
 - `BATCH_TIME_BUDGET = Duration::from_millis(1)`
-  (`crates/atm-storage-rusqlite/src/writer/mod.rs:26`), enforced via
+  (`crates/atm-storage-rusqlite/src/writer/mod.rs:27`), enforced via
   `tokio::time::timeout_at` (:520-573). Windows' default system timer
   granularity is ~15.6 ms unless something in-process calls
   `timeBeginPeriod`. If the effective window rounds up to ~15.6 ms —
@@ -207,12 +216,14 @@ number** (AO2.8 rule, `sprint-AO2-8-windows-tcp-benchmark-parity.md:132-145`).
   (`timeBeginPeriod(1)` in a diagnostic build, or run a known
   timer-raising process alongside). If batch sizes stabilize and
   throughput jumps, H2 is confirmed.
-- **Fix candidates, in ADR-007-compliant order:** count-based batch
-  triggering (drain-to-N; platform-uniform, preferred), Tokio
-  `Builder::event_interval`/coarse-timer-aware tuning (platform-uniform),
-  or — only behind the WPERF.2 ADR-007 gate — an explicit Windows
-  high-resolution waitable timer (platform-conditional; requires an
-  ADR-007 amendment first).
+- **Fix candidates (two co-equal directions — see WPERF.2 D1 for the
+  decision framing):** (a) a Windows high-resolution waitable timer
+  (`CreateWaitableTimerEx` with `CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`,
+  Windows 10 1803+) giving sub-millisecond wakeups without the global
+  `timeBeginPeriod` side effect — this lets the existing 1 ms
+  `BATCH_TIME_BUDGET` design work as-intended on Windows; or (b)
+  platform-uniform mechanisms: count-based batch triggering (drain-to-N),
+  Tokio `Builder::event_interval`/coarse-timer-aware tuning.
 
 ### H3 — Harness connection churn + TIME_WAIT/ephemeral-port pressure (transport targets; also a variance source)
 
@@ -241,8 +252,9 @@ number** (AO2.8 rule, `sprint-AO2-8-windows-tcp-benchmark-parity.md:132-145`).
   (`crates/atm-storage/src/tls.rs`, `PinnedClientVerifier`). Crypto is
   rustls+ring on both platforms (`Cargo.toml:46`), so raw crypto speed is
   comparable — the cost is per-connection count, which H3 multiplies.
-- The authenticated path rebuilds `canonical_api_router(...)` + a fresh
-  `ConcurrencyLimitLayer(128)` **per accepted connection**
+- The authenticated path rebuilds `canonical_api_router(...)` — which
+  instantiates its own per-connection `ConcurrencyLimitLayer(128)`
+  (`message_handler.rs:256,290`) — **per accepted connection**
   (`crates/atm-http-runtime/src/http1_server.rs:110-119`); the plaintext
   path builds its router once at startup
   (`crates/atm-http-runtime/src/runtime_setup.rs:17-25`).
@@ -318,6 +330,16 @@ account on fastpc4 requires local admin. Confirm cwin holds local admin on
 fastpc4 before starting; if not, account creation (task 1) is performed by
 Rand and cwin proceeds from task 2.
 
+**Precondition (escalation channel):** standing practice routes cwin via
+Rand (VPN/fastpc4), not native ATM. Before WPERF.2 starts, determine the
+escalation channel: if native `atm` from fastpc4 can reach the `atm-dev`
+team, provision cwin's ATM caller identity explicitly in the invoking
+shell (`ATM_IDENTITY=cwin`, `ATM_TEAM=atm-dev`, or per-command
+`--as cwin --team atm-dev`; `.atm.toml` is **not** a caller-identity
+fallback) and use direct `atm send team-lead`. If it cannot, all §6.9
+escalation packages are delivered to Rand for relay to team-lead — same
+required fields either way.
+
 Tasks:
 1. Create a local, non-admin, non-interactive account (suggested name
    `atmbench`) on fastpc4; enable SSH or scheduled-task access (no
@@ -348,13 +370,28 @@ smallest justified production correction, regression test, full rerun.
 The §4 checkpoint/timebox applies.
 
 Deliverables beyond the fix itself:
-- **D1 (ADR-007 gate):** platform-conditional durability or timer logic in
-  the writer crate is forbidden by ADR-007 (OS-divergent business logic;
-  allowed seams are IPC/lifecycle/host-ownership adapters only) and the
-  cross-platform-guidelines Phase S guard. Before any such code lands,
-  either (a) an ADR-007 amendment defining a narrow new seam is authored,
-  reviewed, and merged, or (b) the fix is restricted to platform-uniform
-  mechanisms (e.g. count-based batching). Option (b) is the default.
+- **D1 (ADR-007 gate — open technical decision):** ADR-007 forbids
+  OS-divergent *business logic* (allowed seams are IPC/lifecycle/
+  host-ownership adapters only), and the cross-platform-guidelines Phase S
+  guard enforces the same policy. Two co-equal directions exist for the
+  timer fix, and **this plan does not choose between them** — that
+  decision belongs to whoever authors the ADR-007 amendment/seam argument
+  during WPERF.2:
+  - **(a) Windows high-resolution waitable timer**
+    (`CreateWaitableTimerEx` + `CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`,
+    Windows 10 1803+): sub-millisecond wakeups with no global
+    `timeBeginPeriod` side effect, letting the existing platform-neutral
+    1 ms `BATCH_TIME_BUDGET` contract work as-intended on Windows. Likely
+    the better-performing fix. The classification argument to make
+    explicitly in the ADR: this is arguably a legitimate ADR-007
+    host-ownership-adapter seam — a platform-specific *mechanism* honoring
+    the same platform-neutral *contract* — not a business-logic fork.
+    Reviewers judge that argument on its merits.
+  - **(b) Platform-uniform mechanisms** (e.g. count-based batch
+    triggering): the fallback if the seam argument in (a) does not hold
+    up in ADR review.
+  Either way, no platform-conditional code lands before the ADR-007
+  amendment/argument is authored, reviewed, and merged.
 - **D2 (mechanical guard, lands before any D1-adjacent fix):** today no
   lint would catch a violation — `.just/lint_same_host_portability.py`
   scans only 2 files (not `atm-storage-rusqlite`), and
@@ -385,7 +422,7 @@ part of this sprint's product changes (§6.5). The §4 checkpoint/timebox
 applies.
 
 **Acceptance:** Windows tcp p50 ≥ **14,184.82 msg/s** (17,566.34 × 0.85 ×
-0.95) and tcp-tls p50 ≥ **11,697.89 msg/s** (14,486.54 × 0.85 × 0.95),
+0.95) and tcp-tls p50 ≥ **11,697.88 msg/s** (14,486.54 × 0.85 × 0.95),
 unrounded comparison; same attribution/escalation fallback as WPERF.2; no
 M5 regression.
 
@@ -426,15 +463,20 @@ team-lead/quality-mgr. **GH #1030 may close before the harness-model PR
 lands**, provided WPERF.5's re-baseline records the exact harness
 contract revision its floors were measured under (so a later harness
 change forces a visible re-baseline rather than silently shifting
-numbers).
+numbers). **WPERF.5 start gate (scopes the frontmatter WPERF.4→WPERF.5
+`must_follow`): items 1 and 3 above must be closed before WPERF.5
+starts; item 2 (the harness-model PR) is tracked independently by its GH
+issue and is *not* a WPERF.5 blocker.**
 
 ### WPERF.5 — Re-baseline Windows floors (3-clean-run standard)
 
 Current `windows-x64-01` floors are all "historical migration seed;
 pending quality review" (`baselines.json`) — and note the tcp/tcp-tls
-seeds derive from **f16** historical runs (2026-08-01 peaks) while
-official campaigns run **f8**: the current floors are cross-profile and
-must be replaced by same-profile (f8) floors. After WPERF.2–.4 land:
+seeds derive from **f16** historical runs while official campaigns run
+**f8**: the tcp seed (8,793.91) is the 2026-08-01 f16 peak at `2973fe2…`,
+and the tcp-tls seed (6,891.68) is a 2026-08-21 f16 run at `240b2af…`.
+The current floors are cross-profile and must be replaced by same-profile
+(f8) floors. After WPERF.2–.4 land:
 three clean, published official campaigns for the same contract
 (`benchmark-run/SKILL.md:86-92`), then update `baselines.json` floors with
 rationale, recording the harness contract revision used (see WPERF.4
@@ -457,7 +499,7 @@ M5 medians are the unrounded values from §1.
 |---|---:|---:|---:|---:|---:|
 | sqlite | 42,384.89 | 36,027.16 | **34,225.80** | 16,022.88 | ~2.14x |
 | tcp | 17,566.34 | 14,931.39 | **14,184.82** | 6,012.47 | ~2.36x |
-| tcp-tls | 14,486.54 | 12,313.56 | **11,697.89** | 5,614.01 | ~2.08x |
+| tcp-tls | 14,486.54 | 12,313.56 | **11,697.88** | 5,614.01 | ~2.08x |
 
 (uds: not applicable on Windows — three-target matrix,
 `benchmark_schema.py:290-295`.)
@@ -488,9 +530,14 @@ M5 medians are the unrounded values from §1.
    from `develop`; PRs target `develop`; merge-commit only. This plan
    branch carries no implementation.
 9. **Escalation mechanism (cwin is a lone remote executor):** escalate
-   blocking questions, checkpoint packages, and product decisions via
-   `atm send team-lead "<message>"` from fastpc4. Every escalation must
-   include: sprint id (WPERF.n), the specific decision or blocker, the
+   blocking questions, checkpoint packages, and product decisions through
+   the channel established in the WPERF.1 escalation-channel
+   precondition — direct `atm send team-lead "<message>"` (with explicit
+   caller identity: `ATM_IDENTITY=cwin`/`ATM_TEAM=atm-dev` or
+   `--as cwin --team atm-dev`) only if native ATM reachability from
+   fastpc4 was confirmed; otherwise **via Rand** for relay to team-lead
+   (the standing routing for cwin). Every escalation must include: sprint
+   id (WPERF.n), the specific decision or blocker, the
    hypothesis/kill-test state (what was tried, what each showed),
    relevant campaign ids and evidence paths, the current commit SHA, and
    the proposed next action. Do not block silently — if no reply within
@@ -534,7 +581,10 @@ netstat -ano | findstr TIME_WAIT           # H3 churn watch
 powercfg /getactivescheme                  # H6 host facts
 Get-MpComputerStatus | Select RealTimeProtectionEnabled   # H6
 
-# Escalation (§6.9)
+# Escalation (§6.9) — ONLY if native ATM reachability from fastpc4 was
+# confirmed per the WPERF.1 escalation-channel precondition; otherwise
+# deliver the same package to Rand for relay to team-lead.
+$env:ATM_IDENTITY = 'cwin'; $env:ATM_TEAM = 'atm-dev'   # explicit caller identity; .atm.toml is not a fallback
 atm send team-lead "WPERF.n: <blocker/decision> | tried: <kill-tests+results> | campaigns: <ids> | commit: <sha> | proposed: <next action>"
 ```
 
@@ -543,3 +593,4 @@ atm send team-lead "WPERF.n: <blocker/decision> | tried: <kill-tests+results> | 
 | Round | Date | Reviewer | Result | Notes |
 |---|---|---|---|---|
 | 1 | 2026-08-29 | quality-mgr | FAIL | 1 blocking, 10 important, 5 minor. Core analysis (all 5 self-reported findings) verified correct; findings were plan-structure/accuracy. B1: §4/§5 acceptance numbers disagreed and no sprint used the defined gate — resolved by declaring the ×0.95 closure floor the single gate, recomputing all figures from unrounded M5 medians (42,384.89 / 17,566.34 / 14,486.54), and aligning §4 and §5 exactly. I1a–g data corrections (revision attribution for the 08-01 peaks → `2973fe2…`; tls median 14,486.54; interval-count semantics — 118/318 observed, field already captured; single sqlite median figure; D3 ratchet-exception context stated; tcp plateau evidence base narrowed to `78ec600…`; bundled vs bundled-windows marked low-yield). I2 harness-pipelining suspicion re-labeled deferred/unrecorded with `ao2-f64-concurrency-closeout.md` citation. I3/I4/I5 → WPERF.2 D1 (ADR-007 gate), D2 (lint/boundary-TOML guard), D3 (durability ADR). I6 WPERF.4 itemized with per-item acceptance. I7/I8 harness PRs separated, owner cwin + issue tracking + closure-independence stated. I9 §6.9 escalation mechanism + WPERF.1 admin precondition. I10 AO2.8 checkpoint/timebox added. All 5 minors applied (frontmatter dependency_relations, WPERF.5 Acceptance label, H5 accept-loop location, keep-alive framing, f16-seed/f8-official + account-home discrepancy + ConcurrencyLimitLayer notes). All items resolved in round-1 fix commit. |
+| 2 | 2026-08-29 | quality-mgr | FAIL (near-pass) | All 16 round-1 findings confirmed resolved. 2 important + 5 minor new. N1: WPERF.4→WPERF.5 `must_follow` scoped to items 1+3 (frontmatter `scope` note + WPERF.5 start gate in the WPERF.4 ownership paragraph); harness-model PR (item 2) explicitly not a WPERF.5 blocker. N2: escalation-channel precondition added to WPERF.1 (explicit ATM caller identity `ATM_IDENTITY`/`ATM_TEAM` or `--as`/`--team`, no `.atm.toml` fallback; standing cwin-via-Rand routing is the default unless native ATM reachability from fastpc4 is confirmed), §6.9 and §7 aligned. M1: tcp-tls floor literal corrected to 11,697.88. M2: tcp-tls seed re-attributed to the 2026-08-21 f16 run at `240b2af…`. M3: cross-connection ceiling re-attributed to the accept-side `Semaphore::new(limits.max_connections)` (`http1_server.rs:93`, default 128, bootstrap `lib.rs:320`); `ConcurrencyLimitLayer(128)` (`message_handler.rs:256,290`) noted as per-connection only. M4: `writer/mod.rs:27`. M5: floor-check citation reworded (result carries `baseline_p50_floor`). Additional technical revision (Rand, same round): WPERF.2 D1 reclassified as an open decision presenting (a) Windows high-res waitable timer (`CreateWaitableTimerEx` + `CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`) as a candidate ADR-007 host-ownership-adapter seam and (b) platform-uniform count-based batching as fallback, on equal footing — decision deferred to the WPERF.2 ADR author/review; H2 fix-candidates list aligned. All items resolved in round-2 fix commit. |
