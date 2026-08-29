@@ -165,7 +165,12 @@ class QueueHookTests(HookTestHelpers, unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root, state = Path(directory), Path(directory) / "state"
             fake = self.fake_cli(root, [])
-            result = self.run_hook("stop", fake, state)
+            # debounce_seconds="0" keeps schedule_idle's expiry inline
+            # instead of spawning a detached child that can still be
+            # touching files under `directory` when TemporaryDirectory
+            # tears it down -- see
+            # test_stop_pull_blocks_with_literal_json_and_completes_idle_inline.
+            result = self.run_hook("stop", fake, state, debounce_seconds="0")
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout, "")
 
@@ -214,19 +219,26 @@ class QueueHookTests(HookTestHelpers, unittest.TestCase):
                     {"kind": "queue", "msg_id": "01SECOND", "body": "second queued message"},
                 ],
             )
-            first = self.run_hook("stop", fake, state)
+            # debounce_seconds="0" keeps each Stop's idle-expiry inline
+            # (schedule_idle short-circuits to expire_idle in-process)
+            # instead of spawning a detached expiry child per call. Three
+            # unawaited detached children can still be reading/writing
+            # files under `directory` when TemporaryDirectory tears it
+            # down, which raced with rmtree on Windows CI -- see
+            # test_stop_pull_blocks_with_literal_json_and_completes_idle_inline.
+            first = self.run_hook("stop", fake, state, debounce_seconds="0")
             self.assertEqual(first.returncode, 0)
             self.assertEqual(
                 json.loads(first.stdout),
                 {"decision": "block", "reason": "first queued message"},
             )
-            second = self.run_hook("stop", fake, state)
+            second = self.run_hook("stop", fake, state, debounce_seconds="0")
             self.assertEqual(second.returncode, 0)
             self.assertEqual(
                 json.loads(second.stdout),
                 {"decision": "block", "reason": "second queued message"},
             )
-            third = self.run_hook("stop", fake, state)
+            third = self.run_hook("stop", fake, state, debounce_seconds="0")
             self.assertEqual(third.returncode, 0)
             self.assertEqual(third.stdout, "", "the third Stop must proceed with no output")
 
