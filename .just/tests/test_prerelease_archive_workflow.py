@@ -219,6 +219,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             "Validate prerelease tag and workspace version",
             "Resolve release target matrix",
         )
+        shell = resolve_posix_shell()
+        self.assertIsNotNone(shell, "bash is required for the extracted workflow step")
+        with mock.patch.dict(os.environ, {"GIT_BASH": r"C:\System32\bash.exe"}):
+            self.assertEqual(resolve_posix_shell(), shell)
         with tempfile.TemporaryDirectory() as directory:
             tmp_path = Path(directory)
             scripts_dir = tmp_path / ".github" / "scripts"
@@ -267,8 +271,6 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 "GH_TOKEN_CAPTURE": str(token_capture),
                 "GH_PROBE_STATUS": "404",
             }
-            shell = resolve_posix_shell()
-            self.assertIsNotNone(shell, "bash is required for the extracted workflow step")
             result = subprocess.run(
                 [shell, "-euo", "pipefail", "-c", script],
                 cwd=tmp_path,
