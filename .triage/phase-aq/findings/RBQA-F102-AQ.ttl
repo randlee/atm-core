@@ -31,12 +31,12 @@
   triage:status "fixed" ;
   triage:closed true ;
   triage:branch "fix/aq-phase-review-boundary" ;
-  triage:headSha "974f6f89ca2b7cbb03d8eed070eec47198a7bb57" ;
-  triage:occursIn <urn:atm:triage:worktree/fix-aq-phase-review-boundary/974f6f89ca2b7cbb03d8eed070eec47198a7bb57> .
+  triage:headSha "e79dd52a4" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aq-phase-review-boundary/e79dd52a4> .
 
-<urn:atm:triage:worktree/fix-aq-phase-review-boundary/974f6f89ca2b7cbb03d8eed070eec47198a7bb57>
+<urn:atm:triage:worktree/fix-aq-phase-review-boundary/e79dd52a4>
   a triage:WorktreeSnapshot ;
   triage:path "fix/aq-phase-review-boundary" ;
   triage:branch "fix/aq-phase-review-boundary" ;
-  triage:headSha "974f6f89ca2b7cbb03d8eed070eec47198a7bb57" ;
+  triage:headSha "e79dd52a4" ;
   triage:orderIndex 0 .
