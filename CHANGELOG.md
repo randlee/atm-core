@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- enforce the request-budget ordering between SQLite storage, the replacement
+  daemon, and same-host clients; rebuild local TCP and Unix transports after a
+  daemon generation change, classify pre-send reconnects separately from
+  writes whose delivery may have completed, and preserve fail-closed recovery
+  guidance for uncertain requests (Phase AQ, AQ1.9)
 - publish a native `aarch64-unknown-linux-gnu` release archive (arm64
   Linux, e.g. Apple-Silicon colima/docker containers without emulation);
   Homebrew arm-linux is not yet wired (#1057)

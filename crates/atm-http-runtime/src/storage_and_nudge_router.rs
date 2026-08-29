@@ -69,12 +69,14 @@ where
 #[derive(Clone)]
 struct BlockingCoreBridge {
     permits: Arc<tokio::sync::Semaphore>,
+    runtime_health: RuntimeHealth,
 }
 
 impl BlockingCoreBridge {
-    fn new(capacity: NonZeroUsize) -> Self {
+    fn new(capacity: NonZeroUsize, runtime_health: RuntimeHealth) -> Self {
         Self {
             permits: Arc::new(tokio::sync::Semaphore::new(capacity.get())),
+            runtime_health,
         }
     }
 
@@ -103,6 +105,13 @@ impl BlockingCoreBridge {
                 "request deadline expired before replacement blocking core operation started",
             ));
         }
+        // The blocking job itself is intentionally not wrapped in a
+        // `tokio::time::timeout`: a durable storage write must run to
+        // completion rather than be abandoned mid-transaction. `elapsed` is
+        // therefore observability, not enforcement -- it records when a job
+        // outlived the budget it was dispatched with, without changing
+        // whether or how long the job runs.
+        let started_at = std::time::Instant::now();
         let outcome = tokio::task::spawn_blocking(job).await.map_err(|source| {
             AtmError::new(
                 atm_core::error::AtmErrorCode::InternalError,
@@ -110,6 +119,18 @@ impl BlockingCoreBridge {
             )
             .with_cause(source)
         })?;
+        let elapsed = started_at.elapsed();
+        if elapsed > remaining {
+            self.runtime_health.record_blocking_core_bridge_stall();
+            tracing::warn!(
+                subsystem = "atm_http_runtime.blocking_core_bridge",
+                action = "blocking_job",
+                outcome = "budget_exceeded",
+                elapsed = ?elapsed,
+                budget = ?remaining,
+                "blocking core bridge job outlived its remaining request budget"
+            );
+        }
         drop(permit);
         outcome
     }
@@ -147,15 +168,17 @@ impl StorageAndNudgeRouter {
         received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
         daemon_home: PathBuf,
     ) -> Self {
+        let runtime_health = RuntimeHealth::default();
         Self {
             service_runtime,
             observability,
             received_hook_selector,
             blocking_core_bridge: BlockingCoreBridge::new(
                 NonZeroUsize::new(1).expect("one non-storage core bridge operation"),
+                runtime_health.clone(),
             ),
             daemon_home,
-            runtime_health: RuntimeHealth::default(),
+            runtime_health,
             doctor_ports: None,
             daemon_context: None,
             direct_peer_port: crate::direct_peer_port(),
@@ -183,6 +206,7 @@ impl StorageAndNudgeRouter {
         runtime_health: RuntimeHealth,
         doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     ) -> Self {
+        self.blocking_core_bridge.runtime_health = runtime_health.clone();
         self.runtime_health = runtime_health;
         self.doctor_ports = Some(doctor_ports);
         self
@@ -1622,7 +1646,10 @@ mod tests {
 
     #[tokio::test]
     async fn blocking_core_bridge_rejects_saturation_without_starting_a_second_job() {
-        let admission = BlockingCoreBridge::new(NonZeroUsize::new(1).expect("non-zero capacity"));
+        let admission = BlockingCoreBridge::new(
+            NonZeroUsize::new(1).expect("non-zero capacity"),
+            RuntimeHealth::default(),
+        );
         let (first_started_tx, first_started_rx) = tokio::sync::oneshot::channel();
         let (release_first_tx, release_first_rx) = tokio::sync::oneshot::channel();
         let first_admission = admission.clone();
@@ -1671,7 +1698,10 @@ mod tests {
 
     #[tokio::test]
     async fn expired_blocking_core_bridge_never_starts_a_blocking_job() {
-        let admission = BlockingCoreBridge::new(NonZeroUsize::new(1).expect("non-zero capacity"));
+        let admission = BlockingCoreBridge::new(
+            NonZeroUsize::new(1).expect("non-zero capacity"),
+            RuntimeHealth::default(),
+        );
         let started = Arc::new(AtomicBool::new(false));
         let job_started = Arc::clone(&started);
 
@@ -1687,6 +1717,73 @@ mod tests {
         assert!(
             !started.load(Ordering::SeqCst),
             "an expired request must not create a blocking SQLite job"
+        );
+    }
+
+    /// Busy-waits for `duration` on the calling thread.
+    ///
+    /// Test-only stand-in for a slow blocking job. A thread-sleep primitive
+    /// is deliberately avoided: the AL.3 architecture boundary guard forbids
+    /// `atm-http-runtime` sources, including tests, from restoring blocking
+    /// sleep constructs.
+    fn spin_wait(duration: Duration) {
+        let deadline = std::time::Instant::now() + duration;
+        while std::time::Instant::now() < deadline {
+            std::hint::spin_loop();
+        }
+    }
+
+    #[tokio::test]
+    async fn blocking_core_bridge_records_a_stall_when_a_job_outlives_its_budget() {
+        let health = RuntimeHealth::default();
+        let admission = BlockingCoreBridge::new(
+            NonZeroUsize::new(1).expect("non-zero capacity"),
+            health.clone(),
+        );
+
+        // A fake slow job: it runs longer than the remaining budget it was
+        // dispatched with. The bridge must let it run to completion (a
+        // durable write is never abandoned mid-flight) and only record the
+        // stall as an observability event. This busy-waits deliberately
+        // instead of sleeping the blocking thread: the AL.3 boundary guard
+        // forbids `atm-http-runtime` from restoring blocking-runtime sleep
+        // constructs anywhere in its sources, tests included.
+        let result = admission
+            .run(
+                RequestDeadline::after(Duration::from_millis(20)),
+                move || {
+                    spin_wait(Duration::from_millis(150));
+                    Ok("slow job still finished")
+                },
+            )
+            .await
+            .expect("an outrunning job still completes and returns its result");
+
+        assert_eq!(result, "slow job still finished");
+        assert_eq!(
+            health.snapshot().blocking_core_bridge_stalls_total,
+            1,
+            "a job outliving its budget must be recorded as one bridge stall"
+        );
+    }
+
+    #[tokio::test]
+    async fn blocking_core_bridge_does_not_record_a_stall_for_jobs_within_budget() {
+        let health = RuntimeHealth::default();
+        let admission = BlockingCoreBridge::new(
+            NonZeroUsize::new(1).expect("non-zero capacity"),
+            health.clone(),
+        );
+
+        admission
+            .run(RequestDeadline::after(Duration::from_secs(1)), || Ok(()))
+            .await
+            .expect("a fast job completes within its budget");
+
+        assert_eq!(
+            health.snapshot().blocking_core_bridge_stalls_total,
+            0,
+            "a job that stays within its budget must not be recorded as a stall"
         );
     }
 
@@ -1794,7 +1891,10 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn started_write_retains_its_actual_result_after_the_advisory_deadline() {
-        let admission = BlockingCoreBridge::new(NonZeroUsize::new(1).expect("non-zero capacity"));
+        let admission = BlockingCoreBridge::new(
+            NonZeroUsize::new(1).expect("non-zero capacity"),
+            RuntimeHealth::default(),
+        );
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let (release_tx, release_rx) = tokio::sync::oneshot::channel();
         let task = tokio::spawn(async move {
@@ -1821,7 +1921,10 @@ mod tests {
 
     #[tokio::test]
     async fn blocking_core_bridge_returns_the_underlying_storage_error() {
-        let admission = BlockingCoreBridge::new(NonZeroUsize::new(1).expect("non-zero capacity"));
+        let admission = BlockingCoreBridge::new(
+            NonZeroUsize::new(1).expect("non-zero capacity"),
+            RuntimeHealth::default(),
+        );
         let error = admission
             .run(RequestDeadline::after(Duration::from_secs(1)), || {
                 Err::<(), _>(AtmError::validation("intentional storage failure"))

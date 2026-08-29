@@ -1091,6 +1091,42 @@ mod tests {
         }
     }
 
+    /// Counts writes without blocking, unlike [`CountingLoopbackRouter`],
+    /// which deliberately holds each call open for connection-admission
+    /// tests. Used by daemon-replacement tests that need an ordinary
+    /// request/response round trip per daemon generation.
+    struct ImmediateCountingLoopbackRouter {
+        calls: AtomicUsize,
+    }
+
+    impl ImmediateCountingLoopbackRouter {
+        fn new() -> Self {
+            Self {
+                calls: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    impl atm_core::boundary::sealed::Sealed for ImmediateCountingLoopbackRouter {}
+
+    impl CanonicalWriteHandler for ImmediateCountingLoopbackRouter {
+        fn write(
+            &self,
+            _request: atm_core::send::WriteRequest,
+            _ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
+        > {
+            Box::pin(async move {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                Ok(ApiResponse::new(ResponseEnvelope::Error(
+                    AtmError::validation("immediate counting loopback handler reached"),
+                )))
+            })
+        }
+    }
+
     impl atm_core::boundary::sealed::Sealed for CountingLoopbackRouter {}
 
     impl CanonicalWriteHandler for CountingLoopbackRouter {
@@ -2391,6 +2427,106 @@ mod tests {
             !record_path.exists(),
             "the runtime removes only its own endpoint record after drain"
         );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn reused_loopback_client_follows_a_replaced_daemon_listener_without_duplicate_delivery()
+    {
+        // Reproduces the shape of a long-lived embedded host (for example
+        // the Python graft binding's `PyGraftSession`) that builds one
+        // `DaemonApiClient` and keeps it for the lifetime of the process,
+        // across a managed daemon restart it never explicitly reconnects
+        // for. The client must transparently follow the daemon to its new
+        // listener, and the retired daemon generation must never receive a
+        // duplicate of the request the reused client sends after the
+        // replacement.
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+
+        let first_instance_id = Ulid::new();
+        write_owner_record(&record_path, first_instance_id);
+        let first_handler = Arc::new(ImmediateCountingLoopbackRouter::new());
+        let first_runtime = HttpRuntimeBuilder::new(
+            loopback_runtime_config(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                record_path.clone(),
+                first_instance_id,
+                None,
+                1024,
+            ),
+            first_handler.clone(),
+        )
+        .build()
+        .expect("valid loopback runtime configuration")
+        .start()
+        .await
+        .expect("first loopback runtime starts");
+
+        // One client, built once and reused across the replacement below.
+        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("shared loopback client");
+
+        client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect("first request reaches the first daemon generation");
+        assert_eq!(first_handler.calls.load(Ordering::SeqCst), 1);
+
+        // Replace the daemon: drain and remove the first runtime's listener
+        // and endpoint record, then start a second runtime -- a different
+        // daemon generation -- at a fresh ephemeral port under the same
+        // record path, exactly as a managed `atm daemon restart` does.
+        first_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("first loopback runtime drains");
+
+        let second_instance_id = Ulid::new();
+        write_owner_record(&record_path, second_instance_id);
+        let second_handler = Arc::new(ImmediateCountingLoopbackRouter::new());
+        let second_runtime = HttpRuntimeBuilder::new(
+            loopback_runtime_config(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                record_path.clone(),
+                second_instance_id,
+                None,
+                1024,
+            ),
+            second_handler.clone(),
+        )
+        .build()
+        .expect("valid loopback runtime configuration")
+        .start()
+        .await
+        .expect("second loopback runtime starts");
+
+        // The same, never-rebuilt client must transparently follow the
+        // replacement: its next request must reach the new daemon
+        // generation exactly once, without an explicit reconnect and
+        // without a duplicate delivery to either generation.
+        client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect(
+                "second request reaches the second daemon generation without an explicit reconnect",
+            );
+        assert_eq!(
+            second_handler.calls.load(Ordering::SeqCst),
+            1,
+            "the replaced daemon must receive the reused client's next request exactly once"
+        );
+        assert_eq!(
+            first_handler.calls.load(Ordering::SeqCst),
+            1,
+            "the retired daemon generation must not receive a duplicate of the second request"
+        );
+
+        second_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("second loopback runtime drains");
     }
 
     #[tokio::test(flavor = "current_thread")]

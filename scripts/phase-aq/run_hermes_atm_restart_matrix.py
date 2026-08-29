@@ -96,25 +96,6 @@ def scoped_process_environment(overrides: dict[str, str]) -> Iterator[None]:
                 os.environ[key] = value
 
 
-def refresh_sender_after_daemon_restart(
-    sender_session: Any,
-    record: dict[str, Any],
-    *,
-    platform_name: str | None = None,
-) -> None:
-    """Refresh the native client after a Windows daemon restart.
-
-    Windows local HTTP clients retain the daemon connection across a process
-    restart, while the restarted daemon owns a new listener.  The graft
-    binding exposes an explicit refresh operation; do not retry the write
-    implicitly because a retry could duplicate a message.
-    """
-    if (platform_name or os.name) != "nt":
-        return
-    sender_session.reconnect()
-    record["sender_reconnect"] = "windows-post-daemon-restart"
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="local", help="evidence host label, for example local or m5")
@@ -175,9 +156,20 @@ class OutputCapture:
 
     def wait_for(self, predicate: Callable[[str], bool], timeout: float) -> str:
         deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
+        while True:
+            # `remaining` is computed exactly once per iteration and clamped
+            # to zero before being handed to `Queue.get(timeout=...)`, which
+            # raises `ValueError` (not `queue.Empty`) for a negative timeout.
+            # Recomputing it a second time between this guard and the `get`
+            # call below (the previous shape) let preemption between the two
+            # reads push the second read past `deadline`, crashing the
+            # harness with `ValueError` instead of reaching the graceful
+            # `TimeoutError` path below.
+            remaining = max(0.0, deadline - time.monotonic())
+            if remaining <= 0:
+                break
             try:
-                line = self.events.get(timeout=min(0.1, deadline - time.monotonic()))
+                line = self.events.get(timeout=min(0.1, remaining))
             except queue.Empty:
                 continue
             if line is None:
@@ -185,6 +177,19 @@ class OutputCapture:
             if predicate(line):
                 return line
         raise TimeoutError("matrix child did not emit its expected event")
+
+    def join(self, timeout: float = 2.0) -> None:
+        """Join the reader threads after the child process has exited.
+
+        `stop_process` already waits for the child, but the reader threads
+        that drain its pipes are separate and were previously never joined:
+        `OwnedDaemon.stop`/`ReceiverWorker.stop` called `tail()` immediately
+        after the process exited, racing the last buffered stdout/stderr
+        lines against the reader threads that append them. Called after the
+        process exits and before `tail()` in both stop paths.
+        """
+        for thread in self._threads:
+            thread.join(timeout=timeout)
 
     def tail(self) -> list[str]:
         return list(self.lines)
@@ -244,11 +249,31 @@ def require_clean_host() -> None:
         )
 
 
-def stop_process(process: subprocess.Popen[str] | None, *, crash: bool = False) -> None:
+def stop_process(process: subprocess.Popen[str] | None, *, crash: bool = False, cooperative: bool = False) -> None:
+    """Stop a child process, optionally requesting cooperative shutdown first.
+
+    `crash` is a deliberate hard kill (SIGKILL / TerminateProcess), used only
+    for the crash-within-window row. Otherwise, `cooperative=True` asks for a
+    signal the child's own stop logic can observe before falling back to the
+    unconditional `terminate()`/`wait(timeout=10)`-then-`kill()` sequence
+    below: on POSIX that is `SIGTERM` either way (already observable via
+    `signal.signal`), but on Windows `Popen.terminate()` is `TerminateProcess`
+    -- a hard kill that never runs the child's `signal.signal` handler at all
+    -- so a cooperative stop there needs `CTRL_BREAK_EVENT` instead, which
+    Windows delivers as `SIGBREAK` to a child started with
+    `CREATE_NEW_PROCESS_GROUP` (see `ReceiverWorker.start` and
+    `worker_main`'s `SIGBREAK` registration). Without this, the receiver
+    worker's `finally: session.close()` (its lease unregister) never runs
+    before the process dies on Windows.
+    """
     if process is None or process.poll() is not None:
         return
     if crash:
         process.kill()
+    elif cooperative and _cooperative_stop_signal(
+        is_windows=os.name == "nt", has_ctrl_break=hasattr(signal, "CTRL_BREAK_EVENT")
+    ) == "ctrl_break":
+        process.send_signal(signal.CTRL_BREAK_EVENT)
     else:
         process.terminate()
     try:
@@ -256,6 +281,24 @@ def stop_process(process: subprocess.Popen[str] | None, *, crash: bool = False) 
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=5)
+
+
+def _cooperative_stop_signal(*, is_windows: bool, has_ctrl_break: bool) -> str:
+    """Pick the signal `stop_process` sends for a cooperative (non-hard-kill) stop.
+
+    Factored out of `stop_process` as pure decision logic so the platform
+    branch is unit-testable without patching the real `os`/`signal` modules
+    (which `stop_process` reads directly, since there is no per-call way to
+    inject them into `subprocess.Popen.terminate`/`send_signal`). `"nt"` with
+    `CTRL_BREAK_EVENT` available picks `"ctrl_break"` -- the only signal a
+    Windows child's `signal.signal` handler can actually observe, since
+    `Popen.terminate()` there is `TerminateProcess` (see `stop_process`'s own
+    docstring). Every other combination (POSIX, or a Windows Python build
+    old enough to lack `CTRL_BREAK_EVENT`) falls back to `"terminate"`.
+    """
+    if is_windows and has_ctrl_break:
+        return "ctrl_break"
+    return "terminate"
 
 
 def worker_main(args: argparse.Namespace) -> int:
@@ -273,6 +316,16 @@ def worker_main(args: argparse.Namespace) -> int:
 
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, request_stop)
+    # Windows has no real SIGTERM delivery: `Popen.terminate()` there is
+    # `TerminateProcess`, a hard kill that bypasses this handler entirely.
+    # `CTRL_BREAK_EVENT`, sent to a child started with
+    # `CREATE_NEW_PROCESS_GROUP` (see `ReceiverWorker.start`), is delivered
+    # as `SIGBREAK` instead, which *is* observable here -- that is the only
+    # way a clean-restart row's cooperative stop (`stop_process(...,
+    # cooperative=True)`) can let this worker's `finally: session.close()`
+    # (its lease unregister) run before the process exits on Windows.
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, request_stop)
     agent = os.environ["ATM_IDENTITY"]
     team = os.environ["ATM_TEAM"]
     caller = atm_graft.PyAgentAddress(agent, team, None)
@@ -350,6 +403,8 @@ class OwnedDaemon:
         process = self.process
         output = self.output
         stop_process(process)
+        if output is not None:
+            output.join()
         return {
             "pid": process.pid if process is not None else None,
             "returncode": process.returncode if process is not None else None,
@@ -367,6 +422,14 @@ class ReceiverWorker:
         self.output: OutputCapture | None = None
 
     def start(self) -> dict[str, Any]:
+        # `CREATE_NEW_PROCESS_GROUP` is Windows-only and required for
+        # `send_signal(CTRL_BREAK_EVENT)` (the cooperative-stop signal) to
+        # target this child alone rather than raising `ValueError` or
+        # breaking the parent's own console group; it is a no-op on POSIX,
+        # where cooperative stop is plain `SIGTERM`.
+        extra_kwargs: dict[str, Any] = {}
+        if os.name == "nt":
+            extra_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         self.process = subprocess.Popen(
             [
                 sys.executable,
@@ -382,6 +445,7 @@ class ReceiverWorker:
             text=True,
             encoding="utf-8",
             errors="replace",
+            **extra_kwargs,
         )
         self.output = OutputCapture(self.process)
         assert self.output is not None
@@ -409,10 +473,12 @@ class ReceiverWorker:
         line = self.output.wait_for(matching_event, timeout)
         return json.loads(line)
 
-    def stop(self, *, crash: bool = False) -> dict[str, Any]:
+    def stop(self, *, crash: bool = False, cooperative: bool = False) -> dict[str, Any]:
         process = self.process
         output = self.output
-        stop_process(process, crash=crash)
+        stop_process(process, crash=crash, cooperative=cooperative)
+        if output is not None:
+            output.join()
         return {
             "pid": process.pid if process is not None else None,
             "returncode": process.returncode if process is not None else None,
@@ -502,6 +568,59 @@ def doctor(atm: Path, env: dict[str, str]) -> dict[str, Any]:
     except json.JSONDecodeError:
         payload = {"exit_code": completed.returncode, "stdout": completed.stdout, "stderr": completed.stderr}
     return payload
+
+
+def _best_effort(action: Callable[[], Any]) -> Any:
+    """Run `action`, returning an `{"error": ...}` payload instead of raising.
+
+    Used for diagnostics gathered inside a row's own exception handler
+    (`doctor_after`, the failure-log copy): a second failure while
+    collecting failure evidence must never mask or replace the row's real
+    exception, so every one of these calls is defensively wrapped.
+    """
+    try:
+        return action()
+    except Exception as error:  # noqa: BLE001 - diagnostics capture must never raise
+        return {"error": f"{type(error).__name__}: {error}"}
+
+
+def _capture_exception(error: BaseException, *, tail_lines: int = 40) -> dict[str, Any]:
+    """Render a caught exception as evidence: a short message plus a bounded traceback tail.
+
+    Mirrors `main`'s top-level `harness_crashed` guard (which keeps the full
+    `traceback.format_exc()`), but a row-level failure is evidence attached
+    to an otherwise-successful matrix run, so the traceback is bounded the
+    same way `OutputCapture` bounds transcripts -- enough to diagnose, not
+    enough to bloat every row's evidence file.
+    """
+    lines = traceback.format_exc().rstrip("\n").splitlines()
+    return {
+        "error": f"{type(error).__name__}: {error}",
+        "traceback_tail": lines[-tail_lines:],
+    }
+
+
+def _copy_failure_log(source: Path, evidence_dir: Path, row: str, host: str) -> str | None:
+    """Best-effort copy of a row's scratch `atm.log.jsonl` into evidence on failure.
+
+    Called only from a row's own exception handler, before scratch-directory
+    cleanup deletes `source`. Copies into
+    `evidence_dir/failure-logs/<row>-<host>.log.jsonl` so ATM_LOG=debug
+    output survives past the row's own process lifetime; a passing row
+    copies nothing. Never raises: a copy failure (missing source, a locked
+    file on Windows, a full disk) must never mask the row's real exception,
+    so this returns `None` instead.
+    """
+    try:
+        if not source.is_file():
+            return None
+        destination_dir = evidence_dir / "failure-logs"
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        destination = destination_dir / f"{row}-{host}.log.jsonl"
+        shutil.copyfile(source, destination)
+        return str(destination)
+    except OSError:
+        return None
 
 
 def _remove_tree_tolerant(path: Path, *, attempts: int = 6, initial_delay: float = 0.15) -> str | None:
@@ -694,6 +813,16 @@ def run_scenario(args: argparse.Namespace, row: str, action: str) -> dict[str, A
     receiver: ReceiverWorker | None = None
     sender_session: Any | None = None
     roster_members: list[str] = []
+    # Snapshotted immediately after each `daemon.start()` / `receiver.start()`
+    # call, since `OwnedDaemon`/`ReceiverWorker` overwrite `self.output` with
+    # a fresh `OutputCapture` on the next `start()` -- without these, a row
+    # that fails after a restart could only ever see the *new* process's
+    # transcript, never the one that was running when the row's setup
+    # actually failed.
+    daemon_before_output: OutputCapture | None = None
+    daemon_after_output: OutputCapture | None = None
+    receiver_before_output: OutputCapture | None = None
+    receiver_after_output: OutputCapture | None = None
     record: dict[str, Any] = {
         "id": row,
         "action": action,
@@ -708,10 +837,12 @@ def run_scenario(args: argparse.Namespace, row: str, action: str) -> dict[str, A
             add_roster_member(args.atm, env, home, RECEIVER)
             roster_members.append(RECEIVER)
             daemon_start = daemon.start()
+            daemon_before_output = daemon.output
             record["daemon_before"] = daemon_start
             record["doctor_before"] = doctor(args.atm, env)
             receiver = ReceiverWorker(Path(__file__).resolve(), workspace, env, args.timeout)
             record["receiver_before"] = receiver.start()
+            receiver_before_output = receiver.output
             import atm_graft
 
             sender_session = atm_graft.PyGraftSession(atm_graft.PyAgentAddress(SENDER, TEAM, None))
@@ -720,13 +851,30 @@ def run_scenario(args: argparse.Namespace, row: str, action: str) -> dict[str, A
                 record["restart_at_ns"] = time.time_ns()
                 record["daemon_stop"] = daemon.stop()
                 record["daemon_after"] = daemon.start()
-                refresh_sender_after_daemon_restart(sender_session, record)
+                daemon_after_output = daemon.output
+                # Recording only, per AQ1.9's own product observables (`atm
+                # doctor --json` `graft_receivers`, asserted post-delivery
+                # below) -- this is not a gate. It exists so a row that then
+                # times out on `sender_session.send` (the Windows PR #1088
+                # failure this fix responds to: `HTTP client request exceeded
+                # its absolute request budget`) still has a doctor snapshot
+                # from right after the daemon reported READY, to help tell a
+                # daemon-side stall (for example a SQLite writer-lock wait
+                # after an unclean restart) apart from a client-side one.
+                record["doctor_after_restart"] = _best_effort(lambda: doctor(args.atm, env))
             else:
                 crash = action == "receiver_crash_within_window"
                 record["restart_at_ns"] = time.time_ns()
-                record["receiver_stop"] = receiver.stop(crash=crash)
+                # Only the deliberate crash row uses a hard kill. Every other
+                # restart row asks for a cooperative stop first so the
+                # receiver's own `finally: session.close()` (its lease
+                # unregister) gets a chance to run before the process exits
+                # -- see `stop_process` and `worker_main`'s `SIGBREAK`
+                # registration for why that matters on Windows specifically.
+                record["receiver_stop"] = receiver.stop(crash=crash, cooperative=not crash)
                 receiver = ReceiverWorker(Path(__file__).resolve(), workspace, env, args.timeout)
                 record["receiver_after"] = receiver.start()
+                receiver_after_output = receiver.output
             marker = f"aq1-9-{row}-{uuid.uuid4()}"
             send_started = time.time_ns()
             sent = sender_session.send(receiver_address, marker, False)
@@ -759,7 +907,30 @@ def run_scenario(args: argparse.Namespace, row: str, action: str) -> dict[str, A
                 if not verdict["displaced_at_bind"]:
                     record["status"] = "fail"
         except Exception as error:  # noqa: BLE001 - evidence must retain the row failure
-            record["error"] = f"{type(error).__name__}: {error}"
+            # Every diagnostic below is captured before the scratch
+            # directory (and the still-running daemon/receiver transcripts
+            # in it) is torn down: this is the harness's only chance to
+            # explain *why* a row failed rather than just *that* it did.
+            # See PR #1088's Windows `daemon-restart-live-receiver` failure
+            # (`AtmGraftError: HTTP client request exceeded its absolute
+            # request budget` on the first `sender_session.send` after
+            # `ATM_DAEMON_READY`), where none of this survived and the
+            # suspected daemon-side stall (a SQLite writer-lock wait after
+            # an unclean `TerminateProcess` restart) could not be proven.
+            record.update(_capture_exception(error))
+            record["daemon_transcript"] = {
+                "before": daemon_before_output.tail() if daemon_before_output is not None else [],
+                "after": daemon_after_output.tail() if daemon_after_output is not None else [],
+            }
+            record["receiver_transcript"] = {
+                "before": receiver_before_output.tail() if receiver_before_output is not None else [],
+                "after": receiver_after_output.tail() if receiver_after_output is not None else [],
+            }
+            record["doctor_after"] = _best_effort(lambda: doctor(args.atm, env))
+            evidence_dir = _evidence_output_paths(args)[0].parent
+            record["failure_log_path"] = _copy_failure_log(
+                root / "logs" / "atm.log.jsonl", evidence_dir, row, args.host
+            )
         finally:
             if sender_session is not None:
                 try:
@@ -778,7 +949,9 @@ def run_scenario(args: argparse.Namespace, row: str, action: str) -> dict[str, A
     # Scratch-directory teardown happens last, strictly after the row's
     # record is fully populated above -- a teardown failure can only ever
     # attach a `cleanup_warning` to an already-complete record, never
-    # discard it.
+    # discard it. It also runs after any failure-log copy above, so the
+    # source `logs/atm.log.jsonl` this copy reads from is never deleted
+    # out from under it.
     cleanup_warning = _remove_tree_tolerant(root)
     if cleanup_warning is not None:
         record["cleanup_warning"] = cleanup_warning
