@@ -2502,6 +2502,68 @@ fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes(
 }
 
 #[test]
+fn al9_atm_graft_pins_full_dependency_set_including_http_runtime() {
+    // RBQA post-merge review (2026-08): atm-graft/Cargo.toml declared
+    // atm-http-runtime (AL.9, cc3ae58c4 routes atm-graft write-transport
+    // selection through atm_http_runtime::preferred_local_client /
+    // selected_write_transport) without the boundary TOML's
+    // allowed_dependencies listing it, and without a Rust guard pinning
+    // atm-graft's full dependency set the way al1_http_runtime_is_core_
+    // contract_only_and_excludes_retired_transport_shapes does for
+    // atm-http-runtime. This test closes both gaps.
+    let dependencies = direct_normal_workspace_dependencies();
+    let actual = dependencies
+        .get("atm-graft")
+        .expect("atm-graft package must exist");
+    let expected = BTreeSet::from([
+        "agent-team-mail-core".to_string(),
+        "atm-daemon-client".to_string(),
+        "atm-http-runtime".to_string(),
+    ]);
+    assert_eq!(
+        actual, &expected,
+        "atm-graft's normal workspace dependency set drifted; update this guard and the \
+         boundaries/atm-graft/shared-client-consumer.toml allowed_dependencies together"
+    );
+
+    let root = workspace_root();
+    let boundary_path = root.join("boundaries/atm-graft/shared-client-consumer.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("atm-graft shared-client-consumer boundary must parse");
+    let allowed_dependencies = boundary
+        .dependencies
+        .allowed_dependencies
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let package_to_crate_name = BTreeMap::from([
+        ("agent-team-mail-core".to_string(), "atm-core".to_string()),
+        (
+            "atm-daemon-client".to_string(),
+            "atm-daemon-client".to_string(),
+        ),
+        (
+            "atm-http-runtime".to_string(),
+            "atm-http-runtime".to_string(),
+        ),
+    ]);
+    let missing = actual
+        .iter()
+        .map(|package| {
+            package_to_crate_name.get(package).unwrap_or_else(|| {
+                panic!("no crate-name mapping registered for package `{package}`")
+            })
+        })
+        .filter(|crate_name| !allowed_dependencies.contains(crate_name.as_str()))
+        .collect::<Vec<_>>();
+    assert!(
+        missing.is_empty(),
+        "boundaries/atm-graft/shared-client-consumer.toml allowed_dependencies is missing crates \
+         atm-graft actually depends on: {missing:?}"
+    );
+}
+
+#[test]
 fn al1_compatibility_oracle_retains_negative_inputs_after_ipc_retirement() {
     let root = workspace_root();
     let oracle = read_source(&root.join("docs/plans/phase-al/AL1-runtime-compatibility-oracle.md"));

@@ -700,8 +700,7 @@ mod tests {
             model: ModelName::default(),
             recipient_pane_id: None,
             metadata_json: {
-                let mut metadata = serde_json::Map::new();
-                metadata.insert(["backend", "Type"].concat(), json!("herdr"));
+                let mut metadata = atm_core::delivery_channel::test_backend_type_metadata("herdr");
                 metadata.insert("herdrSession".to_owned(), json!(session));
                 metadata
             },

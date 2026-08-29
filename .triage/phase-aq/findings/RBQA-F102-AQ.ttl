@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F102-AQ>
+  a triage:Finding ;
+  triage:findingId "RBQA-F102-AQ" ;
+  triage:title "scripts/check-nudge-taxonomy.py has no detection for computed/concatenated forms of the backendType literal" ;
+  triage:description "The backendType containment gate in scripts/check-nudge-taxonomy.py only matched a contiguous \"backendType\" string token, so a computed equivalent built from string parts (e.g. [\"backend\", \"Type\"].concat(), concat!(\"backend\", \"Type\"), or \"backend\" + \"Type\") outside the two owning modules (member_mutation.rs, delivery_channel.rs) passed the gate undetected -- see RBQA-F101-AQ. Fixed by adding BACKEND_TYPE_COMPUTED_PATTERNS regexes that flag these computed forms (any internal whitespace) on every Rust source line outside the owning files, including test-only sources and inline #[cfg(test)] modules, since evading the gate from test code is exactly the bug class being guarded against. Covered by .just/tests/test_check_nudge_taxonomy.py::test_computed_backend_type_literal_outside_owners_is_flagged and ::test_canonical_owners_with_real_literal_still_pass." ;
+  triage:phaseId "phase-aq" ;
+  triage:triageMode "phase_end" ;
+  triage:category "lint-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AQ ;
+  triage:foundAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F102-AQ/AQ-cnt-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F102-AQ/AQ-cnt-1>
+  a triage:Occurrence ;
+  triage:file "scripts/check-nudge-taxonomy.py" ;
+  triage:line 277 ;
+  triage:snippet "backend_type_containment_gate: computed \"backendType\" literal must not bypass the ownership gate (RBQA-F101-AQ/RBQA-F102-AQ)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aq-phase-review-boundary" ;
+  triage:headSha "e79dd52a4" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aq-phase-review-boundary/e79dd52a4> .
+
+<urn:atm:triage:worktree/fix-aq-phase-review-boundary/e79dd52a4>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aq-phase-review-boundary" ;
+  triage:branch "fix/aq-phase-review-boundary" ;
+  triage:headSha "e79dd52a4" ;
+  triage:orderIndex 0 .
