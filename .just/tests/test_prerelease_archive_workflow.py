@@ -21,6 +21,8 @@ from lint_common import resolve_posix_shell
 import prerelease_tag
 from prerelease_tag import patch_bump
 
+SHELL_COMMAND_TIMEOUT_SECONDS = 10
+
 
 def scripts_root() -> Path:
     return discover_repo_root() / ".github" / "scripts"
@@ -160,7 +162,30 @@ def _python_command_shim(tmp_path: Path, name: str, body: str) -> None:
         (bin_dir / name).symlink_to(script)
 
 
+def run_extracted_shell_step(
+    shell: str, script: str, cwd: Path, env: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    """Run a workflow shell fixture with a finite CI-safe time budget."""
+    return subprocess.run(
+        [shell, "-euo", "pipefail", "-c", script],
+        cwd=cwd,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=SHELL_COMMAND_TIMEOUT_SECONDS,
+    )
+
+
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
+    def test_extracted_shell_step_has_finite_timeout(self) -> None:
+        completed = subprocess.CompletedProcess(args=[], returncode=0)
+        with mock.patch("subprocess.run", return_value=completed) as run:
+            result = run_extracted_shell_step("bash", "true", Path("."), {})
+
+        self.assertIs(result, completed)
+        self.assertEqual(run.call_args.kwargs["timeout"], SHELL_COMMAND_TIMEOUT_SECONDS)
+
     def test_workflow_exists_and_does_not_edit_vendored_kit(self) -> None:
         root = discover_repo_root()
         self.assertTrue((root / ".github" / "workflows" / "prerelease-archive.yml").is_file())
@@ -271,14 +296,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 "GH_TOKEN_CAPTURE": str(token_capture),
                 "GH_PROBE_STATUS": "404",
             }
-            result = subprocess.run(
-                [shell, "-euo", "pipefail", "-c", script],
-                cwd=tmp_path,
-                env=probe_env,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
+            result = run_extracted_shell_step(shell, script, tmp_path, probe_env)
             self.assertEqual(
                 result.returncode,
                 0,
@@ -289,14 +307,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             existing_output = tmp_path / "github-output-existing"
             probe_env["GH_PROBE_STATUS"] = "200"
             probe_env["GITHUB_OUTPUT"] = str(existing_output)
-            existing = subprocess.run(
-                [shell, "-euo", "pipefail", "-c", script],
-                cwd=tmp_path,
-                env=probe_env,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
+            existing = run_extracted_shell_step(shell, script, tmp_path, probe_env)
             self.assertNotEqual(existing.returncode, 0)
             self.assertIn("GitHub Release already exists", existing.stderr)
 
