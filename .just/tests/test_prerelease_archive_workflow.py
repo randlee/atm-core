@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -18,6 +17,7 @@ if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from lint_common import discover_repo_root
+from lint_common import resolve_posix_shell
 import prerelease_tag
 from prerelease_tag import patch_bump
 
@@ -160,40 +160,6 @@ def _python_command_shim(tmp_path: Path, name: str, body: str) -> None:
         (bin_dir / name).symlink_to(script)
 
 
-def _bash() -> str:
-    """Resolve Git Bash explicitly; Windows' System32 WSL stub is not a shell."""
-
-    if os.name != "nt":
-        command = shutil.which("bash")
-        if command is None:
-            raise AssertionError("bash is required for the extracted workflow step")
-        return command
-
-    override = os.environ.get("GIT_BASH")
-    candidates: list[Path] = []
-    if override:
-        override_path = Path(override)
-        candidates.append(override_path / "bash.exe" if override_path.is_dir() else override_path)
-    git_exec_path = subprocess.run(
-        ["git", "--exec-path"], text=True, capture_output=True, check=True
-    ).stdout.strip()
-    if git_exec_path:
-        exec_path = Path(git_exec_path)
-        for base in (exec_path, *exec_path.parents):
-            candidates.extend((base / "bin" / "bash.exe", base / "usr" / "bin" / "bash.exe"))
-
-    system32 = Path(os.environ.get("WINDIR", r"C:\Windows")) / "System32"
-    system32_prefix = str(system32.resolve()).casefold()
-    for candidate in candidates:
-        if not candidate.is_file():
-            continue
-        resolved = str(candidate.resolve())
-        if resolved.casefold().startswith(system32_prefix + os.sep.casefold()):
-            continue
-        return resolved
-    raise AssertionError(f"could not resolve Git Bash outside {system32}")
-
-
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
     def test_workflow_exists_and_does_not_edit_vendored_kit(self) -> None:
         root = discover_repo_root()
@@ -301,8 +267,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 "GH_TOKEN_CAPTURE": str(token_capture),
                 "GH_PROBE_STATUS": "404",
             }
+            shell = resolve_posix_shell()
+            self.assertIsNotNone(shell, "bash is required for the extracted workflow step")
             result = subprocess.run(
-                [_bash(), "-euo", "pipefail", "-c", script],
+                [shell, "-euo", "pipefail", "-c", script],
                 cwd=tmp_path,
                 env=probe_env,
                 text=True,
@@ -320,7 +288,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             probe_env["GH_PROBE_STATUS"] = "200"
             probe_env["GITHUB_OUTPUT"] = str(existing_output)
             existing = subprocess.run(
-                [_bash(), "-euo", "pipefail", "-c", script],
+                [shell, "-euo", "pipefail", "-c", script],
                 cwd=tmp_path,
                 env=probe_env,
                 text=True,

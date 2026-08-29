@@ -26,6 +26,12 @@ import sys
 import unittest
 from pathlib import Path
 
+JUST_DIR = Path(__file__).resolve().parents[1]
+if str(JUST_DIR) not in sys.path:
+    sys.path.insert(0, str(JUST_DIR))
+
+from lint_common import resolve_posix_shell
+
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_PATH = ROOT / "docs/plans/phase-aq/fixtures/picker-input-v1.json"
 PICKER_PY = ROOT / "scripts/send-to/picker.py"
@@ -40,30 +46,12 @@ ALL_MEMBER_IDS = "cipher@atm-dev,fenix@atm-dev,offline@atm-dev"
 ACTIVE_MEMBER_ID = "cipher@atm-dev"
 
 
-def posix_shell() -> str | None:
-    """A POSIX shell to run this repo's `.sh` picker wrappers with.
-
-    `CreateProcess` on Windows has no shebang interpretation:
-    `subprocess.run([str(a_dot_sh_file)])` there raises `OSError:
-    [WinError 193] %1 is not a valid Win32 application`, even though the
-    script's own logic (a thin `exec python3 picker.py ...` wrapper) is
-    entirely portable. GitHub's `windows-latest` runners ship Git for
-    Windows, which puts `bash.exe` on PATH -- use that (or a bare `sh`)
-    instead of executing the file directly. This is a capability check,
-    not a platform check: the `.sh` wrapper tests below run wherever a
-    POSIX shell is found, on any OS, and skip with this exact reason only
-    when one genuinely is not available.
-    """
-    return shutil.which("bash") or shutil.which("sh")
-
-
 def sh_command(script: Path) -> list[str]:
-    """Argv to run a `.sh` script portably; callers must gate on
-    `posix_shell()` first when `os.name == "nt"` (see its docstring)."""
+    """Argv to run a `.sh` script portably."""
     if os.name == "nt":
-        shell = posix_shell()
+        shell = resolve_posix_shell()
         if shell is None:  # pragma: no cover - guarded by class-level skip
-            raise AssertionError("posix_shell() must be checked before sh_command() on Windows")
+            raise AssertionError("a POSIX shell must be available on Windows")
         return [shell, str(script)]
     return [str(script)]
 
@@ -110,7 +98,7 @@ class PickerPyExclusionTests(PickerExclusionAssertions, unittest.TestCase):
 
 
 @unittest.skipIf(
-    os.name == "nt" and posix_shell() is None,
+    os.name == "nt" and resolve_posix_shell() is None,
     "no POSIX shell (bash/sh) found on PATH to run this .sh wrapper on Windows",
 )
 class PickerMacosExclusionTests(PickerExclusionAssertions, unittest.TestCase):
@@ -118,7 +106,7 @@ class PickerMacosExclusionTests(PickerExclusionAssertions, unittest.TestCase):
         # picker-macos.sh always delegates to picker.py --backend osascript;
         # ATM_SEND_TO_SELECTION is consulted first, so osascript is never
         # actually invoked -- safe to run on any host with a POSIX shell to
-        # execute the wrapper itself (see `posix_shell`/`sh_command`).
+        # execute the wrapper itself (see `resolve_posix_shell`/`sh_command`).
         result = run(sh_command(PICKER_MACOS))
         self.assert_dead_and_idle_are_excluded(result)
 
@@ -129,7 +117,7 @@ class PickerMacosExclusionTests(PickerExclusionAssertions, unittest.TestCase):
     "launch picker.py, regardless of ATM_SEND_TO_SELECTION",
 )
 @unittest.skipIf(
-    os.name == "nt" and posix_shell() is None,
+    os.name == "nt" and resolve_posix_shell() is None,
     "no POSIX shell (bash/sh) found on PATH to run this .sh wrapper on Windows",
 )
 class PickerLinuxExclusionTests(PickerExclusionAssertions, unittest.TestCase):

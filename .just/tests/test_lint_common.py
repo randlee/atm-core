@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 JUST_DIR = Path(__file__).resolve().parents[1]
@@ -27,6 +28,7 @@ from lint_common import make_log_path
 from lint_common import print_report
 from lint_common import relative_log_path
 from lint_common import render_workspace_crate_table
+from lint_common import resolve_posix_shell
 from lint_common import rust_file_test_scope
 from lint_common import strip_negated_cfg_segments
 from lint_common import workspace_crates
@@ -43,6 +45,44 @@ resolver = "2"
 
 
 class LintCommonTests(unittest.TestCase):
+    def test_resolve_posix_shell_prefers_bash_outside_windows(self) -> None:
+        with mock.patch(
+            "lint_common.shutil.which",
+            side_effect=lambda name: {"bash": "/usr/bin/bash", "sh": "/bin/sh"}.get(name),
+        ):
+            self.assertEqual(resolve_posix_shell(windows=False), "/usr/bin/bash")
+
+    def test_resolve_posix_shell_rejects_system32_wsl_stub(self) -> None:
+        git_result = mock.Mock(stdout="C:\\Program Files\\Git\\mingw64\\libexec\\git-core\n")
+
+        def is_git_bash(candidate: Path) -> bool:
+            return str(candidate).replace("/", "\\").casefold() == (
+                r"c:\program files\git\bin\bash.exe"
+            )
+
+        with (
+            mock.patch("lint_common.subprocess.run", return_value=git_result) as run,
+            mock.patch(
+                "lint_common.shutil.which",
+                side_effect=lambda name: r"C:\Windows\System32\bash.exe" if name == "bash" else None,
+            ),
+            mock.patch("lint_common.Path.is_file", new=is_git_bash),
+        ):
+            self.assertEqual(
+                resolve_posix_shell(windows=True, windir=r"C:\Windows"),
+                r"C:\Program Files\Git\bin\bash.exe",
+            )
+
+        self.assertEqual(run.call_args.kwargs["timeout"], 5)
+
+    def test_resolve_posix_shell_ignores_ambient_git_bash(self) -> None:
+        with (
+            mock.patch.dict("lint_common.os.environ", {"GIT_BASH": r"C:\unsafe"}, clear=False),
+            mock.patch("lint_common.subprocess.run", side_effect=OSError),
+            mock.patch("lint_common.shutil.which", return_value=None),
+        ):
+            self.assertIsNone(resolve_posix_shell(windows=True))
+
     def write_workspace(self, repo_root: Path) -> None:
         (repo_root / ".just").mkdir()
         (repo_root / ".just/lint-config.toml").write_text(
