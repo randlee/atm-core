@@ -23,6 +23,36 @@ def load_module():
 
 
 class HermesAtmRestartMatrixTests(unittest.TestCase):
+    def test_refresh_sender_after_daemon_restart_is_windows_only(self) -> None:
+        module = load_module()
+
+        class Sender:
+            def __init__(self) -> None:
+                self.reconnect_calls = 0
+
+            def reconnect(self) -> None:
+                self.reconnect_calls += 1
+
+        windows_sender = Sender()
+        windows_record: dict[str, Any] = {}
+        module.refresh_sender_after_daemon_restart(
+            windows_sender,
+            windows_record,
+            platform_name="nt",
+        )
+        self.assertEqual(windows_sender.reconnect_calls, 1)
+        self.assertEqual(windows_record["sender_reconnect"], "windows-post-daemon-restart")
+
+        unix_sender = Sender()
+        unix_record: dict[str, Any] = {}
+        module.refresh_sender_after_daemon_restart(
+            unix_sender,
+            unix_record,
+            platform_name="posix",
+        )
+        self.assertEqual(unix_sender.reconnect_calls, 0)
+        self.assertNotIn("sender_reconnect", unix_record)
+
     def test_evidence_names_all_three_rows_and_records_pending_m5_as_host_specific(self) -> None:
         module = load_module()
         with tempfile.TemporaryDirectory() as temporary:
