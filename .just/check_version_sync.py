@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+from typing import Callable
 
 from lint_common import load_lint_config
 from lint_common import workspace_crate_section_lines
@@ -42,15 +43,20 @@ def dependency_sections(manifest: dict) -> list[tuple[str, dict]]:
     return sections
 
 
+SEMVER_PATTERN = r"\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+
+
+def extract_versions_from_url(url: str) -> list[str]:
+    versions = re.findall(rf"/download/v(?P<version>{SEMVER_PATTERN})/", url)
+    versions.extend(re.findall(rf"[_-](?P<version>{SEMVER_PATTERN})[/_]", url))
+    return versions
+
+
 def extract_version_from_url(url: str) -> str | None:
-    semver = r"\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
-    match = re.search(rf"/download/v(?P<version>{semver})/", url)
-    if match:
-        return match.group("version")
-    match = re.search(rf"[_-](?P<version>{semver})[/_]", url)
-    if match:
-        return match.group("version")
-    return None
+    """Return the first URL version for compatibility with existing callers."""
+
+    versions = extract_versions_from_url(url)
+    return versions[0] if versions else None
 
 
 def version_sync_config(repo_root: Path) -> dict:
@@ -58,6 +64,59 @@ def version_sync_config(repo_root: Path) -> dict:
     if not isinstance(config, dict):
         raise SystemExit("[version_sync] must be a TOML table")
     return config
+
+
+def winget_settings(config: dict) -> tuple[str, str, str, str] | None:
+    winget = config.get("winget", {})
+    if not isinstance(winget, dict) or not winget.get("enabled", False):
+        return None
+    manifest_glob = winget.get("manifest_glob")
+    fields = (
+        winget.get("package_version_field", "PackageVersion"),
+        winget.get("manifest_version_field", "ManifestVersion"),
+        winget.get("installer_url_field", "InstallerUrl"),
+    )
+    if not isinstance(manifest_glob, str) or not manifest_glob.strip():
+        raise SystemExit("[version_sync.winget].manifest_glob must be a non-empty string when enabled")
+    if not all(isinstance(field, str) and field for field in fields):
+        raise SystemExit("[version_sync.winget] field names must be non-empty strings")
+    return (manifest_glob, *fields)
+
+
+def winget_manifest_paths(repo_root: Path, manifest_glob: str) -> list[Path]:
+    paths = sorted(repo_root.glob(manifest_glob))
+    if not paths:
+        fail(f"no Winget manifests found for glob {manifest_glob!r}")
+    return paths
+
+
+def winget_field_pattern(field_name: str) -> re.Pattern[str]:
+    return re.compile(rf"^([ \t]*{re.escape(field_name)}:[ \t]*)(\S+)([ \t]*)$", re.MULTILINE)
+
+
+def winget_field_values(text: str, field_name: str) -> list[str]:
+    return [match.group(2) for match in winget_field_pattern(field_name).finditer(text)]
+
+
+def replace_winget_field_values(
+    text: str, field_name: str, transform: Callable[[str], str], *, expected_count: int | None = None
+) -> tuple[str, int]:
+    pattern = winget_field_pattern(field_name)
+    matches = list(pattern.finditer(text))
+    if not matches:
+        return text, 0
+    if expected_count is not None and len(matches) != expected_count:
+        return text, len(matches)
+    updated = pattern.sub(
+        lambda match: f"{match.group(1)}{transform(match.group(2))}{match.group(3)}",
+        text,
+    )
+    return updated, len(matches)
+
+
+def replace_version_occurrences(value: str, old_version: str, new_version: str) -> str:
+    pattern = re.compile(rf"(?<![0-9.]){re.escape(old_version)}(?![0-9])")
+    return pattern.sub(new_version, value)
 
 
 def validate_workspace_version(repo_root: Path) -> str:
@@ -193,33 +252,21 @@ def validate_lockfile(repo_root: Path, workspace_version: str) -> None:
 
 
 def validate_winget_manifests(repo_root: Path, workspace_version: str, config: dict) -> bool:
-    winget = config.get("winget", {})
-    if not isinstance(winget, dict) or not winget.get("enabled", False):
+    settings = winget_settings(config)
+    if settings is None:
         return False
-
-    manifest_glob = winget.get("manifest_glob")
-    if not isinstance(manifest_glob, str) or not manifest_glob.strip():
-        raise SystemExit("[version_sync.winget].manifest_glob must be a non-empty string when enabled")
-
-    package_version_field = winget.get("package_version_field", "PackageVersion")
-    manifest_version_field = winget.get("manifest_version_field", "ManifestVersion")
-    installer_url_field = winget.get("installer_url_field", "InstallerUrl")
-    if not all(isinstance(item, str) and item for item in (package_version_field, manifest_version_field, installer_url_field)):
-        raise SystemExit("[version_sync.winget] field names must be non-empty strings")
-
-    manifest_paths = sorted(repo_root.glob(manifest_glob))
-    if not manifest_paths:
-        fail(f"no Winget manifests found for glob {manifest_glob!r}")
+    manifest_glob, package_version_field, manifest_version_field, installer_url_field = settings
+    manifest_paths = winget_manifest_paths(repo_root, manifest_glob)
 
     for manifest_path in manifest_paths:
         rel_manifest = manifest_path.relative_to(repo_root).as_posix()
         text = read_text(manifest_path)
 
         def extract_field(field_name: str) -> str:
-            match = re.search(rf"^{re.escape(field_name)}:\s*(?P<value>\S+)\s*$", text, re.MULTILINE)
-            if match is None:
+            values = winget_field_values(text, field_name)
+            if len(values) != 1:
                 fail(f"{rel_manifest} is missing {field_name}")
-            return match.group("value")
+            return values[0]
 
         package_version = extract_field(package_version_field)
         if package_version != workspace_version:
@@ -235,60 +282,49 @@ def validate_winget_manifests(repo_root: Path, workspace_version: str, config: d
                 f"does not match workspace version ({workspace_version})"
             )
 
-        installer_urls = re.findall(rf"^\s*{re.escape(installer_url_field)}:\s*(?P<value>\S+)\s*$", text, re.MULTILINE)
+        installer_urls = winget_field_values(text, installer_url_field)
         if not installer_urls:
             fail(f"{rel_manifest} is missing {installer_url_field}")
         for installer_url in installer_urls:
-            installer_version = extract_version_from_url(installer_url)
-            if installer_version != workspace_version:
+            installer_versions = extract_versions_from_url(installer_url)
+            if not installer_versions or any(version != workspace_version for version in installer_versions):
                 fail(
-                    f"{rel_manifest} {installer_url_field} version ({installer_version}) "
+                    f"{rel_manifest} {installer_url_field} versions ({installer_versions}) "
                     f"does not match workspace version ({workspace_version})"
                 )
     return True
 
 
-def sync_winget_manifests(repo_root: Path, workspace_version: str, config: dict) -> list[Path]:
+def sync_winget_manifests(
+    repo_root: Path, old_version: str, workspace_version: str, config: dict
+) -> list[Path]:
     """Update the configured Winget fields used by ``validate_winget_manifests``."""
 
-    winget = config.get("winget", {})
-    if not isinstance(winget, dict) or not winget.get("enabled", False):
+    settings = winget_settings(config)
+    if settings is None:
         return []
-
-    manifest_glob = winget.get("manifest_glob")
-    package_version_field = winget.get("package_version_field", "PackageVersion")
-    manifest_version_field = winget.get("manifest_version_field", "ManifestVersion")
-    installer_url_field = winget.get("installer_url_field", "InstallerUrl")
-    if not isinstance(manifest_glob, str) or not manifest_glob.strip():
-        raise SystemExit("[version_sync.winget].manifest_glob must be a non-empty string when enabled")
-    fields = (package_version_field, manifest_version_field, installer_url_field)
-    if not all(isinstance(item, str) and item for item in fields):
-        raise SystemExit("[version_sync.winget] field names must be non-empty strings")
-
-    manifest_paths = sorted(repo_root.glob(manifest_glob))
-    if not manifest_paths:
-        fail(f"no Winget manifests found for glob {manifest_glob!r}")
+    manifest_glob, package_version_field, manifest_version_field, installer_url_field = settings
+    manifest_paths = winget_manifest_paths(repo_root, manifest_glob)
 
     changed: list[Path] = []
     for manifest_path in manifest_paths:
         text = read_text(manifest_path)
         original = text
         for field_name in (package_version_field, manifest_version_field):
-            pattern = re.compile(rf"^({re.escape(field_name)}:\s*)\S+(\s*)$", re.MULTILINE)
-            text, count = pattern.subn(rf"\g<1>{workspace_version}\g<2>", text)
+            text, count = replace_winget_field_values(
+                text,
+                field_name,
+                lambda _old_value: workspace_version,
+                expected_count=1,
+            )
             if count != 1:
                 fail(f"{manifest_path.relative_to(repo_root)} must contain exactly one {field_name} field")
 
-        installer_pattern = re.compile(
-            rf"^(\s*{re.escape(installer_url_field)}:\s*\S*?)(?P<version>"
-            rf"\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)(?P<suffix>[/_]\S*)$",
-            re.MULTILINE,
+        text, count = replace_winget_field_values(
+            text,
+            installer_url_field,
+            lambda value: replace_version_occurrences(value, old_version, workspace_version),
         )
-
-        def replace_installer_version(match: re.Match[str]) -> str:
-            return f"{match.group(1)}{workspace_version}{match.group('suffix')}"
-
-        text, count = installer_pattern.subn(replace_installer_version, text)
         if count == 0:
             fail(f"{manifest_path.relative_to(repo_root)} is missing {installer_url_field} version")
 

@@ -92,6 +92,27 @@ def cargo_manifest_paths(repo_root: Path) -> list[Path]:
     return [repo_root / "Cargo.toml", *workspace_manifest_paths(repo_root)]
 
 
+def sync_python_version(repo_root: Path, pyproject: Path) -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(repo_root / ".github" / "scripts" / "release_artifacts.py"),
+            "sync-python-version",
+            "--workspace-toml",
+            "Cargo.toml",
+            "--pyproject",
+            str(pyproject.relative_to(repo_root)),
+        ],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise SystemExit(f"python version sync failed for {pyproject}: {detail}")
+
+
 def update_manifest_versions(repo_root: Path, old: str, new: str) -> dict[Path, str]:
     manifests = cargo_manifest_paths(repo_root)
     if not manifests:
@@ -116,26 +137,9 @@ def update_manifest_versions(repo_root: Path, old: str, new: str) -> dict[Path, 
         raise SystemExit("workspace package version was not found in Cargo.toml")
 
     for pyproject in python_project_paths(repo_root):
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(repo_root / ".github" / "scripts" / "release_artifacts.py"),
-                "sync-python-version",
-                "--workspace-toml",
-                "Cargo.toml",
-                "--pyproject",
-                str(pyproject.relative_to(repo_root)),
-            ],
-            cwd=repo_root,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            detail = (result.stderr or result.stdout).strip()
-            raise SystemExit(f"python version sync failed for {pyproject}: {detail}")
+        sync_python_version(repo_root, pyproject)
 
-    winget_paths = sync_winget_manifests(repo_root, new, version_sync_config(repo_root))
+    winget_paths = sync_winget_manifests(repo_root, old, new, version_sync_config(repo_root))
 
     tracked_manifests = [*manifests, *python_project_paths(repo_root)]
     tracked_manifests.extend(winget_paths)

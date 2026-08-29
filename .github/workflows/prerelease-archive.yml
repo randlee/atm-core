@@ -152,6 +152,7 @@ jobs:
           import os
           from pathlib import Path
           import shutil
+          import sys
           import subprocess
           import tarfile
           import zipfile
@@ -161,7 +162,7 @@ jobs:
           config = json.loads(
               subprocess.check_output(
                   [
-                      "python3",
+                      sys.executable,
                       ".github/scripts/release_artifacts.py",
                       "release-package-config",
                       "--manifest",
