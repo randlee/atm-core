@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-023>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-023" ;
+  triage:title "SKILL.md cites 'v1.4.4 defect 14' to justify the new Homebrew runtime-rehearsal requirement, but the postmortem document it comes from is not landed on develop" ;
+  triage:description "SKILL.md's rehearsal rule (line ~127) cites 'v1.4.4 defect 14' as the concrete incident justifying the new Homebrew runtime-rehearsal requirement ('ruby -c passed a formula that failed every user's brew install, v1.4.4 defect 14'). The source document, docs/postmortems/v1.4.4-publish-postmortem.md, does not exist on develop -- it exists only on the companion, unmerged branch plan/v144-publish-postmortem (PR #1084, reviewed in parallel by quality-mgr). If PR #1085 merges before PR #1084, the citation is dangling (references a defect number in a document readers cannot find in the repo). Not a defect in the rule's substance -- the underlying incident is real and independently corroborated by direct diff-reading of PR #1085 against the postmortem draft -- but a landing-order dependency that must be sequenced correctly. Found by req-qa (ATM-QA-006). Independently verified by quality-mgr via git show develop:docs/postmortems/v1.4.4-publish-postmortem.md (fatal: path exists on disk but not in develop) on commit 682949bc5." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-28T05:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:PUB-1085 ;
+  triage:foundAt "2026-08-28T04:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-023/PUB-1085-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-023/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-29T00:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-023/PUB-1085-1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/publishing/SKILL.md" ;
+  triage:line 127 ;
+  triage:snippet "a formula that failed every user's `brew install`, v1.4.4 defect 14" ;
+  triage:status "open" ; triage:closed false ;
+  triage:branch "skill/publishing-rehearsal-parallel" ; triage:headSha "682949bc5" ;
+  triage:occursIn <urn:atm:triage:worktree/PUB-1085/682949bc5-d> .
+
+<urn:atm:triage:worktree/PUB-1085/682949bc5-d>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/skill-publishing-rehearsal-parallel" ;
+  triage:branch "skill/publishing-rehearsal-parallel" ;
+  triage:headSha "682949bc5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/ATM-QA-023/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/publishing/SKILL.md" ;
+  triage:line 127 ;
+  triage:snippet "v1.4.4 defect 14 in release/sc-publish-qualification-25668ecc.md, round 4" ;
+  triage:status "fixed" ; triage:closed true ;
+  triage:branch "skill/publishing-rehearsal-parallel" ; triage:headSha "a37677804" ;
+  triage:occursIn <urn:atm:triage:worktree/PUB-1085/a37677804-d> .
+
+<urn:atm:triage:worktree/PUB-1085/a37677804-d>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/skill-publishing-rehearsal-parallel" ;
+  triage:branch "skill/publishing-rehearsal-parallel" ;
+  triage:headSha "a37677804" ;
+  triage:orderIndex 2 .
