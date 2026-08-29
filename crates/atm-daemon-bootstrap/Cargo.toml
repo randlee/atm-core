@@ -18,14 +18,14 @@ path = "src/bin/atm-daemon-benchmark.rs"
 required-features = ["benchmark-harness"]
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.5" }
-atm-herdr = { path = "../atm-herdr", version = "1.4.5" }
-atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.5" }
-atm-runtime = { path = "../atm-runtime", version = "1.4.5" }
-atm-storage = { path = "../atm-storage", version = "1.4.5" }
-atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.5" }
-atm-template-sc-compose = { path = "../atm-template-sc-compose", version = "1.4.5" }
-peer-tls = { path = "../peer-tls", version = "1.4.5" }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.6" }
+atm-herdr = { path = "../atm-herdr", version = "1.4.6" }
+atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.6" }
+atm-runtime = { path = "../atm-runtime", version = "1.4.6" }
+atm-storage = { path = "../atm-storage", version = "1.4.6" }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.6" }
+atm-template-sc-compose = { path = "../atm-template-sc-compose", version = "1.4.6" }
+peer-tls = { path = "../peer-tls", version = "1.4.6" }
 tokio.workspace = true
 tracing.workspace = true
 fs4 = "0.13"
@@ -33,9 +33,9 @@ serde_json.workspace = true
 ulid.workspace = true
 
 [dev-dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.5", features = ["test-utils"] }
-atm-herdr = { path = "../atm-herdr", version = "1.4.5", features = ["test-utils"] }
-atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.5", features = ["test-support"] }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.6", features = ["test-utils"] }
+atm-herdr = { path = "../atm-herdr", version = "1.4.6", features = ["test-utils"] }
+atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.6", features = ["test-support"] }
 atm-runtime-test-support = { path = "../atm-runtime-test-support" }
 serde_json.workspace = true
 tempfile = "3"

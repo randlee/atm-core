@@ -20,6 +20,7 @@ from lint_common import discover_repo_root
 from lint_common import resolve_posix_shell
 import prerelease_tag
 from prerelease_tag import patch_bump
+from prerelease_tag import workspace_version
 
 SHELL_COMMAND_TIMEOUT_SECONDS = 10
 
@@ -287,6 +288,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             subprocess.run(["git", "commit", "-qm", "fixture"], cwd=tmp_path, check=True)
             output = tmp_path / "github-output"
             token_capture = tmp_path / "gh-token"
+            # Fixture-local tag/version: this test runs the extracted script in a synthetic repo.
             probe_env = {
                 **os.environ,
                 "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
@@ -356,32 +358,35 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertIn('"push", "origin", branch', helper)
 
     def test_prerelease_tag_helper_patch_bumps_the_workspace_version(self) -> None:
+        # Fixture-local values: this unit test exercises patch arithmetic, not the real workspace.
         self.assertEqual(patch_bump("1.4.5"), "1.4.6")
         self.assertEqual(patch_bump("9.99.0"), "9.99.1")
 
     def test_candidate_bump_updates_actual_lockfile_collision_safely(self) -> None:
         root = discover_repo_root()
-        changes = prerelease_tag.candidate_changes(root, "1.4.5", "1.4.6")
+        old_version = workspace_version(root)
+        new_version = patch_bump(old_version)
+        changes = prerelease_tag.candidate_changes(root, old_version, new_version)
         lock = tomllib.loads(changes[root / "Cargo.lock"])
         directives = [
             package for package in lock["package"] if package["name"] == "sc-lint-directives"
         ]
         self.assertEqual(
             [(package["version"], "source" in package) for package in directives],
-            [("0.5.0", True), ("1.4.6", False)],
+            [("0.5.0", True), (new_version, False)],
         )
         self.assertEqual(
             tomllib.loads(changes[root / "crates" / "atm-query-python" / "pyproject.toml"])[
                 "project"
             ]["version"],
-            "1.4.6",
+            new_version,
         )
         expected = {
             root / "Cargo.toml",
             *(
                 path
                 for path in prerelease_tag.workspace_manifest_paths(root)
-                if 'version = "1.4.5"' in path.read_text(encoding="utf-8")
+                if f'version = "{old_version}"' in path.read_text(encoding="utf-8")
             ),
             *(
                 path
@@ -397,12 +402,12 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             if path not in changes:
                 continue
             project = tomllib.loads(changes[path])["project"]
-            self.assertEqual(project["version"], "1.4.6")
+            self.assertEqual(project["version"], new_version)
         winget = changes[root / ".winget" / "randlee.agent-team-mail.yaml"]
-        self.assertIn("PackageVersion: 1.4.6", winget)
-        self.assertIn("ManifestVersion: 1.4.6", winget)
+        self.assertIn(f"PackageVersion: {new_version}", winget)
+        self.assertIn(f"ManifestVersion: {new_version}", winget)
         self.assertIn(
-            "releases/download/v1.4.6/atm_1.4.6_x86_64-pc-windows-msvc.zip",
+            f"releases/download/v{new_version}/atm_{new_version}_x86_64-pc-windows-msvc.zip",
             winget,
         )
 
@@ -413,6 +418,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
             subprocess.run(["git", "config", "user.name", "AS1.1 test"], cwd=repo, check=True)
             manifest = repo / "Cargo.toml"
+            # Fixture-local versions: this test exercises rollback after a failed commit.
             original = "[workspace.package]\nversion = \"1.4.5\"\n"
             manifest.write_text(original, encoding="utf-8")
             subprocess.run(["git", "add", "Cargo.toml"], cwd=repo, check=True)
@@ -446,6 +452,8 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
 
     def test_just_prerelease_tag_dry_run_is_end_to_end_and_clean(self) -> None:
         root = discover_repo_root()
+        old_version = workspace_version(root)
+        new_version = patch_bump(old_version)
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory) / "atm-core"
 
@@ -464,8 +472,8 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("workspace version: 1.4.5 -> 1.4.6", result.stdout)
-            self.assertIn("would create tag: prerelease/v1.4.6", result.stdout)
+            self.assertIn(f"workspace version: {old_version} -> {new_version}", result.stdout)
+            self.assertIn(f"would create tag: prerelease/v{new_version}", result.stdout)
             self.assertEqual(
                 subprocess.run(
                     ["git", "status", "--porcelain"],
