@@ -1,10 +1,9 @@
 name: Prerelease Archive
 
-# Builds manifest-declared release archives (linux/macOS/windows) from an
-# arbitrary ref, with CI provenance, and WITHOUT tagging or publishing
-# anything. This exists so integration testing (e.g. Phase AR's docker
-# testbed and the Mac daemon-switch install) can get real binaries for a
-# develop-head build without cutting a release.
+# Builds manifest-declared release archives (linux/macOS/windows) from a
+# prerelease/vX.Y.Z tag, with CI provenance, without creating a GitHub Release.
+# The tag is created by `just prerelease-tag`, which patch-bumps the workspace
+# on the caller's current branch before pushing the tag.
 #
 # This workflow is atm-core-owned, not part of the vendored sc-publish kit
 # (see README.sc-publish.md — kit files under .github/workflows are pinned
@@ -16,24 +15,15 @@ name: Prerelease Archive
 # release.yml ("Package manifest-declared release archive"), so the two
 # stay behaviour-identical without any drift to the pinned kit files.
 on:
-  workflow_dispatch:
-    inputs:
-      ref:
-        description: "Git ref (branch, tag, or commit SHA) to build archives from"
-        required: false
-        default: develop
-        type: string
-      targets:
-        description: "Comma-separated release target triples to build (default: every [[release_targets]] entry in release/publish-artifacts.toml)"
-        required: false
-        default: ""
-        type: string
+  push:
+    tags:
+      - "prerelease/v*.*.*"
 
 permissions:
   contents: read
 
 concurrency:
-  group: prerelease-archive-${{ github.event.inputs.ref }}
+  group: prerelease-archive-${{ github.ref_name }}
   cancel-in-progress: true
 
 env:
@@ -59,65 +49,50 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Resolve build ref and pre-release version
+      - name: Validate prerelease tag and workspace version
         id: resolve
         shell: bash
         run: |
           set -euo pipefail
-          sha="$(git rev-parse HEAD)"
-          short_sha="$(git rev-parse --short=9 HEAD)"
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "${tag}" =~ ^prerelease/v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "invalid prerelease tag '${tag}'; expected prerelease/vX.Y.Z" >&2
+            exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
           plan="$(python3 .github/scripts/release_artifacts.py build-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
           workspace_toml="$(jq -r '.workspace_toml' <<<"${plan}")"
           rust_toolchain="$(jq -r '.rust_toolchain' <<<"${plan}")"
-          base_version="$(python3 -c '
-          import sys
-          import tomllib
-          from pathlib import Path
-
-          data = tomllib.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-          print(data["workspace"]["package"]["version"])
-          ' "${workspace_toml}")"
-          version="${base_version}-pre.${short_sha}"
-          # A pre-release version must never collide with a tag-style X.Y.Z
-          # release version, so it can never be confused with a real release.
-          if [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "computed pre-release version '${version}' is tag-style; refusing" >&2
+          python3 .github/scripts/release_artifacts.py verify-version \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --workspace-toml "${workspace_toml}" \
+            --version "${version}"
+          python3 .github/scripts/release_artifacts.py verify-version-lockstep \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --workspace-toml "${workspace_toml}"
+          probe="$(gh api --include "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" 2>&1 || true)"
+          if grep -qE '^HTTP/[0-9.]+ 200' <<<"${probe}"; then
+            echo "GitHub Release already exists for ${tag}; refusing to rebuild it" >&2
             exit 1
           fi
+          if ! grep -qE '^HTTP/[0-9.]+ 404' <<<"${probe}"; then
+            echo "could not prove that GitHub Release ${tag} is absent" >&2
+            echo "${probe}" >&2
+            exit 1
+          fi
+          sha="$(git rev-parse HEAD)"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "sha=${sha}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "rust_toolchain=${rust_toolchain}" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve requested release target matrix
+      - name: Resolve release target matrix
         id: matrix
         shell: bash
         run: |
           set -euo pipefail
           full="$(python3 .github/scripts/release_artifacts.py release-target-matrix --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
-          requested='${{ inputs.targets }}'
-          matrix="$(python3 -c '
-          import json
-          import sys
-
-          full = json.loads(sys.argv[1])
-          requested = [item.strip() for item in sys.argv[2].split(",") if item.strip()]
-          if not requested:
-              print(json.dumps(full, separators=(",", ":")))
-              raise SystemExit(0)
-
-          available = {entry["target"] for entry in full["include"]}
-          unknown = sorted(set(requested) - available)
-          if unknown:
-              print(
-                  f"unknown release target(s): {\", \".join(unknown)}; "
-                  f"available: {\", \".join(sorted(available))}",
-                  file=sys.stderr,
-              )
-              raise SystemExit(1)
-
-          selected = [entry for entry in full["include"] if entry["target"] in requested]
-          print(json.dumps({"include": selected}, separators=(",", ":")))
-          ' "${full}" "${requested}")"
+          matrix="${full}"
           echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
 
   build:
@@ -272,7 +247,7 @@ jobs:
           provenance = {
               "version": "${{ needs.plan.outputs.version }}",
               "atm_core_sha": "${{ needs.plan.outputs.atm_core_sha }}",
-              "ref": "${{ inputs.ref }}",
+              "ref": "${{ github.ref }}",
               "run_id": "${{ github.run_id }}",
               "targets": entries,
           }

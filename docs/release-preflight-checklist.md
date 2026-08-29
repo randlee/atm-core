@@ -191,38 +191,41 @@ does not execute them:
 - verify manual handoff prerequisites for Homebrew or `winget` when automation
   depends on external systems
 
-## Pre-release Archives for Integration Testing (no tag, no publish)
+## Prerelease Archives for Integration Testing (tag-triggered, no publish)
 
 `.github/workflows/prerelease-archive.yml` builds manifest-declared release
-archives (linux/macOS/windows) from any ref, with CI provenance, without
-tagging or publishing anything. Use it to get real binaries for integration
-testing (e.g. the docker-testbed and Mac daemon-switch parity checks) from a
-`develop` head or any other ref, ahead of a real `release.yml` run. It is not
-part of the vendored sc-publish kit; see
+archives (linux/macOS/windows) from a `prerelease/vX.Y.Z` tag, with CI
+provenance, without creating a GitHub Release or publishing anything. Use
+`just prerelease-tag` from a clean feature/fix branch to patch-bump the
+workspace version, commit it on the current branch, and push the matching tag.
+The workflow then builds the exact tagged workspace from any branch; it does
+not require the tag to be reachable from `develop`. It is not part of the
+vendored sc-publish kit; see
 [`docs/plans/phase-ar/sprint-AR1-1-prerelease-archive.md`](./plans/phase-ar/sprint-AR1-1-prerelease-archive.md)
 for why.
 
-Dispatch it and download results with:
+Create the tag and download results with:
 
 ```bash
-gh workflow run prerelease-archive.yml -f ref=<sha-or-branch> [-f targets=<comma-separated-triples>]
+just prerelease-tag --dry-run
+just prerelease-tag
 
-# find the run, then:
+# find the tag-triggered run, then:
 gh run download <run-id> -n x86_64-unknown-linux-gnu   # one archive per requested target
 gh run download <run-id> -n checksums                  # checksums.txt + provenance.json
 ```
 
-- `ref` defaults to `develop`.
-- `targets` defaults to every `[[release_targets]]` entry in
-  `release/publish-artifacts.toml` (all four targets today, macOS included —
-  not opt-in). Pass `targets=x86_64-unknown-linux-gnu` to narrow to a single
-  target.
+- `just prerelease-tag` refuses `develop`, `main`, detached HEADs, dirty trees,
+  duplicate tags, and non-stable workspace versions.
+- The recipe increments only the patch component (for example `1.4.5` to
+  `1.4.6`), verifies workspace lockstep, commits on the current branch, and
+  pushes both the commit and `prerelease/v1.4.6`.
+- The workflow triggers only on `prerelease/vX.Y.Z`, verifies that the tag
+  version matches the workspace and release-contract lockstep, and refuses to
+  run when a GitHub Release already uses that tag.
 - Verify a downloaded archive against `checksums.txt` with
   `shasum -a 256 -c checksums.txt` (macOS/Linux) — same line format
   `release.yml`'s own checksums use.
-- The produced version string is `<workspace version>-pre.<short sha>` (for
-  example `1.4.5-pre.eab52792e`) and is asserted never to collide with a
-  tag-style `X.Y.Z` release version.
 
 ## Usage Notes
 

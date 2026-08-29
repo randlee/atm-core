@@ -109,6 +109,11 @@ _lint-version:
 version mode='current':
     {{python_cmd}} .just/run_version.py {{mode}}
 
+# Patch-bump the workspace, commit it on the current feature/fix branch, and
+# publish the matching prerelease/vX.Y.Z tag. Use --dry-run to inspect the plan.
+prerelease-tag *args:
+    {{python_cmd}} .just/prerelease_tag.py {{args}}
+
 # Enforce RULE-008 for test and cfg(test) code.
 [private]
 _lint-identities:
