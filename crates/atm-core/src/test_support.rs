@@ -146,6 +146,27 @@ impl FakeEnvSource {
         }
         Self(map)
     }
+
+    /// Builds a fake env source from an iterator of `(key, value)` pairs,
+    /// every one of which is treated as set.
+    ///
+    /// Complements [`FakeEnvSource::new`] for callers that assemble pairs
+    /// dynamically (e.g. from a loop over a key list with computed values)
+    /// rather than from a fixed-size array literal, where `new`'s
+    /// const-generic array shape does not fit.
+    #[must_use]
+    pub fn from_pairs<K, V>(pairs: impl IntoIterator<Item = (K, V)>) -> Self
+    where
+        K: Into<String>,
+        V: Into<String>,
+    {
+        Self(
+            pairs
+                .into_iter()
+                .map(|(key, value)| (key.into(), value.into()))
+                .collect(),
+        )
+    }
 }
 
 #[cfg(any(test, feature = "test-utils"))]

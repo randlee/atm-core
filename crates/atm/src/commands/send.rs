@@ -2294,23 +2294,12 @@ mod tests {
             recipients: Vec::new(),
             note: Some("fan-out test".to_string()),
         };
-        let env = std::collections::HashMap::from([(
+        let atm_temp_dir = fixture.home_dir.join("atm-temp");
+        let env = atm_core::test_support::FakeEnvSource::new([(
             "ATM_TEMP",
-            fixture
-                .home_dir
-                .join("atm-temp")
-                .to_str()
-                .expect("utf8")
-                .to_string(),
+            Some(atm_temp_dir.to_str().expect("utf8")),
         )]);
-        struct FixedEnvSource(std::collections::HashMap<&'static str, String>);
-        impl atm_core::atm_temp::EnvSource for FixedEnvSource {
-            fn var(&self, key: &str) -> Option<String> {
-                self.0.get(key).cloned()
-            }
-        }
-        let atm_temp =
-            atm_core::atm_temp::resolve_atm_temp(&FixedEnvSource(env)).expect("atm_temp resolves");
+        let atm_temp = atm_core::atm_temp::resolve_atm_temp(&env).expect("atm_temp resolves");
 
         let (delivered, not_delivered, failure) = command
             .send_fan_out_recipients(
