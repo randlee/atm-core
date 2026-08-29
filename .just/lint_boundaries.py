@@ -226,6 +226,14 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+# Some boundaries expose a facade from ``lib.rs`` while their concrete
+# implementation is deliberately split into private modules. Keep those
+# modules explicit and tested so an ``io_forbidden`` policy cannot be evaded
+# by declaring only the crate root as the implementation source.
+IMPLEMENTATION_SOURCE_MODULES: dict[str, tuple[str, ...]] = {
+    "BOUNDARY-HttpRuntime": ("atm_http_runtime::client",),
+}
+
 # The runtime composition crate performs a deliberately short-lived listener
 # bind as configuration preflight; it does not own a live transport.  Keep the
 # exception explicit and narrow while still checking every other socket call
@@ -1934,7 +1942,16 @@ def collect_io_forbidden_source_violations(
                 continue
             if record.implementation_module is None:
                 continue
-            source_paths = resolve_module_file(repo_root, record.implementation_module)
+            source_modules = (record.implementation_module,) + IMPLEMENTATION_SOURCE_MODULES.get(
+                record.boundary_id, ()
+            )
+            source_paths: list[Path] = []
+            seen_source_paths: set[Path] = set()
+            for source_module in source_modules:
+                for source_path in resolve_module_file(repo_root, source_module):
+                    if source_path not in seen_source_paths:
+                        seen_source_paths.add(source_path)
+                        source_paths.append(source_path)
             for source_path in source_paths:
                 rel_source = source_path.relative_to(repo_root).as_posix()
                 source_lines = source_path.read_text(encoding="utf-8").splitlines()

@@ -7,6 +7,7 @@ pub mod error;
 mod error_catalog;
 pub mod error_codes;
 pub mod factory;
+pub mod request_budget;
 pub mod schema;
 pub mod search;
 pub mod template_catalog;

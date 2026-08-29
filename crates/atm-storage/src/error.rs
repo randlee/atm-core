@@ -656,6 +656,16 @@ mod tests {
     }
 
     #[test]
+    fn daemon_may_have_executed_is_fail_closed_before_a_new_attempt() {
+        let error = AtmError::daemon_may_have_executed("request write was interrupted");
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonMayHaveExecuted);
+        assert!(error.message().contains("Inspect the mailbox"));
+        assert!(error.message().contains("before attempting"));
+        assert!(!error.message().contains("retry this"));
+    }
+
+    #[test]
     fn decomposed_template_include_forbidden_has_its_stable_wire_code() {
         let error = AtmError::decomposed_template_include_forbidden();
 

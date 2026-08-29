@@ -2668,6 +2668,10 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
         client.contains("tokio::time::timeout") && client.contains("RequestDeadline"),
         "the shared client must enforce one absolute Tokio deadline"
     );
+    assert!(
+        client.contains("is_safe_to_reconnect") && client.contains("prepare_pre_send_reconnect"),
+        "the shared client must keep any pre-send reconnect policy explicit and connector-owned"
+    );
     for forbidden in [
         "HttpFrameReader",
         "read_http_response_with_frame_reader",
@@ -2676,8 +2680,6 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
         "write_http_request(",
         "block_on(",
         "message[]",
-        "retry",
-        "replay",
     ] {
         assert!(
             !client.contains(forbidden),

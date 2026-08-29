@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).with_name("run_hermes_atm_restart_matrix.py")
@@ -23,36 +24,6 @@ def load_module():
 
 
 class HermesAtmRestartMatrixTests(unittest.TestCase):
-    def test_refresh_sender_after_daemon_restart_is_windows_only(self) -> None:
-        module = load_module()
-
-        class Sender:
-            def __init__(self) -> None:
-                self.reconnect_calls = 0
-
-            def reconnect(self) -> None:
-                self.reconnect_calls += 1
-
-        windows_sender = Sender()
-        windows_record: dict[str, Any] = {}
-        module.refresh_sender_after_daemon_restart(
-            windows_sender,
-            windows_record,
-            platform_name="nt",
-        )
-        self.assertEqual(windows_sender.reconnect_calls, 1)
-        self.assertEqual(windows_record["sender_reconnect"], "windows-post-daemon-restart")
-
-        unix_sender = Sender()
-        unix_record: dict[str, Any] = {}
-        module.refresh_sender_after_daemon_restart(
-            unix_sender,
-            unix_record,
-            platform_name="posix",
-        )
-        self.assertEqual(unix_sender.reconnect_calls, 0)
-        self.assertNotIn("sender_reconnect", unix_record)
-
     def test_evidence_names_all_three_rows_and_records_pending_m5_as_host_specific(self) -> None:
         module = load_module()
         with tempfile.TemporaryDirectory() as temporary:
@@ -428,6 +399,311 @@ class HermesAtmRestartMatrixTests(unittest.TestCase):
             assert result is not None
             self.assertIn("could not remove", result)
             self.assertIn("WinError 32", result)
+
+
+class OutputCaptureTests(unittest.TestCase):
+    """Unit coverage for `OutputCapture.wait_for`'s timeout clamping
+    (FTQ-001) and `OutputCapture.join`'s ordering guarantee relative to
+    `tail()` (FTQ-002). Uses a real `os.pipe()` in place of a subprocess so
+    both are provable deterministically, with no fixed sleeps."""
+
+    def _make_output_capture(self, module: Any) -> tuple[Any, Any, int, int]:
+        stdout_read_fd, stdout_write_fd = os.pipe()
+        stderr_read_fd, stderr_write_fd = os.pipe()
+        process = SimpleNamespace(
+            stdout=os.fdopen(stdout_read_fd, "r"),
+            stderr=os.fdopen(stderr_read_fd, "r"),
+        )
+        output = module.OutputCapture(process)
+        return output, process, stdout_write_fd, stderr_write_fd
+
+    def test_wait_for_raises_timeout_error_not_value_error_when_clock_jumps_past_deadline(
+        self,
+    ) -> None:
+        # FTQ-001 regression: `wait_for` previously recomputed the
+        # remaining time a second time inside
+        # `self.events.get(timeout=deadline - time.monotonic())`, after the
+        # `while time.monotonic() < deadline` guard had already passed.
+        # Under preemption between those two `time.monotonic()` reads, the
+        # second read could land past `deadline`, handing
+        # `queue.Queue.get` a negative timeout -- which raises
+        # `ValueError`, not `queue.Empty` -- crashing the harness instead
+        # of reaching the graceful `TimeoutError` path. The fix reads
+        # `time.monotonic()` exactly once per loop iteration and clamps
+        # the result to zero before it ever reaches `get`, so this second,
+        # racing read no longer exists.
+        module = load_module()
+        output, process, stdout_write_fd, stderr_write_fd = self._make_output_capture(module)
+        try:
+            # The queue stays empty for the call below: nothing is ever
+            # written to either pipe, so both reader threads simply block
+            # on read() (daemon threads; harmless at interpreter exit).
+            monotonic_readings = iter([100.0, 250.0])
+            with patch.object(module.time, "monotonic", side_effect=lambda: next(monotonic_readings)):
+                with self.assertRaises(TimeoutError):
+                    output.wait_for(lambda _line: True, timeout=5.0)
+        finally:
+            os.close(stdout_write_fd)
+            os.close(stderr_write_fd)
+            output.join(timeout=2.0)
+            process.stdout.close()
+            process.stderr.close()
+
+    def test_wait_for_still_returns_a_line_already_queued(self) -> None:
+        # Regression coverage alongside the clamp fix: normal operation (a
+        # line already sitting in the queue, no clock jump) is unaffected
+        # by the clamp and is still returned promptly.
+        module = load_module()
+        output, process, stdout_write_fd, stderr_write_fd = self._make_output_capture(module)
+        try:
+            output.events.put("already queued line")
+            line = output.wait_for(lambda candidate: candidate == "already queued line", timeout=5.0)
+            self.assertEqual(line, "already queued line")
+        finally:
+            os.close(stdout_write_fd)
+            os.close(stderr_write_fd)
+            output.join(timeout=2.0)
+            process.stdout.close()
+            process.stderr.close()
+
+    def test_join_waits_for_reader_threads_so_tail_reflects_the_final_line(self) -> None:
+        # FTQ-002 regression: the reader threads were never joined, so
+        # `OwnedDaemon.stop`/`ReceiverWorker.stop` calling `tail()`
+        # immediately after `process.wait()` raced the last buffered lines
+        # against the reader threads still draining the pipes. `join()`
+        # must block until both threads have finished appending everything
+        # the pipe delivered before EOF, so `tail()` afterward is complete.
+        module = load_module()
+        output, process, stdout_write_fd, stderr_write_fd = self._make_output_capture(module)
+        with os.fdopen(stdout_write_fd, "w") as writer:
+            writer.write("first line\n")
+            writer.write("final line written just before close\n")
+        os.close(stderr_write_fd)
+
+        output.join(timeout=2.0)
+
+        tail = output.tail()
+        self.assertIn("first line", tail)
+        self.assertIn("final line written just before close", tail)
+        process.stdout.close()
+        process.stderr.close()
+
+
+class FailureCaptureHelperTests(unittest.TestCase):
+    """Unit coverage for the small, pure helpers `run_scenario`'s failure path
+    is built from: `_cooperative_stop_signal`, `_capture_exception`,
+    `_best_effort`, and `_copy_failure_log`. Each is exercised directly, with
+    no subprocess or filesystem dependency beyond a scratch `tempfile`
+    directory, so the failure-capture behavior is provable without a real
+    daemon/atm binary."""
+
+    def test_cooperative_stop_signal_prefers_ctrl_break_only_on_windows_with_support(self) -> None:
+        # `stop_process` reads the real `os`/`signal` modules directly (there
+        # is no per-call way to inject them into `Popen.terminate`/
+        # `send_signal`), so this selection logic is factored out precisely
+        # so the platform branch can be driven by explicit booleans instead.
+        module = load_module()
+        self.assertEqual(module._cooperative_stop_signal(is_windows=True, has_ctrl_break=True), "ctrl_break")
+        self.assertEqual(module._cooperative_stop_signal(is_windows=True, has_ctrl_break=False), "terminate")
+        self.assertEqual(module._cooperative_stop_signal(is_windows=False, has_ctrl_break=True), "terminate")
+        self.assertEqual(module._cooperative_stop_signal(is_windows=False, has_ctrl_break=False), "terminate")
+
+    def test_capture_exception_includes_type_message_and_bounded_traceback_tail(self) -> None:
+        module = load_module()
+        try:
+            raise ValueError("boom")
+        except ValueError as error:
+            captured = module._capture_exception(error, tail_lines=5)
+        self.assertEqual(captured["error"], "ValueError: boom")
+        self.assertLessEqual(len(captured["traceback_tail"]), 5)
+        self.assertTrue(any("ValueError: boom" in line for line in captured["traceback_tail"]))
+
+    def test_best_effort_returns_result_on_success_and_error_dict_on_exception(self) -> None:
+        module = load_module()
+        self.assertEqual(module._best_effort(lambda: {"ok": True}), {"ok": True})
+
+        def _boom() -> None:
+            raise RuntimeError("nope")
+
+        self.assertEqual(module._best_effort(_boom), {"error": "RuntimeError: nope"})
+
+    def test_copy_failure_log_copies_present_source_and_returns_none_for_missing(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence_dir = Path(temporary) / "evidence" / "AQ1.9"
+            source = Path(temporary) / "scratch" / "logs" / "atm.log.jsonl"
+            source.parent.mkdir(parents=True)
+            source.write_text('{"msg": "debug"}\n', encoding="utf-8")
+
+            copied = module._copy_failure_log(source, evidence_dir, "unit-test-row", "unit-test-host")
+            self.assertIsNotNone(copied)
+            assert copied is not None
+            copied_path = Path(copied)
+            self.assertEqual(
+                copied_path, evidence_dir / "failure-logs" / "unit-test-row-unit-test-host.log.jsonl"
+            )
+            self.assertEqual(copied_path.read_text(encoding="utf-8"), source.read_text(encoding="utf-8"))
+
+            missing_source = Path(temporary) / "scratch" / "logs" / "does-not-exist.log.jsonl"
+            self.assertIsNone(module._copy_failure_log(missing_source, evidence_dir, "row", "host"))
+
+
+class _FakeOutputCapture:
+    """Stands in for `OutputCapture` with a fixed, pre-drained transcript."""
+
+    def __init__(self, lines: list[str]) -> None:
+        self._lines = list(lines)
+
+    def tail(self) -> list[str]:
+        return list(self._lines)
+
+
+class _FakeSentMessage:
+    def __init__(self, message_id: str) -> None:
+        self.message_id = message_id
+
+
+class _FakeGraftSession:
+    """Stands in for `atm_graft.PyGraftSession`: no native extension needed."""
+
+    def __init__(self, caller: Any) -> None:
+        self.caller = caller
+        self.closed = False
+
+    def send(self, _address: Any, _marker: str, _flag: bool) -> _FakeSentMessage:
+        return _FakeSentMessage("fake-message-id")
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeDaemon:
+    """Stands in for `OwnedDaemon`: deterministic output, no real subprocess."""
+
+    def __init__(self, _binary: Path, _env: dict[str, str], _timeout: float) -> None:
+        self.output = _FakeOutputCapture(["ATM_DAEMON_READY"])
+
+    def start(self) -> dict[str, Any]:
+        self.output = _FakeOutputCapture(["ATM_DAEMON_READY"])
+        return {"pid": 4242, "output_tail": self.output.tail()}
+
+    def stop(self) -> dict[str, Any]:
+        return {"pid": 4242, "returncode": 0, "output_tail": self.output.tail()}
+
+
+class _FakeReceiver:
+    """Stands in for `ReceiverWorker`: deterministic output, no real subprocess."""
+
+    def __init__(self, _script: Path, _workspace_root: Path, _env: dict[str, str], _timeout: float) -> None:
+        self.output = _FakeOutputCapture([json.dumps({"kind": "ready", "at_ns": 1})])
+
+    def start(self) -> dict[str, Any]:
+        self.output = _FakeOutputCapture([json.dumps({"kind": "ready", "at_ns": 1})])
+        return {"pid": 4343, "ready_at_ns": 1}
+
+    def wait_for_nudge(self, marker: str, _timeout: float) -> dict[str, Any]:
+        return {"at_ns": 2, "body": marker}
+
+    def stop(self, *, crash: bool = False, cooperative: bool = False) -> dict[str, Any]:
+        return {"pid": 4343, "returncode": 0, "crash": crash, "output_tail": self.output.tail()}
+
+
+class RunScenarioFailureCaptureTests(unittest.TestCase):
+    """End-to-end coverage of `run_scenario`'s failure-capture wiring, using
+    fakes for `OwnedDaemon`/`ReceiverWorker`/`atm_graft` (no real daemon or
+    `atm` binary, no subprocess, no sleeps) so both the failure path
+    (diagnostics captured, log copied) and the success path (no
+    `failure-logs` file at all) are provable deterministically."""
+
+    def test_run_scenario_failure_path_captures_error_transcripts_and_copies_log(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence_dir = Path(temporary) / "evidence"
+            args = SimpleNamespace(
+                host="unit-test-host",
+                evidence_dir=evidence_dir,
+                atm=Path("/nonexistent/atm"),
+                daemon=Path("/nonexistent/atm-daemon"),
+                timeout=1.0,
+            )
+
+            def fake_add_roster_member(
+                _atm: Path, env: dict[str, str], _home: Path, _member: str
+            ) -> None:
+                # A real daemon would already have written ATM_LOG=debug
+                # output by the time a row fails; simulate that so the
+                # failure-log copy below has a source file to find.
+                log_dir = Path(env["ATM_LOG_DIR"])
+                log_dir.mkdir(parents=True, exist_ok=True)
+                (log_dir / "atm.log.jsonl").write_text('{"msg": "debug line"}\n', encoding="utf-8")
+                raise RuntimeError("simulated setup failure before daemon start")
+
+            original_add_roster_member = module.add_roster_member
+            original_doctor = module.doctor
+            module.add_roster_member = fake_add_roster_member
+            module.doctor = lambda _atm, _env: {"ok": True}
+            try:
+                record = module.run_scenario(args, "unit-test-row", "daemon_restart")
+            finally:
+                module.add_roster_member = original_add_roster_member
+                module.doctor = original_doctor
+
+            self.assertEqual(record["status"], "fail")
+            self.assertIn("RuntimeError", record["error"])
+            self.assertIn("simulated setup failure", record["error"])
+            self.assertTrue(record["traceback_tail"])
+            self.assertIn("Traceback", "\n".join(record["traceback_tail"]))
+            # Neither daemon nor receiver ever started before the row failed.
+            self.assertEqual(record["daemon_transcript"], {"before": [], "after": []})
+            self.assertEqual(record["receiver_transcript"], {"before": [], "after": []})
+            self.assertEqual(record["doctor_after"], {"ok": True})
+
+            failure_log_path = record["failure_log_path"]
+            self.assertIsNotNone(failure_log_path)
+            assert failure_log_path is not None
+            copied = Path(failure_log_path)
+            self.assertTrue(copied.exists())
+            self.assertEqual(copied.name, "unit-test-row-unit-test-host.log.jsonl")
+            self.assertEqual(copied.parent.name, "failure-logs")
+            self.assertIn("debug line", copied.read_text(encoding="utf-8"))
+
+    def test_run_scenario_success_leaves_no_failure_log_file(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence_dir = Path(temporary) / "evidence"
+            args = SimpleNamespace(
+                host="unit-test-host",
+                evidence_dir=evidence_dir,
+                atm=Path("/nonexistent/atm"),
+                daemon=Path("/nonexistent/atm-daemon"),
+                timeout=1.0,
+            )
+
+            fake_atm_graft = SimpleNamespace(
+                PyAgentAddress=lambda agent, team, extra=None: (agent, team, extra),
+                PyGraftSession=_FakeGraftSession,
+            )
+            patches = {
+                "OwnedDaemon": _FakeDaemon,
+                "ReceiverWorker": _FakeReceiver,
+                "doctor": lambda _atm, _env: {"graft_receivers": {"receivers": []}},
+                "add_roster_member": lambda *_a, **_k: None,
+                "remove_roster_member": lambda *_a, **_k: None,
+            }
+            originals = {name: getattr(module, name) for name in patches}
+            for name, value in patches.items():
+                setattr(module, name, value)
+            try:
+                with patch.dict(sys.modules, {"atm_graft": fake_atm_graft}):
+                    record = module.run_scenario(args, "unit-test-row", "daemon_restart")
+            finally:
+                for name, value in originals.items():
+                    setattr(module, name, value)
+
+            self.assertEqual(record["status"], "pass")
+            self.assertNotIn("error", record)
+            failure_logs_dir = evidence_dir / "failure-logs"
+            self.assertFalse(failure_logs_dir.exists(), "a passing row must not write any failure-logs file")
 
 
 if __name__ == "__main__":

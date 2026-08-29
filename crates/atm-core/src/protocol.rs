@@ -523,6 +523,10 @@ pub struct RuntimeStatusSnapshot {
     /// Cumulative deferred queue drain/recovery dispatch failures.
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub queue_drain_failures_total: u64,
+    /// Cumulative blocking-core-bridge jobs that outlived the remaining
+    /// request budget they were dispatched with.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub blocking_core_bridge_stalls_total: u64,
 }
 
 fn is_zero_u64(value: &u64) -> bool {
@@ -673,6 +677,7 @@ mod tests {
             herdr_queue_last_tick_at: None,
             queue_messages_drained_total: 0,
             queue_drain_failures_total: 0,
+            blocking_core_bridge_stalls_total: 0,
         };
 
         let encoded = serde_json::to_vec(&snapshot).expect("encode runtime snapshot");
@@ -739,6 +744,7 @@ mod tests {
             herdr_queue_last_tick_at: None,
             queue_messages_drained_total: 0,
             queue_drain_failures_total: 0,
+            blocking_core_bridge_stalls_total: 0,
         };
         let decoded: LegacyRuntimeStatusSnapshot =
             serde_json::from_value(serde_json::to_value(snapshot).expect("encode snapshot"))

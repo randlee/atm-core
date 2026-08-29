@@ -845,7 +845,7 @@ mod tests {
             .expect_err("malformed request marks the overflow guard failed before write");
         assert!(matches!(
             failure,
-            super::HttpRuntimeClientFailure::RequestWrite(_)
+            super::HttpRuntimeClientFailure::PeerRequestWrite { .. }
         ));
 
         let completed_before_drop = pool.completed_driver_count();

@@ -101,11 +101,16 @@ const fn identity_guidance(code: AtmErrorCode) -> Option<&'static str> {
 
 const fn daemon_guidance(code: AtmErrorCode) -> Option<&'static str> {
     match code {
+        AtmErrorCode::DaemonMayHaveExecuted => {
+            Some("Inspect the mailbox or daemon-side effects before attempting this request again.")
+        }
+        AtmErrorCode::RemoteDeliveryUnconfirmed => {
+            Some("Inspect the peer's delivery status before attempting this request again.")
+        }
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::RuntimeRootInvalid
         | AtmErrorCode::RuntimeBootstrapRefused
         | AtmErrorCode::SocketOverrideForbidden
-        | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge
         | AtmErrorCode::DaemonLaunchGateRejected
         | AtmErrorCode::DaemonServingStateRejected

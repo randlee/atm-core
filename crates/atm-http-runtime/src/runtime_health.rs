@@ -67,6 +67,7 @@ struct RuntimeHealthState {
     herdr_queue_last_tick_at: Option<IsoTimestamp>,
     queue_messages_drained_total: u64,
     queue_drain_failures_total: u64,
+    blocking_core_bridge_stalls_total: u64,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -182,6 +183,20 @@ impl RuntimeHealth {
     pub fn record_queue_drain_failure(&self) {
         let mut state = self.lock();
         state.queue_drain_failures_total = state.queue_drain_failures_total.saturating_add(1);
+    }
+
+    /// Records one blocking-core-bridge job that ran longer than the
+    /// remaining request budget it was dispatched with.
+    ///
+    /// The bridge does not cancel the outrunning `spawn_blocking` job (doing
+    /// so would abandon a durable storage write mid-flight); this counter is
+    /// the observable signal that a job outlived its budget so `atm doctor`
+    /// can surface a stalled blocking bridge instead of it being silently
+    /// invisible.
+    pub fn record_blocking_core_bridge_stall(&self) {
+        let mut state = self.lock();
+        state.blocking_core_bridge_stalls_total =
+            state.blocking_core_bridge_stalls_total.saturating_add(1);
     }
 
     /// Record an already-authorized local heartbeat.
@@ -363,6 +378,7 @@ impl RuntimeHealth {
             herdr_queue_last_tick_at: state.herdr_queue_last_tick_at,
             queue_messages_drained_total: state.queue_messages_drained_total,
             queue_drain_failures_total: state.queue_drain_failures_total,
+            blocking_core_bridge_stalls_total: state.blocking_core_bridge_stalls_total,
         }
     }
 

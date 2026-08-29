@@ -20,7 +20,6 @@ use std::sync::Arc;
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
 // Search projection writes touch several B-trees and FTS segments inside the
 // sole durable writer transaction.  The SQLite default is only 2 MiB, which
 // churns cache pages under a concurrent admission burst.  This setting applies
@@ -577,9 +576,14 @@ pub(crate) fn configure_connection(
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     // Bound SQLite lock waits so contention returns an actionable ATM timeout
-    // instead of hanging an adapter thread indefinitely.
+    // instead of hanging an adapter thread indefinitely. This is derived
+    // from `atm_storage::request_budget::SERVER_REQUEST_BUDGET` so a
+    // writer-lock wait can never by itself consume the entire per-request
+    // budget the Tokio/Axum server enforces around this call; a busy
+    // timeout at or above that budget would mean a lock wait could never
+    // succeed inside it.
     connection
-        .busy_timeout(std::time::Duration::from_millis(SQLITE_BUSY_TIMEOUT_MS))
+        .busy_timeout(atm_storage::request_budget::SQLITE_BUSY_TIMEOUT)
         .map_err(|error| sqlite_error(target, "failed to configure sqlite busy timeout", error))?;
     connection
         .pragma_update(None, "foreign_keys", "ON")
@@ -1077,6 +1081,7 @@ pub(crate) fn sqlite_thread_mode(mode: Option<ThreadMode>) -> Option<&'static st
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -1139,8 +1144,124 @@ mod tests {
             "post-commit message lookup must remain indexed instead of scanning a growing mailbox: {plan}"
         );
     }
+    #[test]
+    fn configured_busy_timeout_never_reaches_the_server_request_budget() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-busy-timeout-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let connection = open_connection_for_target(&target).expect("open connection");
+
+        let configured_ms: i64 = connection
+            .query_row("PRAGMA busy_timeout;", [], |row| row.get(0))
+            .expect("read configured sqlite busy_timeout");
+
+        let expected_ms =
+            i64::try_from(atm_storage::request_budget::SQLITE_BUSY_TIMEOUT.as_millis())
+                .expect("busy timeout millis fit in i64");
+        assert_eq!(
+            configured_ms, expected_ms,
+            "sqlite busy_timeout must stay derived from the shared request budget"
+        );
+
+        let budget_ms =
+            i64::try_from(atm_storage::request_budget::SERVER_REQUEST_BUDGET.as_millis())
+                .expect("server budget millis fit in i64");
+        assert!(
+            configured_ms < budget_ms,
+            "sqlite busy_timeout ({configured_ms}ms) must stay below the server \
+             request budget ({budget_ms}ms), or a writer-lock wait could never \
+             succeed inside one request"
+        );
+    }
+
     use std::sync::Barrier;
+    use std::sync::mpsc;
     use std::thread;
+
+    #[test]
+    fn stalled_writer_lock_yields_a_typed_lock_error_after_the_busy_timeout() {
+        // Proves the SQLITE_BUSY_TIMEOUT < SERVER_REQUEST_BUDGET contract
+        // holds under real writer-lock contention, not only as the
+        // compile-time assertion in `atm_storage::request_budget`: a second
+        // writer that has to wait out the configured busy_timeout must fail
+        // with a typed lock error, so the daemon can return an actionable
+        // response instead of the request silently overrunning on the
+        // client. This deliberately waits on SQLite's own busy-lock retry
+        // loop instead of a fixed sleep primitive; the elapsed wall time is
+        // the product observable under test, not a synchronization device.
+        //
+        // This intentionally uses a file-backed target rather than the
+        // `cache=shared` in-memory target used by other tests in this
+        // module: SQLite's shared-cache mode reports same-process table
+        // lock conflicts as `SQLITE_LOCKED`, and `busy_timeout`'s retry
+        // handler only fires for `SQLITE_BUSY`, so a shared-cache
+        // in-memory target would fail the second writer immediately
+        // without ever exercising the busy-wait this test verifies.
+        // Production storage (`SharedDbTarget::Path`) always opens plain,
+        // non-shared-cache connections, so this matches production
+        // locking semantics.
+        let tempdir = tempfile::tempdir().expect("create temporary database directory");
+        let db_path = tempdir.path().join("busy-timeout-contract.db");
+        let db = Arc::new(
+            SharedDb::open_with_observability(&db_path, Arc::new(NullSqliteObservability))
+                .expect("open database"),
+        );
+
+        let (holder_ready_tx, holder_ready_rx) = mpsc::channel::<()>();
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let holder_db = Arc::clone(&db);
+        let holder = thread::spawn(move || {
+            holder_db
+                .with_connection(|connection| {
+                    let transaction = connection
+                        .transaction_with_behavior(TransactionBehavior::Immediate)
+                        .expect("first writer acquires the immediate transaction lock");
+                    holder_ready_tx
+                        .send(())
+                        .expect("signal that the writer lock is held");
+                    release_rx
+                        .recv()
+                        .expect("wait for the test to release the writer lock");
+                    transaction.commit().expect("release the writer lock");
+                    Ok(())
+                })
+                .expect("holder transaction succeeds");
+        });
+
+        holder_ready_rx
+            .recv()
+            .expect("first writer must confirm it holds the lock before the second write starts");
+
+        let started_at = std::time::Instant::now();
+        let result = db.with_transaction(|_connection| Ok(()));
+        let elapsed = started_at.elapsed();
+
+        release_tx
+            .send(())
+            .expect("release the held writer lock so the holder thread can finish");
+        holder.join().expect("holder thread panicked");
+
+        let error = result.expect_err(
+            "a second writer contending on an already-held immediate transaction must fail \
+             once the configured busy_timeout elapses",
+        );
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::MailboxLockTimeout,
+            "a busy writer lock must surface as a typed mailbox-lock error, not an \
+             opaque failure: {error:?}"
+        );
+        eprintln!("stalled writer lock typed-error elapsed: {elapsed:?}");
+        assert!(
+            elapsed >= atm_storage::request_budget::SQLITE_BUSY_TIMEOUT / 2,
+            "a stalled writer must actually wait out most of the configured \
+             busy_timeout ({:?}) before failing, not fail immediately: waited {elapsed:?}",
+            atm_storage::request_budget::SQLITE_BUSY_TIMEOUT,
+        );
+    }
 
     #[test]
     fn writer_initialization_persists_wal_for_later_reader_connections() {
