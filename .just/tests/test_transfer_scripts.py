@@ -457,16 +457,17 @@ class TailscaleShTests(_TransferScriptContractTestsMixin, unittest.TestCase):
         self.assertTrue(os.access(TAILSCALE_SH, os.X_OK))
 
 
-@unittest.skipUnless(sys.platform == "win32" or PWSH is not None, "sftp.ps1 needs pwsh, and only ships for win32; skipping with a recorded reason")
+@unittest.skipUnless(
+    sys.platform == "win32" and PWSH is not None,
+    "sftp.ps1 is validated on Windows only; unsupported pwsh host",
+)
 class SftpPs1Tests(unittest.TestCase):
     """`sftp.ps1` (Windows/`pwsh` example) exercises the identical
-    invocation contract as `sftp.sh`, through `pwsh`. Gated exactly like
-    the rest of this repository's cross-platform script suite: it always
-    runs on a `win32` CI lane (where `pwsh` -- PowerShell 7+ -- ships by
-    default on `windows-latest`), and opportunistically on any other
-    platform where a developer happens to have `pwsh` installed; everywhere
-    else it is skipped with an explicit, non-silent reason rather than
-    reporting a false pass."""
+    invocation contract as `sftp.sh`, through `pwsh`. It runs on the
+    `win32` CI lane (where `pwsh` -- PowerShell 7+ -- ships by default on
+    `windows-latest`). Non-Windows hosts skip this Windows adapter with an
+    explicit reason: foreign PowerShell runtimes are not a supported test
+    environment and can crash before the script starts."""
 
     def _invoke(self, args, env, cwd):
         assert PWSH is not None

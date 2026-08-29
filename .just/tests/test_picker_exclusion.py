@@ -138,11 +138,20 @@ class PickerLinuxExclusionTests(PickerExclusionAssertions, unittest.TestCase):
         self.assert_dead_and_idle_are_excluded(result)
 
 
-@unittest.skipUnless(shutil.which("pwsh"), "picker-windows.ps1 requires pwsh")
+# `picker-windows.ps1` is a Windows adapter.  On non-Windows hosts an
+# opportunistically installed PowerShell is not a supported execution
+# environment: the Homebrew PowerShell 7.5.4 runtime on macOS 15.5 crashes
+# in .NET's MulticoreJitProfilePlayer before the script starts (SIGSEGV 11).
+# Keep this test on the platform whose adapter it exercises; otherwise a
+# broken foreign runtime turns an unrelated host lint run into a false failure.
+@unittest.skipUnless(
+    sys.platform == "win32" and shutil.which("pwsh"),
+    "picker-windows.ps1 is validated on Windows only; unsupported pwsh host",
+)
 class PickerWindowsExclusionTests(PickerExclusionAssertions, unittest.TestCase):
     def test_windows_adapter_excludes_dead_and_idle(self) -> None:
         # ATM_SEND_TO_SELECTION is consulted before Out-GridView, so this is
-        # hermetic wherever pwsh is installed (not only on Windows).
+        # hermetic on the Windows runner without opening a UI.
         result = run(["pwsh", "-NoProfile", "-File", str(PICKER_WINDOWS)])
         self.assert_dead_and_idle_are_excluded(result)
 
