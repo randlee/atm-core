@@ -156,9 +156,20 @@ class OutputCapture:
 
     def wait_for(self, predicate: Callable[[str], bool], timeout: float) -> str:
         deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
+        while True:
+            # `remaining` is computed exactly once per iteration and clamped
+            # to zero before being handed to `Queue.get(timeout=...)`, which
+            # raises `ValueError` (not `queue.Empty`) for a negative timeout.
+            # Recomputing it a second time between this guard and the `get`
+            # call below (the previous shape) let preemption between the two
+            # reads push the second read past `deadline`, crashing the
+            # harness with `ValueError` instead of reaching the graceful
+            # `TimeoutError` path below.
+            remaining = max(0.0, deadline - time.monotonic())
+            if remaining <= 0:
+                break
             try:
-                line = self.events.get(timeout=min(0.1, deadline - time.monotonic()))
+                line = self.events.get(timeout=min(0.1, remaining))
             except queue.Empty:
                 continue
             if line is None:
@@ -166,6 +177,19 @@ class OutputCapture:
             if predicate(line):
                 return line
         raise TimeoutError("matrix child did not emit its expected event")
+
+    def join(self, timeout: float = 2.0) -> None:
+        """Join the reader threads after the child process has exited.
+
+        `stop_process` already waits for the child, but the reader threads
+        that drain its pipes are separate and were previously never joined:
+        `OwnedDaemon.stop`/`ReceiverWorker.stop` called `tail()` immediately
+        after the process exited, racing the last buffered stdout/stderr
+        lines against the reader threads that append them. Called after the
+        process exits and before `tail()` in both stop paths.
+        """
+        for thread in self._threads:
+            thread.join(timeout=timeout)
 
     def tail(self) -> list[str]:
         return list(self.lines)
@@ -379,6 +403,8 @@ class OwnedDaemon:
         process = self.process
         output = self.output
         stop_process(process)
+        if output is not None:
+            output.join()
         return {
             "pid": process.pid if process is not None else None,
             "returncode": process.returncode if process is not None else None,
@@ -451,6 +477,8 @@ class ReceiverWorker:
         process = self.process
         output = self.output
         stop_process(process, crash=crash, cooperative=cooperative)
+        if output is not None:
+            output.join()
         return {
             "pid": process.pid if process is not None else None,
             "returncode": process.returncode if process is not None else None,

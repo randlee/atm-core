@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).with_name("run_hermes_atm_restart_matrix.py")
@@ -400,6 +401,94 @@ class HermesAtmRestartMatrixTests(unittest.TestCase):
             self.assertIn("WinError 32", result)
 
 
+class OutputCaptureTests(unittest.TestCase):
+    """Unit coverage for `OutputCapture.wait_for`'s timeout clamping
+    (FTQ-001) and `OutputCapture.join`'s ordering guarantee relative to
+    `tail()` (FTQ-002). Uses a real `os.pipe()` in place of a subprocess so
+    both are provable deterministically, with no fixed sleeps."""
+
+    def _make_output_capture(self, module: Any) -> tuple[Any, Any, int, int]:
+        stdout_read_fd, stdout_write_fd = os.pipe()
+        stderr_read_fd, stderr_write_fd = os.pipe()
+        process = SimpleNamespace(
+            stdout=os.fdopen(stdout_read_fd, "r"),
+            stderr=os.fdopen(stderr_read_fd, "r"),
+        )
+        output = module.OutputCapture(process)
+        return output, process, stdout_write_fd, stderr_write_fd
+
+    def test_wait_for_raises_timeout_error_not_value_error_when_clock_jumps_past_deadline(
+        self,
+    ) -> None:
+        # FTQ-001 regression: `wait_for` previously recomputed the
+        # remaining time a second time inside
+        # `self.events.get(timeout=deadline - time.monotonic())`, after the
+        # `while time.monotonic() < deadline` guard had already passed.
+        # Under preemption between those two `time.monotonic()` reads, the
+        # second read could land past `deadline`, handing
+        # `queue.Queue.get` a negative timeout -- which raises
+        # `ValueError`, not `queue.Empty` -- crashing the harness instead
+        # of reaching the graceful `TimeoutError` path. The fix reads
+        # `time.monotonic()` exactly once per loop iteration and clamps
+        # the result to zero before it ever reaches `get`, so this second,
+        # racing read no longer exists.
+        module = load_module()
+        output, process, stdout_write_fd, stderr_write_fd = self._make_output_capture(module)
+        try:
+            # The queue stays empty for the call below: nothing is ever
+            # written to either pipe, so both reader threads simply block
+            # on read() (daemon threads; harmless at interpreter exit).
+            monotonic_readings = iter([100.0, 250.0])
+            with patch.object(module.time, "monotonic", side_effect=lambda: next(monotonic_readings)):
+                with self.assertRaises(TimeoutError):
+                    output.wait_for(lambda _line: True, timeout=5.0)
+        finally:
+            os.close(stdout_write_fd)
+            os.close(stderr_write_fd)
+            output.join(timeout=2.0)
+            process.stdout.close()
+            process.stderr.close()
+
+    def test_wait_for_still_returns_a_line_already_queued(self) -> None:
+        # Regression coverage alongside the clamp fix: normal operation (a
+        # line already sitting in the queue, no clock jump) is unaffected
+        # by the clamp and is still returned promptly.
+        module = load_module()
+        output, process, stdout_write_fd, stderr_write_fd = self._make_output_capture(module)
+        try:
+            output.events.put("already queued line")
+            line = output.wait_for(lambda candidate: candidate == "already queued line", timeout=5.0)
+            self.assertEqual(line, "already queued line")
+        finally:
+            os.close(stdout_write_fd)
+            os.close(stderr_write_fd)
+            output.join(timeout=2.0)
+            process.stdout.close()
+            process.stderr.close()
+
+    def test_join_waits_for_reader_threads_so_tail_reflects_the_final_line(self) -> None:
+        # FTQ-002 regression: the reader threads were never joined, so
+        # `OwnedDaemon.stop`/`ReceiverWorker.stop` calling `tail()`
+        # immediately after `process.wait()` raced the last buffered lines
+        # against the reader threads still draining the pipes. `join()`
+        # must block until both threads have finished appending everything
+        # the pipe delivered before EOF, so `tail()` afterward is complete.
+        module = load_module()
+        output, process, stdout_write_fd, stderr_write_fd = self._make_output_capture(module)
+        with os.fdopen(stdout_write_fd, "w") as writer:
+            writer.write("first line\n")
+            writer.write("final line written just before close\n")
+        os.close(stderr_write_fd)
+
+        output.join(timeout=2.0)
+
+        tail = output.tail()
+        self.assertIn("first line", tail)
+        self.assertIn("final line written just before close", tail)
+        process.stdout.close()
+        process.stderr.close()
+
+
 class FailureCaptureHelperTests(unittest.TestCase):
     """Unit coverage for the small, pure helpers `run_scenario`'s failure path
     is built from: `_cooperative_stop_signal`, `_capture_exception`,
@@ -604,13 +693,12 @@ class RunScenarioFailureCaptureTests(unittest.TestCase):
             originals = {name: getattr(module, name) for name in patches}
             for name, value in patches.items():
                 setattr(module, name, value)
-            sys.modules["atm_graft"] = fake_atm_graft
             try:
-                record = module.run_scenario(args, "unit-test-row", "daemon_restart")
+                with patch.dict(sys.modules, {"atm_graft": fake_atm_graft}):
+                    record = module.run_scenario(args, "unit-test-row", "daemon_restart")
             finally:
                 for name, value in originals.items():
                     setattr(module, name, value)
-                sys.modules.pop("atm_graft", None)
 
             self.assertEqual(record["status"], "pass")
             self.assertNotIn("error", record)
