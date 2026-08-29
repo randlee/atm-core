@@ -35,6 +35,7 @@ use atm_http_runtime::{
     PeerStreamFuture, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
+use atm_storage::request_budget::SERVER_REQUEST_BUDGET;
 use atm_storage_rusqlite::SqliteStorageFactory;
 use peer_tls::MtlsPeerStreamAdapter;
 use tokio::net::TcpStream;
@@ -319,7 +320,12 @@ fn replacement_runtime_config_with_direct_peer(
             NonZeroUsize::new(128).expect("non-zero connection limit"),
         ),
         RuntimeTimeouts::new(
-            NonZeroDuration::new(Duration::from_secs(3)).expect("non-zero request timeout"),
+            // Server-side per-request budget. This is the one source of
+            // truth `atm_storage::request_budget::SERVER_REQUEST_BUDGET`,
+            // which the same-host client deadline and the SQLite
+            // busy_timeout are both derived from; do not hardcode a
+            // different value here without updating that module's contract.
+            NonZeroDuration::new(SERVER_REQUEST_BUDGET).expect("non-zero request timeout"),
             NonZeroDuration::new(REPLACEMENT_DRAIN_DEADLINE).expect("non-zero shutdown timeout"),
         ),
     )

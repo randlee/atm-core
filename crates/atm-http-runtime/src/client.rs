@@ -46,7 +46,13 @@ const REQUEST_ID_HEADER: &str = "X-ATM-Request-Id";
 ///
 /// The daemon owns this direct-plaintext budget after the CLI or graft
 /// submits the canonical request through its ordinary local transport.
-pub const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+///
+/// This is `atm_core::request_budget::SAME_HOST_REQUEST_DEADLINE`, the
+/// shared same-host client budget derived from the server's own request
+/// budget plus its response handoff grace. See that module for the full
+/// client/server budget contract and why the two must never be equal.
+pub const SAME_HOST_REQUEST_DEADLINE: Duration =
+    atm_core::request_budget::SAME_HOST_REQUEST_DEADLINE;
 
 /// Returns the fixed direct-peer protocol port.
 #[must_use]

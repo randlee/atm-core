@@ -72,6 +72,9 @@ pub mod protocol;
 pub mod provenance;
 /// Mailbox read/query workflows and output models.
 pub mod read;
+/// Shared same-host client/server request-budget contract, re-exported from
+/// `atm-storage`.
+pub mod request_budget;
 /// Reserved production role constants shared across runtime and tests.
 pub mod roles;
 /// Hidden bounded installation hooks for daemon composition/bootstrap and test
