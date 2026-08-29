@@ -337,6 +337,21 @@ See also:
 Subprocess-style ATM tests must not reuse developer workstation config or
 identity state.
 
+### POSIX shell fixtures on Windows
+
+Python tests that exercise a repository `.sh` fixture must invoke a real POSIX
+shell on Windows: Windows does not interpret a shebang through `CreateProcess`.
+Use `.just/lint_common.py`'s `resolve_posix_shell()` rather than adding a
+test-local resolver. It discovers Git Bash from `git --exec-path` or `PATH`
+and explicitly rejects `C:\Windows\System32\bash.exe`, which is the WSL launcher
+rather than the Git-for-Windows shell needed by these fixtures.
+
+Do not read an ambient `GIT_BASH` environment variable in a test. If a test
+needs to control its shell candidate, pass `git_bash=` explicitly to the
+shared resolver and keep that value in the test fixture's command environment.
+Bound both resolution and the resulting shell subprocess with a timeout, so a
+missing or incorrect Windows shell cannot leave the lint lane hung.
+
 Required pattern:
 - create one `TempDir` per test fixture
 - point `ATM_HOME` at that temp-owned runtime root
