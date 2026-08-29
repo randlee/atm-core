@@ -201,7 +201,7 @@ workspace version, commit it on the current branch, and push the matching tag.
 The workflow then builds the exact tagged workspace from any branch; it does
 not require the tag to be reachable from `develop`. It is not part of the
 vendored sc-publish kit; see
-[`docs/plans/phase-ar/sprint-AR1-1-prerelease-archive.md`](./plans/phase-ar/sprint-AR1-1-prerelease-archive.md)
+[`docs/plans/phase-as/sprint-AS1-1-prerelease-archive.md`](./plans/phase-as/sprint-AS1-1-prerelease-archive.md)
 for why.
 
 Create the tag and download results with:
