@@ -163,6 +163,12 @@ impl RuntimeHealth {
     /// `RuntimeHealth` (or one of its clones) is held, letting callers await
     /// the pump's own completion signal instead of polling `snapshot()` on a
     /// fixed interval.
+    ///
+    /// Only test harnesses subscribe today; production code observes queue
+    /// activity through [`RuntimeHealth::snapshot`]. Gated to keep this
+    /// accessor out of the shipped daemon dependency, matching
+    /// `DirectPeerTcpConfig::ephemeral_for_test`'s convention.
+    #[cfg(any(test, feature = "test-support"))]
     #[must_use]
     pub fn subscribe_herdr_queue_tick(&self) -> watch::Receiver<Option<IsoTimestamp>> {
         self.herdr_queue_tick.subscribe()
