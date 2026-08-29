@@ -191,6 +191,42 @@ does not execute them:
 - verify manual handoff prerequisites for Homebrew or `winget` when automation
   depends on external systems
 
+## Prerelease Archives for Integration Testing (tag-triggered, no publish)
+
+`.github/workflows/prerelease-archive.yml` builds manifest-declared release
+archives (linux/macOS/windows) from a `prerelease/vX.Y.Z` tag, with CI
+provenance, without creating a GitHub Release or publishing anything. Use
+`just prerelease-tag` from a clean feature/fix branch to patch-bump the
+workspace version, commit it on the current branch, and push the matching tag.
+The workflow then builds the exact tagged workspace from any branch; it does
+not require the tag to be reachable from `develop`. It is not part of the
+vendored sc-publish kit; see
+[`docs/plans/phase-as/sprint-AS1-1-prerelease-archive.md`](./plans/phase-as/sprint-AS1-1-prerelease-archive.md)
+for why.
+
+Create the tag and download results with:
+
+```bash
+just prerelease-tag --dry-run
+just prerelease-tag
+
+# find the tag-triggered run, then:
+gh run download <run-id> -n x86_64-unknown-linux-gnu   # one archive per requested target
+gh run download <run-id> -n checksums                  # checksums.txt + provenance.json
+```
+
+- `just prerelease-tag` refuses `develop`, `main`, detached HEADs, dirty trees,
+  duplicate tags, and non-stable workspace versions.
+- The recipe increments only the patch component (for example `1.4.5` to
+  `1.4.6`), verifies workspace lockstep, commits on the current branch, and
+  pushes both the commit and `prerelease/v1.4.6`.
+- The workflow triggers only on `prerelease/vX.Y.Z`, verifies that the tag
+  version matches the workspace and release-contract lockstep, and refuses to
+  run when a GitHub Release already uses that tag.
+- Verify a downloaded archive against `checksums.txt` with
+  `shasum -a 256 -c checksums.txt` (macOS/Linux) — same line format
+  `release.yml`'s own checksums use.
+
 ## Usage Notes
 
 - use this document for sequencing and scope

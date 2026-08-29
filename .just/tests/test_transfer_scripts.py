@@ -26,6 +26,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+JUST_DIR = Path(__file__).resolve().parents[1]
+if str(JUST_DIR) not in sys.path:
+    sys.path.insert(0, str(JUST_DIR))
+
+from lint_common import resolve_posix_shell
+
 ROOT = Path(__file__).resolve().parents[2]
 SFTP_SH = ROOT / "scripts" / "transfer" / "sftp.sh"
 TAILSCALE_SH = ROOT / "scripts" / "transfer" / "tailscale.sh"
@@ -34,31 +40,12 @@ SFTP_PS1 = ROOT / "scripts" / "transfer" / "sftp.ps1"
 PWSH = shutil.which("pwsh")
 
 
-def posix_shell() -> str | None:
-    """A POSIX shell, when one happens to be available.
-
-    `CreateProcess` on Windows has no shebang interpretation:
-    `subprocess.run([str(a_dot_sh_file)])` there raises `OSError:
-    [WinError 193] %1 is not a valid Win32 application`, even though the
-    script's own logic is entirely portable `/bin/sh`. `sftp.sh`/
-    `tailscale.sh` are not the shipped Windows transfer path (`sftp.ps1`
-    is, covered separately by `SftpPs1Tests`), so `SftpShTests`/
-    `TailscaleShTests` below unconditionally skip on `win32` regardless of
-    what this returns -- this helper and `sh_invocation()` stay in place
-    only for `PosixShellDiscoveryTests`' direct unit coverage of the
-    bash/sh preference order, and so `sh_invocation()` keeps working
-    correctly if a future non-Windows-gated caller needs it.
-    """
-    return shutil.which("bash") or shutil.which("sh")
-
-
 def sh_invocation(script: Path) -> list[str]:
-    """Argv prefix to invoke a `.sh` script portably; callers on Windows
-    must gate on `posix_shell()` first (see its docstring above)."""
+    """Argv prefix to invoke a `.sh` script portably."""
     if sys.platform == "win32":
-        shell = posix_shell()
+        shell = resolve_posix_shell()
         if shell is None:  # pragma: no cover - guarded by class-level skip
-            raise AssertionError("posix_shell() must be checked before sh_invocation() on Windows")
+            raise AssertionError("a POSIX shell must be available on Windows")
         return [shell, str(script)]
     return [str(script)]
 
@@ -228,7 +215,7 @@ def _install_fake_bin(bin_dir: Path) -> None:
 
     The bare, extension-less files are what a POSIX shell (`sftp.sh`/
     `tailscale.sh` invoked via a discovered `bash`/`sh` on Windows, see
-    `posix_shell()`) actually resolves on `PATH` -- MSYS/Git-for-Windows
+    `resolve_posix_shell()`) actually resolves on `PATH` -- MSYS/Git-for-Windows
     treats a PATH entry as executable by content-sniffing its shebang line,
     which only works if that line is pure `\n`-terminated. `Path.write_text`
     defaults to universal-newline translation, which would silently turn
@@ -678,9 +665,12 @@ class SftpPs1Tests(unittest.TestCase):
 
 
 class PosixShellDiscoveryTests(unittest.TestCase):
-    """Direct unit coverage for `posix_shell()`'s discovery order, mocking
-    `shutil.which` so these assertions never depend on what happens to be
-    on this machine's real `PATH`."""
+    """Direct coverage for non-Windows PATH resolution, independent of host.
+
+    Windows has a distinct Git-Bash probe, covered in test_lint_common.py.
+    These tests set ``windows=False`` so a real Git-for-Windows installation
+    cannot leak into mocked PATH expectations on a Windows CI runner.
+    """
 
     def test_prefers_bash_when_both_bash_and_sh_are_on_path(self) -> None:
         with mock.patch.object(
@@ -688,7 +678,7 @@ class PosixShellDiscoveryTests(unittest.TestCase):
             "which",
             side_effect=lambda name: f"/usr/bin/{name}" if name in ("bash", "sh") else None,
         ):
-            self.assertEqual(posix_shell(), "/usr/bin/bash")
+            self.assertEqual(resolve_posix_shell(windows=False), "/usr/bin/bash")
 
     def test_falls_back_to_sh_when_bash_is_absent(self) -> None:
         with mock.patch.object(
@@ -696,11 +686,11 @@ class PosixShellDiscoveryTests(unittest.TestCase):
             "which",
             side_effect=lambda name: "/bin/sh" if name == "sh" else None,
         ):
-            self.assertEqual(posix_shell(), "/bin/sh")
+            self.assertEqual(resolve_posix_shell(windows=False), "/bin/sh")
 
     def test_returns_none_when_neither_is_on_path(self) -> None:
         with mock.patch.object(shutil, "which", return_value=None):
-            self.assertIsNone(posix_shell())
+            self.assertIsNone(resolve_posix_shell(windows=False))
 
 
 if __name__ == "__main__":
