@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -116,18 +117,81 @@ def _python3_shim(tmp_path: Path) -> Path:
         (bin_dir / "python3.cmd").write_text(
             f'@"{sys.executable}" %*\n', encoding="utf-8"
         )
+        drive, tail = os.path.splitdrive(sys.executable)
+        msys_executable = (
+            f"/{drive[0].lower()}{tail.replace(chr(92), '/')}"
+            if drive
+            else sys.executable.replace(chr(92), "/")
+        )
+        (bin_dir / "python3").write_text(
+            "#!/bin/sh\n"
+            f'exec "{msys_executable}" "$@"\n',
+            encoding="utf-8",
+        )
     else:
         (bin_dir / "python3").symlink_to(sys.executable)
     return bin_dir
 
 
-def _python_command_shim(tmp_path: Path, name: str, body: str) -> Path:
-    """Write a Python-backed command that the Bash fixture invokes directly."""
+def _python_command_shim(tmp_path: Path, name: str, body: str) -> None:
+    """Install a Python-backed command for Git Bash and Windows PATH lookup."""
 
-    script = tmp_path / "bin" / f"{name}.py"
-    script.parent.mkdir(exist_ok=True)
-    script.write_text(body, encoding="utf-8")
-    return script
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    script = bin_dir / f"{name}.py"
+    script.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
+    if os.name == "nt":
+        (bin_dir / f"{name}.cmd").write_text(
+            f'@"{sys.executable}" "%~dp0{name}.py" %*\n', encoding="utf-8"
+        )
+        drive, tail = os.path.splitdrive(sys.executable)
+        msys_executable = (
+            f"/{drive[0].lower()}{tail.replace(chr(92), '/')}"
+            if drive
+            else sys.executable.replace(chr(92), "/")
+        )
+        (bin_dir / name).write_text(
+            "#!/bin/sh\n"
+            f'exec "{msys_executable}" "$(dirname "$0")/{name}.py" "$@"\n',
+            encoding="utf-8",
+        )
+    else:
+        script.chmod(0o755)
+        (bin_dir / name).symlink_to(script)
+
+
+def _bash() -> str:
+    """Resolve Git Bash explicitly; Windows' System32 WSL stub is not a shell."""
+
+    if os.name != "nt":
+        command = shutil.which("bash")
+        if command is None:
+            raise AssertionError("bash is required for the extracted workflow step")
+        return command
+
+    override = os.environ.get("GIT_BASH")
+    candidates: list[Path] = []
+    if override:
+        override_path = Path(override)
+        candidates.append(override_path / "bash.exe" if override_path.is_dir() else override_path)
+    git_exec_path = subprocess.run(
+        ["git", "--exec-path"], text=True, capture_output=True, check=True
+    ).stdout.strip()
+    if git_exec_path:
+        exec_path = Path(git_exec_path)
+        for base in (exec_path, *exec_path.parents):
+            candidates.extend((base / "bin" / "bash.exe", base / "usr" / "bin" / "bash.exe"))
+
+    system32 = Path(os.environ.get("WINDIR", r"C:\Windows")) / "System32"
+    system32_prefix = str(system32.resolve()).casefold()
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        resolved = str(candidate.resolve())
+        if resolved.casefold().startswith(system32_prefix + os.sep.casefold()):
+            continue
+        return resolved
+    raise AssertionError(f"could not resolve Git Bash outside {system32}")
 
 
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
@@ -156,7 +220,11 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             result = run_prerelease_archive_packager(
                 tmp_path, target_name="x86_64-pc-windows-msvc", expected_filename="fixture.exe"
             )
-            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stderr:\n{result.stderr}\nstdout:\n{result.stdout}",
+            )
             archive = tmp_path / "fixture_1.5.0_x86_64-pc-windows-msvc.zip"
             with zipfile.ZipFile(archive) as packaged:
                 self.assertEqual(
@@ -196,14 +264,17 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 "    print(json.dumps({'workspace_toml': 'Cargo.toml', 'rust_toolchain': 'stable'}))\n",
                 encoding="utf-8",
             )
-            jq_shim = _python_command_shim(
+            bin_dir = tmp_path / "bin"
+            bin_dir.mkdir()
+            _python3_shim(tmp_path)
+            _python_command_shim(
                 tmp_path,
                 "jq",
                 "import sys\n"
                 "values = {'.workspace_toml': 'Cargo.toml', '.rust_toolchain': 'stable'}\n"
                 "print(values.get(sys.argv[2], ''))\n",
             )
-            gh_shim = _python_command_shim(
+            _python_command_shim(
                 tmp_path,
                 "gh",
                 "import os\n"
@@ -219,14 +290,9 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             subprocess.run(["git", "commit", "-qm", "fixture"], cwd=tmp_path, check=True)
             output = tmp_path / "github-output"
             token_capture = tmp_path / "gh-token"
-            script = (
-                'python3() { "$PYTHON_EXECUTABLE" "$@"; }\n'
-                'jq() { "$PYTHON_EXECUTABLE" "$JQ_SHIM" "$@"; }\n'
-                'gh() { "$PYTHON_EXECUTABLE" "$GH_SHIM" "$@"; }\n'
-                + script
-            )
             probe_env = {
                 **os.environ,
+                "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
                 "GITHUB_REF_NAME": "prerelease/v1.4.6",
                 "GITHUB_REPOSITORY": "randlee/atm-core",
                 "GITHUB_OUTPUT": str(output),
@@ -234,26 +300,27 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 "GH_TOKEN": "workflow-token",
                 "GH_TOKEN_CAPTURE": str(token_capture),
                 "GH_PROBE_STATUS": "404",
-                "PYTHON_EXECUTABLE": sys.executable,
-                "JQ_SHIM": str(jq_shim),
-                "GH_SHIM": str(gh_shim),
             }
             result = subprocess.run(
-                ["bash", "-euo", "pipefail", "-c", script],
+                [_bash(), "-euo", "pipefail", "-c", script],
                 cwd=tmp_path,
                 env=probe_env,
                 text=True,
                 capture_output=True,
                 check=False,
             )
-            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stderr:\n{result.stderr}\nstdout:\n{result.stdout}",
+            )
             self.assertEqual(token_capture.read_text(encoding="utf-8"), "workflow-token")
             self.assertIn("version=1.4.6", output.read_text(encoding="utf-8"))
             existing_output = tmp_path / "github-output-existing"
             probe_env["GH_PROBE_STATUS"] = "200"
             probe_env["GITHUB_OUTPUT"] = str(existing_output)
             existing = subprocess.run(
-                ["bash", "-euo", "pipefail", "-c", script],
+                [_bash(), "-euo", "pipefail", "-c", script],
                 cwd=tmp_path,
                 env=probe_env,
                 text=True,
@@ -340,7 +407,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         winget = changes[root / ".winget" / "randlee.agent-team-mail.yaml"]
         self.assertIn("PackageVersion: 1.4.6", winget)
         self.assertIn("ManifestVersion: 1.4.6", winget)
-        self.assertIn("releases/download/v1.4.6/", winget)
+        self.assertIn(
+            "releases/download/v1.4.6/atm_1.4.6_x86_64-pc-windows-msvc.zip",
+            winget,
+        )
 
     def test_write_and_commit_restores_files_when_commit_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
