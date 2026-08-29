@@ -27,6 +27,35 @@ ROOT = Path(__file__).resolve().parents[2]
 HOOK = ROOT / "scripts" / "hooks" / "atm_queue_hook.py"
 
 
+def _pid_alive(pid: int) -> bool:
+    """Cross-platform "is this pid still running" check for a detached
+    grandchild the test process cannot ``os.waitpid`` (it isn't its direct
+    child -- the hook process that spawned it already exited). Used only to
+    poll ATM_HOOK_DEBOUNCE_CHILD_PIDFILE's recorded pid to completion."""
+    if sys.platform.startswith("win"):
+        import ctypes
+
+        query_limited_info = 0x1000
+        still_active = 259
+        handle = ctypes.windll.kernel32.OpenProcess(query_limited_info, False, pid)
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong(0)
+            if not ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return False
+            return exit_code.value == still_active
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 class HookTestHelpers:
     """Shared fixtures for the Claude-neutral and Codex-specific test
     classes below. Deliberately not a `unittest.TestCase` subclass so
@@ -40,6 +69,7 @@ class HookTestHelpers:
         state: Path,
         harness: str = "claude",
         debounce_seconds: str = "0.02",
+        child_pidfile: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         env = {
             **os.environ,
@@ -52,6 +82,12 @@ class HookTestHelpers:
             "ATM_HOME": str(state.parent),
             "ATM_CONFIG_HOME": str(state.parent),
         }
+        if child_pidfile is not None:
+            # Ask the hook to record any detached debounce-expiry child's
+            # pid, so a test that genuinely needs the delayed path can
+            # wait for it to fully exit via wait_for_detached_child_exit
+            # instead of racing TemporaryDirectory teardown against it.
+            env["ATM_HOOK_DEBOUNCE_CHILD_PIDFILE"] = str(child_pidfile)
         return subprocess.run(
             [sys.executable, str(HOOK), "--event", event, "--harness", harness],
             capture_output=True,
@@ -59,6 +95,29 @@ class HookTestHelpers:
             env=env,
             check=False,
         )
+
+    def wait_for_detached_child_exit(self, pidfile: Path, deadline_seconds: float = 10.0) -> None:
+        """Block until the detached expiry child recorded at `pidfile`
+        (via ATM_HOOK_DEBOUNCE_CHILD_PIDFILE) has fully exited, or fail
+        loudly after `deadline_seconds`. A hang detector, not a sleep --
+        callers use this so nothing is still touching a
+        `tempfile.TemporaryDirectory()` when it tears down on Windows."""
+        deadline = time.monotonic() + deadline_seconds
+        pid_text = ""
+        while time.monotonic() < deadline:
+            if pidfile.exists():
+                pid_text = pidfile.read_text(encoding="utf-8").strip()
+                if pid_text:
+                    break
+            time.sleep(0.02)
+        if not pid_text:
+            raise AssertionError(f"detached expiry child pid was never recorded at {pidfile}")
+        pid = int(pid_text)
+        while time.monotonic() < deadline:
+            if not _pid_alive(pid):
+                return
+            time.sleep(0.02)
+        raise AssertionError(f"detached expiry child pid {pid} did not exit within {deadline_seconds}s")
 
     def fake_cli(self, root: Path, rows: list[dict[str, object]]) -> Path:
         fake = root / "fake-atm.py"
@@ -125,9 +184,16 @@ class QueueHookTests(HookTestHelpers, unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root, state = Path(directory), Path(directory) / "state"
             fake = self.fake_cli(root, [])
-            self.run_hook("stop", fake, state)
+            pidfile = Path(directory) / "expiry-child.pid"
+            self.run_hook("stop", fake, state, child_pidfile=pidfile)
             self.run_hook("pre-tool-use", fake, state)
             self.assertFalse((state / "pending-idle").exists())
+            # Wait for the Stop's detached expiry child to fully exit
+            # before this TemporaryDirectory tears down -- it is still
+            # exercising the real debounced-cancel path (unlike
+            # test_stop_pull_blocks_with_literal_json_and_completes_idle_inline,
+            # which sidesteps the child entirely via debounce_seconds="0").
+            self.wait_for_detached_child_exit(pidfile)
 
     def test_idle_expiry_ignores_a_vanished_state_directory(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -143,7 +209,8 @@ class QueueHookTests(HookTestHelpers, unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root, state = Path(directory), Path(directory) / "state"
             fake = self.fake_cli(root, [])
-            result = self.run_hook("stop", fake, state)
+            pidfile = Path(directory) / "expiry-child.pid"
+            result = self.run_hook("stop", fake, state, child_pidfile=pidfile)
             self.assertEqual(result.returncode, 0)
             deadline = time.monotonic() + 2.0
             heartbeat_calls: list[str] = []
@@ -160,6 +227,13 @@ class QueueHookTests(HookTestHelpers, unittest.TestCase):
                 ["_internal-heartbeat --activity idle --as test-agent"],
                 "the debounced expiry must send exactly one idle heartbeat call",
             )
+            # The heartbeat call is written by a grandchild the expiry
+            # child spawns and waits on, so it is recorded slightly
+            # before the expiry child itself exits. Confirm the child
+            # has actually exited -- not merely emitted the call -- so
+            # nothing is still touching this TemporaryDirectory when it
+            # tears down on Windows.
+            self.wait_for_detached_child_exit(pidfile)
 
     def test_empty_stop_proceeds_without_output(self):
         with tempfile.TemporaryDirectory() as directory:
