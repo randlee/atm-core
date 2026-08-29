@@ -418,30 +418,9 @@ fn default_scratch_root() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::FakeEnvSource;
     #[cfg(unix)]
     use crate::test_support::capture_tracing;
-    use std::collections::HashMap;
-
-    #[derive(Default)]
-    struct FakeEnvSource(HashMap<String, String>);
-
-    impl FakeEnvSource {
-        fn unset() -> Self {
-            Self::default()
-        }
-
-        fn with(key: &str, value: impl Into<String>) -> Self {
-            let mut map = HashMap::new();
-            map.insert(key.to_string(), value.into());
-            Self(map)
-        }
-    }
-
-    impl EnvSource for FakeEnvSource {
-        fn var(&self, key: &str) -> Option<String> {
-            self.0.get(key).cloned()
-        }
-    }
 
     #[test]
     fn unix_default_scratch_root_has_uid_suffix() {
@@ -457,16 +436,16 @@ mod tests {
 
     #[test]
     fn is_atm_temp_unset_reports_true_only_when_unset() {
-        assert!(is_atm_temp_unset(&FakeEnvSource::unset()));
-        assert!(!is_atm_temp_unset(&FakeEnvSource::with(
+        assert!(is_atm_temp_unset(&FakeEnvSource::empty()));
+        assert!(!is_atm_temp_unset(&FakeEnvSource::new([(
             "ATM_TEMP",
-            "/anywhere"
-        )));
+            Some("/anywhere")
+        )])));
     }
 
     #[test]
     fn explicit_relative_path_is_rejected() {
-        let env = FakeEnvSource::with("ATM_TEMP", "relative/path");
+        let env = FakeEnvSource::new([("ATM_TEMP", Some("relative/path"))]);
         assert_eq!(resolve_atm_temp(&env), Err(AtmTempError::NotAbsolute));
     }
 
@@ -474,7 +453,7 @@ mod tests {
     fn explicit_path_with_missing_parent_is_unresolvable() {
         let dir = tempfile::tempdir().expect("tempdir");
         let missing = dir.path().join("does-not-exist").join("atm-temp");
-        let env = FakeEnvSource::with("ATM_TEMP", missing.to_str().expect("utf8 path"));
+        let env = FakeEnvSource::new([("ATM_TEMP", Some(missing.to_str().expect("utf8 path")))]);
         assert_eq!(resolve_atm_temp(&env), Err(AtmTempError::Unresolvable));
     }
 
@@ -499,7 +478,7 @@ mod tests {
         fn explicit_new_path_is_created_with_mode_0700() {
             let dir = tempfile::tempdir().expect("tempdir");
             let target = dir.path().join("atm-temp");
-            let env = FakeEnvSource::with("ATM_TEMP", target.to_str().expect("utf8 path"));
+            let env = FakeEnvSource::new([("ATM_TEMP", Some(target.to_str().expect("utf8 path")))]);
             let resolved = resolve_atm_temp(&env).expect("resolves");
             assert_eq!(resolved.path(), target);
             let mode = std::fs::metadata(&target)
@@ -516,7 +495,7 @@ mod tests {
             std::fs::create_dir(&target).expect("create dir");
             std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755))
                 .expect("chmod");
-            let env = FakeEnvSource::with("ATM_TEMP", target.to_str().expect("utf8 path"));
+            let env = FakeEnvSource::new([("ATM_TEMP", Some(target.to_str().expect("utf8 path")))]);
             let error = resolve_atm_temp(&env).expect_err("insecure directory must be refused");
             assert!(
                 matches!(error, AtmTempError::AtmTempInsecure { .. }),
@@ -531,7 +510,7 @@ mod tests {
             std::fs::create_dir(&target).expect("create dir");
             std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o700))
                 .expect("chmod");
-            let env = FakeEnvSource::with("ATM_TEMP", target.to_str().expect("utf8 path"));
+            let env = FakeEnvSource::new([("ATM_TEMP", Some(target.to_str().expect("utf8 path")))]);
             let resolved = resolve_atm_temp(&env).expect("own-uid 0700 directory is accepted");
             assert_eq!(resolved.path(), target);
         }
@@ -586,7 +565,7 @@ mod tests {
             std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o500))
                 .expect("chmod parent read-only");
             let target = parent.join("atm-temp");
-            let env = FakeEnvSource::with("ATM_TEMP", target.to_str().expect("utf8 path"));
+            let env = FakeEnvSource::new([("ATM_TEMP", Some(target.to_str().expect("utf8 path")))]);
             let error = resolve_atm_temp(&env).expect_err("locked parent must refuse creation");
             assert_eq!(error, AtmTempError::NotWritable);
             // Restore permissions so tempfile can clean up the directory.
@@ -605,7 +584,7 @@ mod tests {
             std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o500))
                 .expect("chmod parent read-only");
             let target = parent.join("atm-temp");
-            let env = FakeEnvSource::with("ATM_TEMP", target.to_str().expect("utf8 path"));
+            let env = FakeEnvSource::new([("ATM_TEMP", Some(target.to_str().expect("utf8 path")))]);
 
             let (result, logs) = capture_tracing(|| resolve_atm_temp(&env));
             let error = result.expect_err("locked parent must refuse creation");

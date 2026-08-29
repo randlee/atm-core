@@ -10,7 +10,9 @@ use std::sync::Once;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use atm_core::atm_temp::{AtmTemp, ProcessEnvSource, is_atm_temp_unset, resolve_atm_temp};
+use atm_core::atm_temp::{
+    AtmTemp, EnvSource, ProcessEnvSource, is_atm_temp_unset, resolve_atm_temp,
+};
 use atm_core::error::AtmError;
 use atm_core::send_to::{
     RecipientLocality, stage_same_host_attachments, validate_landed_dir_stdout,
@@ -84,7 +86,9 @@ pub(crate) async fn land_attachments(
             Ok(AttachmentLanding { landed_dir })
         }
         RecipientLocality::Remote(host) => {
-            let landed_dir = resolve_and_invoke_transfer_script(host, transfer_id, files).await?;
+            let landed_dir =
+                resolve_and_invoke_transfer_script(&ProcessEnvSource, host, transfer_id, files)
+                    .await?;
             Ok(AttachmentLanding { landed_dir })
         }
     }
@@ -108,6 +112,7 @@ fn transfer_not_enabled_error(host: &HostName) -> AtmError {
 }
 
 async fn resolve_and_invoke_transfer_script(
+    env: &dyn EnvSource,
     host: &HostName,
     transfer_id: Ulid,
     files: &[PathBuf],
@@ -120,6 +125,7 @@ async fn resolve_and_invoke_transfer_script(
         }
     };
     invoke_transfer_script(
+        env,
         &configured,
         transfer_id,
         files,
@@ -148,6 +154,7 @@ async fn resolve_and_invoke_transfer_script(
 /// (stderr, bounded, is included), is killed after exceeding `timeout`, or
 /// produces stdout that fails [`validate_landed_dir_stdout`].
 pub(crate) async fn invoke_transfer_script(
+    env: &dyn EnvSource,
     configured: &ConfiguredTransferScript,
     transfer_id: Ulid,
     files: &[PathBuf],
@@ -158,11 +165,11 @@ pub(crate) async fn invoke_transfer_script(
     command.args(&invocation.args);
     command.env_clear();
     for key in TRANSFER_SCRIPT_ALLOWED_ENV_KEYS {
-        if let Ok(value) = std::env::var(key) {
+        if let Some(value) = env.var(key) {
             command.env(key, value);
         }
     }
-    for (key, value) in synthesized_transfer_script_env(&ProcessEnvSource) {
+    for (key, value) in synthesized_transfer_script_env(env) {
         command.env(key, value);
     }
     command.stdin(Stdio::null());
@@ -306,6 +313,7 @@ mod tests {
         let configured = fixture_configured_script(script_path, host("m5"));
 
         let result = invoke_transfer_script(
+            &atm_core::test_support::FakeEnvSource::empty(),
             &configured,
             Ulid::new(),
             &[PathBuf::from("/tmp/report.pdf")],
@@ -329,6 +337,7 @@ mod tests {
         let configured = fixture_configured_script(script_path, host("m5"));
 
         let error = invoke_transfer_script(
+            &atm_core::test_support::FakeEnvSource::empty(),
             &configured,
             Ulid::new(),
             &[PathBuf::from("/tmp/report.pdf")],
@@ -348,6 +357,7 @@ mod tests {
         let configured = fixture_configured_script(script_path, host("m5"));
 
         let error = invoke_transfer_script(
+            &atm_core::test_support::FakeEnvSource::empty(),
             &configured,
             Ulid::new(),
             &[PathBuf::from("/tmp/report.pdf")],
@@ -367,6 +377,7 @@ mod tests {
         let configured = fixture_configured_script(script_path, host("m5"));
 
         let error = invoke_transfer_script(
+            &atm_core::test_support::FakeEnvSource::empty(),
             &configured,
             Ulid::new(),
             &[PathBuf::from("/tmp/report.pdf")],
@@ -396,7 +407,7 @@ mod tests {
         let script_path = write_script(dir.path(), "stub.sh", &script_contents);
         let configured = fixture_configured_script(script_path, host("m5"));
 
-        let _env = atm_core::test_support::EnvGuard::set_many([
+        let env = atm_core::test_support::FakeEnvSource::new([
             ("ATM_TEMP", Some("atm-temp-test-value")),
             ("ATM_IDENTITY", Some("test-agent")),
             ("ATM_TEAM", Some("test-team")),
@@ -404,6 +415,7 @@ mod tests {
         ]);
 
         let result = invoke_transfer_script(
+            &env,
             &configured,
             Ulid::new(),
             &[PathBuf::from("/tmp/report.pdf")],
@@ -447,7 +459,7 @@ mod tests {
         let script_path = write_script(dir.path(), "stub.sh", &script_contents);
         let configured = fixture_configured_script(script_path, host("m5"));
 
-        let _env = atm_core::test_support::EnvGuard::set_many([
+        let env = atm_core::test_support::FakeEnvSource::new([
             ("ATM_TEMP", Some("atm-temp-test-value")),
             ("ATM_IDENTITY", Some("test-agent")),
             ("ATM_TEAM", Some("test-team")),
@@ -458,6 +470,7 @@ mod tests {
         ]);
 
         invoke_transfer_script(
+            &env,
             &configured,
             Ulid::new(),
             &[PathBuf::from("/tmp/report.pdf")],
@@ -497,7 +510,7 @@ mod tests {
         let configured = fixture_configured_script(script_path, host("m5"));
 
         let distinctive_caller_path = "/definitely-not-a-real-dir/atm-caller-path-marker";
-        let _env = atm_core::test_support::EnvGuard::set_many([
+        let env = atm_core::test_support::FakeEnvSource::new([
             ("ATM_TEMP", Some("atm-temp-test-value")),
             ("ATM_IDENTITY", Some("test-agent")),
             ("ATM_TEAM", Some("test-team")),
@@ -505,6 +518,7 @@ mod tests {
         ]);
 
         invoke_transfer_script(
+            &env,
             &configured,
             Ulid::new(),
             &[PathBuf::from("/tmp/report.pdf")],
@@ -521,15 +535,13 @@ mod tests {
         );
         assert_eq!(
             child_path,
-            atm_core::transfer_script::synthesized_transfer_script_env(
-                &atm_core::atm_temp::ProcessEnvSource
-            )
-            .into_iter()
-            .find(|(key, _)| *key == "PATH")
-            .expect("synthesized env always includes PATH")
-            .1
-            .to_str()
-            .expect("synthesized PATH is UTF-8 in this test")
+            atm_core::transfer_script::synthesized_transfer_script_env(&env)
+                .into_iter()
+                .find(|(key, _)| *key == "PATH")
+                .expect("synthesized env always includes PATH")
+                .1
+                .to_str()
+                .expect("synthesized PATH is UTF-8 in this test")
         );
     }
 
