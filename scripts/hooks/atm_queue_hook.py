@@ -160,7 +160,7 @@ def schedule_idle(harness: str) -> None:
     if delay == 0:
         expire_idle(token, harness)
         return
-    subprocess.Popen(  # noqa: S603 - ATM_BIN is an explicit operator override
+    child = subprocess.Popen(  # noqa: S603 - ATM_BIN is an explicit operator override
         [sys.executable, __file__, "--event", "idle-expired", "--harness", harness, "--token", token],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -168,6 +168,16 @@ def schedule_idle(harness: str) -> None:
         start_new_session=True,
         env=os.environ.copy(),
     )
+    # Test-support hook only: this detached child is deliberately never
+    # waited on by the hook process itself (it must survive past this
+    # process's own exit so the idle debounce fires later). When a
+    # deterministic test needs to prove the child has fully exited before
+    # tearing down a temp directory it may still be touching, it can set
+    # ATM_HOOK_DEBOUNCE_CHILD_PIDFILE and poll the recorded pid itself.
+    # Inert unless that env var is set; changes no production behavior.
+    pidfile = os.environ.get("ATM_HOOK_DEBOUNCE_CHILD_PIDFILE", "").strip()
+    if pidfile:
+        Path(pidfile).write_text(str(child.pid), encoding="utf-8")
 
 
 def expire_idle(token: str, harness: str) -> None:
