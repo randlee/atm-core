@@ -6,7 +6,7 @@
 
 use std::num::NonZeroU16;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 #[cfg(unix)]
@@ -30,6 +30,7 @@ use hyper::body::Incoming;
 use hyper::client::conn::http1;
 
 use reqwest::header::{HeaderName, HeaderValue};
+use ulid::Ulid;
 
 use crate::PeerConnectionPool;
 
@@ -77,6 +78,22 @@ pub(crate) enum HttpRuntimeClientFailure {
 }
 
 impl HttpRuntimeClientFailure {
+    /// Returns `true` when this failure provably occurred before any bytes
+    /// of the request could have left the client, so retrying it exactly
+    /// once against a freshly re-resolved, freshly connected transport can
+    /// never duplicate a write the server may already have received.
+    ///
+    /// Only [`Self::Connect`] qualifies: it is raised solely for a
+    /// connection-establishment failure (including a bounded
+    /// `connect_timeout` expiry), which by construction happens strictly
+    /// before any request bytes are written. Every other variant means a
+    /// request was at least partially transmitted, or a response was
+    /// already read, and must never be retried -- see the no-duplicate-write
+    /// contract in [`HttpRuntimeConnector::exchange`].
+    fn is_safe_to_retry_after_reconnect(&self) -> bool {
+        matches!(self, Self::Connect(_))
+    }
+
     fn into_atm_error(self) -> AtmError {
         match self {
             Self::EndpointRecord(error) => error,
@@ -274,10 +291,60 @@ pub fn preferred_local_client(
 /// Reqwest-backed physical loopback connector. It adds exactly the local
 /// capability header from the validated endpoint record; all request DTO
 /// encoding and response mapping remain in [`HttpRuntimeClient`].
+///
+/// A managed daemon restart (`atm daemon restart`/switch) always rebinds a
+/// fresh ephemeral loopback listener and publishes a new
+/// [`LocalHttpEndpointRecord::daemon_instance_id`] for it. A long-lived
+/// embedded client (for example the Python graft binding's `PyGraftSession`)
+/// keeps this connector, and therefore its underlying `reqwest::Client`
+/// connection pool, alive across that restart. Without a generation check, a
+/// pooled connection established against the pre-restart daemon can outlive
+/// the process it was connected to; on Windows, writing to (or waiting on a
+/// response from) that stale connection has been observed to silently stall
+/// instead of failing fast, consuming the entire same-host request budget.
+/// `transport` therefore caches the client alongside the daemon generation
+/// it was built for, and is rebuilt -- discarding any pooled connections --
+/// whenever the freshly read record names a different generation.
 #[derive(Debug)]
 struct LoopbackTcpConnector {
-    client: reqwest::Client,
     endpoint_record_path: PathBuf,
+    transport: RwLock<Option<Arc<GenerationalReqwestClient>>>,
+}
+
+/// A same-host `reqwest::Client` bound to the daemon generation it was built
+/// for. See [`LoopbackTcpConnector`] for why this binding matters.
+#[derive(Debug)]
+struct GenerationalReqwestClient {
+    client: reqwest::Client,
+    daemon_instance_id: Ulid,
+}
+
+/// Upper bound on establishing the loopback TCP connection to the daemon.
+///
+/// Same-host `connect()` to an actually-listening daemon completes in well
+/// under a millisecond. This bound exists only to fail a connect attempt
+/// fast when the client is racing a managed daemon restart, rather than
+/// silently consuming the rest of [`SAME_HOST_REQUEST_DEADLINE`] on a
+/// connect that a stale pooled route can never complete. It is kept an
+/// order of magnitude below [`atm_core::request_budget::SERVER_REQUEST_BUDGET`]
+/// so even a legitimately slow (but real) connect leaves most of the
+/// request budget for the server itself.
+const LOOPBACK_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
+
+/// Builds one loopback `reqwest::Client` bound to no particular daemon
+/// generation yet. Callers must pair the result with the
+/// [`Ulid`] read from the same [`LocalHttpEndpointRecord`] exchange that
+/// motivated the build.
+fn build_loopback_reqwest_client() -> Result<reqwest::Client, HttpRuntimeClientFailure> {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(LOOPBACK_CONNECT_TIMEOUT)
+        .build()
+        .map_err(|source| {
+            HttpRuntimeClientFailure::Connect(format!(
+                "failed to build loopback HTTP client: {source}"
+            ))
+        })
 }
 
 /// Reqwest owns DNS, connection and HTTP. This adapter owns only the
@@ -598,16 +665,70 @@ pub(crate) fn peer_connect_deadline_failure(
 
 impl LoopbackTcpConnector {
     fn new(endpoint_record_path: &Path) -> Result<Self, AtmError> {
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|source| {
-                AtmError::config("failed to build loopback HTTP client").with_cause(source)
-            })?;
+        // Build-and-discard once so a client construction error (for
+        // example an unsupported TLS backend) still fails fast at connector
+        // construction time instead of surfacing from the first `exchange`
+        // call. The cached transport starts empty; it is built for real,
+        // and bound to a daemon generation, on first use.
+        build_loopback_reqwest_client().map_err(HttpRuntimeClientFailure::into_atm_error)?;
         Ok(Self {
-            client,
             endpoint_record_path: endpoint_record_path.to_path_buf(),
+            transport: RwLock::new(None),
         })
+    }
+
+    /// Returns the cached transport if it was built for `daemon_instance_id`,
+    /// otherwise builds and caches a fresh one, discarding any pooled
+    /// connections the previous transport held open.
+    ///
+    /// This is the proactive half of the stale-connection fix: it guarantees
+    /// a request is never issued over a connection pool that may still hold
+    /// a socket connected to a since-replaced daemon process.
+    fn transport_for_generation(
+        &self,
+        daemon_instance_id: Ulid,
+    ) -> Result<Arc<GenerationalReqwestClient>, HttpRuntimeClientFailure> {
+        if let Some(current) = self.cached_transport_if_matching(daemon_instance_id) {
+            return Ok(current);
+        }
+        self.rebuild_transport(daemon_instance_id)
+    }
+
+    fn cached_transport_if_matching(
+        &self,
+        daemon_instance_id: Ulid,
+    ) -> Option<Arc<GenerationalReqwestClient>> {
+        let guard = self
+            .transport
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard
+            .as_ref()
+            .filter(|cached| cached.daemon_instance_id == daemon_instance_id)
+            .map(Arc::clone)
+    }
+
+    /// Unconditionally builds and caches a fresh transport for
+    /// `daemon_instance_id`, replacing whatever was cached before.
+    ///
+    /// Used both when the cached generation does not match (proactive
+    /// refresh) and, once, after a provably pre-send connect failure
+    /// (reactive refresh); see [`HttpRuntimeConnector::exchange`].
+    fn rebuild_transport(
+        &self,
+        daemon_instance_id: Ulid,
+    ) -> Result<Arc<GenerationalReqwestClient>, HttpRuntimeClientFailure> {
+        let client = build_loopback_reqwest_client()?;
+        let fresh = Arc::new(GenerationalReqwestClient {
+            client,
+            daemon_instance_id,
+        });
+        let mut guard = self
+            .transport
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *guard = Some(Arc::clone(&fresh));
+        Ok(fresh)
     }
 }
 
@@ -620,13 +741,42 @@ impl HttpRuntimeConnector for LoopbackTcpConnector {
         )
     }
 
+    /// Exchanges one request, retrying exactly once after a provably
+    /// pre-send connect failure.
+    ///
+    /// No-duplicate-write contract: the retry only happens for
+    /// [`HttpRuntimeClientFailure::is_safe_to_retry_after_reconnect`]
+    /// failures, i.e. failures raised strictly before any request byte left
+    /// the client. A retry re-reads the endpoint record (picking up a
+    /// concurrently completed daemon restart) and forces a fresh transport,
+    /// so it can never reuse the connection that just failed.
     async fn exchange(
         &self,
         request: HttpRequest,
         deadline: RequestDeadline,
     ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-        let (endpoint, capability) =
+        match self.exchange_once(request.clone(), deadline).await {
+            Ok(response) => Ok(response),
+            Err(failure) if failure.is_safe_to_retry_after_reconnect() => {
+                let daemon_instance_id =
+                    load_active_loopback_daemon_instance_id(&self.endpoint_record_path).await?;
+                self.rebuild_transport(daemon_instance_id)?;
+                self.exchange_once(request, deadline).await
+            }
+            Err(failure) => Err(failure),
+        }
+    }
+}
+
+impl LoopbackTcpConnector {
+    async fn exchange_once(
+        &self,
+        request: HttpRequest,
+        deadline: RequestDeadline,
+    ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+        let (endpoint, capability, daemon_instance_id) =
             load_active_loopback_endpoint(&self.endpoint_record_path).await?;
+        let transport = self.transport_for_generation(daemon_instance_id)?;
         let url = reqwest::Url::parse(&format!("http://{endpoint}{}", request.path)).map_err(
             |source| {
                 HttpRuntimeClientFailure::RequestWrite(format!(
@@ -636,7 +786,7 @@ impl HttpRuntimeConnector for LoopbackTcpConnector {
             },
         )?;
         execute_reqwest_request(
-            &self.client,
+            &transport.client,
             url,
             request,
             deadline,
@@ -648,7 +798,7 @@ impl HttpRuntimeConnector for LoopbackTcpConnector {
 
 async fn load_active_loopback_endpoint(
     endpoint_record_path: &Path,
-) -> Result<(std::net::SocketAddr, LocalCapability), HttpRuntimeClientFailure> {
+) -> Result<(std::net::SocketAddr, LocalCapability, Ulid), HttpRuntimeClientFailure> {
     let path = endpoint_record_path.to_path_buf();
     tokio::task::spawn_blocking(move || load_active_loopback_endpoint_blocking(&path))
         .await
@@ -661,9 +811,23 @@ async fn load_active_loopback_endpoint(
         .map_err(HttpRuntimeClientFailure::EndpointRecord)
 }
 
+/// Re-reads only the daemon generation from the local endpoint record.
+///
+/// Used exclusively by the one post-connect-failure retry in
+/// [`LoopbackTcpConnector::exchange`] so the forced transport rebuild binds
+/// to whatever generation is current at retry time, not the generation that
+/// just failed.
+async fn load_active_loopback_daemon_instance_id(
+    endpoint_record_path: &Path,
+) -> Result<Ulid, HttpRuntimeClientFailure> {
+    load_active_loopback_endpoint(endpoint_record_path)
+        .await
+        .map(|(_, _, daemon_instance_id)| daemon_instance_id)
+}
+
 fn load_active_loopback_endpoint_blocking(
     endpoint_record_path: &Path,
-) -> Result<(std::net::SocketAddr, LocalCapability), AtmError> {
+) -> Result<(std::net::SocketAddr, LocalCapability, Ulid), AtmError> {
     let contents = std::fs::read(endpoint_record_path).map_err(|source| {
         AtmError::daemon_unavailable("failed to read local HTTP endpoint record").with_cause(source)
     })?;
@@ -692,7 +856,7 @@ fn load_active_loopback_endpoint_blocking(
             "local HTTP endpoint record contains a non-loopback address",
         ));
     }
-    Ok((endpoint, capability))
+    Ok((endpoint, capability, record.daemon_instance_id))
 }
 
 /// Physical connection setup for the one shared HTTP client.
@@ -844,7 +1008,22 @@ async fn execute_reqwest_request(
     }
 
     let response = client.execute(outbound).await.map_err(|source| {
-        HttpRuntimeClientFailure::Connect(format!("HTTP connector request failed: {source}"))
+        // `reqwest::Error::is_connect` is `true` only for connection
+        // establishment failures (DNS/TCP/TLS, including a configured
+        // `connect_timeout` expiry), which happen strictly before any
+        // request byte is written. Every other `execute` failure means the
+        // request may have been partially or fully transmitted, so it must
+        // stay in a non-retry-eligible variant -- see
+        // `HttpRuntimeClientFailure::is_safe_to_retry_after_reconnect`.
+        if source.is_connect() {
+            HttpRuntimeClientFailure::Connect(format!(
+                "HTTP connector could not establish a connection: {source}"
+            ))
+        } else {
+            HttpRuntimeClientFailure::RequestWrite(format!(
+                "HTTP connector request failed after a connection was established: {source}"
+            ))
+        }
     })?;
     let status = response.status();
     let headers = response.headers().clone();
@@ -994,8 +1173,8 @@ mod tests {
 
     use super::{
         DirectPeerTcpConnector, HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector,
-        direct_peer_connection_failure, direct_peer_tcp_client, selected_write_transport,
-        shared_direct_peer_client,
+        direct_peer_connection_failure, direct_peer_tcp_client, execute_reqwest_request,
+        selected_write_transport, shared_direct_peer_client,
     };
 
     struct LocalOnlyClient;
@@ -1171,6 +1350,126 @@ mod tests {
             1,
             "one reqwest client keeps its established connection for sequential writes"
         );
+    }
+
+    #[test]
+    fn only_connect_failures_are_safe_to_retry_after_reconnect() {
+        let retry_eligible = HttpRuntimeClientFailure::Connect("refused".to_owned());
+        assert!(retry_eligible.is_safe_to_retry_after_reconnect());
+
+        let never_retried = [
+            HttpRuntimeClientFailure::EndpointRecord(AtmError::daemon_unavailable("missing")),
+            HttpRuntimeClientFailure::PeerConnect {
+                target: "peer:1".to_owned(),
+                cause: "refused".to_owned(),
+            },
+            HttpRuntimeClientFailure::RequestWrite("reset mid-write".to_owned()),
+            HttpRuntimeClientFailure::ResponseDecode(AtmError::daemon_unavailable("bad body")),
+            HttpRuntimeClientFailure::Cancelled,
+            HttpRuntimeClientFailure::Timeout,
+            HttpRuntimeClientFailure::PeerConnectTimeout {
+                target: "peer:1".to_owned(),
+                cause: "slow".to_owned(),
+            },
+        ];
+        for failure in never_retried {
+            assert!(
+                !failure.is_safe_to_retry_after_reconnect(),
+                "{failure:?} may mean request bytes already left the client and must never be retried"
+            );
+        }
+    }
+
+    /// A request against a port nobody listens on must fail during TCP
+    /// connect, strictly before any request byte is written -- the one
+    /// failure class the loopback connector is allowed to retry after
+    /// forcing a fresh transport.
+    #[tokio::test]
+    async fn a_refused_connection_is_classified_as_a_safe_to_retry_connect_failure() {
+        let refused_port = {
+            let listener = TcpListener::bind(("127.0.0.1", 0))
+                .await
+                .expect("reserve an ephemeral port");
+            listener.local_addr().expect("listener address").port()
+            // The listener is dropped here without ever calling `accept`,
+            // so the OS refuses the next connection attempt to this port.
+        };
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_millis(500))
+            .build()
+            .expect("build a bounded test client");
+        let url = reqwest::Url::parse(&format!("http://127.0.0.1:{refused_port}/v1/atm/messages"))
+            .expect("valid loopback url");
+        let request = HttpRequest {
+            method: "POST".to_owned(),
+            path: "/v1/atm/messages".to_owned(),
+            headers: Vec::new(),
+            body: Vec::new(),
+        };
+
+        let failure = execute_reqwest_request(
+            &client,
+            url,
+            request,
+            RequestDeadline::after(Duration::from_secs(1)),
+            None,
+        )
+        .await
+        .expect_err("nothing listens on the reserved port");
+
+        assert!(
+            matches!(failure, HttpRuntimeClientFailure::Connect(_)),
+            "a refused connection must classify as Connect, got {failure:?}"
+        );
+        assert!(failure.is_safe_to_retry_after_reconnect());
+    }
+
+    /// A peer that accepts the TCP connection and then closes it without
+    /// ever answering must NOT classify as a connect failure: by the time
+    /// the connection was accepted, the request may already have been
+    /// written, so retrying it could duplicate a write the peer already
+    /// received.
+    #[tokio::test]
+    async fn a_connection_closed_after_accept_is_not_classified_as_a_safe_to_retry_failure() {
+        let listener = TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("bind a test listener");
+        let port = listener.local_addr().expect("listener address").port();
+        tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("accept one connection");
+            // Immediately drop the accepted stream without reading or
+            // writing anything, simulating a peer that vanished the instant
+            // after the TCP handshake completed.
+            drop(stream);
+        });
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_millis(500))
+            .build()
+            .expect("build a bounded test client");
+        let url = reqwest::Url::parse(&format!("http://127.0.0.1:{port}/v1/atm/messages"))
+            .expect("valid loopback url");
+        let request = HttpRequest {
+            method: "POST".to_owned(),
+            path: "/v1/atm/messages".to_owned(),
+            headers: Vec::new(),
+            body: Vec::new(),
+        };
+
+        let failure = execute_reqwest_request(
+            &client,
+            url,
+            request,
+            RequestDeadline::after(Duration::from_secs(1)),
+            None,
+        )
+        .await
+        .expect_err("the peer closes the connection without responding");
+
+        assert!(
+            !matches!(failure, HttpRuntimeClientFailure::Connect(_)),
+            "a post-accept closure must not classify as Connect, got {failure:?}"
+        );
+        assert!(!failure.is_safe_to_retry_after_reconnect());
     }
 
     #[tokio::test]

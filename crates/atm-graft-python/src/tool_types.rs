@@ -188,4 +188,36 @@ mod tests {
             assert_eq!(result.layer, "native_client");
         });
     }
+
+    /// [`HttpRuntimeClientFailure::Connect`] (atm-http-runtime) is the only
+    /// same-host client failure that is provably pre-send -- it maps to
+    /// [`AtmErrorCode::DaemonUnavailable`] before ever reaching this crate.
+    /// `is_daemon_unavailable` must recognize exactly that code so
+    /// `with_daemon_recovery`'s `RefreshOnly` policy can refresh the stale
+    /// client once. It must not recognize any other code (e.g.
+    /// `AtmErrorCode::WaitTimeout`, raised for both cancellations and
+    /// genuine in-flight response waits) as daemon-unavailable, or a write
+    /// that already reached the server could be replayed.
+    #[test]
+    fn only_the_daemon_unavailable_code_is_treated_as_a_recoverable_stale_client() {
+        let daemon_unavailable = AtmToolError {
+            code: AtmErrorCode::DaemonUnavailable.as_str().to_owned(),
+            message: "HTTP client could not connect to the configured daemon endpoint".to_owned(),
+            recovery: String::new(),
+            layer: "native_client".to_owned(),
+        };
+        assert!(daemon_unavailable.is_daemon_unavailable());
+
+        let wait_timeout = AtmToolError {
+            code: AtmErrorCode::WaitTimeout.as_str().to_owned(),
+            message: "HTTP client request exceeded its absolute request budget".to_owned(),
+            recovery: String::new(),
+            layer: "native_client".to_owned(),
+        };
+        assert!(
+            !wait_timeout.is_daemon_unavailable(),
+            "a request-budget timeout may mean the write already reached the server; \
+             it must never be classified as safe to silently retry"
+        );
+    }
 }
