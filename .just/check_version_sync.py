@@ -248,6 +248,56 @@ def validate_winget_manifests(repo_root: Path, workspace_version: str, config: d
     return True
 
 
+def sync_winget_manifests(repo_root: Path, workspace_version: str, config: dict) -> list[Path]:
+    """Update the configured Winget fields used by ``validate_winget_manifests``."""
+
+    winget = config.get("winget", {})
+    if not isinstance(winget, dict) or not winget.get("enabled", False):
+        return []
+
+    manifest_glob = winget.get("manifest_glob")
+    package_version_field = winget.get("package_version_field", "PackageVersion")
+    manifest_version_field = winget.get("manifest_version_field", "ManifestVersion")
+    installer_url_field = winget.get("installer_url_field", "InstallerUrl")
+    if not isinstance(manifest_glob, str) or not manifest_glob.strip():
+        raise SystemExit("[version_sync.winget].manifest_glob must be a non-empty string when enabled")
+    fields = (package_version_field, manifest_version_field, installer_url_field)
+    if not all(isinstance(item, str) and item for item in fields):
+        raise SystemExit("[version_sync.winget] field names must be non-empty strings")
+
+    manifest_paths = sorted(repo_root.glob(manifest_glob))
+    if not manifest_paths:
+        fail(f"no Winget manifests found for glob {manifest_glob!r}")
+
+    changed: list[Path] = []
+    for manifest_path in manifest_paths:
+        text = read_text(manifest_path)
+        original = text
+        for field_name in (package_version_field, manifest_version_field):
+            pattern = re.compile(rf"^({re.escape(field_name)}:\s*)\S+(\s*)$", re.MULTILINE)
+            text, count = pattern.subn(rf"\g<1>{workspace_version}\g<2>", text)
+            if count != 1:
+                fail(f"{manifest_path.relative_to(repo_root)} must contain exactly one {field_name} field")
+
+        installer_pattern = re.compile(
+            rf"^(\s*{re.escape(installer_url_field)}:\s*\S*?)(?P<version>"
+            rf"\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)(?P<suffix>[/_]\S*)$",
+            re.MULTILINE,
+        )
+
+        def replace_installer_version(match: re.Match[str]) -> str:
+            return f"{match.group(1)}{workspace_version}{match.group('suffix')}"
+
+        text, count = installer_pattern.subn(replace_installer_version, text)
+        if count == 0:
+            fail(f"{manifest_path.relative_to(repo_root)} is missing {installer_url_field} version")
+
+        if text != original:
+            manifest_path.write_text(text, encoding="utf-8")
+            changed.append(manifest_path)
+    return changed
+
+
 def validate_release_wiring(repo_root: Path, config: dict) -> bool:
     release_wiring = config.get("release_wiring", {})
     if not isinstance(release_wiring, dict) or not release_wiring.get("enabled", False):

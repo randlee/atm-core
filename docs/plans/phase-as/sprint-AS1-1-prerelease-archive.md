@@ -1,13 +1,13 @@
-# Sprint AR1.1 — Prerelease archive job
+# Sprint AS1.1 — Prerelease archive job
 
 **Branch**: `feature/ar1-prerelease-archive` → PR targets `develop`
 **Worktree**: `../atm-core-worktrees/feature/ar1-prerelease-archive`
-**Owner**: fenix (Phase AR) · **Consumer**: loki@hermes docker-testbed and the
+**Owner**: fenix (Phase AS (release validation 1.4.x)) · **Consumer**: loki@hermes docker-testbed and the
 Mac daemon-switch install for cross-host parity.
 
 ## Purpose
 
-Phase AR integration testing needs CI-provenanced Linux, macOS, and Windows
+Phase AS (release validation 1.4.x) needs CI-provenanced Linux, macOS, and Windows
 archives with the same layout as the production release installer. The
 workspace version is the release identity: `just prerelease-tag` patch-bumps
 `X.Y.Z`, commits that bump on the operator's current branch, and pushes the
@@ -23,8 +23,8 @@ the workflow deliberately performs no develop-reachability check.
 `release.yml` and `.github/scripts/release_artifacts.py` are pinned
 sc-publish kit files and remain untouched. The atm-core-owned prerelease
 workflow duplicates the production packaging block and uses the existing
-`build-plan`, `verify-version`, `verify-version-lockstep`, and target-matrix
-subcommands. The
+`build-plan`, `verify-version`, `verify-version-lockstep`, `release-target-matrix`,
+`cargo-build-bin-args`, and `release-package-config` subcommands. The
 `.just/tests/test_prerelease_archive_workflow.py` compares the extracted
 Python blocks byte-for-byte after normalizing only their version-output line.
 No new kit subcommand is introduced.
@@ -42,8 +42,15 @@ No new kit subcommand is introduced.
 2. `Justfile` exposes `just prerelease-tag`, backed by
    `.just/prerelease_tag.py`. It refuses `develop`, `main`, detached HEADs,
    dirty trees, duplicate tags, and non-stable workspace versions; updates
-   workspace manifests and `Cargo.lock`; verifies lockstep; commits the bump
-   on the current branch; then creates and pushes `prerelease/vX.Y.Z`.
+   workspace version fields, the three registered Python package manifests,
+   configured Winget fields, and `Cargo.lock`; verifies lockstep; commits the
+   bump on the current branch; then creates and pushes `prerelease/vX.Y.Z`.
+   Python updates delegate to the release-artifacts kit's
+   `sync-python-version`; Winget updates delegate to the config-owned
+   `check_version_sync.py` implementation. `candidate_changes()` copies only
+   `git ls-files` output, validates the candidate, and returns the exact
+   version-manifest allowlist; `write_and_commit()` applies that set with
+   rollback on commit failure.
    `--dry-run` prints the exact bump, commit, tag, and push trace without
    changing the checkout.
 3. `.just/tests/test_prerelease_archive_workflow.py` is repository-owned,
@@ -72,7 +79,8 @@ names and provenance use the same stable workspace version.
 
 ## Verification
 
-- `python3 .just/run_pytests.py` — the workflow test is collected and passes.
+- `python3 .just/run_pytests.py` — the workflow test is collected and passes;
+  the focused prerelease suite contains 13 tests.
 - `just lint` — full repository lint gate.
 - `cargo test --workspace` — required when the recipe/version tooling changes
   Rust-facing workspace metadata or lockfile behavior.
@@ -88,7 +96,7 @@ names and provenance use the same stable workspace version.
 
 ## Constraints
 
-- No `crates/` or daemon changes.
+- no Rust source changes; the bump recipe MAY edit version fields in crates/*/pyproject.toml and the workspace Cargo.toml/Cargo.lock, and nothing else under crates/
 - No sc-publish kit files are hand-edited.
 - The prerelease workflow is tag-triggered only and has no publishing token or
   write permission.

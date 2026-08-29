@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -15,6 +16,8 @@ from pathlib import Path
 
 from lint_common import discover_repo_root
 from lint_common import workspace_manifest_paths
+from check_version_sync import sync_winget_manifests
+from check_version_sync import version_sync_config
 
 
 STABLE_VERSION = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
@@ -70,10 +73,6 @@ def python_project_paths(repo_root: Path) -> list[Path]:
     return sorted((repo_root / "crates").glob("*/pyproject.toml"))
 
 
-def winget_manifest_paths(repo_root: Path) -> list[Path]:
-    return sorted((repo_root / ".winget").glob("*.yaml"))
-
-
 def replace_package_version(text: str, section: str, old: str, new: str) -> tuple[str, bool]:
     section_re = re.compile(
         rf"(?ms)^(\[{re.escape(section)}\]\n)(.*?)(?=^\[|\Z)"
@@ -89,38 +88,62 @@ def replace_package_version(text: str, section: str, old: str, new: str) -> tupl
     return text[: match.start(2)] + updated + text[match.end(2) :], True
 
 
+def cargo_manifest_paths(repo_root: Path) -> list[Path]:
+    return [repo_root / "Cargo.toml", *workspace_manifest_paths(repo_root)]
+
+
 def update_manifest_versions(repo_root: Path, old: str, new: str) -> dict[Path, str]:
-    manifests = [
-        repo_root / "Cargo.toml",
-        *workspace_manifest_paths(repo_root),
-        *python_project_paths(repo_root),
-        *winget_manifest_paths(repo_root),
-    ]
+    manifests = cargo_manifest_paths(repo_root)
     if not manifests:
         raise SystemExit("no workspace manifests found")
-    changed: dict[Path, str] = {}
-    for manifest_path in manifests:
-        before = manifest_path.read_text(encoding="utf-8")
-        if manifest_path.suffix == ".yaml":
-            after = before.replace(old, new)
-        else:
-            section = "project" if manifest_path.name == "pyproject.toml" else "package"
-            if manifest_path == repo_root / "Cargo.toml":
-                section = "workspace.package"
-            after, _did_change = replace_package_version(before, section, old, new)
-            if manifest_path.name == "Cargo.toml":
-                lines = []
-                for line in after.splitlines(keepends=True):
-                    if "path =" in line:
-                        line = line.replace(f'version = "{old}"', f'version = "{new}"')
-                    lines.append(line)
-                after = "".join(lines)
-        if after != before:
-            changed[manifest_path] = after
 
-    if repo_root / "Cargo.toml" not in changed:
+    before = {manifest_path: manifest_path.read_text(encoding="utf-8") for manifest_path in manifests}
+    for manifest_path in manifests:
+        original = before[manifest_path]
+        if manifest_path == repo_root / "Cargo.toml":
+            section = "workspace.package"
+        else:
+            section = "package"
+        after, _did_change = replace_package_version(original, section, old, new)
+        lines = []
+        for line in after.splitlines(keepends=True):
+            if "path =" in line:
+                line = line.replace(f'version = "{old}"', f'version = "{new}"')
+            lines.append(line)
+        manifest_path.write_text("".join(lines), encoding="utf-8")
+
+    if before[repo_root / "Cargo.toml"] == (repo_root / "Cargo.toml").read_text(encoding="utf-8"):
         raise SystemExit("workspace package version was not found in Cargo.toml")
-    return changed
+
+    for pyproject in python_project_paths(repo_root):
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(repo_root / ".github" / "scripts" / "release_artifacts.py"),
+                "sync-python-version",
+                "--workspace-toml",
+                "Cargo.toml",
+                "--pyproject",
+                str(pyproject.relative_to(repo_root)),
+            ],
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            raise SystemExit(f"python version sync failed for {pyproject}: {detail}")
+
+    winget_paths = sync_winget_manifests(repo_root, new, version_sync_config(repo_root))
+
+    tracked_manifests = [*manifests, *python_project_paths(repo_root)]
+    tracked_manifests.extend(winget_paths)
+    return {
+        path: path.read_text(encoding="utf-8")
+        for path in tracked_manifests
+        if path not in before or path.read_text(encoding="utf-8") != before[path]
+    }
 
 
 def update_lockfile(repo_root: Path) -> str:
@@ -207,23 +230,10 @@ def validate_candidate(repo_root: Path, version: str, manifest_updates: dict[Pat
 
 
 def candidate_changes(repo_root: Path, old: str, new: str) -> dict[Path, str]:
-    manifest_updates = update_manifest_versions(repo_root, old, new)
     with tempfile.TemporaryDirectory(prefix="prerelease-tag-") as directory:
         candidate = Path(directory) / repo_root.name
-
-        def ignore(_path: str, names: list[str]) -> set[str]:
-            return {
-                name
-                for name in names
-                if name in {".git", ".bootstrap-venv", "target", "artifacts"}
-            }
-
-        shutil.copytree(repo_root, candidate, ignore=ignore)
-        candidate_updates: dict[Path, str] = {}
-        for path, text in manifest_updates.items():
-            candidate_path = candidate / path.relative_to(repo_root)
-            candidate_path.write_text(text, encoding="utf-8")
-            candidate_updates[candidate_path] = text
+        copy_tracked_files(repo_root, candidate)
+        candidate_updates = update_manifest_versions(candidate, old, new)
         lockfile = update_lockfile(candidate)
         candidate_updates[candidate / "Cargo.lock"] = lockfile
         validate_candidate(candidate, new, candidate_updates)
@@ -231,6 +241,24 @@ def candidate_changes(repo_root: Path, old: str, new: str) -> dict[Path, str]:
             repo_root / path.relative_to(candidate): text
             for path, text in candidate_updates.items()
         }
+
+
+def copy_tracked_files(repo_root: Path, destination: Path) -> None:
+    """Copy only the clean checkout's tracked files into a candidate tree."""
+
+    destination.mkdir(parents=True, exist_ok=True)
+    result = git(repo_root, "ls-files", "-z")
+    for encoded_path in result.stdout.encode().split(b"\0"):
+        if not encoded_path:
+            continue
+        relative_path = Path(os.fsdecode(encoded_path))
+        source = repo_root / relative_path
+        target = destination / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if source.is_symlink():
+            target.symlink_to(os.readlink(source))
+        else:
+            shutil.copy2(source, target)
 
 
 def remote_tag_exists(repo_root: Path, tag: str) -> bool:

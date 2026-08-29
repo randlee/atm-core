@@ -75,6 +75,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bootstrap-
 
+      # The prerelease-tag candidate check runs cargo update --offline. Keep
+      # the registry available on fresh just-lint runners so that check is not
+      # dependent on an incidental warm local Cargo cache.
+      - name: Cache Cargo registry for lint
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-just-lint-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-just-lint-cargo-registry-
+
       - name: Install just
         uses: taiki-e/install-action@v2
         with:

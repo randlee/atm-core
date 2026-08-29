@@ -1,10 +1,9 @@
-"""Tests for the atm-core-owned prerelease archive workflow (AR1.1)."""
+"""Tests for the atm-core-owned prerelease archive workflow (AS1.1)."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -113,9 +112,29 @@ def _python3_shim(tmp_path: Path) -> Path:
     """Put the interpreter behind the literal ``python3`` name used by the heredoc."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
-    shim_name = "python3.exe" if os.name == "nt" else "python3"
-    shutil.copy2(sys.executable, bin_dir / shim_name)
+    if os.name == "nt":
+        (bin_dir / "python3.cmd").write_text(
+            f'@"{sys.executable}" %*\n', encoding="utf-8"
+        )
+    else:
+        (bin_dir / "python3").symlink_to(sys.executable)
     return bin_dir
+
+
+def _python_command_shim(tmp_path: Path, name: str, body: str) -> None:
+    """Install a Python-backed command for Git Bash and Windows PATH lookup."""
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    script = bin_dir / f"{name}.py"
+    script.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
+    if os.name == "nt":
+        (bin_dir / f"{name}.cmd").write_text(
+            f'@"{sys.executable}" "%~dp0{name}.py" %*\n', encoding="utf-8"
+        )
+    else:
+        script.chmod(0o755)
+        (bin_dir / name).symlink_to(script)
 
 
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
@@ -186,25 +205,24 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             )
             bin_dir = tmp_path / "bin"
             bin_dir.mkdir()
-            (bin_dir / "jq").write_text(
-                "#!/bin/sh\n"
-                "case \"$2\" in\n"
-                "  .workspace_toml) printf '%s\\n' Cargo.toml ;;\n"
-                "  .rust_toolchain) printf '%s\\n' stable ;;\n"
-                "esac\n",
-                encoding="utf-8",
+            _python_command_shim(
+                tmp_path,
+                "jq",
+                "import sys\n"
+                "values = {'.workspace_toml': 'Cargo.toml', '.rust_toolchain': 'stable'}\n"
+                "print(values.get(sys.argv[2], ''))\n",
             )
-            (bin_dir / "gh").write_text(
-                "#!/bin/sh\n"
-                "printf '%s' \"${GH_TOKEN-}\" > \"${GH_TOKEN_CAPTURE}\"\n"
-                "printf '%s\\n' \"HTTP/2 ${GH_PROBE_STATUS}\"\n",
-                encoding="utf-8",
+            _python_command_shim(
+                tmp_path,
+                "gh",
+                "import os\n"
+                "from pathlib import Path\n"
+                "Path(os.environ['GH_TOKEN_CAPTURE']).write_text(os.environ.get('GH_TOKEN', ''), encoding='utf-8')\n"
+                "print(f\"HTTP/2 {os.environ['GH_PROBE_STATUS']}\")\n",
             )
-            for command in (bin_dir / "jq", bin_dir / "gh"):
-                command.chmod(0o755)
             subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=tmp_path, check=True)
-            subprocess.run(["git", "config", "user.name", "AR1.1 test"], cwd=tmp_path, check=True)
+            subprocess.run(["git", "config", "user.name", "AS1.1 test"], cwd=tmp_path, check=True)
             (tmp_path / "Cargo.toml").write_text("[workspace]\n", encoding="utf-8")
             subprocess.run(["git", "add", "Cargo.toml"], cwd=tmp_path, check=True)
             subprocess.run(["git", "commit", "-qm", "fixture"], cwd=tmp_path, check=True)
@@ -302,13 +320,35 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             ]["version"],
             "1.4.6",
         )
+        expected = {
+            root / "Cargo.toml",
+            *(
+                path
+                for path in prerelease_tag.workspace_manifest_paths(root)
+                if 'version = "1.4.5"' in path.read_text(encoding="utf-8")
+            ),
+            *prerelease_tag.python_project_paths(root),
+            root / ".winget" / "randlee.agent-team-mail.yaml",
+            root / "Cargo.lock",
+        }
+        self.assertEqual(set(changes), expected)
+        for path in prerelease_tag.python_project_paths(root):
+            project = tomllib.loads(changes[path])["project"]
+            if "version" in project:
+                self.assertEqual(project["version"], "1.4.6")
+            else:
+                self.assertEqual(project["dynamic"], ["version"])
+        winget = changes[root / ".winget" / "randlee.agent-team-mail.yaml"]
+        self.assertIn("PackageVersion: 1.4.6", winget)
+        self.assertIn("ManifestVersion: 1.4.6", winget)
+        self.assertIn("releases/download/v1.4.6/", winget)
 
     def test_write_and_commit_restores_files_when_commit_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
             subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.name", "AR1.1 test"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "AS1.1 test"], cwd=repo, check=True)
             manifest = repo / "Cargo.toml"
             original = "[workspace.package]\nversion = \"1.4.5\"\n"
             manifest.write_text(original, encoding="utf-8")
@@ -346,17 +386,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory) / "atm-core"
 
-            def ignore(_path: str, names: list[str]) -> set[str]:
-                return {
-                    name
-                    for name in names
-                    if name in {".git", ".bootstrap-venv", "target", "artifacts"}
-                }
-
-            shutil.copytree(root, repo, ignore=ignore)
+            prerelease_tag.copy_tracked_files(root, repo)
             subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.name", "AR1.1 test"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "AS1.1 test"], cwd=repo, check=True)
             subprocess.run(["git", "add", "."], cwd=repo, check=True)
             subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo, check=True)
             python_command = "python" if os.name == "nt" else "python3"
