@@ -109,9 +109,9 @@ def _git_bash_candidates(git_exec_path: str) -> list[str]:
 
 
 def _is_system32_wsl_stub(candidate: str, system32: str) -> bool:
-    normalized_candidate = ntpath.normcase(ntpath.abspath(candidate))
-    normalized_system32 = ntpath.normcase(ntpath.abspath(system32))
-    return normalized_candidate == ntpath.join(normalized_system32, "bash.exe")
+    resolved_candidate = str(Path(candidate).resolve(strict=False)).replace("\\", "/").casefold().rstrip("/")
+    resolved_system32 = str(Path(system32).resolve(strict=False)).replace("\\", "/").casefold().rstrip("/")
+    return resolved_candidate == resolved_system32 or resolved_candidate.startswith(f"{resolved_system32}/")
 
 
 def load_lint_config(repo_root: Path) -> dict:

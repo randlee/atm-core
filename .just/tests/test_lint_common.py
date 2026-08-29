@@ -34,6 +34,7 @@ from lint_common import strip_negated_cfg_segments
 from lint_common import workspace_crates
 from lint_common import workspace_manifest_paths
 from lint_common import workspace_target_args
+from lint_common import _is_system32_wsl_stub
 
 
 ROOT_MANIFEST = """\
@@ -82,6 +83,32 @@ class LintCommonTests(unittest.TestCase):
             mock.patch("lint_common.shutil.which", return_value=None),
         ):
             self.assertIsNone(resolve_posix_shell(windows=True))
+
+    def test_system32_wsl_stub_rejection_resolves_prefix_and_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            system32 = root / "System32"
+            system32.mkdir()
+            (system32 / "Sub").mkdir()
+            literal = system32 / "bash.exe"
+            nested = system32 / "Sub" / "bash.exe"
+            literal.touch()
+            nested.touch()
+            linked_system32 = root / "linked-system32"
+            try:
+                linked_system32.symlink_to(system32, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"symlink support unavailable: {error}")
+
+            linked = linked_system32 / "bash.exe"
+            outside = root / "Git" / "bin" / "bash.exe"
+            outside.parent.mkdir(parents=True)
+            outside.touch()
+
+            self.assertTrue(_is_system32_wsl_stub(str(literal), str(system32)))
+            self.assertTrue(_is_system32_wsl_stub(str(nested), str(system32)))
+            self.assertTrue(_is_system32_wsl_stub(str(linked), str(system32)))
+            self.assertFalse(_is_system32_wsl_stub(str(outside), str(system32)))
 
     def write_workspace(self, repo_root: Path) -> None:
         (repo_root / ".just").mkdir()

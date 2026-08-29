@@ -250,8 +250,6 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         )
         shell = resolve_posix_shell()
         self.assertIsNotNone(shell, "bash is required for the extracted workflow step")
-        with mock.patch.dict(os.environ, {"GIT_BASH": r"C:\System32\bash.exe"}):
-            self.assertEqual(resolve_posix_shell(), shell)
         with tempfile.TemporaryDirectory() as directory:
             tmp_path = Path(directory)
             scripts_dir = tmp_path / ".github" / "scripts"
@@ -314,6 +312,13 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             existing = run_extracted_shell_step(shell, script, tmp_path, probe_env)
             self.assertNotEqual(existing.returncode, 0)
             self.assertIn("GitHub Release already exists", existing.stderr)
+
+    @unittest.skipUnless(os.name == "nt", "GIT_BASH override behavior is Windows-only")
+    def test_ambient_git_bash_override_does_not_replace_resolved_shell(self) -> None:
+        shell = resolve_posix_shell()
+        self.assertIsNotNone(shell, "Git Bash is required on Windows")
+        with mock.patch.dict(os.environ, {"GIT_BASH": r"C:\System32\bash.exe"}):
+            self.assertEqual(resolve_posix_shell(), shell)
 
     def test_workflow_uses_patch_bumped_stable_versions_without_short_sha_scheme(self) -> None:
         text = workflow_text("prerelease-archive.yml")
