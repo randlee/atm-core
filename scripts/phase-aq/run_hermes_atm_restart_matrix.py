@@ -96,25 +96,6 @@ def scoped_process_environment(overrides: dict[str, str]) -> Iterator[None]:
                 os.environ[key] = value
 
 
-def refresh_sender_after_daemon_restart(
-    sender_session: Any,
-    record: dict[str, Any],
-    *,
-    platform_name: str | None = None,
-) -> None:
-    """Refresh the native client after a Windows daemon restart.
-
-    Windows local HTTP clients retain the daemon connection across a process
-    restart, while the restarted daemon owns a new listener.  The graft
-    binding exposes an explicit refresh operation; do not retry the write
-    implicitly because a retry could duplicate a message.
-    """
-    if (platform_name or os.name) != "nt":
-        return
-    sender_session.reconnect()
-    record["sender_reconnect"] = "windows-post-daemon-restart"
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="local", help="evidence host label, for example local or m5")
@@ -881,7 +862,6 @@ def run_scenario(args: argparse.Namespace, row: str, action: str) -> dict[str, A
                 # daemon-side stall (for example a SQLite writer-lock wait
                 # after an unclean restart) apart from a client-side one.
                 record["doctor_after_restart"] = _best_effort(lambda: doctor(args.atm, env))
-                refresh_sender_after_daemon_restart(sender_session, record)
             else:
                 crash = action == "receiver_crash_within_window"
                 record["restart_at_ns"] = time.time_ns()
