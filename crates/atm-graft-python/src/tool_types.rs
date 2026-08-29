@@ -175,126 +175,19 @@ impl AtmToolError {
     }
 }
 
+const DELIVERY_UNCERTAIN_CODES: [AtmErrorCode; 3] = [
+    AtmErrorCode::DaemonMayHaveExecuted,
+    AtmErrorCode::RemoteDeliveryUnconfirmed,
+    AtmErrorCode::WaitTimeout,
+];
+
 fn is_delivery_uncertain_code(code: &str) -> bool {
-    let Ok(code) = code.parse::<AtmErrorCode>() else {
-        return false;
-    };
-    match code {
-        AtmErrorCode::DaemonMayHaveExecuted
-        | AtmErrorCode::RemoteDeliveryUnconfirmed
-        | AtmErrorCode::WaitTimeout => true,
-        AtmErrorCode::ConfigHomeUnavailable
-        | AtmErrorCode::AtmHomeUnresolved
-        | AtmErrorCode::ConfigParseFailed
-        | AtmErrorCode::ConfigRetiredHookMembersKey
-        | AtmErrorCode::ConfigRetiredLegacyHookKeys
-        | AtmErrorCode::ConfigTeamParseFailed
-        | AtmErrorCode::ConfigTeamMissing
-        | AtmErrorCode::IdentityUnavailable
-        | AtmErrorCode::IdentityInvalid
-        | AtmErrorCode::IdentityConflict
-        | AtmErrorCode::MemberAlreadyExists
-        | AtmErrorCode::MemberNotFound
-        | AtmErrorCode::DaemonUnavailable
-        | AtmErrorCode::RuntimeRootInvalid
-        | AtmErrorCode::RuntimeBootstrapRefused
-        | AtmErrorCode::SocketOverrideForbidden
-        | AtmErrorCode::DaemonLifecycleWedge
-        | AtmErrorCode::DaemonLaunchGateRejected
-        | AtmErrorCode::DaemonServingStateRejected
-        | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
-        | AtmErrorCode::DaemonAutoStartFailed
-        | AtmErrorCode::DaemonConnectionSaturated
-        | AtmErrorCode::PeerWireModeInvalid
-        | AtmErrorCode::PeerWireModeSourceForbidden
-        | AtmErrorCode::PeerWirePlaintextAuthenticationRequired
-        | AtmErrorCode::PeerConfigValidationFailed
-        | AtmErrorCode::CertificateOperationFailed
-        | AtmErrorCode::PeerAuthenticationFailed
-        | AtmErrorCode::TransportTimeout
-        | AtmErrorCode::TransportProtocolFailed
-        | AtmErrorCode::BindPreflightFailed
-        | AtmErrorCode::ClientDaemonVersionIncompatible
-        | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
-        | AtmErrorCode::DaemonAdvisorySessionNotRegistered
-        | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
-        | AtmErrorCode::AddressParseFailed
-        | AtmErrorCode::TeamUnavailable
-        | AtmErrorCode::TeamInvalid
-        | AtmErrorCode::TeamNotFound
-        | AtmErrorCode::AgentNotFound
-        | AtmErrorCode::MailboxReadFailed
-        | AtmErrorCode::MailboxWriteFailed
-        | AtmErrorCode::MailboxLockFailed
-        | AtmErrorCode::MailboxLockReadOnlyFilesystem
-        | AtmErrorCode::MailboxLockTimeout
-        | AtmErrorCode::InternalError
-        | AtmErrorCode::MessageValidationFailed
-        | AtmErrorCode::SearchLocalOnly
-        | AtmErrorCode::LocalHttpCapabilityInvalid
-        | AtmErrorCode::LocalHttpEndpointSchemaUnsupported
-        | AtmErrorCode::LocalHttpEndpointMissing
-        | AtmErrorCode::LocalHttpEndpointNonLoopback
-        | AtmErrorCode::LocalHttpRuntimeDirectoryMissing
-        | AtmErrorCode::LocalHttpCapabilityRevoked
-        | AtmErrorCode::MessageIdConflict
-        | AtmErrorCode::SelfAddressedSendInvalid
-        | AtmErrorCode::EmptyNudgeTemplateBody
-        | AtmErrorCode::CallerContextRequestInvalid
-        | AtmErrorCode::TemplateContentNotUtf8
-        | AtmErrorCode::DecomposedTemplateIncludeForbidden
-        | AtmErrorCode::TemplateLoadFailed
-        | AtmErrorCode::TemplateHashApiFailed
-        | AtmErrorCode::TemplateInspectionParseFailed
-        | AtmErrorCode::TemplateRequiredVariableMissing
-        | AtmErrorCode::TemplateRenderVerificationFailed
-        | AtmErrorCode::TemplateIncludeUnresolved
-        | AtmErrorCode::TemplateClassificationInvalid
-        | AtmErrorCode::TemplateWorkflowInvalid
-        | AtmErrorCode::TemplateWorkflowValueInvalid
-        | AtmErrorCode::TemplateTagReserved
-        | AtmErrorCode::WorkflowQueryInvalid
-        | AtmErrorCode::WorkflowTelemetryConfigInvalid
-        | AtmErrorCode::WorkflowTelemetryDropped
-        | AtmErrorCode::SerializationFailed
-        | AtmErrorCode::FilePolicyRejected
-        | AtmErrorCode::FileReferenceRewriteFailed
-        | AtmErrorCode::AckInvalidState
-        | AtmErrorCode::ClearInvalidState
-        | AtmErrorCode::ObservabilityEmitFailed
-        | AtmErrorCode::ObservabilityQueryFailed
-        | AtmErrorCode::ObservabilityFollowFailed
-        | AtmErrorCode::ObservabilityHealthFailed
-        | AtmErrorCode::ObservabilityBootstrapFailed
-        | AtmErrorCode::ObservabilityHealthOk
-        | AtmErrorCode::WarningInvalidTeamMemberSkipped
-        | AtmErrorCode::WarningMailboxRecordSkipped
-        | AtmErrorCode::WarningMalformedAtmFieldIgnored
-        | AtmErrorCode::WarningObservabilityHealthDegraded
-        | AtmErrorCode::WarningSqliteHealthDegraded
-        | AtmErrorCode::WarningOriginInboxEntrySkipped
-        | AtmErrorCode::WarningMissingTeamConfigFallback
-        | AtmErrorCode::WarningSendAlertStateDegraded
-        | AtmErrorCode::WarningIdentityDrift
-        | AtmErrorCode::WarningRosterDrift
-        | AtmErrorCode::WarningBaselineMemberMissing
-        | AtmErrorCode::WarningRestoreInProgress
-        | AtmErrorCode::WarningStaleMailboxLock
-        | AtmErrorCode::WarningHookSkipped
-        | AtmErrorCode::WarningHookExecutionFailed
-        | AtmErrorCode::RosterMixedLocalBackend
-        | AtmErrorCode::HerdrAgentNotVisible
-        | AtmErrorCode::PostSendPaneMissing
-        | AtmErrorCode::PostSendTmuxSendFailed
-        | AtmErrorCode::PostSendHerdrPromptFailed
-        | AtmErrorCode::HerdrPromptFailed
-        | AtmErrorCode::HerdrUnavailable
-        | AtmErrorCode::PostSendGraftUnavailable
-        | AtmErrorCode::GraftReceiverAlreadyActive
-        | AtmErrorCode::GraftReceiverNotOwner
-        | AtmErrorCode::PostSendAdvisoryDeliveryFailed
-        | AtmErrorCode::TestFakeTransportInjectionFailed
-        | AtmErrorCode::HelpTopicNotFound => false,
+    match code.parse::<AtmErrorCode>() {
+        Ok(code) => DELIVERY_UNCERTAIN_CODES.contains(&code),
+        // An unknown future code must not receive recovery text that invites
+        // a potentially duplicating retry. Treat it as delivery-uncertain
+        // until the canonical registry classifies it explicitly.
+        Err(_) => true,
     }
 }
 
@@ -319,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn delivery_uncertainty_parsing_fails_closed_for_unknown_codes() {
+    fn unknown_error_codes_are_treated_as_delivery_uncertain() {
         assert!(is_delivery_uncertain_code(
             AtmErrorCode::DaemonMayHaveExecuted.as_str()
         ));
@@ -329,7 +222,7 @@ mod tests {
         assert!(is_delivery_uncertain_code(
             AtmErrorCode::WaitTimeout.as_str()
         ));
-        assert!(!is_delivery_uncertain_code("ATM_FUTURE_UNSPECIFIED"));
+        assert!(is_delivery_uncertain_code("ATM_FUTURE_UNSPECIFIED"));
         assert!(!is_delivery_uncertain_code(
             AtmErrorCode::DaemonUnavailable.as_str()
         ));

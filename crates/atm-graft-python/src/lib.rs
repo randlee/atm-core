@@ -431,6 +431,17 @@ impl PyGraftSession {
     }
 
     fn reconnect_client(&self) -> PyResult<()> {
+        // These are intentionally two recovery layers with different
+        // questions and ownership. Request scope in atm-http-runtime asks
+        // whether this connection is stale for a still-configured endpoint:
+        // it may perform one generation-aware, pre-send reconnect after
+        // re-reading the endpoint record, decided solely by
+        // `is_safe_to_reconnect()`. Session scope here asks whether the
+        // daemon/endpoint itself is unavailable or caller identity/team
+        // context must be re-established: it rebuilds the client under
+        // `RefreshOnly` for the next call and never re-issues the failed
+        // request. The `DaemonUnavailable` gate deliberately excludes
+        // `WaitTimeout`; that boundary must not be widened.
         {
             let client = self
                 .client
@@ -1496,6 +1507,51 @@ mod tests {
         assert_eq!(initial_calls.load(Ordering::SeqCst), 1);
         assert_eq!(session.reconnect_attempts.load(Ordering::SeqCst), 0);
         assert_eq!(replacement_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn refresh_only_is_not_triggered_by_wait_timeout() {
+        Python::initialize();
+        let reconnect_attempts = Arc::new(AtomicUsize::new(0));
+        let reconnect_attempts_for_transport = Arc::clone(&reconnect_attempts);
+        let session = test_session(
+            Arc::new(FakeClientTransport::new(Box::new(|request| {
+                assert!(matches!(request, RequestEnvelope::Write(_)));
+                Err(AtmError::new(
+                    AtmErrorCode::WaitTimeout,
+                    "request budget elapsed",
+                ))
+            }))),
+            Arc::new(FakeClientTransport::new(Box::new(move |_| {
+                reconnect_attempts_for_transport.fetch_add(1, Ordering::SeqCst);
+                panic!("RefreshOnly must not reconnect after WaitTimeout")
+            }))),
+        );
+
+        Python::attach(|py| {
+            let result = session
+                .send_tool(
+                    py,
+                    Some(format!("{TEST_RECIPIENT}@{TEST_TEAM}")),
+                    "timeout is uncertain".to_owned(),
+                    false,
+                    None,
+                )
+                .expect("WaitTimeout is returned as a typed tool result");
+            let result = result.bind(py);
+            assert!(result.is_instance_of::<AtmToolError>());
+            assert_eq!(
+                result
+                    .getattr("code")
+                    .expect("code")
+                    .extract::<String>()
+                    .expect("string code"),
+                AtmErrorCode::WaitTimeout.as_str()
+            );
+        });
+
+        assert_eq!(session.reconnect_attempts.load(Ordering::SeqCst), 0);
+        assert_eq!(reconnect_attempts.load(Ordering::SeqCst), 0);
     }
 
     #[test]
