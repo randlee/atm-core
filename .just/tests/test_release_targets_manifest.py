@@ -19,28 +19,26 @@ import tomllib
 import unittest
 from pathlib import Path
 
+JUST_DIR = Path(__file__).resolve().parents[1]
+if str(JUST_DIR) not in sys.path:
+    sys.path.insert(0, str(JUST_DIR))
 
-def repo_root() -> Path:
-    return next(
-        path
-        for path in Path(__file__).resolve().parents
-        if (path / "install.py").is_file()
-    )
+from lint_common import discover_repo_root
 
 
 def scripts_root() -> Path:
-    return repo_root() / ".github" / "scripts"
+    return discover_repo_root() / ".github" / "scripts"
 
 
 def release_manifest() -> dict:
-    manifest_path = repo_root() / "release" / "publish-artifacts.toml"
+    manifest_path = discover_repo_root() / "release" / "publish-artifacts.toml"
     return tomllib.loads(manifest_path.read_text(encoding="utf-8"))
 
 
 def run_release_artifacts(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(scripts_root() / "release_artifacts.py"), *args],
-        cwd=repo_root(),
+        cwd=discover_repo_root(),
         text=True,
         capture_output=True,
         check=False,
