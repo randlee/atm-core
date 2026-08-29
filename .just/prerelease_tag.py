@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
 from pathlib import Path
 
@@ -63,17 +66,12 @@ def require_clean_tree(repo_root: Path) -> None:
         raise SystemExit("prerelease-tag requires a clean working tree")
 
 
-def workspace_package_names(manifests: list[Path]) -> set[str]:
-    names: set[str] = set()
-    for manifest_path in manifests:
-        manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
-        package = manifest.get("package", {})
-        name = package.get("name") if isinstance(package, dict) else None
-        if isinstance(name, str) and name:
-            names.add(name)
-    if not names:
-        raise SystemExit("no workspace package manifests found")
-    return names
+def python_project_paths(repo_root: Path) -> list[Path]:
+    return sorted((repo_root / "crates").glob("*/pyproject.toml"))
+
+
+def winget_manifest_paths(repo_root: Path) -> list[Path]:
+    return sorted((repo_root / ".winget").glob("*.yaml"))
 
 
 def replace_package_version(text: str, section: str, old: str, new: str) -> tuple[str, bool]:
@@ -91,53 +89,52 @@ def replace_package_version(text: str, section: str, old: str, new: str) -> tupl
     return text[: match.start(2)] + updated + text[match.end(2) :], True
 
 
-def update_manifest_versions(repo_root: Path, old: str, new: str) -> list[Path]:
-    manifests = [repo_root / "Cargo.toml", *workspace_manifest_paths(repo_root)]
+def update_manifest_versions(repo_root: Path, old: str, new: str) -> dict[Path, str]:
+    manifests = [
+        repo_root / "Cargo.toml",
+        *workspace_manifest_paths(repo_root),
+        *python_project_paths(repo_root),
+        *winget_manifest_paths(repo_root),
+    ]
     if not manifests:
         raise SystemExit("no workspace manifests found")
-    changed: list[Path] = []
+    changed: dict[Path, str] = {}
     for manifest_path in manifests:
         before = manifest_path.read_text(encoding="utf-8")
-        after, _did_change = replace_package_version(
-            before,
-            "workspace.package" if manifest_path == repo_root / "Cargo.toml" else "package",
-            old,
-            new,
-        )
-        lines = []
-        for line in after.splitlines(keepends=True):
-            if "path =" in line:
-                line = line.replace(f'version = "{old}"', f'version = "{new}"')
-            lines.append(line)
-        after = "".join(lines)
+        if manifest_path.suffix == ".yaml":
+            after = before.replace(old, new)
+        else:
+            section = "project" if manifest_path.name == "pyproject.toml" else "package"
+            if manifest_path == repo_root / "Cargo.toml":
+                section = "workspace.package"
+            after, _did_change = replace_package_version(before, section, old, new)
+            if manifest_path.name == "Cargo.toml":
+                lines = []
+                for line in after.splitlines(keepends=True):
+                    if "path =" in line:
+                        line = line.replace(f'version = "{old}"', f'version = "{new}"')
+                    lines.append(line)
+                after = "".join(lines)
         if after != before:
-            manifest_path.write_text(after, encoding="utf-8")
-            changed.append(manifest_path)
+            changed[manifest_path] = after
 
     if repo_root / "Cargo.toml" not in changed:
         raise SystemExit("workspace package version was not found in Cargo.toml")
     return changed
 
 
-def update_lockfile(repo_root: Path, old: str, new: str, package_names: set[str]) -> None:
-    path = repo_root / "Cargo.lock"
-    text = path.read_text(encoding="utf-8")
-    blocks = text.split("[[package]]")
-    found: set[str] = set()
-    updated_blocks: list[str] = [blocks[0]]
-    for block in blocks[1:]:
-        name_match = re.search(r'^name = "([^"]+)"$', block, re.MULTILINE)
-        if name_match is not None and name_match.group(1) in package_names:
-            version_re = re.compile(rf'^(version = )"{re.escape(old)}"$', re.MULTILINE)
-            block, count = version_re.subn(r'\1"' + new + '"', block, count=1)
-            if count != 1:
-                raise SystemExit(f"Cargo.lock version for {name_match.group(1)} is not {old}")
-            found.add(name_match.group(1))
-        updated_blocks.append(block)
-    missing = sorted(package_names - found)
-    if missing:
-        raise SystemExit(f"Cargo.lock is missing workspace package(s): {', '.join(missing)}")
-    path.write_text("[[package]]".join(updated_blocks), encoding="utf-8")
+def update_lockfile(repo_root: Path) -> str:
+    result = subprocess.run(
+        ["cargo", "update", "--workspace", "--offline"],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise SystemExit(f"cargo update --workspace --offline failed: {detail}")
+    return (repo_root / "Cargo.lock").read_text(encoding="utf-8")
 
 
 def verify_lockstep(repo_root: Path) -> None:
@@ -152,8 +149,92 @@ def verify_lockstep(repo_root: Path) -> None:
         raise SystemExit((result.stderr or result.stdout).strip() or "version lockstep verification failed")
 
 
+def validate_candidate(repo_root: Path, version: str, manifest_updates: dict[Path, str]) -> None:
+    for manifest_path, text in manifest_updates.items():
+        if manifest_path.suffix != ".toml":
+            continue
+        try:
+            tomllib.loads(text)
+        except tomllib.TOMLDecodeError as error:
+            raise SystemExit(f"updated manifest is invalid: {manifest_path}: {error}") from error
+
+    plan_result = subprocess.run(
+        [
+            sys.executable,
+            str(repo_root / ".github" / "scripts" / "release_artifacts.py"),
+            "build-plan",
+            "--manifest",
+            "release/publish-artifacts.toml",
+        ],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if plan_result.returncode != 0:
+        raise SystemExit((plan_result.stderr or plan_result.stdout).strip() or "build-plan failed")
+    plan = json.loads(plan_result.stdout)
+    workspace_toml = plan["workspace_toml"]
+    for command in (
+        [
+            "verify-version",
+            "--manifest",
+            "release/publish-artifacts.toml",
+            "--workspace-toml",
+            workspace_toml,
+            "--version",
+            version,
+        ],
+        [
+            "verify-version-lockstep",
+            "--manifest",
+            "release/publish-artifacts.toml",
+            "--workspace-toml",
+            workspace_toml,
+        ],
+    ):
+        result = subprocess.run(
+            [sys.executable, str(repo_root / ".github" / "scripts" / "release_artifacts.py"), *command],
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            raise SystemExit(f"release version validation failed: {detail}")
+    verify_lockstep(repo_root)
+
+
+def candidate_changes(repo_root: Path, old: str, new: str) -> dict[Path, str]:
+    manifest_updates = update_manifest_versions(repo_root, old, new)
+    with tempfile.TemporaryDirectory(prefix="prerelease-tag-") as directory:
+        candidate = Path(directory) / repo_root.name
+
+        def ignore(_path: str, names: list[str]) -> set[str]:
+            return {
+                name
+                for name in names
+                if name in {".git", ".bootstrap-venv", "target", "artifacts"}
+            }
+
+        shutil.copytree(repo_root, candidate, ignore=ignore)
+        candidate_updates: dict[Path, str] = {}
+        for path, text in manifest_updates.items():
+            candidate_path = candidate / path.relative_to(repo_root)
+            candidate_path.write_text(text, encoding="utf-8")
+            candidate_updates[candidate_path] = text
+        lockfile = update_lockfile(candidate)
+        candidate_updates[candidate / "Cargo.lock"] = lockfile
+        validate_candidate(candidate, new, candidate_updates)
+        return {
+            repo_root / path.relative_to(candidate): text
+            for path, text in candidate_updates.items()
+        }
+
+
 def remote_tag_exists(repo_root: Path, tag: str) -> bool:
-    # TODO(sc-publish): share tag checks with vendored release.yml in the package-archive follow-up.
+    # TODO(sc-publish): share tag checks with vendored release.yml; see https://github.com/randlee/sc-publish/issues/79.
     result = git(
         repo_root,
         "ls-remote",
@@ -164,6 +245,27 @@ def remote_tag_exists(repo_root: Path, tag: str) -> bool:
         check=False,
     )
     return result.returncode == 0
+
+
+def write_and_commit(repo_root: Path, changes: dict[Path, str], message: str) -> None:
+    touched = list(changes)
+    committed = False
+    try:
+        for path, text in changes.items():
+            path.write_text(text, encoding="utf-8")
+        git(
+            repo_root,
+            "add",
+            *(str(path.relative_to(repo_root)) for path in touched),
+        )
+        git(repo_root, "commit", "-m", message)
+        committed = True
+    except BaseException:
+        if not committed and touched:
+            relative_paths = [str(path.relative_to(repo_root)) for path in touched]
+            git(repo_root, "reset", "HEAD", "--", *relative_paths, check=False)
+            git(repo_root, "checkout", "--", *relative_paths, check=False)
+        raise
 
 
 def describe_plan(branch: str, old: str, new: str) -> None:
@@ -181,8 +283,6 @@ def execute(repo_root: Path, *, dry_run: bool) -> int:
     old = workspace_version(repo_root)
     new = patch_bump(old)
     tag = f"prerelease/v{new}"
-    manifests = workspace_manifest_paths(repo_root)
-    package_names = workspace_package_names(manifests)
 
     if dry_run:
         verify_lockstep(repo_root)
@@ -194,17 +294,8 @@ def execute(repo_root: Path, *, dry_run: bool) -> int:
     if remote_tag_exists(repo_root, tag):
         raise SystemExit(f"tag already exists on origin: {tag}")
 
-    update_manifest_versions(repo_root, old, new)
-    update_lockfile(repo_root, old, new, package_names)
-    verify_lockstep(repo_root)
-    git(
-        repo_root,
-        "add",
-        "Cargo.toml",
-        "Cargo.lock",
-        *(str(path.relative_to(repo_root)) for path in manifests),
-    )
-    git(repo_root, "commit", "-m", f"chore(release): bump workspace version to {new}")
+    changes = candidate_changes(repo_root, old, new)
+    write_and_commit(repo_root, changes, f"chore(release): bump workspace version to {new}")
     git(repo_root, "tag", "-a", tag, "-m", f"Prerelease {new}")
     git(repo_root, "push", "origin", branch)
     git(repo_root, "push", "origin", tag)

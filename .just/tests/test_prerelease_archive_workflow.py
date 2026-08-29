@@ -8,14 +8,17 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 import zipfile
+from unittest import mock
 
 JUST_DIR = Path(__file__).resolve().parents[1]
 if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from lint_common import discover_repo_root
+import prerelease_tag
 from prerelease_tag import patch_bump
 
 
@@ -281,6 +284,102 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
     def test_prerelease_tag_helper_patch_bumps_the_workspace_version(self) -> None:
         self.assertEqual(patch_bump("1.4.5"), "1.4.6")
         self.assertEqual(patch_bump("9.99.0"), "9.99.1")
+
+    def test_candidate_bump_updates_actual_lockfile_collision_safely(self) -> None:
+        root = discover_repo_root()
+        changes = prerelease_tag.candidate_changes(root, "1.4.5", "1.4.6")
+        lock = tomllib.loads(changes[root / "Cargo.lock"])
+        directives = [
+            package for package in lock["package"] if package["name"] == "sc-lint-directives"
+        ]
+        self.assertEqual(
+            [(package["version"], "source" in package) for package in directives],
+            [("0.5.0", True), ("1.4.6", False)],
+        )
+        self.assertEqual(
+            tomllib.loads(changes[root / "crates" / "atm-query-python" / "pyproject.toml"])[
+                "project"
+            ]["version"],
+            "1.4.6",
+        )
+
+    def test_write_and_commit_restores_files_when_commit_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "AR1.1 test"], cwd=repo, check=True)
+            manifest = repo / "Cargo.toml"
+            original = "[workspace.package]\nversion = \"1.4.5\"\n"
+            manifest.write_text(original, encoding="utf-8")
+            subprocess.run(["git", "add", "Cargo.toml"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo, check=True)
+
+            real_git = prerelease_tag.git
+
+            def fail_commit(repo_root: Path, *args: str, check: bool = True):
+                if args and args[0] == "commit":
+                    raise SystemExit("simulated commit failure")
+                return real_git(repo_root, *args, check=check)
+
+            with mock.patch.object(prerelease_tag, "git", side_effect=fail_commit):
+                with self.assertRaises(SystemExit):
+                    prerelease_tag.write_and_commit(
+                        repo,
+                        {manifest: original.replace("1.4.5", "1.4.6")},
+                        "fixture bump",
+                    )
+            self.assertEqual(manifest.read_text(encoding="utf-8"), original)
+            self.assertEqual(
+                subprocess.run(
+                    ["git", "status", "--porcelain"],
+                    cwd=repo,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout,
+                "",
+            )
+
+    def test_just_prerelease_tag_dry_run_is_end_to_end_and_clean(self) -> None:
+        root = discover_repo_root()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "atm-core"
+
+            def ignore(_path: str, names: list[str]) -> set[str]:
+                return {
+                    name
+                    for name in names
+                    if name in {".git", ".bootstrap-venv", "target", "artifacts"}
+                }
+
+            shutil.copytree(root, repo, ignore=ignore)
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "AR1.1 test"], cwd=repo, check=True)
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo, check=True)
+            python_command = "python" if os.name == "nt" else "python3"
+            result = subprocess.run(
+                ["just", "--set", "python_cmd", python_command, "prerelease-tag", "--dry-run"],
+                cwd=repo,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("workspace version: 1.4.5 -> 1.4.6", result.stdout)
+            self.assertIn("would create tag: prerelease/v1.4.6", result.stdout)
+            self.assertEqual(
+                subprocess.run(
+                    ["git", "status", "--porcelain"],
+                    cwd=repo,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout,
+                "",
+            )
 
 
 if __name__ == "__main__":
