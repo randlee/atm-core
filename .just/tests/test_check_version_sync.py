@@ -19,6 +19,7 @@ from check_version_sync import validate_winget_manifests
 from check_version_sync import success_message
 from check_version_sync import validate_release_version_lockstep
 from check_version_sync import KIT_RELEASE_ARTIFACTS
+from check_version_sync import replace_version_occurrences
 from prerelease_tag import copy_tracked_files
 from prerelease_tag import sync_python_version
 
@@ -241,6 +242,14 @@ ManifestVersion: 1.3.2-beta-21-pre
                 }
             }
             self.assertTrue(validate_winget_manifests(repo_root, "1.3.2-beta-21-pre", config))
+
+    def test_replace_version_occurrences_rejects_adjacent_version_component(self) -> None:
+        self.assertEqual(
+            replace_version_occurrences(
+                "https://example.invalid/atm_1.1.2.0_x86_64.zip", "1.1.2", "1.1.3"
+            ),
+            "https://example.invalid/atm_1.1.2.0_x86_64.zip",
+        )
 
     @mock.patch("prerelease_tag.subprocess.run")
     def test_sync_python_version_propagates_owner_failure(self, run: mock.Mock) -> None:
