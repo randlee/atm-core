@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F101-AQ>
+  a triage:Finding ;
+  triage:findingId "RBQA-F101-AQ" ;
+  triage:title "Test fixtures build the backendType roster metadata key via a computed [\"backend\",\"Type\"].concat() literal, evading the nudge-taxonomy containment lint" ;
+  triage:description "RosterEntry test fixtures in crates/atm-daemon-bootstrap/src/queue_drain.rs (~line 1023) and crates/atm-http-runtime/src/herdr_queue_wake.rs (~line 704) built the \"backendType\" roster metadata key via [\"backend\", \"Type\"].concat(), which evades scripts/check-nudge-taxonomy.py's literal-containment check since it only scans for the contiguous \"backendType\" token. This let test code route around the single-owner gate (member_mutation.rs/delivery_channel.rs) without detection. Fixed by routing both call sites through the new atm_core::delivery_channel::test_backend_type_metadata fixture constructor, which writes the key through the module's own BACKEND_TYPE_METADATA_KEY constant." ;
+  triage:phaseId "phase-aq" ;
+  triage:triageMode "phase_end" ;
+  triage:category "boundary-violation" ;
+  triage:severity "critical" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AQ ;
+  triage:foundAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F101-AQ/AQ-qd-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F101-AQ/AQ-hqw-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F101-AQ/AQ-qd-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/queue_drain.rs" ;
+  triage:line 1023 ;
+  triage:snippet "metadata.insert([\"backend\", \"Type\"].concat(), serde_json::json!(backend));" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aq-phase-review-boundary" ;
+  triage:headSha "974f6f89ca2b7cbb03d8eed070eec47198a7bb57" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aq-phase-review-boundary/974f6f89ca2b7cbb03d8eed070eec47198a7bb57> .
+
+<urn:atm:triage:occurrence/RBQA-F101-AQ/AQ-hqw-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 704 ;
+  triage:snippet "metadata.insert([\"backend\", \"Type\"].concat(), json!(\"herdr\"));" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aq-phase-review-boundary" ;
+  triage:headSha "974f6f89ca2b7cbb03d8eed070eec47198a7bb57" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aq-phase-review-boundary/974f6f89ca2b7cbb03d8eed070eec47198a7bb57> .
+
+<urn:atm:triage:worktree/fix-aq-phase-review-boundary/974f6f89ca2b7cbb03d8eed070eec47198a7bb57>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aq-phase-review-boundary" ;
+  triage:branch "fix/aq-phase-review-boundary" ;
+  triage:headSha "974f6f89ca2b7cbb03d8eed070eec47198a7bb57" ;
+  triage:orderIndex 0 .

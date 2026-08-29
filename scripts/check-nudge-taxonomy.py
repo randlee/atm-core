@@ -166,7 +166,7 @@ HERDR_WIRE_PATTERNS = tuple(
 # token, so it cannot catch a computed equivalent (e.g.
 # `["backend", "Type"].concat()`, `concat!("backend", "Type")`, or
 # `"backend" + "Type"`) built outside the two owning modules to route around
-# the ownership gate (RBQA-F101/F102). These patterns catch the computed
+# the ownership gate (RBQA-F101-AQ/RBQA-F102-AQ). These patterns catch the computed
 # forms regardless of internal whitespace; each is matched against every
 # Rust source line, including test-only sources and inline `#[cfg(test)]`
 # modules, since evading the gate from test code is exactly the bug class
@@ -274,7 +274,7 @@ def find_violations(repo_root: Path) -> tuple[Violation, ...]:
                                 line_number,
                                 "backend_type_containment_gate: computed \"backendType\" literal must not "
                                 "bypass the member_mutation.rs/delivery_channel.rs ownership gate "
-                                "(RBQA-F101/F102)",
+                                "(RBQA-F101-AQ/RBQA-F102-AQ)",
                                 line.strip(),
                             )
                         )
