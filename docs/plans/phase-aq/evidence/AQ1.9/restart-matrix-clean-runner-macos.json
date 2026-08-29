@@ -2,17 +2,17 @@
   "schema_version": 1,
   "sprint": "AQ1.9",
   "host": "clean-runner-macos",
-  "commit": "c833d6c5ec59e7e6d322054290dd14c614d4265c",
+  "commit": "6644a533951f48d8d9def37775a38fac0df9aa90",
   "lease_refresh_interval_seconds": 1.0,
   "records": [
     {
       "id": "daemon-restart-live-receiver",
       "action": "daemon_restart",
-      "started_at_ns": 1787964690290353000,
+      "started_at_ns": 1787971906947197000,
       "status": "pass",
       "host": "clean-runner-macos",
       "daemon_before": {
-        "pid": 21999,
+        "pid": 30330,
         "output_tail": [
           "ATM_DAEMON_READY"
         ]
@@ -29,13 +29,13 @@
           {
             "severity": "info",
             "code": "ATM_OBSERVABILITY_HEALTH_OK",
-            "message": "shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-hgdroyxe/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=2 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+            "message": "shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=2 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
             "remediation": null
           }
         ],
         "recommendations": [],
         "environment": {
-          "atm_home": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-hgdroyxe/atm-home",
+          "atm_home": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/atm-home",
           "atm_team": "aq1-9-hermes",
           "atm_identity": "aq1-9-sender",
           "team_override": null
@@ -64,9 +64,9 @@
               "agent_type": "general-purpose",
               "harness": "claude-code",
               "model": "unknown",
-              "joined_at": 1787964690359,
+              "joined_at": 1787971906967,
               "tmux_pane_id": null,
-              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-hgdroyxe/home",
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/home",
               "extra": {}
             },
             {
@@ -75,10 +75,10 @@
               "agent_type": "general-purpose",
               "harness": "claude-code",
               "model": "unknown",
-              "joined_at": 1787964690304,
+              "joined_at": 1787971906956,
               "tmux_pane_id": null,
-              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-hgdroyxe/home",
-              "live_cwd": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-hgdroyxe/atm-home",
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/home",
+              "live_cwd": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/atm-home",
               "extra": {}
             }
           ]
@@ -87,7 +87,7 @@
           "receivers": []
         },
         "observability": {
-          "active_log_path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-hgdroyxe/logs/atm.log.jsonl",
+          "active_log_path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/logs/atm.log.jsonl",
           "logging_state": "healthy",
           "query_state": null,
           "maintenance": {
@@ -103,6 +103,7 @@
           "state": "closed"
         },
         "herdr_queue_pump": {
+          "last_tick_at": "2026-08-29T02:51:46.983065Z",
           "breaker": {
             "state": "closed"
           }
@@ -125,23 +126,24 @@
         "runtime_status": {
           "liveness": "running",
           "readiness": "ready",
-          "singleton_owner_pid": 21999,
+          "singleton_owner_pid": 30330,
           "degraded_ingest": false,
           "member_counts": {
             "active_members": 0,
             "idle_members": 0,
             "offline_members": 0,
             "unknown_members": 0
-          }
+          },
+          "herdr_queue_last_tick_at": "2026-08-29T02:51:46.983065Z"
         }
       },
       "receiver_before": {
-        "pid": 22001,
-        "ready_at_ns": 1787964690592913000
+        "pid": 30332,
+        "ready_at_ns": 1787971907100762000
       },
-      "restart_at_ns": 1787964690654965000,
+      "restart_at_ns": 1787971907146882000,
       "daemon_stop": {
-        "pid": 21999,
+        "pid": 30330,
         "returncode": 0,
         "output_tail": [
           "ATM_DAEMON_READY",
@@ -149,30 +151,12 @@
         ]
       },
       "daemon_after": {
-        "pid": 22002,
+        "pid": 30333,
         "output_tail": [
           "ATM_DAEMON_READY"
         ]
       },
-      "marker": "aq1-9-daemon-restart-live-receiver-c50882c6-db4f-4239-b8aa-93c58bb93730",
-      "message_id": "01M15G047STZPS98XSAJYZ9JC9",
-      "sent_at_ns": 1787964690679258000,
-      "delivered_at_ns": 1787964690757701000,
-      "delivery_latency_ms": 78.443,
-      "nudge": {
-        "at_ns": 1787964690757701000,
-        "body": "<atm from=\"aq1-9-sender@aq1-9-hermes\" message-id=\"01M15G047STZPS98XSAJYZ9JC9\">\n  <action>read atm --team aq1-9-hermes</action>\n  <description>aq1-9-daemon-restart-live-receiver-c50882c6-db4f-4239-b8aa-93c58bb93730</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>\n\naq1-9-daemon-restart-live-receiver-c50882c6-db4f-4239-b8aa-93c58bb93730",
-        "kind": "nudge",
-        "message_id": "01M15G047STZPS98XSAJYZ9JC9"
-      },
-      "receiver_transcript": [
-        "{\"kind\": \"ready\", \"at_ns\": 1787964690592913000}",
-        "{\"at_ns\": 1787964690757701000, \"body\": \"<atm from=\\\"aq1-9-sender@aq1-9-hermes\\\" message-id=\\\"01M15G047STZPS98XSAJYZ9JC9\\\">\\n  <action>read atm --team aq1-9-hermes</action>\\n  <description>aq1-9-daemon-restart-live-receiver-c50882c6-db4f-4239-b8aa-93c58bb93730</description>\\n  <action>execute the assigned task</action>\\n  <when idle=\\\"immediate\\\" busy=\\\"after-current-task\\\"/>\\n  <console announce=\\\"concise\\\" pause=\\\"false\\\"/>\\n</atm>\\n\\naq1-9-daemon-restart-live-receiver-c50882c6-db4f-4239-b8aa-93c58bb93730\", \"kind\": \"nudge\", \"message_id\": \"01M15G047STZPS98XSAJYZ9JC9\"}"
-      ],
-      "daemon_transcript": [
-        "ATM_DAEMON_READY"
-      ],
-      "doctor_after": {
+      "doctor_after_restart": {
         "summary": {
           "status": "healthy",
           "message": "ATM doctor completed with healthy findings only",
@@ -184,13 +168,13 @@
           {
             "severity": "info",
             "code": "ATM_OBSERVABILITY_HEALTH_OK",
-            "message": "shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-hgdroyxe/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+            "message": "shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=2 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
             "remediation": null
           }
         ],
         "recommendations": [],
         "environment": {
-          "atm_home": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-hgdroyxe/atm-home",
+          "atm_home": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/atm-home",
           "atm_team": "aq1-9-hermes",
           "atm_identity": "aq1-9-sender",
           "team_override": null
@@ -219,9 +203,9 @@
               "agent_type": "general-purpose",
               "harness": "claude-code",
               "model": "unknown",
-              "joined_at": 1787964690359,
+              "joined_at": 1787971906967,
               "tmux_pane_id": null,
-              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-hgdroyxe/home",
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/home",
               "extra": {}
             },
             {
@@ -230,10 +214,10 @@
               "agent_type": "general-purpose",
               "harness": "claude-code",
               "model": "unknown",
-              "joined_at": 1787964690304,
+              "joined_at": 1787971906956,
               "tmux_pane_id": null,
-              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-hgdroyxe/home",
-              "live_cwd": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-hgdroyxe/atm-home",
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/home",
+              "live_cwd": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/atm-home",
               "extra": {}
             }
           ]
@@ -244,155 +228,15 @@
               "team": "aq1-9-hermes",
               "agent": "aq1-9-receiver",
               "endpoint": "127.0.0.1:49244",
-              "registered_at": "2026-08-29T00:51:30.591368Z",
-              "last_seen_at": "2026-08-29T00:51:30.591368Z",
+              "registered_at": "2026-08-29T02:51:47.099672Z",
+              "last_seen_at": "2026-08-29T02:51:47.099672Z",
               "last_seen_age_seconds": 0,
               "reachable_at_last_use": true
             }
           ]
         },
         "observability": {
-          "active_log_path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-hgdroyxe/logs/atm.log.jsonl",
-          "logging_state": "healthy",
-          "query_state": null,
-          "maintenance": {
-            "state": "running",
-            "rotated_files_total": 0,
-            "pruned_files_total": 0,
-            "last_pass_at": null
-          },
-          "diagnostic": null,
-          "detail": "writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never"
-        },
-        "herdr_breaker": {
-          "state": "closed"
-        },
-        "herdr_queue_pump": {
-          "breaker": {
-            "state": "closed"
-          }
-        },
-        "post_send": {
-          "config_root": "",
-          "external_rules": [],
-          "recipient_paths": []
-        },
-        "config": {
-          "findings": []
-        },
-        "mail_store": {
-          "findings": []
-        },
-        "roster_store": {
-          "findings": []
-        },
-        "drift_findings": [],
-        "runtime_status": {
-          "liveness": "running",
-          "readiness": "ready",
-          "singleton_owner_pid": 22002,
-          "degraded_ingest": false,
-          "member_counts": {
-            "active_members": 0,
-            "idle_members": 0,
-            "offline_members": 0,
-            "unknown_members": 0
-          }
-        }
-      },
-      "daemon_cleanup": {
-        "pid": 22002,
-        "returncode": 0,
-        "output_tail": [
-          "ATM_DAEMON_READY",
-          "replacement ATM daemon received SIGTERM; starting graceful shutdown"
-        ]
-      },
-      "finished_at_ns": 1787964691064881000
-    },
-    {
-      "id": "receiver-restart-live-daemon",
-      "action": "receiver_restart",
-      "started_at_ns": 1787964691066394000,
-      "status": "pass",
-      "host": "clean-runner-macos",
-      "daemon_before": {
-        "pid": 22008,
-        "output_tail": [
-          "ATM_DAEMON_READY"
-        ]
-      },
-      "doctor_before": {
-        "summary": {
-          "status": "healthy",
-          "message": "ATM doctor completed with healthy findings only",
-          "info_count": 1,
-          "warning_count": 0,
-          "error_count": 0
-        },
-        "findings": [
-          {
-            "severity": "info",
-            "code": "ATM_OBSERVABILITY_HEALTH_OK",
-            "message": "shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-i2kcr2yr/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=2 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
-            "remediation": null
-          }
-        ],
-        "recommendations": [],
-        "environment": {
-          "atm_home": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-i2kcr2yr/atm-home",
-          "atm_team": "aq1-9-hermes",
-          "atm_identity": "aq1-9-sender",
-          "team_override": null
-        },
-        "client_context": {
-          "team": "aq1-9-hermes",
-          "identity": "aq1-9-sender",
-          "version": "1.4.5",
-          "cli_schema_version": 1,
-          "http_api_version": "1.0.0"
-        },
-        "daemon_context": {
-          "team": "aq1-9-hermes",
-          "identity": "aq1-9-sender",
-          "version": "1.4.5",
-          "cli_schema_version": 1,
-          "http_api_version": "1.0.0",
-          "peer_wire_security": "plaintext-test"
-        },
-        "member_roster": {
-          "team": "aq1-9-hermes",
-          "members": [
-            {
-              "name": "aq1-9-receiver",
-              "agent_id": "aq1-9-receiver@aq1-9-hermes",
-              "agent_type": "general-purpose",
-              "harness": "claude-code",
-              "model": "unknown",
-              "joined_at": 1787964691097,
-              "tmux_pane_id": null,
-              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-i2kcr2yr/home",
-              "extra": {}
-            },
-            {
-              "name": "aq1-9-sender",
-              "agent_id": "aq1-9-sender@aq1-9-hermes",
-              "agent_type": "general-purpose",
-              "harness": "claude-code",
-              "model": "unknown",
-              "joined_at": 1787964691080,
-              "tmux_pane_id": null,
-              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-i2kcr2yr/home",
-              "live_cwd": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-i2kcr2yr/atm-home",
-              "extra": {}
-            }
-          ]
-        },
-        "graft_receivers": {
-          "receivers": []
-        },
-        "observability": {
-          "active_log_path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-i2kcr2yr/logs/atm.log.jsonl",
+          "active_log_path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/logs/atm.log.jsonl",
           "logging_state": "healthy",
           "query_state": null,
           "maintenance": {
@@ -408,6 +252,7 @@
           "state": "closed"
         },
         "herdr_queue_pump": {
+          "last_tick_at": "2026-08-29T02:51:47.163815Z",
           "breaker": {
             "state": "closed"
           }
@@ -430,47 +275,31 @@
         "runtime_status": {
           "liveness": "running",
           "readiness": "ready",
-          "singleton_owner_pid": 22008,
+          "singleton_owner_pid": 30333,
           "degraded_ingest": false,
           "member_counts": {
             "active_members": 0,
             "idle_members": 0,
             "offline_members": 0,
             "unknown_members": 0
-          }
+          },
+          "herdr_queue_last_tick_at": "2026-08-29T02:51:47.163815Z"
         }
       },
-      "receiver_before": {
-        "pid": 22010,
-        "ready_at_ns": 1787964691288031000
-      },
-      "restart_at_ns": 1787964691288484000,
-      "receiver_stop": {
-        "pid": 22010,
-        "returncode": 0,
-        "crash": false,
-        "output_tail": [
-          "{\"kind\": \"ready\", \"at_ns\": 1787964691288031000}"
-        ]
-      },
-      "receiver_after": {
-        "pid": 22031,
-        "ready_at_ns": 1787964691722957000
-      },
-      "marker": "aq1-9-receiver-restart-live-daemon-effbc93b-a9fe-4295-b584-5ab391593894",
-      "message_id": "01M15G058E8QZA4JAYQ9109J4M",
-      "sent_at_ns": 1787964691723491000,
-      "delivered_at_ns": 1787964691845773000,
-      "delivery_latency_ms": 122.282,
+      "marker": "aq1-9-daemon-restart-live-receiver-0b5e7dc9-eb00-40d7-a304-03a07ad7dc25",
+      "message_id": "01M15PWBK8YB14DKX2M84F0K90",
+      "sent_at_ns": 1787971907175591000,
+      "delivered_at_ns": 1787971907234590000,
+      "delivery_latency_ms": 58.999,
       "nudge": {
-        "at_ns": 1787964691845773000,
-        "body": "<atm from=\"aq1-9-sender@aq1-9-hermes\" message-id=\"01M15G058E8QZA4JAYQ9109J4M\">\n  <action>read atm --team aq1-9-hermes</action>\n  <description>aq1-9-receiver-restart-live-daemon-effbc93b-a9fe-4295-b584-5ab391593894</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>\n\naq1-9-receiver-restart-live-daemon-effbc93b-a9fe-4295-b584-5ab391593894",
+        "at_ns": 1787971907234590000,
+        "body": "<atm from=\"aq1-9-sender@aq1-9-hermes\" message-id=\"01M15PWBK8YB14DKX2M84F0K90\">\n  <action>read atm --team aq1-9-hermes</action>\n  <description>aq1-9-daemon-restart-live-receiver-0b5e7dc9-eb00-40d7-a304-03a07ad7dc25</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>\n\naq1-9-daemon-restart-live-receiver-0b5e7dc9-eb00-40d7-a304-03a07ad7dc25",
         "kind": "nudge",
-        "message_id": "01M15G058E8QZA4JAYQ9109J4M"
+        "message_id": "01M15PWBK8YB14DKX2M84F0K90"
       },
       "receiver_transcript": [
-        "{\"kind\": \"ready\", \"at_ns\": 1787964691722957000}",
-        "{\"at_ns\": 1787964691845773000, \"body\": \"<atm from=\\\"aq1-9-sender@aq1-9-hermes\\\" message-id=\\\"01M15G058E8QZA4JAYQ9109J4M\\\">\\n  <action>read atm --team aq1-9-hermes</action>\\n  <description>aq1-9-receiver-restart-live-daemon-effbc93b-a9fe-4295-b584-5ab391593894</description>\\n  <action>execute the assigned task</action>\\n  <when idle=\\\"immediate\\\" busy=\\\"after-current-task\\\"/>\\n  <console announce=\\\"concise\\\" pause=\\\"false\\\"/>\\n</atm>\\n\\naq1-9-receiver-restart-live-daemon-effbc93b-a9fe-4295-b584-5ab391593894\", \"kind\": \"nudge\", \"message_id\": \"01M15G058E8QZA4JAYQ9109J4M\"}"
+        "{\"kind\": \"ready\", \"at_ns\": 1787971907100762000}",
+        "{\"at_ns\": 1787971907234590000, \"body\": \"<atm from=\\\"aq1-9-sender@aq1-9-hermes\\\" message-id=\\\"01M15PWBK8YB14DKX2M84F0K90\\\">\\n  <action>read atm --team aq1-9-hermes</action>\\n  <description>aq1-9-daemon-restart-live-receiver-0b5e7dc9-eb00-40d7-a304-03a07ad7dc25</description>\\n  <action>execute the assigned task</action>\\n  <when idle=\\\"immediate\\\" busy=\\\"after-current-task\\\"/>\\n  <console announce=\\\"concise\\\" pause=\\\"false\\\"/>\\n</atm>\\n\\naq1-9-daemon-restart-live-receiver-0b5e7dc9-eb00-40d7-a304-03a07ad7dc25\", \"kind\": \"nudge\", \"message_id\": \"01M15PWBK8YB14DKX2M84F0K90\"}"
       ],
       "daemon_transcript": [
         "ATM_DAEMON_READY"
@@ -487,13 +316,13 @@
           {
             "severity": "info",
             "code": "ATM_OBSERVABILITY_HEALTH_OK",
-            "message": "shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-i2kcr2yr/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+            "message": "shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
             "remediation": null
           }
         ],
         "recommendations": [],
         "environment": {
-          "atm_home": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-i2kcr2yr/atm-home",
+          "atm_home": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/atm-home",
           "atm_team": "aq1-9-hermes",
           "atm_identity": "aq1-9-sender",
           "team_override": null
@@ -522,9 +351,9 @@
               "agent_type": "general-purpose",
               "harness": "claude-code",
               "model": "unknown",
-              "joined_at": 1787964691097,
+              "joined_at": 1787971906967,
               "tmux_pane_id": null,
-              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-i2kcr2yr/home",
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/home",
               "extra": {}
             },
             {
@@ -533,10 +362,10 @@
               "agent_type": "general-purpose",
               "harness": "claude-code",
               "model": "unknown",
-              "joined_at": 1787964691080,
+              "joined_at": 1787971906956,
               "tmux_pane_id": null,
-              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-i2kcr2yr/home",
-              "live_cwd": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-i2kcr2yr/atm-home",
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/home",
+              "live_cwd": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/atm-home",
               "extra": {}
             }
           ]
@@ -546,16 +375,16 @@
             {
               "team": "aq1-9-hermes",
               "agent": "aq1-9-receiver",
-              "endpoint": "127.0.0.1:49249",
-              "registered_at": "2026-08-29T00:51:31.721068Z",
-              "last_seen_at": "2026-08-29T00:51:31.721068Z",
+              "endpoint": "127.0.0.1:49244",
+              "registered_at": "2026-08-29T02:51:47.099672Z",
+              "last_seen_at": "2026-08-29T02:51:47.099672Z",
               "last_seen_age_seconds": 0,
               "reachable_at_last_use": true
             }
           ]
         },
         "observability": {
-          "active_log_path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-i2kcr2yr/logs/atm.log.jsonl",
+          "active_log_path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-daemon-restart-live-receiver-203ntx2g/logs/atm.log.jsonl",
           "logging_state": "healthy",
           "query_state": null,
           "maintenance": {
@@ -571,6 +400,7 @@
           "state": "closed"
         },
         "herdr_queue_pump": {
+          "last_tick_at": "2026-08-29T02:51:47.163815Z",
           "breaker": {
             "state": "closed"
           }
@@ -593,34 +423,35 @@
         "runtime_status": {
           "liveness": "running",
           "readiness": "ready",
-          "singleton_owner_pid": 22008,
+          "singleton_owner_pid": 30333,
           "degraded_ingest": false,
           "member_counts": {
             "active_members": 0,
             "idle_members": 0,
             "offline_members": 0,
             "unknown_members": 0
-          }
+          },
+          "herdr_queue_last_tick_at": "2026-08-29T02:51:47.163815Z"
         }
       },
       "daemon_cleanup": {
-        "pid": 22008,
+        "pid": 30333,
         "returncode": 0,
         "output_tail": [
           "ATM_DAEMON_READY",
           "replacement ATM daemon received SIGTERM; starting graceful shutdown"
         ]
       },
-      "finished_at_ns": 1787964692251971000
+      "finished_at_ns": 1787971907332173000
     },
     {
-      "id": "receiver-crash-within-window",
-      "action": "receiver_crash_within_window",
-      "started_at_ns": 1787964692255208000,
+      "id": "receiver-restart-live-daemon",
+      "action": "receiver_restart",
+      "started_at_ns": 1787971907333493000,
       "status": "pass",
       "host": "clean-runner-macos",
       "daemon_before": {
-        "pid": 22188,
+        "pid": 30340,
         "output_tail": [
           "ATM_DAEMON_READY"
         ]
@@ -637,13 +468,13 @@
           {
             "severity": "info",
             "code": "ATM_OBSERVABILITY_HEALTH_OK",
-            "message": "shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-bq029yma/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+            "message": "shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-k10cuv5c/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=2 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
             "remediation": null
           }
         ],
         "recommendations": [],
         "environment": {
-          "atm_home": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-bq029yma/atm-home",
+          "atm_home": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-k10cuv5c/atm-home",
           "atm_team": "aq1-9-hermes",
           "atm_identity": "aq1-9-sender",
           "team_override": null
@@ -672,9 +503,9 @@
               "agent_type": "general-purpose",
               "harness": "claude-code",
               "model": "unknown",
-              "joined_at": 1787964692286,
+              "joined_at": 1787971907352,
               "tmux_pane_id": null,
-              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-bq029yma/home",
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-k10cuv5c/home",
               "extra": {}
             },
             {
@@ -683,10 +514,10 @@
               "agent_type": "general-purpose",
               "harness": "claude-code",
               "model": "unknown",
-              "joined_at": 1787964692270,
+              "joined_at": 1787971907342,
               "tmux_pane_id": null,
-              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-bq029yma/home",
-              "live_cwd": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-bq029yma/atm-home",
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-k10cuv5c/home",
+              "live_cwd": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-k10cuv5c/atm-home",
               "extra": {}
             }
           ]
@@ -695,7 +526,7 @@
           "receivers": []
         },
         "observability": {
-          "active_log_path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-bq029yma/logs/atm.log.jsonl",
+          "active_log_path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-k10cuv5c/logs/atm.log.jsonl",
           "logging_state": "healthy",
           "query_state": null,
           "maintenance": {
@@ -705,12 +536,13 @@
             "last_pass_at": null
           },
           "diagnostic": null,
-          "detail": "writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never"
+          "detail": "writer_state=running queue_depth=2 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never"
         },
         "herdr_breaker": {
           "state": "closed"
         },
         "herdr_queue_pump": {
+          "last_tick_at": "2026-08-29T02:51:47.365728Z",
           "breaker": {
             "state": "closed"
           }
@@ -733,47 +565,48 @@
         "runtime_status": {
           "liveness": "running",
           "readiness": "ready",
-          "singleton_owner_pid": 22188,
+          "singleton_owner_pid": 30340,
           "degraded_ingest": false,
           "member_counts": {
             "active_members": 0,
             "idle_members": 0,
             "offline_members": 0,
             "unknown_members": 0
-          }
+          },
+          "herdr_queue_last_tick_at": "2026-08-29T02:51:47.365728Z"
         }
       },
       "receiver_before": {
-        "pid": 22198,
-        "ready_at_ns": 1787964692562478000
+        "pid": 30342,
+        "ready_at_ns": 1787971907468541000
       },
-      "restart_at_ns": 1787964692563019000,
+      "restart_at_ns": 1787971907468804000,
       "receiver_stop": {
-        "pid": 22198,
-        "returncode": -9,
-        "crash": true,
+        "pid": 30342,
+        "returncode": 0,
+        "crash": false,
         "output_tail": [
-          "{\"kind\": \"ready\", \"at_ns\": 1787964692562478000}"
+          "{\"kind\": \"ready\", \"at_ns\": 1787971907468541000}"
         ]
       },
       "receiver_after": {
-        "pid": 22221,
-        "ready_at_ns": 1787964692765944000
+        "pid": 30344,
+        "ready_at_ns": 1787971907884550000
       },
-      "marker": "aq1-9-receiver-crash-within-window-8b57a659-8def-4158-9664-7e2fb36fd197",
-      "message_id": "01M15G06910A944JXWNCQEC9NH",
-      "sent_at_ns": 1787964692766474000,
-      "delivered_at_ns": 1787964692875048000,
-      "delivery_latency_ms": 108.574,
+      "marker": "aq1-9-receiver-restart-live-daemon-209c61f7-6e18-4af3-8250-f9dc79f7e962",
+      "message_id": "01M15PWC9DTXEZ7S92AAVW9JGP",
+      "sent_at_ns": 1787971907884728000,
+      "delivered_at_ns": 1787971907980313000,
+      "delivery_latency_ms": 95.585,
       "nudge": {
-        "at_ns": 1787964692875048000,
-        "body": "<atm from=\"aq1-9-sender@aq1-9-hermes\" message-id=\"01M15G06910A944JXWNCQEC9NH\">\n  <action>read atm --team aq1-9-hermes</action>\n  <description>aq1-9-receiver-crash-within-window-8b57a659-8def-4158-9664-7e2fb36fd197</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>\n\naq1-9-receiver-crash-within-window-8b57a659-8def-4158-9664-7e2fb36fd197",
+        "at_ns": 1787971907980313000,
+        "body": "<atm from=\"aq1-9-sender@aq1-9-hermes\" message-id=\"01M15PWC9DTXEZ7S92AAVW9JGP\">\n  <action>read atm --team aq1-9-hermes</action>\n  <description>aq1-9-receiver-restart-live-daemon-209c61f7-6e18-4af3-8250-f9dc79f7e962</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>\n\naq1-9-receiver-restart-live-daemon-209c61f7-6e18-4af3-8250-f9dc79f7e962",
         "kind": "nudge",
-        "message_id": "01M15G06910A944JXWNCQEC9NH"
+        "message_id": "01M15PWC9DTXEZ7S92AAVW9JGP"
       },
       "receiver_transcript": [
-        "{\"kind\": \"ready\", \"at_ns\": 1787964692765944000}",
-        "{\"at_ns\": 1787964692875048000, \"body\": \"<atm from=\\\"aq1-9-sender@aq1-9-hermes\\\" message-id=\\\"01M15G06910A944JXWNCQEC9NH\\\">\\n  <action>read atm --team aq1-9-hermes</action>\\n  <description>aq1-9-receiver-crash-within-window-8b57a659-8def-4158-9664-7e2fb36fd197</description>\\n  <action>execute the assigned task</action>\\n  <when idle=\\\"immediate\\\" busy=\\\"after-current-task\\\"/>\\n  <console announce=\\\"concise\\\" pause=\\\"false\\\"/>\\n</atm>\\n\\naq1-9-receiver-crash-within-window-8b57a659-8def-4158-9664-7e2fb36fd197\", \"kind\": \"nudge\", \"message_id\": \"01M15G06910A944JXWNCQEC9NH\"}"
+        "{\"kind\": \"ready\", \"at_ns\": 1787971907884550000}",
+        "{\"at_ns\": 1787971907980313000, \"body\": \"<atm from=\\\"aq1-9-sender@aq1-9-hermes\\\" message-id=\\\"01M15PWC9DTXEZ7S92AAVW9JGP\\\">\\n  <action>read atm --team aq1-9-hermes</action>\\n  <description>aq1-9-receiver-restart-live-daemon-209c61f7-6e18-4af3-8250-f9dc79f7e962</description>\\n  <action>execute the assigned task</action>\\n  <when idle=\\\"immediate\\\" busy=\\\"after-current-task\\\"/>\\n  <console announce=\\\"concise\\\" pause=\\\"false\\\"/>\\n</atm>\\n\\naq1-9-receiver-restart-live-daemon-209c61f7-6e18-4af3-8250-f9dc79f7e962\", \"kind\": \"nudge\", \"message_id\": \"01M15PWC9DTXEZ7S92AAVW9JGP\"}"
       ],
       "daemon_transcript": [
         "ATM_DAEMON_READY"
@@ -790,13 +623,13 @@
           {
             "severity": "info",
             "code": "ATM_OBSERVABILITY_HEALTH_OK",
-            "message": "shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-bq029yma/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+            "message": "shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-k10cuv5c/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
             "remediation": null
           }
         ],
         "recommendations": [],
         "environment": {
-          "atm_home": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-bq029yma/atm-home",
+          "atm_home": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-k10cuv5c/atm-home",
           "atm_team": "aq1-9-hermes",
           "atm_identity": "aq1-9-sender",
           "team_override": null
@@ -825,9 +658,9 @@
               "agent_type": "general-purpose",
               "harness": "claude-code",
               "model": "unknown",
-              "joined_at": 1787964692286,
+              "joined_at": 1787971907352,
               "tmux_pane_id": null,
-              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-bq029yma/home",
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-k10cuv5c/home",
               "extra": {}
             },
             {
@@ -836,10 +669,10 @@
               "agent_type": "general-purpose",
               "harness": "claude-code",
               "model": "unknown",
-              "joined_at": 1787964692270,
+              "joined_at": 1787971907342,
               "tmux_pane_id": null,
-              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-bq029yma/home",
-              "live_cwd": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-bq029yma/atm-home",
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-k10cuv5c/home",
+              "live_cwd": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-k10cuv5c/atm-home",
               "extra": {}
             }
           ]
@@ -849,16 +682,16 @@
             {
               "team": "aq1-9-hermes",
               "agent": "aq1-9-receiver",
-              "endpoint": "127.0.0.1:49253",
-              "registered_at": "2026-08-29T00:51:32.763860Z",
-              "last_seen_at": "2026-08-29T00:51:32.763860Z",
+              "endpoint": "127.0.0.1:49249",
+              "registered_at": "2026-08-29T02:51:47.883626Z",
+              "last_seen_at": "2026-08-29T02:51:47.883626Z",
               "last_seen_age_seconds": 0,
               "reachable_at_last_use": true
             }
           ]
         },
         "observability": {
-          "active_log_path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-bq029yma/logs/atm.log.jsonl",
+          "active_log_path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-restart-live-daemon-k10cuv5c/logs/atm.log.jsonl",
           "logging_state": "healthy",
           "query_state": null,
           "maintenance": {
@@ -874,6 +707,7 @@
           "state": "closed"
         },
         "herdr_queue_pump": {
+          "last_tick_at": "2026-08-29T02:51:47.365728Z",
           "breaker": {
             "state": "closed"
           }
@@ -896,26 +730,352 @@
         "runtime_status": {
           "liveness": "running",
           "readiness": "ready",
-          "singleton_owner_pid": 22188,
+          "singleton_owner_pid": 30340,
           "degraded_ingest": false,
           "member_counts": {
             "active_members": 0,
             "idle_members": 0,
             "offline_members": 0,
             "unknown_members": 0
-          }
+          },
+          "herdr_queue_last_tick_at": "2026-08-29T02:51:47.365728Z"
         }
       },
-      "error": "RuntimeError: expected exactly one pre-crash lease for aq1-9-receiver, found 0",
       "daemon_cleanup": {
-        "pid": 22188,
+        "pid": 30340,
         "returncode": 0,
         "output_tail": [
           "ATM_DAEMON_READY",
           "replacement ATM daemon received SIGTERM; starting graceful shutdown"
         ]
       },
-      "finished_at_ns": 1787964693152479000
+      "finished_at_ns": 1787971908140301000
+    },
+    {
+      "id": "receiver-crash-within-window",
+      "action": "receiver_crash_within_window",
+      "started_at_ns": 1787971908141901000,
+      "status": "pass",
+      "host": "clean-runner-macos",
+      "daemon_before": {
+        "pid": 30350,
+        "output_tail": [
+          "ATM_DAEMON_READY"
+        ]
+      },
+      "doctor_before": {
+        "summary": {
+          "status": "healthy",
+          "message": "ATM doctor completed with healthy findings only",
+          "info_count": 1,
+          "warning_count": 0,
+          "error_count": 0
+        },
+        "findings": [
+          {
+            "severity": "info",
+            "code": "ATM_OBSERVABILITY_HEALTH_OK",
+            "message": "shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-q9i3sg5g/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=2 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+            "remediation": null
+          }
+        ],
+        "recommendations": [],
+        "environment": {
+          "atm_home": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-q9i3sg5g/atm-home",
+          "atm_team": "aq1-9-hermes",
+          "atm_identity": "aq1-9-sender",
+          "team_override": null
+        },
+        "client_context": {
+          "team": "aq1-9-hermes",
+          "identity": "aq1-9-sender",
+          "version": "1.4.5",
+          "cli_schema_version": 1,
+          "http_api_version": "1.0.0"
+        },
+        "daemon_context": {
+          "team": "aq1-9-hermes",
+          "identity": "aq1-9-sender",
+          "version": "1.4.5",
+          "cli_schema_version": 1,
+          "http_api_version": "1.0.0",
+          "peer_wire_security": "plaintext-test"
+        },
+        "member_roster": {
+          "team": "aq1-9-hermes",
+          "members": [
+            {
+              "name": "aq1-9-receiver",
+              "agent_id": "aq1-9-receiver@aq1-9-hermes",
+              "agent_type": "general-purpose",
+              "harness": "claude-code",
+              "model": "unknown",
+              "joined_at": 1787971908162,
+              "tmux_pane_id": null,
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-q9i3sg5g/home",
+              "extra": {}
+            },
+            {
+              "name": "aq1-9-sender",
+              "agent_id": "aq1-9-sender@aq1-9-hermes",
+              "agent_type": "general-purpose",
+              "harness": "claude-code",
+              "model": "unknown",
+              "joined_at": 1787971908151,
+              "tmux_pane_id": null,
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-q9i3sg5g/home",
+              "live_cwd": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-q9i3sg5g/atm-home",
+              "extra": {}
+            }
+          ]
+        },
+        "graft_receivers": {
+          "receivers": []
+        },
+        "observability": {
+          "active_log_path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-q9i3sg5g/logs/atm.log.jsonl",
+          "logging_state": "healthy",
+          "query_state": null,
+          "maintenance": {
+            "state": "running",
+            "rotated_files_total": 0,
+            "pruned_files_total": 0,
+            "last_pass_at": null
+          },
+          "diagnostic": null,
+          "detail": "writer_state=running queue_depth=2 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never"
+        },
+        "herdr_breaker": {
+          "state": "closed"
+        },
+        "herdr_queue_pump": {
+          "last_tick_at": "2026-08-29T02:51:48.176034Z",
+          "breaker": {
+            "state": "closed"
+          }
+        },
+        "post_send": {
+          "config_root": "",
+          "external_rules": [],
+          "recipient_paths": []
+        },
+        "config": {
+          "findings": []
+        },
+        "mail_store": {
+          "findings": []
+        },
+        "roster_store": {
+          "findings": []
+        },
+        "drift_findings": [],
+        "runtime_status": {
+          "liveness": "running",
+          "readiness": "ready",
+          "singleton_owner_pid": 30350,
+          "degraded_ingest": false,
+          "member_counts": {
+            "active_members": 0,
+            "idle_members": 0,
+            "offline_members": 0,
+            "unknown_members": 0
+          },
+          "herdr_queue_last_tick_at": "2026-08-29T02:51:48.176034Z"
+        }
+      },
+      "receiver_before": {
+        "pid": 30352,
+        "ready_at_ns": 1787971908279760000
+      },
+      "restart_at_ns": 1787971908280041000,
+      "receiver_stop": {
+        "pid": 30352,
+        "returncode": -9,
+        "crash": true,
+        "output_tail": [
+          "{\"kind\": \"ready\", \"at_ns\": 1787971908279760000}"
+        ]
+      },
+      "receiver_after": {
+        "pid": 30353,
+        "ready_at_ns": 1787971908376902000
+      },
+      "marker": "aq1-9-receiver-crash-within-window-e852488e-9dce-46ce-b404-5003be11ac09",
+      "message_id": "01M15PWCRSJ4PYKH8Q0DGPQ05N",
+      "sent_at_ns": 1787971908377084000,
+      "delivered_at_ns": 1787971908468506000,
+      "delivery_latency_ms": 91.422,
+      "nudge": {
+        "at_ns": 1787971908468506000,
+        "body": "<atm from=\"aq1-9-sender@aq1-9-hermes\" message-id=\"01M15PWCRSJ4PYKH8Q0DGPQ05N\">\n  <action>read atm --team aq1-9-hermes</action>\n  <description>aq1-9-receiver-crash-within-window-e852488e-9dce-46ce-b404-5003be11ac09</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>\n\naq1-9-receiver-crash-within-window-e852488e-9dce-46ce-b404-5003be11ac09",
+        "kind": "nudge",
+        "message_id": "01M15PWCRSJ4PYKH8Q0DGPQ05N"
+      },
+      "receiver_transcript": {
+        "before": [
+          "{\"kind\": \"ready\", \"at_ns\": 1787971908279760000}"
+        ],
+        "after": [
+          "{\"kind\": \"ready\", \"at_ns\": 1787971908376902000}",
+          "{\"at_ns\": 1787971908468506000, \"body\": \"<atm from=\\\"aq1-9-sender@aq1-9-hermes\\\" message-id=\\\"01M15PWCRSJ4PYKH8Q0DGPQ05N\\\">\\n  <action>read atm --team aq1-9-hermes</action>\\n  <description>aq1-9-receiver-crash-within-window-e852488e-9dce-46ce-b404-5003be11ac09</description>\\n  <action>execute the assigned task</action>\\n  <when idle=\\\"immediate\\\" busy=\\\"after-current-task\\\"/>\\n  <console announce=\\\"concise\\\" pause=\\\"false\\\"/>\\n</atm>\\n\\naq1-9-receiver-crash-within-window-e852488e-9dce-46ce-b404-5003be11ac09\", \"kind\": \"nudge\", \"message_id\": \"01M15PWCRSJ4PYKH8Q0DGPQ05N\"}"
+        ]
+      },
+      "daemon_transcript": {
+        "before": [
+          "ATM_DAEMON_READY"
+        ],
+        "after": []
+      },
+      "doctor_after": {
+        "summary": {
+          "status": "healthy",
+          "message": "ATM doctor completed with healthy findings only",
+          "info_count": 1,
+          "warning_count": 0,
+          "error_count": 0
+        },
+        "findings": [
+          {
+            "severity": "info",
+            "code": "ATM_OBSERVABILITY_HEALTH_OK",
+            "message": "shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-q9i3sg5g/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+            "remediation": null
+          }
+        ],
+        "recommendations": [],
+        "environment": {
+          "atm_home": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-q9i3sg5g/atm-home",
+          "atm_team": "aq1-9-hermes",
+          "atm_identity": "aq1-9-sender",
+          "team_override": null
+        },
+        "client_context": {
+          "team": "aq1-9-hermes",
+          "identity": "aq1-9-sender",
+          "version": "1.4.5",
+          "cli_schema_version": 1,
+          "http_api_version": "1.0.0"
+        },
+        "daemon_context": {
+          "team": "aq1-9-hermes",
+          "identity": "aq1-9-sender",
+          "version": "1.4.5",
+          "cli_schema_version": 1,
+          "http_api_version": "1.0.0",
+          "peer_wire_security": "plaintext-test"
+        },
+        "member_roster": {
+          "team": "aq1-9-hermes",
+          "members": [
+            {
+              "name": "aq1-9-receiver",
+              "agent_id": "aq1-9-receiver@aq1-9-hermes",
+              "agent_type": "general-purpose",
+              "harness": "claude-code",
+              "model": "unknown",
+              "joined_at": 1787971908162,
+              "tmux_pane_id": null,
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-q9i3sg5g/home",
+              "extra": {}
+            },
+            {
+              "name": "aq1-9-sender",
+              "agent_id": "aq1-9-sender@aq1-9-hermes",
+              "agent_type": "general-purpose",
+              "harness": "claude-code",
+              "model": "unknown",
+              "joined_at": 1787971908151,
+              "tmux_pane_id": null,
+              "home_dir": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-q9i3sg5g/home",
+              "live_cwd": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-q9i3sg5g/atm-home",
+              "extra": {}
+            }
+          ]
+        },
+        "graft_receivers": {
+          "receivers": [
+            {
+              "team": "aq1-9-hermes",
+              "agent": "aq1-9-receiver",
+              "endpoint": "127.0.0.1:49254",
+              "registered_at": "2026-08-29T02:51:48.375967Z",
+              "last_seen_at": "2026-08-29T02:51:48.375967Z",
+              "last_seen_age_seconds": 0,
+              "reachable_at_last_use": true
+            }
+          ]
+        },
+        "observability": {
+          "active_log_path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq1-9-receiver-crash-within-window-q9i3sg5g/logs/atm.log.jsonl",
+          "logging_state": "healthy",
+          "query_state": null,
+          "maintenance": {
+            "state": "running",
+            "rotated_files_total": 0,
+            "pruned_files_total": 0,
+            "last_pass_at": null
+          },
+          "diagnostic": null,
+          "detail": "writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never"
+        },
+        "herdr_breaker": {
+          "state": "closed"
+        },
+        "herdr_queue_pump": {
+          "last_tick_at": "2026-08-29T02:51:48.176034Z",
+          "breaker": {
+            "state": "closed"
+          }
+        },
+        "post_send": {
+          "config_root": "",
+          "external_rules": [],
+          "recipient_paths": []
+        },
+        "config": {
+          "findings": []
+        },
+        "mail_store": {
+          "findings": []
+        },
+        "roster_store": {
+          "findings": []
+        },
+        "drift_findings": [],
+        "runtime_status": {
+          "liveness": "running",
+          "readiness": "ready",
+          "singleton_owner_pid": 30350,
+          "degraded_ingest": false,
+          "member_counts": {
+            "active_members": 0,
+            "idle_members": 0,
+            "offline_members": 0,
+            "unknown_members": 0
+          },
+          "herdr_queue_last_tick_at": "2026-08-29T02:51:48.176034Z"
+        }
+      },
+      "error": "RuntimeError: expected exactly one pre-crash lease for aq1-9-receiver, found 0",
+      "traceback_tail": [
+        "Traceback (most recent call last):",
+        "  File \"/Users/runner/work/atm-core/atm-core/scripts/phase-aq/run_hermes_atm_restart_matrix.py\", line 899, in run_scenario",
+        "    pre_crash_lease=receiver_lease(record[\"doctor_before\"]),",
+        "                    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "  File \"/Users/runner/work/atm-core/atm-core/scripts/phase-aq/run_hermes_atm_restart_matrix.py\", line 703, in receiver_lease",
+        "    raise RuntimeError(f\"expected exactly one pre-crash lease for {RECEIVER}, found {len(leases)}\")",
+        "RuntimeError: expected exactly one pre-crash lease for aq1-9-receiver, found 0"
+      ],
+      "failure_log_path": "/Users/runner/work/atm-core/atm-core/docs/plans/phase-aq/evidence/AQ1.9/failure-logs/receiver-crash-within-window-clean-runner-macos.log.jsonl",
+      "daemon_cleanup": {
+        "pid": 30350,
+        "returncode": 0,
+        "output_tail": [
+          "ATM_DAEMON_READY",
+          "replacement ATM daemon received SIGTERM; starting graceful shutdown"
+        ]
+      },
+      "finished_at_ns": 1787971908663644000
     }
   ]
 }
