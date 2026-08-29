@@ -14,13 +14,17 @@
   triage:category "deliverable-missing" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-28T05:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:POSTMORTEM-1084 ;
   triage:foundAt "2026-08-28T04:45:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-024/POSTMORTEM-1084-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-024/QMGR-CLOSE-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-024/QMGR-CLOSE-2> ;
+  triage:closedAt "2026-08-29T00:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/ATM-QA-024/POSTMORTEM-1084-1>
   a triage:Occurrence ;
@@ -37,3 +41,35 @@
   triage:branch "plan/v144-publish-postmortem" ;
   triage:headSha "6689ed3f3" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/ATM-QA-024/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "docs/postmortems/v1.4.4-publish-postmortem.md" ;
+  triage:line 82 ;
+  triage:snippet "round-1 fix (commit 1ae18c516) split the table into Landed (merged) vs In review (open PRs -- not yet in effect), correctly reflecting #1083 as still open at that time; adequate for the state of the world when written, but PR #1083 merged shortly after (5436f69886380f1dcf17fe884141e3040b64742f, 2026-08-28T23:58:54Z), making the In-review placement of the #1083 rows stale -- flagged back to fenix per fenix's own invitation in the re-review request rather than closed" ;
+  triage:status "fixed" ; triage:closed true ;
+  triage:branch "plan/v144-publish-postmortem" ; triage:headSha "1ae18c516" ;
+  triage:occursIn <urn:atm:triage:worktree/POSTMORTEM-1084/1ae18c516> .
+
+<urn:atm:triage:worktree/POSTMORTEM-1084/1ae18c516>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/plan-v144-publish-postmortem" ;
+  triage:branch "plan/v144-publish-postmortem" ;
+  triage:headSha "1ae18c516" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/ATM-QA-024/QMGR-CLOSE-2>
+  a triage:Occurrence ;
+  triage:file "docs/postmortems/v1.4.4-publish-postmortem.md" ;
+  triage:line 82 ;
+  triage:snippet "#1083 rows flipped to Landed (merged): 'PR #1083 (merged to main 2026-08-28; homebrew re-dispatched from main, recovery run 33222167237 passed with live consumer verification)'; outcome line now reads '7 merges to main (#1067, #1071, #1072, #1073, #1074, #1077, #1083)' and '7 failed CI publish runs'. Independently confirmed: gh run view 33222167237 shows conclusion success (Publish Homebrew); table counts now match the timeline table's own 7 rows with no residual pending marker." ;
+  triage:status "fixed" ; triage:closed true ;
+  triage:branch "plan/v144-publish-postmortem" ; triage:headSha "48ba07772" ;
+  triage:occursIn <urn:atm:triage:worktree/POSTMORTEM-1084/48ba07772> .
+
+<urn:atm:triage:worktree/POSTMORTEM-1084/48ba07772>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/plan-v144-publish-postmortem" ;
+  triage:branch "plan/v144-publish-postmortem" ;
+  triage:headSha "48ba07772" ;
+  triage:orderIndex 3 .

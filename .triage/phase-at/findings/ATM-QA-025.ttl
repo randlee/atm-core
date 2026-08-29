@@ -14,13 +14,16 @@
   triage:category "cross-doc-conflict" ;
   triage:severity "important" ;
   triage:repeatable false ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-28T05:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:POSTMORTEM-1084 ;
   triage:foundAt "2026-08-28T04:45:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-025/POSTMORTEM-1084-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-025/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-29T00:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/ATM-QA-025/POSTMORTEM-1084-1>
   a triage:Occurrence ;
@@ -37,3 +40,19 @@
   triage:branch "plan/v144-publish-postmortem" ;
   triage:headSha "6689ed3f3" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/ATM-QA-025/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "docs/postmortems/v1.4.4-publish-postmortem.md" ;
+  triage:line 6 ;
+  triage:snippet "final outcome line: 'all seven channels completed on 2026-08-28 -- but it took 15 documented defects, 7 merges to main (#1067, #1071, #1072, #1073, #1074, #1077, #1083), and 7 failed CI publish runs, plus one channel run that passed CI while shipping a live break' -- counters now match the timeline table's own row/run counts exactly (verified at both 1ae18c516 and 48ba07772)" ;
+  triage:status "fixed" ; triage:closed true ;
+  triage:branch "plan/v144-publish-postmortem" ; triage:headSha "48ba07772" ;
+  triage:occursIn <urn:atm:triage:worktree/POSTMORTEM-1084/48ba07772-b> .
+
+<urn:atm:triage:worktree/POSTMORTEM-1084/48ba07772-b>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/plan-v144-publish-postmortem" ;
+  triage:branch "plan/v144-publish-postmortem" ;
+  triage:headSha "48ba07772" ;
+  triage:orderIndex 2 .
