@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-002>
+  a triage:Finding ;
+  triage:findingId "FTQ-002" ;
+  triage:title "ac6 sustained-load test asserts refresh count within a fixed busy-loop window" ;
+  triage:description "Phase AQ phase-end review (ATM-QA-002) found ac6_sustained_connection_load_never_starves_the_lease_refresh_cadence in crates/atm-graft/src/runtime/mod.rs drove a fixed 4s busy loop and then asserted a minimum refresh count observed within that fixed window -- a source of flakiness under CI scheduling contention, where a slower host can starve the refresh cadence without the production guarantee actually being violated. Fixed by replacing the fixed-window assertion with a bounded poll that drives sustained load until the registry observes >= 2 refreshes, backed by a generous 15s hang-detector deadline, matching the wait_until pattern already used by ac2/ac3/ac5/ac7 in this module." ;
+  triage:phaseId "phase-aq" ;
+  triage:triageMode "phase_end" ;
+  triage:category "flaky-test" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AQ ;
+  triage:foundAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/occ-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FTQ-002/occ-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime/mod.rs" ;
+  triage:line 1867 ;
+  triage:snippet "fn ac6_sustained_connection_load_never_starves_the_lease_refresh_cadence() {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aq-phase-review-flaky" ;
+  triage:headSha "4db81074d" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aq-phase-review-flaky/4db81074d> .
+
+<urn:atm:triage:worktree/fix-aq-phase-review-flaky/4db81074d>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aq-phase-review-flaky" ;
+  triage:branch "fix/aq-phase-review-flaky" ;
+  triage:headSha "4db81074d" ;
+  triage:orderIndex 1 .

@@ -532,6 +532,16 @@ struct CommandOutput {
     success: bool,
 }
 
+/// Selects the timeout actually applied to a spawned `herdr` child process:
+/// whichever of the caller's `remaining` deadline or [`HERDR_PROCESS_CAP`] is
+/// smaller (HR-SAFE-002). A pure function so the caller-deadline-vs-process-
+/// cap precedence is unit-testable deterministically, without spawning a
+/// process or depending on wall-clock scheduling (see the
+/// `effective_process_timeout_*` tests below).
+fn effective_process_timeout(remaining: Duration) -> Duration {
+    remaining.min(HERDR_PROCESS_CAP)
+}
+
 async fn run_command(
     breaker: &HerdrSpawnBreaker,
     args: &[String],
@@ -563,7 +573,7 @@ async fn run_command_with_binary(
         }
         return Err(HerdrError::TimedOut);
     };
-    let effective_timeout = remaining.min(HERDR_PROCESS_CAP);
+    let effective_timeout = effective_process_timeout(remaining);
     let mut command = tokio::process::Command::new(binary);
     command
         .args(args)
@@ -1193,7 +1203,49 @@ mod tests {
         )
         .await;
         assert!(matches!(result, Err(HerdrError::TimedOut)));
-        assert!(started.elapsed() < Duration::from_secs(5));
+        // Hang-detector bound only, not a pass/fail timing assertion: a
+        // tight upper bound here (e.g. the old 5s) is exactly what makes
+        // this flaky under CI/kill+reap scheduling contention. The
+        // semantic assertion above already proves the process timed out
+        // rather than completing its 30s `sleep`; this generous margin
+        // (comfortably above both the 2s caller deadline and the 5s
+        // `HERDR_PROCESS_CAP`) exists solely to catch the test genuinely
+        // hanging, never to assert *which* of the two bounds fired first.
+        // The `effective_process_timeout_*` unit tests below are the actual
+        // deterministic proof that a 2s caller deadline governs over the 5s
+        // `HERDR_PROCESS_CAP` (HR-SAFE-002); this test only proves the
+        // end-to-end spawn path times out at all.
+        assert!(started.elapsed() < Duration::from_secs(15));
+    }
+
+    /// HR-SAFE-002 precedence proof (deterministic, no wall-clock): a
+    /// caller deadline shorter than `HERDR_PROCESS_CAP` governs the
+    /// effective process timeout.
+    #[test]
+    fn effective_process_timeout_uses_the_shorter_caller_deadline() {
+        assert_eq!(
+            effective_process_timeout(Duration::from_secs(2)),
+            Duration::from_secs(2)
+        );
+    }
+
+    /// HR-SAFE-002 precedence proof (deterministic, no wall-clock): a
+    /// caller deadline longer than `HERDR_PROCESS_CAP` is clamped to the
+    /// cap, so a slow/misbehaving `herdr` child is never allowed to run
+    /// past it.
+    #[test]
+    fn effective_process_timeout_clamps_to_the_process_cap() {
+        assert_eq!(
+            effective_process_timeout(Duration::from_secs(30)),
+            HERDR_PROCESS_CAP
+        );
+    }
+
+    /// A caller deadline of zero (already expired) selects a zero timeout,
+    /// never a negative or the process cap.
+    #[test]
+    fn effective_process_timeout_of_zero_remaining_is_zero() {
+        assert_eq!(effective_process_timeout(Duration::ZERO), Duration::ZERO);
     }
 
     #[test]

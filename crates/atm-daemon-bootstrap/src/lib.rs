@@ -469,9 +469,16 @@ async fn start_replacement_runtime(
     handler: Arc<StorageAndNudgeRouter>,
     runtime_health: RuntimeHealth,
 ) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
+    // `StorageAndNudgeRouter` forwards `RuntimeMaintenance::start` to the
+    // `HerdrQueueWakePump` composed in `build_replacement_handler`. Without
+    // registering the router itself as the runtime's maintenance object
+    // here, `HttpRuntime` never spawns that forwarding call and the queue
+    // wake pump silently never starts in production.
+    let maintenance = Arc::clone(&handler) as Arc<dyn atm_http_runtime::RuntimeMaintenance>;
     let runtime_handler: Arc<dyn atm_http_runtime::CanonicalWriteHandler> = handler;
     HttpRuntimeBuilder::new(config, runtime_handler)
         .with_runtime_health(runtime_health)
+        .with_maintenance(maintenance)
         .build()?
         .start()
         .await
@@ -790,7 +797,7 @@ mod replacement_runtime_tests {
         SelectedPeerAdapterSelection, ShutdownSignal, assemble_host_runtime_with_template_composer,
         build_replacement_handler, parse_direct_peer_port, parse_peer_wire_mode,
         peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
-        write_ready_signal_if_requested,
+        start_replacement_runtime, write_ready_signal_if_requested,
     };
 
     /// Test-owned receiver selection prevents an external tmux/graft action
@@ -1104,6 +1111,96 @@ mod replacement_runtime_tests {
             .finish()
             .await
             .expect("plaintext bootstrap runtime drains");
+    }
+
+    /// Phase-end CRITICAL regression: `HerdrQueueWakePump` was composed into
+    /// `StorageAndNudgeRouter::with_maintenance` (AQ2.7) but the production
+    /// `start_replacement_runtime` entry point never registered the router
+    /// itself as the `HttpRuntime`'s maintenance object, so the pump was
+    /// never spawned outside of tests that call `pump.tick_once()` directly.
+    ///
+    /// This test goes through the exact production entry point
+    /// (`start_replacement_runtime`, not a hand-assembled
+    /// `HttpRuntimeBuilder`) and asserts the pump actually ran by awaiting
+    /// `RuntimeHealth::subscribe_herdr_queue_tick()`'s own `changed()`
+    /// signal -- the pump's real completion event, fired from
+    /// `record_herdr_queue_tick` every time `tick_once` runs -- instead of
+    /// polling `snapshot()` on a fixed sleep cadence. The subscription is
+    /// created before the runtime starts so the pump's first (immediate)
+    /// tick cannot race ahead of it.
+    #[tokio::test]
+    async fn replacement_runtime_start_actually_runs_the_herdr_queue_wake_pump() {
+        let temporary_root = tempfile::tempdir().expect("temporary bootstrap runtime root");
+        let assembly = open_isolated_sqlite_boundary(temporary_root.path())
+            .expect("assemble isolated daemon runtime")
+            .for_daemon();
+        let peer_stream_adapter =
+            peer_stream_adapter_for_mode(PeerWireMode::plaintext_test(), || {
+                panic!("plaintext bootstrap must not inspect invalid TLS peer configuration")
+            })
+            .expect("plaintext bootstrap selects no TLS stream adapter");
+        let runtime_health = RuntimeHealth::with_owner(std::process::id());
+        let mut herdr_queue_tick = runtime_health.subscribe_herdr_queue_tick();
+        let (handler, _recovery_sweep) = build_replacement_handler(
+            assembly,
+            ReplacementHandlerConfig {
+                observability: Arc::new(NullObservability),
+                selector_factory: |_, _, _, _| {
+                    Arc::new(NoReceivedHookSelector)
+                        as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
+                },
+                daemon_launch_identity: DaemonLaunchIdentity::default(),
+                peer_wire_mode: PeerWireMode::plaintext_test(),
+                peer_adapter_selection: SelectedPeerAdapterSelection {
+                    adapter: peer_stream_adapter.clone(),
+                    pool_config: PeerPoolConfig::default(),
+                },
+                runtime_health: runtime_health.clone(),
+                bare_cli: Default::default(),
+                herdr_process: None,
+            },
+        )
+        .expect("compose the replacement daemon handler");
+        let config = replacement_runtime_config_with_direct_peer(
+            LoopbackTcpConfig::new(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                temporary_root.path().join("local-http.json"),
+                ulid::Ulid::new(),
+            ),
+            None,
+            DirectPeerTcpConfig::ephemeral_for_test(),
+            &peer_stream_adapter,
+            PeerPoolConfig::default(),
+        );
+
+        let running = start_replacement_runtime(config, handler, runtime_health.clone())
+            .await
+            .expect("start the real replacement runtime entry point");
+
+        let observed_tick = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                if herdr_queue_tick.borrow_and_update().is_some() {
+                    return;
+                }
+                herdr_queue_tick
+                    .changed()
+                    .await
+                    .expect("the RuntimeHealth handle stays alive for the test's duration");
+            }
+        })
+        .await;
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("replacement runtime drains");
+
+        observed_tick.expect(
+            "HerdrQueueWakePump must actually run through the production \
+             `start_replacement_runtime` path so its own `RuntimeHealth::record_herdr_queue_tick` \
+             completion signal fires, without any fixed wall-clock sleep",
+        );
     }
 
     #[test]

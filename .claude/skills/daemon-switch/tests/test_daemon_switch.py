@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import argparse
+import json
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 import plistlib
@@ -203,6 +204,189 @@ class MacosDevelopmentSigningTests(unittest.TestCase):
             ],
         )
 
+    def test_restore_accepts_homebrew_pair_without_development_identity(self) -> None:
+        cli = Path("/opt/homebrew/opt/atm/bin/atm")
+        daemon = Path("/opt/homebrew/opt/atm/bin/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "homebrew_pair", return_value=(cli.resolve(), daemon.resolve())),
+            mock.patch.object(DAEMON_SWITCH, "require_homebrew_release_provenance") as provenance,
+            mock.patch.object(DAEMON_SWITCH, "require_macos_development_signatures") as development,
+        ):
+            DAEMON_SWITCH.require_macos_restore_provenance(cli, daemon)
+
+        provenance.assert_called_once_with(cli.resolve(), daemon.resolve())
+        development.assert_not_called()
+
+    def test_restore_rejects_homebrew_pair_without_valid_provenance(self) -> None:
+        cli = Path("/opt/homebrew/opt/atm/bin/atm")
+        daemon = Path("/opt/homebrew/opt/atm/bin/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "homebrew_pair", return_value=(cli.resolve(), daemon.resolve())),
+            mock.patch.object(
+                DAEMON_SWITCH,
+                "require_homebrew_release_provenance",
+                side_effect=DAEMON_SWITCH.SwitchError("invalid release provenance"),
+            ),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "invalid release provenance"):
+                DAEMON_SWITCH.require_macos_restore_provenance(cli, daemon)
+
+    def test_homebrew_release_provenance_accepts_matching_release_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary) / "opt" / "atm"
+            binary_dir = prefix / "bin"
+            binary_dir.mkdir(parents=True)
+            cli = binary_dir / "atm"
+            daemon = binary_dir / "atm-daemon"
+            for binary in (cli, daemon):
+                binary.write_bytes(binary.name.encode("utf-8"))
+                binary.chmod(0o700)
+            formula = {
+                "name": "atm",
+                "full_name": "randlee/tap/atm",
+                "homepage": "https://github.com/randlee/atm-core",
+                "versions": {"stable": "1.4.4"},
+                "installed": [{"version": "1.4.4"}],
+                "urls": {
+                    "stable": {
+                        "url": "https://github.com/randlee/atm-core/releases/download/v1.4.4/atm.tar.gz",
+                        "checksum": "a" * 64,
+                    }
+                },
+            }
+            with (
+                mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+                mock.patch.object(DAEMON_SWITCH.shutil, "which", return_value="/opt/homebrew/bin/brew"),
+                mock.patch.object(
+                    DAEMON_SWITCH,
+                    "run",
+                    side_effect=[
+                        subprocess.CompletedProcess([], 0, f"{prefix}\n", ""),
+                        subprocess.CompletedProcess(
+                            [],
+                            0,
+                            json.dumps(
+                                {
+                                    "formulae": [
+                                        {"name": "openssl", "full_name": "homebrew/core/openssl"},
+                                        formula,
+                                        {"name": "python", "full_name": "homebrew/core/python"},
+                                    ]
+                                }
+                            ),
+                            "",
+                        ),
+                    ],
+                ),
+                mock.patch.object(DAEMON_SWITCH, "selected_release_version", return_value="1.4.4"),
+            ):
+                DAEMON_SWITCH.require_homebrew_release_provenance(cli, daemon)
+
+    def test_homebrew_release_provenance_rejects_invalid_release_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary) / "opt" / "atm"
+            binary_dir = prefix / "bin"
+            binary_dir.mkdir(parents=True)
+            cli = binary_dir / "atm"
+            daemon = binary_dir / "atm-daemon"
+            for binary in (cli, daemon):
+                binary.write_bytes(binary.name.encode("utf-8"))
+                binary.chmod(0o700)
+            formula = {
+                "name": "atm",
+                "full_name": "randlee/tap/atm",
+                "homepage": "https://github.com/randlee/atm-core",
+                "versions": {"stable": "1.4.4"},
+                "installed": [{"version": "1.4.4"}],
+                "urls": {
+                    "stable": {
+                        "url": "https://example.invalid/atm.tar.gz",
+                        "checksum": "not-a-sha256",
+                    }
+                },
+            }
+            with (
+                mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+                mock.patch.object(DAEMON_SWITCH.shutil, "which", return_value="/opt/homebrew/bin/brew"),
+                mock.patch.object(
+                    DAEMON_SWITCH,
+                    "run",
+                    side_effect=[
+                        subprocess.CompletedProcess([], 0, f"{prefix}\n", ""),
+                        subprocess.CompletedProcess([], 0, json.dumps({"formulae": [formula]}), ""),
+                    ],
+                ),
+                mock.patch.object(DAEMON_SWITCH, "selected_release_version", return_value="1.4.4"),
+            ):
+                with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "matching GitHub Release asset"):
+                    DAEMON_SWITCH.require_homebrew_release_provenance(cli, daemon)
+
+    def test_homebrew_release_provenance_does_not_probe_daemon_owner_lock_as_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary) / "opt" / "atm"
+            binary_dir = prefix / "bin"
+            binary_dir.mkdir(parents=True)
+            cli = binary_dir / "atm"
+            daemon = binary_dir / "atm-daemon"
+            for binary in (cli, daemon):
+                binary.write_bytes(binary.name.encode("utf-8"))
+                binary.chmod(0o700)
+            formula = {
+                "name": "atm",
+                "full_name": "randlee/tap/atm",
+                "homepage": "https://github.com/randlee/atm-core",
+                "versions": {"stable": "1.4.4"},
+                "installed": [{"version": "1.4.4"}],
+                "urls": {
+                    "stable": {
+                        "url": "https://github.com/randlee/atm-core/releases/download/v1.4.4/atm.tar.gz",
+                        "checksum": "a" * 64,
+                    }
+                },
+            }
+            probed: list[Path] = []
+
+            def version_probe(binary: Path) -> str:
+                probed.append(binary)
+                if binary == daemon:
+                    return "an ATM daemon already owns ~/.atm/daemon/owner.lock ... retry."
+                return "atm 1.4.4"
+
+            with (
+                mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+                mock.patch.object(DAEMON_SWITCH.shutil, "which", return_value="/opt/homebrew/bin/brew"),
+                mock.patch.object(
+                    DAEMON_SWITCH,
+                    "run",
+                    side_effect=[
+                        subprocess.CompletedProcess([], 0, f"{prefix}\n", ""),
+                        subprocess.CompletedProcess([], 0, json.dumps({"formulae": [formula]}), ""),
+                    ],
+                ),
+                mock.patch.object(DAEMON_SWITCH, "version", side_effect=version_probe),
+            ):
+                DAEMON_SWITCH.require_homebrew_release_provenance(cli, daemon)
+
+            self.assertEqual(probed, [cli.resolve()])
+
+    def test_restore_dispatch_uses_provenance_gate_and_skips_dev_gate(self) -> None:
+        args = argparse.Namespace(command="restore")
+        cli = Path("/release/atm")
+        daemon = Path("/release/atm-daemon")
+        argument_parser = mock.Mock(parse_args=mock.Mock(return_value=args))
+        with (
+            mock.patch.object(DAEMON_SWITCH, "parser", return_value=argument_parser),
+            mock.patch.object(DAEMON_SWITCH, "restore_pair", return_value=(cli, daemon)),
+            mock.patch.object(DAEMON_SWITCH, "require_macos_restore_provenance") as provenance,
+            mock.patch.object(DAEMON_SWITCH, "switch_pair") as switch,
+        ):
+            self.assertEqual(DAEMON_SWITCH.main(), 0)
+
+        provenance.assert_called_once_with(cli, daemon)
+        switch.assert_called_once_with(args, cli, daemon, require_development_signature=False)
+
     def test_signature_check_uses_shared_stable_identifier_verifier(self) -> None:
         daemon = Path("/candidate/atm-daemon")
         with (
@@ -362,6 +546,29 @@ class ReadinessAndRollbackTests(unittest.TestCase):
                 mock.call(daemon_link, old_daemon),
             ],
         )
+
+    def test_switch_path_retains_the_development_signature_gate(self) -> None:
+        args = argparse.Namespace(yes=False, dry_run=True, repair_orphan=False)
+        cli_link = Path("/selected/atm")
+        daemon_link = Path("/selected/atm-daemon")
+        old_cli = Path("/old/atm")
+        old_daemon = Path("/old/atm-daemon")
+        candidate_cli = Path("/candidate/atm")
+        candidate_daemon = Path("/candidate/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(cli_link, daemon_link)),
+            mock.patch.object(
+                DAEMON_SWITCH,
+                "require_executable",
+                side_effect=[old_cli, old_daemon, candidate_cli, candidate_daemon],
+            ),
+            mock.patch.object(DAEMON_SWITCH, "validate_selectors"),
+            mock.patch.object(DAEMON_SWITCH, "require_macos_development_signatures") as development,
+            redirect_stdout(io.StringIO()),
+        ):
+            DAEMON_SWITCH.switch_pair(args, candidate_cli, candidate_daemon)
+
+        development.assert_called_once_with(candidate_cli, candidate_daemon)
 
 
 class TemporaryLaunchJournalTests(unittest.TestCase):

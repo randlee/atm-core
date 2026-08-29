@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-003>
+  a triage:Finding ;
+  triage:findingId "FTQ-003" ;
+  triage:title "herdr deadline test asserts a tight wall-clock upper bound" ;
+  triage:description "Phase AQ phase-end review (ATM-QA-002) found two_second_caller_deadline_preempts_the_five_second_process_cap in crates/atm-herdr/src/lib.rs asserted a tight 5s elapsed-time upper bound after spawning a real, 30s-sleeping child process -- a source of CI flakiness under kill+reap scheduling contention. Fixed by widening the bound to a generous 15s hang-detector-only margin; the semantic assertion, matches!(result, Err(HerdrError::TimedOut)), is unchanged and remains the real pass/fail condition. ATM-QA-001 separately required this test regain deterministic proof that the 2s caller deadline (not the 5s HERDR_PROCESS_CAP) governs, which is now covered by the effective_process_timeout_* unit tests added alongside this fix." ;
+  triage:phaseId "phase-aq" ;
+  triage:triageMode "phase_end" ;
+  triage:category "flaky-test" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AQ ;
+  triage:foundAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/occ-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FTQ-003/occ-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 1183 ;
+  triage:snippet "async fn two_second_caller_deadline_preempts_the_five_second_process_cap() {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aq-phase-review-flaky" ;
+  triage:headSha "a9cb5aec7" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aq-phase-review-flaky/a9cb5aec7> .
+
+<urn:atm:triage:worktree/fix-aq-phase-review-flaky/a9cb5aec7>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aq-phase-review-flaky" ;
+  triage:branch "fix/aq-phase-review-flaky" ;
+  triage:headSha "a9cb5aec7" ;
+  triage:orderIndex 1 .

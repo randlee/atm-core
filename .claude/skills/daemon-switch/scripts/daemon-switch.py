@@ -232,6 +232,130 @@ def require_macos_development_signatures(cli: Path, daemon: Path) -> None:
             )
 
 
+def homebrew_release_metadata() -> dict[str, object]:
+    """Return the installed ATM formula metadata used for release provenance."""
+    brew = shutil.which("brew")
+    if brew is None:
+        raise SwitchError("cannot verify Homebrew release provenance: brew is not installed")
+    try:
+        result = run([brew, "info", "--json=v2", "--installed", "atm"], timeout=10.0)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise SwitchError(f"cannot verify Homebrew release provenance: {error}") from error
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise SwitchError(f"cannot verify Homebrew release provenance: {detail or 'brew info failed'}")
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise SwitchError("cannot verify Homebrew release provenance: brew info returned invalid JSON") from error
+    formulae = payload.get("formulae") if isinstance(payload, dict) else None
+    if not isinstance(formulae, list):
+        raise SwitchError("cannot verify Homebrew release provenance: ATM formula metadata is missing")
+    # Homebrew returns every installed formula when --installed is present,
+    # even when a formula name is supplied. Select ATM explicitly instead of
+    # assuming the response contains one item.
+    atm_formulae = [
+        formula
+        for formula in formulae
+        if isinstance(formula, dict)
+        and (
+            formula.get("name") == "atm"
+            or (
+                isinstance(formula.get("full_name"), str)
+                and formula["full_name"].rsplit("/", maxsplit=1)[-1] == "atm"
+            )
+        )
+    ]
+    if len(atm_formulae) != 1:
+        raise SwitchError("cannot verify Homebrew release provenance: ATM formula metadata is missing")
+    return atm_formulae[0]
+
+
+def require_homebrew_release_provenance(cli: Path, daemon: Path) -> None:
+    """Accept an ad-hoc Homebrew pair only when Homebrew proves its release origin.
+
+    Homebrew verifies the release archive checksum before installing it.  The
+    formula metadata is therefore the provenance boundary for the extracted
+    binaries: it must identify this project, the same release version in both
+    installed and stable metadata, the v-tagged GitHub Release asset, and a
+    valid SHA-256 checksum.  This gate is intentionally restore-only; source
+    switches continue to require the Apple Development identity.
+    """
+    if platform.system() != "Darwin":
+        return
+    cli = require_executable(cli, "Homebrew atm CLI")
+    daemon = require_executable(daemon, "Homebrew atm daemon")
+    brew = shutil.which("brew")
+    if brew is None:
+        raise SwitchError("cannot verify Homebrew release provenance: brew is not installed")
+    try:
+        prefix_result = run([brew, "--prefix", "atm"], timeout=10.0)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise SwitchError(f"cannot verify Homebrew release provenance: {error}") from error
+    if prefix_result.returncode != 0:
+        raise SwitchError("cannot verify Homebrew release provenance: brew prefix failed")
+    try:
+        prefix = Path(prefix_result.stdout.strip()).expanduser().resolve()
+    except (OSError, RuntimeError) as error:
+        raise SwitchError(f"cannot verify Homebrew release provenance: invalid formula prefix: {error}") from error
+    expected_bin_dir = (prefix / "bin").resolve()
+    for label, binary in (("CLI", cli), ("daemon", daemon)):
+        try:
+            binary.relative_to(expected_bin_dir)
+        except ValueError as error:
+            raise SwitchError(
+                f"{label} target is not the installed Homebrew ATM binary under {expected_bin_dir}: {binary}"
+            ) from error
+
+    formula = homebrew_release_metadata()
+    if formula.get("homepage") != "https://github.com/randlee/atm-core":
+        raise SwitchError("Homebrew ATM formula has an unexpected project homepage")
+    # atm-daemon has no side-effect-free --version mode: while the singleton
+    # is running, probing it attempts startup and returns the owner-lock error.
+    # Both binaries are extracted from Homebrew's one checksummed release
+    # archive, so the CLI version plus formula provenance establishes pairing
+    # without probing the live daemon.
+    cli_version = selected_release_version(cli)
+    versions = formula.get("versions")
+    installed = formula.get("installed")
+    if not isinstance(versions, dict) or versions.get("stable") != cli_version:
+        raise SwitchError("Homebrew ATM formula stable version does not match the selected binaries")
+    if (
+        not isinstance(installed, list)
+        or len(installed) != 1
+        or not isinstance(installed[0], dict)
+        or installed[0].get("version") != cli_version
+    ):
+        raise SwitchError("Homebrew ATM installed version does not match the selected binaries")
+    urls = formula.get("urls")
+    stable = urls.get("stable") if isinstance(urls, dict) else None
+    release_url = stable.get("url") if isinstance(stable, dict) else None
+    checksum = stable.get("checksum") if isinstance(stable, dict) else None
+    expected_prefix = f"https://github.com/randlee/atm-core/releases/download/v{cli_version}/"
+    if not isinstance(release_url, str) or not release_url.startswith(expected_prefix):
+        raise SwitchError("Homebrew ATM formula does not point at the matching GitHub Release asset")
+    if not isinstance(checksum, str) or re.fullmatch(r"[0-9a-fA-F]{64}", checksum) is None:
+        raise SwitchError("Homebrew ATM formula has no valid SHA-256 release asset checksum")
+
+
+def require_macos_restore_provenance(cli: Path, daemon: Path) -> None:
+    """Validate restore targets as either a verified Homebrew release or dev pair."""
+    if platform.system() != "Darwin":
+        return
+    brew_pair = homebrew_pair()
+    try:
+        selected = (cli.expanduser().resolve(), daemon.expanduser().resolve())
+    except (OSError, RuntimeError) as error:
+        raise SwitchError(f"cannot resolve restore targets: {error}") from error
+    if brew_pair is not None and selected == brew_pair:
+        require_homebrew_release_provenance(*brew_pair)
+        return
+    # A non-Homebrew restore remains a development restore and keeps the
+    # original strict signing policy. Only the managed Homebrew release gets
+    # the ad-hoc-signature exception.
+    require_macos_development_signatures(cli, daemon)
+
+
 def homebrew_pair() -> tuple[Path, Path] | None:
     brew = shutil.which("brew")
     if brew is None:
@@ -768,7 +892,13 @@ def temporary_launch_evidence(session: TemporaryLaunchSession, outcome: str) -> 
     }
 
 
-def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path) -> None:
+def switch_pair(
+    args: argparse.Namespace,
+    cli_target: Path,
+    daemon_target: Path,
+    *,
+    require_development_signature: bool = True,
+) -> None:
     require_no_active_temporary_launch_session()
     cli_link, daemon_link = selected_links(args)
     validate_selectors(cli_link, daemon_link)
@@ -791,7 +921,8 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
         raise SwitchError(
             "refusing targets from different release directories; build or install the matched pair together"
         )
-    require_macos_development_signatures(cli_target, daemon_target)
+    if require_development_signature:
+        require_macos_development_signatures(cli_target, daemon_target)
     if cli_link.resolve() == cli_target and daemon_link.resolve() == daemon_target:
         print("already selected; service left running")
         return
@@ -1074,7 +1205,8 @@ def main() -> int:
             switch_pair(args, Path(args.cli), Path(args.daemon))
         elif args.command == "restore":
             cli, daemon = restore_pair(args)
-            switch_pair(args, cli, daemon)
+            require_macos_restore_provenance(cli, daemon)
+            switch_pair(args, cli, daemon, require_development_signature=False)
         elif args.command == "restart":
             restart(args)
         elif args.command == "temporary-launch":

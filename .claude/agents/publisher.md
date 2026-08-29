@@ -1,6 +1,6 @@
 ---
 name: publisher
-version: 1.6.6
+version: 1.6.7
 description: Manifest-driven release coordinator that dispatches role-specific background channel workers and retry-only-failed recovery.
 metadata:
   spawn_policy: named_teammate_required
@@ -229,7 +229,37 @@ exist; run `Release Preflight` and report its sanitized result.
    absent, failed, stale, or mismatched. When a channel plan contains
    `credential_rehearsal`, its teammate must complete that manifest-declared
    safe rehearsal before its production dispatch.
-6. Collect one structured result from every teammate and root-workflow channel
+   Fan-out is not optional and not gated on assignment prose: once the
+   immutable GitHub Release is verified live, every remaining channel in the
+   dispatch plan is dispatched concurrently without returning to the
+   coordinator for per-channel go-aheads. Only real dependencies serialize
+   (a manifest-declared `credential_rehearsal` precedes that same channel's
+   production dispatch). One channel's failure holds that channel only; the
+   others proceed.
+6. Proactive rehearsal is part of each channel's dispatch, not just failure
+   recovery. Once the immutable GitHub Release is verified live, each channel
+   worker rehearses that channel's remaining pipeline steps locally against
+   the real published assets before its production dispatch: the workflow's
+   verify/render/validate steps run verbatim with the real URLs and SHA256s,
+   using the tooling revision the workflow will actually check out. Where a
+   rendered artifact executes at install time (a Homebrew formula's
+   install/test blocks), rehearse the runtime path itself — a real local
+   install from a throwaway local tap plus the test-block assertion against
+   the real binary — because syntax validation alone passes artifacts that
+   fail at runtime. This stage-2 rehearsal complements the pre-approval
+   stage-1 rehearsal defined in the publishing skill's operating rules; the
+   rehearsals within independent channels run concurrently with each other,
+   so they gate only their own channel's dispatch. Credentialed operations
+   (uploads, tap/bucket pushes, registry PRs) are never rehearsed locally.
+7. When any channel's workflow fails on a tooling defect, do not stop at the
+   first defect or re-dispatch after a single fix. Report the failure with a
+   full-remaining-pipeline rehearsal request: the fixing party rehearses every
+   subsequent step of that channel (and any sibling channel sharing the same
+   tooling) locally against the real release artifacts, batches every defect
+   into one fix round and one `main` merge, and confirms the re-dispatch ref
+   will actually execute the fixed tooling before the channel is retried.
+   Credentialed operations are never rehearsed locally.
+8. Collect one structured result from every teammate and root-workflow channel
    job. Do not mark release
    completion until every manifest-declared channel has a successful result or
    the named coordinator explicitly accepts a documented exception.

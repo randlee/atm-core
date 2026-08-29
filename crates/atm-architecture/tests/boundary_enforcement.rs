@@ -2502,6 +2502,68 @@ fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes(
 }
 
 #[test]
+fn al9_atm_graft_pins_full_dependency_set_including_http_runtime() {
+    // RBQA post-merge review (2026-08): atm-graft/Cargo.toml declared
+    // atm-http-runtime (AL.9, cc3ae58c4 routes atm-graft write-transport
+    // selection through atm_http_runtime::preferred_local_client /
+    // selected_write_transport) without the boundary TOML's
+    // allowed_dependencies listing it, and without a Rust guard pinning
+    // atm-graft's full dependency set the way al1_http_runtime_is_core_
+    // contract_only_and_excludes_retired_transport_shapes does for
+    // atm-http-runtime. This test closes both gaps.
+    let dependencies = direct_normal_workspace_dependencies();
+    let actual = dependencies
+        .get("atm-graft")
+        .expect("atm-graft package must exist");
+    let expected = BTreeSet::from([
+        "agent-team-mail-core".to_string(),
+        "atm-daemon-client".to_string(),
+        "atm-http-runtime".to_string(),
+    ]);
+    assert_eq!(
+        actual, &expected,
+        "atm-graft's normal workspace dependency set drifted; update this guard and the \
+         boundaries/atm-graft/shared-client-consumer.toml allowed_dependencies together"
+    );
+
+    let root = workspace_root();
+    let boundary_path = root.join("boundaries/atm-graft/shared-client-consumer.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("atm-graft shared-client-consumer boundary must parse");
+    let allowed_dependencies = boundary
+        .dependencies
+        .allowed_dependencies
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let package_to_crate_name = BTreeMap::from([
+        ("agent-team-mail-core".to_string(), "atm-core".to_string()),
+        (
+            "atm-daemon-client".to_string(),
+            "atm-daemon-client".to_string(),
+        ),
+        (
+            "atm-http-runtime".to_string(),
+            "atm-http-runtime".to_string(),
+        ),
+    ]);
+    let missing = actual
+        .iter()
+        .map(|package| {
+            package_to_crate_name.get(package).unwrap_or_else(|| {
+                panic!("no crate-name mapping registered for package `{package}`")
+            })
+        })
+        .filter(|crate_name| !allowed_dependencies.contains(crate_name.as_str()))
+        .collect::<Vec<_>>();
+    assert!(
+        missing.is_empty(),
+        "boundaries/atm-graft/shared-client-consumer.toml allowed_dependencies is missing crates \
+         atm-graft actually depends on: {missing:?}"
+    );
+}
+
+#[test]
 fn al1_compatibility_oracle_retains_negative_inputs_after_ipc_retirement() {
     let root = workspace_root();
     let oracle = read_source(&root.join("docs/plans/phase-al/AL1-runtime-compatibility-oracle.md"));
@@ -2994,6 +3056,42 @@ fn al8_marks_the_replacement_bootstrap_as_the_only_active_daemon_boundary() {
     let boundary: BoundaryToml =
         toml::from_str(&contents).expect("replacement bootstrap boundary must remain valid TOML");
     assert_eq!(boundary.status.state, "active");
+}
+
+#[test]
+fn al8_replacement_runtime_registers_maintenance_for_every_composed_runtime_maintenance_implementer()
+ {
+    // Phase-end CRITICAL regression: `HerdrQueueWakePump` was composed into
+    // `StorageAndNudgeRouter::with_maintenance` (AQ2.7), and
+    // `StorageAndNudgeRouter` forwards `RuntimeMaintenance::start` to it, but
+    // the production `start_replacement_runtime` entry point never
+    // registered the router itself as the `HttpRuntime`'s maintenance
+    // object via `HttpRuntimeBuilder::with_maintenance`. `HttpRuntime` never
+    // spawned the forwarding call, so the pump silently never ran outside of
+    // tests that call `pump.tick_once()` directly. This pins both halves of
+    // that wiring so a future composed `RuntimeMaintenance` implementer
+    // cannot regress the same way.
+    let root = workspace_root();
+    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let replacement_handler =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/replacement_handler.rs"));
+
+    assert!(
+        replacement_handler.contains("HerdrQueueWakePump::new(")
+            && replacement_handler.contains(".with_maintenance(queue_wake_pump)"),
+        "AL.8 replacement handler must compose the Herdr queue-wake pump as the router's \
+         `RuntimeMaintenance` implementer"
+    );
+
+    let start_replacement_runtime = extract_fn_body(&bootstrap, "start_replacement_runtime");
+    assert!(
+        start_replacement_runtime.contains("HttpRuntimeBuilder::new(")
+            && start_replacement_runtime.contains(".with_maintenance("),
+        "AL.8 `start_replacement_runtime` builds the replacement runtime's `HttpRuntimeBuilder` \
+         but never registers the router as the `HttpRuntime`'s maintenance object; any \
+         `RuntimeMaintenance` implementer composed into `StorageAndNudgeRouter` (for example \
+         `HerdrQueueWakePump`) would silently never run in production"
+    );
 }
 
 #[test]
@@ -3518,6 +3616,35 @@ fn documented_boundary_section<'a>(docs: &'a str, name: &str) -> Option<&'a str>
 fn read_source(path: &Path) -> String {
     fs::read_to_string(path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+}
+
+/// Returns the brace-delimited body (inclusive of the braces) of the first
+/// `fn {fn_name}(` occurrence in `source`, so fitness assertions can pin
+/// wiring inside one specific function instead of matching anywhere in the
+/// file (for example inside an unrelated test).
+fn extract_fn_body<'source>(source: &'source str, fn_name: &str) -> &'source str {
+    let marker = format!("fn {fn_name}(");
+    let signature_start = source
+        .find(&marker)
+        .unwrap_or_else(|| panic!("function `{fn_name}` not found in source"));
+    let body_start = source[signature_start..]
+        .find('{')
+        .map(|offset| signature_start + offset)
+        .unwrap_or_else(|| panic!("function `{fn_name}` has no body"));
+    let mut depth = 0usize;
+    for (offset, character) in source[body_start..].char_indices() {
+        match character {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &source[body_start..=body_start + offset];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("function `{fn_name}` body is not closed")
 }
 
 fn retired_windows_transport_ast_findings(path: &Path) -> Vec<String> {

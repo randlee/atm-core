@@ -25,15 +25,7 @@ pub(crate) fn daemon_atm_config(env: &dyn EnvSource) -> Option<AtmConfig> {
 #[cfg(test)]
 mod tests {
     use super::daemon_atm_config;
-    use std::collections::HashMap;
-
-    struct FixedEnvSource(HashMap<&'static str, String>);
-
-    impl atm_core::atm_temp::EnvSource for FixedEnvSource {
-        fn var(&self, key: &str) -> Option<String> {
-            self.0.get(key).cloned()
-        }
-    }
+    use atm_core::test_support::FakeEnvSource;
 
     /// QM43-I5: sweep-interval/TTL threading reads `$HOME/.atm.toml`, not a
     /// workspace-relative config -- `assemble_daemon_runtime`'s doc comment
@@ -47,9 +39,8 @@ mod tests {
             "[atm]\nsweep_interval_seconds = 120\nsweep_ttl_days = 7\n",
         )
         .expect("write .atm.toml");
-        let mut vars = HashMap::new();
-        vars.insert("HOME", home.path().to_str().expect("utf8 path").to_string());
-        let config = daemon_atm_config(&FixedEnvSource(vars)).expect("config resolves");
+        let env = FakeEnvSource::new([("HOME", Some(home.path().to_str().expect("utf8 path")))]);
+        let config = daemon_atm_config(&env).expect("config resolves");
         assert_eq!(config.sweep_interval_seconds, 120);
         assert_eq!(config.sweep_ttl_days, 7);
     }
@@ -57,13 +48,12 @@ mod tests {
     #[test]
     fn daemon_atm_config_is_none_without_a_home_atm_toml() {
         let home = tempfile::tempdir().expect("tempdir");
-        let mut vars = HashMap::new();
-        vars.insert("HOME", home.path().to_str().expect("utf8 path").to_string());
-        assert_eq!(daemon_atm_config(&FixedEnvSource(vars)), None);
+        let env = FakeEnvSource::new([("HOME", Some(home.path().to_str().expect("utf8 path")))]);
+        assert_eq!(daemon_atm_config(&env), None);
     }
 
     #[test]
     fn daemon_atm_config_is_none_when_home_is_unresolvable() {
-        assert_eq!(daemon_atm_config(&FixedEnvSource(HashMap::new())), None);
+        assert_eq!(daemon_atm_config(&FakeEnvSource::empty()), None);
     }
 }

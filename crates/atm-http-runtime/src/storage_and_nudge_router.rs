@@ -1034,7 +1034,7 @@ mod tests {
     use crate::{
         AcceptedPeerStream, EstablishedPeerStream, HttpRuntimeBuilder, HttpRuntimeConfig,
         LoopbackTcpConfig, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, PeerStreamFuture,
-        direct_peer_tcp_client,
+        direct_peer_tcp_client, shared_direct_peer_client,
     };
     use crate::{
         AuthenticatedConnector, BareCliFifo, BareCliQueueFullDrops, CanonicalWriteHandler,
@@ -1572,6 +1572,28 @@ mod tests {
         )
     }
 
+    /// Hang detector for two-runtime router tests that dispatch a canonical
+    /// write or ACK over a real reqwest client to a real, in-process peer
+    /// HTTP runtime. This is not a timing assertion on how fast delivery
+    /// should be: it exists only to fail a genuinely hung exchange instead of
+    /// blocking `cargo test` forever. A fresh client build (TLS/connector
+    /// init), TCP connect, remote accept, remote `commit_write` (including a
+    /// SQLite fsync), and the synchronous received-hook path all happen
+    /// inside this budget on a shared executor, so it must stay generous on
+    /// loaded CI runners. See `DIRECT_PEER_TEST_SERVER_REQUEST_TIMEOUT` for
+    /// the server-side counterpart, which must stay strictly larger than
+    /// this value per the request-budget contract.
+    const TWO_RUNTIME_TEST_REQUEST_BUDGET: Duration = Duration::from_secs(30);
+
+    /// Hang detector for tests that host a real accept loop and a real
+    /// client dispatch on the same executor (see `TWO_RUNTIME_TEST_REQUEST_BUDGET`
+    /// for the client-side counterpart). This is not a timing assertion: it
+    /// only needs to be comfortably larger than the client-side budget so a
+    /// slow-but-correct exchange cannot be starved by the server closing the
+    /// connection first. Per the request-budget contract, the server budget
+    /// must stay strictly greater than the client budget.
+    const DIRECT_PEER_TEST_SERVER_REQUEST_TIMEOUT: Duration = Duration::from_secs(35);
+
     fn direct_peer_runtime_config(
         fixture: &Fixture,
         direct_peer: crate::DirectPeerTcpConfig,
@@ -1590,7 +1612,8 @@ mod tests {
                 std::num::NonZeroUsize::new(1).expect("non-zero request limit"),
             ),
             RuntimeTimeouts::new(
-                NonZeroDuration::new(Duration::from_secs(1)).expect("request timeout"),
+                NonZeroDuration::new(DIRECT_PEER_TEST_SERVER_REQUEST_TIMEOUT)
+                    .expect("request timeout"),
                 NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
             ),
         )
@@ -3489,7 +3512,7 @@ mod tests {
             .expect("direct peer runtime drains");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn locally_admitted_host_qualified_write_is_forwarded_by_the_selected_daemon() {
         let remote = fixture(true, None, None);
         let remote_runtime = HttpRuntimeBuilder::new(
@@ -3510,7 +3533,10 @@ mod tests {
         local.router = local
             .router
             .clone()
-            .with_direct_peer_port(NonZeroU16::new(remote_port).expect("non-zero port"));
+            .with_direct_peer_port(NonZeroU16::new(remote_port).expect("non-zero port"))
+            .with_shared_direct_peer_client(
+                shared_direct_peer_client().expect("shared direct peer client"),
+            );
         let mut outbound = write_request(local.home_dir.clone(), local.current_dir.clone());
         outbound.to = Some(
             "recipient@test-team.127.0.0.1"
@@ -3522,7 +3548,7 @@ mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
             )
             .await
             .expect("local daemon owns host-qualified delivery");
@@ -3552,7 +3578,7 @@ mod tests {
             .expect("remote runtime drains");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn selected_router_reuses_one_opaque_peer_connection_across_three_loopback_writes() {
         let adapter = Arc::new(CountingPassthroughPeerAdapter::default());
         let remote = fixture(true, None, None);
@@ -3590,7 +3616,7 @@ mod tests {
                 .dispatch(
                     ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
                     AuthenticatedIngress::Local,
-                    RequestDeadline::after(Duration::from_secs(1)),
+                    RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
                 )
                 .await
                 .expect("selected router forwards the local write");
@@ -3629,7 +3655,7 @@ mod tests {
             .expect("remote runtime drains");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn local_ack_routes_to_the_received_peer_and_peer_receipt_does_not_reacknowledge() {
         let remote = fixture(true, None, None);
         let remote_runtime = HttpRuntimeBuilder::new(
@@ -3650,7 +3676,10 @@ mod tests {
         local.router = local
             .router
             .clone()
-            .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"));
+            .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"))
+            .with_shared_direct_peer_client(
+                shared_direct_peer_client().expect("shared direct peer client"),
+            );
         let local_runtime = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&local, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(local.router.clone()),
@@ -3726,7 +3755,7 @@ mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
             )
             .await
             .expect("local acknowledgement is delivered to the stored peer host");

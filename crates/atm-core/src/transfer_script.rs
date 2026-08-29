@@ -798,6 +798,7 @@ fn is_owner_executable(mode: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::FakeEnvSource;
 
     fn host(value: &str) -> HostName {
         value.parse().expect("valid host")
@@ -1306,20 +1307,12 @@ mod tests {
         }
     }
 
-    struct FakeEnvSource(std::collections::HashMap<&'static str, String>);
-
-    impl EnvSource for FakeEnvSource {
-        fn var(&self, key: &str) -> Option<String> {
-            self.0.get(key).cloned()
-        }
-    }
-
     /// A home-directory resolution failure must surface as its own error,
     /// distinct from `AtmTempError::Unresolvable` (which names an
     /// `ATM_TEMP`-resolution failure, not a home-directory one) (QM43-B2).
     #[test]
     fn missing_home_env_vars_report_home_dir_unavailable() {
-        let env = FakeEnvSource(std::collections::HashMap::new());
+        let env = FakeEnvSource::empty();
         let error = home_dir_from_env(&env).expect_err("no HOME/USERPROFILE must fail closed");
         assert_eq!(error, AtmTempError::HomeDirUnavailable);
     }
@@ -1330,18 +1323,14 @@ mod tests {
         // raw value flows through unchanged, not that it looks like a real
         // Unix home directory (`home_dir_from_env` does not validate path
         // shape at all).
-        let mut vars = std::collections::HashMap::new();
-        vars.insert("HOME", "test-home-value".to_string());
-        let env = FakeEnvSource(vars);
+        let env = FakeEnvSource::new([("HOME", Some("test-home-value"))]);
         let home = home_dir_from_env(&env).expect("HOME is set");
         assert_eq!(home, PathBuf::from("test-home-value"));
     }
 
     #[test]
     fn userprofile_is_used_when_home_is_unset() {
-        let mut vars = std::collections::HashMap::new();
-        vars.insert("USERPROFILE", r"C:\Users\rand".to_string());
-        let env = FakeEnvSource(vars);
+        let env = FakeEnvSource::new([("USERPROFILE", Some(r"C:\Users\rand"))]);
         let home = home_dir_from_env(&env).expect("USERPROFILE is set");
         assert_eq!(home, PathBuf::from(r"C:\Users\rand"));
     }
@@ -1361,7 +1350,7 @@ mod tests {
     #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
     fn unix_synthesized_env_is_exactly_the_fixed_minimal_path() {
-        let env = FakeEnvSource(std::collections::HashMap::new());
+        let env = FakeEnvSource::empty();
         let entries = synthesized_transfer_script_env(&env);
         assert_eq!(
             entries,
@@ -1372,7 +1361,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn macos_synthesized_env_is_exactly_the_fixed_minimal_path() {
-        let env = FakeEnvSource(std::collections::HashMap::new());
+        let env = FakeEnvSource::empty();
         let entries = synthesized_transfer_script_env(&env);
         assert_eq!(
             entries,
@@ -1390,12 +1379,10 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn unix_synthesized_env_never_forwards_the_callers_path() {
-        let mut vars = std::collections::HashMap::new();
-        vars.insert(
+        let env = FakeEnvSource::new([(
             "PATH",
-            "/definitely-not-a-real-dir/atm-caller-path-marker".to_string(),
-        );
-        let env = FakeEnvSource(vars);
+            Some("/definitely-not-a-real-dir/atm-caller-path-marker"),
+        )]);
         let entries = synthesized_transfer_script_env(&env);
         let path = path_entry(&entries, "PATH").expect("PATH is always present");
         assert!(
@@ -1411,7 +1398,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn unix_synthesized_env_forwards_home_only_when_the_caller_has_one() {
-        let env = FakeEnvSource(std::collections::HashMap::new());
+        let env = FakeEnvSource::empty();
         assert_eq!(
             path_entry(&synthesized_transfer_script_env(&env), "HOME"),
             None
@@ -1421,9 +1408,7 @@ mod tests {
         // when_present` above): this test only proves `HOME`'s raw value
         // flows through unchanged, not that it looks like a real Unix home
         // directory.
-        let mut vars = std::collections::HashMap::new();
-        vars.insert("HOME", "test-home-value".to_string());
-        let env = FakeEnvSource(vars);
+        let env = FakeEnvSource::new([("HOME", Some("test-home-value"))]);
         assert_eq!(
             path_entry(&synthesized_transfer_script_env(&env), "HOME"),
             Some(OsString::from("test-home-value"))
@@ -1433,7 +1418,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_synthesized_env_defaults_system_root_when_unset() {
-        let env = FakeEnvSource(std::collections::HashMap::new());
+        let env = FakeEnvSource::empty();
         let entries = synthesized_transfer_script_env(&env);
         let path = path_entry(&entries, "PATH").expect("PATH is always present");
         let path = path.to_string_lossy();
@@ -1452,13 +1437,13 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_synthesized_env_uses_an_explicit_system_root_and_never_forwards_the_callers_path() {
-        let mut vars = std::collections::HashMap::new();
-        vars.insert("SystemRoot", r"D:\CustomWindows".to_string());
-        vars.insert(
-            "PATH",
-            r"C:\definitely-not-a-real-dir\atm-caller-path-marker".to_string(),
-        );
-        let env = FakeEnvSource(vars);
+        let env = FakeEnvSource::new([
+            ("SystemRoot", Some(r"D:\CustomWindows")),
+            (
+                "PATH",
+                Some(r"C:\definitely-not-a-real-dir\atm-caller-path-marker"),
+            ),
+        ]);
         let entries = synthesized_transfer_script_env(&env);
         let path = path_entry(&entries, "PATH").expect("PATH is always present");
         let path = path.to_string_lossy();
@@ -1477,12 +1462,10 @@ mod tests {
     fn windows_synthesized_env_includes_pwshs_own_directory_when_locatable() {
         let dir = tempfile::tempdir().expect("tempdir");
         std::fs::write(dir.path().join("pwsh.exe"), b"").expect("write fake pwsh.exe");
-        let mut vars = std::collections::HashMap::new();
-        vars.insert(
+        let env = FakeEnvSource::new([(
             "PATH",
-            dir.path().to_str().expect("utf8 tempdir path").to_string(),
-        );
-        let env = FakeEnvSource(vars);
+            Some(dir.path().to_str().expect("utf8 tempdir path")),
+        )]);
         let entries = synthesized_transfer_script_env(&env);
         let path = path_entry(&entries, "PATH").expect("PATH is always present");
         assert!(
@@ -1495,15 +1478,13 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_synthesized_env_forwards_temp_only_when_the_caller_has_one() {
-        let env = FakeEnvSource(std::collections::HashMap::new());
+        let env = FakeEnvSource::empty();
         assert_eq!(
             path_entry(&synthesized_transfer_script_env(&env), "TEMP"),
             None
         );
 
-        let mut vars = std::collections::HashMap::new();
-        vars.insert("TEMP", r"C:\Users\rand\AppData\Local\Temp".to_string());
-        let env = FakeEnvSource(vars);
+        let env = FakeEnvSource::new([("TEMP", Some(r"C:\Users\rand\AppData\Local\Temp"))]);
         assert_eq!(
             path_entry(&synthesized_transfer_script_env(&env), "TEMP"),
             Some(OsString::from(r"C:\Users\rand\AppData\Local\Temp"))
@@ -1530,7 +1511,7 @@ mod tests {
             "COMSPEC",
         ];
 
-        let env = FakeEnvSource(std::collections::HashMap::new());
+        let env = FakeEnvSource::empty();
         let entries = synthesized_transfer_script_env(&env);
         for key in keys {
             assert_eq!(
@@ -1540,11 +1521,8 @@ mod tests {
             );
         }
 
-        let mut vars = std::collections::HashMap::new();
-        for key in keys {
-            vars.insert(key, format!("value-for-{key}"));
-        }
-        let env = FakeEnvSource(vars);
+        let env =
+            FakeEnvSource::from_pairs(keys.iter().map(|key| (*key, format!("value-for-{key}"))));
         let entries = synthesized_transfer_script_env(&env);
         for key in keys {
             assert_eq!(

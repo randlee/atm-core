@@ -29,6 +29,16 @@ final physical proof.
 | RBQA-F103-AL | corrected/waived | `9e303af7`: active Tokio bootstrap and CLI use the `atm-core` contract; the frozen legacy daemon occurrence is waived for Phase AM deletion |
 | AL-CLOSURE-004 | pending physical proof | intentionally out of this documentation/source cleanup; final AL.9 physical-proof run is required |
 
+**2026-08-28 (out-of-band, PR #1082, `fix/aq-phase-review-boundary`):** an
+undeclared Cargo dependency edge from `atm-graft` to `atm-http-runtime` was
+backfilled into `boundaries/atm-graft/shared-client-consumer.toml`, guarded by
+the new architecture test
+`al9_atm_graft_pins_full_dependency_set_including_http_runtime`. This is a
+boundary-declaration correction only, made outside the Phase AL sprint
+sequence during Phase AQ review. **AL-CLOSURE-004 remains open and is
+unaffected by this change** — the AL.9 final physical-proof matrix is still
+required before Phase AL can be declared complete.
+
 ## Required physical proof before completion
 
 At a single SHA/version-selected candidate, retain and index the following:

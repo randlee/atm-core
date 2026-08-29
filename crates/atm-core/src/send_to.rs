@@ -478,17 +478,10 @@ pub fn format_attachment_note(landed_dir: &Path, source_files: &[PathBuf]) -> St
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::atm_temp::{EnvSource, resolve_atm_temp};
+    use crate::atm_temp::resolve_atm_temp;
     use crate::boundary::{RosterHarness, RosterMemberKind};
+    use crate::test_support::FakeEnvSource;
     use serde_json::json;
-
-    struct FixedEnvSource(std::collections::HashMap<&'static str, String>);
-
-    impl EnvSource for FixedEnvSource {
-        fn var(&self, key: &str) -> Option<String> {
-            self.0.get(key).cloned()
-        }
-    }
 
     /// Builds a real, security-checked [`AtmTemp`] rooted at an already
     /// `0700`-permissioned throwaway directory, exercising the same
@@ -498,9 +491,8 @@ mod tests {
     /// -- the same pattern `atm_temp.rs`'s own tests use.
     fn atm_temp_for_tests(root: &Path) -> AtmTemp {
         secure_dir_for_tests(root);
-        let mut vars = std::collections::HashMap::new();
-        vars.insert("ATM_TEMP", root.to_str().expect("utf8 path").to_string());
-        resolve_atm_temp(&FixedEnvSource(vars)).expect("throwaway root resolves")
+        let env = FakeEnvSource::new([("ATM_TEMP", Some(root.to_str().expect("utf8 path")))]);
+        resolve_atm_temp(&env).expect("throwaway root resolves")
     }
 
     #[cfg(unix)]

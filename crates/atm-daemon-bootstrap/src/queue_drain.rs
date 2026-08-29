@@ -1018,11 +1018,10 @@ mod tests {
         pane: Option<PaneId>,
         backend: Option<&str>,
     ) -> RosterEntry {
-        let metadata_json = backend.map_or_else(Default::default, |backend| {
-            let mut metadata = serde_json::Map::new();
-            metadata.insert(["backend", "Type"].concat(), serde_json::json!(backend));
-            metadata
-        });
+        let metadata_json = backend.map_or_else(
+            Default::default,
+            atm_core::delivery_channel::test_backend_type_metadata,
+        );
         RosterEntry {
             team_name: team.clone(),
             agent_name: agent.clone(),
