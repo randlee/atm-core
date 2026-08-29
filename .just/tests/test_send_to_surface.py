@@ -327,5 +327,74 @@ class SendToSurfaceTests(unittest.TestCase):
             self.assertIn("send-to picker", result.stderr)
 
 
+# RBQA-F103: ATM_SEND_TO_PICKER / ATM_SEND_TO_NATIVE_PICKER are test-only
+# override seams shipped inside atm-send-to.sh/.ps1 with no mechanical
+# enforcement that they stay documented as test-only or stay confined to the
+# two scripts (plus their own test coverage). This is that enforcement.
+SEND_TO_TEST_ONLY_ENV_VARS = ("ATM_SEND_TO_PICKER", "ATM_SEND_TO_NATIVE_PICKER")
+SEND_TO_SCRIPTS = (
+    ROOT / "scripts/send-to/atm-send-to.sh",
+    ROOT / "scripts/send-to/atm-send-to.ps1",
+)
+# Files other than the two send-to scripts and `test_*` files that
+# legitimately reference the seam today. Kept as an explicit allowlist
+# (rather than a broader glob) so any new reference is a deliberate,
+# reviewed addition rather than an accidental leak into a shipped path.
+SEND_TO_SEAM_REFERENCE_ALLOWLIST = (
+    ROOT / "scripts/phase-aq/run_aq5_wyvern_degradation_evidence.py",
+    # RBQA-F103's own release-environment guard (see
+    # validate_send_to_test_seams in scripts/validate_release.py).
+    ROOT / "scripts/validate_release.py",
+)
+
+
+class SendToTestOnlySeamLintTests(unittest.TestCase):
+    def test_both_scripts_document_the_seam_as_test_only(self) -> None:
+        for script in SEND_TO_SCRIPTS:
+            text = script.read_text(encoding="utf-8")
+            for var in SEND_TO_TEST_ONLY_ENV_VARS:
+                self.assertIn(var, text, f"{script}: expected a reference to {var}")
+                index = text.index(var)
+                # The documenting comment must sit close to the variable, not
+                # merely appear somewhere else in the file.
+                window = text[max(0, index - 600) : index]
+                self.assertIn(
+                    "test-only",
+                    window.lower(),
+                    f"{script}: {var} must be documented as a test-only seam near its use",
+                )
+
+    def test_no_other_shipped_script_or_workflow_references_the_seam(self) -> None:
+        candidate_roots = (
+            ROOT / ".github" / "workflows",
+            ROOT / "scripts",
+            ROOT / ".just",
+        )
+        allowed = {*SEND_TO_SCRIPTS, *SEND_TO_SEAM_REFERENCE_ALLOWLIST}
+        stray: list[str] = []
+        for root in candidate_roots:
+            if not root.exists():
+                continue
+            for path in sorted(root.rglob("*")):
+                if not path.is_file() or path in allowed:
+                    continue
+                if path.name.startswith("test_"):
+                    continue
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except (UnicodeDecodeError, OSError):
+                    continue
+                for var in SEND_TO_TEST_ONLY_ENV_VARS:
+                    if var in text:
+                        stray.append(f"{path.relative_to(ROOT)}: references {var}")
+        self.assertEqual(
+            stray,
+            [],
+            "the Send-To test-only picker seam must stay confined to "
+            "scripts/send-to/atm-send-to.{sh,ps1}, their tests, and the "
+            "explicit SEND_TO_SEAM_REFERENCE_ALLOWLIST entries:\n" + "\n".join(stray),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

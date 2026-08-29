@@ -23,11 +23,15 @@ REQUIRED_RELEASE_FILES = (
     "release/RELEASE-NOTES-TEMPLATE.md",
 )
 REQUIRED_RELEASE_BINARIES = ("atm", "atm-daemon")
+# RBQA-F103: test-only override seams from scripts/send-to/atm-send-to.sh /
+# .ps1 that must never be set in a real release environment.
+SEND_TO_TEST_ONLY_ENV_VARS = ("ATM_SEND_TO_PICKER", "ATM_SEND_TO_NATIVE_PICKER")
 KIT_RELEASE_ARTIFACTS = ".github/scripts/release_artifacts.py"
 CHECK_DEP_CURRENCY_ENV = "ATMD_CHECK_DEP_CURRENCY"
 GITHUB_ISSUE_ENV = "ATMD_GH_AUTOFIX_ISSUES"
 DEFAULT_RELEASE_TARGETS = (
     "support-files",
+    "send-to-test-seams",
     "lint",
     "cli-surface",
     "manifest",
@@ -268,6 +272,28 @@ def validate_support_files(root: Path, findings: list[Finding]) -> None:
                 severity="error",
                 summary="missing required release support files",
                 detail=", ".join(missing),
+            )
+        )
+
+
+def validate_send_to_test_seams(root: Path, findings: list[Finding]) -> None:
+    """Fail release validation if a Send-To test-only picker override leaked
+    into the release environment.
+
+    ATM_SEND_TO_PICKER / ATM_SEND_TO_NATIVE_PICKER exist only so the
+    degradation harness can exercise scripts/send-to/atm-send-to.sh / .ps1
+    without a real UI (see .just/tests/test_send_to_surface.py). Neither
+    variable has a legitimate reason to be set while validating a release.
+    """
+    _ = root  # signature kept uniform with the other validate_* targets
+    leaked = sorted(name for name in SEND_TO_TEST_ONLY_ENV_VARS if os.environ.get(name))
+    if leaked:
+        findings.append(
+            Finding(
+                check="send-to-test-seams",
+                severity="error",
+                summary="Send-To test-only picker override is set in the release environment",
+                detail=", ".join(leaked),
             )
         )
 
@@ -1344,6 +1370,7 @@ def build_parser() -> argparse.ArgumentParser:
             "lint",
             "cli-surface",
             "support-files",
+            "send-to-test-seams",
             "manifest",
             "publish-surface",
             "release-binaries",
@@ -1377,6 +1404,7 @@ def main(argv: list[str] | None = None) -> int:
     findings: list[Finding] = []
     actions = {
         "support-files": lambda: validate_support_files(root, findings),
+        "send-to-test-seams": lambda: validate_send_to_test_seams(root, findings),
         "lint": lambda: validate_lint(root, findings),
         "cli-surface": lambda: validate_cli_surface(root, findings),
         "manifest": lambda: validate_manifest(

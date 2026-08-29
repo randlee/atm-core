@@ -11,6 +11,10 @@ $pickerDir = $PSScriptRoot
 if ($Files.Count -eq 0) { throw "atm-send-to: provide at least one file" }
 $inputJson = (& $atm teams --json --members | Out-String).Trim()
 $pickerOutput = $null
+# Test-only seam: overrides the whole picker step (skipping both Wyvern and
+# the native fallback picker) with an arbitrary PickerInput -> PickerOutput
+# command, so end-to-end send-to coverage never depends on a real UI.
+# Production launches never set this.
 if ($env:ATM_SEND_TO_PICKER) {
     $pickerOutput = $inputJson | & $env:ATM_SEND_TO_PICKER | Out-String
 } else {
