@@ -365,6 +365,17 @@ Satisfied by:
     closed with actionable recovery to use DNS/DDNS or enable mDNS; it must not
     fall back to a durable or inferred IP alias
 
+- `REQ-P-PLATFORM-003` The published release archive set is manifest-declared
+  (`release/publish-artifacts.toml`).
+
+  Required behavior:
+  - the archive set MUST include x86_64 and aarch64 Linux (gnu), x86_64 and
+    aarch64 macOS, and x86_64 Windows
+  - every target is built natively on a matching runner (no cross-linking)
+  - every target is carried by the same packaging path and produces
+    checksummed archives (sha256) alongside every other target
+  - adding a target is a manifest change plus docs, never a workflow fork
+
 ### 2.1 In Scope
 
 - one binary: `atm`
