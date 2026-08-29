@@ -118,7 +118,11 @@ def update_manifest_versions(repo_root: Path, old: str, new: str) -> dict[Path, 
     if not manifests:
         raise SystemExit("no workspace manifests found")
 
-    before = {manifest_path: manifest_path.read_text(encoding="utf-8") for manifest_path in manifests}
+    python_projects = python_project_paths(repo_root)
+    before = {
+        manifest_path: manifest_path.read_text(encoding="utf-8")
+        for manifest_path in [*manifests, *python_projects]
+    }
     for manifest_path in manifests:
         original = before[manifest_path]
         if manifest_path == repo_root / "Cargo.toml":
@@ -136,12 +140,12 @@ def update_manifest_versions(repo_root: Path, old: str, new: str) -> dict[Path, 
     if before[repo_root / "Cargo.toml"] == (repo_root / "Cargo.toml").read_text(encoding="utf-8"):
         raise SystemExit("workspace package version was not found in Cargo.toml")
 
-    for pyproject in python_project_paths(repo_root):
+    for pyproject in python_projects:
         sync_python_version(repo_root, pyproject)
 
     winget_paths = sync_winget_manifests(repo_root, old, new, version_sync_config(repo_root))
 
-    tracked_manifests = [*manifests, *python_project_paths(repo_root)]
+    tracked_manifests = [*manifests, *python_projects]
     tracked_manifests.extend(winget_paths)
     return {
         path: path.read_text(encoding="utf-8")

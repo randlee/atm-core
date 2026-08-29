@@ -52,13 +52,6 @@ def extract_versions_from_url(url: str) -> list[str]:
     return versions
 
 
-def extract_version_from_url(url: str) -> str | None:
-    """Return the first URL version for compatibility with existing callers."""
-
-    versions = extract_versions_from_url(url)
-    return versions[0] if versions else None
-
-
 def version_sync_config(repo_root: Path) -> dict:
     config = load_lint_config(repo_root).get("version_sync", {})
     if not isinstance(config, dict):
@@ -115,7 +108,7 @@ def replace_winget_field_values(
 
 
 def replace_version_occurrences(value: str, old_version: str, new_version: str) -> str:
-    pattern = re.compile(rf"(?<![0-9.]){re.escape(old_version)}(?![0-9])")
+    pattern = re.compile(rf"(?<![0-9.]){re.escape(old_version)}(?![0-9.])")
     return pattern.sub(new_version, value)
 
 

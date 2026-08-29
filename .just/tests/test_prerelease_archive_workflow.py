@@ -117,7 +117,7 @@ def _python3_shim(tmp_path: Path) -> Path:
     bin_dir.mkdir(exist_ok=True)
     if os.name == "nt":
         (bin_dir / "python3.cmd").write_text(
-            f'@"{sys.executable}" %*\n', encoding="utf-8"
+            f'@"{sys.executable}" %*\n', encoding="utf-8", newline="\n"
         )
         drive, tail = os.path.splitdrive(sys.executable)
         msys_executable = (
@@ -129,6 +129,7 @@ def _python3_shim(tmp_path: Path) -> Path:
             "#!/bin/sh\n"
             f'exec "{msys_executable}" "$@"\n',
             encoding="utf-8",
+            newline="\n",
         )
     else:
         (bin_dir / "python3").symlink_to(sys.executable)
@@ -141,10 +142,12 @@ def _python_command_shim(tmp_path: Path, name: str, body: str) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     script = bin_dir / f"{name}.py"
-    script.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
+    script.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8", newline="\n")
     if os.name == "nt":
         (bin_dir / f"{name}.cmd").write_text(
-            f'@"{sys.executable}" "%~dp0{name}.py" %*\n', encoding="utf-8"
+            f'@"{sys.executable}" "%~dp0{name}.py" %*\n',
+            encoding="utf-8",
+            newline="\n",
         )
         drive, tail = os.path.splitdrive(sys.executable)
         msys_executable = (
@@ -156,6 +159,7 @@ def _python_command_shim(tmp_path: Path, name: str, body: str) -> None:
             "#!/bin/sh\n"
             f'exec "{msys_executable}" "$(dirname "$0")/{name}.py" "$@"\n',
             encoding="utf-8",
+            newline="\n",
         )
     else:
         script.chmod(0o755)
@@ -374,17 +378,21 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 for path in prerelease_tag.workspace_manifest_paths(root)
                 if 'version = "1.4.5"' in path.read_text(encoding="utf-8")
             ),
-            *prerelease_tag.python_project_paths(root),
+            *(
+                path
+                for path in prerelease_tag.python_project_paths(root)
+                if "version =" in path.read_text(encoding="utf-8")
+            ),
             root / ".winget" / "randlee.agent-team-mail.yaml",
             root / "Cargo.lock",
         }
         self.assertEqual(set(changes), expected)
+        self.assertNotIn(root / "crates" / "atm-graft-python" / "pyproject.toml", changes)
         for path in prerelease_tag.python_project_paths(root):
+            if path not in changes:
+                continue
             project = tomllib.loads(changes[path])["project"]
-            if "version" in project:
-                self.assertEqual(project["version"], "1.4.6")
-            else:
-                self.assertEqual(project["dynamic"], ["version"])
+            self.assertEqual(project["version"], "1.4.6")
         winget = changes[root / ".winget" / "randlee.agent-team-mail.yaml"]
         self.assertIn("PackageVersion: 1.4.6", winget)
         self.assertIn("ManifestVersion: 1.4.6", winget)
