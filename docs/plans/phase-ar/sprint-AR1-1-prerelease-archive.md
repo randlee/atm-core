@@ -22,7 +22,9 @@ the workflow deliberately performs no develop-reachability check.
 
 `release.yml` and `.github/scripts/release_artifacts.py` are pinned
 sc-publish kit files and remain untouched. The atm-core-owned prerelease
-workflow duplicates the production packaging block and
+workflow duplicates the production packaging block and uses the existing
+`build-plan`, `verify-version`, `verify-version-lockstep`, and target-matrix
+subcommands. The
 `.just/tests/test_prerelease_archive_workflow.py` compares the extracted
 Python blocks byte-for-byte after normalizing only their version-output line.
 No new kit subcommand is introduced.

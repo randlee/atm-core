@@ -10,7 +10,7 @@ name: Prerelease Archive
 # and never hand-edited locally; a workflow like this one, added by the
 # consumer, is exactly the escape hatch the kit expects). It intentionally
 # re-uses only unmodified sc-publish CLI subcommands
-# (release-target-matrix, cargo-build-bin-args, release-package-config) and
+# (build-plan, release-target-matrix, cargo-build-bin-args, release-package-config) and
 # duplicates — rather than edits — the packaging step already vendored in
 # release.yml ("Package manifest-declared release archive"), so the two
 # stay behaviour-identical without any drift to the pinned kit files.
@@ -52,6 +52,8 @@ jobs:
       - name: Validate prerelease tag and workspace version
         id: resolve
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
@@ -139,7 +141,7 @@ jobs:
       # subcommand): this is release.yml's own "Package manifest-declared
       # release archive" step, byte-for-byte, so archive layout stays
       # provably identical without editing the vendored kit file. See
-      # .github/scripts/tests/test_prerelease_archive_workflow.py, which
+      # .just/tests/test_prerelease_archive_workflow.py, which
       # asserts this block and release.yml's block are the same script.
       - name: Package manifest-declared pre-release archive
         shell: bash

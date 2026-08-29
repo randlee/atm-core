@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -35,6 +36,18 @@ def extract_python_step(workflow: str, step_name: str, next_step_name: str) -> s
     lines = script.splitlines()
     if not all(not line or line.startswith("          ") for line in lines):
         raise AssertionError("workflow Python block has unexpected indentation")
+    return "\n".join(line[10:] if line else "" for line in lines)
+
+
+def extract_shell_step(workflow: str, step_name: str, next_step_name: str) -> str:
+    """Extract the shell body of one workflow step."""
+    step = workflow.split(f"      - name: {step_name}\n", 1)[1].split(
+        f"      - name: {next_step_name}\n", 1
+    )[0]
+    script = step.split("        run: |\n", 1)[1]
+    lines = script.splitlines()
+    if not all(not line or line.startswith("          ") for line in lines):
+        raise AssertionError("workflow shell block has unexpected indentation")
     return "\n".join(line[10:] if line else "" for line in lines)
 
 
@@ -82,6 +95,7 @@ def run_prerelease_archive_packager(
         cwd=tmp_path,
         env={
             **os.environ,
+            "PATH": f"{_python3_shim(tmp_path)}{os.pathsep}{os.environ.get('PATH', '')}",
             "RELEASE_ARTIFACT_MANIFEST": str(tmp_path / "release" / "manifest.toml"),
             "GITHUB_ENV": str(output),
         },
@@ -90,6 +104,15 @@ def run_prerelease_archive_packager(
         check=False,
     )
     return result
+
+
+def _python3_shim(tmp_path: Path) -> Path:
+    """Put the interpreter behind the literal ``python3`` name used by the heredoc."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    shim_name = "python3.exe" if os.name == "nt" else "python3"
+    shutil.copy2(sys.executable, bin_dir / shim_name)
+    return bin_dir
 
 
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
@@ -136,6 +159,89 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertIn("verify-version-lockstep", text)
         self.assertIn("releases/tags/${tag}", text)
         self.assertNotIn("merge-base", text)
+
+    def test_plan_step_exercises_authenticated_release_probe(self) -> None:
+        workflow = workflow_text("prerelease-archive.yml")
+        self.assertIn(
+            "        env:\n          GH_TOKEN: ${{ github.token }}\n        run: |", workflow
+        )
+        script = extract_shell_step(
+            workflow,
+            "Validate prerelease tag and workspace version",
+            "Resolve release target matrix",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            tmp_path = Path(directory)
+            scripts_dir = tmp_path / ".github" / "scripts"
+            scripts_dir.mkdir(parents=True)
+            (scripts_dir / "release_artifacts.py").write_text(
+                "import json\n"
+                "import sys\n"
+                "if sys.argv[1] == 'build-plan':\n"
+                "    print(json.dumps({'workspace_toml': 'Cargo.toml', 'rust_toolchain': 'stable'}))\n",
+                encoding="utf-8",
+            )
+            bin_dir = tmp_path / "bin"
+            bin_dir.mkdir()
+            (bin_dir / "jq").write_text(
+                "#!/bin/sh\n"
+                "case \"$2\" in\n"
+                "  .workspace_toml) printf '%s\\n' Cargo.toml ;;\n"
+                "  .rust_toolchain) printf '%s\\n' stable ;;\n"
+                "esac\n",
+                encoding="utf-8",
+            )
+            (bin_dir / "gh").write_text(
+                "#!/bin/sh\n"
+                "printf '%s' \"${GH_TOKEN-}\" > \"${GH_TOKEN_CAPTURE}\"\n"
+                "printf '%s\\n' \"HTTP/2 ${GH_PROBE_STATUS}\"\n",
+                encoding="utf-8",
+            )
+            for command in (bin_dir / "jq", bin_dir / "gh"):
+                command.chmod(0o755)
+            subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=tmp_path, check=True)
+            subprocess.run(["git", "config", "user.name", "AR1.1 test"], cwd=tmp_path, check=True)
+            (tmp_path / "Cargo.toml").write_text("[workspace]\n", encoding="utf-8")
+            subprocess.run(["git", "add", "Cargo.toml"], cwd=tmp_path, check=True)
+            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=tmp_path, check=True)
+            output = tmp_path / "github-output"
+            token_capture = tmp_path / "gh-token"
+            probe_env = {
+                **os.environ,
+                "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+                "GITHUB_REF_NAME": "prerelease/v1.4.6",
+                "GITHUB_REPOSITORY": "randlee/atm-core",
+                "GITHUB_OUTPUT": str(output),
+                "RELEASE_ARTIFACT_MANIFEST": "release/publish-artifacts.toml",
+                "GH_TOKEN": "workflow-token",
+                "GH_TOKEN_CAPTURE": str(token_capture),
+                "GH_PROBE_STATUS": "404",
+            }
+            result = subprocess.run(
+                ["bash", "-euo", "pipefail", "-c", script],
+                cwd=tmp_path,
+                env=probe_env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(token_capture.read_text(encoding="utf-8"), "workflow-token")
+            self.assertIn("version=1.4.6", output.read_text(encoding="utf-8"))
+            existing_output = tmp_path / "github-output-existing"
+            probe_env["GH_PROBE_STATUS"] = "200"
+            probe_env["GITHUB_OUTPUT"] = str(existing_output)
+            existing = subprocess.run(
+                ["bash", "-euo", "pipefail", "-c", script],
+                cwd=tmp_path,
+                env=probe_env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(existing.returncode, 0)
+            self.assertIn("GitHub Release already exists", existing.stderr)
 
     def test_workflow_uses_patch_bumped_stable_versions_without_short_sha_scheme(self) -> None:
         text = workflow_text("prerelease-archive.yml")

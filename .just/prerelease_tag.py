@@ -153,6 +153,7 @@ def verify_lockstep(repo_root: Path) -> None:
 
 
 def remote_tag_exists(repo_root: Path, tag: str) -> bool:
+    # TODO(sc-publish): share tag checks with vendored release.yml in the package-archive follow-up.
     result = git(
         repo_root,
         "ls-remote",
