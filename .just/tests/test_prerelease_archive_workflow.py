@@ -121,20 +121,13 @@ def _python3_shim(tmp_path: Path) -> Path:
     return bin_dir
 
 
-def _python_command_shim(tmp_path: Path, name: str, body: str) -> None:
-    """Install a Python-backed command for Git Bash and Windows PATH lookup."""
+def _python_command_shim(tmp_path: Path, name: str, body: str) -> Path:
+    """Write a Python-backed command that the Bash fixture invokes directly."""
 
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir(exist_ok=True)
-    script = bin_dir / f"{name}.py"
-    script.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
-    if os.name == "nt":
-        (bin_dir / f"{name}.cmd").write_text(
-            f'@"{sys.executable}" "%~dp0{name}.py" %*\n', encoding="utf-8"
-        )
-    else:
-        script.chmod(0o755)
-        (bin_dir / name).symlink_to(script)
+    script = tmp_path / "bin" / f"{name}.py"
+    script.parent.mkdir(exist_ok=True)
+    script.write_text(body, encoding="utf-8")
+    return script
 
 
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
@@ -203,16 +196,14 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 "    print(json.dumps({'workspace_toml': 'Cargo.toml', 'rust_toolchain': 'stable'}))\n",
                 encoding="utf-8",
             )
-            bin_dir = tmp_path / "bin"
-            bin_dir.mkdir()
-            _python_command_shim(
+            jq_shim = _python_command_shim(
                 tmp_path,
                 "jq",
                 "import sys\n"
                 "values = {'.workspace_toml': 'Cargo.toml', '.rust_toolchain': 'stable'}\n"
                 "print(values.get(sys.argv[2], ''))\n",
             )
-            _python_command_shim(
+            gh_shim = _python_command_shim(
                 tmp_path,
                 "gh",
                 "import os\n"
@@ -228,9 +219,14 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             subprocess.run(["git", "commit", "-qm", "fixture"], cwd=tmp_path, check=True)
             output = tmp_path / "github-output"
             token_capture = tmp_path / "gh-token"
+            script = (
+                'python3() { "$PYTHON_EXECUTABLE" "$@"; }\n'
+                'jq() { "$PYTHON_EXECUTABLE" "$JQ_SHIM" "$@"; }\n'
+                'gh() { "$PYTHON_EXECUTABLE" "$GH_SHIM" "$@"; }\n'
+                + script
+            )
             probe_env = {
                 **os.environ,
-                "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
                 "GITHUB_REF_NAME": "prerelease/v1.4.6",
                 "GITHUB_REPOSITORY": "randlee/atm-core",
                 "GITHUB_OUTPUT": str(output),
@@ -238,6 +234,9 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 "GH_TOKEN": "workflow-token",
                 "GH_TOKEN_CAPTURE": str(token_capture),
                 "GH_PROBE_STATUS": "404",
+                "PYTHON_EXECUTABLE": sys.executable,
+                "JQ_SHIM": str(jq_shim),
+                "GH_SHIM": str(gh_shim),
             }
             result = subprocess.run(
                 ["bash", "-euo", "pipefail", "-c", script],
