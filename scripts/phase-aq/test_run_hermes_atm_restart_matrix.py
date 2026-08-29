@@ -603,6 +603,9 @@ class _FakeGraftSession:
     def send(self, _address: Any, _marker: str, _flag: bool) -> _FakeSentMessage:
         return _FakeSentMessage("fake-message-id")
 
+    def reconnect(self) -> None:
+        pass
+
     def close(self) -> None:
         self.closed = True
 
