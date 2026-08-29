@@ -1525,6 +1525,17 @@ unreachable pre-kit installed-doc validator path and recorded every remaining
 legacy publish candidate as a gate-bound deferral in its receipt. The first
 kit-era release is the follow-up deletion trigger.
 
+## 52a. Phase AS (release validation 1.4.x) — Prerelease Archives [ACTIVE]
+
+This is a distinct, narrowly-scoped release-validation phase, not a revival
+of the superseded **Phase AS — Shared Publish-Kit Migration** above. It owns
+only the repository-local, tag-triggered prerelease archive workflow and its
+operator safeguards. Its current sprint is
+[`AS1.1 — Prerelease archive job`](./plans/phase-as/sprint-AS1-1-prerelease-archive.md),
+which builds CI-provenanced archives without publishing or modifying the
+vendored `sc-publish` kit. It does not inherit the retired phase's files,
+acceptance criteria, or release receipts.
+
 ## 53. Phase AU — Boundary Debt Retirement ✅ COMPLETE
 
 Phase AU retires the 22 pre-existing sc-boundary findings exposed when
