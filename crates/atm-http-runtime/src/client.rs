@@ -747,30 +747,22 @@ impl HttpRuntimeConnector for LoopbackTcpConnector {
         )
     }
 
-    /// Exchanges one request, reconnecting exactly once after a provably
-    /// pre-send failure.
-    ///
-    /// No-duplicate-write contract: the second attempt only happens for
-    /// [`HttpRuntimeClientFailure::is_safe_to_reconnect`]
-    /// failures, i.e. failures raised strictly before any request byte left
-    /// the client. The reconnect re-reads the endpoint record (picking up a
-    /// concurrently completed daemon restart) and forces a fresh transport,
-    /// so it can never reuse the connection that just failed.
+    /// Exchanges one request. The shared client owns the one-retry policy;
+    /// this connector only refreshes its generation when that policy invokes
+    /// [`Self::prepare_pre_send_reconnect`].
     async fn exchange(
         &self,
         request: HttpRequest,
         deadline: RequestDeadline,
     ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-        match self.exchange_once(request.clone(), deadline).await {
-            Ok(response) => Ok(response),
-            Err(failure) if failure.is_safe_to_reconnect() => {
-                let daemon_instance_id =
-                    load_active_loopback_daemon_instance_id(&self.endpoint_record_path).await?;
-                self.transport_for_generation(TransportGeneration::Loopback(daemon_instance_id))?;
-                self.exchange_once(request, deadline).await
-            }
-            Err(failure) => Err(failure),
-        }
+        self.exchange_once(request, deadline).await
+    }
+
+    async fn prepare_pre_send_reconnect(&self) -> Result<bool, HttpRuntimeClientFailure> {
+        let daemon_instance_id =
+            load_active_loopback_daemon_instance_id(&self.endpoint_record_path).await?;
+        self.transport_for_generation(TransportGeneration::Loopback(daemon_instance_id))?;
+        Ok(true)
     }
 }
 
@@ -820,10 +812,9 @@ async fn load_active_loopback_endpoint(
 
 /// Re-reads only the daemon generation from the local endpoint record.
 ///
-/// Used exclusively by the one post-connect-failure reconnect in
-/// [`LoopbackTcpConnector::exchange`] so the forced transport rebuild binds
-/// to whatever generation is current at reconnect time, not the generation that
-/// just failed.
+/// Used exclusively by the one pre-send reconnect hook so the forced transport
+/// rebuild binds to whatever generation is current at reconnect time, not the
+/// generation that just failed.
 async fn load_active_loopback_daemon_instance_id(
     endpoint_record_path: &Path,
 ) -> Result<Ulid, HttpRuntimeClientFailure> {
@@ -884,6 +875,14 @@ pub(crate) trait HttpRuntimeConnector: Send + Sync {
     /// already admitted but has not completed.
     fn deadline_elapsed(&self) -> HttpRuntimeClientFailure {
         HttpRuntimeClientFailure::Timeout
+    }
+
+    /// Refreshes connector-owned generation state after a failure that is
+    /// proven to have happened before request bytes were written. The default
+    /// is intentionally a no-op: direct-peer and test connectors must never
+    /// turn a remote write into an automatic second attempt.
+    async fn prepare_pre_send_reconnect(&self) -> Result<bool, HttpRuntimeClientFailure> {
+        Ok(false)
     }
 
     async fn exchange(
@@ -1007,15 +1006,13 @@ impl HttpRuntimeConnector for UnixSocketConnector {
         request: HttpRequest,
         deadline: RequestDeadline,
     ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-        match self.exchange_once(request.clone(), deadline).await {
-            Ok(response) => Ok(response),
-            Err(failure) if failure.is_safe_to_reconnect() => {
-                let generation = self.socket_generation()?;
-                self.transport_for_generation(generation)?;
-                self.exchange_once(request, deadline).await
-            }
-            Err(failure) => Err(failure),
-        }
+        self.exchange_once(request, deadline).await
+    }
+
+    async fn prepare_pre_send_reconnect(&self) -> Result<bool, HttpRuntimeClientFailure> {
+        let generation = self.socket_generation()?;
+        self.transport_for_generation(generation)?;
+        Ok(true)
     }
 }
 
@@ -1211,10 +1208,22 @@ impl<Connector> HttpRuntimeClient<Connector> {
                 "HTTP client request budget elapsed before connector dispatch",
             )
         })?;
-        let response = tokio::time::timeout(remaining, self.connector.exchange(encoded, deadline))
-            .await
-            .map_err(|_| self.connector.deadline_elapsed().into_atm_error())?
-            .map_err(HttpRuntimeClientFailure::into_atm_error)?;
+        let response = tokio::time::timeout(remaining, async {
+            match self.connector.exchange(encoded.clone(), deadline).await {
+                Ok(response) => Ok(response),
+                Err(failure) if failure.is_safe_to_reconnect() => {
+                    if self.connector.prepare_pre_send_reconnect().await? {
+                        self.connector.exchange(encoded, deadline).await
+                    } else {
+                        Err(failure)
+                    }
+                }
+                Err(failure) => Err(failure),
+            }
+        })
+        .await
+        .map_err(|_| self.connector.deadline_elapsed().into_atm_error())?
+        .map_err(HttpRuntimeClientFailure::into_atm_error)?;
         let headers = response
             .headers()
             .iter()
@@ -1318,6 +1327,41 @@ mod tests {
             _deadline: RequestDeadline,
         ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
             self.requests.lock().expect("requests").push(request);
+            self.responses
+                .lock()
+                .expect("responses")
+                .pop_front()
+                .expect("configured response")
+        }
+    }
+
+    struct RetryingRecordingConnector {
+        requests: Mutex<Vec<HttpRequest>>,
+        responses: Mutex<VecDeque<Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure>>>,
+        reconnects: AtomicUsize,
+        remaining: Mutex<Vec<Duration>>,
+    }
+
+    #[async_trait]
+    impl HttpRuntimeConnector for RetryingRecordingConnector {
+        fn connection_target(&self) -> String {
+            "retrying recording test connector".to_owned()
+        }
+
+        async fn prepare_pre_send_reconnect(&self) -> Result<bool, HttpRuntimeClientFailure> {
+            self.reconnects.fetch_add(1, Ordering::SeqCst);
+            Ok(true)
+        }
+
+        async fn exchange(
+            &self,
+            request: HttpRequest,
+            deadline: RequestDeadline,
+        ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+            self.requests.lock().expect("requests").push(request);
+            if let Some(remaining) = deadline.remaining() {
+                self.remaining.lock().expect("remaining").push(remaining);
+            }
             self.responses
                 .lock()
                 .expect("responses")
@@ -1493,6 +1537,64 @@ mod tests {
                 "{failure:?} may mean request bytes already left the client and must never be retried"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn shared_client_retries_one_pre_send_failure_with_one_deadline() {
+        let connector = Arc::new(RetryingRecordingConnector {
+            requests: Mutex::new(Vec::new()),
+            responses: Mutex::new(VecDeque::from([
+                Err(HttpRuntimeClientFailure::Connect("refused".to_owned())),
+                Ok(sent_response()),
+            ])),
+            reconnects: AtomicUsize::new(0),
+            remaining: Mutex::new(Vec::new()),
+        });
+        let client = HttpRuntimeClient::new(Arc::clone(&connector), Duration::from_secs(1));
+
+        client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect("a pre-send failure is retried by the shared client");
+
+        let requests = connector.requests.lock().expect("requests");
+        assert_eq!(requests.len(), 2, "the shared policy makes one retry");
+        assert_eq!(requests[0], requests[1], "retry reuses the encoded request");
+        assert_eq!(connector.reconnects.load(Ordering::SeqCst), 1);
+        let remaining = connector.remaining.lock().expect("remaining");
+        assert_eq!(remaining.len(), 2);
+        assert!(
+            remaining[1] <= remaining[0],
+            "retry keeps the original absolute deadline: {remaining:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn shared_client_allows_at_most_one_pre_send_retry() {
+        let connector = Arc::new(RetryingRecordingConnector {
+            requests: Mutex::new(Vec::new()),
+            responses: Mutex::new(VecDeque::from([
+                Err(HttpRuntimeClientFailure::Connect(
+                    "first refusal".to_owned(),
+                )),
+                Err(HttpRuntimeClientFailure::Connect(
+                    "second refusal".to_owned(),
+                )),
+                Ok(sent_response()),
+            ])),
+            reconnects: AtomicUsize::new(0),
+            remaining: Mutex::new(Vec::new()),
+        });
+        let client = HttpRuntimeClient::new(Arc::clone(&connector), Duration::from_secs(1));
+
+        let error = client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect_err("a second pre-send failure must not trigger another retry");
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert_eq!(connector.requests.lock().expect("requests").len(), 2);
+        assert_eq!(connector.reconnects.load(Ordering::SeqCst), 1);
     }
 
     #[test]

@@ -1440,6 +1440,88 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
                 rendered,
             )
 
+    def test_http_runtime_io_policy_scans_split_client_module(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            root_manifest = (repo_root / "Cargo.toml").read_text(encoding="utf-8")
+            (repo_root / "Cargo.toml").write_text(
+                root_manifest.replace(
+                    '"crates/atm-daemon"]',
+                    '"crates/atm-daemon", "crates/atm-http-runtime"]',
+                ),
+                encoding="utf-8",
+            )
+            runtime_dir = repo_root / "crates/atm-http-runtime"
+            (runtime_dir / "src").mkdir(parents=True)
+            (runtime_dir / "Cargo.toml").write_text(
+                """\
+[package]
+name = "atm-http-runtime"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "atm_http_runtime"
+""",
+                encoding="utf-8",
+            )
+            (runtime_dir / "src/lib.rs").write_text(
+                "pub struct HttpRuntimeClient;\n", encoding="utf-8"
+            )
+            client_path = runtime_dir / "src/client.rs"
+            client_path.write_text(
+                "fn is_safe_to_reconnect() {}\n", encoding="utf-8"
+            )
+            boundary = BASE_BOUNDARY_TOML
+            boundary = boundary.replace(
+                'boundary_id = "BOUNDARY-MailStore-Sqlite"',
+                'boundary_id = "BOUNDARY-HttpRuntime"',
+            )
+            boundary = boundary.replace(
+                'owner_package = "atm-storage-rusqlite"',
+                'owner_package = "atm-http-runtime"',
+            )
+            boundary = boundary.replace(
+                'owner_crate_path = "atm_storage_rusqlite"',
+                'owner_crate_path = "atm_http_runtime"',
+            )
+            boundary = boundary.replace(
+                'module = "atm_storage_rusqlite::mail_store"',
+                'module = "atm_http_runtime"',
+            )
+            boundary = boundary.replace(
+                'io_forbidden = ["socket_io"]',
+                'io_forbidden = ["replay_or_resend"]',
+            )
+            boundary = boundary.replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-http-runtime", text=boundary)
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            self.assertEqual(
+                collect_io_forbidden_source_violations(repo_root, records),
+                [],
+                "the documented pre-send helper shape is not replay/resend",
+            )
+
+            client_path.write_text(
+                "struct PeerResendScheduler;\n", encoding="utf-8"
+            )
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertTrue(
+                any(
+                    "crates/atm-http-runtime/src/client.rs" in item
+                    and "BOUNDARY-HttpRuntime forbids io 'replay_or_resend'" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+
     def test_background_work_policy_ignores_test_spawns_but_flags_production_spawns(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

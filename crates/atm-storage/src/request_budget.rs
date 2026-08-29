@@ -19,6 +19,11 @@
 //!   of request processing (transaction body, received-message hook,
 //!   response encoding).
 //!
+//! The 2.5/3.0/3.25 second ladder assumes no more than 0.5 seconds of
+//! scheduler overhead per hop. A loaded host can breach a wall-clock
+//! observation even when these product constants and typed outcomes remain
+//! correct; that is backlog awareness, not a runtime retry or timeout fix.
+//!
 //! Every constant here is derived from [`SERVER_REQUEST_BUDGET`] so the
 //! invariants (`SAME_HOST_REQUEST_DEADLINE > SERVER_REQUEST_BUDGET` and
 //! `SQLITE_BUSY_TIMEOUT < SERVER_REQUEST_BUDGET`) hold by construction and

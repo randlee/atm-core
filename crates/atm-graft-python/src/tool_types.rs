@@ -176,12 +176,126 @@ impl AtmToolError {
 }
 
 fn is_delivery_uncertain_code(code: &str) -> bool {
-    matches!(
-        code,
-        value if value == AtmErrorCode::DaemonMayHaveExecuted.as_str()
-            || value == AtmErrorCode::RemoteDeliveryUnconfirmed.as_str()
-            || value == AtmErrorCode::WaitTimeout.as_str()
-    )
+    let Ok(code) = code.parse::<AtmErrorCode>() else {
+        return false;
+    };
+    match code {
+        AtmErrorCode::DaemonMayHaveExecuted
+        | AtmErrorCode::RemoteDeliveryUnconfirmed
+        | AtmErrorCode::WaitTimeout => true,
+        AtmErrorCode::ConfigHomeUnavailable
+        | AtmErrorCode::AtmHomeUnresolved
+        | AtmErrorCode::ConfigParseFailed
+        | AtmErrorCode::ConfigRetiredHookMembersKey
+        | AtmErrorCode::ConfigRetiredLegacyHookKeys
+        | AtmErrorCode::ConfigTeamParseFailed
+        | AtmErrorCode::ConfigTeamMissing
+        | AtmErrorCode::IdentityUnavailable
+        | AtmErrorCode::IdentityInvalid
+        | AtmErrorCode::IdentityConflict
+        | AtmErrorCode::MemberAlreadyExists
+        | AtmErrorCode::MemberNotFound
+        | AtmErrorCode::DaemonUnavailable
+        | AtmErrorCode::RuntimeRootInvalid
+        | AtmErrorCode::RuntimeBootstrapRefused
+        | AtmErrorCode::SocketOverrideForbidden
+        | AtmErrorCode::DaemonLifecycleWedge
+        | AtmErrorCode::DaemonLaunchGateRejected
+        | AtmErrorCode::DaemonServingStateRejected
+        | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
+        | AtmErrorCode::DaemonAutoStartFailed
+        | AtmErrorCode::DaemonConnectionSaturated
+        | AtmErrorCode::PeerWireModeInvalid
+        | AtmErrorCode::PeerWireModeSourceForbidden
+        | AtmErrorCode::PeerWirePlaintextAuthenticationRequired
+        | AtmErrorCode::PeerConfigValidationFailed
+        | AtmErrorCode::CertificateOperationFailed
+        | AtmErrorCode::PeerAuthenticationFailed
+        | AtmErrorCode::TransportTimeout
+        | AtmErrorCode::TransportProtocolFailed
+        | AtmErrorCode::BindPreflightFailed
+        | AtmErrorCode::ClientDaemonVersionIncompatible
+        | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
+        | AtmErrorCode::DaemonAdvisorySessionNotRegistered
+        | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
+        | AtmErrorCode::AddressParseFailed
+        | AtmErrorCode::TeamUnavailable
+        | AtmErrorCode::TeamInvalid
+        | AtmErrorCode::TeamNotFound
+        | AtmErrorCode::AgentNotFound
+        | AtmErrorCode::MailboxReadFailed
+        | AtmErrorCode::MailboxWriteFailed
+        | AtmErrorCode::MailboxLockFailed
+        | AtmErrorCode::MailboxLockReadOnlyFilesystem
+        | AtmErrorCode::MailboxLockTimeout
+        | AtmErrorCode::InternalError
+        | AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::SearchLocalOnly
+        | AtmErrorCode::LocalHttpCapabilityInvalid
+        | AtmErrorCode::LocalHttpEndpointSchemaUnsupported
+        | AtmErrorCode::LocalHttpEndpointMissing
+        | AtmErrorCode::LocalHttpEndpointNonLoopback
+        | AtmErrorCode::LocalHttpRuntimeDirectoryMissing
+        | AtmErrorCode::LocalHttpCapabilityRevoked
+        | AtmErrorCode::MessageIdConflict
+        | AtmErrorCode::SelfAddressedSendInvalid
+        | AtmErrorCode::EmptyNudgeTemplateBody
+        | AtmErrorCode::CallerContextRequestInvalid
+        | AtmErrorCode::TemplateContentNotUtf8
+        | AtmErrorCode::DecomposedTemplateIncludeForbidden
+        | AtmErrorCode::TemplateLoadFailed
+        | AtmErrorCode::TemplateHashApiFailed
+        | AtmErrorCode::TemplateInspectionParseFailed
+        | AtmErrorCode::TemplateRequiredVariableMissing
+        | AtmErrorCode::TemplateRenderVerificationFailed
+        | AtmErrorCode::TemplateIncludeUnresolved
+        | AtmErrorCode::TemplateClassificationInvalid
+        | AtmErrorCode::TemplateWorkflowInvalid
+        | AtmErrorCode::TemplateWorkflowValueInvalid
+        | AtmErrorCode::TemplateTagReserved
+        | AtmErrorCode::WorkflowQueryInvalid
+        | AtmErrorCode::WorkflowTelemetryConfigInvalid
+        | AtmErrorCode::WorkflowTelemetryDropped
+        | AtmErrorCode::SerializationFailed
+        | AtmErrorCode::FilePolicyRejected
+        | AtmErrorCode::FileReferenceRewriteFailed
+        | AtmErrorCode::AckInvalidState
+        | AtmErrorCode::ClearInvalidState
+        | AtmErrorCode::ObservabilityEmitFailed
+        | AtmErrorCode::ObservabilityQueryFailed
+        | AtmErrorCode::ObservabilityFollowFailed
+        | AtmErrorCode::ObservabilityHealthFailed
+        | AtmErrorCode::ObservabilityBootstrapFailed
+        | AtmErrorCode::ObservabilityHealthOk
+        | AtmErrorCode::WarningInvalidTeamMemberSkipped
+        | AtmErrorCode::WarningMailboxRecordSkipped
+        | AtmErrorCode::WarningMalformedAtmFieldIgnored
+        | AtmErrorCode::WarningObservabilityHealthDegraded
+        | AtmErrorCode::WarningSqliteHealthDegraded
+        | AtmErrorCode::WarningOriginInboxEntrySkipped
+        | AtmErrorCode::WarningMissingTeamConfigFallback
+        | AtmErrorCode::WarningSendAlertStateDegraded
+        | AtmErrorCode::WarningIdentityDrift
+        | AtmErrorCode::WarningRosterDrift
+        | AtmErrorCode::WarningBaselineMemberMissing
+        | AtmErrorCode::WarningRestoreInProgress
+        | AtmErrorCode::WarningStaleMailboxLock
+        | AtmErrorCode::WarningHookSkipped
+        | AtmErrorCode::WarningHookExecutionFailed
+        | AtmErrorCode::RosterMixedLocalBackend
+        | AtmErrorCode::HerdrAgentNotVisible
+        | AtmErrorCode::PostSendPaneMissing
+        | AtmErrorCode::PostSendTmuxSendFailed
+        | AtmErrorCode::PostSendHerdrPromptFailed
+        | AtmErrorCode::HerdrPromptFailed
+        | AtmErrorCode::HerdrUnavailable
+        | AtmErrorCode::PostSendGraftUnavailable
+        | AtmErrorCode::GraftReceiverAlreadyActive
+        | AtmErrorCode::GraftReceiverNotOwner
+        | AtmErrorCode::PostSendAdvisoryDeliveryFailed
+        | AtmErrorCode::TestFakeTransportInjectionFailed
+        | AtmErrorCode::HelpTopicNotFound => false,
+    }
 }
 
 #[cfg(test)]
@@ -190,7 +304,7 @@ mod tests {
     use pyo3::exceptions::PyException;
     use pyo3::prelude::*;
 
-    use super::AtmToolError;
+    use super::{AtmToolError, is_delivery_uncertain_code};
 
     #[test]
     fn unstructured_python_errors_use_the_canonical_internal_error_code() {
@@ -202,6 +316,23 @@ mod tests {
             assert_eq!(result.code, AtmErrorCode::InternalError.as_str());
             assert_eq!(result.layer, "native_client");
         });
+    }
+
+    #[test]
+    fn delivery_uncertainty_parsing_fails_closed_for_unknown_codes() {
+        assert!(is_delivery_uncertain_code(
+            AtmErrorCode::DaemonMayHaveExecuted.as_str()
+        ));
+        assert!(is_delivery_uncertain_code(
+            AtmErrorCode::RemoteDeliveryUnconfirmed.as_str()
+        ));
+        assert!(is_delivery_uncertain_code(
+            AtmErrorCode::WaitTimeout.as_str()
+        ));
+        assert!(!is_delivery_uncertain_code("ATM_FUTURE_UNSPECIFIED"));
+        assert!(!is_delivery_uncertain_code(
+            AtmErrorCode::DaemonUnavailable.as_str()
+        ));
     }
 
     /// Only the pre-send local-connect code enters stale-client recovery.
