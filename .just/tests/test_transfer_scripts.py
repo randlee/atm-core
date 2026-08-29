@@ -664,9 +664,12 @@ class SftpPs1Tests(unittest.TestCase):
 
 
 class PosixShellDiscoveryTests(unittest.TestCase):
-    """Direct unit coverage for the shared resolver's discovery order, mocking
-    `shutil.which` so these assertions never depend on what happens to be
-    on this machine's real `PATH`."""
+    """Direct coverage for non-Windows PATH resolution, independent of host.
+
+    Windows has a distinct Git-Bash probe, covered in test_lint_common.py.
+    These tests set ``windows=False`` so a real Git-for-Windows installation
+    cannot leak into mocked PATH expectations on a Windows CI runner.
+    """
 
     def test_prefers_bash_when_both_bash_and_sh_are_on_path(self) -> None:
         with mock.patch.object(
@@ -674,7 +677,7 @@ class PosixShellDiscoveryTests(unittest.TestCase):
             "which",
             side_effect=lambda name: f"/usr/bin/{name}" if name in ("bash", "sh") else None,
         ):
-            self.assertEqual(resolve_posix_shell(), "/usr/bin/bash")
+            self.assertEqual(resolve_posix_shell(windows=False), "/usr/bin/bash")
 
     def test_falls_back_to_sh_when_bash_is_absent(self) -> None:
         with mock.patch.object(
@@ -682,11 +685,11 @@ class PosixShellDiscoveryTests(unittest.TestCase):
             "which",
             side_effect=lambda name: "/bin/sh" if name == "sh" else None,
         ):
-            self.assertEqual(resolve_posix_shell(), "/bin/sh")
+            self.assertEqual(resolve_posix_shell(windows=False), "/bin/sh")
 
     def test_returns_none_when_neither_is_on_path(self) -> None:
         with mock.patch.object(shutil, "which", return_value=None):
-            self.assertIsNone(resolve_posix_shell())
+            self.assertIsNone(resolve_posix_shell(windows=False))
 
 
 if __name__ == "__main__":
