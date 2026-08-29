@@ -7,6 +7,9 @@
   daemon generation change, classify pre-send reconnects separately from
   writes whose delivery may have completed, and preserve fail-closed recovery
   guidance for uncertain requests (Phase AQ, AQ1.9)
+- publish a native `aarch64-unknown-linux-gnu` release archive (arm64
+  Linux, e.g. Apple-Silicon colima/docker containers without emulation);
+  Homebrew arm-linux is not yet wired (#1057)
 - add the `atm queue` CLI verb (mirrors `atm send`'s full surface, including
   `--attach`, with the recipient nudge deferred rather than fired
   immediately) plus the nudge taxonomy and `PendingNudgeStore` storage
