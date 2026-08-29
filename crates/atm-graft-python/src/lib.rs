@@ -1441,6 +1441,64 @@ mod tests {
     }
 
     #[test]
+    fn send_tool_does_not_refresh_or_advise_resend_after_an_uncertain_write() {
+        Python::initialize();
+        let initial_calls = Arc::new(AtomicUsize::new(0));
+        let replacement_calls = Arc::new(AtomicUsize::new(0));
+        let initial_calls_for_transport = Arc::clone(&initial_calls);
+        let replacement_calls_for_transport = Arc::clone(&replacement_calls);
+        let session = test_session(
+            Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                assert!(matches!(request, RequestEnvelope::Write(_)));
+                initial_calls_for_transport.fetch_add(1, Ordering::SeqCst);
+                Err(AtmError::daemon_may_have_executed(
+                    "request write was interrupted",
+                ))
+            }))),
+            Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                assert!(matches!(request, RequestEnvelope::Write(_)));
+                replacement_calls_for_transport.fetch_add(1, Ordering::SeqCst);
+                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
+                    send_outcome(),
+                )))
+            }))),
+        );
+
+        Python::attach(|py| {
+            let result = session
+                .send_tool(
+                    py,
+                    Some(format!("{TEST_RECIPIENT}@{TEST_TEAM}")),
+                    "do not resend an uncertain write".to_owned(),
+                    false,
+                    None,
+                )
+                .expect("typed uncertainty result");
+            let result = result.bind(py);
+            assert!(result.is_instance_of::<AtmToolError>());
+            assert_eq!(
+                result
+                    .getattr("code")
+                    .expect("code")
+                    .extract::<String>()
+                    .expect("string code"),
+                AtmErrorCode::DaemonMayHaveExecuted.as_str()
+            );
+            let recovery = result
+                .getattr("recovery")
+                .expect("recovery")
+                .extract::<String>()
+                .expect("string recovery");
+            assert!(recovery.contains("inspect mailbox"));
+            assert!(!recovery.contains("retry this send"));
+        });
+
+        assert_eq!(initial_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(session.reconnect_attempts.load(Ordering::SeqCst), 0);
+        assert_eq!(replacement_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
     fn plain_send_refreshes_once_without_replaying_a_failed_write() {
         Python::initialize();
         let initial_calls = Arc::new(AtomicUsize::new(0));

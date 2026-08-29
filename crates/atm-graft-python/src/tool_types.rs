@@ -150,11 +150,17 @@ impl AtmToolError {
                 .ok()
                 .and_then(|attribute| attribute.extract::<String>().ok())
         };
+        let code =
+            attribute("code").unwrap_or_else(|| AtmErrorCode::InternalError.as_str().to_owned());
+        let recovery = if is_delivery_uncertain_code(&code) {
+            "the request outcome is uncertain; inspect mailbox or service-side effects before attempting it again"
+        } else {
+            "verify the local ATM daemon and configured identity, then retry"
+        };
         Self {
-            code: attribute("code")
-                .unwrap_or_else(|| AtmErrorCode::InternalError.as_str().to_owned()),
+            code,
             message: attribute("message").unwrap_or_else(|| error.to_string()),
-            recovery: "verify the local ATM daemon and configured identity, then retry".to_owned(),
+            recovery: recovery.to_owned(),
             layer: "native_client".to_owned(),
         }
     }
@@ -167,6 +173,15 @@ impl AtmToolError {
         self.recovery = recovery.into();
         self
     }
+}
+
+fn is_delivery_uncertain_code(code: &str) -> bool {
+    matches!(
+        code,
+        value if value == AtmErrorCode::DaemonMayHaveExecuted.as_str()
+            || value == AtmErrorCode::RemoteDeliveryUnconfirmed.as_str()
+            || value == AtmErrorCode::WaitTimeout.as_str()
+    )
 }
 
 #[cfg(test)]
@@ -189,15 +204,9 @@ mod tests {
         });
     }
 
-    /// [`HttpRuntimeClientFailure::Connect`] (atm-http-runtime) is the only
-    /// same-host client failure that is provably pre-send -- it maps to
-    /// [`AtmErrorCode::DaemonUnavailable`] before ever reaching this crate.
-    /// `is_daemon_unavailable` must recognize exactly that code so
-    /// `with_daemon_recovery`'s `RefreshOnly` policy can refresh the stale
-    /// client once. It must not recognize any other code (e.g.
-    /// `AtmErrorCode::WaitTimeout`, raised for both cancellations and
-    /// genuine in-flight response waits) as daemon-unavailable, or a write
-    /// that already reached the server could be replayed.
+    /// Only the pre-send local-connect code enters stale-client recovery.
+    /// An uncertain request-write result must stay outside that path because
+    /// the daemon may already have accepted the request.
     #[test]
     fn only_the_daemon_unavailable_code_is_treated_as_a_recoverable_stale_client() {
         let daemon_unavailable = AtmToolError {
@@ -219,5 +228,27 @@ mod tests {
             "a request-budget timeout may mean the write already reached the server; \
              it must never be classified as safe to silently retry"
         );
+
+        let uncertain_write = AtmToolError {
+            code: AtmErrorCode::DaemonMayHaveExecuted.as_str().to_owned(),
+            message: "request acceptance is unknown".to_owned(),
+            recovery: "inspect mailbox or service-side effects before attempting it again"
+                .to_owned(),
+            layer: "native_client".to_owned(),
+        };
+        assert!(!uncertain_write.is_daemon_unavailable());
+
+        for code in [
+            AtmErrorCode::RemoteDeliveryUnconfirmed,
+            AtmErrorCode::WaitTimeout,
+        ] {
+            let error = AtmToolError {
+                code: code.as_str().to_owned(),
+                message: "request outcome is uncertain".to_owned(),
+                recovery: String::new(),
+                layer: "native_client".to_owned(),
+            };
+            assert!(!error.is_daemon_unavailable());
+        }
     }
 }
