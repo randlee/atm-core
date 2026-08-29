@@ -102,3 +102,23 @@ names and provenance use the same stable workspace version.
   write permission.
 - The direct bump commit is intentionally pushed to the operator's current
   branch; no PR is created by the recipe.
+
+## QA history
+
+### QA-1 — 2026-08-29
+
+QA-1 identified one active-plan ambiguity, one stale preflight link, and three
+Windows shell-fixture reliability gaps. Their closing commits on
+`feature/ar1-prerelease-archive` are:
+
+- `3c55f6a46` — distinguishes the active AS1.1 release-validation scope from
+  the superseded Phase AS migration in the project plan.
+- `915aa38c9` — links release preflight to this authoritative AS1.1 plan.
+- `c03c97137` — centralizes POSIX/Git-Bash discovery and rejects the System32
+  WSL launcher.
+- `7d6d149b1` — proves prerelease shell discovery ignores ambient `GIT_BASH`.
+- `57e7f50e2` — bounds resolver and extracted-workflow shell commands.
+
+The remaining documentation clarifications are tracked as QA-1 follow-ups in
+this plan and the cross-platform guidelines; they do not change the release
+workflow or its archive contract.
