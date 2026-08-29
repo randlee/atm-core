@@ -1,0 +1,288 @@
+name: Prerelease Archive
+
+# Builds manifest-declared release archives (linux/macOS/windows) from an
+# arbitrary ref, with CI provenance, and WITHOUT tagging or publishing
+# anything. This exists so integration testing (e.g. Phase AR's docker
+# testbed and the Mac daemon-switch install) can get real binaries for a
+# develop-head build without cutting a release.
+#
+# This workflow is atm-core-owned, not part of the vendored sc-publish kit
+# (see README.sc-publish.md — kit files under .github/workflows are pinned
+# and never hand-edited locally; a workflow like this one, added by the
+# consumer, is exactly the escape hatch the kit expects). It intentionally
+# re-uses only unmodified sc-publish CLI subcommands
+# (release-target-matrix, cargo-build-bin-args, release-package-config) and
+# duplicates — rather than edits — the packaging step already vendored in
+# release.yml ("Package manifest-declared release archive"), so the two
+# stay behaviour-identical without any drift to the pinned kit files.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch, tag, or commit SHA) to build archives from"
+        required: false
+        default: develop
+        type: string
+      targets:
+        description: "Comma-separated release target triples to build (default: every [[release_targets]] entry in release/publish-artifacts.toml)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prerelease-archive-${{ github.event.inputs.ref }}
+  cancel-in-progress: true
+
+env:
+  RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      atm_core_sha: ${{ steps.resolve.outputs.sha }}
+      version: ${{ steps.resolve.outputs.version }}
+      rust_toolchain: ${{ steps.resolve.outputs.rust_toolchain }}
+      release_target_matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Resolve build ref and pre-release version
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=9 HEAD)"
+          plan="$(python3 .github/scripts/release_artifacts.py build-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
+          workspace_toml="$(jq -r '.workspace_toml' <<<"${plan}")"
+          rust_toolchain="$(jq -r '.rust_toolchain' <<<"${plan}")"
+          base_version="$(python3 -c '
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          data = tomllib.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          print(data["workspace"]["package"]["version"])
+          ' "${workspace_toml}")"
+          version="${base_version}-pre.${short_sha}"
+          # A pre-release version must never collide with a tag-style X.Y.Z
+          # release version, so it can never be confused with a real release.
+          if [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "computed pre-release version '${version}' is tag-style; refusing" >&2
+            exit 1
+          fi
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "rust_toolchain=${rust_toolchain}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve requested release target matrix
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          full="$(python3 .github/scripts/release_artifacts.py release-target-matrix --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
+          requested='${{ inputs.targets }}'
+          matrix="$(python3 -c '
+          import json
+          import sys
+
+          full = json.loads(sys.argv[1])
+          requested = [item.strip() for item in sys.argv[2].split(",") if item.strip()]
+          if not requested:
+              print(json.dumps(full, separators=(",", ":")))
+              raise SystemExit(0)
+
+          available = {entry["target"] for entry in full["include"]}
+          unknown = sorted(set(requested) - available)
+          if unknown:
+              print(
+                  f"unknown release target(s): {\", \".join(unknown)}; "
+                  f"available: {\", \".join(sorted(available))}",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+
+          selected = [entry for entry in full["include"] if entry["target"] in requested]
+          print(json.dumps({"include": selected}, separators=(",", ":")))
+          ' "${full}" "${requested}")"
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.release_target_matrix) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.atm_core_sha }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.plan.outputs.rust_toolchain }}
+          targets: ${{ matrix.target }}
+
+      - name: Ensure cross-compilation target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Install Linux native build deps
+        uses: ./.github/actions/install-linux-native-deps
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ matrix.target }}-cargo-prerelease-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin_args="$(python3 .github/scripts/release_artifacts.py cargo-build-bin-args --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
+          cargo build --release --target ${{ matrix.target }} ${bin_args}
+
+      # Deliberately duplicated (not shared via a new release_artifacts.py
+      # subcommand): this is release.yml's own "Package manifest-declared
+      # release archive" step, byte-for-byte, so archive layout stays
+      # provably identical without editing the vendored kit file. See
+      # .github/scripts/tests/test_prerelease_archive_workflow.py, which
+      # asserts this block and release.yml's block are the same script.
+      - name: Package manifest-declared pre-release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+          import tarfile
+          import zipfile
+
+          target_name = "${{ matrix.target }}"
+          version = "${{ needs.plan.outputs.version }}"
+          config = json.loads(
+              subprocess.check_output(
+                  [
+                      "python3",
+                      ".github/scripts/release_artifacts.py",
+                      "release-package-config",
+                      "--manifest",
+                      os.environ["RELEASE_ARTIFACT_MANIFEST"],
+                      "--target",
+                      target_name,
+                  ],
+                  text=True,
+              )
+          )
+          project = config["project"]
+          target = config["target"]
+          stage = Path(f"{project['archive_prefix']}_{version}_{target_name}")
+          if stage.exists():
+              shutil.rmtree(stage)
+          (stage / "bin").mkdir(parents=True)
+          for binary in config["binaries"]:
+              filename = binary["name"] + (".exe" if "windows" in target_name else "")
+              shutil.copy2(Path("target") / target_name / "release" / filename, stage / "bin" / filename)
+              for bundled_path in binary.get("bundled_paths", []):
+                  source = Path(bundled_path["source"])
+                  destination = stage / bundled_path["destination"]
+                  destination.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copytree(source, destination, dirs_exist_ok=True)
+          archive = Path(f"{stage}.{target['archive']}")
+          if target["archive"] == "tar.gz":
+              with tarfile.open(archive, "w:gz") as output:
+                  output.add(stage, arcname=stage.name)
+          elif target["archive"] == "zip":
+              with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:
+                  for item in stage.rglob("*"):
+                      if item.is_file():
+                          output.write(item, item.relative_to(stage.parent))
+          else:
+              raise SystemExit(f"unsupported archive type: {target['archive']}")
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env:
+              env.write(f"ARCHIVE={archive}\n")
+          PY
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.ARCHIVE }}
+
+  checksums:
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download all target artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate checksums and provenance record
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          artifacts_dir = Path("artifacts")
+          entries = []
+          checksum_lines = []
+          for target_dir in sorted(p for p in artifacts_dir.iterdir() if p.is_dir()):
+              archives = sorted(target_dir.glob("*"))
+              if len(archives) != 1:
+                  raise SystemExit(
+                      f"expected exactly one archive for {target_dir.name}, found {len(archives)}"
+                  )
+              archive = archives[0]
+              digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+              # Same "<sha256>  <filename>" line format sha256sum/release.yml's
+              # checksums.txt emits and `shasum -a 256 -c` verifies.
+              checksum_lines.append(f"{digest}  {archive.name}")
+              entries.append({"target": target_dir.name, "archive": archive.name, "sha256": digest})
+
+          out_dir = Path("checksums")
+          out_dir.mkdir(exist_ok=True)
+          (out_dir / "checksums.txt").write_text("\n".join(checksum_lines) + "\n", encoding="utf-8")
+
+          provenance = {
+              "version": "${{ needs.plan.outputs.version }}",
+              "atm_core_sha": "${{ needs.plan.outputs.atm_core_sha }}",
+              "ref": "${{ inputs.ref }}",
+              "run_id": "${{ github.run_id }}",
+              "targets": entries,
+          }
+          (out_dir / "provenance.json").write_text(
+              json.dumps(provenance, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+
+      - name: Upload checksums artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: checksums
