@@ -57,3 +57,266 @@ suite, so no consumer CI impact. Filed upstream as
 [sc-publish #65](https://github.com/randlee/sc-publish/issues/65) for the next
 qualified revision; no kit change made mid-qualification per the multi-repo
 qualification rule.
+
+## Release-branch fixes (release/v1.4.4 only — documented kit drift)
+
+The v1.4.4 final Release Preflight (run 33150049684, main tip 78913af39)
+surfaced three defects in the kit's own workflows — the first real execution
+of these paths on a crates-publishing consumer. Per Rand's rulings
+(2026-08-28): sc-lint is a lint tool owned by repo CI (`just lint` runs it —
+the vendored workspace analyzer — extensively, every sprint); sc-publish is
+git workflows and agent prompts; the publish pipeline must run the same
+lint/build/test sprint CI runs plus only publish-specific checks, and there
+must be NO surprises at publish time. Fixes applied directly on
+`release/v1.4.4` (commit 9f5bae568), bypassing `develop` per the
+release-state strategy's release-fix path:
+
+1. Removed the sc-lint install/smoke gate from
+   `.github/actions/setup-lint-toolchain` — preflight was downloading
+   published sc-lint 0.4.0 while the repo runs the vendored workspace
+   analyzer (version/schema skew). Upstream deletion:
+   [sc-publish #67](https://github.com/randlee/sc-publish/issues/67).
+2. Implemented the `crates_io` credential-liveness arm in
+   `release-preflight.yml` (read-only probe of `https://crates.io/api/v1/me`).
+   Upstream: [sc-publish #68](https://github.com/randlee/sc-publish/issues/68).
+3. Added `if: always()` to the five evidence steps that skipped on an earlier
+   hard failure, so one run collects complete evidence. Upstream:
+   [sc-publish #69](https://github.com/randlee/sc-publish/issues/69).
+
+These are deliberate, temporary drift from pin 25668ecc, scoped to the
+release branch; `develop` stays byte-clean against the pin and re-converges
+on the next qualified sc-publish revision. All preflight gates were rehearsed
+locally green before any CI dispatch (fmt, clippy, workspace tests,
+validate-manifest, publish-order, verify-version, version-lockstep, helper
+presence; the crates_io liveness probe and registry-state checks execute
+first in CI since publish tokens exist only as Actions secrets).
+
+### Round 2 (readiness preflight run 33154250124 on the release branch)
+
+The first readiness preflight on `release/v1.4.4` collected complete evidence
+(the round-1 fixes worked) and surfaced four more defects — three reported by
+the run, one caught only by local rehearsal of the fix:
+
+4. **crates_io liveness probe is unsound by design** (revises fix 2):
+   crates.io API tokens are scope-restricted (RFC 2947) and no read-only
+   endpoint accepts them — `GET /api/v1/me` is session-only — so the probe
+   returns HTTP 403 for a correctly scoped publish token. The 403 in run
+   33154250124 is expected endpoint behavior, **not** a credential problem.
+   The arm now records presence-only liveness (presence is checked by the
+   required-secrets step; authorization is proven at publish time). Upstream:
+   [sc-publish #68](https://github.com/randlee/sc-publish/issues/68) (updated).
+5. **Preflight workspace tests ran in a preflight-only environment**: the
+   step never ran `just bootstrap`, so the pinned sc-compose CLI was missing
+   and the two compose-passthrough parity tests panicked. The workflow now
+   mirrors sprint CI exactly (cargo-bin PATH, just, cargo-binstall,
+   `just bootstrap`) and runs the exact CI test surface
+   (`cargo test --workspace --exclude atm-daemon` plus the CLI surface
+   contract test). Upstream:
+   [sc-publish #70](https://github.com/randlee/sc-publish/issues/70).
+6. **`list-publish-plan` emitted non-publishable crates in manifest order**:
+   `publish = false` crates (the PyPI-only maturin crates) were included and
+   `publish_order` was ignored. This also affected `crates-publish.yml`,
+   which would have aborted the live ordered publish on
+   `cargo publish -p atm-graft-python`. The helper now filters
+   `publish = false` and sorts by `publish_order`. Upstream:
+   [sc-publish #70](https://github.com/randlee/sc-publish/issues/70).
+7. **Per-crate `cargo package` cannot verify a coordinated version bump**:
+   packaging each crate independently resolves rewritten sibling deps against
+   the live index, which fails until siblings are published (chicken-and-egg;
+   `--no-verify` does not avoid it — resolution happens at lockfile
+   generation). The step now issues one multi-package `cargo package`
+   invocation so cargo verify-builds against its local overlay registry
+   (cargo >= 1.90; the manifest pins 1.94.1). Upstream:
+   [sc-publish #71](https://github.com/randlee/sc-publish/issues/71).
+8. **Product fix (release-blocking, found only in local rehearsal)**:
+   `crates/atm-daemon-bootstrap/Cargo.toml` declared its dev-dependency on
+   the never-published `atm-runtime-test-support` with an explicit
+   `version = "1.4.4"`, so cargo retained it in the packaged manifest and
+   required it on crates.io. `cargo publish -p atm-daemon-bootstrap` would
+   have hard-failed mid-release. The version key is removed (path-only
+   dev-deps are stripped at package time — the pattern the three sibling
+   consumers of this crate already use). One line; Cargo.lock unchanged.
+
+Round-2 local rehearsal, all green before CI dispatch: YAML parse of the
+edited workflow, `bash -n` of all three edited run blocks, functional run of
+the crates_io liveness arm (presence-only path, correct `channel_outcomes`),
+fixed `list-publish-plan` output (13 publishable crates in publish order),
+the exact fixed package-checks step verbatim (plan-derived multi-package
+`cargo package --locked --allow-dirty`), and the CLI surface contract test.
+The kit's own pytest expectations for `list-publish-plan` were not updated
+(consumer CI does not run them); flagged in sc-publish #70.
+
+### Round 3 (live release run 33198964299 from main e8a5b1c1b)
+
+The first live `release.yml` dispatch succeeded through gate-and-tag (tag
+`v1.4.4` created), all binary builds, and the full ordered crates.io publish
+(13/13 crates live). One more kit defect surfaced in the maturin Python
+artifact builds:
+
+9. **`setup-python-release-build` installs the Rust toolchain without the
+   consumer's declared components**: the kit composite's
+   `dtolnay/rust-toolchain` step passes no `components`, so maturin's nested
+   `cargo metadata` triggers rustup's auto-add of the components declared in
+   `rust-toolchain.toml` (`clippy`, `rustfmt`). That auto-add races the hosted
+   runner's preinstalled cargo-fmt and fails intermittently with
+   `failed to install component: 'rustfmt-preview-…', detected conflict:
+   'bin/cargo-fmt'` → `cargo metadata` fails → maturin aborts
+   (atm-graft-python and atm-query-python failed on some matrix runners,
+   passed on others — a race, not a deterministic failure; the setuptools
+   distribution was unaffected). This repo's own `ci.yml` maturin job already
+   documents and prevents exactly this race by passing
+   `components: clippy, rustfmt` to the same action — the fix applies that
+   proven pattern to the kit composite. Upstream:
+   [sc-publish #72](https://github.com/randlee/sc-publish/issues/72).
+   Because `release.yml` computes `build_ref` from the verified `origin/main`
+   tip (the immutable tag only needs to be an ancestor), merging this fix to
+   `main` and re-dispatching the same version/target picks it up without
+   touching tag `v1.4.4`; the idempotent crates.io publish job skips all
+   already-live crates.
+
+10. **`sync-python-version`/`verify-python-version` cannot handle
+    `dynamic = ["version"]`** (found on retry run 33202161368, after fix 9
+    unblocked atm-query-python and hermes-atm): `cmd_sync_python_version`
+    hard-fails with "could not find [project].version to rewrite" when a
+    pyproject deliberately declares `dynamic = ["version"]`
+    (atm-graft-python does, by design — maturin derives the wheel version
+    from the adjacent Cargo manifest), and `cmd_verify_python_version`
+    would likewise mismatch on the empty dynamic version. The manifest
+    layer's `_assert_python_package_version` (used by the lockstep gate)
+    already supports dynamic versions by falling back to the Cargo
+    manifest; the two composite-invoked commands never got that handling.
+    Fix: `sync-python-version` treats a dynamic version as a no-op success,
+    and `verify-python-version` verifies the adjacent Cargo manifest's
+    version against the workspace base (same semantics as the lockstep
+    check). Upstream:
+    [sc-publish #73](https://github.com/randlee/sc-publish/issues/73).
+    Rehearsed locally: sync+verify green on both the dynamic
+    (atm-graft-python) and static (atm-query-python) distributions, a wrong
+    `--version` still fails closed, and `maturin sdist` builds
+    `atm_graft-1.4.4.tar.gz` with the correctly derived dynamic version.
+
+11. **sdist metadata matcher rejects well-formed setuptools sdists** (found
+    on TestPyPI rehearsal run 33211063257, pypi-publish.yml "Select and
+    verify Python distributions"): `_python_distribution_name_from_sdist`
+    matched every `*/PKG-INFO` tar member and hard-failed on more than one.
+    A standard setuptools sdist legitimately contains both the root
+    `<pkg>-<ver>/PKG-INFO` and the package's `*.egg-info/PKG-INFO`
+    (hermes_atm-1.4.4.tar.gz carries `src/hermes_atm.egg-info/PKG-INFO`),
+    so the well-formed hermes-atm sdist was rejected before any upload
+    began. The sdist itself is NOT defective. Fix: match only the canonical
+    root-level `<rootdir>/PKG-INFO`; still fail closed on zero or multiple
+    root matches. Upstream:
+    [sc-publish #74](https://github.com/randlee/sc-publish/issues/74).
+12. **Asset-count expectation wrong for pure-Python wheels** (found only by
+    local rehearsal of fix 11 against the real v1.4.4 release assets —
+    would have failed the next CI dispatch): `verify-python-release-assets`
+    expects `len(wheels)` wheel files per distribution, but the manifest's
+    `wheels` list drives the per-OS *build matrix*, and a pure-Python
+    setuptools build produces one platform-independent `*-none-any.whl`
+    whose identical filename deduplicates across the three matrix legs in
+    the GitHub Release (hermes-atm: expected 3, release correctly holds 1).
+    Fix: when a distribution's found wheel is a single universal wheel,
+    expect exactly one; every other mismatch still fails closed (verified:
+    a removed platform wheel and a duplicate universal wheel both still
+    fail). Upstream:
+    [sc-publish #75](https://github.com/randlee/sc-publish/issues/75).
+13. **`pypi-publish.yml` pins its checkout to the immutable release tag**
+    (found while verifying that fixes 11–12 would actually take effect on
+    re-dispatch): both jobs check out `ref: ${{ inputs.tag }}`, but the
+    workflow never builds from source — the checkout exists only to supply
+    the verify tooling and manifest. Tag `v1.4.4` (e8a5b1c1b) predates
+    every round-3 script fix, so a re-dispatch after merging fixes 11–12 to
+    `main` would have run the tag's frozen `release_artifacts.py` and
+    failed identically — the immutable tag permanently bricks PyPI
+    publication on any verify-tooling defect. Fix: drop the `ref:` pins so
+    both jobs check out the dispatch ref (main), mirroring `release.yml`'s
+    model (immutable tag for artifacts — `gh release download` stays pinned
+    to the tag and `verify-published-release` validates via the API — with
+    tooling from current main). Upstream:
+    [sc-publish #76](https://github.com/randlee/sc-publish/issues/76).
+
+Round-3 full-pipeline rehearsal (every remaining pypi-publish.yml step,
+per the standing "no surprises" rule — collect all defects in one pass
+rather than one merge cycle per CI discovery):
+
+- `channel-config --channel pypi` → valid JSON; `test_repository=testpypi`,
+  `production_repository=pypi`.
+- `build-plan` → `python_upload_tool=maturin` (correct: maturin
+  distributions present).
+- The "Select configured Python repository" inline snippet run verbatim
+  with the real channel JSON → `PYPI_REPOSITORY=testpypi` (target=testpypi)
+  and `PYPI_REPOSITORY=pypi` (target=production).
+- `twine check` (twine 6.1.0, the kit-pinned uploader version) over all 10
+  release dist files → 10/10 PASSED. The maturin wheels/sdists warn about a
+  missing `long_description` (empty PyPI description page — cosmetic, not
+  an upload blocker; candidate future polish, not a v1.4.4 gate).
+- maturin 1.9.4 upload semantics verified in its pinned source
+  (`src/upload.rs` at tag v1.9.4): `testpypi` and `pypi` repository names
+  are built in (no `.pypirc` needed), token read from `MATURIN_PYPI_TOKEN`,
+  and `--skip-existing` is supported. Upload itself is deliberately NOT
+  rehearsed locally (tokens are CI secrets; maturin falls back to keyring
+  credentials, so a local invocation risks an accidental real publish).
+
+Round-3 rehearsal evidence (fixes 11–12): the exact failing CI step was
+rehearsed verbatim against the real v1.4.4 GitHub Release assets
+(`verify-python-release-assets --manifest release/publish-artifacts.toml`
+over the downloaded `*.whl`/`*.tar.gz` set) — passes and selects all 10
+distributions (3+1 atm-graft, 3+1 atm-query, 1+1 hermes-atm); both
+negative paths above still exit nonzero.
+
+Round-3 rehearsal evidence (fix 9): the fix is byte-for-byte the component list and
+rationale already running green on every sprint CI maturin job (`ci.yml`
+"Install Rust toolchain": `components: clippy, rustfmt` with the same race
+documented in its comment); the edited composite parses as valid YAML. The
+runner-image race itself is not reproducible on a local macOS host with a
+fully provisioned toolchain, so in-repo CI precedent is the rehearsal
+authority here.
+
+### Round 4 (live homebrew channel run 33220372286 — workflow PASSED, formula runtime-broken)
+
+The homebrew channel run went green and pushed both formulas to the tap, but
+`brew install randlee/tap/atm` fails at runtime for every user
+(reported by publisher's post-push live verification):
+
+14. **`formula.rb.j2` renders Homebrew path-helper methods as string
+    literals**: every `bundled_paths` destination component goes through
+    `| tojson`, so `["pkgshare"]` renders as `("pkgshare").install Dir[...]`
+    — a String, not the `pkgshare` method →
+    `NoMethodError: undefined method 'install' for an instance of String`
+    during `brew install`. `ruby -c` (the workflow's only formula gate)
+    passes on the broken output, which is why both the workflow and the
+    round-3 local rehearsal (render + `ruby -c`) missed it — **syntax
+    validation is not runtime validation**. Fix: the first component
+    renders as the bare path-helper method, subsequent components as
+    quoted segments (the `pkgshare/"subdir"` idiom). Upstream:
+    [sc-publish #77](https://github.com/randlee/sc-publish/issues/77);
+    the missing runtime gate is
+    [sc-publish #78](https://github.com/randlee/sc-publish/issues/78).
+15. **Manifest `test_output` stale against the released binary** (found
+    only by the round-4 runtime rehearsal): all three formula entries
+    asserted `"CLI for local agent team mail workflows"`, but the v1.4.4
+    binary's `--help` prints `ATM CLI` — the formula `test do` block fails
+    for anyone running `brew test`. No gate ever executes the test block
+    (also #78). Fix: `test_output = "ATM CLI"` (the stable first line of
+    the real help output), verified against the released binary.
+
+This round also drops the `ref: ${{ inputs.tag }}` checkout pins from
+`homebrew-publish.yml`, `scoop-publish.yml`, and `winget-publish.yml` (the
+defect-13 / sc-publish #76 class): homebrew's render step read the formula
+template from a tag-pinned `release-source` checkout, so a re-dispatch after
+merging fix 14 would have re-pushed the tag's frozen broken template. All
+three now use the dispatch-ref checkout for tooling/templates; release
+assets stay tag-pinned via their download URLs and
+`verify-published-release` API validation (same model as `release.yml` and
+the fixed `pypi-publish.yml`).
+
+Round-4 runtime rehearsal (the new bar for this channel, per #78):
+`brew install` executed locally from the fixed rendered formula in a
+throwaway local tap against the real v1.4.4 release assets — install block
+runs clean (41 files incl. pkgshare docs in the keg), keg binary reports
+`atm 1.4.4`, and the test-block assertion (`--help` contains `ATM CLI`)
+passes against the real released binary. `ruby -c` both formulas OK; all
+three edited workflows YAML-parse; scoop manifest re-rendered under the new
+`--root .` model and JSON-validates. The scoop/winget artifacts themselves
+were already live-verified by publisher (bucket JSON content; winget-pkgs
+PR #425892) and are declarative — no analogous runtime DSL surface.
