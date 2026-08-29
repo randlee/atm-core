@@ -63,9 +63,15 @@ an atm-graft API change notification, not a Python code change request.
    bound stamped before the successor's interpreter spawn; on the Windows
    clean runner the product displaced the lease at +211 ms while the bound
    tripped on the 933 ms CPython + `atm_graft` spawn. Committed records under
-   `evidence/AQ1.9/` predate the fix and keep the old
-   `within_one_refresh_tick` field; they are not rewritten. Transcript + `atm doctor --json` graft
-   section captured as sprint evidence for all three rows. **Not executed
+   `evidence/AQ1.9/` were initially committed with the old
+   `within_one_refresh_tick` field. Regenerated 2026-08-29 after the harness fix in #1078;
+   the records now carry `displaced_at_bind` (run 33224178965, head `e3d132782`,
+   merge ref `c833d6c5c`). Transcript + `atm doctor --json` graft
+   section captured as sprint evidence for all three rows. The Windows
+   daemon-restart row was captured with the harness's explicit post-restart
+   graft session refresh (commit `e3d132782`; the `sender_reconnect` field
+   is present in that record), with the product-side fix tracked in PR #1095.
+   **Not executed
    this sprint**: m5 is unreachable from the execution network (see Scope
    ruling below); tracked as `AQ1.9-m5` for Phase AQ closeout (AQ6) or as
    soon as m5 is reachable, whichever comes first.
@@ -85,8 +91,9 @@ remain the source of truth for the local-loopback and m5 rows until real
 
 | Host | Status | Run | Evidence |
 |---|---|---|---|
-| clean-runner-linux | PASS 3/3 | run [33094805689](https://github.com/randlee/atm-core/actions/runs/33094805689), head `a2dc79e52` | `docs/plans/phase-aq/evidence/AQ1.9/restart-matrix-clean-runner-linux.json`, `restart-matrix-clean-runner-linux.md` |
-| clean-runner-macos | PASS 3/3 | run [33110341894](https://github.com/randlee/atm-core/actions/runs/33110341894), head `585eff5e4` | `docs/plans/phase-aq/evidence/AQ1.9/restart-matrix-clean-runner-macos.json`, `restart-matrix-clean-runner-macos.md` |
+| clean-runner-linux | PASS 3/3 | run [33224178965](https://github.com/randlee/atm-core/actions/runs/33224178965), head `e3d132782`, merge ref `c833d6c5c` | `docs/plans/phase-aq/evidence/AQ1.9/restart-matrix-clean-runner-linux.json`, `restart-matrix-clean-runner-linux.md` |
+| clean-runner-macos | PASS 3/3 | run [33224178965](https://github.com/randlee/atm-core/actions/runs/33224178965), head `e3d132782`, merge ref `c833d6c5c` | `docs/plans/phase-aq/evidence/AQ1.9/restart-matrix-clean-runner-macos.json`, `restart-matrix-clean-runner-macos.md` |
+| clean-runner-windows | PASS 3/3 | run [33224178965](https://github.com/randlee/atm-core/actions/runs/33224178965), head `e3d132782`, merge ref `c833d6c5c` | `docs/plans/phase-aq/evidence/AQ1.9/restart-matrix-clean-runner-windows.json`, `restart-matrix-clean-runner-windows.md` |
 | m5 | FOLLOW-UP (AQ1.9-m5) | not attempted (m5 unreachable) | `docs/plans/phase-aq/evidence/AQ1.9/restart-matrix-m5.pending.md` (stub); owner: Phase AQ closeout (AQ6); prerequisite: m5 reachable |
 
 ## Scope ruling (fenix, Phase AQ driver, 2026-08-27)
