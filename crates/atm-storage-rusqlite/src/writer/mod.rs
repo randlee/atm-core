@@ -530,10 +530,10 @@ async fn collect_batch(
     shutting_down: &mut bool,
 ) {
     let deadline = tokio::time::Instant::now() + BATCH_TIME_BUDGET;
-    // Drain an already-queued bounded burst without delay. Once the queue is
-    // momentarily empty, wait only until this fixed deadline for a new arrival
-    // to join the commit. A saturated producer is bounded by channel capacity,
-    // rather than this idle-arrival deadline.
+    // Drain an already-queued bounded burst without delay. Between arrivals,
+    // yield cooperatively until the fixed deadline instead of parking on an OS
+    // timer: the batching contract stays platform-neutral and a one-millisecond
+    // window is not expanded by host scheduler granularity.
     loop {
         match receiver.try_recv() {
             Ok(WriterMessage::Submit { op, reply }) => {
@@ -552,19 +552,10 @@ async fn collect_batch(
                 if *shutting_down {
                     return;
                 }
-                match tokio::time::timeout_at(deadline, receiver.recv()).await {
-                    Ok(Some(WriterMessage::Submit { op, reply })) => {
-                        batch.push(QueuedWrite { op, reply });
-                    }
-                    Ok(Some(WriterMessage::Shutdown)) => {
-                        *shutting_down = true;
-                    }
-                    Ok(None) => {
-                        *shutting_down = true;
-                        return;
-                    }
-                    Err(_) => return,
+                if tokio::time::Instant::now() >= deadline {
+                    return;
                 }
+                tokio::task::yield_now().await;
             }
         }
     }
