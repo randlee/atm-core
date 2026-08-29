@@ -3578,7 +3578,7 @@ mod tests {
             .expect("remote runtime drains");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn selected_router_reuses_one_opaque_peer_connection_across_three_loopback_writes() {
         let adapter = Arc::new(CountingPassthroughPeerAdapter::default());
         let remote = fixture(true, None, None);
@@ -3616,7 +3616,7 @@ mod tests {
                 .dispatch(
                     ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
                     AuthenticatedIngress::Local,
-                    RequestDeadline::after(Duration::from_secs(1)),
+                    RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
                 )
                 .await
                 .expect("selected router forwards the local write");
