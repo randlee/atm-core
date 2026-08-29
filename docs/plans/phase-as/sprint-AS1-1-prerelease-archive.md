@@ -128,3 +128,11 @@ commit on `feature/ar1-prerelease-archive` is recorded below:
 The remaining documentation clarifications are tracked as QA-1 follow-ups in
 this plan and the cross-platform guidelines; they do not change the release
 workflow or its archive contract.
+
+### QA-2 — 2026-08-29
+
+Windows CI found the original shared-resolver unit tests were unintentionally
+observing a real Git-for-Windows installation instead of their mocked PATH.
+`e23dac88a` fixes that test isolation, gives the picker subprocess helper the
+same finite timeout policy, and records the complete seven-finding QA-1 map
+above. Production Git-Bash discovery remains enabled on Windows.
