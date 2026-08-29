@@ -244,6 +244,8 @@ class MacosDevelopmentSigningTests(unittest.TestCase):
                 binary.write_bytes(binary.name.encode("utf-8"))
                 binary.chmod(0o700)
             formula = {
+                "name": "atm",
+                "full_name": "randlee/tap/atm",
                 "homepage": "https://github.com/randlee/atm-core",
                 "versions": {"stable": "1.4.4"},
                 "installed": [{"version": "1.4.4"}],
@@ -262,10 +264,23 @@ class MacosDevelopmentSigningTests(unittest.TestCase):
                     "run",
                     side_effect=[
                         subprocess.CompletedProcess([], 0, f"{prefix}\n", ""),
-                        subprocess.CompletedProcess([], 0, json.dumps({"formulae": [formula]}), ""),
+                        subprocess.CompletedProcess(
+                            [],
+                            0,
+                            json.dumps(
+                                {
+                                    "formulae": [
+                                        {"name": "openssl", "full_name": "homebrew/core/openssl"},
+                                        formula,
+                                        {"name": "python", "full_name": "homebrew/core/python"},
+                                    ]
+                                }
+                            ),
+                            "",
+                        ),
                     ],
                 ),
-                mock.patch.object(DAEMON_SWITCH, "selected_release_version", side_effect=["1.4.4", "1.4.4"]),
+                mock.patch.object(DAEMON_SWITCH, "selected_release_version", return_value="1.4.4"),
             ):
                 DAEMON_SWITCH.require_homebrew_release_provenance(cli, daemon)
 
@@ -280,6 +295,8 @@ class MacosDevelopmentSigningTests(unittest.TestCase):
                 binary.write_bytes(binary.name.encode("utf-8"))
                 binary.chmod(0o700)
             formula = {
+                "name": "atm",
+                "full_name": "randlee/tap/atm",
                 "homepage": "https://github.com/randlee/atm-core",
                 "versions": {"stable": "1.4.4"},
                 "installed": [{"version": "1.4.4"}],
@@ -301,10 +318,58 @@ class MacosDevelopmentSigningTests(unittest.TestCase):
                         subprocess.CompletedProcess([], 0, json.dumps({"formulae": [formula]}), ""),
                     ],
                 ),
-                mock.patch.object(DAEMON_SWITCH, "selected_release_version", side_effect=["1.4.4", "1.4.4"]),
+                mock.patch.object(DAEMON_SWITCH, "selected_release_version", return_value="1.4.4"),
             ):
                 with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "matching GitHub Release asset"):
                     DAEMON_SWITCH.require_homebrew_release_provenance(cli, daemon)
+
+    def test_homebrew_release_provenance_does_not_probe_daemon_owner_lock_as_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary) / "opt" / "atm"
+            binary_dir = prefix / "bin"
+            binary_dir.mkdir(parents=True)
+            cli = binary_dir / "atm"
+            daemon = binary_dir / "atm-daemon"
+            for binary in (cli, daemon):
+                binary.write_bytes(binary.name.encode("utf-8"))
+                binary.chmod(0o700)
+            formula = {
+                "name": "atm",
+                "full_name": "randlee/tap/atm",
+                "homepage": "https://github.com/randlee/atm-core",
+                "versions": {"stable": "1.4.4"},
+                "installed": [{"version": "1.4.4"}],
+                "urls": {
+                    "stable": {
+                        "url": "https://github.com/randlee/atm-core/releases/download/v1.4.4/atm.tar.gz",
+                        "checksum": "a" * 64,
+                    }
+                },
+            }
+            probed: list[Path] = []
+
+            def version_probe(binary: Path) -> str:
+                probed.append(binary)
+                if binary == daemon:
+                    return "an ATM daemon already owns ~/.atm/daemon/owner.lock ... retry."
+                return "atm 1.4.4"
+
+            with (
+                mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+                mock.patch.object(DAEMON_SWITCH.shutil, "which", return_value="/opt/homebrew/bin/brew"),
+                mock.patch.object(
+                    DAEMON_SWITCH,
+                    "run",
+                    side_effect=[
+                        subprocess.CompletedProcess([], 0, f"{prefix}\n", ""),
+                        subprocess.CompletedProcess([], 0, json.dumps({"formulae": [formula]}), ""),
+                    ],
+                ),
+                mock.patch.object(DAEMON_SWITCH, "version", side_effect=version_probe),
+            ):
+                DAEMON_SWITCH.require_homebrew_release_provenance(cli, daemon)
+
+            self.assertEqual(probed, [cli.resolve()])
 
     def test_restore_dispatch_uses_provenance_gate_and_skips_dev_gate(self) -> None:
         args = argparse.Namespace(command="restore")

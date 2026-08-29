@@ -249,9 +249,26 @@ def homebrew_release_metadata() -> dict[str, object]:
     except json.JSONDecodeError as error:
         raise SwitchError("cannot verify Homebrew release provenance: brew info returned invalid JSON") from error
     formulae = payload.get("formulae") if isinstance(payload, dict) else None
-    if not isinstance(formulae, list) or len(formulae) != 1 or not isinstance(formulae[0], dict):
+    if not isinstance(formulae, list):
         raise SwitchError("cannot verify Homebrew release provenance: ATM formula metadata is missing")
-    return formulae[0]
+    # Homebrew returns every installed formula when --installed is present,
+    # even when a formula name is supplied. Select ATM explicitly instead of
+    # assuming the response contains one item.
+    atm_formulae = [
+        formula
+        for formula in formulae
+        if isinstance(formula, dict)
+        and (
+            formula.get("name") == "atm"
+            or (
+                isinstance(formula.get("full_name"), str)
+                and formula["full_name"].rsplit("/", maxsplit=1)[-1] == "atm"
+            )
+        )
+    ]
+    if len(atm_formulae) != 1:
+        raise SwitchError("cannot verify Homebrew release provenance: ATM formula metadata is missing")
+    return atm_formulae[0]
 
 
 def require_homebrew_release_provenance(cli: Path, daemon: Path) -> None:
@@ -293,12 +310,12 @@ def require_homebrew_release_provenance(cli: Path, daemon: Path) -> None:
     formula = homebrew_release_metadata()
     if formula.get("homepage") != "https://github.com/randlee/atm-core":
         raise SwitchError("Homebrew ATM formula has an unexpected project homepage")
+    # atm-daemon has no side-effect-free --version mode: while the singleton
+    # is running, probing it attempts startup and returns the owner-lock error.
+    # Both binaries are extracted from Homebrew's one checksummed release
+    # archive, so the CLI version plus formula provenance establishes pairing
+    # without probing the live daemon.
     cli_version = selected_release_version(cli)
-    daemon_version = selected_release_version(daemon)
-    if cli_version != daemon_version:
-        raise SwitchError(
-            f"Homebrew ATM pair has mismatched versions: CLI {cli_version}, daemon {daemon_version}"
-        )
     versions = formula.get("versions")
     installed = formula.get("installed")
     if not isinstance(versions, dict) or versions.get("stable") != cli_version:
