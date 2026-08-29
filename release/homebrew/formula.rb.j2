@@ -26,7 +26,7 @@ class {{ formula_class }} < Formula
     bin.install {{ binary_path | tojson }}
 {% endfor %}
 {% for bundle in bundled_paths %}
-    ({% for component in bundle.destination_components %}{{ component | tojson }}{% if not loop.last %}/{% endif %}{% endfor %}).install Dir[{{ bundle.source_glob | tojson }}]
+    ({% for component in bundle.destination_components %}{% if loop.first %}{{ component }}{% else %}/{{ component | tojson }}{% endif %}{% endfor %}).install Dir[{{ bundle.source_glob | tojson }}]
 {% endfor %}
   end
 
