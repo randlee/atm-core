@@ -972,6 +972,22 @@ async fn execute_reqwest_request(
     if deadline.expired() {
         return Err(HttpRuntimeClientFailure::Cancelled);
     }
+    let outbound = build_outbound_reqwest_request(url, request, additional_header)?;
+    let response = client
+        .execute(outbound)
+        .await
+        .map_err(classify_reqwest_execute_failure)?;
+    decode_reqwest_response(response).await
+}
+
+/// Builds the outbound `reqwest::Request` from the shared, transport-agnostic
+/// [`HttpRequest`], applying the connector-specific `additional_header` (for
+/// example the loopback capability header) last.
+fn build_outbound_reqwest_request(
+    url: reqwest::Url,
+    request: HttpRequest,
+    additional_header: Option<(&'static str, String)>,
+) -> Result<reqwest::Request, HttpRuntimeClientFailure> {
     let method = request.method.parse().map_err(|source| {
         HttpRuntimeClientFailure::RequestWrite(format!(
             "shared HTTP request has an invalid method `{}`: {source}",
@@ -1006,25 +1022,33 @@ async fn execute_reqwest_request(
         })?;
         outbound.headers_mut().insert(name, value);
     }
+    Ok(outbound)
+}
 
-    let response = client.execute(outbound).await.map_err(|source| {
-        // `reqwest::Error::is_connect` is `true` only for connection
-        // establishment failures (DNS/TCP/TLS, including a configured
-        // `connect_timeout` expiry), which happen strictly before any
-        // request byte is written. Every other `execute` failure means the
-        // request may have been partially or fully transmitted, so it must
-        // stay in a non-retry-eligible variant -- see
-        // `HttpRuntimeClientFailure::is_safe_to_retry_after_reconnect`.
-        if source.is_connect() {
-            HttpRuntimeClientFailure::Connect(format!(
-                "HTTP connector could not establish a connection: {source}"
-            ))
-        } else {
-            HttpRuntimeClientFailure::RequestWrite(format!(
-                "HTTP connector request failed after a connection was established: {source}"
-            ))
-        }
-    })?;
+/// Classifies a `reqwest::Client::execute` failure for the no-duplicate-write
+/// contract. `reqwest::Error::is_connect` is `true` only for connection
+/// establishment failures (DNS/TCP/TLS, including a configured
+/// `connect_timeout` expiry), which happen strictly before any request byte
+/// is written. Every other `execute` failure means the request may have been
+/// partially or fully transmitted, so it must stay in a non-retry-eligible
+/// variant -- see `HttpRuntimeClientFailure::is_safe_to_retry_after_reconnect`.
+fn classify_reqwest_execute_failure(source: reqwest::Error) -> HttpRuntimeClientFailure {
+    if source.is_connect() {
+        HttpRuntimeClientFailure::Connect(format!(
+            "HTTP connector could not establish a connection: {source}"
+        ))
+    } else {
+        HttpRuntimeClientFailure::RequestWrite(format!(
+            "HTTP connector request failed after a connection was established: {source}"
+        ))
+    }
+}
+
+/// Decodes a successfully executed `reqwest::Response` into the shared,
+/// transport-agnostic response type.
+async fn decode_reqwest_response(
+    response: reqwest::Response,
+) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
     let status = response.status();
     let headers = response.headers().clone();
     let body = response.bytes().await.map_err(|source| {
