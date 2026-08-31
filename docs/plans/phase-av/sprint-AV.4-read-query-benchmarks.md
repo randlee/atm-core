@@ -26,6 +26,16 @@ dependency_relations:
 
 # AV.4 — Massively parallel read and query benchmarks
 
+## QA history
+
+- **QA-r1 fix — `ef9341eae` (2026-08-31):** closed AV4-B1, AV4-B2,
+  AV4-I1, AV4-I2, AV4-M1, AV4-M2, and AV4-M3. The fix reuses the shared
+  benchmark schema/report/policy primitives, records the complete D5
+  diagnostic skeleton without fabricated values, composes all three named
+  Just lanes, gates official runs on AV.1b, records budget and corpus
+  provenance, and rejects incomplete artifacts. No live campaign or floor
+  seeding was performed because AV.1b remains a must-follow dependency.
+
 Prove — and keep proving — that mailbox reads and queries execute in a
 massively parallel manner: a read-serialization regression must become a
 failing benchmark campaign, not an anecdote discovered by a timed-out
