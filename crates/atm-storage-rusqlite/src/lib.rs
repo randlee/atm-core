@@ -3083,10 +3083,10 @@ mod tests {
         assert!(listed.contains(&second));
         assert_eq!(
             reader
-                .load_message(scope, first.message_key.clone(), deadline)
+                .load_message(scope.clone(), first.message_key.clone(), deadline)
                 .await
                 .expect("reader load"),
-            Some(first)
+            Some(first.clone())
         );
 
         let denied = reader
@@ -3104,6 +3104,42 @@ mod tests {
             .await
             .expect_err("mismatched scope must fail at the boundary");
         assert_eq!(denied, ReadLaneError::UnauthorizedScope);
+
+        let denied_load = reader
+            .load_message(
+                MailboxScope::new("other-team".parse().expect("team"), agent()),
+                first.message_key.clone(),
+                deadline,
+            )
+            .await
+            .expect_err("cross-team load must fail at the storage boundary");
+        assert_eq!(denied_load, ReadLaneError::UnauthorizedScope);
+
+        let other_agent: AgentName = "other-agent".parse().expect("agent");
+        let denied_list = reader
+            .list_messages(
+                scope.clone(),
+                MessageQuery {
+                    team: team(),
+                    agent: other_agent.clone(),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                },
+                deadline,
+            )
+            .await
+            .expect_err("cross-agent list must fail at the storage boundary");
+        assert_eq!(denied_list, ReadLaneError::UnauthorizedScope);
+        let denied_cross_agent_load = reader
+            .load_message(
+                MailboxScope::new(team(), other_agent),
+                second.message_key.clone(),
+                deadline,
+            )
+            .await
+            .expect_err("cross-agent load must fail at the storage boundary");
+        assert_eq!(denied_cross_agent_load, ReadLaneError::UnauthorizedScope);
     }
 
     #[test]
