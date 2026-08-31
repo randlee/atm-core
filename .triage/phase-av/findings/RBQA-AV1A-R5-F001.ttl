@@ -15,8 +15,11 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "Enumerate every io_owns=[sqlite] (and other io_owns values) owner root the carve-out honors, and every production file under those roots that is exempted for the owned tag while lacking a declared concrete boundary record in boundaries/" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
+  triage:closedAt "2026-08-31T18:25:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:resolutionNote "Fixed @ 170d17748 on feature/av3-read-concurrency-gates (verified firsthand by quality-mgr): sqlite_owner_roots directory-membership carve-out removed from .just/lint_boundaries.py — concrete_trait_implementation_delegates now returns only modules with declared concrete boundary records; concrete records added for the three formerly-exempt adapters (boundaries/atm-storage-rusqlite/{nudge-template-override-store,pending-nudge-store,graft-receiver-endpoint-store}-sqlite.toml); lint self-tests extended (+43 lines)." ;
   triage:triagedAt "2026-08-31T17:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV1A ;
   triage:foundAt "2026-08-31T16:02:24Z"^^xsd:dateTime ;
@@ -32,8 +35,8 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 2040 ;
   triage:snippet "def concrete_trait_implementation_delegates(...): ...sqlite_owner_roots..." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "222e26c34" ;
   triage:occursIn <urn:atm:triage:worktree/AV3/222e26c34> .
@@ -43,8 +46,8 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 2071 ;
   triage:snippet "def concrete_owner_delegates_trait_implementation(...): return tag == direct_sqlite_io and any(...)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "222e26c34" ;
   triage:occursIn <urn:atm:triage:worktree/AV3/222e26c34> .
@@ -54,8 +57,8 @@
   triage:file "crates/atm-storage-rusqlite/src/nudge_template_override_store.rs" ;
   triage:line 20 ;
   triage:snippet "impl SqliteNudgeTemplateOverrideStore (use rusqlite :9)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "222e26c34" ;
   triage:occursIn <urn:atm:triage:worktree/AV3/222e26c34> .
@@ -65,8 +68,8 @@
   triage:file "crates/atm-storage-rusqlite/src/pending_nudge_store.rs" ;
   triage:line 19 ;
   triage:snippet "impl SqlitePendingNudgeStore (use rusqlite :8)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "222e26c34" ;
   triage:occursIn <urn:atm:triage:worktree/AV3/222e26c34> .
@@ -76,8 +79,8 @@
   triage:file "crates/atm-storage-rusqlite/src/graft_receiver_endpoint_store.rs" ;
   triage:line 37 ;
   triage:snippet "impl SqliteGraftReceiverEndpointStore (use rusqlite :10)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "222e26c34" ;
   triage:occursIn <urn:atm:triage:worktree/AV3/222e26c34> .
