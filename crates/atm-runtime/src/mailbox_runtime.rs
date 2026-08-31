@@ -287,14 +287,21 @@ pub trait AsyncMailboxRuntime: Send + Sync {
     ) -> Result<MailboxSelectionResult, AtmError>;
 }
 
-/// Composition-owned implementation.  The writer handle is intentionally
-/// retained although AV.1a performs no read-state mutation; AV.1b uses that
-/// explicit handoff rather than smuggling a writer through the reader API.
+/// Composition-owned implementation.  After supervisor startup, it retains
+/// only the explicit handoff rather than a direct writer-lane handle.
 #[derive(Clone)]
 pub struct StorageAsyncMailboxRuntime {
     reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
-    writer_lane: Arc<dyn AsyncMessageStore + Send + Sync>,
-    state_handoff: Option<StateHandoffSupervisor>,
+    state_handoff: StateHandoffLifecycle,
+}
+
+/// Before startup composition temporarily holds the writer ingress needed to
+/// create the supervisor. After startup mailbox reads have no direct writer
+/// handle at all.
+#[derive(Clone)]
+enum StateHandoffLifecycle {
+    Unstarted(Arc<dyn AsyncMessageStore + Send + Sync>),
+    Active(StateHandoffSupervisor),
 }
 
 impl StorageAsyncMailboxRuntime {
@@ -305,18 +312,23 @@ impl StorageAsyncMailboxRuntime {
     ) -> Self {
         Self {
             reader,
-            writer_lane,
-            state_handoff: None,
+            state_handoff: StateHandoffLifecycle::Unstarted(writer_lane),
         }
     }
 
     /// Starts the composition-owned writer handoff before read handlers are
     /// admitted.  Construction fails closed if no Tokio runtime is present.
     pub fn with_state_handoff(mut self, config: HandoffConfig) -> Result<Self, AtmError> {
-        self.state_handoff = Some(StateHandoffSupervisor::start(
-            config,
-            Arc::clone(&self.writer_lane),
-        )?);
+        let writer = match &self.state_handoff {
+            StateHandoffLifecycle::Unstarted(writer) => Arc::clone(writer),
+            StateHandoffLifecycle::Active(_) => {
+                return Err(AtmError::validation(
+                    "mailbox state-handoff supervisor was started more than once",
+                ));
+            }
+        };
+        self.state_handoff =
+            StateHandoffLifecycle::Active(StateHandoffSupervisor::start(config, writer)?);
         Ok(self)
     }
 
@@ -326,8 +338,7 @@ impl StorageAsyncMailboxRuntime {
         // on the writer lane before AV.1b owns read-state mutation.
         Self {
             reader,
-            writer_lane: Arc::new(TestOnlyWriterLane),
-            state_handoff: None,
+            state_handoff: StateHandoffLifecycle::Unstarted(Arc::new(TestOnlyWriterLane)),
         }
     }
 }
@@ -378,7 +389,7 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
 
 impl StorageAsyncMailboxRuntime {
     fn handoff_read_display_state(&self, scope: MailboxScope, selection: &MailboxSelectionResult) {
-        let Some(handoff) = &self.state_handoff else {
+        let StateHandoffLifecycle::Active(handoff) = &self.state_handoff else {
             return;
         };
         let message_ids = selection
