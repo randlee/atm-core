@@ -3442,6 +3442,15 @@ async fn heartbeat() { ControlPathSyncBridge::run(); }
         !region.contains("ControlPathSyncBridge"),
         "handler-region scans must not confuse an allowed residual control-path caller with a read handler"
     );
+    let regions = av3_handler_regions(source, &["list_messages", "receive_mailbox"]);
+    assert_eq!(
+        regions.len(),
+        2,
+        "the plural handler path must retain both bodies"
+    );
+    for (handler, body) in regions {
+        av3_assert_allowlisted_types(&body, &[], &format!("handler `{handler}`"));
+    }
 }
 
 #[test]
@@ -3498,20 +3507,24 @@ fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies() {
         return;
     }
     let handlers = read_handler_names();
-    let read_region = av3_handler_region(
+    let read_regions = av3_handler_regions(
         &router,
         &handlers.iter().map(String::as_str).collect::<Vec<_>>(),
     );
-    av3_assert_allowlisted_types(
-        &read_region,
-        &[
-            "AsyncMailboxRuntime",
-            "DoctorProjection",
-            "ApiResponse",
-            "ResponseEnvelope",
-        ],
-        "read-handler",
-    );
+    let allowed = [
+        "AsyncMailboxRuntime",
+        "DoctorProjection",
+        "ApiResponse",
+        "ResponseEnvelope",
+    ];
+    for (handler, region) in &read_regions {
+        av3_assert_allowlisted_types(region, &allowed, &format!("read-handler `{handler}`"));
+    }
+    let read_region = read_regions
+        .values()
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n");
     for prohibited in [
         "BlockingCoreBridge",
         "ControlPathSyncBridge",
@@ -3553,35 +3566,13 @@ fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()
     }
     let source = read_source(&mailbox_runtime);
     let implementation = av3_async_mailbox_runtime_impl_region(&source);
+    let allowed = av3_async_mailbox_runtime_allowed_types(&source);
+    let allowed = allowed.iter().map(String::as_str).collect::<Vec<_>>();
     assert!(
         source.contains("reader: Arc<dyn AsyncMailboxReader"),
         "the AsyncMailboxRuntime composition must use the reader-lane capability"
     );
-    av3_assert_allowlisted_item_types(
-        &implementation,
-        &[
-            "AsyncMailboxRuntime",
-            "StorageAsyncMailboxRuntime",
-            "AsyncMailboxReader",
-            "StateHandoffSupervisor",
-            "MailboxSelectionRequest",
-            "MailboxSelectionCandidate",
-            "MailboxSelectionResult",
-            "SelectedMailboxMessage",
-            "MailboxScope",
-            "Message",
-            "MessageKey",
-            "MessageQuery",
-            "RequestDeadline",
-            "ReadDeadline",
-            "AtmError",
-            "ReadLaneError",
-            "Result",
-            "Ok",
-            "Self",
-        ],
-        "AsyncMailboxRuntime composition",
-    );
+    av3_assert_allowlisted_item_types(&implementation, &allowed, "AsyncMailboxRuntime composition");
     for prohibited in [
         "spawn_blocking",
         "ControlPathSyncBridge",
@@ -3595,6 +3586,33 @@ fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()
             "AV.3 composition boundary rejects read serialization primitive `{prohibited}`"
         );
     }
+}
+
+#[test]
+fn av3_async_mailbox_runtime_composition_allows_trait_surface_and_prelude() {
+    let source = r#"
+trait AsyncMailboxRuntime {
+    fn handoff_diagnostics(&self) -> Option<StateHandoffDiagnostics>;
+    async fn list_command(&self, command: AsyncListCommand) -> Result<ListOutcome, AtmError>;
+    async fn read_command(&self, command: AsyncReadCommand) -> Result<ReadOutcome, AtmError>;
+}
+impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
+    fn compose(&self) {
+        let _diagnostics: Option<StateHandoffDiagnostics> = None;
+        let _command = Some(AsyncListCommand);
+        let _read = AsyncReadCommand;
+        let _outcome = ListOutcome;
+        let _read_outcome = ReadOutcome;
+    }
+}
+"#;
+    let allowed = av3_async_mailbox_runtime_allowed_types(source);
+    let allowed = allowed.iter().map(String::as_str).collect::<Vec<_>>();
+    av3_assert_allowlisted_item_types(
+        &av3_async_mailbox_runtime_impl_region(source),
+        &allowed,
+        "synthetic AsyncMailboxRuntime composition",
+    );
 }
 
 #[test]
@@ -3975,17 +3993,26 @@ fn read_source(path: &Path) -> String {
 /// in that file after AV.1b, so file-wide token checks would either reject an
 /// allowed mutation/control-path caller or permit a read-handler regression.
 fn av3_handler_region(source: &str, handlers: &[&str]) -> String {
+    av3_handler_regions(source, handlers)
+        .into_values()
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn av3_handler_regions(source: &str, handlers: &[&str]) -> BTreeMap<String, String> {
     let functions = av3_production_functions(source);
     handlers
         .iter()
         .map(|handler| {
-            functions.get(*handler).unwrap_or_else(|| {
-                panic!("AV.3 handler `{handler}` is missing from production source")
-            })
+            (
+                (*handler).to_owned(),
+                functions.get(*handler).unwrap_or_else(|| {
+                    panic!("AV.3 handler `{handler}` is missing from production source")
+                }),
+            )
         })
-        .cloned()
-        .collect::<Vec<_>>()
-        .join("\n")
+        .map(|(handler, body)| (handler, body.clone()))
+        .collect()
 }
 
 fn av3_assert_allowlisted_types(region: &str, allowed: &[&str], scope: &str) {
@@ -4001,35 +4028,7 @@ fn av3_assert_allowlisted_item_types(region: &str, allowed: &[&str], scope: &str
 }
 
 fn av3_assert_allowlisted_syntax_types(syntax: &syn::File, allowed: &[&str], scope: &str) {
-    struct TypeVisitor {
-        names: BTreeSet<String>,
-    }
-    impl<'ast> Visit<'ast> for TypeVisitor {
-        fn visit_expr_path(&mut self, path: &'ast syn::ExprPath) {
-            for segment in &path.path.segments {
-                let name = segment.ident.to_string();
-                if name.chars().next().is_some_and(char::is_uppercase) {
-                    self.names.insert(name);
-                }
-            }
-            syn::visit::visit_expr_path(self, path);
-        }
-        fn visit_path(&mut self, path: &'ast syn::Path) {
-            if let Some(segment) = path.segments.last() {
-                let name = segment.ident.to_string();
-                if name.chars().next().is_some_and(char::is_uppercase) {
-                    self.names.insert(name);
-                }
-            }
-            syn::visit::visit_path(self, path);
-        }
-    }
-    let mut visitor = TypeVisitor {
-        names: BTreeSet::new(),
-    };
-    visitor.visit_file(syntax);
-    let unexpected = visitor
-        .names
+    let unexpected = av3_type_names_in_syntax(syntax)
         .into_iter()
         .filter(|name| !allowed.contains(&name.as_str()))
         .collect::<Vec<_>>();
@@ -4037,6 +4036,88 @@ fn av3_assert_allowlisted_syntax_types(syntax: &syn::File, allowed: &[&str], sco
         unexpected.is_empty(),
         "AV.3 {scope} allowlist rejects unlisted type(s): {unexpected:?}"
     );
+}
+
+#[derive(Default)]
+struct Av3TypeNameVisitor {
+    names: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for Av3TypeNameVisitor {
+    fn visit_expr_path(&mut self, path: &'ast syn::ExprPath) {
+        for segment in &path.path.segments {
+            let name = segment.ident.to_string();
+            if name.chars().next().is_some_and(char::is_uppercase) {
+                self.names.insert(name);
+            }
+        }
+        syn::visit::visit_expr_path(self, path);
+    }
+
+    fn visit_path(&mut self, path: &'ast syn::Path) {
+        if let Some(segment) = path.segments.last() {
+            let name = segment.ident.to_string();
+            if name.chars().next().is_some_and(char::is_uppercase) {
+                self.names.insert(name);
+            }
+        }
+        syn::visit::visit_path(self, path);
+    }
+}
+
+fn av3_type_names_in_syntax(syntax: &syn::File) -> BTreeSet<String> {
+    let mut visitor = Av3TypeNameVisitor::default();
+    visitor.visit_file(syntax);
+    visitor.names
+}
+
+fn av3_async_mailbox_runtime_allowed_types(source: &str) -> BTreeSet<String> {
+    const PRELUDE: &[&str] = &[
+        "Box", "Err", "None", "Ok", "Option", "Result", "Self", "Some", "String", "Vec",
+    ];
+    const DOCUMENTED_EXTRAS: &[&str] = &[
+        "AsyncMailboxReader",
+        "AsyncMailboxRuntime",
+        "AtmError",
+        "MailboxScope",
+        "MailboxSelectionCandidate",
+        "MailboxSelectionRequest",
+        "MailboxSelectionResult",
+        "Message",
+        "MessageKey",
+        "MessageQuery",
+        "ReadDeadline",
+        "ReadLaneError",
+        "RequestDeadline",
+        "SelectedMailboxMessage",
+        "StateHandoffSupervisor",
+        "StorageAsyncMailboxRuntime",
+        "Unstarted",
+        "Active",
+    ];
+    let syntax =
+        syn::parse_file(source).expect("AV.3 AsyncMailboxRuntime source must parse as Rust");
+    let trait_item = syntax
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Trait(item)
+                if !item.attrs.iter().any(is_test_configuration_attribute)
+                    && item.ident == "AsyncMailboxRuntime" =>
+            {
+                Some(item)
+            }
+            _ => None,
+        })
+        .expect("AV.1b must define AsyncMailboxRuntime");
+    let trait_syntax = syn::parse_file(&trait_item.to_token_stream().to_string())
+        .expect("AsyncMailboxRuntime trait item must parse as Rust");
+    PRELUDE
+        .iter()
+        .chain(DOCUMENTED_EXTRAS)
+        .map(|name| (*name).to_owned())
+        .chain(av3_type_names_in_syntax(&trait_syntax))
+        .collect()
 }
 
 fn av3_async_mailbox_runtime_impl_region(source: &str) -> String {

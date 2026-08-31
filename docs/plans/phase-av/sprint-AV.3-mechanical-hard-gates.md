@@ -109,14 +109,16 @@ sprint.
       permits `StorageAsyncMailboxRuntime`, `RequestDeadline`,
       `ReadDeadline`, `AtmError`/`ReadLaneError`, the ordinary mailbox
       domain values (`MailboxScope`, `Message`, `MessageKey`,
-      `MessageQuery`), and all public
-      `atm_core::read::selection` values
+      `MessageQuery`), all public `atm_core::read::selection` values
       (`MailboxSelectionRequest`, `MailboxSelectionCandidate`,
-      `MailboxSelectionResult`, `SelectedMailboxMessage`). It derives only
-      the production `impl AsyncMailboxRuntime for
-      StorageAsyncMailboxRuntime` with `syn`; `#[cfg(test)]` writer fakes
-      are outside the asserted region. `AsyncMessageStore` and
-      `MessageStore` deliberately remain absent from the positive allowlist.
+      `MailboxSelectionResult`, `SelectedMailboxMessage`), and the
+      `Unstarted`/`Active` state-handoff lifecycle states. It derives its
+      remaining type names from the production `AsyncMailboxRuntime` trait's
+      `syn`-parsed signatures plus a small explicit Rust-prelude set; the
+      asserted region is only the production `impl AsyncMailboxRuntime for
+      StorageAsyncMailboxRuntime`, so `#[cfg(test)]` writer fakes are outside
+      it. `AsyncMessageStore` and `MessageStore` deliberately remain absent
+      from the positive allowlist.
 - [ ] D2b — Behavior gate (mechanism-independent): tests run each
       read-family endpoint against an **instrumented writer ingress
       that records every submission** (op variant, origin, outcome)
@@ -215,6 +217,14 @@ fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
   lint check (`c231b86b5`). `AV3-I3` remains explicitly deferred to round 2
   / A2b after AV.1b because the D2b mechanism-independent behavior test is
   not yet live.
+- 2026-08-31 Round-2 part 1 fixed merge-forward gate defects `AV3-B5/B6`
+  (`deca61e6e`): the composition surface is derived from
+  `AsyncMailboxRuntime` signatures plus explicit prelude/D2 names, and the
+  read handler assertion parses each named handler independently. Against the
+  real AV.1b tree the composition gate passes; the `doctor` handler remains
+  intentionally rejected pending ownership of `AtmError`, `Box`, `Doctor`,
+  `DoctorProjectionContext`, `Ok`, `Ordering`, `Relaxed`, and `Some` rather
+  than weakening the D1 allowlist.
 
 This is the authoritative acceptance checklist.
 
