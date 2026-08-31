@@ -3479,6 +3479,16 @@ fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies() {
         &router,
         &handlers.iter().map(String::as_str).collect::<Vec<_>>(),
     );
+    av3_assert_allowlisted_types(
+        &read_region,
+        &[
+            "AsyncMailboxRuntime",
+            "DoctorProjection",
+            "ApiResponse",
+            "ResponseEnvelope",
+        ],
+        "read-handler",
+    );
     for prohibited in [
         "BlockingCoreBridge",
         "ControlPathSyncBridge",
@@ -3498,6 +3508,21 @@ fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies() {
 }
 
 #[test]
+fn av3_allowlist_rejects_a_freshly_named_read_gate() {
+    let region = av3_handler_region(
+        "async fn list_messages() { FreshSemaphoreGate::acquire().await; }",
+        &["list_messages"],
+    );
+    let result = std::panic::catch_unwind(|| {
+        av3_assert_allowlisted_types(&region, &["AsyncMailboxRuntime"], "read-handler")
+    });
+    assert!(
+        result.is_err(),
+        "the positive allowlist must reject renamed gates"
+    );
+}
+
+#[test]
 fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives() {
     let mailbox_runtime = workspace_root().join("crates/atm-runtime/src/mailbox_runtime.rs");
     if !mailbox_runtime.exists() {
@@ -3511,6 +3536,16 @@ fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()
     assert!(
         source.contains("reader: Arc<dyn AsyncMailboxReader"),
         "the AsyncMailboxRuntime composition must use the reader-lane capability"
+    );
+    av3_assert_allowlisted_types(
+        implementation,
+        &[
+            "AsyncMailboxReader",
+            "StateHandoffSupervisor",
+            "ReadDeadline",
+            "AtmError",
+        ],
+        "AsyncMailboxRuntime composition",
     );
     for prohibited in [
         "spawn_blocking",
@@ -3766,6 +3801,47 @@ fn av3_handler_region(source: &str, handlers: &[&str]) -> String {
         .cloned()
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn av3_assert_allowlisted_types(region: &str, allowed: &[&str], scope: &str) {
+    let syntax = syn::parse_file(&format!("fn gate() {region}"))
+        .unwrap_or_else(|error| panic!("AV.3 {scope} fixture must parse: {error}"));
+    struct TypeVisitor {
+        names: BTreeSet<String>,
+    }
+    impl<'ast> Visit<'ast> for TypeVisitor {
+        fn visit_expr_path(&mut self, path: &'ast syn::ExprPath) {
+            for segment in &path.path.segments {
+                let name = segment.ident.to_string();
+                if name.chars().next().is_some_and(char::is_uppercase) {
+                    self.names.insert(name);
+                }
+            }
+            syn::visit::visit_expr_path(self, path);
+        }
+        fn visit_path(&mut self, path: &'ast syn::Path) {
+            if let Some(segment) = path.segments.last() {
+                let name = segment.ident.to_string();
+                if name.chars().next().is_some_and(char::is_uppercase) {
+                    self.names.insert(name);
+                }
+            }
+            syn::visit::visit_path(self, path);
+        }
+    }
+    let mut visitor = TypeVisitor {
+        names: BTreeSet::new(),
+    };
+    visitor.visit_file(&syntax);
+    let unexpected = visitor
+        .names
+        .into_iter()
+        .filter(|name| !allowed.contains(&name.as_str()))
+        .collect::<Vec<_>>();
+    assert!(
+        unexpected.is_empty(),
+        "AV.3 {scope} allowlist rejects unlisted type(s): {unexpected:?}"
+    );
 }
 
 fn read_handler_names() -> Vec<String> {
