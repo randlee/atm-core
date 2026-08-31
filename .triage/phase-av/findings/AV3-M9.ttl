@@ -15,8 +15,11 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "all AV.3 gate-bearing tests (D1 exact-call-site, D2/D2b behavior, D4 liveness) vs the names the .just gate asserts" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-31T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:resolutionNote "Fixed @ dcecfd5f4 on feature/av3-read-concurrency-gates (verified firsthand by quality-mgr): read_family_uses_only_the_supervised_recording_writer_handoff added to REQUIRED_LIVENESS_TESTS (.just/check_read_concurrency_gates.py:46) with permanent self-check test_d2b_behavior_gate_is_a_required_permanent_test and updated gate fixture corpus." ;
   triage:triagedAt "2026-08-31T10:06:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV3 ;
   triage:foundAt "2026-08-31T10:05:00Z"^^xsd:dateTime ;
@@ -29,8 +32,8 @@
   triage:file ".just/check_read_concurrency_gates.py" ;
   triage:line 41 ;
   triage:snippet "REQUIRED_LIVENESS_TESTS = (" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "c78288c4d" ;
   triage:occursIn <urn:atm:triage:worktree/av3/c78288c4d> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 2511 ;
   triage:snippet "async fn read_family_uses_only_the_supervised_recording_writer_handoff()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "c78288c4d" ;
   triage:occursIn <urn:atm:triage:worktree/av3/c78288c4d> .
