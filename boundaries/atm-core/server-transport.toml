@@ -36,6 +36,7 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
 [enforcement]
+no_in_repo_implementation = true
 lint_rules = ["LINT-BOUNDARY-SERVER-TRANSPORT-REFERENCES"]
 review_gates = ["no_server_business_logic"]
 
