@@ -265,16 +265,16 @@ benchmark-official *args:
 benchmark-read: benchmark-read-fanout benchmark-query-fts benchmark-read-under-write-load _benchmark-read-official
 
 _benchmark-read-official:
-    {{python_cmd}} scripts/smoke/read_benchmark.py --families read-fanout query-fts read-under-write-load
+    {{python_cmd}} -m scripts.smoke.read_benchmark --families read-fanout query-fts read-under-write-load
 
 benchmark-read-fanout:
-    {{python_cmd}} scripts/smoke/read_benchmark.py --family read-fanout --diagnostic-only
+    {{python_cmd}} -m scripts.smoke.read_benchmark --family read-fanout --diagnostic-only
 
 benchmark-query-fts:
-    {{python_cmd}} scripts/smoke/read_benchmark.py --family query-fts --diagnostic-only
+    {{python_cmd}} -m scripts.smoke.read_benchmark --family query-fts --diagnostic-only
 
 benchmark-read-under-write-load:
-    {{python_cmd}} scripts/smoke/read_benchmark.py --family read-under-write-load --diagnostic-only
+    {{python_cmd}} -m scripts.smoke.read_benchmark --family read-under-write-load --diagnostic-only
 
 # Generate architecture visualization artifacts.
 view target='all':
