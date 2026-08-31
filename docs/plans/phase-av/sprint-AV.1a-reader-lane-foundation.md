@@ -353,8 +353,22 @@ M8); AV1A-M3 `2b6c95958975ea59894d3598efbbed7ae771a8d8`; AV1A-M4
 
 Validation before closure: `cargo test --workspace --exclude atm-daemon`,
 `cargo test -p atm-architecture`, `just lint`, and
-`python3 .just/lint_boundaries.py` pass. `just validate` passes on the
-current pinned toolchain.
+`python3 .just/lint_boundaries.py` pass. `just validate` reaches the final
+dependency-currency gate and fails only because the repository-wide
+`sc-ecosystem`/Wyvern pins are stale; that external pin work is out of AV.1a
+scope.
+
+## QA round 2 closure
+
+AV1A-M4, AV1A-I6, and AV1A-M9 are closed by the AV.1a fix-round-2 commit:
+both reader boundary records mechanically forbid write-capable connections and
+writer lanes; the boundary lint now scans each record's declared, tag-specific
+implementation modules, including declared trait-only adapter modules. A
+SQLite `Connection::open_with_flags` call is permitted only when its flags are
+read-only; default opens and flagged `READ_WRITE`/`CREATE` opens fail the
+guard, while `#[cfg(test)]` in-memory setup stays outside production-policy
+scope. Validation reports `just validate` honestly as failing only at the
+known dependency-currency gate above.
 
 ## Out of scope
 

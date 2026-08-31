@@ -1,0 +1,108 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-B2>
+  a triage:Finding ;
+  triage:findingId "AV3-B2" ;
+  triage:title "Python/Rust read-handler name divergence: lint gate hard-fails at its own AV.1b activation moment" ;
+  triage:description ".just/check_read_concurrency_gates.py:31 has READ_HANDLERS = (\"list\", \"peek\", \"read\", \"doctor\"); the real router fns in storage_and_nudge_router.rs are list_messages (:493), peek_messages (:514), receive_messages (:536), doctor (:579) — the names the Rust test itself uses. `fn list(`/`fn peek(`/`fn read(` occur nowhere in the router. When AV.1b lands the AsyncMailboxRuntime marker, extract_fn_body raises ValueError(\"read handler `list` is missing\") and the gate exits 1 on a scanner bug instead of scanning. The checker's unit-test fixtures use the wrong names too (.just/tests/test_check_read_concurrency_gates.py:54-57), which is why dev validation passed. Fix: correct the tuple AND add a parity test pinning the Python and Rust handler-name lists to one source of truth. Reviewer ids ARCH-AV3-4, RBQA-AV3-003." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope ".just/*.py scanners and .just/tests fixtures and crates/atm-architecture/tests/boundary_enforcement.rs for every hardcoded handler/function-name list referring to the storage_and_nudge_router read handlers" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T05:59:41Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T06:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T05:33:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B2/AV3-B2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B2/AV3-B2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B2/AV3-B2-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B2/AV3-B2-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-B2/AV3-B2-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_read_concurrency_gates.py" ;
+  triage:line 31 ;
+  triage:snippet "READ_HANDLERS = (\"list\", \"peek\", \"read\", \"doctor\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b283e5ad85d1e21a1ec61c28ec7274879a" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
+
+<urn:atm:triage:occurrence/AV3-B2/AV3-B2-2>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_check_read_concurrency_gates.py" ;
+  triage:line 54 ;
+  triage:snippet "# Test fixture with wrong handler names" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b283e5ad85d1e21a1ec61c28ec7274879a" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
+
+<urn:atm:triage:occurrence/AV3-B2/AV3-B2-3>
+  a triage:Occurrence ;
+  triage:file ".just/check_read_concurrency_gates.py" ;
+  triage:line 31 ;
+  triage:snippet "READ_HANDLERS = (\"list\", \"peek\", \"read\", \"doctor\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd1a36a37cdcfe0a1209dc6c7de233f107" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-5/4a97f0dd1> .
+
+<urn:atm:triage:occurrence/AV3-B2/AV3-B2-4>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_check_read_concurrency_gates.py" ;
+  triage:line 54 ;
+  triage:snippet "# Test fixture with wrong handler names" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd1a36a37cdcfe0a1209dc6c7de233f107" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-5/4a97f0dd1> .
+
+<urn:atm:triage:worktree/AV3-1/8938ed6ab>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "8938ed6ab33f7182a507b7e819ed65e650c3fbac" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV3-2/db08f459>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "db08f45915f9995726b81e4b51523b9ee65c3cc3" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV3-3/f37063fdd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "f37063fdda2c257bf0d336514991702f0b49760f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV3-4/2c6040b28>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b283e5ad85d1e21a1ec61c28ec7274879a" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV3-5/4a97f0dd1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd1a36a37cdcfe0a1209dc6c7de233f107" ;
+  triage:orderIndex 5 .

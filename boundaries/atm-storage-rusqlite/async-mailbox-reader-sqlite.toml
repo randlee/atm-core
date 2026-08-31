@@ -17,7 +17,7 @@ roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
 
 [ownership]
 io_owns = ["sqlite", "bounded_read_submission", "read_only_connections"]
-io_forbidden = ["writer_lane", "socket_io", "process_spawn"]
+io_forbidden = ["write_capable_connection", "writer_lane", "socket_io", "process_spawn"]
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
@@ -38,6 +38,7 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]
+io_forbidden_source_modules = { write_capable_connection = ["atm_storage_rusqlite::shared_db_reader_lanes", "atm_storage_rusqlite::reader_pool"], writer_lane = ["atm_storage_rusqlite::reader_pool"] }
 lint_rules = ["LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES"]
 review_gates = ["no_public_impl", "no_public_constructor", "no_public_reexport"]
 

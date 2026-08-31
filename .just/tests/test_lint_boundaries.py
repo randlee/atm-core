@@ -1440,6 +1440,79 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
                 rendered,
             )
 
+    def test_trait_only_io_policy_scans_declared_adapter_modules_and_distinguishes_ro_open(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            boundary = BASE_BOUNDARY_TOML.replace(
+                """[implementation]
+type = \"SqliteMailStore\"
+module = \"atm_storage_rusqlite::mail_store\"
+visibility = \"private\"
+constructor = \"private\"""",
+                """[implementation]
+visibility = \"trait_only\"
+constructor = \"none\"""",
+            )
+            boundary = boundary.replace(
+                'io_forbidden = ["socket_io"]',
+                'io_forbidden = ["write_capable_connection"]',
+            )
+            boundary = boundary.replace(
+                "[enforcement]\n",
+                "[enforcement]\n"
+                "io_forbidden_source_modules = { write_capable_connection = [\"atm_storage_rusqlite::reader_lane\"] }\n",
+            )
+            boundary = boundary.replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
+            source_path = repo_root / "crates/atm-storage-rusqlite/src/reader_lane.rs"
+            source_path.write_text(
+                """\
+pub fn read_only() {
+    let _ = Connection::open_with_flags(
+        \"reader.sqlite\",
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    );
+}
+""",
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            self.assertEqual(
+                collect_io_forbidden_source_violations(repo_root, records),
+                [],
+                "an explicitly read-only SQLite open must remain allowed",
+            )
+
+            source_path.write_text(
+                """\
+pub fn write_capable() {
+    let _ = Connection::open_with_flags(
+        \"reader.sqlite\",
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
+    );
+}
+""",
+                encoding="utf-8",
+            )
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertTrue(
+                any(
+                    "crates/atm-storage-rusqlite/src/reader_lane.rs" in item
+                    and "BOUNDARY-MailStore-Sqlite forbids io 'write_capable_connection'" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+
     def test_http_runtime_io_policy_scans_split_client_module(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

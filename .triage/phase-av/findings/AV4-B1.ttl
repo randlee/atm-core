@@ -1,0 +1,108 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV4-B1>
+  a triage:Finding ;
+  triage:findingId "AV4-B1" ;
+  triage:title "Freeze-exception bound (D6/A6) violated: read_benchmark.py is a forked parallel harness, not additive family registration" ;
+  triage:description "scripts/smoke/read_benchmark.py imports nothing from the existing send-message-benchmark infrastructure and reimplements what D6 requires be reused: (a) second baseline/ratchet engine load_read_baselines/ratchet_floor (:182-231) with new read_families JSON shape and max(prior, min3*(1-5%)) auto-ratchet vs benchmark_schema.py BaselineSet/BaselineEntry with approved_by/effective_from provenance and require_non_decreasing_baselines(); (b) second report renderer/envelope render_report/execute (:466-532, :606-612) duplicating benchmark_report.py compose()/render_envelope() and never calling regenerate_index(); (c) divergent percentile() (:130-138) vs benchmark_schema.percentile/distribution; (d) ad hoc pass/fail instead of benchmark_policy.classify_status(). Remediation: rework onto existing primitives (family discriminator, name-level extension). Source: quality-mgr phase-av-sprint-av4-qa-r1, PR #1114 report; consolidates ARCH-AV4-1, RBQA-AV4-1/2/3." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AV4" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T03:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-08-31T02:31:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-B1/AV4-B1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-B1/AV4-B1-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-B1/AV4-B1-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-B1/AV4-B1-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV4-B1/AV4-B1-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 143 ;
+  triage:snippet "def percentile(values: Sequence[float], fraction: float) -> float:" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4-5/64a32e6f9> .
+
+<urn:atm:triage:occurrence/AV4-B1/AV4-B1-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 196 ;
+  triage:snippet "def load_read_baselines(path: Path = BASELINES_PATH) -> dict[str, dict[str, dict[str, Any]]]:" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4-5/64a32e6f9> .
+
+<urn:atm:triage:occurrence/AV4-B1/AV4-B1-3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 215 ;
+  triage:snippet "def ratchet_floor(" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4-5/64a32e6f9> .
+
+<urn:atm:triage:occurrence/AV4-B1/AV4-B1-4>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 560 ;
+  triage:snippet "def render_report(payload: Mapping[str, Any], json_path: Path, html_path: Path) -> None:" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4-5/64a32e6f9> .
+
+<urn:atm:triage:worktree/AV4-1/d2c8e5f0a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "d2c8e5f0a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV4-2/db08f4591>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "db08f4591" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV4-3/f37063fdd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "f37063fdd" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV4-4/2c6040b28>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV4-5/64a32e6f9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:orderIndex 5 .
