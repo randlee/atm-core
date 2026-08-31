@@ -15,8 +15,11 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:dispatchReady false ;
+  triage:deferredNote "quality-mgr ruling 2026-08-31 (QA-AV3 early-signal adjudication, fenix msg 01M1BMCBYZ30H3PB24XT5PHHZS): NOT-A-DEFECT-IN-PHASE-AV / deferred. The repo's mechanical authority for RULE-003 is check_line_counts.py max_production_lines=1000 applied to production CODE lines (blanks/comments excluded); the router counts 901 and passes. The 1012 figure is a raw-line reading that is not the enforced standard. Pre-existing since AL.3, present on develop. Phase-AM residual ControlPathSyncBridge deletion is expected to shrink this file. Do not dispatch a fix in phase AV; re-evaluate only if production code lines approach the 1000 cap." ;
+  triage:deferredBy "quality-mgr" ;
+  triage:deferredAt "2026-08-31T10:08:00Z"^^xsd:dateTime ;
   triage:triagedAt "2026-08-31T10:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV3 ;
   triage:foundAt "2026-08-31T10:05:00Z"^^xsd:dateTime ;
@@ -31,7 +34,7 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 1 ;
   triage:snippet "production-region (1-1013)" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:closed false ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "93c361a43" ;
@@ -42,7 +45,7 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 1 ;
   triage:snippet "production-region (1-1013)" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:closed false ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "21d578887" ;
@@ -53,7 +56,7 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 1 ;
   triage:snippet "production-region (1-1013)" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:closed false ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "c78288c4d" ;
@@ -64,7 +67,7 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 1 ;
   triage:snippet "production-region (1-1013)" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:closed false ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "3a09e2a6f" ;

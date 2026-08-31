@@ -15,8 +15,11 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:dispatchReady false ;
+  triage:deferredNote "quality-mgr ruling 2026-08-31 (QA-AV3 early-signal adjudication, fenix msg 01M1BMCBYZ30H3PB24XT5PHHZS): deferred, by-design. atm_storage::contract::sealed::Sealed is deliberately implementable workspace-wide (impl sites in atm-core, atm-graft, atm-runtime, atm-template-sc-compose, atm-daemon-bootstrap); a type-enforced seal cannot be introduced without breaking the build. Closure path is documentation only: a one-line clarification in the atm-storage boundary record / docs/architecture.md that the seal is advisory and cross-crate by design, ridable in any future doc round. Not a phase-AV dev item." ;
+  triage:deferredBy "quality-mgr" ;
+  triage:deferredAt "2026-08-31T10:08:00Z"^^xsd:dateTime ;
   triage:triagedAt "2026-08-31T10:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV3 ;
   triage:foundAt "2026-08-31T10:05:00Z"^^xsd:dateTime ;
@@ -33,7 +36,7 @@
   triage:file "crates/atm-storage/src/contract.rs" ;
   triage:line 18 ;
   triage:snippet "pub mod sealed { pub trait Sealed {} }" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:closed false ;
   triage:branch "integrate/phase-av" ;
   triage:headSha "dc2f56002" ;
@@ -44,7 +47,7 @@
   triage:file "crates/atm-storage/src/contract.rs" ;
   triage:line 18 ;
   triage:snippet "pub mod sealed { pub trait Sealed {} }" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:closed false ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "1e81aade8" ;
@@ -55,7 +58,7 @@
   triage:file "crates/atm-storage/src/contract.rs" ;
   triage:line 18 ;
   triage:snippet "pub mod sealed { pub trait Sealed {} }" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:closed false ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "93c361a43" ;
@@ -66,7 +69,7 @@
   triage:file "crates/atm-storage/src/contract.rs" ;
   triage:line 18 ;
   triage:snippet "pub mod sealed { pub trait Sealed {} }" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:closed false ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "21d578887" ;
@@ -77,7 +80,7 @@
   triage:file "crates/atm-storage/src/contract.rs" ;
   triage:line 18 ;
   triage:snippet "pub mod sealed { pub trait Sealed {} }" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:closed false ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "c78288c4d" ;
@@ -88,7 +91,7 @@
   triage:file "crates/atm-storage/src/contract.rs" ;
   triage:line 18 ;
   triage:snippet "pub mod sealed { pub trait Sealed {} }" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:closed false ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "3a09e2a6f" ;
