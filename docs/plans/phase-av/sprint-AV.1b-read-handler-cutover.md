@@ -4,8 +4,8 @@ sprint: AV.1b
 title: Read-handler cutover and writer purity
 branch: feature/av1b-read-handler-cutover
 integration_branch: integrate/phase-av
-stack_parent: fix/mailbox-read-blocking-serialization (AV.1a) — planned; stack provisioned by task AV.0 (phase plan §4)
-status: planned
+stack_parent: integrate/phase-av (AV.1a merged via PR #1112; rebased base after branch auto-delete)
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 dependency_relations:
