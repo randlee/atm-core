@@ -19,7 +19,7 @@ io_owns = ["bounded_durable_admission", "durable_message_result"]
 io_forbidden = ["socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
+allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-runtime-test-support", "atm-storage-rusqlite"]
 allowed_dependencies = []
 forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
 

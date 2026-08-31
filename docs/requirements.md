@@ -1713,6 +1713,46 @@ only. When additional matches exist, they must state that more matches were
 found and direct the operator to `atm list` for metadata inspection instead of
 emitting additional full bodies.
 
+### 7.13 Read-Lane Concurrency And Read-State Handoff
+
+The following requirements make the AV mailbox-read cutover observable and
+non-regressible. They apply to the daemon's mailbox read-family operations,
+regardless of whether the caller is the CLI, an HTTP client, or a graft
+adapter.
+
+- `R-READ-CONC-1` Mailbox read-family operations (`read`, `peek`, `list`,
+  `doctor`, and `query`) MUST be serviced concurrently by a bounded
+  read-only reader lane. They MUST NOT share a concurrency bound with, or be
+  ordered behind, any write or housekeeping lane. A write-lane permit MUST
+  NOT be required to select or load read response data.
+- `R-READ-CONC-2` Read deadlines MUST be enforced cancellably. A request that
+  cannot acquire reader capacity before its deadline MUST fail explicitly
+  with a saturation or deadline outcome; it MUST NOT remain in an indefinite
+  queue. Reader capacity MUST be reclaimed when a cancelled request stops.
+- `R-STATE-RACE-1` Durable primary message records MUST be immutable after
+  admission. Mutable read, acknowledgement, and seen state is
+  race-tolerant: a read racing a state change MAY return either value. No
+  mailbox-read requirement may demand read-your-writes, snapshot pinning, or
+  reader/writer fencing.
+- `R-STATE-HANDOFF-1` Read-flow read/seen state transitions MUST be submitted
+  to a supervised, bounded, non-blocking in-process handoff. That handoff
+  owns writer admission and retry; the read path MUST NOT await the writer
+  lane. A transition MAY be lost only when the handoff buffer overflows or
+  the process exits. Buffer overflow MUST be counted and surfaced by
+  `atm doctor`. In either loss case the behavior MUST be fail-safe: the
+  affected message remains unread/unseen and is re-presented on a subsequent
+  read; it MUST NOT be hidden or discarded.
+  Its lifecycle MUST include readiness-gated startup, a monitored supervisor
+  task, and an atomic `Unavailable` state that rejects new handoffs while
+  preserving the buffered work if the task faults. The supervisor MUST
+  restart within a bounded budget. Restart exhaustion or permanent writer
+  failure MUST fail the runtime closed. `R-STATE-RACE-1` governs observation
+  only and MUST NOT authorize discarding a transition.
+
+The handoff behavior is a product decision recorded in ADR-059. The ADR
+records permanent drop and synchronous write-through as rejected alternatives
+and their operator consequences.
+
 ## 8. `atm ack`
 
 Product requirement ID:

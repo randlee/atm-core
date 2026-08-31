@@ -757,6 +757,7 @@ fn read_deadline(deadline: RequestDeadline) -> Result<ReadDeadline, AtmError> {
 
 #[cfg(test)]
 mod tests {
+    use atm_runtime_test_support::RecordingWriter;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
@@ -768,8 +769,8 @@ mod tests {
     use atm_core::types::ReadSelection;
     use atm_storage::testing::InMemoryMailboxReader;
     use atm_storage::{
-        AgentName, AsyncMessageStore, AtmError, AtmErrorCode, IsoTimestamp, MailboxScope, Message,
-        MessageEnvelope, MessageKey, MessageQuery, MessageStore, ReadLaneError, TeamName,
+        AgentName, AtmError, AtmErrorCode, IsoTimestamp, Message, MessageEnvelope, ReadLaneError,
+        TeamName,
     };
 
     use super::{
@@ -1262,97 +1263,6 @@ mod tests {
             panic!("composition outside Tokio must not admit reads without a supervisor");
         };
         assert!(error.detail().contains("Tokio runtime"));
-    }
-
-    struct RecordingWriter {
-        failures_remaining: std::sync::atomic::AtomicUsize,
-        attempts: std::sync::atomic::AtomicUsize,
-        applied_transitions: std::sync::Mutex<Vec<Vec<MessageKey>>>,
-    }
-
-    impl Default for RecordingWriter {
-        fn default() -> Self {
-            Self::with_failures(0)
-        }
-    }
-
-    impl RecordingWriter {
-        fn with_failures(failures: usize) -> Self {
-            Self {
-                failures_remaining: std::sync::atomic::AtomicUsize::new(failures),
-                attempts: std::sync::atomic::AtomicUsize::new(0),
-                applied_transitions: std::sync::Mutex::new(Vec::new()),
-            }
-        }
-
-        fn attempts(&self) -> usize {
-            self.attempts.load(std::sync::atomic::Ordering::Acquire)
-        }
-
-        fn set_failures(&self, failures: usize) {
-            self.failures_remaining
-                .store(failures, std::sync::atomic::Ordering::Release);
-        }
-
-        fn applied(&self) -> Vec<Vec<MessageKey>> {
-            self.applied_transitions
-                .lock()
-                .expect("recording writer mutex")
-                .clone()
-        }
-    }
-
-    impl atm_storage::contract::sealed::Sealed for RecordingWriter {}
-
-    impl MessageStore for RecordingWriter {
-        fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
-            unreachable!("handoff test writer only receives display transitions")
-        }
-
-        fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
-            unreachable!("handoff test writer only receives display transitions")
-        }
-
-        fn load_message(&self, _key: &MessageKey) -> Result<Option<Message>, AtmError> {
-            unreachable!("handoff test writer only receives display transitions")
-        }
-
-        fn list_messages(&self, _query: &MessageQuery) -> Result<Vec<Message>, AtmError> {
-            unreachable!("handoff test writer only receives display transitions")
-        }
-
-        fn delete_message(&self, _key: &MessageKey) -> Result<(), AtmError> {
-            unreachable!("handoff test writer only receives display transitions")
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl AsyncMessageStore for RecordingWriter {
-        async fn apply_read_display_state_async(
-            &self,
-            _scope: MailboxScope,
-            message_ids: Vec<MessageKey>,
-            _seen_watermark: Option<IsoTimestamp>,
-        ) -> Result<(), AtmError> {
-            self.attempts
-                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-            if self
-                .failures_remaining
-                .fetch_update(
-                    std::sync::atomic::Ordering::AcqRel,
-                    std::sync::atomic::Ordering::Acquire,
-                    |remaining| remaining.checked_sub(1),
-                )
-                .is_ok()
-            {
-                return Err(AtmError::daemon_unavailable("transient writer failure"));
-            }
-            self.applied_transitions
-                .lock()
-                .expect("recording writer mutex")
-                .push(message_ids);
-            Ok(())
-        }
     }
 
     #[test]

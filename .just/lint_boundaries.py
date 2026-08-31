@@ -2040,20 +2040,17 @@ def trait_contract_source_regions(repo_root: Path, trait: str | None) -> list[tu
 def concrete_trait_implementation_delegates(
     repo_root: Path,
     records: list[BoundaryRecord],
-) -> tuple[set[Path], tuple[Path, ...]]:
-    """Return concrete implementation modules and SQLite-owning crate roots.
+) -> set[Path]:
+    """Return production modules declared by concrete boundary records.
 
     A trait contract must reach each production implementation file.  When an
     implementation is already a declared concrete boundary module, that
     concrete boundary remains the single policy owner for the module; scanning
     it again through the abstract trait would conflate permitted adapter I/O
-    with contract I/O.  SQLite adapters are package-owned because several
-    private adapter modules are intentionally constructed below the shared
-    SQLite boundary's crate-root module.
+    with contract I/O.  An owner crate alone is not sufficient: each
+    implementation file needs its own declared concrete boundary record.
     """
     concrete_modules: set[Path] = set()
-    sqlite_owner_roots: list[Path] = []
-    aliases = manifest_by_alias(repo_root)
     for record in records:
         if not record.is_active or record.implementation_visibility == "trait_only":
             continue
@@ -2061,18 +2058,12 @@ def concrete_trait_implementation_delegates(
             concrete_modules.update(
                 resolve_module_file(repo_root, record.implementation_module)
             )
-        if "sqlite" in record.io_owns:
-            owner = aliases.get(record.owner_package)
-            if owner is not None:
-                sqlite_owner_roots.append(owner.path.parent / "src")
-    return concrete_modules, tuple(sqlite_owner_roots)
+    return concrete_modules
 
 
 def concrete_owner_delegates_trait_implementation(
     source_path: Path,
-    tag: str,
     concrete_modules: set[Path],
-    sqlite_owner_roots: tuple[Path, ...],
 ) -> bool:
     """Whether a concrete boundary, rather than an abstract trait, owns I/O.
 
@@ -2080,11 +2071,7 @@ def concrete_owner_delegates_trait_implementation(
     scans the module under its own policy.  It only applies to implementation
     files discovered from a trait-only contract, never to the contract region.
     """
-    if source_path in concrete_modules:
-        return True
-    return tag == "direct_sqlite_io" and any(
-        source_path.is_relative_to(root) for root in sqlite_owner_roots
-    )
+    return source_path in concrete_modules
 
 
 def collect_io_forbidden_source_violations(
@@ -2110,9 +2097,7 @@ def collect_io_forbidden_source_violations(
         key: tuple(re.compile(pattern, re.IGNORECASE) for pattern in patterns)
         for key, patterns in IO_FORBIDDEN_SOURCE_EXCEPTIONS.items()
     }
-    concrete_modules, sqlite_owner_roots = concrete_trait_implementation_delegates(
-        repo_root, records
-    )
+    concrete_modules = concrete_trait_implementation_delegates(repo_root, records)
     for record in records:
         for tag in record.io_forbidden:
             patterns = compiled_patterns.get(tag)
@@ -2205,7 +2190,7 @@ def collect_io_forbidden_source_violations(
                 implementation_is_concretely_owned = (
                     source_path in implementation_source_paths
                     and concrete_owner_delegates_trait_implementation(
-                        source_path, tag, concrete_modules, sqlite_owner_roots
+                        source_path, concrete_modules
                     )
                 )
                 if implementation_is_concretely_owned:

@@ -68,12 +68,12 @@ where
 /// is intentionally synchronous, so the marker transaction enters this bridge
 /// before the request leaves the router.
 #[derive(Clone)]
-struct BlockingCoreBridge {
+struct ControlPathSyncBridge {
     permits: Arc<tokio::sync::Semaphore>,
     runtime_health: RuntimeHealth,
 }
 
-impl BlockingCoreBridge {
+impl ControlPathSyncBridge {
     fn new(capacity: NonZeroUsize, runtime_health: RuntimeHealth) -> Self {
         Self {
             permits: Arc::new(tokio::sync::Semaphore::new(capacity.get())),
@@ -147,7 +147,7 @@ pub struct StorageAndNudgeRouter {
     service_runtime: LocalServiceRuntime,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
-    blocking_core_bridge: BlockingCoreBridge,
+    control_path_sync_bridge: ControlPathSyncBridge,
     async_mailbox_runtime: Option<Arc<dyn AsyncMailboxRuntime>>,
     doctor_projection: Option<Arc<dyn DoctorProjection>>,
     daemon_home: PathBuf,
@@ -176,7 +176,7 @@ impl StorageAndNudgeRouter {
             service_runtime,
             observability,
             received_hook_selector,
-            blocking_core_bridge: BlockingCoreBridge::new(
+            control_path_sync_bridge: ControlPathSyncBridge::new(
                 NonZeroUsize::new(1).expect("one non-storage core bridge operation"),
                 runtime_health.clone(),
             ),
@@ -230,7 +230,7 @@ impl StorageAndNudgeRouter {
         runtime_health: RuntimeHealth,
         doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     ) -> Self {
-        self.blocking_core_bridge.runtime_health = runtime_health.clone();
+        self.control_path_sync_bridge.runtime_health = runtime_health.clone();
         self.runtime_health = runtime_health;
         self.doctor_ports = Some(doctor_ports);
         self
@@ -330,7 +330,7 @@ impl StorageAndNudgeRouter {
             let runtime = self.service_runtime.clone();
             let health = self.runtime_health.clone();
             let marker_result = self
-                .blocking_core_bridge
+                .control_path_sync_bridge
                 .run(deadline, move || {
                     Ok(retry_deferred_marker(&health, || {
                         prepared.mark_pending_if_deferred(&runtime)
@@ -578,7 +578,7 @@ impl StorageAndNudgeRouter {
         let runtime = self.service_runtime.clone();
         let observability = Arc::clone(&self.observability);
         let home = self.daemon_home.clone();
-        self.blocking_core_bridge
+        self.control_path_sync_bridge
             .run(deadline, move || {
                 atm_core::clear::clear_mail_with_runtime(
                     query.with_daemon_paths(home),
@@ -656,7 +656,7 @@ impl StorageAndNudgeRouter {
         let runtime = self.service_runtime.clone();
         let health = self.runtime_health.clone();
         let sink = self.member_state_transition_sink.clone();
-        self.blocking_core_bridge
+        self.control_path_sync_bridge
             .run(deadline, move || {
                 validate_heartbeat_member(&runtime, &request.team, &request.member)?;
                 Ok(request)
@@ -688,7 +688,7 @@ impl StorageAndNudgeRouter {
         }
         let runtime = self.service_runtime.clone();
         let fifo = self.bare_cli_fifo.clone();
-        self.blocking_core_bridge
+        self.control_path_sync_bridge
             .run(deadline, move || {
                 validate_heartbeat_member(&runtime, &request.team, &request.member)?;
                 let member = atm_core::boundary::MemberKey::new(request.team, request.member);
@@ -710,7 +710,7 @@ impl StorageAndNudgeRouter {
         require_local_graft_ingress(ingress)?;
         let runtime = self.service_runtime.clone();
         let store = runtime.graft_receiver_endpoint_store()?;
-        self.blocking_core_bridge
+        self.control_path_sync_bridge
             .run(deadline, move || {
                 validate_graft_receiver_member(&runtime, &request.team, &request.agent)?;
                 let local_endpoint = match request.endpoint.ip() {
@@ -744,7 +744,7 @@ impl StorageAndNudgeRouter {
         require_local_graft_ingress(ingress)?;
         let runtime = self.service_runtime.clone();
         let store = runtime.graft_receiver_endpoint_store()?;
-        self.blocking_core_bridge
+        self.control_path_sync_bridge
             .run(deadline, move || {
                 validate_graft_receiver_member(&runtime, &request.team, &request.agent)?;
                 store
@@ -769,7 +769,7 @@ impl StorageAndNudgeRouter {
         require_local_graft_ingress(ingress)?;
         let runtime = self.service_runtime.clone();
         let store = runtime.graft_receiver_endpoint_store()?;
-        self.blocking_core_bridge
+        self.control_path_sync_bridge
             .run(deadline, move || {
                 validate_graft_receiver_member(&runtime, &request.team, &request.agent)?;
                 store
@@ -790,7 +790,7 @@ impl StorageAndNudgeRouter {
         require_local_graft_ingress(ingress)?;
         let runtime = self.service_runtime.clone();
         let store = runtime.graft_receiver_endpoint_store()?;
-        self.blocking_core_bridge
+        self.control_path_sync_bridge
             .run(deadline, move || {
                 validate_graft_receiver_member(&runtime, &team, &agent)?;
                 let lease = store.lookup(&team, &agent).map_err(graft_store_error)?;
@@ -1045,6 +1045,7 @@ mod tests {
         DoctorProjection, DoctorProjectionConfig, DoctorProjectionContext, HandoffConfig,
         StorageDoctorProjection,
     };
+    use atm_runtime_test_support::{RecordedWriterOutcome, mailbox_runtime_with_recording_ingress};
     use atm_runtime_test_support::{
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
         open_graft_receiver_endpoint_store, open_sqlite_boundary,
@@ -1059,7 +1060,7 @@ mod tests {
     use tempfile::TempDir;
     use tower::ServiceExt;
 
-    use super::{BlockingCoreBridge, StorageAndNudgeRouter, retry_deferred_marker};
+    use super::{ControlPathSyncBridge, StorageAndNudgeRouter, retry_deferred_marker};
     use crate::{
         AcceptedPeerStream, EstablishedPeerStream, HttpRuntimeBuilder, HttpRuntimeConfig,
         LoopbackTcpConfig, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, PeerStreamFuture,
@@ -1651,7 +1652,7 @@ mod tests {
 
     #[tokio::test]
     async fn blocking_core_bridge_rejects_saturation_without_starting_a_second_job() {
-        let admission = BlockingCoreBridge::new(
+        let admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
             RuntimeHealth::default(),
         );
@@ -1703,7 +1704,7 @@ mod tests {
 
     #[tokio::test]
     async fn expired_blocking_core_bridge_never_starts_a_blocking_job() {
-        let admission = BlockingCoreBridge::new(
+        let admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
             RuntimeHealth::default(),
         );
@@ -1741,7 +1742,7 @@ mod tests {
     #[tokio::test]
     async fn blocking_core_bridge_records_a_stall_when_a_job_outlives_its_budget() {
         let health = RuntimeHealth::default();
-        let admission = BlockingCoreBridge::new(
+        let admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
             health.clone(),
         );
@@ -1775,7 +1776,7 @@ mod tests {
     #[tokio::test]
     async fn blocking_core_bridge_does_not_record_a_stall_for_jobs_within_budget() {
         let health = RuntimeHealth::default();
-        let admission = BlockingCoreBridge::new(
+        let admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
             health.clone(),
         );
@@ -1896,7 +1897,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn started_write_retains_its_actual_result_after_the_advisory_deadline() {
-        let admission = BlockingCoreBridge::new(
+        let admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
             RuntimeHealth::default(),
         );
@@ -1926,7 +1927,7 @@ mod tests {
 
     #[tokio::test]
     async fn blocking_core_bridge_returns_the_underlying_storage_error() {
-        let admission = BlockingCoreBridge::new(
+        let admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
             RuntimeHealth::default(),
         );
@@ -2507,6 +2508,168 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn read_family_uses_only_the_supervised_recording_writer_handoff() {
+        let fixture = fixture(true, None, None);
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(write_request(
+                    fixture.home_dir.clone(),
+                    fixture.current_dir.clone(),
+                )))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("seed mailbox");
+
+        let assembly = open_sqlite_boundary(&fixture.database_path).expect("reopen async boundary");
+        let (mailbox_runtime, ingress) = mailbox_runtime_with_recording_ingress(
+            assembly
+                .service_runtime
+                .async_mailbox_reader()
+                .expect("async mailbox reader"),
+            HandoffConfig {
+                handoff_retry_deadline: Duration::from_millis(20),
+                ..HandoffConfig::default()
+            },
+        )
+        .expect("start recording handoff");
+        let doctor_projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig::default(),
+            assembly.service_runtime,
+            assembly.doctor_ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start doctor projection");
+        let router = fixture
+            .router
+            .clone()
+            .with_async_mailbox_runtime(Arc::new(mailbox_runtime))
+            .with_doctor_projection(Arc::new(doctor_projection));
+        let root = fixture.home_dir.clone();
+        let list = atm_core::list::ListQuery::new(
+            root.clone(),
+            root.clone(),
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query");
+        let peek = atm_core::read::PeekQuery::new(
+            root.clone(),
+            root.clone(),
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("peek query");
+        let read = atm_core::read::ReadQuery::new(
+            root.clone(),
+            root,
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query");
+
+        for request in [
+            ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                list,
+            ))),
+            ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::Peek(
+                peek,
+            ))),
+            ApiRequest::Doctor(atm_core::doctor::DoctorQuery::default()),
+        ] {
+            router
+                .dispatch(
+                    request,
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("non-read-display endpoint succeeds");
+            assert!(
+                ingress.submissions().is_empty(),
+                "list, peek, and doctor never submit writer work"
+            );
+        }
+
+        router
+            .dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::Receive(
+                    read.clone(),
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("read response is independent of writer completion");
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while ingress.submissions().is_empty() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("read handoff reaches recording ingress");
+        assert!(
+            ingress
+                .submissions()
+                .iter()
+                .all(|submission| submission.outcome == RecordedWriterOutcome::Applied),
+            "read submits only its supervised display-state handoff"
+        );
+
+        ingress.set_rejecting(true);
+        router
+            .dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::Receive(
+                    read,
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("writer rejection never feeds the read response");
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !ingress
+                .submissions()
+                .iter()
+                .any(|submission| submission.outcome == RecordedWriterOutcome::Rejected)
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("supervisor records the rejecting handoff path");
+    }
+
+    #[tokio::test]
     async fn mailbox_and_doctor_fanout_stays_live_while_the_legacy_bridge_is_occupied() {
         let fixture = fixture(true, None, None);
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
@@ -2537,7 +2700,7 @@ mod tests {
             .clone()
             .with_async_mailbox_runtime(Arc::new(async_mailbox_runtime))
             .with_doctor_projection(Arc::new(doctor_projection));
-        let bridge = router.blocking_core_bridge.clone();
+        let bridge = router.control_path_sync_bridge.clone();
         let bridge_task = tokio::spawn(async move {
             bridge
                 .run(RequestDeadline::after(Duration::from_secs(1)), || {

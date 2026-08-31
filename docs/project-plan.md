@@ -1581,6 +1581,16 @@ The authoritative plan is
 [phase-av-plan](./plans/phase-av/phase-av-plan.md) with per-sprint docs
 under `docs/plans/phase-av/`, authored on branch `plan/phase-av` (PR #1108).
 
+Phase AV sprint status:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AV.1a` | `merged` (PR #1112) | `fix/mailbox-read-blocking-serialization` | `docs/plans/phase-av/sprint-AV.1a-reader-lane-foundation.md` |
+| `AV.1b` | `merged` (PR #1115) | `feature/av1b-read-handler-cutover` | `docs/plans/phase-av/sprint-AV.1b-read-handler-cutover.md` |
+| `AV.2` | `complete` | `feature/av2-read-concurrency-requirements` | `docs/requirements.md`, `docs/adr/ADR-059-async-mailbox-read-concurrency.md`, `docs/plans/phase-av/av-closeout-record.md` |
+| `AV.3` | `in-review` (PR #1113 open) | `feature/av3-read-concurrency-gates` | `docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md` |
+| `AV.4` | `planned` (PR #1114 open) | `feature/av4-read-query-benchmarks` | `docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md` |
+
 ## Publishing Improvements
 
 Implementation Branches:

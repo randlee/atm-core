@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-PendingNudgeStore-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqlitePendingNudgeStore"
+
+[public]
+trait = "PendingNudgeStore"
+
+[implementation]
+type = "SqlitePendingNudgeStore"
+module = "atm_storage_rusqlite::pending_nudge_store"
+visibility = "private"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["sqlite", "deferred_nudge_marker_lifecycle"]
+io_forbidden = ["message_delivery", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SqlitePendingNudgeStore", "rusqlite::Connection"]
+
+[contracts]
+request_types = ["MemberKey", "AtmMessageId", "NudgeClaim", "IsoTimestamp"]
+response_types = ["bool", "Option<NudgeClaim>", "Vec<MemberKey>"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-PENDING-NUDGE-STORE-SQLITE"]
+review_gates = ["private_sqlite_impl", "no_cli_sqlite_lookup"]
+
+[status]
+state = "concrete_landed"

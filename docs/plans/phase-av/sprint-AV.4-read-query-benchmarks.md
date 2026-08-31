@@ -26,6 +26,16 @@ dependency_relations:
 
 # AV.4 — Massively parallel read and query benchmarks
 
+## QA history
+
+- **QA-r1 fix — `ef9341eae` (2026-08-31):** closed AV4-B1, AV4-B2,
+  AV4-I1, AV4-I2, AV4-M1, AV4-M2, and AV4-M3. The fix reuses the shared
+  benchmark schema/report/policy primitives, records the complete D5
+  diagnostic skeleton without fabricated values, composes all three named
+  Just lanes, gates official runs on AV.1b, records budget and corpus
+  provenance, and rejects incomplete artifacts. No live campaign or floor
+  seeding was performed because AV.1b remains a must-follow dependency.
+
 Prove — and keep proving — that mailbox reads and queries execute in a
 massively parallel manner: a read-serialization regression must become a
 failing benchmark campaign, not an anecdote discovered by a timed-out
@@ -105,6 +115,11 @@ sprint.
         entry, never a comparison against the old floor.
       - *Writer load (mixed mode):* sustained writer rate and payload
         profile fixed in config and recorded in the report.
+      - *Mixed-mode read budget:* the interim p95 ceiling is **1000 ms**,
+        sourced from the AV.1a D5 contract while runtime reader timing
+        metrics are unimplemented. The harness records this named source in
+        every mixed-mode report; AV.1b replaces the entry only through a
+        reviewed configuration change when exported metrics become available.
       - *Timing windows (every in-scope campaign, reference Mac host):*
         an explicit warm-up window (excluded from metrics) and a
         measurement window, both durations fixed in config and recorded
