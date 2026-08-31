@@ -2313,6 +2313,61 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn doctor_projection_rejects_control_lane_overload_explicitly() {
+        let fixture = fixture(true, None, None);
+        let assembly =
+            open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
+        let projection = Arc::new(
+            StorageDoctorProjection::start(
+                DoctorProjectionConfig {
+                    worker_count: 1,
+                    queue_depth: 1,
+                },
+                assembly.service_runtime,
+                assembly.doctor_ports,
+                Arc::new(NullObservability),
+            )
+            .expect("start bounded doctor projection"),
+        );
+        let barrier = Arc::new(tokio::sync::Barrier::new(65));
+        let mut calls = Vec::new();
+        for _ in 0..64 {
+            let projection = Arc::clone(&projection);
+            let barrier = Arc::clone(&barrier);
+            calls.push(tokio::spawn(async move {
+                barrier.wait().await;
+                projection
+                    .project(
+                        atm_core::doctor::DoctorQuery::default(),
+                        DoctorProjectionContext::default(),
+                        RequestDeadline::after(Duration::from_secs(1)),
+                    )
+                    .await
+            }));
+        }
+        barrier.wait().await;
+
+        let mut completed = 0;
+        let mut saturated = 0;
+        for call in calls {
+            match call.await.expect("doctor caller joins") {
+                Ok(_) => completed += 1,
+                Err(error)
+                    if error.code() == atm_storage::AtmErrorCode::DaemonConnectionSaturated =>
+                {
+                    saturated += 1;
+                }
+                Err(error) => panic!("unexpected doctor overload result: {error}"),
+            }
+        }
+        assert!(completed > 0, "admitted doctor calls retain healthy parity");
+        assert!(
+            saturated > 0,
+            "beyond the bounded control lane, doctor rejects explicitly instead of serializing"
+        );
+    }
+
     #[test]
     fn mailbox_and_doctor_handlers_never_enter_the_blocking_core_bridge() {
         let source = include_str!("storage_and_nudge_router.rs")
