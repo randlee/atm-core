@@ -54,6 +54,14 @@ impl SearchReader {
             .map_err(to_atm_error)
     }
 
+    pub(crate) fn metrics(&self) -> crate::reader_pool::ReaderLaneMetricsSnapshot {
+        self.pool.metrics()
+    }
+
+    pub(crate) fn record_wal_health(&self, checkpoint_succeeded: bool, frames: u64) {
+        self.pool.record_wal_health(checkpoint_succeeded, frames);
+    }
+
     #[cfg(test)]
     pub(crate) async fn submit_expired_for_test(
         &self,

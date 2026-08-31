@@ -1,9 +1,7 @@
-use crate::mailbox_reader::start_mailbox_reader;
+use crate::mailbox_reader::{MailboxReaderMetrics, start_mailbox_reader};
 #[cfg(test)]
 use crate::observability::NullSqliteObservability;
-use crate::observability::{
-    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
-};
+use crate::observability::SqliteObservability;
 use crate::reader_pool::ReaderLanesConfig;
 use crate::search_reader::SearchReader;
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
@@ -185,11 +183,12 @@ impl SharedDbTarget {
 
 #[derive(Clone)]
 pub(crate) struct SharedDb {
-    target: Arc<SharedDbTarget>,
+    pub(crate) target: Arc<SharedDbTarget>,
     writer: Arc<SqliteWriter>,
-    search_reader: Arc<SearchReader>,
+    pub(crate) search_reader: Arc<SearchReader>,
     mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
-    observability: Arc<dyn SqliteObservability>,
+    pub(crate) mailbox_reader_metrics: MailboxReaderMetrics,
+    pub(crate) observability: Arc<dyn SqliteObservability>,
 }
 
 impl SharedDb {
@@ -229,12 +228,14 @@ impl SharedDb {
             Arc::clone(&target),
             reader_lanes.search,
         )?);
-        let mailbox_reader = start_mailbox_reader(Arc::clone(&target), reader_lanes.mailbox)?;
+        let (mailbox_reader, mailbox_reader_metrics) =
+            start_mailbox_reader(Arc::clone(&target), reader_lanes.mailbox)?;
         Ok(Self {
             target,
             writer,
             search_reader,
             mailbox_reader,
+            mailbox_reader_metrics,
             observability,
         })
     }
@@ -277,7 +278,8 @@ impl SharedDb {
             Arc::clone(&target),
             reader_lanes.search,
         )?);
-        let mailbox_reader = start_mailbox_reader(Arc::clone(&target), reader_lanes.mailbox)?;
+        let (mailbox_reader, mailbox_reader_metrics) =
+            start_mailbox_reader(Arc::clone(&target), reader_lanes.mailbox)?;
         tracing::debug!(
             writer_handles = 1,
             path = %target.display(),
@@ -288,6 +290,7 @@ impl SharedDb {
             writer,
             search_reader,
             mailbox_reader,
+            mailbox_reader_metrics,
             observability,
         })
     }
@@ -549,37 +552,6 @@ impl SharedDb {
             #[cfg(test)]
             SharedDbTarget::InMemory { .. } => None,
         }
-    }
-
-    pub(crate) fn checkpoint_wal(&self) -> Result<(), AtmError> {
-        #[cfg(test)]
-        if matches!(self.target.as_ref(), SharedDbTarget::InMemory { .. }) {
-            return Ok(());
-        }
-
-        let result = self.with_connection(|connection| {
-            connection
-                .query_row("PRAGMA wal_checkpoint(PASSIVE);", [], |_row| Ok(()))
-                .map_err(|error| {
-                    sqlite_error(
-                        self.target.as_ref(),
-                        "failed to checkpoint sqlite wal during daemon shutdown",
-                        error,
-                    )
-                })
-        });
-        match &result {
-            Ok(()) => {}
-            Err(error) => self
-                .observability
-                .emit_or_warn(SqliteObservabilityEvent::new(
-                    "wal_checkpoint",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message().to_owned(),
-                    Some(error.code()),
-                )),
-        }
-        result
     }
 
     fn open_connection(&self) -> Result<Connection, AtmError> {

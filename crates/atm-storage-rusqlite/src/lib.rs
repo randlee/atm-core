@@ -23,9 +23,12 @@ mod search_reader;
 mod search_schema;
 mod search_store;
 mod shared_db;
+mod shared_db_diagnostics;
 mod template_catalog_schema;
 mod template_catalog_store;
 mod writer;
+
+pub use reader_pool::{ReaderLaneMetricsSnapshot, ReaderLanesMetricsSnapshot};
 
 pub use crate::analyst_query::open_analyst_query_store;
 #[cfg(feature = "test-support")]
@@ -904,6 +907,13 @@ impl SqliteStorageBackend {
         self.message_store.db.checkpoint_wal()
     }
 
+    /// Samples mailbox/search reader-lane diagnostics without scheduling a
+    /// reader operation. AV.4 records these values with benchmark campaigns.
+    #[must_use]
+    pub fn reader_lane_metrics(&self) -> ReaderLanesMetricsSnapshot {
+        self.message_store.db.reader_lane_metrics()
+    }
+
     pub fn path(&self) -> Option<&Path> {
         match self.message_store.db.target_path() {
             Some(path) => Some(path.as_path()),
@@ -992,6 +1002,88 @@ mod tests {
         let message = error.message();
         assert!(message.contains("mailbox_pool=4"));
         assert!(message.contains("max_connections=21"));
+    }
+
+    #[tokio::test]
+    async fn reader_lane_metrics_export_wal_health_after_a_bounded_read() {
+        let root = tempfile::tempdir().expect("temporary storage root");
+        let backend = SqliteStorageBackend::new(root.path().join("mail.db")).expect("backend");
+        backend
+            .message_store()
+            .save_message(&message("atm:metrics", "metrics"))
+            .expect("writer admission");
+        let scope = MailboxScope::new(team(), agent());
+        backend
+            .async_mailbox_reader()
+            .list_messages(
+                scope.clone(),
+                MessageQuery {
+                    team: scope.team,
+                    agent: scope.agent,
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                },
+                ReadDeadline::new(std::time::Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("bounded read");
+        backend.checkpoint_wal().expect("checkpoint");
+        let metrics = backend.reader_lane_metrics();
+        assert_eq!(metrics.mailbox.lane, "mailbox");
+        assert_eq!(metrics.search.lane, "search");
+        assert_eq!(metrics.mailbox.last_checkpoint_succeeded, Some(true));
+        assert!(metrics.mailbox.current_wal_frames.is_some());
+        assert_eq!(metrics.search.last_checkpoint_succeeded, Some(true));
+    }
+
+    #[tokio::test]
+    async fn sustained_reader_and_writer_load_releases_read_transactions_for_wal_checkpointing() {
+        let root = tempfile::tempdir().expect("temporary storage root");
+        let backend =
+            Arc::new(SqliteStorageBackend::new(root.path().join("mail.db")).expect("backend"));
+        let writer = backend.async_message_store();
+        let reader = backend.async_mailbox_reader();
+        let scope = MailboxScope::new(team(), agent());
+        let writer_task = tokio::spawn(async move {
+            for index in 0..24 {
+                writer
+                    .save_message_if_absent_async(message(
+                        &format!("atm:wal-{index}"),
+                        "sustained writer",
+                    ))
+                    .await
+                    .expect("writer admission");
+            }
+        });
+        let reader_task = {
+            let scope = scope.clone();
+            tokio::spawn(async move {
+                for _ in 0..24 {
+                    reader
+                        .list_messages(
+                            scope.clone(),
+                            MessageQuery {
+                                team: scope.team.clone(),
+                                agent: scope.agent.clone(),
+                                sender: None,
+                                task_id: None,
+                                limit: Some(8),
+                            },
+                            ReadDeadline::new(std::time::Duration::from_secs(1)).expect("deadline"),
+                        )
+                        .await
+                        .expect("reader response");
+                }
+            })
+        };
+        writer_task.await.expect("writer join");
+        reader_task.await.expect("reader join");
+        backend.checkpoint_wal().expect("checkpoint");
+        let metrics = backend.reader_lane_metrics();
+        assert_eq!(metrics.mailbox.current_quarantined_workers, 0);
+        assert_eq!(metrics.mailbox.last_checkpoint_succeeded, Some(true));
+        assert!(metrics.mailbox.current_wal_frames.is_some());
     }
 
     fn message(key: &str, text: &str) -> Message {

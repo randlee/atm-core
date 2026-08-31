@@ -22,26 +22,30 @@ const NO_REQUEST: usize = usize::MAX;
 /// Snapshot of the per-lane counters. This is intentionally a value object so
 /// observability can sample it without holding a worker or SQLite connection.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(
-    dead_code,
-    reason = "AV.1a exports the diagnostic snapshot now; AV.1b's doctor projection consumes it."
-)]
-pub(crate) struct ReaderLaneMetricsSnapshot {
-    pub(crate) lane: &'static str,
-    pub(crate) queue_depth: usize,
-    pub(crate) saturated: u64,
-    pub(crate) in_flight: usize,
-    pub(crate) wait_nanos: u64,
-    pub(crate) execution_nanos: u64,
-    pub(crate) expired_in_queue: u64,
-    pub(crate) interrupted_while_active: u64,
-    pub(crate) quarantined: u64,
-    pub(crate) current_quarantined_workers: usize,
-    pub(crate) retired_replaced_workers: u64,
-    pub(crate) quarantine_exhausted_rejections: u64,
-    pub(crate) pool_size: usize,
-    pub(crate) last_checkpoint_succeeded: Option<bool>,
-    pub(crate) current_wal_frames: Option<u64>,
+pub struct ReaderLaneMetricsSnapshot {
+    pub lane: &'static str,
+    pub queue_depth: usize,
+    pub saturated: u64,
+    pub in_flight: usize,
+    pub wait_nanos: u64,
+    pub execution_nanos: u64,
+    pub expired_in_queue: u64,
+    pub interrupted_while_active: u64,
+    pub quarantined: u64,
+    pub current_quarantined_workers: usize,
+    pub retired_replaced_workers: u64,
+    pub quarantine_exhausted_rejections: u64,
+    pub pool_size: usize,
+    pub last_checkpoint_succeeded: Option<bool>,
+    pub current_wal_frames: Option<u64>,
+}
+
+/// Backend-neutral value export for AV.4 diagnostics. The doctor lane joins
+/// this same shape in AV.1b; no reader metric requires a writer-lane permit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReaderLanesMetricsSnapshot {
+    pub mailbox: ReaderLaneMetricsSnapshot,
+    pub search: ReaderLaneMetricsSnapshot,
 }
 
 #[derive(Debug)]
@@ -128,6 +132,7 @@ impl ReaderLaneMetrics {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct ReaderPool {
     inner: Arc<PoolInner>,
 }
@@ -333,10 +338,6 @@ impl ReaderPool {
         Ok(Self { inner })
     }
 
-    #[allow(
-        dead_code,
-        reason = "AV.1b attaches this established reader-lane seam to doctor diagnostics."
-    )]
     pub(crate) fn metrics(&self) -> ReaderLaneMetricsSnapshot {
         self.inner.metrics.snapshot()
     }
@@ -344,10 +345,6 @@ impl ReaderPool {
     /// The checkpoint owner records WAL health here; reader jobs never run a
     /// checkpoint themselves because that would make an observability sample a
     /// hidden writer-side operation.
-    #[allow(
-        dead_code,
-        reason = "The checkpoint owner attaches this AV.1a seam before AV.4 reports it."
-    )]
     pub(crate) fn record_wal_health(&self, checkpoint_succeeded: bool, frames: u64) {
         self.inner
             .metrics
@@ -505,7 +502,9 @@ impl ReaderPool {
         let grace = self.inner.config.interrupt_grace;
         let pool = Arc::clone(&self.inner);
         thread::spawn(move || {
-            thread::sleep(grace);
+            // A watchdog is exceptional cleanup, not a Tokio request task.
+            // Park gives the thread no runnable work during its grace delay.
+            thread::park_timeout(grace);
             if reservation.state.active.load(Ordering::Acquire)
                 && reservation.state.active_request.load(Ordering::Acquire) == request_id
             {
@@ -814,11 +813,11 @@ mod tests {
         let started = Instant::now();
         let (left, right) = tokio::join!(
             pool.submit(Duration::from_secs(1), |_, _| {
-                std::thread::sleep(Duration::from_millis(80));
+                std::thread::park_timeout(Duration::from_millis(80));
                 Ok::<_, atm_storage::ReadLaneError>("left")
             }),
             pool.submit(Duration::from_secs(1), |_, _| {
-                std::thread::sleep(Duration::from_millis(80));
+                std::thread::park_timeout(Duration::from_millis(80));
                 Ok::<_, atm_storage::ReadLaneError>("right")
             })
         );
@@ -828,6 +827,51 @@ mod tests {
             started.elapsed() < Duration::from_millis(145),
             "two worker pool must not serialize independent reads"
         );
+    }
+
+    #[tokio::test]
+    async fn mailbox_and_search_lanes_do_not_steal_each_others_capacity() {
+        let mailbox = Arc::new(test_pool(ReaderPoolConfig {
+            pool_size: 1,
+            queue_depth: 1,
+            interrupt_grace: Duration::from_millis(50),
+            max_quarantined: 1,
+        }));
+        let search = test_pool(ReaderPoolConfig {
+            pool_size: 1,
+            queue_depth: 1,
+            interrupt_grace: Duration::from_millis(50),
+            max_quarantined: 1,
+        });
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let mailbox_task = {
+            let mailbox = Arc::clone(&mailbox);
+            tokio::spawn(async move {
+                mailbox
+                    .submit(Duration::from_secs(1), move |_, _| {
+                        let _ = started_tx.send(());
+                        std::thread::park_timeout(Duration::from_millis(80));
+                        Ok::<_, atm_storage::ReadLaneError>(())
+                    })
+                    .await
+            })
+        };
+        started_rx.await.expect("mailbox worker started");
+        let started = Instant::now();
+        search
+            .submit(Duration::from_millis(100), |_, _| {
+                Ok::<_, atm_storage::ReadLaneError>("search")
+            })
+            .await
+            .expect("search lane stays available");
+        assert!(
+            started.elapsed() < Duration::from_millis(40),
+            "search must not wait behind a mailbox worker"
+        );
+        mailbox_task
+            .await
+            .expect("mailbox join")
+            .expect("mailbox result");
     }
 
     #[tokio::test]
@@ -844,7 +888,7 @@ mod tests {
             active_pool
                 .submit(Duration::from_secs(1), move |_, _| {
                     let _ = started_tx.send(());
-                    std::thread::sleep(Duration::from_millis(80));
+                    std::thread::park_timeout(Duration::from_millis(80));
                     Ok::<_, atm_storage::ReadLaneError>(())
                 })
                 .await
@@ -878,7 +922,9 @@ mod tests {
             .await
             .expect("join active")
             .expect("active request");
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        wait_for_metrics(&pool, |metrics| metrics.queue_depth == 0)
+            .await
+            .expect("worker drains the expired queued request");
         let metrics = pool.metrics();
         assert!(metrics.expired_in_queue >= 1);
         assert!(metrics.saturated >= 1);
@@ -901,7 +947,7 @@ mod tests {
                     let _ = started_tx.send(());
                     // Deliberately ignores SQLite's interrupt handle: this is
                     // the adversarial worker required by A3c.
-                    std::thread::sleep(Duration::from_millis(100));
+                    std::thread::park_timeout(Duration::from_millis(100));
                     Ok::<_, atm_storage::ReadLaneError>(())
                 })
                 .await
@@ -917,7 +963,9 @@ mod tests {
                 stage: "executing active query"
             }
         );
-        tokio::time::sleep(Duration::from_millis(35)).await;
+        wait_for_metrics(&pool, |metrics| metrics.current_quarantined_workers == 1)
+            .await
+            .expect("nonresponsive worker enters quarantine after the interrupt grace");
         let quarantined = pool.metrics();
         assert_eq!(quarantined.current_quarantined_workers, 1);
         assert_eq!(quarantined.pool_size, 1, "no early replacement is allowed");
@@ -933,17 +981,10 @@ mod tests {
                 reason: "reader quarantine budget exhausted"
             }
         ));
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                let metrics = pool.metrics();
-                if metrics.current_quarantined_workers == 0
-                    && metrics.retired_replaced_workers == 1
-                    && metrics.pool_size == 1
-                {
-                    break;
-                }
-                tokio::time::sleep(Duration::from_millis(5)).await;
-            }
+        wait_for_metrics(&pool, |metrics| {
+            metrics.current_quarantined_workers == 0
+                && metrics.retired_replaced_workers == 1
+                && metrics.pool_size == 1
         })
         .await
         .expect("returned worker must retire and be replaced after its connection drops");
@@ -1041,18 +1082,30 @@ mod tests {
         })
         .await
         .expect("ordinary read");
-        tokio::time::timeout(Duration::from_millis(100), async {
-            while pool.metrics().in_flight != 0 {
-                tokio::time::sleep(Duration::from_millis(1)).await;
-            }
-        })
-        .await
-        .expect("worker reports completion after sending its result");
+        wait_for_metrics(&pool, |metrics| metrics.in_flight == 0)
+            .await
+            .expect("worker reports completion after sending its result");
         let metrics = pool.metrics();
         assert_eq!(metrics.lane, "test");
         assert_eq!(metrics.last_checkpoint_succeeded, Some(true));
         assert_eq!(metrics.current_wal_frames, Some(7));
         assert_eq!(metrics.pool_size, 1);
         assert_eq!(metrics.in_flight, 0);
+    }
+
+    async fn wait_for_metrics(
+        pool: &ReaderPool,
+        predicate: impl Fn(&super::ReaderLaneMetricsSnapshot) -> bool,
+    ) -> Result<(), tokio::time::error::Elapsed> {
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let metrics = pool.metrics();
+                if predicate(&metrics) {
+                    return;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
     }
 }

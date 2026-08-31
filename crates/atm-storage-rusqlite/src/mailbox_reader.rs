@@ -18,6 +18,23 @@ struct MailboxReader {
     pool: ReaderPool,
 }
 
+/// Backend-private diagnostics handle kept separate from the sealed reader
+/// adapter so observability does not widen the adapter's construction surface.
+#[derive(Clone)]
+pub(crate) struct MailboxReaderMetrics {
+    pool: ReaderPool,
+}
+
+impl MailboxReaderMetrics {
+    pub(crate) fn snapshot(&self) -> crate::reader_pool::ReaderLaneMetricsSnapshot {
+        self.pool.metrics()
+    }
+
+    pub(crate) fn record_wal_health(&self, checkpoint_succeeded: bool, frames: u64) {
+        self.pool.record_wal_health(checkpoint_succeeded, frames);
+    }
+}
+
 impl MailboxReader {
     fn start(target: Arc<SharedDbTarget>, config: ReaderPoolConfig) -> Result<Self, AtmError> {
         Ok(Self {
@@ -58,8 +75,18 @@ impl MailboxReader {
 pub(crate) fn start_mailbox_reader(
     target: Arc<SharedDbTarget>,
     config: ReaderPoolConfig,
-) -> Result<Arc<dyn AsyncMailboxReader + Send + Sync>, AtmError> {
-    Ok(Arc::new(MailboxReader::start(target, config)?))
+) -> Result<
+    (
+        Arc<dyn AsyncMailboxReader + Send + Sync>,
+        MailboxReaderMetrics,
+    ),
+    AtmError,
+> {
+    let reader = MailboxReader::start(target, config)?;
+    let metrics = MailboxReaderMetrics {
+        pool: reader.pool.clone(),
+    };
+    Ok((Arc::new(reader), metrics))
 }
 
 #[async_trait::async_trait]
@@ -106,13 +133,7 @@ fn list_messages(
         .limit
         .map(|value| i64::try_from(value).unwrap_or(i64::MAX))
         .unwrap_or(-1);
-    let transaction = connection.unchecked_transaction().map_err(|error| {
-        sqlite_error(
-            target,
-            "failed to open bounded mailbox reader transaction",
-            error,
-        )
-    })?;
+    let transaction = open_reader_transaction(connection, target)?;
     let mut statement = transaction
         .prepare(
             "SELECT mail_messages.message_key, mail_messages.envelope_json
@@ -134,6 +155,32 @@ fn list_messages(
         .map_err(|error| {
             sqlite_error(target, "failed to prepare mailbox reader list query", error)
         })?;
+    let messages = decode_list_messages(&transaction, target, query, limit, &mut statement)?;
+    drop(statement);
+    close_reader_transaction(transaction, target)?;
+    Ok(messages)
+}
+
+fn open_reader_transaction<'connection>(
+    connection: &'connection Connection,
+    target: &SharedDbTarget,
+) -> Result<rusqlite::Transaction<'connection>, AtmError> {
+    connection.unchecked_transaction().map_err(|error| {
+        sqlite_error(
+            target,
+            "failed to open bounded mailbox reader transaction",
+            error,
+        )
+    })
+}
+
+fn decode_list_messages(
+    transaction: &rusqlite::Transaction<'_>,
+    target: &SharedDbTarget,
+    query: &MessageQuery,
+    limit: i64,
+    statement: &mut rusqlite::Statement<'_>,
+) -> Result<Vec<Message>, AtmError> {
     let rows = statement
         .query_map(
             params![
@@ -148,28 +195,31 @@ fn list_messages(
         .map_err(|error| {
             sqlite_error(target, "failed to execute mailbox reader list query", error)
         })?;
-    let mut messages = Vec::new();
-    for row in rows {
+    rows.map(|row| {
         let (key, envelope_json) = row
             .map_err(|error| sqlite_error(target, "failed to decode mailbox reader row", error))?;
         let key = MessageKey::new(key)?;
-        let state = load_state(&transaction, target, &query.team, &query.agent, &key)?;
-        let envelope = apply_state(
-            deserialize_json(&envelope_json, "sqlite message envelope")?,
-            state.as_ref(),
-        );
-        messages.push(Message {
+        let state = load_state(transaction, target, &query.team, &query.agent, &key)?;
+        Ok(Message {
             team: query.team.clone(),
             agent: query.agent.clone(),
             message_key: key,
-            envelope,
-        });
-    }
-    drop(statement);
-    transaction.commit().map_err(|error| {
-        sqlite_error(target, "failed to close mailbox reader transaction", error)
-    })?;
-    Ok(messages)
+            envelope: apply_state(
+                deserialize_json(&envelope_json, "sqlite message envelope")?,
+                state.as_ref(),
+            ),
+        })
+    })
+    .collect()
+}
+
+fn close_reader_transaction(
+    transaction: rusqlite::Transaction<'_>,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    transaction
+        .commit()
+        .map_err(|error| sqlite_error(target, "failed to close mailbox reader transaction", error))
 }
 
 fn load_message(
@@ -178,13 +228,7 @@ fn load_message(
     scope: &MailboxScope,
     key: &MessageKey,
 ) -> Result<Option<Message>, AtmError> {
-    let transaction = connection.unchecked_transaction().map_err(|error| {
-        sqlite_error(
-            target,
-            "failed to open bounded mailbox reader transaction",
-            error,
-        )
-    })?;
+    let transaction = open_reader_transaction(connection, target)?;
     let row = transaction
         .query_row(
             "SELECT team, agent, envelope_json FROM mail_messages WHERE message_key = ?1;",
@@ -225,9 +269,7 @@ fn load_message(
             })
         })
         .transpose()?;
-    transaction.commit().map_err(|error| {
-        sqlite_error(target, "failed to close mailbox reader transaction", error)
-    })?;
+    close_reader_transaction(transaction, target)?;
     Ok(message)
 }
 
