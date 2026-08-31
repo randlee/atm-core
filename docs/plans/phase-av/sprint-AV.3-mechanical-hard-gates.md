@@ -203,35 +203,6 @@ fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
 
 ## Acceptance criteria
 
-## QA history
-
-- 2026-08-31 QA-r1 fixes: `AV3-B1/B2/B3/I1/I2/M1/M2/M3` use a shared
-  checked-in handler contract, hardened Python literal-aware scanner, and
-  `syn` AST for Rust source gates. AST is chosen because handler ownership,
-  generic functions, `#[cfg(test)]` exclusion, and bridge construction/type
-  forms are semantic Rust properties; string scanning cannot make that
-  contract robust. Commits: `27bd384eb`, `06b73c9f8`, `3a1736a7b`.
-- 2026-08-31 QA-r2 fixes: `AV3-B3` masks raw, raw-byte, and byte string
-  literals before balancing handler braces. `AV3-I2` replaces the D2b
-  tautology with an `AsyncMailboxRuntime`-activated ingress recorder that
-  derives each path from the real router handler body and proves a writer-lane
-  fixture is rejected. AV.1b will activate the supervised state-handoff path.
-- 2026-08-31 QA-r3 passed the original scope and exposed three merge-forward
-  defects: `AV3-B4` now derives the production-only
-  `StorageAsyncMailboxRuntime` implementation with `syn` and checks its D2/D6
-  allowlist (`be0e458dd`); `AV3-M4` requires exact raw-string closing hash
-  counts (`71898a6f2`); and `AV3-M5` makes Rust architecture gates a default
-  lint check (`c231b86b5`). `AV3-I3` remains explicitly deferred to round 2
-  / A2b after AV.1b because the D2b mechanism-independent behavior test is
-  not yet live.
-- 2026-08-31 Round-2 part 1 fixed merge-forward gate defects `AV3-B5/B6`
-  (`deca61e6e`, `357b9c040`): the composition surface is derived from
-  `AsyncMailboxRuntime` signatures plus explicit prelude/D2 names, and the
-  read handler assertion parses each named handler independently. D1 now
-  derives the allowed port-signature types and ignores enum-variant expression
-  paths; all 91 boundary-enforcement tests and all 97 atm-architecture package
-  tests pass against the real AV.1b tree.
-
 This is the authoritative acceptance checklist.
 
 - [x] A1 — Bridge gate, three-part check: (1) a grep for
@@ -277,3 +248,19 @@ This is the authoritative validation checklist.
   graft-receiver store, deferred marker, clear) to async ports / writer
   ingress and deleting the bridge for real — follow-up `AV-FU-1` (phase
   plan §4).
+
+## QA history
+
+- 2026-08-31 QA-r1/r2/r3 established the AST handler/composition gates,
+  literal-aware scanners, and default lint architecture gate (commits
+  `27bd384eb`, `06b73c9f8`, `3a1736a7b`, `5c9ed27b6`, `be0e458dd`,
+  `71898a6f2`, `c231b86b5`).
+- 2026-08-31 Round-2 part 1 fixed AV3-B5/B6 (`deca61e6e`, `357b9c040`):
+  91 boundary-enforcement tests and 97 atm-architecture package tests passed
+  on that tree.
+- 2026-08-31 Round-2 part 2: D1 renamed the residual bridge and its syn gate
+  records the real `commit_write` site rather than the prior documented `send`
+  site (`99bd66b49`). AV3-I3 replaced the evadable substring scaffold with a
+  real-router recording ingress behavior test (`e8d5886c2`); D4 makes the
+  liveness and overload tests fail closed through the default lint gate
+  (`6dd4d5a59`). Parent AV.2 merge-forward is `ae5e72d0c`.
