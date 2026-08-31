@@ -105,7 +105,18 @@ sprint.
       `tokio::sync::Semaphore`/`Mutex` acquisition around a storage
       read, `spawn_blocking`, `ControlPathSyncBridge`, and any
       `StorageWriterIngress` submission other than through the
-      supervisor.
+      supervisor. The activated AV.1a composition assertion additionally
+      permits `StorageAsyncMailboxRuntime`, `RequestDeadline`,
+      `ReadDeadline`, `AtmError`/`ReadLaneError`, the ordinary mailbox
+      domain values (`MailboxScope`, `Message`, `MessageKey`,
+      `MessageQuery`), and all public
+      `atm_core::read::selection` values
+      (`MailboxSelectionRequest`, `MailboxSelectionCandidate`,
+      `MailboxSelectionResult`, `SelectedMailboxMessage`). It derives only
+      the production `impl AsyncMailboxRuntime for
+      StorageAsyncMailboxRuntime` with `syn`; `#[cfg(test)]` writer fakes
+      are outside the asserted region. `AsyncMessageStore` and
+      `MessageStore` deliberately remain absent from the positive allowlist.
 - [ ] D2b — Behavior gate (mechanism-independent): tests run each
       read-family endpoint against an **instrumented writer ingress
       that records every submission** (op variant, origin, outcome)

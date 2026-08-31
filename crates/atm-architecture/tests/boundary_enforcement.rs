@@ -3555,21 +3555,33 @@ fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()
         return;
     }
     let source = read_source(&mailbox_runtime);
-    let implementation = source
-        .split("impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime")
-        .nth(1)
-        .expect("AV.1a composition must implement AsyncMailboxRuntime");
+    let implementation = av3_async_mailbox_runtime_impl_region(&source);
     assert!(
         source.contains("reader: Arc<dyn AsyncMailboxReader"),
         "the AsyncMailboxRuntime composition must use the reader-lane capability"
     );
-    av3_assert_allowlisted_types(
-        implementation,
+    av3_assert_allowlisted_item_types(
+        &implementation,
         &[
+            "AsyncMailboxRuntime",
+            "StorageAsyncMailboxRuntime",
             "AsyncMailboxReader",
             "StateHandoffSupervisor",
+            "MailboxSelectionRequest",
+            "MailboxSelectionCandidate",
+            "MailboxSelectionResult",
+            "SelectedMailboxMessage",
+            "MailboxScope",
+            "Message",
+            "MessageKey",
+            "MessageQuery",
+            "RequestDeadline",
             "ReadDeadline",
             "AtmError",
+            "ReadLaneError",
+            "Result",
+            "Ok",
+            "Self",
         ],
         "AsyncMailboxRuntime composition",
     );
@@ -3586,6 +3598,45 @@ fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()
             "AV.3 composition boundary rejects read serialization primitive `{prohibited}`"
         );
     }
+}
+
+#[test]
+fn av3_async_mailbox_runtime_composition_rejects_production_writer_and_gate_fixtures() {
+    for prohibited in ["FreshSemaphoreGate", "AsyncMessageStore"] {
+        let source = format!(
+            "impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {{ fn compose(&self) {{ {prohibited}::acquire(); }} }}"
+        );
+        let implementation = av3_async_mailbox_runtime_impl_region(&source);
+        let rejection = std::panic::catch_unwind(|| {
+            av3_assert_allowlisted_item_types(
+                &implementation,
+                &["AsyncMailboxRuntime", "StorageAsyncMailboxRuntime", "Self"],
+                "synthetic AsyncMailboxRuntime composition",
+            )
+        });
+        assert!(
+            rejection.is_err(),
+            "the production composition guard must reject `{prohibited}`"
+        );
+    }
+}
+
+#[test]
+fn av3_async_mailbox_runtime_composition_excludes_cfg_test_writer_fake() {
+    let source = r#"
+impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime { fn compose(&self) {} }
+#[cfg(test)] mod tests { fn writer_fake() { AsyncMessageStore::acquire(); } }
+"#;
+    let implementation = av3_async_mailbox_runtime_impl_region(source);
+    assert!(
+        !implementation.contains("AsyncMessageStore"),
+        "the production composition region must exclude cfg(test) writer fakes"
+    );
+    av3_assert_allowlisted_item_types(
+        &implementation,
+        &["AsyncMailboxRuntime", "StorageAsyncMailboxRuntime", "Self"],
+        "synthetic AsyncMailboxRuntime composition",
+    );
 }
 
 #[test]
@@ -3926,6 +3977,16 @@ fn av3_handler_region(source: &str, handlers: &[&str]) -> String {
 fn av3_assert_allowlisted_types(region: &str, allowed: &[&str], scope: &str) {
     let syntax = syn::parse_file(&format!("fn gate() {region}"))
         .unwrap_or_else(|error| panic!("AV.3 {scope} fixture must parse: {error}"));
+    av3_assert_allowlisted_syntax_types(&syntax, allowed, scope);
+}
+
+fn av3_assert_allowlisted_item_types(region: &str, allowed: &[&str], scope: &str) {
+    let syntax = syn::parse_file(region)
+        .unwrap_or_else(|error| panic!("AV.3 {scope} fixture must parse: {error}"));
+    av3_assert_allowlisted_syntax_types(&syntax, allowed, scope);
+}
+
+fn av3_assert_allowlisted_syntax_types(syntax: &syn::File, allowed: &[&str], scope: &str) {
     struct TypeVisitor {
         names: BTreeSet<String>,
     }
@@ -3952,7 +4013,7 @@ fn av3_assert_allowlisted_types(region: &str, allowed: &[&str], scope: &str) {
     let mut visitor = TypeVisitor {
         names: BTreeSet::new(),
     };
-    visitor.visit_file(&syntax);
+    visitor.visit_file(syntax);
     let unexpected = visitor
         .names
         .into_iter()
@@ -3962,6 +4023,34 @@ fn av3_assert_allowlisted_types(region: &str, allowed: &[&str], scope: &str) {
         unexpected.is_empty(),
         "AV.3 {scope} allowlist rejects unlisted type(s): {unexpected:?}"
     );
+}
+
+fn av3_async_mailbox_runtime_impl_region(source: &str) -> String {
+    let syntax =
+        syn::parse_file(source).expect("AV.3 AsyncMailboxRuntime source must parse as Rust");
+    syntax
+        .items
+        .into_iter()
+        .filter_map(|item| match item {
+            syn::Item::Impl(implementation)
+                if !implementation
+                    .attrs
+                    .iter()
+                    .any(is_test_configuration_attribute)
+                    && implementation.self_ty.to_token_stream().to_string()
+                        == "StorageAsyncMailboxRuntime"
+                    && implementation.trait_.as_ref().is_some_and(|(_, path, _)| {
+                        path.segments
+                            .last()
+                            .is_some_and(|segment| segment.ident == "AsyncMailboxRuntime")
+                    }) =>
+            {
+                Some(implementation.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .next()
+        .expect("AV.1a composition must implement AsyncMailboxRuntime")
 }
 
 fn av3_identifier_findings(root: &Path, identifier: &str) -> Vec<String> {
