@@ -1,0 +1,130 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-B3>
+  a triage:Finding ;
+  triage:findingId "AV3-B3" ;
+  triage:title "Scanner primitives admit silent false negatives in merge-gate position" ;
+  triage:description "(a) extract_fn_body (boundary_enforcement.rs:3815) counts raw braces with no comment/string-literal exclusion — a `}` inside a comment or string truncates the scanned region so a real spawn_blocking after it silently escapes; the same file already strips `//` comments in contains_adapter_availability_inference and uses syn visitors for identical tasks. (b) function_names (:3796) picks up names from comment text (spurious panic) and silently drops generic fns (`fn foo<T>(` fails the alnum filter). (c) the D1 enumerator (:3771) recognises only ControlPathSyncBridge::run( or .run( via a self.<field> declared literally `: ControlPathSyncBridge`; an inline-constructed bridge (`let b = ControlPathSyncBridge::new(pool); b.run(...)`) is invisible to both branches so assert_eq!(sites, RESIDUAL) still passes, defeating D1's 'any new call site fails' guarantee. Fix-shaping: settle syn-AST vs hardened-string scanning once; that remediates B3(a)(b)(c) plus M1, M2, M3. Reviewer ids RBP-AV3-1 (critical), RBP-AV3-2, RBQA-AV3-002." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T22:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T05:33:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B3/AV3-B3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B3/AV3-B3-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B3/AV3-B3-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B3/AV3-B3-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B3/AV3-B3-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B3/AV3-B3-6> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-B3/AV3-B3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3771 ;
+  triage:snippet "fn bridge_run_call_sites_by_enclosing_fn(source: &str) -> BTreeSet<String>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
+
+<urn:atm:triage:occurrence/AV3-B3/AV3-B3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3796 ;
+  triage:snippet "fn function_names(source: &str) -> BTreeSet<String>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
+
+<urn:atm:triage:occurrence/AV3-B3/AV3-B3-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3815 ;
+  triage:snippet "fn extract_fn_body<'source>(source: &'source str, fn_name: &str) -> &'source str" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
+
+<urn:atm:triage:occurrence/AV3-B3/AV3-B3-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3771 ;
+  triage:snippet "fn bridge_run_call_sites_by_enclosing_fn(source: &str) -> BTreeSet<String>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4-5/4a97f0dd1> .
+
+<urn:atm:triage:occurrence/AV3-B3/AV3-B3-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3796 ;
+  triage:snippet "fn function_names(source: &str) -> BTreeSet<String>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4-5/4a97f0dd1> .
+
+<urn:atm:triage:occurrence/AV3-B3/AV3-B3-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3815 ;
+  triage:snippet "fn extract_fn_body<'source>(source: &'source str, fn_name: &str) -> &'source str" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4-5/4a97f0dd1> .
+
+<urn:atm:triage:worktree/AV1A-1/8938ed6a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "8938ed6a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV1B-2/db08f459>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "db08f459" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV2-3/f37063fd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "f37063fd" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV3-4/2c6040b28>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV4-5/4a97f0dd1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd1" ;
+  triage:orderIndex 5 .
