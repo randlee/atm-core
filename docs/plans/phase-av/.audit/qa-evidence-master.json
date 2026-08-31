@@ -212,17 +212,17 @@
     {
       "aich_sprint": "AV1A",
       "phase_sprint": "AV.1a",
-      "pass": null,
+      "pass": true,
       "run_type": "fix",
       "assignment_time_pst": null,
       "assignment_from": "fenix",
-      "result_time_utc": null,
+      "result_time_utc": "2026-08-31T09:57:00Z",
       "result_time_pst": null,
-      "result_message_id": null,
-      "result_from": null,
+      "result_message_id": "01M1BKGPVK6SHC40GSM4QJS0NB",
+      "result_from": "arch-ctm",
       "result_shared_path": null,
       "result_temp_path": null,
-      "verdict": null,
+      "verdict": "COMPLETE (dev)",
       "blockers": null,
       "important": null,
       "minor": null,
@@ -232,7 +232,7 @@
       "assignment_message_id": "01M1BJC17BY2W11FZK85M68YD1",
       "assignment_shared_path": "/Users/randlee/.atm/.config/atm/share/atm-dev/av1a-fix-r3-task.xml (reference copy; task sent inline via --stdin)",
       "assignment_summary": "Fix round 3 for AV.1a: AV1A-I6 sweep — map all 34 unmapped trait_only io_forbidden boundary records, turn the lint skip into a hard failure, tests, sprint-doc QA-history r3 (task phase-av-sprint-av1a-fix-r3, assignee arch-ctm).",
-      "evidence": "FIX-AV1A-R3 dispatched 2026-08-31T09:33Z to arch-ctm (msg 01M1BJC17BY2W11FZK85M68YD1, 11.1 KB inline) on d057032e8 after QA-r3 FAIL 21/22. Scope: AV1A-I6 only (sweepScope), commits atop d057032e8 with no force-push, then merge-forward into AV.1b. Out of scope, logged: flags-via-variable evasion, socket_io/process_spawn mapping. Stack at dispatch: AV.1b e7401d4a8, AV.2 a0418ac9f, AV.3 7ff985064, AV.4 merged 7ff985064 (Cipher msg 01M1BJBWQKYZ5AQV2WA3DF64QD). Result pending. PUSHED 09:42Z: 875d0497f (merge integrate/phase-av 27bd0236b) -> 0ca86ecaf fix(boundaries): make trait-only I/O policy fail closed -> 1e81aade8 docs(av1a): record fail-closed I/O sweep. 15 files +287/-3 (lint +134, tests +126/+2, 11 atm-core TOMLs +1 each, sprint doc +17); atm-http-runtime/atm-daemon diff empty. Completion message not yet received at QA-r4 dispatch; AV.1b merge-forward pending."
+      "evidence": "FIX-AV1A-R3 dispatched 2026-08-31T09:33Z to arch-ctm (msg 01M1BJC17BY2W11FZK85M68YD1, 11.1 KB inline) on d057032e8 after QA-r3 FAIL 21/22. Scope: AV1A-I6 only (sweepScope), commits atop d057032e8 with no force-push, then merge-forward into AV.1b. Out of scope, logged: flags-via-variable evasion, socket_io/process_spawn mapping. Stack at dispatch: AV.1b e7401d4a8, AV.2 a0418ac9f, AV.3 7ff985064, AV.4 merged 7ff985064 (Cipher msg 01M1BJBWQKYZ5AQV2WA3DF64QD). Result pending. PUSHED 09:42Z: 875d0497f (merge integrate/phase-av 27bd0236b) -> 0ca86ecaf fix(boundaries): make trait-only I/O policy fail closed -> 1e81aade8 docs(av1a): record fail-closed I/O sweep. 15 files +287/-3 (lint +134, tests +126/+2, 11 atm-core TOMLs +1 each, sprint doc +17); atm-http-runtime/atm-daemon diff empty. Completion message not yet received at QA-r4 dispatch; AV.1b merge-forward pending. COMPLETION 09:57Z (msg 01M1BKGPVK6SHC40GSM4QJS0NB): HEAD 1e81aade8 final; AV.1b merge-forward 93c361a43 (fenix verified ancestry). 34 records covered (23 declaration-region derived, 11 no_in_repo_implementation, reader mapping explicit); no prohibited I/O; one exact PeerConfigStore/socket_io exception (SocketAddr DTO false positive). Validation: lint_boundaries PASS, pytest 524/10 skipped/13 subtests, just lint 32/32, cargo tests PASS, fmt/clippy clean, just validate FAILS only at sc-ecosystem/Wyvern pins. Relayed to quality-mgr 01M1BKHQJSN6BHG498JMYKDWVE; AV.2 merge-forward requested from Cipher 01M1BKHQZ884169M9JK46X4B2D."
     },
     {
       "aich_sprint": "AV1A",
@@ -257,7 +257,7 @@
       "assignment_message_id": "01M1BKC2R01SCQF4BYGCSCD131",
       "assignment_shared_path": "/Users/randlee/.atm/.config/atm/share/atm-dev/av1a-qa-r4-task.xml (reference copy; sent inline via --stdin)",
       "assignment_summary": "Sprint QA round 4 for AV.1a on 1e81aade8 (task phase-av-sprint-av1a-qa-r4): re-verify AV1A-I6 against full sweepScope after fix-r3 (23 declaration-region-derived records + 11 no_in_repo_implementation assertions + fail-closed skip replacement); regression-check 16 closed records.",
-      "evidence": "QA-AV1A-R4 dispatched 2026-08-31T09:50Z on push (arch-ctm completion pending) to quality-mgr, msg 01M1BKC2R01SCQF4BYGCSCD131, 12.6 KB inline. Facts handed over, not prescribed: only 11 TOMLs changed; 23 records rely on new trait_contract_source_regions logic; truth of the 11 no-impl assertions to be verified. Result pending.",
+      "evidence": "QA-AV1A-R4 dispatched 2026-08-31T09:50Z on push (arch-ctm completion pending) to quality-mgr, msg 01M1BKC2R01SCQF4BYGCSCD131, 12.6 KB inline. Facts handed over, not prescribed: only 11 TOMLs changed; 23 records rely on new trait_contract_source_regions logic; truth of the 11 no-impl assertions to be verified. Result pending. quality-mgr ACK 01M1BKE59ZNSWA3WZJ3DJ7WXRB: req-qa + rust-qa + ruthless (carry I6) + boundary-guard spawned @ 1e81aade8 on push notice; boundary-guard PASS (no relaxations; io_forbidden untouched); quality-mgr owns the sweepScope call on the 23 derived records.",
       "head_sha": "1e81aade8"
     },
     {
