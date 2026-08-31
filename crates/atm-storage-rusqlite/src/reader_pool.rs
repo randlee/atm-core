@@ -1,12 +1,12 @@
 //! Shared bounded substrate for all SQLite read lanes.
 //!
-//! A lane owns independent defensive read-only connections.  The pool never
-//! acquires the writer lane and is intentionally usable by mailbox and search
-//! adapters alike so their fan-out and deadline behavior cannot drift.
+//! A lane owns independent defensive read-only connections. The workers are
+//! deliberately OS threads because rusqlite connections are thread-affine, but
+//! Tokio callers only await bounded channels and oneshots: normal read fan-out
+//! never passes through a global blocking bridge.
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, Weak, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -15,14 +15,126 @@ use rusqlite::{Connection, InterruptHandle};
 
 use crate::shared_db::{SharedDbTarget, open_read_connection_for_target};
 
-pub(crate) struct ReaderPool {
-    workers: Vec<Worker>,
-    next_worker: AtomicUsize,
+const READY: usize = 0;
+const QUARANTINED: usize = 1;
+const NO_REQUEST: usize = usize::MAX;
+
+/// Snapshot of the per-lane counters. This is intentionally a value object so
+/// observability can sample it without holding a worker or SQLite connection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(
+    dead_code,
+    reason = "AV.1a exports the diagnostic snapshot now; AV.1b's doctor projection consumes it."
+)]
+pub(crate) struct ReaderLaneMetricsSnapshot {
+    pub(crate) lane: &'static str,
+    pub(crate) queue_depth: usize,
+    pub(crate) saturated: u64,
+    pub(crate) in_flight: usize,
+    pub(crate) wait_nanos: u64,
+    pub(crate) execution_nanos: u64,
+    pub(crate) expired_in_queue: u64,
+    pub(crate) interrupted_while_active: u64,
+    pub(crate) quarantined: u64,
+    pub(crate) current_quarantined_workers: usize,
+    pub(crate) retired_replaced_workers: u64,
+    pub(crate) quarantine_exhausted_rejections: u64,
+    pub(crate) pool_size: usize,
+    pub(crate) last_checkpoint_succeeded: Option<bool>,
+    pub(crate) current_wal_frames: Option<u64>,
 }
 
-/// Bounded knobs for one independent read lane.  AV.1b adds the doctor lane
-/// to the same configuration surface; keeping the budget arithmetic here
-/// makes it impossible for a future lane to silently oversubscribe SQLite.
+#[derive(Debug)]
+#[allow(
+    dead_code,
+    reason = "AV.1b attaches this established reader-lane seam to doctor diagnostics."
+)]
+struct ReaderLaneMetrics {
+    lane: &'static str,
+    queue_depth: AtomicUsize,
+    saturated: AtomicU64,
+    in_flight: AtomicUsize,
+    wait_nanos: AtomicU64,
+    execution_nanos: AtomicU64,
+    expired_in_queue: AtomicU64,
+    interrupted_while_active: AtomicU64,
+    quarantined: AtomicU64,
+    current_quarantined_workers: AtomicUsize,
+    retired_replaced_workers: AtomicU64,
+    quarantine_exhausted_rejections: AtomicU64,
+    pool_size: AtomicUsize,
+    last_checkpoint_succeeded: AtomicUsize,
+    current_wal_frames: AtomicU64,
+}
+
+#[allow(
+    dead_code,
+    reason = "AV.1b attaches this established reader-lane seam to doctor diagnostics."
+)]
+impl ReaderLaneMetrics {
+    fn new(lane: &'static str, pool_size: usize) -> Self {
+        Self {
+            lane,
+            queue_depth: AtomicUsize::new(0),
+            saturated: AtomicU64::new(0),
+            in_flight: AtomicUsize::new(0),
+            wait_nanos: AtomicU64::new(0),
+            execution_nanos: AtomicU64::new(0),
+            expired_in_queue: AtomicU64::new(0),
+            interrupted_while_active: AtomicU64::new(0),
+            quarantined: AtomicU64::new(0),
+            current_quarantined_workers: AtomicUsize::new(0),
+            retired_replaced_workers: AtomicU64::new(0),
+            quarantine_exhausted_rejections: AtomicU64::new(0),
+            pool_size: AtomicUsize::new(pool_size),
+            last_checkpoint_succeeded: AtomicUsize::new(0),
+            current_wal_frames: AtomicU64::new(0),
+        }
+    }
+
+    fn snapshot(&self) -> ReaderLaneMetricsSnapshot {
+        let checkpoint = match self.last_checkpoint_succeeded.load(Ordering::Relaxed) {
+            0 => None,
+            1 => Some(false),
+            _ => Some(true),
+        };
+        let frames = self.current_wal_frames.load(Ordering::Relaxed);
+        ReaderLaneMetricsSnapshot {
+            lane: self.lane,
+            queue_depth: self.queue_depth.load(Ordering::Relaxed),
+            saturated: self.saturated.load(Ordering::Relaxed),
+            in_flight: self.in_flight.load(Ordering::Relaxed),
+            wait_nanos: self.wait_nanos.load(Ordering::Relaxed),
+            execution_nanos: self.execution_nanos.load(Ordering::Relaxed),
+            expired_in_queue: self.expired_in_queue.load(Ordering::Relaxed),
+            interrupted_while_active: self.interrupted_while_active.load(Ordering::Relaxed),
+            quarantined: self.quarantined.load(Ordering::Relaxed),
+            current_quarantined_workers: self.current_quarantined_workers.load(Ordering::Relaxed),
+            retired_replaced_workers: self.retired_replaced_workers.load(Ordering::Relaxed),
+            quarantine_exhausted_rejections: self
+                .quarantine_exhausted_rejections
+                .load(Ordering::Relaxed),
+            pool_size: self.pool_size.load(Ordering::Relaxed),
+            last_checkpoint_succeeded: checkpoint,
+            current_wal_frames: frames.checked_sub(1),
+        }
+    }
+
+    fn record_wal_health(&self, checkpoint_succeeded: bool, frames: u64) {
+        self.last_checkpoint_succeeded
+            .store(usize::from(checkpoint_succeeded) + 1, Ordering::Relaxed);
+        self.current_wal_frames
+            .store(frames.saturating_add(1), Ordering::Relaxed);
+    }
+}
+
+pub(crate) struct ReaderPool {
+    inner: Arc<PoolInner>,
+}
+
+/// Bounded knobs for one independent read lane. AV.1b adds the doctor lane to
+/// the same configuration surface; keeping the budget arithmetic here makes it
+/// impossible for a future lane to silently oversubscribe SQLite.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ReaderPoolConfig {
     pub(crate) pool_size: usize,
@@ -51,8 +163,8 @@ impl ReaderPoolConfig {
     }
 }
 
-/// AV.1b's doctor lane is included now so the connection cap remains stable
-/// as the stacked handler-cutover branch lands.
+/// AV.1b's doctor lane is included now so the connection cap remains stable as
+/// the stacked handler-cutover branch lands.
 pub(crate) const DEFAULT_DOCTOR_READER_CONFIG: ReaderPoolConfig = ReaderPoolConfig {
     pool_size: 4,
     queue_depth: 16,
@@ -82,6 +194,9 @@ pub(crate) fn validate_connection_budget(
         || mailbox.queue_depth == 0
         || search.queue_depth == 0
         || doctor.queue_depth == 0
+        || mailbox.max_quarantined > mailbox.pool_size
+        || search.max_quarantined > search.pool_size
+        || doctor.max_quarantined > doctor.pool_size
         || max_connections == 0
         || worst_case > max_connections
     {
@@ -98,21 +213,59 @@ pub(crate) fn validate_connection_budget(
     Ok(())
 }
 
+struct PoolInner {
+    lane: &'static str,
+    target: Arc<SharedDbTarget>,
+    config: ReaderPoolConfig,
+    queue_per_worker: usize,
+    workers: Mutex<Vec<Worker>>,
+    next_worker_index: AtomicUsize,
+    next_worker_id: AtomicUsize,
+    next_request: AtomicUsize,
+    metrics: Arc<ReaderLaneMetrics>,
+}
+
 struct Worker {
+    id: usize,
     sender: tokio::sync::mpsc::Sender<Request>,
-    interrupt: InterruptHandle,
+    interrupt: Arc<InterruptHandle>,
+    state: Arc<WorkerState>,
+}
+
+struct WorkerState {
+    status: AtomicUsize,
+    active: AtomicBool,
+    active_request: AtomicUsize,
+}
+
+struct WorkerReservation {
+    id: usize,
+    sender: tokio::sync::mpsc::Sender<Request>,
+    interrupt: Arc<InterruptHandle>,
+    state: Arc<WorkerState>,
 }
 
 struct Request {
+    id: usize,
+    queued_at: Instant,
     deadline: Instant,
-    run: Box<dyn FnOnce(&Connection, &SharedDbTarget, bool) + Send>,
+    run: Box<ReaderJob>,
+}
+
+type ReaderJob = dyn FnOnce(&Connection, &SharedDbTarget, RequestDisposition) + Send;
+
+enum RequestDisposition {
+    Execute,
+    ExpiredInQueue,
+    Rejected(ReadLaneError),
 }
 
 impl std::fmt::Debug for ReaderPool {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("ReaderPool")
-            .field("worker_count", &self.workers.len())
+            .field("lane", &self.inner.lane)
+            .field("worker_count", &self.inner.worker_count())
             .finish_non_exhaustive()
     }
 }
@@ -123,39 +276,51 @@ impl ReaderPool {
         target: Arc<SharedDbTarget>,
         config: ReaderPoolConfig,
     ) -> Result<Self, AtmError> {
-        let pool_size = config.pool_size;
-        let queue_depth = config.queue_depth;
-        if pool_size == 0 || queue_depth == 0 {
+        if config.pool_size == 0
+            || config.queue_depth == 0
+            || config.max_quarantined == 0
+            || config.max_quarantined > config.pool_size
+        {
             return Err(AtmError::validation(format!(
-                "SQLite {lane} reader pool requires non-zero pool_size and queue_depth"
+                "SQLite {lane} reader pool requires non-zero pool_size/queue_depth and max_quarantined <= pool_size"
             )));
         }
-        let queue_per_worker = queue_depth.div_ceil(pool_size);
-        let mut workers = Vec::with_capacity(pool_size);
-        for index in 0..pool_size {
-            let connection = open_read_connection_for_target(target.as_ref())?;
-            let interrupt = connection.get_interrupt_handle();
-            let (sender, mut receiver) = tokio::sync::mpsc::channel::<Request>(queue_per_worker);
-            let worker_target = Arc::clone(&target);
-            thread::Builder::new()
-                .name(format!("atm-sqlite-{lane}-reader-{index}"))
-                .spawn(move || {
-                    while let Some(request) = receiver.blocking_recv() {
-                        let expired_in_queue = Instant::now() >= request.deadline;
-                        (request.run)(&connection, worker_target.as_ref(), expired_in_queue);
-                    }
-                })
-                .map_err(|error| {
-                    AtmError::daemon_unavailable(format!(
-                        "failed to start SQLite {lane} reader worker {index}: {error}"
-                    ))
-                })?;
-            workers.push(Worker { sender, interrupt });
+        let inner = Arc::new(PoolInner {
+            lane,
+            target,
+            queue_per_worker: config.queue_depth.div_ceil(config.pool_size),
+            config,
+            workers: Mutex::new(Vec::with_capacity(config.pool_size)),
+            next_worker_index: AtomicUsize::new(0),
+            next_worker_id: AtomicUsize::new(config.pool_size),
+            next_request: AtomicUsize::new(0),
+            metrics: Arc::new(ReaderLaneMetrics::new(lane, config.pool_size)),
+        });
+        for worker_id in 0..config.pool_size {
+            inner.spawn_worker(worker_id)?;
         }
-        Ok(Self {
-            workers,
-            next_worker: AtomicUsize::new(0),
-        })
+        Ok(Self { inner })
+    }
+
+    #[allow(
+        dead_code,
+        reason = "AV.1b attaches this established reader-lane seam to doctor diagnostics."
+    )]
+    pub(crate) fn metrics(&self) -> ReaderLaneMetricsSnapshot {
+        self.inner.metrics.snapshot()
+    }
+
+    /// The checkpoint owner records WAL health here; reader jobs never run a
+    /// checkpoint themselves because that would make an observability sample a
+    /// hidden writer-side operation.
+    #[allow(
+        dead_code,
+        reason = "The checkpoint owner attaches this AV.1a seam before AV.4 reports it."
+    )]
+    pub(crate) fn record_wal_health(&self, checkpoint_succeeded: bool, frames: u64) {
+        self.inner
+            .metrics
+            .record_wal_health(checkpoint_succeeded, frames);
     }
 
     pub(crate) async fn submit<T, F>(
@@ -168,42 +333,62 @@ impl ReaderPool {
         F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
     {
         let expires_at = Instant::now() + deadline;
-        let worker_index = self.reserve_worker()?;
+        let reservation = self.reserve_worker()?;
+        let request_id = self.inner.next_request.fetch_add(1, Ordering::Relaxed);
         let (reply, response) = tokio::sync::oneshot::channel();
         let request = Request {
+            id: request_id,
+            queued_at: Instant::now(),
             deadline: expires_at,
-            run: Box::new(move |connection, target, expired_in_queue| {
-                let result = if expired_in_queue {
-                    Err(ReadLaneError::DeadlineExpired {
+            run: Box::new(move |connection, target, disposition| {
+                let result = match disposition {
+                    RequestDisposition::Execute => operation(connection, target),
+                    RequestDisposition::ExpiredInQueue => Err(ReadLaneError::DeadlineExpired {
                         stage: "waiting in queue",
-                    })
-                } else {
-                    operation(connection, target)
+                    }),
+                    RequestDisposition::Rejected(error) => Err(error),
                 };
                 let _ = reply.send(result);
             }),
         };
+        self.inner
+            .metrics
+            .queue_depth
+            .fetch_add(1, Ordering::Relaxed);
         let remaining = expires_at.saturating_duration_since(Instant::now());
-        tokio::time::timeout(remaining, self.workers[worker_index].sender.send(request))
-            .await
-            .map_err(|_| ReadLaneError::DeadlineExpired {
-                stage: "waiting in queue",
-            })?
-            .map_err(|_| ReadLaneError::Unavailable {
-                message: "reader worker stopped".to_owned(),
-            })?;
+        match tokio::time::timeout(remaining, reservation.sender.send(request)).await {
+            Err(_) => {
+                self.inner
+                    .metrics
+                    .queue_depth
+                    .fetch_sub(1, Ordering::Relaxed);
+                self.inner
+                    .metrics
+                    .expired_in_queue
+                    .fetch_add(1, Ordering::Relaxed);
+                return Err(ReadLaneError::DeadlineExpired {
+                    stage: "waiting in queue",
+                });
+            }
+            Ok(Err(_)) => {
+                self.inner
+                    .metrics
+                    .queue_depth
+                    .fetch_sub(1, Ordering::Relaxed);
+                return Err(ReadLaneError::Unavailable {
+                    message: "reader worker stopped".to_owned(),
+                });
+            }
+            Ok(Ok(())) => {}
+        }
         let remaining = expires_at.saturating_duration_since(Instant::now());
-        tokio::time::timeout(remaining, response)
-            .await
-            .map_err(|_| {
-                self.workers[worker_index].interrupt.interrupt();
-                ReadLaneError::DeadlineExpired {
-                    stage: "executing active query",
-                }
-            })?
-            .map_err(|_| ReadLaneError::Unavailable {
+        match tokio::time::timeout(remaining, response).await {
+            Err(_) => Err(self.expire_waiting_request(reservation, request_id)),
+            Ok(Err(_)) => Err(ReadLaneError::Unavailable {
                 message: "reader worker closed its reply channel".to_owned(),
-            })?
+            }),
+            Ok(Ok(result)) => result,
+        }
     }
 
     pub(crate) fn submit_blocking<T, F>(
@@ -216,26 +401,41 @@ impl ReaderPool {
         F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
     {
         let expires_at = Instant::now() + deadline;
-        let worker_index = self.reserve_worker()?;
+        let reservation = self.reserve_worker()?;
+        let request_id = self.inner.next_request.fetch_add(1, Ordering::Relaxed);
         let (reply, response) = mpsc::sync_channel(1);
         let mut request = Request {
+            id: request_id,
+            queued_at: Instant::now(),
             deadline: expires_at,
-            run: Box::new(move |connection, target, expired_in_queue| {
-                let result = if expired_in_queue {
-                    Err(ReadLaneError::DeadlineExpired {
+            run: Box::new(move |connection, target, disposition| {
+                let result = match disposition {
+                    RequestDisposition::Execute => operation(connection, target),
+                    RequestDisposition::ExpiredInQueue => Err(ReadLaneError::DeadlineExpired {
                         stage: "waiting in queue",
-                    })
-                } else {
-                    operation(connection, target)
+                    }),
+                    RequestDisposition::Rejected(error) => Err(error),
                 };
                 let _ = reply.send(result);
             }),
         };
         loop {
-            match self.workers[worker_index].sender.try_send(request) {
+            self.inner
+                .metrics
+                .queue_depth
+                .fetch_add(1, Ordering::Relaxed);
+            match reservation.sender.try_send(request) {
                 Ok(()) => break,
                 Err(tokio::sync::mpsc::error::TrySendError::Full(returned)) => {
+                    self.inner
+                        .metrics
+                        .queue_depth
+                        .fetch_sub(1, Ordering::Relaxed);
                     if Instant::now() >= expires_at {
+                        self.inner
+                            .metrics
+                            .expired_in_queue
+                            .fetch_add(1, Ordering::Relaxed);
                         return Err(ReadLaneError::DeadlineExpired {
                             stage: "waiting in queue",
                         });
@@ -244,6 +444,10 @@ impl ReaderPool {
                     thread::park_timeout(Duration::from_millis(2));
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                    self.inner
+                        .metrics
+                        .queue_depth
+                        .fetch_sub(1, Ordering::Relaxed);
                     return Err(ReadLaneError::Unavailable {
                         message: "reader worker stopped".to_owned(),
                     });
@@ -253,37 +457,265 @@ impl ReaderPool {
         response
             .recv_timeout(expires_at.saturating_duration_since(Instant::now()))
             .map_err(|error| match error {
-                RecvTimeoutError::Timeout => {
-                    self.workers[worker_index].interrupt.interrupt();
-                    ReadLaneError::DeadlineExpired {
-                        stage: "executing active query",
-                    }
+                mpsc::RecvTimeoutError::Timeout => {
+                    self.expire_waiting_request(reservation, request_id)
                 }
-                RecvTimeoutError::Disconnected => ReadLaneError::Unavailable {
+                mpsc::RecvTimeoutError::Disconnected => ReadLaneError::Unavailable {
                     message: "reader worker closed its reply channel".to_owned(),
                 },
             })?
     }
 
-    fn reserve_worker(&self) -> Result<usize, ReadLaneError> {
-        let count = self.workers.len();
+    fn reserve_worker(&self) -> Result<WorkerReservation, ReadLaneError> {
+        self.inner.reserve_worker()
+    }
+
+    fn schedule_quarantine(&self, reservation: WorkerReservation, request_id: usize) {
+        let grace = self.inner.config.interrupt_grace;
+        let pool = Arc::clone(&self.inner);
+        thread::spawn(move || {
+            thread::sleep(grace);
+            if reservation.state.active.load(Ordering::Acquire)
+                && reservation.state.active_request.load(Ordering::Acquire) == request_id
+            {
+                pool.quarantine_if_still_active(reservation.id, request_id);
+            }
+        });
+    }
+
+    fn expire_waiting_request(
+        &self,
+        reservation: WorkerReservation,
+        request_id: usize,
+    ) -> ReadLaneError {
+        if reservation.state.active.load(Ordering::Acquire)
+            && reservation.state.active_request.load(Ordering::Acquire) == request_id
+        {
+            reservation.interrupt.interrupt();
+            self.inner
+                .metrics
+                .interrupted_while_active
+                .fetch_add(1, Ordering::Relaxed);
+            self.schedule_quarantine(reservation, request_id);
+            ReadLaneError::DeadlineExpired {
+                stage: "executing active query",
+            }
+        } else {
+            self.inner
+                .metrics
+                .expired_in_queue
+                .fetch_add(1, Ordering::Relaxed);
+            ReadLaneError::DeadlineExpired {
+                stage: "waiting in queue",
+            }
+        }
+    }
+}
+
+impl PoolInner {
+    fn worker_count(&self) -> usize {
+        self.workers.lock().expect("reader pool lock").len()
+    }
+
+    fn spawn_worker(self: &Arc<Self>, id: usize) -> Result<(), AtmError> {
+        let connection = open_read_connection_for_target(self.target.as_ref())?;
+        let interrupt = Arc::new(connection.get_interrupt_handle());
+        let (sender, receiver) = tokio::sync::mpsc::channel(self.queue_per_worker);
+        let state = Arc::new(WorkerState {
+            status: AtomicUsize::new(READY),
+            active: AtomicBool::new(false),
+            active_request: AtomicUsize::new(NO_REQUEST),
+        });
+        let weak = Arc::downgrade(self);
+        let worker_state = Arc::clone(&state);
+        let worker_metrics = Arc::clone(&self.metrics);
+        let worker_target = Arc::clone(&self.target);
+        let lane = self.lane;
+        thread::Builder::new()
+            .name(format!("atm-sqlite-{lane}-reader-{id}"))
+            .spawn(move || {
+                let retired = run_worker(
+                    connection,
+                    Arc::clone(&worker_target),
+                    receiver,
+                    worker_state,
+                    worker_metrics,
+                );
+                // The SQLite connection has to be dropped before a replacement
+                // exists; this is the quarantine lifecycle's hard resource cap.
+                if retired && let Some(pool) = Weak::upgrade(&weak) {
+                    pool.retire_and_replace(id);
+                }
+            })
+            .map_err(|error| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to start SQLite {lane} reader worker {id}: {error}"
+                ))
+            })?;
+        self.workers.lock().expect("reader pool lock").push(Worker {
+            id,
+            sender,
+            interrupt,
+            state,
+        });
+        Ok(())
+    }
+
+    fn reserve_worker(&self) -> Result<WorkerReservation, ReadLaneError> {
+        let workers = self.workers.lock().expect("reader pool lock");
+        let quarantined = workers
+            .iter()
+            .filter(|worker| worker.state.status.load(Ordering::Acquire) == QUARANTINED)
+            .count();
+        if quarantined >= self.config.max_quarantined {
+            self.metrics
+                .quarantine_exhausted_rejections
+                .fetch_add(1, Ordering::Relaxed);
+            self.metrics.saturated.fetch_add(1, Ordering::Relaxed);
+            return Err(ReadLaneError::Saturated {
+                reason: "reader quarantine budget exhausted",
+            });
+        }
+        let count = workers.len();
         if count == 0 {
             return Err(ReadLaneError::Unavailable {
                 message: "reader pool has no workers".to_owned(),
             });
         }
-        let start = self.next_worker.fetch_add(1, Ordering::Relaxed);
+        let start = self.next_worker_index.fetch_add(1, Ordering::Relaxed);
         for offset in 0..count {
-            let index = (start + offset) % count;
-            if !self.workers[index].sender.is_closed() && self.workers[index].sender.capacity() > 0
+            let worker = &workers[(start + offset) % count];
+            if worker.state.status.load(Ordering::Acquire) == READY
+                && !worker.sender.is_closed()
+                && worker.sender.capacity() > 0
             {
-                return Ok(index);
+                return Ok(WorkerReservation {
+                    id: worker.id,
+                    sender: worker.sender.clone(),
+                    interrupt: Arc::clone(&worker.interrupt),
+                    state: Arc::clone(&worker.state),
+                });
             }
         }
+        self.metrics.saturated.fetch_add(1, Ordering::Relaxed);
         Err(ReadLaneError::Saturated {
             reason: "all bounded reader queues are full",
         })
     }
+
+    fn quarantine_if_still_active(&self, worker_id: usize, request_id: usize) {
+        let workers = self.workers.lock().expect("reader pool lock");
+        let Some(worker) = workers.iter().find(|worker| worker.id == worker_id) else {
+            return;
+        };
+        if !worker.state.active.load(Ordering::Acquire)
+            || worker.state.active_request.load(Ordering::Acquire) != request_id
+        {
+            return;
+        }
+        let existing = workers
+            .iter()
+            .filter(|candidate| candidate.state.status.load(Ordering::Acquire) == QUARANTINED)
+            .count();
+        if existing >= self.config.max_quarantined {
+            return;
+        }
+        if worker
+            .state
+            .status
+            .compare_exchange(READY, QUARANTINED, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            self.metrics.quarantined.fetch_add(1, Ordering::Relaxed);
+            self.metrics
+                .current_quarantined_workers
+                .fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn retire_and_replace(self: &Arc<Self>, worker_id: usize) {
+        let was_quarantined = {
+            let mut workers = self.workers.lock().expect("reader pool lock");
+            let Some(position) = workers.iter().position(|worker| worker.id == worker_id) else {
+                return;
+            };
+            let worker = workers.remove(position);
+            worker.state.status.load(Ordering::Acquire) == QUARANTINED
+        };
+        if !was_quarantined {
+            return;
+        }
+        self.metrics
+            .current_quarantined_workers
+            .fetch_sub(1, Ordering::Relaxed);
+        self.metrics
+            .retired_replaced_workers
+            .fetch_add(1, Ordering::Relaxed);
+        self.metrics.pool_size.fetch_sub(1, Ordering::Relaxed);
+        let replacement_id = self.next_worker_id.fetch_add(1, Ordering::Relaxed);
+        if self.spawn_worker(replacement_id).is_err() {
+            return;
+        }
+        self.metrics.pool_size.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+fn run_worker(
+    connection: Connection,
+    target: Arc<SharedDbTarget>,
+    mut receiver: tokio::sync::mpsc::Receiver<Request>,
+    state: Arc<WorkerState>,
+    metrics: Arc<ReaderLaneMetrics>,
+) -> bool {
+    while let Some(request) = receiver.blocking_recv() {
+        let now = Instant::now();
+        metrics
+            .queue_depth
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |depth| {
+                depth.checked_sub(1)
+            })
+            .ok();
+        metrics.wait_nanos.fetch_add(
+            u64::try_from(now.saturating_duration_since(request.queued_at).as_nanos())
+                .unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+        if state.status.load(Ordering::Acquire) != READY {
+            (request.run)(
+                &connection,
+                target.as_ref(),
+                RequestDisposition::Rejected(ReadLaneError::Saturated {
+                    reason: "reader worker is quarantined",
+                }),
+            );
+            continue;
+        }
+        if now >= request.deadline {
+            metrics.expired_in_queue.fetch_add(1, Ordering::Relaxed);
+            (request.run)(
+                &connection,
+                target.as_ref(),
+                RequestDisposition::ExpiredInQueue,
+            );
+            continue;
+        }
+        state.active_request.store(request.id, Ordering::Release);
+        state.active.store(true, Ordering::Release);
+        metrics.in_flight.fetch_add(1, Ordering::Relaxed);
+        let started = Instant::now();
+        (request.run)(&connection, target.as_ref(), RequestDisposition::Execute);
+        metrics.execution_nanos.fetch_add(
+            u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+        metrics.in_flight.fetch_sub(1, Ordering::Relaxed);
+        state.active.store(false, Ordering::Release);
+        state.active_request.store(NO_REQUEST, Ordering::Release);
+        if state.status.load(Ordering::Acquire) == QUARANTINED {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -294,7 +726,24 @@ mod tests {
     };
     use crate::shared_db::SharedDbTarget;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
+
+    static NEXT_TEST_POOL_ID: AtomicUsize = AtomicUsize::new(1);
+
+    fn test_pool(config: ReaderPoolConfig) -> ReaderPool {
+        ReaderPool::start(
+            "test",
+            Arc::new(SharedDbTarget::InMemory {
+                uri: format!(
+                    "file:reader-pool-test-{}?mode=memory&cache=shared",
+                    NEXT_TEST_POOL_ID.fetch_add(1, Ordering::Relaxed)
+                ),
+            }),
+            config,
+        )
+        .expect("reader pool")
+    }
 
     #[test]
     fn documented_default_connection_budget_is_within_the_cap() {
@@ -325,19 +774,12 @@ mod tests {
 
     #[tokio::test]
     async fn two_reader_workers_execute_independent_queries_in_parallel() {
-        let database = tempfile::NamedTempFile::new().expect("temporary database path");
-        rusqlite::Connection::open(database.path()).expect("initialize sqlite file");
-        let pool = ReaderPool::start(
-            "test",
-            Arc::new(SharedDbTarget::Path(database.path().to_path_buf())),
-            ReaderPoolConfig {
-                pool_size: 2,
-                queue_depth: 2,
-                interrupt_grace: Duration::from_millis(250),
-                max_quarantined: 2,
-            },
-        )
-        .expect("reader pool");
+        let pool = test_pool(ReaderPoolConfig {
+            pool_size: 2,
+            queue_depth: 2,
+            interrupt_grace: Duration::from_millis(250),
+            max_quarantined: 2,
+        });
         let started = Instant::now();
         let (left, right) = tokio::join!(
             pool.submit(Duration::from_secs(1), |_, _| {
@@ -355,5 +797,231 @@ mod tests {
             started.elapsed() < Duration::from_millis(145),
             "two worker pool must not serialize independent reads"
         );
+    }
+
+    #[tokio::test]
+    async fn bounded_queue_expires_and_rejects_saturation_without_serializing_reads() {
+        let pool = Arc::new(test_pool(ReaderPoolConfig {
+            pool_size: 1,
+            queue_depth: 1,
+            interrupt_grace: Duration::from_millis(20),
+            max_quarantined: 1,
+        }));
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let active_pool = Arc::clone(&pool);
+        let active_task = tokio::spawn(async move {
+            active_pool
+                .submit(Duration::from_secs(1), move |_, _| {
+                    let _ = started_tx.send(());
+                    std::thread::sleep(Duration::from_millis(80));
+                    Ok::<_, atm_storage::ReadLaneError>(())
+                })
+                .await
+        });
+        started_rx.await.expect("worker started");
+        // The second request waits in the bounded queue and reaches its own
+        // deadline without being mistaken for an active SQLite statement.
+        let queued = pool
+            .submit(Duration::from_millis(10), |_, _| {
+                Ok::<_, atm_storage::ReadLaneError>(())
+            })
+            .await
+            .expect_err("queued request must expire");
+        assert_eq!(
+            queued,
+            atm_storage::ReadLaneError::DeadlineExpired {
+                stage: "waiting in queue"
+            }
+        );
+        let saturated = pool
+            .submit(Duration::from_millis(20), |_, _| {
+                Ok::<_, atm_storage::ReadLaneError>(())
+            })
+            .await
+            .expect_err("full pool plus queue must fail closed");
+        assert!(matches!(
+            saturated,
+            atm_storage::ReadLaneError::Saturated { .. }
+        ));
+        active_task
+            .await
+            .expect("join active")
+            .expect("active request");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        let metrics = pool.metrics();
+        assert!(metrics.expired_in_queue >= 1);
+        assert!(metrics.saturated >= 1);
+        assert_eq!(metrics.queue_depth, 0);
+    }
+
+    #[tokio::test]
+    async fn nonresponsive_worker_is_quarantined_then_replaced_only_after_returning() {
+        let pool = Arc::new(test_pool(ReaderPoolConfig {
+            pool_size: 1,
+            queue_depth: 1,
+            interrupt_grace: Duration::from_millis(20),
+            max_quarantined: 1,
+        }));
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let active_pool = Arc::clone(&pool);
+        let active_task = tokio::spawn(async move {
+            active_pool
+                .submit(Duration::from_millis(15), move |_, _| {
+                    let _ = started_tx.send(());
+                    // Deliberately ignores SQLite's interrupt handle: this is
+                    // the adversarial worker required by A3c.
+                    std::thread::sleep(Duration::from_millis(100));
+                    Ok::<_, atm_storage::ReadLaneError>(())
+                })
+                .await
+        });
+        started_rx.await.expect("worker started");
+        let timed_out = active_task
+            .await
+            .expect("join active")
+            .expect_err("deadline");
+        assert_eq!(
+            timed_out,
+            atm_storage::ReadLaneError::DeadlineExpired {
+                stage: "executing active query"
+            }
+        );
+        tokio::time::sleep(Duration::from_millis(35)).await;
+        let quarantined = pool.metrics();
+        assert_eq!(quarantined.current_quarantined_workers, 1);
+        assert_eq!(quarantined.pool_size, 1, "no early replacement is allowed");
+        let exhausted = pool
+            .submit(Duration::from_millis(20), |_, _| {
+                Ok::<_, atm_storage::ReadLaneError>(())
+            })
+            .await
+            .expect_err("quarantine exhaustion rejects new reads");
+        assert!(matches!(
+            exhausted,
+            atm_storage::ReadLaneError::Saturated {
+                reason: "reader quarantine budget exhausted"
+            }
+        ));
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let metrics = pool.metrics();
+                if metrics.current_quarantined_workers == 0
+                    && metrics.retired_replaced_workers == 1
+                    && metrics.pool_size == 1
+                {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("returned worker must retire and be replaced after its connection drops");
+        assert_eq!(
+            pool.submit(Duration::from_millis(100), |_, _| {
+                Ok::<_, atm_storage::ReadLaneError>("reclaimed")
+            })
+            .await
+            .expect("replacement serves a new request"),
+            "reclaimed"
+        );
+        let metrics = pool.metrics();
+        assert_eq!(metrics.quarantined, 1);
+        assert_eq!(metrics.interrupted_while_active, 1);
+        assert_eq!(metrics.quarantine_exhausted_rejections, 1);
+    }
+
+    #[tokio::test]
+    async fn active_sqlite_statement_is_interrupted_and_worker_capacity_is_reclaimed() {
+        let pool = test_pool(ReaderPoolConfig {
+            pool_size: 1,
+            queue_depth: 1,
+            interrupt_grace: Duration::from_millis(100),
+            max_quarantined: 1,
+        });
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (interrupted_tx, interrupted_rx) = std::sync::mpsc::sync_channel(1);
+        let timed_out = pool
+            .submit(Duration::from_millis(15), move |connection, _| {
+                let _ = started_tx.send(());
+                let result = connection.query_row(
+                    "WITH RECURSIVE count(value) AS (
+                         VALUES(0)
+                         UNION ALL
+                         SELECT value + 1 FROM count WHERE value < 1000000000
+                     )
+                     SELECT sum(value) FROM count;",
+                    [],
+                    |_| Ok(()),
+                );
+                let interrupted = matches!(
+                    &result,
+                    Err(rusqlite::Error::SqliteFailure(error, _))
+                        if error.code == rusqlite::ErrorCode::OperationInterrupted
+                );
+                let _ = interrupted_tx.send(interrupted);
+                result.map_err(|error| atm_storage::ReadLaneError::Unavailable {
+                    message: error.to_string(),
+                })
+            })
+            .await
+            .expect_err("active recursive statement must reach its deadline");
+        assert_eq!(
+            timed_out,
+            atm_storage::ReadLaneError::DeadlineExpired {
+                stage: "executing active query"
+            }
+        );
+        started_rx.await.expect("statement started before deadline");
+        assert!(
+            interrupted_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("worker reports query termination"),
+            "the worker must observe SQLite's interrupt, not merely abandon the query"
+        );
+        assert_eq!(
+            pool.submit(Duration::from_millis(100), |connection, _| {
+                connection
+                    .query_row("SELECT 1;", [], |row| row.get::<_, i64>(0))
+                    .map_err(|error| atm_storage::ReadLaneError::Unavailable {
+                        message: error.to_string(),
+                    })
+            })
+            .await
+            .expect("interrupted worker remains reusable"),
+            1
+        );
+        let metrics = pool.metrics();
+        assert_eq!(metrics.interrupted_while_active, 1);
+        assert_eq!(metrics.current_quarantined_workers, 0);
+        assert_eq!(metrics.pool_size, 1);
+    }
+
+    #[tokio::test]
+    async fn metrics_snapshot_exposes_lane_deadline_and_wal_health_seams() {
+        let pool = test_pool(ReaderPoolConfig {
+            pool_size: 1,
+            queue_depth: 1,
+            interrupt_grace: Duration::from_millis(20),
+            max_quarantined: 1,
+        });
+        pool.record_wal_health(true, 7);
+        pool.submit(Duration::from_millis(100), |_, _| {
+            Ok::<_, atm_storage::ReadLaneError>(())
+        })
+        .await
+        .expect("ordinary read");
+        tokio::time::timeout(Duration::from_millis(100), async {
+            while pool.metrics().in_flight != 0 {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .expect("worker reports completion after sending its result");
+        let metrics = pool.metrics();
+        assert_eq!(metrics.lane, "test");
+        assert_eq!(metrics.last_checkpoint_succeeded, Some(true));
+        assert_eq!(metrics.current_wal_frames, Some(7));
+        assert_eq!(metrics.pool_size, 1);
+        assert_eq!(metrics.in_flight, 0);
     }
 }
