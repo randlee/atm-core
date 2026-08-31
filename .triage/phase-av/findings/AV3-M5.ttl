@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-M5>
+  a triage:Finding ;
+  triage:findingId "AV3-M5" ;
+  triage:title "just lint does not run cargo test -p atm-architecture, so Rust architecture gates are invisible to lint" ;
+  triage:description "QA-r3 tooling gap: `just lint` reported 33/33 at the failing HEAD 8905f1046 because it runs only the Python gates (.just/*.py) and never `cargo test -p atm-architecture`; the AV.3 Rust architecture gates (D1/D2/D2b composition gates in crates/atm-architecture/tests/boundary_enforcement.rs) are therefore invisible to the lint entry point that devs and QA cite as evidence. Relevant to AV.3 D4's permanent CI-liveness-gate intent. Fix: wire `cargo test -p atm-architecture` (or a dedicated `just arch-gates` recipe invoked by lint) into the default lint path and record it in the sprint doc's D4 section." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "tooling" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T06:35:48Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T06:22:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T06:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M5/av3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M5/av4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-M5/av3-1>
+  a triage:Occurrence ;
+  triage:file ".just/run_lint.py" ;
+  triage:line 59 ;
+  triage:snippet "CARGO_LINT_ORDER = (\"fmt\", \"clippy\", \"deny\", \"shear\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3/8905f1046> .
+
+<urn:atm:triage:occurrence/AV3-M5/av4-1>
+  a triage:Occurrence ;
+  triage:file ".just/run_lint.py" ;
+  triage:line 59 ;
+  triage:snippet "CARGO_LINT_ORDER = (\"fmt\", \"clippy\", \"deny\", \"shear\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/a36bff376> .
+
+<urn:atm:triage:worktree/AV3/8905f1046>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV4/a36bff376>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:orderIndex 5 .

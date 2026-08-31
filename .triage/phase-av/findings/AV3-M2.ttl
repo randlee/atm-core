@@ -1,0 +1,84 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-M2>
+  a triage:Finding ;
+  triage:findingId "AV3-M2" ;
+  triage:title "handler_region scans whole file without the production/#[cfg(test)] split the D1 test applies" ;
+  triage:description "handler_region in boundary_enforcement.rs scans the entire router file without splitting off the #[cfg(test)] module the way the D1 test does; a same-named test-module fn appearing ahead of the real handler would be scanned instead of the production handler. Reviewer id RBQA-AV3-006. Expected to be remediated together with AV3-B3." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T05:59:41Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T05:37:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T05:33:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M2/AV3-M2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M2/AV3-M2-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-M2/AV3-M2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3760 ;
+  triage:snippet "fn handler_region(source: &str, handlers: &[&str]) -> String {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
+
+<urn:atm:triage:occurrence/AV3-M2/AV3-M2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3760 ;
+  triage:snippet "fn handler_region(source: &str, handlers: &[&str]) -> String {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-5/4a97f0dd1> .
+
+<urn:atm:triage:worktree/AV3-1/8938ed6ab>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "8938ed6ab" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV3-2/db08f4591>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "db08f4591" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV3-3/f37063fdd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "f37063fdd" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV3-4/2c6040b28>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV3-5/4a97f0dd1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd1" ;
+  triage:orderIndex 5 .

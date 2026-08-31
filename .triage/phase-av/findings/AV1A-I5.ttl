@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV1A-I5>
+  a triage:Finding ;
+  triage:findingId "AV1A-I5" ;
+  triage:title "A3e not literally met: no test counts real opened connections (12 steady-state / <=22 worst-case)" ;
+  triage:description "No test counts real opened connections; the three related tests validate budget arithmetic and the error message only. Acceptance A3e requires asserting 12 steady-state / <=22 worst-case by counting opened connections in a test build (instrumented open counter). req-qa 005." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T09:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1A ;
+  triage:foundAt "2026-08-31T06:33:00Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/AV1A/16421b24d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV1B/043aba984>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV2/51de5f554>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV3/8905f1046>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV4/a36bff376>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:orderIndex 5 .

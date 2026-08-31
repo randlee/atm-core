@@ -1,0 +1,72 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-I1>
+  a triage:Finding ;
+  triage:findingId "AV3-I1" ;
+  triage:title "No crates/-wide BlockingCoreBridge absence scan (A1 part 1)" ;
+  triage:description "A1 requires a crates/-wide zero-occurrence check for the BlockingCoreBridge identifier after the rename. The only automated check built is single-file (crates/atm-runtime/.../storage_and_nudge_router.rs) and inert until the rename marker appears there. A stray reintroduction in any other crate is caught by nothing built this sprint. Reviewer id RBQA-AV3-004." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T05:59:41Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T05:33:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-I1/AV3-I1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-I1/AV3-I1-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_read_concurrency_gates.py" ;
+  triage:line 1 ;
+  triage:snippet "Single-file gate check; workspace-wide absence check needed per A1" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
+
+<urn:atm:triage:worktree/AV3-1/8938ed6a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "8938ed6a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV3-2/db08f459>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "db08f459" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV3-3/f37063fdd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "f37063fdd" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV3-4/2c6040b28>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV3-5/4a97f0dd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd" ;
+  triage:orderIndex 5 .
