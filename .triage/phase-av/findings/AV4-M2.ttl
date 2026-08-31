@@ -1,0 +1,106 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV4-M2>
+  a triage:Finding ;
+  triage:findingId "AV4-M2" ;
+  triage:title "partial_artifact hard-failure branch only reachable from unit tests" ;
+  triage:description "scripts/smoke/read_benchmark.py has a partial_artifact hard-failure branch that no production code path sets; it is exercised only by scripts/smoke/test_read_benchmark.py. D7 requires partial artifacts to be a real hard campaign failure, so the production path must detect and set it (or the dead branch must go). Source: quality-mgr phase-av-sprint-av4-qa-r1, PR #1114 (REQ-AV4-4)." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AV4" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T19:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-08-31T02:31:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-M2/AV4-M2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-M2/AV4-M2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-M2/AV4-M2-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-M2/AV4-M2-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV4-M2/AV4-M2-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 175 ;
+  triage:snippet "partial_artifact: bool = False," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/AV5/64a32e6f9> .
+
+<urn:atm:triage:occurrence/AV4-M2/AV4-M2-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 189 ;
+  triage:snippet "if partial_artifact:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/AV5/64a32e6f9> .
+
+<urn:atm:triage:occurrence/AV4-M2/AV4-M2-3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_read_benchmark.py" ;
+  triage:line 62 ;
+  triage:snippet "def test_missing_seed_warmup_and_partial_artifacts_fail_closed(self) -> None:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/AV5/64a32e6f9> .
+
+<urn:atm:triage:occurrence/AV4-M2/AV4-M2-4>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_read_benchmark.py" ;
+  triage:line 78 ;
+  triage:snippet "partial_artifact=True," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/AV5/64a32e6f9> .
+
+<urn:atm:triage:worktree/AV1/d2c8e5f0a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "d2c8e5f0a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV2/db08f4591>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "db08f4591" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV3/f37063fdd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "f37063fdd" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV4/2c6040b28>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV5/64a32e6f9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:orderIndex 5 .

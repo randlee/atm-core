@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Provenance: Phase AV dispatched by fenix (phase lead) on 2026-08-31 after plan
+# PR #1108 merged (develop@db08f4591). Per Rand's directive all stacked sprints
+# run in parallel without waiting for predecessor QA; only real must_follow
+# dev-push dependencies serialize (AV.1b after AV.1a). Assignment times are the
+# ATM dispatch times; completion times are the dev-complete evidence message.
+
+triage:a1 a triage:Assignment ;
+    triage:ofSprint triage:AV1A ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-31T01:44:00Z"^^xsd:dateTime .
+
+triage:a2 a triage:Assignment ;
+    triage:ofSprint triage:AV2 ;
+    triage:assignedTo "Cipher-311d" ;
+    triage:assignedAt "2026-08-31T01:44:00Z"^^xsd:dateTime .
+
+# AV.2 completion: Cipher-311d msg 01M1ARDAQC56D8A6PJYBR0EVBS (PR #1110, QA PASS)
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:AV2 ;
+    triage:at "2026-08-31T01:54:44Z"^^xsd:dateTime .
+
+triage:a3 a triage:Assignment ;
+    triage:ofSprint triage:AV4 ;
+    triage:assignedTo "Cipher-311d" ;
+    triage:assignedAt "2026-08-31T02:11:00Z"^^xsd:dateTime .
+
+triage:a4 a triage:Assignment ;
+    triage:ofSprint triage:AV3 ;
+    triage:assignedTo "Crimson-2f4c" ;
+    triage:assignedAt "2026-08-31T02:12:00Z"^^xsd:dateTime .
+
+# AV.4 dev completion (harness scope): Cipher-311d msg 01M1AT1ZQXN00TE0XKRYRRY2JP (PR #1114)
+triage:c3 a triage:Completion ;
+    triage:ofSprint triage:AV4 ;
+    triage:at "2026-08-31T02:23:29Z"^^xsd:dateTime .

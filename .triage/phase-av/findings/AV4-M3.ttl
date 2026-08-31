@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV4-M3>
+  a triage:Finding ;
+  triage:findingId "AV4-M3" ;
+  triage:title "baselines.json skeleton revision key never read/validated; no monotonic-floor enforcement" ;
+  triage:description "site/reports/read-query-benchmark/baselines.json declares a revision key that scripts/smoke/read_benchmark.py never reads or validates, and there is no non-decreasing-floor enforcement analogous to the existing require_non_decreasing_baselines(). Expected to be subsumed by the AV4-B1 rework onto benchmark_schema BaselineSet/BaselineEntry, which already carries revision/provenance and monotonic checks." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AV4" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-08-31T02:31:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-M3/AV4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-M3/AV4-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-M3/AV4-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV4-M3/AV4-1>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/baselines.json" ;
+  triage:line 3 ;
+  triage:snippet "\"revision\": 1," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/64a32e6f9> .
+
+<urn:atm:triage:occurrence/AV4-M3/AV4-2>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/baselines.json" ;
+  triage:line 4 ;
+  triage:snippet "\"revision\": 1," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/64a32e6f9> .
+
+<urn:atm:triage:occurrence/AV4-M3/AV4-3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 197 ;
+  triage:snippet "def load_read_baselines(path: Path = BASELINES_PATH) -> dict[str, dict[str, dict[str, Any]]:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/64a32e6f9> .
+
+<urn:atm:triage:worktree/AV4/64a32e6f9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:orderIndex 5 .

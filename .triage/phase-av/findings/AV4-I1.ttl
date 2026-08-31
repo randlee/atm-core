@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV4-I1>
+  a triage:Finding ;
+  triage:findingId "AV4-I1" ;
+  triage:title "D7 normative composition not implemented: just benchmark-read bypasses the three named subordinate targets" ;
+  triage:description "Justfile:263-264 benchmark-read invokes scripts/smoke/read_benchmark.py --family all directly and never runs benchmark-read-fanout, benchmark-query-fts, benchmark-read-under-write-load, contradicting the D7 contract text that benchmark-read composes those three targets. Fix: compose literally (or amend the sprint doc's D7 wording via plan amendment). Source: quality-mgr phase-av-sprint-av4-qa-r1, PR #1114 (ARCH-AV4-2)." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AV4" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T02:35:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-08-31T02:31:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-I1/AV4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV4-I1/AV4-1>
+  a triage:Occurrence ;
+  triage:file "Justfile" ;
+  triage:line 264 ;
+  triage:snippet "{{python_cmd}} scripts/smoke/read_benchmark.py --family all" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/av4/64a32e6f9> .
+
+<urn:atm:triage:worktree/av4/64a32e6f9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:orderIndex 5 .

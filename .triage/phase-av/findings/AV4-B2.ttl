@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV4-B2>
+  a triage:Finding ;
+  triage:findingId "AV4-B2" ;
+  triage:title "D5/A6 reader-lane diagnostics are fabricated placeholder zeros that read as healthy evidence" ;
+  triage:description "scripts/smoke/read_benchmark.py _diagnostics() (:354-367) hardcodes wait_ms {0,0,0}, saturation_events 0, quarantine_gauge 0, wal_health {status: not-exposed-by-cli}; RequestObservation.timed_out (:114) is never set true so deadline_expiries is structurally always 0. A committed report would show zero saturation/quarantine/WAL activity during a genuine regression. Missing vs AV.1a D5 names: in-flight count, retired/replaced workers, quarantine-exhausted rejections, WAL last-checkpoint outcome/frame count, three deadline-outcome categories. Fix: emit explicit null/unimplemented with the full AV.1a D5 field-name skeleton (never fabricated zeros) or wire a real metrics surface. Source: quality-mgr phase-av-sprint-av4-qa-r1, PR #1114 (REQ-AV4-1, ARCH-AV4-3)." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AV4" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T19:34:15Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-08-31T02:31:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-B2/AV4-B2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV4-B2/AV4-B2-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 410 ;
+  triage:snippet "saturation_events: unavailable()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/64a32e6f9> .
+
+<urn:atm:triage:worktree/AV4/64a32e6f9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AV3/2c6040b28>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV2/f37063fdd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "f37063fdd" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV1B/db08f4591>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "db08f4591" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV1A/d2c8e5f0a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "d2c8e5f0a" ;
+  triage:orderIndex 1 .
