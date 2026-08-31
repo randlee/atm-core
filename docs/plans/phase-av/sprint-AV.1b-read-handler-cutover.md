@@ -40,7 +40,10 @@ atomicity rationale. Evidence base:
 
 ## Deliverables
 
-This is the authoritative deliverable checklist.
+This is the authoritative deliverable checklist. Every listed
+deliverable is expected to land at a production-ready level for the
+scope this sprint claims; partial or shape-only completion fails the
+sprint.
 
 - [ ] D1 — Read-family handler cutover in
       `storage_and_nudge_router.rs`: list (:493-511), peek (:514-533),

@@ -31,7 +31,10 @@ written requirement.
 
 ## Deliverables
 
-This is the authoritative deliverable checklist.
+This is the authoritative deliverable checklist. Every listed
+deliverable is expected to land at a production-ready level for the
+scope this sprint claims; partial or shape-only completion fails the
+sprint.
 
 - [ ] D1 — `docs/requirements.md` amendments (normative MUST language):
       read-family operations (read/peek/list/doctor/query) MUST be
@@ -53,6 +56,27 @@ This is the authoritative deliverable checklist.
 - [ ] D4 — Phase-AM deletion ledger updated: `BlockingCoreBridge` and
       sync read-bridge remnants added as deletion targets with their
       file paths.
+
+## Contract samples
+
+Indicative normative wording (D1/D2); final numbering per requirements.md
+conventions, semantics may not weaken:
+
+```text
+R-READ-CONC-1 (MUST): Mailbox read-family operations (read, peek, list,
+doctor, query) MUST be serviced concurrently by a bounded reader lane and
+MUST NOT share a concurrency bound with, or be ordered behind, any write
+or housekeeping lane.
+
+R-READ-CONC-2 (MUST): Read deadlines MUST be enforced cancellably; reads
+beyond reader-lane capacity MUST fail explicitly (saturation/deadline),
+never queue indefinitely.
+
+R-STATE-RACE-1 (MUST NOT): Primary message records are immutable; mutable
+message state (read/ack/seen) is race-tolerant — a read racing a state
+change may return either value. No requirement may demand read-your-writes,
+snapshot pinning, or reader/writer fencing on mailbox reads.
+```
 
 ## Acceptance criteria
 

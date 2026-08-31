@@ -30,7 +30,10 @@ carries the cross-crate surface work. Evidence base and root cause:
 
 ## Deliverables
 
-This is the authoritative deliverable checklist.
+This is the authoritative deliverable checklist. Every listed
+deliverable is expected to land at a production-ready level for the
+scope this sprint claims; partial or shape-only completion fails the
+sprint.
 
 - [ ] D1 — `AsyncMailboxReader` capability in `atm-storage`
       (`contract.rs`): a separately named async read-only trait/handle,

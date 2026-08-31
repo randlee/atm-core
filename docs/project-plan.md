@@ -1549,6 +1549,27 @@ The authoritative plan is
 critical review round 1 folded in); phase-au sprint docs are being cut from
 it under `docs/plans/phase-au/` on branch `plan/boundary-regression`.
 
+## 54. Phase AV — Async Mailbox-Read Cutover Completion [PLANNED — HARDENING]
+
+Phase AV fixes the mailbox-read serialization regression: every core job —
+including all reads — funnels through one single-permit `BlockingCoreBridge`
+in `atm-http-runtime`, so an unrelated slow job head-of-line blocks `atm
+read` past its client budget. The phase completes the Tokio cutover the AL
+phase left unfinished: a bounded read-only WAL reader lane
+(`AsyncMailboxReader`), atomic read-handler cutover with the hidden
+read-flow mutations split onto the writer lane, normative
+requirements/ADR hardening making re-serialization non-compliant,
+mechanical hard gates, and massively-parallel read/query benchmark
+families with ratcheted floors. Five sprints: `AV.1a` reader-lane
+foundation (runtime-inert), `AV.1b` read-handler cutover (the atomic
+behavior change), `AV.2` requirements/ADR hardening, `AV.3` mechanical
+hard gates, `AV.4` read/query benchmarks. Dependency chain:
+AV.1a→AV.1b→{AV.3, AV.4}; AV.2 parallel-safe with all.
+
+The authoritative plan is
+[phase-av-plan](./plans/phase-av/phase-av-plan.md) with per-sprint docs
+under `docs/plans/phase-av/`, authored on branch `plan/phase-av` (PR #1108).
+
 ## Publishing Improvements
 
 Implementation Branches:

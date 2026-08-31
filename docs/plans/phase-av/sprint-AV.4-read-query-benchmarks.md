@@ -32,7 +32,10 @@ failing benchmark campaign, not an anecdote discovered by a timed-out
 
 ## Deliverables
 
-This is the authoritative deliverable checklist.
+This is the authoritative deliverable checklist. Every listed
+deliverable is expected to land at a production-ready level for the
+scope this sprint claims; partial or shape-only completion fails the
+sprint.
 
 - [ ] D1 — Read benchmark family beside send-message-benchmark:
       concurrent `read`/`peek`/`list` against a seeded multi-team,
@@ -54,6 +57,28 @@ This is the authoritative deliverable checklist.
 - [ ] D6 — Harness/report/schema extensions land via the shared-contract
       rules: separate PR, team-lead visibility, macOS/Windows impact
       stated.
+
+## Contract samples
+
+Indicative `baselines.json` shape for the new families (D4); exact keys
+follow the existing send-message-benchmark entry conventions:
+
+```json
+{
+  "read-fanout": {
+    "rand-m4.local": { "p50_floor_msgs_per_sec": 0, "seeded_runs": 3 }
+  },
+  "query-fts": {
+    "rand-m4.local": { "p50_floor_msgs_per_sec": 0, "seeded_runs": 3 }
+  },
+  "read-under-write-load": {
+    "rand-m4.local": { "p50_floor_msgs_per_sec": 0, "seeded_runs": 3 }
+  }
+}
+```
+
+Floor values are seeded from 3 clean runs (never hand-set); `0` above is a
+placeholder illustrating shape only.
 
 ## Acceptance criteria
 

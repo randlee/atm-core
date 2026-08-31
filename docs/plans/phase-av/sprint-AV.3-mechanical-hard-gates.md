@@ -30,7 +30,10 @@ test, then fail lint — never depend on reviewer vigilance.
 
 ## Deliverables
 
-This is the authoritative deliverable checklist.
+This is the authoritative deliverable checklist. Every listed
+deliverable is expected to land at a production-ready level for the
+scope this sprint claims; partial or shape-only completion fails the
+sprint.
 
 - [ ] D1 — `BlockingCoreBridge` deleted (uncompilable gate): after the
       AV.1b cutover, remove the type and its remaining mutation-path
