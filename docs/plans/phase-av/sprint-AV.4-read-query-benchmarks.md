@@ -4,6 +4,7 @@ sprint: AV.4
 title: Massively parallel read and query benchmarks
 branch: feature/av4-read-query-benchmarks
 integration_branch: integrate/phase-av
+stack_parent: feature/av3-read-concurrency-gates (dependency is on AV.1b below it)
 status: planned
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
@@ -11,7 +12,7 @@ dependency_relations:
   - related: AV.1b
     relation: must_follow
     rationale: Benchmarks drive the cutover read path and consume the AV.1a
-      D5 metrics seams through it; merge-forward AV.1b → AV.4 before every
+      D5 metrics seams through it; stacked above AV.1b; restack before every
       round.
   - related: AV.2
     relation: parallel_safe

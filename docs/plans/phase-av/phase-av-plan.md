@@ -2,9 +2,10 @@
 title: "Phase AV — Async mailbox-read cutover completion, hardening, and read benchmarks"
 phase: AV
 branch: plan/phase-av
-sprint_branches: per-sprint, declared in each sprint doc's frontmatter
-  (AV.1a reuses fix/mailbox-read-blocking-serialization, provisioned by
-  team-lead and held clean off develop)
+sprint_branches: per-sprint, declared in each sprint doc's frontmatter;
+  all five form one `gh stack` rooted at integrate/phase-av (AV.1a reuses
+  fix/mailbox-read-blocking-serialization, provisioned by team-lead and
+  held clean off develop, adopted as the bottom of the stack)
 status: hardening-in-progress
 owner: fenix (plan author); arch-ctm (investigations I-1..I-5, implementation on approval)
 base_revision: 938767c72 (develop)
@@ -164,15 +165,40 @@ criteria, and required validation. This section is a map only.
 Dependency relations (rationale in each sprint doc's frontmatter):
 AV.1a→AV.1b, AV.1b→AV.3, and AV.1b→AV.4 are `must_follow` (cutover
 consumes the foundation; gates and benchmarks assert the post-cutover
-state; merge-forward before every round); AV.2 is `parallel_safe` with
-all others; AV.3∥AV.4 are `parallel_safe`.
+state); AV.2 is `parallel_safe` with all others; AV.3∥AV.4 are
+`parallel_safe`. Propagation of parent changes happens by restacking the
+`gh stack` (see §4), which replaces manual merge-forward.
 
 ## 4. Execution notes
 
 - All daemon work targets the Tokio+Axum `atm-http-runtime` path only;
   the frozen legacy sync daemon is untouched (AGENTS.md hard rule).
-- Implementation branch: `fix/mailbox-read-blocking-serialization`
-  (held clean by team-lead); PRs target `develop`; merge-commit only.
+- Branch strategy — stacked branches (`gh stack`): all five sprint
+  branches form one stack rooted at `integrate/phase-av`, in stack order
+  AV.1a → AV.1b → AV.2 → AV.3 → AV.4:
+
+  ```sh
+  gh stack init --base integrate/phase-av \
+    fix/mailbox-read-blocking-serialization \
+    feature/av1b-read-handler-cutover \
+    docs/av2-read-concurrency-requirements \
+    feature/av3-read-concurrency-gates \
+    feature/av4-read-query-benchmarks
+  gh stack submit --auto   # bottom PR targets integrate/phase-av; each other PR targets its parent
+  ```
+
+  Operate the stack via the `/gh-stack` skill
+  (`~/.claude/skills/gh-stack/SKILL.md`) — non-interactive rules apply
+  (positional branch args, `submit --auto`, `view --json`,
+  `rerere.enabled`). A successor skill is being developed on
+  synaptic-canvas; adopt it when it lands.
+
+  AV.1a adopts the existing held branch
+  `fix/mailbox-read-blocking-serialization`. Stack order is the
+  dependency chain; AV.2's mid-stack position is ordering convenience
+  only (it is `parallel_safe` with everything and carries no code).
+  Parent changes propagate by restacking instead of manual
+  merge-forward; merges remain merge-commit only (never squash).
 - Adjacent-work sequencing: the #1030 WPERF plan touches the same writer
   path — coordinate worktrees/merge order with team-lead.
 - Plan QA: quality-mgr review before any implementation dispatch.

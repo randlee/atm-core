@@ -4,6 +4,7 @@ sprint: AV.3
 title: Mechanical hard gates against read-serialization regression
 branch: feature/av3-read-concurrency-gates
 integration_branch: integrate/phase-av
+stack_parent: docs/av2-read-concurrency-requirements (dependency is on AV.1b below it)
 status: planned
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
@@ -11,8 +12,8 @@ dependency_relations:
   - related: AV.1b
     relation: must_follow
     rationale: The gates assert the post-cutover state (bridge deleted from
-      read paths, WriteOp pure). Merge-forward AV.1b → AV.3 before every
-      round.
+      read paths, WriteOp pure). Stacked above AV.1b; restack before
+      every round.
   - related: AV.2
     relation: parallel_safe
     rationale: AV.3 edits tests/lint tooling; AV.2 edits normative docs only.

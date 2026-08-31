@@ -4,6 +4,7 @@ sprint: AV.2
 title: Requirements and ADR hardening for read concurrency
 branch: docs/av2-read-concurrency-requirements
 integration_branch: integrate/phase-av
+stack_parent: feature/av1b-read-handler-cutover (stack-order convenience only; no dependency)
 status: planned
 recommended_agent: Cipher-311d
 recommended_model: fast

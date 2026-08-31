@@ -4,6 +4,7 @@ sprint: AV.1a
 title: Reader-lane foundation (capability, pool, threading)
 branch: fix/mailbox-read-blocking-serialization
 integration_branch: integrate/phase-av
+stack_parent: integrate/phase-av (stack bottom)
 status: planned
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
@@ -11,7 +12,7 @@ dependency_relations:
   - related: AV.1b
     relation: must_follow
     rationale: AV.1b flips the read handlers onto the capability delivered
-      here. Merge-forward AV.1a → AV.1b before every AV.1b round.
+      here. AV.1b is stacked on this branch; restack propagates changes.
   - related: AV.2
     relation: parallel_safe
     rationale: AV.2 edits docs/requirements.md and ADR files only; this

@@ -4,6 +4,7 @@ sprint: AV.1b
 title: Read-handler cutover and writer purity
 branch: feature/av1b-read-handler-cutover
 integration_branch: integrate/phase-av
+stack_parent: fix/mailbox-read-blocking-serialization (AV.1a)
 status: planned
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
@@ -11,7 +12,7 @@ dependency_relations:
   - related: AV.1a
     relation: must_follow
     rationale: Consumes the AsyncMailboxReader capability and reader pool
-      delivered by AV.1a. Merge-forward AV.1a → AV.1b before every round.
+      delivered by AV.1a. Stacked on AV.1a's branch; restack before every round.
   - related: AV.2
     relation: parallel_safe
     rationale: AV.2 edits docs/requirements.md and ADR files only; this
@@ -19,8 +20,8 @@ dependency_relations:
   - related: AV.3
     relation: must_follow
     rationale: AV.3's gates assert the post-cutover state delivered here
-      (bridge off read paths, WriteOp pure). Merge-forward AV.1b → AV.3
-      before every AV.3 round.
+      (bridge off read paths, WriteOp pure). AV.3 sits above this branch in the
+      stack; restack propagates changes.
   - related: AV.4
     relation: must_follow
     rationale: AV.4 benchmarks drive the cutover read path and consume the
