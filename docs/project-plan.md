@@ -1581,6 +1581,12 @@ The authoritative plan is
 [phase-av-plan](./plans/phase-av/phase-av-plan.md) with per-sprint docs
 under `docs/plans/phase-av/`, authored on branch `plan/phase-av` (PR #1108).
 
+Phase AV sprint status:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AV.2` | `complete` | `docs/av2-read-concurrency-requirements` | `docs/requirements.md`, `docs/adr/ADR-059-async-mailbox-read-concurrency.md`, `docs/plans/phase-av/av-closeout-record.md` |
+
 ## Publishing Improvements
 
 Implementation Branches:
