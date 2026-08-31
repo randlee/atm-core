@@ -15,7 +15,6 @@ import tomllib
 from pathlib import Path
 
 from lint_common import discover_repo_root
-from lint_common import workspace_manifest_paths
 from check_version_sync import sync_winget_manifests
 from check_version_sync import version_sync_config
 
@@ -88,10 +87,6 @@ def replace_package_version(text: str, section: str, old: str, new: str) -> tupl
     return text[: match.start(2)] + updated + text[match.end(2) :], True
 
 
-def cargo_manifest_paths(repo_root: Path) -> list[Path]:
-    return [repo_root / "Cargo.toml", *workspace_manifest_paths(repo_root)]
-
-
 def sync_python_version(repo_root: Path, pyproject: Path) -> None:
     result = subprocess.run(
         [
@@ -114,30 +109,24 @@ def sync_python_version(repo_root: Path, pyproject: Path) -> None:
 
 
 def update_manifest_versions(repo_root: Path, old: str, new: str) -> dict[Path, str]:
-    manifests = cargo_manifest_paths(repo_root)
-    if not manifests:
-        raise SystemExit("no workspace manifests found")
-
+    root_manifest = repo_root / "Cargo.toml"
     python_projects = python_project_paths(repo_root)
     before = {
         manifest_path: manifest_path.read_text(encoding="utf-8")
-        for manifest_path in [*manifests, *python_projects]
+        for manifest_path in [root_manifest, *python_projects]
     }
-    for manifest_path in manifests:
-        original = before[manifest_path]
-        if manifest_path == repo_root / "Cargo.toml":
-            section = "workspace.package"
-        else:
-            section = "package"
-        after, _did_change = replace_package_version(original, section, old, new)
-        lines = []
-        for line in after.splitlines(keepends=True):
-            if "path =" in line:
-                line = line.replace(f'version = "{old}"', f'version = "{new}"')
-            lines.append(line)
-        manifest_path.write_text("".join(lines), encoding="utf-8")
+    original = before[root_manifest]
+    after, _did_change = replace_package_version(original, "workspace.package", old, new)
+    # Workspace dependency versions live here so member manifests remain stable
+    # across release bumps and do not need per-crate rewrites.
+    lines = []
+    for line in after.splitlines(keepends=True):
+        if "path =" in line:
+            line = line.replace(f'version = "{old}"', f'version = "{new}"')
+        lines.append(line)
+    root_manifest.write_text("".join(lines), encoding="utf-8")
 
-    if before[repo_root / "Cargo.toml"] == (repo_root / "Cargo.toml").read_text(encoding="utf-8"):
+    if before[root_manifest] == root_manifest.read_text(encoding="utf-8"):
         raise SystemExit("workspace package version was not found in Cargo.toml")
 
     for pyproject in python_projects:
@@ -145,7 +134,7 @@ def update_manifest_versions(repo_root: Path, old: str, new: str) -> dict[Path, 
 
     winget_paths = sync_winget_manifests(repo_root, old, new, version_sync_config(repo_root))
 
-    tracked_manifests = [*manifests, *python_projects]
+    tracked_manifests = [root_manifest, *python_projects]
     tracked_manifests.extend(winget_paths)
     return {
         path: path.read_text(encoding="utf-8")

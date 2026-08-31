@@ -10,7 +10,7 @@ homepage.workspace = true
 description = "Concrete, bounded mTLS byte-stream adapter for ATM peers."
 
 [dependencies]
-atm-storage = { path = "../atm-storage", version = "1.4.6" }
+atm-storage.workspace = true
 rustls.workspace = true
 tokio.workspace = true
 tokio-rustls.workspace = true
