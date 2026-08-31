@@ -273,7 +273,7 @@
       "result_from": "arch-ctm",
       "result_shared_path": null,
       "result_temp_path": null,
-      "verdict": "DISPATCHED",
+      "verdict": "PUSHED — completion message pending; AV.1b merge-forward pending (93c361a43)",
       "blockers": null,
       "important": null,
       "minor": null,
@@ -288,7 +288,36 @@
       "dispatch_time_utc": "2026-08-31T10:02:36Z",
       "dispatch_message_id": "01M1BMAMNM71NCA2HPRFPC899B",
       "base_sha": "1e81aade8",
-      "ack_message_id": "01M1BMBRQYB5A3W5N2WW7J95VD"
+      "ack_message_id": "01M1BMBRQYB5A3W5N2WW7J95VD",
+      "push_sha": "f31a35484",
+      "push_at": "2026-08-31T10:22:27Z",
+      "commits": [
+        "4870569d2 Merge origin/integrate/phase-av (3ddc7ce97)",
+        "eb9744b4b fix(boundaries): scan trait implementation I/O",
+        "f68257608 fix(boundaries): declare test-only storage notifier",
+        "f31a35484 docs(av1a): record implementation scan coverage"
+      ],
+      "early_signal_message_id": "01M1BNF3193FHBHPZPAXSRAKX9",
+      "early_signal": "quality-mgr @ eb9744b4b+f68257608: GAP-1/GAP-2/M10 FIXED, zero-implementer fail-closed violation proven live, lint real-tree PASS, pytest test_lint_boundaries.py 56/56, waiver count 14"
+    },
+    {
+      "run_id": "QA-AV1A-R5",
+      "sprint": "AV.1a",
+      "task_id": "phase-av-sprint-av1a-qa-r5",
+      "assignee": "quality-mgr",
+      "pr": 1112,
+      "branch": "fix/mailbox-read-blocking-serialization",
+      "qa_head_sha": "f31a35484",
+      "base_sha": "1e81aade8",
+      "dispatched_at": "2026-08-31T10:24:12Z",
+      "dispatch_message_id": "01M1BNJ6J8EQJP8QJ103WFV97H",
+      "triage_records": [
+        "AV1A-I6 (open, v2 @ 36e60d990)",
+        "AV1A-M10 (open)",
+        "AV1A-M11 (open)",
+        "16 closed AV1A records — regression check"
+      ],
+      "verdict": "DISPATCHED"
     },
     {
       "aich_sprint": "AV3",
