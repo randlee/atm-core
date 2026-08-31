@@ -229,7 +229,7 @@ fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
   `AsyncMailboxRuntime` signatures plus explicit prelude/D2 names, and the
   read handler assertion parses each named handler independently. D1 now
   derives the allowed port-signature types and ignores enum-variant expression
-  paths; all 90 architecture tests pass against the real AV.1b tree.
+  paths; all 91 architecture tests pass against the real AV.1b tree.
 
 This is the authoritative acceptance checklist.
 
