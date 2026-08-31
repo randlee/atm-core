@@ -26,6 +26,14 @@ class ReadConcurrencyGateTests(unittest.TestCase):
             source = f"fn list_messages() {{ let x = {literal}; BlockingCoreBridge::run(); }}"
             self.assertIn("BlockingCoreBridge::run", extract_fn_body(source, "list_messages"))
 
+    def test_extract_fn_body_requires_an_exact_raw_string_hash_closer(self) -> None:
+        for literal in [
+            'r##"ambiguous "### } still literal"##',
+            'r###"fewer "## } still literal"###',
+        ]:
+            source = f"fn list_messages() {{ let x = {literal}; BlockingCoreBridge::run(); }}"
+            self.assertIn("BlockingCoreBridge::run", extract_fn_body(source, "list_messages"))
+
     def test_handler_names_match_the_checked_in_contract(self) -> None:
         self.assertEqual(READ_HANDLERS, ("list_messages", "peek_messages", "receive_messages", "doctor"))
 
