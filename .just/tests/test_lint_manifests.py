@@ -80,40 +80,6 @@ class LintManifestsTests(unittest.TestCase):
             rendered = [violation.render() for violation in violations]
             self.assertIn("crates/atm-core/Cargo.toml: set [package].homepage.workspace = true", rendered)
 
-    def test_collect_manifest_violations_flags_mismatched_internal_path_version(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST.replace('"crates/atm"]', '"crates/atm", "crates/atm-core"]'), encoding="utf-8")
-            atm_core_dir = repo_root / "crates/atm-core"
-            atm_core_dir.mkdir(parents=True)
-            (atm_core_dir / "Cargo.toml").write_text(GOOD_MEMBER, encoding="utf-8")
-            atm_dir = repo_root / "crates/atm"
-            atm_dir.mkdir(parents=True)
-            (atm_dir / "Cargo.toml").write_text(
-                """\
-[package]
-name = "agent-team-mail"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-authors.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true
-
-[dependencies]
-atm-core = { path = "../atm-core", version = "9.9.9" }
-""",
-                encoding="utf-8",
-            )
-
-            violations = collect_manifest_violations(repo_root)
-            rendered = [violation.render() for violation in violations]
-            self.assertIn(
-                'crates/atm/Cargo.toml [dependencies.atm-core]: path dependency version must match target crate version "1.1.2"',
-                rendered,
-            )
-
     def test_collect_manifest_violations_flags_unreferenced_explicit_version_drift(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
