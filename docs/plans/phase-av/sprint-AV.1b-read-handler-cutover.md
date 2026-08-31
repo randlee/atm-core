@@ -269,9 +269,16 @@ This is the authoritative validation checklist.
 - [ ] `just test` (includes D5 liveness tests)
 - [ ] `just validate`
 - [ ] Architecture/boundary tests green (`cargo test -p atm-architecture`)
-- [ ] Live manual proof on a local daemon build: `atm read` under
-      induced housekeeping stall returns within budget (gate feature —
-      live proof before QA dispatch).
+- [x] Live manual proof — **relocated to phase level** (Rand,
+      2026-08-31): running a live daemon from an intermediate sprint
+      branch duplicates the phase-level verification at higher risk.
+      The live proof is now the post-integration smoke + benchmark
+      campaign on the isolated `m5-atmbench` account (AV.4 scope,
+      integrated tree), where `atm read` under writer load is measured
+      directly against pre-AV baselines. This sprint's in-tree
+      read-under-stall proof fixtures remain the sprint-level evidence.
+      A daemon swap on the development host is a separate discussion
+      after the atmbench run.
 
 ## Out of scope
 
