@@ -15,8 +15,11 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "all boundaries/**/*.toml records with io_forbidden entries vs the source files that actually contain the guarded constructs; .just/lint_boundaries.py collect_io_forbidden_source_violations" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-31T16:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:resolutionNote "QA-r5 @ f31a35484 (fix-r4: eb9744b4b implementer scan + f68257608 M10 waiver + f31a35484 M11 recount). All occurrences verified fixed firsthand + req-qa/rust-qa/boundary-guard/ruthless. Battery: lint_boundaries PASS, pytest .just/tests 528/10, just lint 32/32, just test PASS, atm-architecture 81, workspace 1528." ;
   triage:triagedAt "2026-08-31T10:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV1A ;
   triage:foundAt "2026-08-31T08:49:00Z"^^xsd:dateTime ;
@@ -35,8 +38,8 @@
   triage:file "crates/atm-storage-rusqlite/src/shared_db_reader_lanes.rs" ;
   triage:line 138 ;
   triage:snippet "Connection::open_with_flags(" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "1e81aade8" ;
   triage:occursIn <urn:atm:triage:worktree/FIX1/1e81aade8> .
@@ -46,8 +49,8 @@
   triage:file "crates/atm-storage-rusqlite/src/shared_db_reader_lanes.rs" ;
   triage:line 144 ;
   triage:snippet "Connection::open_with_flags(" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "1e81aade8" ;
   triage:occursIn <urn:atm:triage:worktree/FIX1/1e81aade8> .
@@ -57,8 +60,8 @@
   triage:file "boundaries/atm-http-runtime/member-state-transition-sink.toml" ;
   triage:line 19 ;
   triage:snippet "io_forbidden = [database_io, process_spawn, daemon_request_dispatch]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "1e81aade8" ;
   triage:occursIn <urn:atm:triage:worktree/FIX1/1e81aade8> .
@@ -68,8 +71,8 @@
   triage:file "crates/atm-daemon-bootstrap/src/queue_drain.rs" ;
   triage:line 93 ;
   triage:snippet "impl MemberStateTransitionSink for DrainOnTransitionSink" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "1e81aade8" ;
   triage:occursIn <urn:atm:triage:worktree/FIX1/1e81aade8> .
@@ -79,8 +82,8 @@
   triage:file "boundaries/atm-storage/async-mailbox-reader.toml" ;
   triage:line 19 ;
   triage:snippet "trait_only socket_io process_spawn io_forbidden unscanned" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "1e81aade8" ;
   triage:occursIn <urn:atm:triage:worktree/FIX1/1e81aade8> .
@@ -90,8 +93,8 @@
   triage:file "boundaries/atm-storage-rusqlite/async-mailbox-reader-sqlite.toml" ;
   triage:line 20 ;
   triage:snippet "trait_only socket_io process_spawn io_forbidden unscanned" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "1e81aade8" ;
   triage:occursIn <urn:atm:triage:worktree/FIX1/1e81aade8> .
@@ -101,8 +104,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 1 ;
   triage:snippet "async reader lane pool socket_io process_spawn unscanned" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "1e81aade8" ;
   triage:occursIn <urn:atm:triage:worktree/FIX1/1e81aade8> .
@@ -112,8 +115,8 @@
   triage:file "crates/atm-storage-rusqlite/src/shared_db_reader_lanes.rs" ;
   triage:line 130 ;
   triage:snippet "read connection factory socket_io process_spawn unscanned" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "1e81aade8" ;
   triage:occursIn <urn:atm:triage:worktree/FIX1/1e81aade8> .

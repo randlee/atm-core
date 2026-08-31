@@ -1,0 +1,109 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-I4>
+  a triage:Finding ;
+  triage:findingId "AV3-I4" ;
+  triage:title "RULE-003 size cap: crates/atm-http-runtime/src/storage_and_nudge_router.rs production region is 1012 lines (mod tests at :1014), 12 over the 1000-line cap — pre-existing, not introduced by AV.3 fix-r5" ;
+  triage:description "The production-region line count (raw lines before mod tests module) exceeds RULE-003 architectural cap of 1000 lines. File is at 1012 lines on develop and earlier AV branches (1013 lines starting with av1b-read-handler-cutover). This violation pre-dates phase AV, originating from AL.3 runtime-scaffold work. The lint (check_line_counts.py) counts only actual code lines (901 production code lines) and passes, but raw line count including comments and whitespace violates the architectural rule." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:deferredNote "quality-mgr ruling 2026-08-31 (QA-AV3 early-signal adjudication, fenix msg 01M1BMCBYZ30H3PB24XT5PHHZS): NOT-A-DEFECT-IN-PHASE-AV / deferred. The repo's mechanical authority for RULE-003 is check_line_counts.py max_production_lines=1000 applied to production CODE lines (blanks/comments excluded); the router counts 901 and passes. The 1012 figure is a raw-line reading that is not the enforced standard. Pre-existing since AL.3, present on develop. Phase-AM residual ControlPathSyncBridge deletion is expected to shrink this file. Do not dispatch a fix in phase AV; re-evaluate only if production code lines approach the 1000 cap." ;
+  triage:deferredBy "quality-mgr" ;
+  triage:deferredAt "2026-08-31T10:08:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-31T10:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T10:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-I4/AV1b-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-I4/AV2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-I4/AV3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-I4/AV4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-I4/AV1b-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 1 ;
+  triage:snippet "production-region (1-1013)" ;
+  triage:status "deferred" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "93c361a43" ;
+  triage:occursIn <urn:atm:triage:worktree/AV1b/93c361a43> .
+
+<urn:atm:triage:occurrence/AV3-I4/AV2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 1 ;
+  triage:snippet "production-region (1-1013)" ;
+  triage:status "deferred" ;
+  triage:closed false ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "21d578887" ;
+  triage:occursIn <urn:atm:triage:worktree/AV2/21d578887> .
+
+<urn:atm:triage:occurrence/AV3-I4/AV3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 1 ;
+  triage:snippet "production-region (1-1013)" ;
+  triage:status "deferred" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "c78288c4d" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3/c78288c4d> .
+
+<urn:atm:triage:occurrence/AV3-I4/AV4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 1 ;
+  triage:snippet "production-region (1-1013)" ;
+  triage:status "deferred" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "3a09e2a6f" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/3a09e2a6f> .
+
+<urn:atm:triage:worktree/integrate/phase-av>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate/phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "dc2f56002" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AV1b/93c361a43>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/av1b" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "93c361a43" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV2/21d578887>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/av2" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "21d578887" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV3/c78288c4d>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/av3" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "c78288c4d" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV4/3a09e2a6f>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/av4" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "3a09e2a6f" ;
+  triage:orderIndex 5 .
