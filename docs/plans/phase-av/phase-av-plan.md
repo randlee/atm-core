@@ -152,6 +152,13 @@ Additional phase mandates (Rand, 2026-08-30/31):
    queries execute in a massively parallel manner, with ratcheted floors
    (§ AV.4).
 
+9. **Phase-level live verification order (Rand, 2026-08-31):** complete
+   all sprint work first; then run the smoke + benchmark campaigns on
+   the isolated `m5-atmbench` account against the integrated tree. This
+   supersedes the AV.1b sprint-level live-daemon proof (an intermediate
+   sprint branch must not drive a live daemon). A daemon swap on the
+   development host is discussed only after the atmbench results are in.
+
 ## 3. Sprints
 
 Sprint docs are the authoritative source for deliverables, acceptance
