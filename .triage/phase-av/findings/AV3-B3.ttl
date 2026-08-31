@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T06:19:51Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-30T22:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV3 ;
@@ -33,8 +35,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3771 ;
   triage:snippet "fn bridge_run_call_sites_by_enclosing_fn(source: &str) -> BTreeSet<String>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "2c6040b28" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
@@ -44,8 +46,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3796 ;
   triage:snippet "fn function_names(source: &str) -> BTreeSet<String>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "2c6040b28" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
@@ -55,8 +57,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3815 ;
   triage:snippet "fn extract_fn_body<'source>(source: &'source str, fn_name: &str) -> &'source str" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "2c6040b28" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
@@ -66,8 +68,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3771 ;
   triage:snippet "fn bridge_run_call_sites_by_enclosing_fn(source: &str) -> BTreeSet<String>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "4a97f0dd1" ;
   triage:occursIn <urn:atm:triage:worktree/AV4-5/4a97f0dd1> .
@@ -77,8 +79,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3796 ;
   triage:snippet "fn function_names(source: &str) -> BTreeSet<String>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "4a97f0dd1" ;
   triage:occursIn <urn:atm:triage:worktree/AV4-5/4a97f0dd1> .
@@ -88,8 +90,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3815 ;
   triage:snippet "fn extract_fn_body<'source>(source: &'source str, fn_name: &str) -> &'source str" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "4a97f0dd1" ;
   triage:occursIn <urn:atm:triage:worktree/AV4-5/4a97f0dd1> .

@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T06:19:51Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-30T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV3 ;
@@ -28,8 +30,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 1 ;
   triage:snippet "D2b/A2b behavior-gate scaffolding (mechanism-independent harness missing)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "2c6040b2" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b2> .
