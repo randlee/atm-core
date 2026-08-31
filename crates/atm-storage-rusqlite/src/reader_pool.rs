@@ -5,6 +5,7 @@
 //! Tokio callers only await bounded channels and oneshots: normal read fan-out
 //! never passes through a global blocking bridge.
 
+use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak, mpsc};
 use std::thread;
@@ -188,28 +189,28 @@ pub(crate) struct ReaderPool {
 /// impossible for a future lane to silently oversubscribe SQLite.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ReaderPoolConfig {
-    pub(crate) pool_size: usize,
-    pub(crate) queue_depth: usize,
+    pub(crate) pool_size: NonZeroUsize,
+    pub(crate) queue_depth: NonZeroUsize,
     pub(crate) interrupt_grace: Duration,
-    pub(crate) max_quarantined: usize,
+    pub(crate) max_quarantined: NonZeroUsize,
 }
 
 impl ReaderPoolConfig {
     pub(crate) const fn mailbox_defaults() -> Self {
         Self {
-            pool_size: 4,
-            queue_depth: 16,
+            pool_size: NonZeroUsize::new(4).expect("non-zero mailbox pool size"),
+            queue_depth: NonZeroUsize::new(16).expect("non-zero mailbox queue depth"),
             interrupt_grace: Duration::from_millis(250),
-            max_quarantined: 4,
+            max_quarantined: NonZeroUsize::new(4).expect("non-zero mailbox quarantine budget"),
         }
     }
 
     pub(crate) const fn search_defaults() -> Self {
         Self {
-            pool_size: 2,
-            queue_depth: 8,
+            pool_size: NonZeroUsize::new(2).expect("non-zero search pool size"),
+            queue_depth: NonZeroUsize::new(8).expect("non-zero search queue depth"),
             interrupt_grace: Duration::from_millis(250),
-            max_quarantined: 2,
+            max_quarantined: NonZeroUsize::new(2).expect("non-zero search quarantine budget"),
         }
     }
 }
@@ -217,13 +218,14 @@ impl ReaderPoolConfig {
 /// AV.1b's doctor lane is included now so the connection cap remains stable as
 /// the stacked handler-cutover branch lands.
 pub(crate) const DEFAULT_DOCTOR_READER_CONFIG: ReaderPoolConfig = ReaderPoolConfig {
-    pool_size: 4,
-    queue_depth: 16,
+    pool_size: NonZeroUsize::new(4).expect("non-zero doctor pool size"),
+    queue_depth: NonZeroUsize::new(16).expect("non-zero doctor queue depth"),
     interrupt_grace: Duration::from_millis(250),
-    max_quarantined: 4,
+    max_quarantined: NonZeroUsize::new(4).expect("non-zero doctor quarantine budget"),
 };
 
-pub(crate) const DEFAULT_MAX_READER_CONNECTIONS: usize = 32;
+pub(crate) const DEFAULT_MAX_READER_CONNECTIONS: NonZeroUsize =
+    NonZeroUsize::new(32).expect("non-zero maximum reader connections");
 
 /// The one composition-owned `[reader_lanes]` configuration surface.
 ///
@@ -236,7 +238,7 @@ pub(crate) struct ReaderLanesConfig {
     pub(crate) mailbox: ReaderPoolConfig,
     pub(crate) search: ReaderPoolConfig,
     pub(crate) doctor: ReaderPoolConfig,
-    pub(crate) max_connections: usize,
+    pub(crate) max_connections: NonZeroUsize,
 }
 
 impl Default for ReaderLanesConfig {
@@ -260,36 +262,29 @@ pub(crate) fn validate_connection_budget(
     mailbox: ReaderPoolConfig,
     search: ReaderPoolConfig,
     doctor: ReaderPoolConfig,
-    max_connections: usize,
+    max_connections: NonZeroUsize,
 ) -> Result<(), AtmError> {
     let worst_case = 1usize
-        .saturating_add(mailbox.pool_size)
-        .saturating_add(search.pool_size)
-        .saturating_add(doctor.pool_size)
-        .saturating_add(mailbox.max_quarantined)
-        .saturating_add(search.max_quarantined)
-        .saturating_add(doctor.max_quarantined)
+        .saturating_add(mailbox.pool_size.get())
+        .saturating_add(search.pool_size.get())
+        .saturating_add(doctor.pool_size.get())
+        .saturating_add(mailbox.max_quarantined.get())
+        .saturating_add(search.max_quarantined.get())
+        .saturating_add(doctor.max_quarantined.get())
         .saturating_add(1); // analyst RO connection
-    if mailbox.pool_size == 0
-        || search.pool_size == 0
-        || doctor.pool_size == 0
-        || mailbox.queue_depth == 0
-        || search.queue_depth == 0
-        || doctor.queue_depth == 0
-        || mailbox.max_quarantined > mailbox.pool_size
+    if mailbox.max_quarantined > mailbox.pool_size
         || search.max_quarantined > search.pool_size
         || doctor.max_quarantined > doctor.pool_size
-        || max_connections == 0
-        || worst_case > max_connections
+        || worst_case > max_connections.get()
     {
         return Err(AtmError::validation(format!(
             "SQLite reader connection budget exceeds max_connections: writer=1, mailbox_pool={}, search_pool={}, doctor_pool={}, mailbox_max_quarantined={}, search_max_quarantined={}, doctor_max_quarantined={}, analyst=1, total={worst_case}, max_connections={max_connections}",
-            mailbox.pool_size,
-            search.pool_size,
-            doctor.pool_size,
-            mailbox.max_quarantined,
-            search.max_quarantined,
-            doctor.max_quarantined,
+            mailbox.pool_size.get(),
+            search.pool_size.get(),
+            doctor.pool_size.get(),
+            mailbox.max_quarantined.get(),
+            search.max_quarantined.get(),
+            doctor.max_quarantined.get(),
         )));
     }
     Ok(())
@@ -358,11 +353,7 @@ impl ReaderPool {
         target: Arc<SharedDbTarget>,
         config: ReaderPoolConfig,
     ) -> Result<Self, AtmError> {
-        if config.pool_size == 0
-            || config.queue_depth == 0
-            || config.max_quarantined == 0
-            || config.max_quarantined > config.pool_size
-        {
+        if config.max_quarantined > config.pool_size {
             return Err(AtmError::validation(format!(
                 "SQLite {lane} reader pool requires non-zero pool_size/queue_depth and max_quarantined <= pool_size"
             )));
@@ -370,15 +361,15 @@ impl ReaderPool {
         let inner = Arc::new(PoolInner {
             lane,
             target,
-            queue_per_worker: config.queue_depth.div_ceil(config.pool_size),
+            queue_per_worker: config.queue_depth.get().div_ceil(config.pool_size.get()),
             config,
-            workers: Mutex::new(Vec::with_capacity(config.pool_size)),
+            workers: Mutex::new(Vec::with_capacity(config.pool_size.get())),
             next_worker_index: AtomicUsize::new(0),
-            next_worker_id: AtomicUsize::new(config.pool_size),
+            next_worker_id: AtomicUsize::new(config.pool_size.get()),
             next_request: AtomicUsize::new(0),
-            metrics: Arc::new(ReaderLaneMetrics::new(lane, config.pool_size)),
+            metrics: Arc::new(ReaderLaneMetrics::new(lane, config.pool_size.get())),
         });
-        for worker_id in 0..config.pool_size {
+        for worker_id in 0..config.pool_size.get() {
             inner.spawn_worker(worker_id)?;
         }
         Ok(Self { inner })
@@ -651,7 +642,7 @@ impl PoolInner {
             .iter()
             .filter(|worker| WorkerStatus::load(&worker.state.status) == WorkerStatus::Quarantined)
             .count();
-        if quarantined >= self.config.max_quarantined {
+        if quarantined >= self.config.max_quarantined.get() {
             self.metrics
                 .quarantine_exhausted_rejections
                 .fetch_add(1, Ordering::Relaxed);
@@ -703,7 +694,7 @@ impl PoolInner {
                 WorkerStatus::load(&candidate.state.status) == WorkerStatus::Quarantined
             })
             .count();
-        if existing >= self.config.max_quarantined {
+        if existing >= self.config.max_quarantined.get() {
             return;
         }
         if WorkerStatus::compare_exchange(
@@ -812,6 +803,7 @@ mod tests {
         deadline_at, validate_connection_budget,
     };
     use crate::shared_db::SharedDbTarget;
+    use std::num::NonZeroUsize;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
@@ -832,6 +824,21 @@ mod tests {
         .expect("reader pool")
     }
 
+    fn test_config(
+        pool_size: usize,
+        queue_depth: usize,
+        interrupt_grace: Duration,
+        max_quarantined: usize,
+    ) -> ReaderPoolConfig {
+        ReaderPoolConfig {
+            pool_size: NonZeroUsize::new(pool_size).expect("non-zero test pool size"),
+            queue_depth: NonZeroUsize::new(queue_depth).expect("non-zero test queue depth"),
+            interrupt_grace,
+            max_quarantined: NonZeroUsize::new(max_quarantined)
+                .expect("non-zero test quarantine budget"),
+        }
+    }
+
     #[test]
     fn documented_default_connection_budget_is_within_the_cap() {
         validate_connection_budget(
@@ -849,7 +856,7 @@ mod tests {
             ReaderPoolConfig::mailbox_defaults(),
             ReaderPoolConfig::search_defaults(),
             DEFAULT_DOCTOR_READER_CONFIG,
-            21,
+            NonZeroUsize::new(21).expect("non-zero maximum connections"),
         )
         .expect_err("22 reader connections must not fit under a cap of 21");
         let message = error.message();
@@ -871,12 +878,7 @@ mod tests {
 
     #[tokio::test]
     async fn two_reader_workers_execute_independent_queries_in_parallel() {
-        let pool = test_pool(ReaderPoolConfig {
-            pool_size: 2,
-            queue_depth: 2,
-            interrupt_grace: Duration::from_millis(250),
-            max_quarantined: 2,
-        });
+        let pool = test_pool(test_config(2, 2, Duration::from_millis(250), 2));
         let started = Instant::now();
         let (left, right) = tokio::join!(
             pool.submit(Duration::from_secs(1), |_, _| {
@@ -898,18 +900,8 @@ mod tests {
 
     #[tokio::test]
     async fn mailbox_and_search_lanes_do_not_steal_each_others_capacity() {
-        let mailbox = Arc::new(test_pool(ReaderPoolConfig {
-            pool_size: 1,
-            queue_depth: 1,
-            interrupt_grace: Duration::from_millis(50),
-            max_quarantined: 1,
-        }));
-        let search = test_pool(ReaderPoolConfig {
-            pool_size: 1,
-            queue_depth: 1,
-            interrupt_grace: Duration::from_millis(50),
-            max_quarantined: 1,
-        });
+        let mailbox = Arc::new(test_pool(test_config(1, 1, Duration::from_millis(50), 1)));
+        let search = test_pool(test_config(1, 1, Duration::from_millis(50), 1));
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let mailbox_task = {
             let mailbox = Arc::clone(&mailbox);
@@ -943,12 +935,7 @@ mod tests {
 
     #[tokio::test]
     async fn bounded_queue_expires_and_rejects_saturation_without_serializing_reads() {
-        let pool = Arc::new(test_pool(ReaderPoolConfig {
-            pool_size: 1,
-            queue_depth: 1,
-            interrupt_grace: Duration::from_millis(20),
-            max_quarantined: 1,
-        }));
+        let pool = Arc::new(test_pool(test_config(1, 1, Duration::from_millis(20), 1)));
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let active_pool = Arc::clone(&pool);
         let active_task = tokio::spawn(async move {
@@ -1000,12 +987,7 @@ mod tests {
 
     #[tokio::test]
     async fn nonresponsive_worker_is_quarantined_then_replaced_only_after_returning() {
-        let pool = Arc::new(test_pool(ReaderPoolConfig {
-            pool_size: 1,
-            queue_depth: 1,
-            interrupt_grace: Duration::from_millis(20),
-            max_quarantined: 1,
-        }));
+        let pool = Arc::new(test_pool(test_config(1, 1, Duration::from_millis(20), 1)));
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let active_pool = Arc::clone(&pool);
         let active_task = tokio::spawn(async move {
@@ -1071,12 +1053,7 @@ mod tests {
 
     #[tokio::test]
     async fn active_sqlite_statement_is_interrupted_and_worker_capacity_is_reclaimed() {
-        let pool = test_pool(ReaderPoolConfig {
-            pool_size: 1,
-            queue_depth: 1,
-            interrupt_grace: Duration::from_millis(100),
-            max_quarantined: 1,
-        });
+        let pool = test_pool(test_config(1, 1, Duration::from_millis(100), 1));
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let (interrupted_tx, interrupted_rx) = std::sync::mpsc::sync_channel(1);
         let timed_out = pool
@@ -1137,12 +1114,7 @@ mod tests {
 
     #[tokio::test]
     async fn metrics_snapshot_exposes_lane_deadline_and_wal_health_seams() {
-        let pool = test_pool(ReaderPoolConfig {
-            pool_size: 1,
-            queue_depth: 1,
-            interrupt_grace: Duration::from_millis(20),
-            max_quarantined: 1,
-        });
+        let pool = test_pool(test_config(1, 1, Duration::from_millis(20), 1));
         pool.record_wal_health(true, 7);
         pool.submit(Duration::from_millis(100), |_, _| {
             Ok::<_, atm_storage::ReadLaneError>(())

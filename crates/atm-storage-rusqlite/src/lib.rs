@@ -993,7 +993,7 @@ mod tests {
     fn reader_lane_configuration_is_threaded_through_storage_factory_and_validated() {
         let root = tempfile::tempdir().expect("temporary storage root");
         let config = ReaderLanesConfig {
-            max_connections: 21,
+            max_connections: std::num::NonZeroUsize::new(21).expect("non-zero maximum connections"),
             ..ReaderLanesConfig::default()
         };
         let error = SqliteStorageFactory::at_path(root.path().join("mail.db"))
