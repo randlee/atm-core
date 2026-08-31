@@ -27,6 +27,7 @@ use atm_http_runtime::{
     StorageAndNudgeRouter, shared_direct_peer_client,
 };
 use atm_runtime::RuntimeAssembly;
+use atm_runtime::{DoctorProjectionConfig, HandoffConfig, StorageDoctorProjection};
 
 use crate::DaemonLaunchIdentity;
 use crate::bare_cli_runtime::BareCliRuntime;
@@ -246,12 +247,24 @@ pub(crate) fn build_replacement_handler(
         runtime_health.clone(),
         queue_wake_process,
     ));
+    let async_mailbox_runtime = assembly
+        .async_mailbox_runtime
+        .clone()
+        .with_state_handoff(HandoffConfig::default())?;
+    let doctor_projection = StorageDoctorProjection::start(
+        DoctorProjectionConfig::default(),
+        assembly.service_runtime.clone(),
+        assembly.doctor_ports.clone(),
+        Arc::clone(&observability),
+    )?;
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,
         selector,
         atm_core::home::atm_home()?,
     )
+    .with_async_mailbox_runtime(Arc::new(async_mailbox_runtime))
+    .with_doctor_projection(Arc::new(doctor_projection))
     .with_maintenance(queue_wake_pump)
     .with_runtime_health(runtime_health, assembly.doctor_ports)
     .with_member_state_transition_sink(transition_sink)
@@ -265,14 +278,19 @@ pub(crate) fn build_replacement_handler(
         peer_wire_security: Some(peer_wire_mode.security().into()),
     })
     .with_shared_direct_peer_client(shared_direct_peer_client()?);
-    let handler = match peer_adapter_selection.adapter {
-        Some(adapter) => handler.with_peer_connection_pool(PeerConnectionPool::new(
-            peer_adapter_selection.pool_config,
-            adapter,
-        )),
-        None => handler,
-    };
+    let handler = add_peer_connection_pool(handler, peer_adapter_selection);
     Ok((Arc::new(handler), recovery_sweep))
+}
+
+fn add_peer_connection_pool(
+    handler: StorageAndNudgeRouter,
+    selection: SelectedPeerAdapterSelection,
+) -> StorageAndNudgeRouter {
+    match selection.adapter {
+        Some(adapter) => handler
+            .with_peer_connection_pool(PeerConnectionPool::new(selection.pool_config, adapter)),
+        None => handler,
+    }
 }
 
 fn resolve_herdr_process(

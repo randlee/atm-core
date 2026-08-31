@@ -22,6 +22,7 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-daemon", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-storage-rusqlite"),
     ("atm-storage", "atm-core"),
+    ("atm-storage", "atm-daemon"),
     ("atm-storage", "atm-storage-rusqlite"),
     ("atm-storage-rusqlite", "atm-core"),
     ("atm-storage-rusqlite", "atm-runtime"),
@@ -1627,16 +1628,8 @@ fn atm_must_not_depend_on_atm_storage_rusqlite() {
 }
 
 #[test]
-fn guarded_runtime_boundaries_forbid_their_declared_crate_edges() {
-    for (source, target) in [
-        ("atm", "atm-daemon"),
-        ("atm-daemon", "atm-runtime"),
-        ("atm-http-runtime", "atm"),
-        ("atm-http-runtime", "atm-daemon-bootstrap"),
-        ("atm-http-runtime", "atm-graft"),
-        ("atm-http-runtime", "atm-storage-rusqlite"),
-        ("atm-daemon-bootstrap", "atm-graft"),
-    ] {
+fn guarded_boundaries_forbid_every_declared_crate_edge() {
+    for &(source, target) in EXPECTED_FORBIDDEN_EDGES {
         assert_forbidden_edge_absent(source, target);
     }
 }
@@ -2459,15 +2452,19 @@ fn direct_normal_workspace_dependencies() -> BTreeMap<String, BTreeSet<String>> 
 }
 
 #[test]
-fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes() {
+fn al1_http_runtime_has_only_authorized_contract_ports_and_excludes_retired_transport_shapes() {
     let dependencies = direct_normal_workspace_dependencies();
     let actual = dependencies
         .get("atm-http-runtime")
         .expect("AL.1 HTTP runtime package must exist");
     assert_eq!(
         actual,
-        &BTreeSet::from(["agent-team-mail-core".to_string(), "atm-herdr".to_string(),]),
-        "atm-http-runtime may depend on ATM core contracts and the Herdr process adapter"
+        &BTreeSet::from([
+            "agent-team-mail-core".to_string(),
+            "atm-herdr".to_string(),
+            "atm-runtime".to_string(),
+        ]),
+        "atm-http-runtime may depend only on core contracts, the Tokio-owned async runtime ports, and the Herdr process adapter"
     );
 
     let root = workspace_root();
@@ -3559,10 +3556,10 @@ fn guarded_boundary_files() -> Vec<PathBuf> {
         root.join("boundaries/atm-http-runtime/member-state-transition-sink.toml"),
         root.join("boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"),
         root.join("boundaries/atm-runtime/runtime-composition.toml"),
-        root.join("boundaries/atm-storage/tls.toml"),
         root.join("boundaries/atm-template-sc-compose/sc-composer.toml"),
         root.join("boundaries/atm-herdr/herdr-process-adapter.toml"),
     ];
+    files.extend(boundary_files_in("atm-storage"));
     let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))
         .expect("boundaries/atm-storage-rusqlite directory must be readable")
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -3571,6 +3568,23 @@ fn guarded_boundary_files() -> Vec<PathBuf> {
     sqlite_files.sort();
     files.extend(sqlite_files);
     files
+}
+
+#[test]
+fn guarded_boundaries_include_every_atm_storage_record() {
+    let root = workspace_root();
+    let guarded_storage_files = guarded_boundary_files()
+        .into_iter()
+        .filter(|path| path.parent() == Some(root.join("boundaries/atm-storage").as_path()))
+        .collect::<BTreeSet<_>>();
+    let storage_boundary_files = boundary_files_in("atm-storage")
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(
+        guarded_storage_files, storage_boundary_files,
+        "the architecture guard must sweep every boundaries/atm-storage TOML record"
+    );
 }
 
 fn daemon_boundary_files() -> Vec<PathBuf> {

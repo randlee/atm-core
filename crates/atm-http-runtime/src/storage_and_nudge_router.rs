@@ -27,6 +27,7 @@ use atm_core::protocol::{
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
+use atm_runtime::{AsyncMailboxRuntime, DoctorProjection, DoctorProjectionContext};
 
 use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
@@ -147,6 +148,8 @@ pub struct StorageAndNudgeRouter {
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
     blocking_core_bridge: BlockingCoreBridge,
+    async_mailbox_runtime: Option<Arc<dyn AsyncMailboxRuntime>>,
+    doctor_projection: Option<Arc<dyn DoctorProjection>>,
     daemon_home: PathBuf,
     runtime_health: RuntimeHealth,
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
@@ -177,6 +180,8 @@ impl StorageAndNudgeRouter {
                 NonZeroUsize::new(1).expect("one non-storage core bridge operation"),
                 runtime_health.clone(),
             ),
+            async_mailbox_runtime: None,
+            doctor_projection: None,
             daemon_home,
             runtime_health,
             doctor_ports: None,
@@ -189,6 +194,25 @@ impl StorageAndNudgeRouter {
             bare_cli_queue_full_drops: Default::default(),
             member_state_transition_sink: None,
         }
+    }
+
+    /// Installs the composition-owned Tokio mailbox port.  AV.1b routes the
+    /// read family exclusively through this capability.
+    #[must_use]
+    pub fn with_async_mailbox_runtime(
+        mut self,
+        async_mailbox_runtime: Arc<dyn AsyncMailboxRuntime>,
+    ) -> Self {
+        self.async_mailbox_runtime = Some(async_mailbox_runtime);
+        self
+    }
+
+    /// Installs the bounded, composition-owned doctor projection.  Doctor is
+    /// a control-plane request and must not share the mailbox read bridge.
+    #[must_use]
+    pub fn with_doctor_projection(mut self, doctor_projection: Arc<dyn DoctorProjection>) -> Self {
+        self.doctor_projection = Some(doctor_projection);
+        self
     }
 
     #[cfg(test)]
@@ -495,20 +519,17 @@ impl StorageAndNudgeRouter {
         query: ListQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
-        let runtime = self.service_runtime.clone();
-        let observability = Arc::clone(&self.observability);
-        let home = self.daemon_home.clone();
-        self.blocking_core_bridge
-            .run(deadline, move || {
-                atm_core::list::list_mail_with_runtime(
-                    query.with_daemon_paths(home),
-                    observability.as_ref(),
-                    &runtime,
-                )
-                .map(ResponseEnvelope::List)
-                .map(ApiResponse::new)
-            })
+        let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "async mailbox runtime was not installed at daemon startup",
+            )
+        })?;
+        let command = atm_core::list::prepare_async_list(&query)?;
+        runtime
+            .list_command(command, deadline)
             .await
+            .map(ResponseEnvelope::List)
+            .map(ApiResponse::new)
     }
 
     async fn peek_messages(
@@ -516,21 +537,18 @@ impl StorageAndNudgeRouter {
         query: PeekQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
-        let runtime = self.service_runtime.clone();
-        let observability = Arc::clone(&self.observability);
-        let home = self.daemon_home.clone();
-        self.blocking_core_bridge
-            .run(deadline, move || {
-                atm_core::read::peek_mail_with_runtime(
-                    query.with_daemon_paths(home),
-                    observability.as_ref(),
-                    &runtime,
-                )
-                .map(Box::new)
-                .map(ResponseEnvelope::Peek)
-                .map(ApiResponse::new)
-            })
+        let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "async mailbox runtime was not installed at daemon startup",
+            )
+        })?;
+        let command = atm_core::read::async_projection::prepare_async_peek(&query)?;
+        runtime
+            .peek_command(command, deadline)
             .await
+            .map(Box::new)
+            .map(ResponseEnvelope::Peek)
+            .map(ApiResponse::new)
     }
 
     async fn receive_messages(
@@ -538,21 +556,18 @@ impl StorageAndNudgeRouter {
         query: ReadQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
-        let runtime = self.service_runtime.clone();
-        let observability = Arc::clone(&self.observability);
-        let home = self.daemon_home.clone();
-        self.blocking_core_bridge
-            .run(deadline, move || {
-                atm_core::read::read_mail_with_runtime(
-                    query.with_daemon_paths(home),
-                    observability.as_ref(),
-                    &runtime,
-                )
-                .map(Box::new)
-                .map(ResponseEnvelope::Receive)
-                .map(ApiResponse::new)
-            })
+        let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "async mailbox runtime was not installed at daemon startup",
+            )
+        })?;
+        let command = atm_core::read::async_projection::prepare_async_read(&query)?;
+        runtime
+            .read_command(command, deadline)
             .await
+            .map(Box::new)
+            .map(ResponseEnvelope::Receive)
+            .map(ApiResponse::new)
     }
 
     async fn clear_messages(
@@ -581,50 +596,36 @@ impl StorageAndNudgeRouter {
         query: DoctorQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
-        let runtime = self.service_runtime.clone();
-        let observability = Arc::clone(&self.observability);
-        let home = self.daemon_home.clone();
+        let doctor_projection = self.doctor_projection.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable("doctor projection was not installed at daemon startup")
+        })?;
+        let handoff = self
+            .async_mailbox_runtime
+            .as_ref()
+            .and_then(|runtime| runtime.handoff_diagnostics());
         let runtime_health = self.runtime_health.clone();
         let bare_cli_queue_full_drops = self.bare_cli_queue_full_drops.clone();
-        let doctor_ports = self.doctor_ports.clone();
-        let presence_doctor = doctor_ports
-            .as_ref()
-            .map(|ports| Arc::clone(&ports.herdr_presence));
         let daemon_context = self.daemon_context.clone();
-        let mut report = self
-            .blocking_core_bridge
-            .run(deadline, move || {
-                let query = query.with_daemon_paths(home);
-                let mut report = match doctor_ports {
-                    Some(ports) => atm_core::doctor::run_doctor_with_runtime_ports(
-                        query,
-                        observability.as_ref(),
-                        &runtime,
-                        &ports,
-                        None,
-                    ),
-                    None => atm_core::doctor::run_doctor_with_runtime(
-                        query,
-                        observability.as_ref(),
-                        &runtime,
-                    ),
-                }?;
-                let mut runtime_status = runtime_health.snapshot();
-                runtime_status.bare_cli_queue_full_drops_total =
-                    bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
-                report.herdr_queue_pump.last_tick_at = runtime_status.herdr_queue_last_tick_at;
-                report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
-                report.runtime_status = Some(runtime_status);
-                report.daemon_context = daemon_context;
-                Ok(report)
-            })
+        let mut runtime_status = runtime_health.snapshot();
+        runtime_status.bare_cli_queue_full_drops_total =
+            bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
+        let mut report = doctor_projection
+            .project(
+                query.with_daemon_paths(self.daemon_home.clone()),
+                DoctorProjectionContext {
+                    runtime_status: Some(runtime_status),
+                    daemon_context,
+                    handoff,
+                },
+                deadline,
+            )
             .await?;
-        if let (Some(presence_doctor), Some(roster)) =
-            (presence_doctor, report.member_roster.as_ref())
-        {
-            let findings = presence_doctor.probe(roster, deadline).await;
-            atm_core::doctor::append_doctor_findings(&mut report, findings);
-        }
+        let runtime_status = report
+            .runtime_status
+            .as_ref()
+            .expect("projection retains runtime status");
+        report.herdr_queue_pump.last_tick_at = runtime_status.herdr_queue_last_tick_at;
+        report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
         Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
 
@@ -1040,6 +1041,10 @@ mod tests {
     };
     use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
+    use atm_runtime::{
+        DoctorProjection, DoctorProjectionConfig, DoctorProjectionContext, HandoffConfig,
+        StorageDoctorProjection,
+    };
     use atm_runtime_test_support::{
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
         open_graft_receiver_endpoint_store, open_sqlite_boundary,
@@ -2229,6 +2234,15 @@ mod tests {
     #[tokio::test]
     async fn doctor_reports_bootstrap_injected_server_version() {
         let fixture = fixture(true, None, None);
+        let assembly =
+            open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
+        let doctor_projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig::default(),
+            assembly.service_runtime,
+            assembly.doctor_ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start doctor projection");
         let daemon_context = atm_core::doctor::DoctorExecutionContext {
             team: Some("daemon-team".parse().expect("team")),
             identity: Some("daemon-agent".parse().expect("agent")),
@@ -2240,6 +2254,7 @@ mod tests {
         let response = fixture
             .router
             .clone()
+            .with_doctor_projection(Arc::new(doctor_projection))
             .with_daemon_context(daemon_context.clone())
             .dispatch(
                 ApiRequest::new(atm_core::protocol::RequestEnvelope::Doctor(
@@ -2258,6 +2273,364 @@ mod tests {
             }
             other => panic!("expected doctor report, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn doctor_projection_serves_parallel_control_requests_without_the_read_bridge() {
+        let fixture = fixture(true, None, None);
+        let assembly =
+            open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
+        let projection = Arc::new(
+            StorageDoctorProjection::start(
+                DoctorProjectionConfig::default(),
+                assembly.service_runtime,
+                assembly.doctor_ports,
+                Arc::new(NullObservability),
+            )
+            .expect("start doctor projection"),
+        );
+        let mut tasks = Vec::new();
+        for _ in 0..8 {
+            let projection = Arc::clone(&projection);
+            tasks.push(tokio::spawn(async move {
+                projection
+                    .project(
+                        atm_core::doctor::DoctorQuery::default(),
+                        DoctorProjectionContext::default(),
+                        RequestDeadline::after(Duration::from_secs(1)),
+                    )
+                    .await
+            }));
+        }
+        for task in tasks {
+            task.await
+                .expect("join doctor request")
+                .expect("parallel doctor response");
+        }
+        assert!(
+            !projection.workers_finished(),
+            "a healthy projection retains its bounded control workers"
+        );
+    }
+
+    #[tokio::test]
+    async fn doctor_projection_rejects_control_lane_overload_explicitly() {
+        let fixture = fixture(true, None, None);
+        let assembly =
+            open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
+        let projection = Arc::new(
+            StorageDoctorProjection::start(
+                DoctorProjectionConfig {
+                    worker_count: 1,
+                    queue_depth: 1,
+                },
+                assembly.service_runtime,
+                assembly.doctor_ports,
+                Arc::new(NullObservability),
+            )
+            .expect("start bounded doctor projection"),
+        );
+        let barrier = Arc::new(tokio::sync::Barrier::new(65));
+        let mut calls = Vec::new();
+        for _ in 0..64 {
+            let projection = Arc::clone(&projection);
+            let barrier = Arc::clone(&barrier);
+            calls.push(tokio::spawn(async move {
+                barrier.wait().await;
+                projection
+                    .project(
+                        atm_core::doctor::DoctorQuery::default(),
+                        DoctorProjectionContext::default(),
+                        RequestDeadline::after(Duration::from_secs(1)),
+                    )
+                    .await
+            }));
+        }
+        barrier.wait().await;
+
+        let mut completed = 0;
+        let mut saturated = 0;
+        for call in calls {
+            match call.await.expect("doctor caller joins") {
+                Ok(_) => completed += 1,
+                Err(error)
+                    if error.code() == atm_storage::AtmErrorCode::DaemonConnectionSaturated =>
+                {
+                    saturated += 1;
+                }
+                Err(error) => panic!("unexpected doctor overload result: {error}"),
+            }
+        }
+        assert!(completed > 0, "admitted doctor calls retain healthy parity");
+        assert!(
+            saturated > 0,
+            "beyond the bounded control lane, doctor rejects explicitly instead of serializing"
+        );
+    }
+
+    #[test]
+    fn mailbox_and_doctor_handlers_never_enter_the_blocking_core_bridge() {
+        let source = include_str!("storage_and_nudge_router.rs")
+            .split("\n#[cfg(test)]\nmod tests")
+            .next()
+            .expect("production source");
+        for handler in [
+            "list_messages",
+            "peek_messages",
+            "receive_messages",
+            "doctor",
+        ] {
+            let start = source
+                .find(&format!("async fn {handler}"))
+                .expect("handler exists");
+            let tail = &source[start..];
+            let end = tail.find("\n    async fn ").unwrap_or(tail.len());
+            assert!(
+                !tail[..end].contains("blocking_core_bridge"),
+                "{handler} must not acquire the global blocking bridge"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn mailbox_handlers_use_the_async_runtime_for_list_peek_and_read() {
+        let fixture = fixture(true, None, None);
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("seed mailbox through canonical write path");
+
+        let assembly = open_sqlite_boundary(&fixture.database_path).expect("reopen async boundary");
+        let async_mailbox_runtime = assembly
+            .async_mailbox_runtime
+            .with_state_handoff(HandoffConfig::default())
+            .expect("start async mailbox handoff");
+        let router = fixture
+            .router
+            .clone()
+            .with_async_mailbox_runtime(Arc::new(async_mailbox_runtime));
+        let root = fixture.home_dir.clone();
+        let list = atm_core::list::ListQuery::new(
+            root.clone(),
+            root.clone(),
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query");
+        let listed = router
+            .dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    list,
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("list through async mailbox runtime")
+            .into_inner();
+        assert!(matches!(listed, ResponseEnvelope::List(outcome) if outcome.count == 1));
+
+        let peek = atm_core::read::PeekQuery::new(
+            root.clone(),
+            root.clone(),
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("peek query");
+        let peeked = router
+            .dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::Peek(
+                    peek,
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("peek through async mailbox runtime")
+            .into_inner();
+        assert!(matches!(peeked, ResponseEnvelope::Peek(outcome) if outcome.count == 1));
+
+        let read = atm_core::read::ReadQuery::new(
+            root.clone(),
+            root,
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query");
+        let read = router
+            .dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::Receive(
+                    read,
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("read through async mailbox runtime")
+            .into_inner();
+        assert!(
+            matches!(read, ResponseEnvelope::Receive(outcome) if outcome.count == 1 && outcome.mutation_applied)
+        );
+    }
+
+    #[tokio::test]
+    async fn mailbox_and_doctor_fanout_stays_live_while_the_legacy_bridge_is_occupied() {
+        let fixture = fixture(true, None, None);
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("seed mailbox");
+
+        let assembly = open_sqlite_boundary(&fixture.database_path).expect("reopen async boundary");
+        let async_mailbox_runtime = assembly
+            .async_mailbox_runtime
+            .with_state_handoff(HandoffConfig::default())
+            .expect("start mailbox handoff");
+        let doctor_projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig::default(),
+            assembly.service_runtime,
+            assembly.doctor_ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start doctor projection");
+        let router = fixture
+            .router
+            .clone()
+            .with_async_mailbox_runtime(Arc::new(async_mailbox_runtime))
+            .with_doctor_projection(Arc::new(doctor_projection));
+        let bridge = router.blocking_core_bridge.clone();
+        let bridge_task = tokio::spawn(async move {
+            bridge
+                .run(RequestDeadline::after(Duration::from_secs(1)), || {
+                    spin_wait(Duration::from_millis(250));
+                    Ok(())
+                })
+                .await
+        });
+        tokio::task::yield_now().await;
+
+        let root = fixture.home_dir.clone();
+        let list = atm_core::list::ListQuery::new(
+            root.clone(),
+            root.clone(),
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query");
+        let peek = atm_core::read::PeekQuery::new(
+            root.clone(),
+            root.clone(),
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("peek query");
+        let read = atm_core::read::ReadQuery::new(
+            root.clone(),
+            root,
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query");
+        let mut calls = Vec::new();
+        for index in 0..12 {
+            let router = router.clone();
+            let request = match index % 4 {
+                0 => ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    list.clone(),
+                ))),
+                1 => ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::Peek(
+                    peek.clone(),
+                ))),
+                2 => ApiRequest::Messages(Box::new(
+                    atm_core::api::MessageCollectionRequest::Receive(read.clone()),
+                )),
+                _ => ApiRequest::Doctor(atm_core::doctor::DoctorQuery::default()),
+            };
+            calls.push(tokio::spawn(async move {
+                router
+                    .dispatch(
+                        request,
+                        AuthenticatedIngress::Local,
+                        RequestDeadline::after(Duration::from_secs(1)),
+                    )
+                    .await
+            }));
+        }
+        for call in calls {
+            call.await
+                .expect("fanout task joins")
+                .expect("fanout request completes while bridge is occupied");
+        }
+        bridge_task
+            .await
+            .expect("bridge task joins")
+            .expect("bridge task completes");
     }
 
     async fn post_write(app: axum::Router, write: &WriteRequest) -> axum::response::Response {
