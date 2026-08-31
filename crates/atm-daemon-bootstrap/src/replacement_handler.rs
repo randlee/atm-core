@@ -278,14 +278,19 @@ pub(crate) fn build_replacement_handler(
         peer_wire_security: Some(peer_wire_mode.security().into()),
     })
     .with_shared_direct_peer_client(shared_direct_peer_client()?);
-    let handler = match peer_adapter_selection.adapter {
-        Some(adapter) => handler.with_peer_connection_pool(PeerConnectionPool::new(
-            peer_adapter_selection.pool_config,
-            adapter,
-        )),
-        None => handler,
-    };
+    let handler = add_peer_connection_pool(handler, peer_adapter_selection);
     Ok((Arc::new(handler), recovery_sweep))
+}
+
+fn add_peer_connection_pool(
+    handler: StorageAndNudgeRouter,
+    selection: SelectedPeerAdapterSelection,
+) -> StorageAndNudgeRouter {
+    match selection.adapter {
+        Some(adapter) => handler
+            .with_peer_connection_pool(PeerConnectionPool::new(selection.pool_config, adapter)),
+        None => handler,
+    }
 }
 
 fn resolve_herdr_process(
