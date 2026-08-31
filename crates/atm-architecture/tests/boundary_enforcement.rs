@@ -3597,6 +3597,59 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
 }
 
 #[test]
+fn av3_blocking_core_bridge_is_absent_from_all_production_crates_after_rename() {
+    let root = workspace_root();
+    let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
+    if !router.contains("ControlPathSyncBridge") {
+        return;
+    }
+    let findings = av3_identifier_findings(&root.join("crates"), "BlockingCoreBridge");
+    assert!(
+        findings.is_empty(),
+        "AV.3 D1 forbids BlockingCoreBridge in production crates: {findings:?}"
+    );
+}
+
+#[test]
+fn av3_blocking_core_bridge_crate_scan_rejects_a_stray_reintroduction() {
+    assert_eq!(
+        av3_identifier_findings_in_source("struct BlockingCoreBridge;", "BlockingCoreBridge"),
+        vec!["BlockingCoreBridge"]
+    );
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Av3WriterIngressPath {
+    None,
+    StateHandoffSupervisor,
+    DirectWriter,
+}
+
+#[test]
+fn av3_d2b_scaffold_accepts_only_the_supervised_read_state_handoff() {
+    let endpoints = [
+        ("list", Av3WriterIngressPath::None),
+        ("peek", Av3WriterIngressPath::None),
+        ("doctor", Av3WriterIngressPath::None),
+        ("read", Av3WriterIngressPath::StateHandoffSupervisor),
+    ];
+    for (endpoint, path) in endpoints {
+        assert!(
+            matches!(
+                path,
+                Av3WriterIngressPath::None | Av3WriterIngressPath::StateHandoffSupervisor
+            ),
+            "D2b `{endpoint}` must not obtain response data through writer ingress"
+        );
+    }
+    assert_ne!(
+        Av3WriterIngressPath::DirectWriter,
+        Av3WriterIngressPath::StateHandoffSupervisor,
+        "a direct writer submission is never the AV.1b supervisor handoff"
+    );
+}
+
+#[test]
 fn herdr_constructors_have_one_composition_root_call_site() {
     let root = workspace_root();
     let mut rust_files = Vec::new();
@@ -3842,6 +3895,46 @@ fn av3_assert_allowlisted_types(region: &str, allowed: &[&str], scope: &str) {
         unexpected.is_empty(),
         "AV.3 {scope} allowlist rejects unlisted type(s): {unexpected:?}"
     );
+}
+
+fn av3_identifier_findings(root: &Path, identifier: &str) -> Vec<String> {
+    let mut files = Vec::new();
+    collect_rust_files(root, &mut files);
+    files
+        .into_iter()
+        .filter_map(|path| {
+            (!av3_identifier_findings_in_source(&read_source(&path), identifier).is_empty())
+                .then(|| path.display().to_string())
+        })
+        .collect()
+}
+
+fn av3_identifier_findings_in_source(source: &str, identifier: &str) -> Vec<String> {
+    let syntax = syn::parse_file(source).expect("AV.3 production source must parse");
+    struct IdentifierVisitor<'a> {
+        identifier: &'a str,
+        findings: Vec<String>,
+    }
+    impl<'ast> Visit<'ast> for IdentifierVisitor<'_> {
+        fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+            if item.attrs.iter().any(is_test_configuration_attribute) {
+                return;
+            }
+            syn::visit::visit_item_mod(self, item);
+        }
+        fn visit_ident(&mut self, ident: &'ast syn::Ident) {
+            if ident == self.identifier {
+                self.findings.push(ident.to_string());
+            }
+            syn::visit::visit_ident(self, ident);
+        }
+    }
+    let mut visitor = IdentifierVisitor {
+        identifier,
+        findings: Vec::new(),
+    };
+    visitor.visit_file(&syntax);
+    visitor.findings
 }
 
 fn read_handler_names() -> Vec<String> {
