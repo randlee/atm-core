@@ -599,6 +599,10 @@ impl StorageAndNudgeRouter {
         let doctor_projection = self.doctor_projection.as_ref().ok_or_else(|| {
             AtmError::daemon_unavailable("doctor projection was not installed at daemon startup")
         })?;
+        let handoff = self
+            .async_mailbox_runtime
+            .as_ref()
+            .and_then(|runtime| runtime.handoff_diagnostics());
         let runtime_health = self.runtime_health.clone();
         let bare_cli_queue_full_drops = self.bare_cli_queue_full_drops.clone();
         let daemon_context = self.daemon_context.clone();
@@ -611,6 +615,7 @@ impl StorageAndNudgeRouter {
                 DoctorProjectionContext {
                     runtime_status: Some(runtime_status),
                     daemon_context,
+                    handoff,
                 },
                 deadline,
             )
@@ -2444,6 +2449,133 @@ mod tests {
         assert!(
             matches!(read, ResponseEnvelope::Receive(outcome) if outcome.count == 1 && outcome.mutation_applied)
         );
+    }
+
+    #[tokio::test]
+    async fn mailbox_and_doctor_fanout_stays_live_while_the_legacy_bridge_is_occupied() {
+        let fixture = fixture(true, None, None);
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("seed mailbox");
+
+        let assembly = open_sqlite_boundary(&fixture.database_path).expect("reopen async boundary");
+        let async_mailbox_runtime = assembly
+            .async_mailbox_runtime
+            .with_state_handoff(HandoffConfig::default())
+            .expect("start mailbox handoff");
+        let doctor_projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig::default(),
+            assembly.service_runtime,
+            assembly.doctor_ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start doctor projection");
+        let router = fixture
+            .router
+            .clone()
+            .with_async_mailbox_runtime(Arc::new(async_mailbox_runtime))
+            .with_doctor_projection(Arc::new(doctor_projection));
+        let bridge = router.blocking_core_bridge.clone();
+        let bridge_task = tokio::spawn(async move {
+            bridge
+                .run(RequestDeadline::after(Duration::from_secs(1)), || {
+                    spin_wait(Duration::from_millis(250));
+                    Ok(())
+                })
+                .await
+        });
+        tokio::task::yield_now().await;
+
+        let root = fixture.home_dir.clone();
+        let list = atm_core::list::ListQuery::new(
+            root.clone(),
+            root.clone(),
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query");
+        let peek = atm_core::read::PeekQuery::new(
+            root.clone(),
+            root.clone(),
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("peek query");
+        let read = atm_core::read::ReadQuery::new(
+            root.clone(),
+            root,
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query");
+        let mut calls = Vec::new();
+        for index in 0..12 {
+            let router = router.clone();
+            let request = match index % 4 {
+                0 => ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    list.clone(),
+                ))),
+                1 => ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::Peek(
+                    peek.clone(),
+                ))),
+                2 => ApiRequest::Messages(Box::new(
+                    atm_core::api::MessageCollectionRequest::Receive(read.clone()),
+                )),
+                _ => ApiRequest::Doctor(atm_core::doctor::DoctorQuery::default()),
+            };
+            calls.push(tokio::spawn(async move {
+                router
+                    .dispatch(
+                        request,
+                        AuthenticatedIngress::Local,
+                        RequestDeadline::after(Duration::from_secs(1)),
+                    )
+                    .await
+            }));
+        }
+        for call in calls {
+            call.await
+                .expect("fanout task joins")
+                .expect("fanout request completes while bridge is occupied");
+        }
+        bridge_task
+            .await
+            .expect("bridge task joins")
+            .expect("bridge task completes");
     }
 
     async fn post_write(app: axum::Router, write: &WriteRequest) -> axum::response::Response {

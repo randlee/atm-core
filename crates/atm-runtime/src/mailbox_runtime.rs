@@ -54,6 +54,17 @@ pub enum SupervisorState {
     Restarting,
 }
 
+/// Value diagnostics sampled by doctor without taking the writer lane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StateHandoffDiagnostics {
+    pub state: SupervisorState,
+    pub buffered_depth: usize,
+    pub restart_count: u32,
+    pub rejected_buffer_full: u64,
+    pub rejected_unavailable: u64,
+    pub retry_deadline_exhaustions: u64,
+}
+
 #[derive(Debug, Clone)]
 struct ReadDisplayTransition {
     scope: MailboxScope,
@@ -76,6 +87,9 @@ struct StateHandoffInner {
     queue_changed: tokio::sync::Notify,
     state: std::sync::atomic::AtomicU8,
     restart_count: std::sync::atomic::AtomicU32,
+    rejected_buffer_full: std::sync::atomic::AtomicU64,
+    rejected_unavailable: std::sync::atomic::AtomicU64,
+    retry_deadline_exhaustions: std::sync::atomic::AtomicU64,
 }
 
 /// Owns the manager handle outside the state shared with the task itself.
@@ -116,6 +130,9 @@ impl StateHandoffSupervisor {
             queue_changed: tokio::sync::Notify::new(),
             state: std::sync::atomic::AtomicU8::new(STATE_READY),
             restart_count: std::sync::atomic::AtomicU32::new(0),
+            rejected_buffer_full: std::sync::atomic::AtomicU64::new(0),
+            rejected_unavailable: std::sync::atomic::AtomicU64::new(0),
+            retry_deadline_exhaustions: std::sync::atomic::AtomicU64::new(0),
         });
         let manager_inner = Arc::clone(&inner);
         let manager = Arc::new(ManagerTask {
@@ -131,6 +148,9 @@ impl StateHandoffSupervisor {
         seen_watermark: Option<IsoTimestamp>,
     ) -> Result<(), HandoffRejected> {
         if self.state() != SupervisorState::Ready {
+            self.inner
+                .rejected_unavailable
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             return Err(HandoffRejected::Unavailable);
         }
         let mut queue = self
@@ -139,9 +159,15 @@ impl StateHandoffSupervisor {
             .lock()
             .expect("state-handoff queue mutex poisoned");
         if self.state() != SupervisorState::Ready {
+            self.inner
+                .rejected_unavailable
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             return Err(HandoffRejected::Unavailable);
         }
         if queue.len() >= self.inner.config.handoff_buffer {
+            self.inner
+                .rejected_buffer_full
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             return Err(HandoffRejected::BufferFull);
         }
         queue.push_back(ReadDisplayTransition {
@@ -177,6 +203,27 @@ impl StateHandoffSupervisor {
         self.inner
             .restart_count
             .load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    #[must_use]
+    pub fn diagnostics(&self) -> StateHandoffDiagnostics {
+        StateHandoffDiagnostics {
+            state: self.state(),
+            buffered_depth: self.buffered_depth(),
+            restart_count: self.restart_count(),
+            rejected_buffer_full: self
+                .inner
+                .rejected_buffer_full
+                .load(std::sync::atomic::Ordering::Relaxed),
+            rejected_unavailable: self
+                .inner
+                .rejected_unavailable
+                .load(std::sync::atomic::Ordering::Relaxed),
+            retry_deadline_exhaustions: self
+                .inner
+                .retry_deadline_exhaustions
+                .load(std::sync::atomic::Ordering::Relaxed),
+        }
     }
 
     /// Reports whether the composition-owned supervisor task has exited.
@@ -265,7 +312,12 @@ async fn run_handoff_worker(inner: Arc<StateHandoffInner>) -> Result<(), AtmErro
                     debug_assert!(removed.is_some(), "worker owns the front transition");
                     break;
                 }
-                Err(error) if tokio::time::Instant::now() >= retry_deadline => return Err(error),
+                Err(error) if tokio::time::Instant::now() >= retry_deadline => {
+                    inner
+                        .retry_deadline_exhaustions
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    return Err(error);
+                }
                 Err(error) => {
                     tracing::warn!(%error, "retrying mailbox read-state handoff");
                     tokio::time::sleep(Duration::from_millis(10)).await;
@@ -281,6 +333,8 @@ const STATE_RESTARTING: u8 = 2;
 
 #[async_trait::async_trait]
 pub trait AsyncMailboxRuntime: Send + Sync {
+    fn handoff_diagnostics(&self) -> Option<StateHandoffDiagnostics>;
+
     async fn list_command(
         &self,
         command: AsyncListCommand,
@@ -381,6 +435,13 @@ impl StorageAsyncMailboxRuntime {
 
 #[async_trait::async_trait]
 impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
+    fn handoff_diagnostics(&self) -> Option<StateHandoffDiagnostics> {
+        match &self.state_handoff {
+            StateHandoffLifecycle::Unstarted(_) => None,
+            StateHandoffLifecycle::Active(handoff) => Some(handoff.diagnostics()),
+        }
+    }
+
     async fn list_command(
         &self,
         command: AsyncListCommand,
@@ -834,6 +895,11 @@ mod tests {
             Err(HandoffRejected::BufferFull),
             "full queue is an explicit fail-safe rejection"
         );
+        assert_eq!(
+            supervisor.diagnostics().rejected_buffer_full,
+            1,
+            "doctor can surface every fail-safe full-buffer rejection"
+        );
     }
 
     #[tokio::test]
@@ -1063,6 +1129,9 @@ mod tests {
             Err(HandoffRejected::Unavailable),
             "runtime fails closed after permanent writer failure"
         );
+        let diagnostics = supervisor.diagnostics();
+        assert_eq!(diagnostics.retry_deadline_exhaustions, 1);
+        assert_eq!(diagnostics.rejected_unavailable, 1);
     }
 
     #[test]

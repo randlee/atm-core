@@ -17,6 +17,8 @@ use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::RuntimeStatusSnapshot;
 use atm_storage::AtmError;
 
+use crate::{StateHandoffDiagnostics, SupervisorState};
+
 /// Fixed bounded-control-plane settings for the doctor projection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DoctorProjectionConfig {
@@ -38,6 +40,7 @@ impl Default for DoctorProjectionConfig {
 pub struct DoctorProjectionContext {
     pub runtime_status: Option<RuntimeStatusSnapshot>,
     pub daemon_context: Option<DoctorExecutionContext>,
+    pub handoff: Option<StateHandoffDiagnostics>,
 }
 
 #[async_trait::async_trait]
@@ -165,6 +168,30 @@ impl DoctorProjection for StorageDoctorProjection {
         }
         if let Some(runtime_status) = context.runtime_status {
             report.runtime_status = Some(runtime_status);
+        }
+        if let Some(handoff) = context.handoff
+            && handoff.state != SupervisorState::Ready
+        {
+            append_doctor_findings(
+                &mut report,
+                vec![DoctorFinding {
+                    severity: DoctorSeverity::Warning,
+                    code: atm_storage::AtmErrorCode::DaemonUnavailable,
+                    message: format!(
+                        "mailbox read-state handoff is {:?}; buffered={}, restarts={}, rejected_full={}, rejected_unavailable={}, retry_deadline_exhaustions={}",
+                        handoff.state,
+                        handoff.buffered_depth,
+                        handoff.restart_count,
+                        handoff.rejected_buffer_full,
+                        handoff.rejected_unavailable,
+                        handoff.retry_deadline_exhaustions,
+                    ),
+                    remediation: Some(
+                        "Inspect the mailbox writer lane and restart the daemon if the handoff does not recover."
+                            .to_owned(),
+                    ),
+                }],
+            );
         }
         report.daemon_context = context.daemon_context;
         Ok(report)

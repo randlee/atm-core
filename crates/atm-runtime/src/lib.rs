@@ -19,7 +19,10 @@ pub use composition::{
 pub use doctor_projection::{
     DoctorProjection, DoctorProjectionConfig, DoctorProjectionContext, StorageDoctorProjection,
 };
-pub use mailbox_runtime::{AsyncMailboxRuntime, HandoffConfig, StateHandoffSupervisor};
+pub use mailbox_runtime::{
+    AsyncMailboxRuntime, HandoffConfig, StateHandoffDiagnostics, StateHandoffSupervisor,
+    SupervisorState,
+};
 pub use workflow_telemetry::{
     WorkflowTelemetryConfig, WorkflowTelemetryDiagnostics, WorkflowTelemetryRuntime,
     WorkflowTelemetrySetup,
