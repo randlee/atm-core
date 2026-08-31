@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-AV4C-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AV4C-004" ;
+  triage:title "AV.4 status frontmatter and project-plan Phase AV rows stale after campaign completion (sprint-AV.4 'planned', AV.3/AV.4 table rows 'in-review'/'planned' with PRs marked open)" ;
+  triage:description "At the AV.4 campaign-completion QA round (integrate/phase-av 9f4d85585, PR #1120), docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md:8 still read 'status: planned' and docs/project-plan.md:1592 Phase AV table showed the AV.4 row as 'planned (PR #1114 open)' although PR #1114 was merged and the official three-run benchmark campaign was complete and QA-verified. The adjacent AV.3 row was equally stale ('in-review (PR #1113 open)' with #1113 merged) — same staleness class. Found by req-qa campaign review; verified firsthand by quality-mgr at 9f4d85585. Reported in PR #1120 comment 5484739181." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-31T21:28:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:resolutionNote "Fixed @ eb67d77c2 on integrate/phase-av by fenix under docs-staleness standing auth (verified firsthand by quality-mgr): delta is exactly the status flips — sprint-AV.4:8 'planned' -> 'complete', project-plan Phase AV table AV.4 row 'planned (PR #1114 open)' -> 'complete (PR #1114 merged)', and the same-class stale AV.3 row 'in-review (PR #1113 open)' -> 'complete (PR #1113 merged)'. eb67d77c2 confirmed an ancestor of integrate/phase-av HEAD. No re-review round required for the docs flip per standing routing." ;
+  triage:triagedAt "2026-08-31T21:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4CAMPAIGN ;
+  triage:foundAt "2026-08-31T21:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AV4C-004/INT-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AV4C-004/INT-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-AV4C-004/INT-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md" ;
+  triage:line 8 ;
+  triage:snippet "status: planned" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "9f4d85585" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/9f4d85585> .
+
+<urn:atm:triage:occurrence/ATM-QA-AV4C-004/INT-2>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1592 ;
+  triage:snippet "| `AV.4` | `planned` (PR #1114 open) | ... (adjacent AV.3 row equally stale)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "9f4d85585" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/9f4d85585> .
+
+<urn:atm:triage:worktree/INTEGRATE/9f4d85585>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate/phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "9f4d85585" ;
+  triage:orderIndex 1 .
