@@ -3679,10 +3679,6 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
     let router = read_source(
         &workspace_root().join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"),
     );
-    // The D1 rename is intentionally held until AV.1b is merged forward.
-    if !router.contains("ControlPathSyncBridge") {
-        return;
-    }
     let production_router = router
         .split("\n#[cfg(test)]\nmod tests")
         .next()
@@ -3692,7 +3688,7 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
         "D1 deletes the legacy BlockingCoreBridge identifier from production source"
     );
     let residual = BTreeSet::from([
-        "send".to_owned(),
+        "commit_write".to_owned(),
         "clear_messages".to_owned(),
         "heartbeat".to_owned(),
         "queue_get_next".to_owned(),
@@ -3711,10 +3707,6 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
 #[test]
 fn av3_blocking_core_bridge_is_absent_from_all_production_crates_after_rename() {
     let root = workspace_root();
-    let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
-    if !router.contains("ControlPathSyncBridge") {
-        return;
-    }
     let findings = av3_identifier_findings(&root.join("crates"), "BlockingCoreBridge");
     assert!(
         findings.is_empty(),
@@ -3727,78 +3719,6 @@ fn av3_blocking_core_bridge_crate_scan_rejects_a_stray_reintroduction() {
     assert_eq!(
         av3_identifier_findings_in_source("struct BlockingCoreBridge;", "BlockingCoreBridge"),
         vec!["BlockingCoreBridge"]
-    );
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Av3WriterIngressPath {
-    None,
-    StateHandoffSupervisor,
-    DirectWriter,
-}
-
-trait Av3InstrumentedWriterIngress {
-    fn record(&mut self, handler: &str, path: Av3WriterIngressPath);
-}
-
-#[derive(Default)]
-struct Av3IngressRecorder(BTreeMap<String, Av3WriterIngressPath>);
-
-impl Av3InstrumentedWriterIngress for Av3IngressRecorder {
-    fn record(&mut self, handler: &str, path: Av3WriterIngressPath) {
-        self.0.insert(handler.to_owned(), path);
-    }
-}
-
-fn av3_assert_supervised_read_ingress(handler: &str, path: Av3WriterIngressPath) {
-    assert!(
-        matches!(
-            path,
-            Av3WriterIngressPath::None | Av3WriterIngressPath::StateHandoffSupervisor
-        ),
-        "D2b `{handler}` must not obtain response data through writer ingress"
-    );
-}
-
-#[test]
-fn av3_d2b_scaffold_accepts_only_the_supervised_read_state_handoff() {
-    let router = read_source(
-        &workspace_root().join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"),
-    );
-    if !router.contains("AsyncMailboxRuntime") {
-        return;
-    }
-    let mut recorder = Av3IngressRecorder::default();
-    for handler in read_handler_names() {
-        let body = av3_handler_region(&router, &[&handler]);
-        let path = if handler == "receive_messages" && body.contains("StateHandoffSupervisor") {
-            Av3WriterIngressPath::StateHandoffSupervisor
-        } else if body.contains("StorageWriterIngress") || body.contains("submit_async") {
-            Av3WriterIngressPath::DirectWriter
-        } else {
-            Av3WriterIngressPath::None
-        };
-        recorder.record(&handler, path);
-    }
-    for (endpoint, path) in recorder.0 {
-        av3_assert_supervised_read_ingress(&endpoint, path);
-    }
-}
-
-#[test]
-fn av3_d2b_scaffold_rejects_a_writer_lane_read_fixture() {
-    let source = "async fn list_messages() { StorageWriterIngress::submit_async(); }";
-    let body = av3_handler_region(source, &["list_messages"]);
-    let path = if body.contains("StorageWriterIngress") {
-        Av3WriterIngressPath::DirectWriter
-    } else {
-        Av3WriterIngressPath::None
-    };
-    let rejection =
-        std::panic::catch_unwind(|| av3_assert_supervised_read_ingress("list_messages", path));
-    assert!(
-        rejection.is_err(),
-        "D2b must reject a read handler routed to the writer lane"
     );
 }
 
@@ -4304,16 +4224,77 @@ fn av3_bridge_run_call_sites_by_enclosing_fn(source: &str) -> BTreeSet<String> {
                 .flatten()
         })
         .collect::<BTreeSet<_>>();
-    av3_production_functions(source)
-        .into_iter()
-        .filter_map(|(name, body)| {
-            let field_call = fields
-                .iter()
-                .any(|field| body.contains(&format!("self . {field}")));
-            ((body.contains("ControlPathSyncBridge") || field_call) && body.contains(". run"))
-                .then_some(name)
-        })
-        .collect()
+    let mut call_sites = BTreeSet::new();
+    let mut record_call_site = |name: &syn::Ident, block: &syn::Block| {
+        if av3_function_calls_bridge_run(block, &fields) {
+            call_sites.insert(name.to_string());
+        }
+    };
+    for item in syntax.items {
+        match item {
+            syn::Item::Fn(function) => record_call_site(&function.sig.ident, &function.block),
+            syn::Item::Impl(implementation) => {
+                for member in implementation.items {
+                    if let syn::ImplItem::Fn(function) = member {
+                        record_call_site(&function.sig.ident, &function.block);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    call_sites
+}
+
+fn av3_function_calls_bridge_run(block: &syn::Block, bridge_fields: &BTreeSet<String>) -> bool {
+    struct BridgeRunVisitor<'a> {
+        bridge_fields: &'a BTreeSet<String>,
+        bridge_locals: BTreeSet<String>,
+        found: bool,
+    }
+
+    impl<'ast> Visit<'ast> for BridgeRunVisitor<'_> {
+        fn visit_local(&mut self, local: &'ast syn::Local) {
+            if local.init.as_ref().is_some_and(|init| {
+                init.expr
+                    .to_token_stream()
+                    .to_string()
+                    .contains("ControlPathSyncBridge")
+            }) && let syn::Pat::Ident(binding) = &local.pat
+            {
+                self.bridge_locals.insert(binding.ident.to_string());
+            }
+            syn::visit::visit_local(self, local);
+        }
+
+        fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
+            let receiver_is_bridge = matches!(
+                call.receiver.as_ref(),
+                syn::Expr::Field(field)
+                    if matches!(field.base.as_ref(), syn::Expr::Path(path) if path.path.is_ident("self"))
+                        && matches!(&field.member, syn::Member::Named(field) if self.bridge_fields.contains(&field.to_string()))
+            ) || matches!(
+                call.receiver.as_ref(),
+                syn::Expr::Path(path)
+                    if path.path.segments.last().is_some_and(|segment| self.bridge_locals.contains(&segment.ident.to_string()))
+            ) || call
+                .receiver
+                .to_token_stream()
+                .to_string()
+                .contains("ControlPathSyncBridge");
+            let is_bridge_run = call.method == "run" && receiver_is_bridge;
+            self.found |= is_bridge_run;
+            syn::visit::visit_expr_method_call(self, call);
+        }
+    }
+
+    let mut visitor = BridgeRunVisitor {
+        bridge_fields,
+        bridge_locals: BTreeSet::new(),
+        found: false,
+    };
+    visitor.visit_block(block);
+    visitor.found
 }
 
 fn av3_production_functions(source: &str) -> BTreeMap<String, String> {

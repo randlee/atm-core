@@ -370,6 +370,53 @@ guard, while `#[cfg(test)]` in-memory setup stays outside production-policy
 scope. Validation reports `just validate` honestly as failing only at the
 known dependency-currency gate above.
 
+## QA round 3 closure
+
+AV1A-I6's full trait-only I/O-policy sweep is implemented by
+`0ca86ecafb342b9f68fa298b6a1bdaf81970c44f`. All 34 records with a non-empty
+`io_forbidden` policy now have a non-vacuous source target: 22 derive the
+production trait-contract declaration region, the pre-existing AV.1a reader
+mapping remains explicit for its helper modules, and 11 retired/planned
+contracts assert `no_in_repo_implementation = true`, which the lint verifies
+against production `impl Trait for Type` sites. The scan fails closed for any
+record lacking all three forms of coverage. The sweep surfaced one
+`SocketAddr` metadata false positive in `PeerConfigStore`; it is covered by a
+single exact source exception, leaving socket operations themselves guarded.
+`python3 .just/lint_boundaries.py` passes. As in round 2, `just validate` is
+reported honestly after the full validation run rather than described as a
+clean pass while dependency-currency remains an external gate. QA owns the
+finding's final closure after independent verification.
+
+## QA round 4 closure
+
+AV1A-I6 is completed by `eb9744b4b03c0a6a99a07bca105da4a7fffef350`: an
+unmapped trait-only I/O policy now derives both the trait declaration region
+and every production `impl Trait for Type` module. A declared concrete boundary
+remains the single owner for its concrete adapter source, so permitted adapter
+I/O is evaluated by that boundary rather than incorrectly attributed to the
+abstract trait. This reaches the previously uncovered
+`DrainOnTransitionSink` implementation in `queue_drain.rs`; its
+`database_io`, `process_spawn`, and `daemon_request_dispatch` scan surfaced no
+real violation. Both `AsyncMailboxReader` records explicitly scan
+`mailbox_reader`, `reader_pool`, and `shared_db_reader_lanes` for `socket_io`
+and `process_spawn`; negative fixtures prove both constructs fail the lint.
+
+The source-target split is regenerated from the tree: 34 trait-only records
+with non-empty `io_forbidden` policies comprise 19 declaration-plus-production
+implementation derivations, one explicit `AsyncMailboxReader` helper mapping,
+and 14 lint-verified `no_in_repo_implementation` declarations. The latter
+includes the cfg(test)-only `StorageNotifier` case, completed by
+`f682576081ee2e436ea250191e405880efe1fc2e`. The sweep keeps failing closed
+when a contract has neither a production implementation nor that explicit
+declaration. `python3 .just/lint_boundaries.py` passes. As in earlier rounds,
+`just validate` is reported from its actual final run and is not described as
+clean while the repository-wide dependency-currency gate remains external.
+
+Future-round candidates only: a `write_capable_connection` flag assembled via
+a variable can evade the current literal-flag matcher, and widening an AV.3
+handler signature can evade its allowlist. Neither changes the AV.1a reader
+lane and neither is implemented here.
+
 ## Out of scope
 
 - Any handler change in `atm-http-runtime` — AV.1b.

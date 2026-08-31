@@ -79,3 +79,39 @@ async fn doctor() {}
             findings = check(root)
             self.assertTrue(any("ListMessages" in finding for finding in findings))
             self.assertTrue(any("BlockingCoreBridge" in finding for finding in findings))
+
+    def test_post_cutover_requires_unignored_liveness_tests(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            router = root / "crates/atm-http-runtime/src/storage_and_nudge_router.rs"
+            ops = root / "crates/atm-storage-rusqlite/src/writer/ops.rs"
+            router.parent.mkdir(parents=True)
+            ops.parent.mkdir(parents=True)
+            router.write_text(
+                """struct AsyncMailboxRuntime;
+#[tokio::test]
+async fn mailbox_and_doctor_fanout_stays_live_while_the_legacy_bridge_is_occupied() {}
+#[tokio::test]
+async fn doctor_projection_serves_parallel_control_requests_without_the_read_bridge() {}
+#[tokio::test]
+async fn doctor_projection_rejects_control_lane_overload_explicitly() {}
+async fn list_messages() {}
+async fn peek_messages() {}
+async fn receive_messages() {}
+async fn doctor() {}
+""",
+                encoding="utf-8",
+            )
+            ops.write_text(
+                "pub(crate) enum WriteOp {\n    UpsertMessage(Message),\n    UpsertMessages(Vec<Message>),\n    Acknowledge(Ack),\n    RegisterTemplate(Template),\n    AdmitDecomposedMessage(Admission),\n    AdmitTemplateMessage(Admission),\n    ApplyReadDisplayState { mailbox: MailboxId },\n}\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(check(root), [])
+            router.write_text(
+                router.read_text(encoding="utf-8").replace(
+                    "#[tokio::test]\nasync fn doctor_projection_rejects",
+                    "#[ignore]\n#[tokio::test]\nasync fn doctor_projection_rejects",
+                ),
+                encoding="utf-8",
+            )
+            self.assertTrue(any("must not be ignored" in finding for finding in check(root)))

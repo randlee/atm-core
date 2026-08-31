@@ -38,6 +38,11 @@ PROHIBITED_READ_HANDLER_TERMS = (
     "ControlPathSyncBridge",
     "spawn_blocking",
 )
+REQUIRED_LIVENESS_TESTS = (
+    "mailbox_and_doctor_fanout_stays_live_while_the_legacy_bridge_is_occupied",
+    "doctor_projection_serves_parallel_control_requests_without_the_read_bridge",
+    "doctor_projection_rejects_control_lane_overload_explicitly",
+)
 
 
 def write_op_variants(source: str) -> set[str]:
@@ -69,6 +74,15 @@ def check(root: Path) -> list[str]:
         for term in PROHIBITED_READ_HANDLER_TERMS:
             if term in body:
                 findings.append(f"read handler `{handler}` references prohibited `{term}`")
+    for test_name in REQUIRED_LIVENESS_TESTS:
+        test_match = re.search(
+            rf"(?P<attributes>(?:\s*#\[[^\]]+\]\s*)*)\s*(?:async\s+)?fn\s+{test_name}\s*\(",
+            router,
+        )
+        if test_match is None:
+            findings.append(f"required AV.1b liveness test `{test_name}` is missing")
+        elif "ignore" in test_match.group("attributes"):
+            findings.append(f"required AV.1b liveness test `{test_name}` must not be ignored")
     return findings
 
 

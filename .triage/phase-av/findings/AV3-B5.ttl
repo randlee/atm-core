@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T09:36:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-31T08:58:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV3 ;
@@ -29,8 +31,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3549 ;
   triage:snippet "fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "c9b71d720" ;
   triage:occursIn <urn:atm:triage:worktree/AV3/c9b71d720> .
@@ -40,8 +42,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3549 ;
   triage:snippet "fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "f103e4a61" ;
   triage:occursIn <urn:atm:triage:worktree/AV4/f103e4a61> .

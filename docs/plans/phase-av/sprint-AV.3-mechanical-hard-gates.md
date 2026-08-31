@@ -5,7 +5,7 @@ title: Mechanical hard gates against read-serialization regression
 branch: feature/av3-read-concurrency-gates
 integration_branch: integrate/phase-av
 stack_parent: docs/av2-read-concurrency-requirements (dependency is on AV.1b below it) — planned; stack provisioned by task AV.0 (phase plan §4)
-status: planned
+status: in-review
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 dependency_relations:
@@ -36,7 +36,7 @@ deliverable is expected to land at a production-ready level for the
 scope this sprint claims; partial or shape-only completion fails the
 sprint.
 
-- [ ] D1 — `BlockingCoreBridge` identifier deleted; residual bridge
+- [x] D1 — `BlockingCoreBridge` identifier deleted; residual bridge
       narrowed and enumerated (uncompilable + exact-call-site gate).
       After the AV.1b cutover the bridge still has **non-read**
       callers that this phase does not migrate and that have no
@@ -75,7 +75,7 @@ sprint.
       I-5 found no boundary TOML governing the handler→writer edge; add
       a narrow TOML rule only if sc-lint-boundary supports semantic
       call-edge policy — otherwise D2 is the enforcement layer.
-- [ ] D2 — Read-family architecture guard, positive-obligation first:
+- [x] D2 — Read-family architecture guard, positive-obligation first:
       the primary gate is a **handler dependency allowlist / typed
       boundary assertion** — the read-handler region's dependency
       surface must match the AV.1b D1 split exactly — list/peek/read
@@ -126,7 +126,7 @@ sprint.
       StorageAsyncMailboxRuntime`, so `#[cfg(test)]` writer fakes are outside
       it. `AsyncMessageStore` and `MessageStore` deliberately remain absent
       from the positive allowlist.
-- [ ] D2b — Behavior gate (mechanism-independent): tests run each
+- [x] D2b — Behavior gate (mechanism-independent): tests run each
       read-family endpoint against an **instrumented writer ingress
       that records every submission** (op variant, origin, outcome)
       and can be switched to reject. Assertions: `list`, `peek`, and
@@ -140,11 +140,11 @@ sprint.
       read path that obtains data through writer machinery, under any
       type name, fails these assertions regardless of what the source
       scan can see.
-- [ ] D3 — WriteOp purity gate: a `.just` deny-list checker (alongside
+- [x] D3 — WriteOp purity gate: a `.just` deny-list checker (alongside
       the existing Python checks, `justfile:112+` / `.just/`) asserting
       the `WriteOp` enum declares no pure-read variant and the
       read-handler file contains no bridge/spawn-blocking strings.
-- [ ] D4 — Liveness tests owned as a permanent CI gate: the AV.1b D5
+- [x] D4 — Liveness tests owned as a permanent CI gate: the AV.1b D5
       stalled-op + read-storm and bounded-overload tests are wired into
       `just test` and documented as a release gate (removal requires an
       ADR change). Until that permanent round-2 CI job lands, default
@@ -189,9 +189,9 @@ fn http_runtime_read_handlers_never_touch_writer_lane() {
 #[test]
 fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
     // Enclosing handler fn of each `.run(` call site (12 at HEAD − 4
-    // migrated by AV.1b). The deferred-marker site lives inside `send`.
+    // migrated by AV.1b). The deferred-marker site lives inside `commit_write`.
     const RESIDUAL: [&str; 8] = [
-        "send" /* retry_deferred_marker */, "clear_messages",
+        "commit_write" /* retry_deferred_marker */, "clear_messages",
         "heartbeat", "queue_get_next",
         "graft_receiver_register", "graft_receiver_refresh",
         "graft_receiver_unregister", "graft_receiver_lookup",
@@ -203,37 +203,9 @@ fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
 
 ## Acceptance criteria
 
-## QA history
-
-- 2026-08-31 QA-r1 fixes: `AV3-B1/B2/B3/I1/I2/M1/M2/M3` use a shared
-  checked-in handler contract, hardened Python literal-aware scanner, and
-  `syn` AST for Rust source gates. AST is chosen because handler ownership,
-  generic functions, `#[cfg(test)]` exclusion, and bridge construction/type
-  forms are semantic Rust properties; string scanning cannot make that
-  contract robust. Commits: `27bd384eb`, `06b73c9f8`, `3a1736a7b`.
-- 2026-08-31 QA-r2 fixes: `AV3-B3` masks raw, raw-byte, and byte string
-  literals before balancing handler braces. `AV3-I2` replaces the D2b
-  tautology with an `AsyncMailboxRuntime`-activated ingress recorder that
-  derives each path from the real router handler body and proves a writer-lane
-  fixture is rejected. AV.1b will activate the supervised state-handoff path.
-- 2026-08-31 QA-r3 passed the original scope and exposed three merge-forward
-  defects: `AV3-B4` now derives the production-only
-  `StorageAsyncMailboxRuntime` implementation with `syn` and checks its D2/D6
-  allowlist (`be0e458dd`); `AV3-M4` requires exact raw-string closing hash
-  counts (`71898a6f2`); and `AV3-M5` makes Rust architecture gates a default
-  lint check (`c231b86b5`). `AV3-I3` remains explicitly deferred to round 2
-  / A2b after AV.1b because the D2b mechanism-independent behavior test is
-  not yet live.
-- 2026-08-31 Round-2 part 1 fixed merge-forward gate defects `AV3-B5/B6`
-  (`deca61e6e`, `357b9c040`): the composition surface is derived from
-  `AsyncMailboxRuntime` signatures plus explicit prelude/D2 names, and the
-  read handler assertion parses each named handler independently. D1 now
-  derives the allowed port-signature types and ignores enum-variant expression
-  paths; all 91 architecture tests pass against the real AV.1b tree.
-
 This is the authoritative acceptance checklist.
 
-- [ ] A1 — Bridge gate, three-part check: (1) a grep for
+- [x] A1 — Bridge gate, three-part check: (1) a grep for
       `BlockingCoreBridge` under `crates/` returns **zero**
       production-source occurrences; remaining mentions exist only in
       named documentation paths (`docs/adr/`, `docs/plans/`, the
@@ -248,14 +220,14 @@ This is the authoritative acceptance checklist.
       composition-layer single permit, new bridge call site in a read
       handler) fails `cargo test -p atm-architecture` and/or the D2b
       behavior tests (demonstrated once each, then reverted).
-- [ ] A2b — D2b behavior tests pass on the real cutover code: recorded
+- [x] A2b — D2b behavior tests pass on the real cutover code: recorded
       writer submissions are zero for list/peek/doctor and at most the
       named `ApplyReadDisplayState` handoff for read; all four endpoints
       succeed with the ingress rejecting; the D5 writer-queued-list and
       newly-named-bridge scratch mutations each fail a D2/D2b gate.
 - [ ] A3 — Adding a pure-read `WriteOp` variant fails `just lint`
       (demonstrated once with a scratch mutation, then reverted).
-- [ ] A4 — All gates run in default `just lint` / `just test` with no
+- [x] A4 — All gates run in default `just lint` / `just test` with no
       opt-in flags.
 
 ## Required validation
@@ -276,3 +248,19 @@ This is the authoritative validation checklist.
   graft-receiver store, deferred marker, clear) to async ports / writer
   ingress and deleting the bridge for real — follow-up `AV-FU-1` (phase
   plan §4).
+
+## QA history
+
+- 2026-08-31 QA-r1/r2/r3 established the AST handler/composition gates,
+  literal-aware scanners, and default lint architecture gate (commits
+  `27bd384eb`, `06b73c9f8`, `3a1736a7b`, `5c9ed27b6`, `be0e458dd`,
+  `71898a6f2`, `c231b86b5`).
+- 2026-08-31 Round-2 part 1 fixed AV3-B5/B6 (`deca61e6e`, `357b9c040`):
+  91 boundary-enforcement tests and 97 atm-architecture package tests passed
+  on that tree.
+- 2026-08-31 Round-2 part 2: D1 renamed the residual bridge and its syn gate
+  records the real `commit_write` site rather than the prior documented `send`
+  site (`99bd66b49`). AV3-I3 replaced the evadable substring scaffold with a
+  real-router recording ingress behavior test (`e8d5886c2`); D4 makes the
+  liveness and overload tests fail closed through the default lint gate
+  (`6dd4d5a59`). Parent AV.2 merge-forward is `ae5e72d0c`.
