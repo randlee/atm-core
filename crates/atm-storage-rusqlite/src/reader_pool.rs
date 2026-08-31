@@ -16,9 +16,54 @@ use rusqlite::{Connection, InterruptHandle};
 use crate::shared_db::SharedDbTarget;
 use crate::shared_db_reader_lanes::open_read_connection_for_target;
 
-const READY: usize = 0;
-const QUARANTINED: usize = 1;
-const NO_REQUEST: usize = usize::MAX;
+#[repr(usize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WorkerStatus {
+    Ready = 0,
+    Quarantined = 1,
+}
+
+impl WorkerStatus {
+    fn load(source: &AtomicUsize) -> Self {
+        match source.load(Ordering::Acquire) {
+            value if value == Self::Ready as usize => Self::Ready,
+            value if value == Self::Quarantined as usize => Self::Quarantined,
+            value => unreachable!("invalid reader worker status {value}"),
+        }
+    }
+
+    fn compare_exchange(source: &AtomicUsize, current: Self, next: Self) -> Result<usize, usize> {
+        source.compare_exchange(
+            current as usize,
+            next as usize,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct RequestId(usize);
+
+impl RequestId {
+    const NONE: usize = usize::MAX;
+
+    fn next(source: &AtomicUsize) -> Self {
+        Self(source.fetch_add(1, Ordering::Relaxed))
+    }
+
+    fn is_active(source: &AtomicUsize, expected: Self) -> bool {
+        source.load(Ordering::Acquire) == expected.0
+    }
+
+    fn activate(self, source: &AtomicUsize) {
+        source.store(self.0, Ordering::Release);
+    }
+
+    fn clear(source: &AtomicUsize) {
+        source.store(Self::NONE, Ordering::Release);
+    }
+}
 
 /// Snapshot of the per-lane counters. This is intentionally a value object so
 /// observability can sample it without holding a worker or SQLite connection.
@@ -283,7 +328,7 @@ struct WorkerReservation {
 }
 
 struct Request {
-    id: usize,
+    id: RequestId,
     queued_at: Instant,
     deadline: Instant,
     run: Box<ReaderJob>,
@@ -363,7 +408,7 @@ impl ReaderPool {
     {
         let expires_at = deadline_at(deadline)?;
         let reservation = self.reserve_worker()?;
-        let request_id = self.inner.next_request.fetch_add(1, Ordering::Relaxed);
+        let request_id = RequestId::next(&self.inner.next_request);
         let (reply, response) = tokio::sync::oneshot::channel();
         let request = Request {
             id: request_id,
@@ -431,7 +476,7 @@ impl ReaderPool {
     {
         let expires_at = deadline_at(deadline)?;
         let reservation = self.reserve_worker()?;
-        let request_id = self.inner.next_request.fetch_add(1, Ordering::Relaxed);
+        let request_id = RequestId::next(&self.inner.next_request);
         let (reply, response) = mpsc::sync_channel(1);
         let mut request = Request {
             id: request_id,
@@ -499,7 +544,7 @@ impl ReaderPool {
         self.inner.reserve_worker()
     }
 
-    fn schedule_quarantine(&self, reservation: WorkerReservation, request_id: usize) {
+    fn schedule_quarantine(&self, reservation: WorkerReservation, request_id: RequestId) {
         let grace = self.inner.config.interrupt_grace;
         let pool = Arc::clone(&self.inner);
         thread::spawn(move || {
@@ -507,7 +552,7 @@ impl ReaderPool {
             // Park gives the thread no runnable work during its grace delay.
             thread::park_timeout(grace);
             if reservation.state.active.load(Ordering::Acquire)
-                && reservation.state.active_request.load(Ordering::Acquire) == request_id
+                && RequestId::is_active(&reservation.state.active_request, request_id)
             {
                 pool.quarantine_if_still_active(reservation.id, request_id);
             }
@@ -517,10 +562,10 @@ impl ReaderPool {
     fn expire_waiting_request(
         &self,
         reservation: WorkerReservation,
-        request_id: usize,
+        request_id: RequestId,
     ) -> ReadLaneError {
         if reservation.state.active.load(Ordering::Acquire)
-            && reservation.state.active_request.load(Ordering::Acquire) == request_id
+            && RequestId::is_active(&reservation.state.active_request, request_id)
         {
             reservation.interrupt.interrupt();
             self.inner
@@ -561,9 +606,9 @@ impl PoolInner {
         let interrupt = Arc::new(connection.get_interrupt_handle());
         let (sender, receiver) = tokio::sync::mpsc::channel(self.queue_per_worker);
         let state = Arc::new(WorkerState {
-            status: AtomicUsize::new(READY),
+            status: AtomicUsize::new(WorkerStatus::Ready as usize),
             active: AtomicBool::new(false),
-            active_request: AtomicUsize::new(NO_REQUEST),
+            active_request: AtomicUsize::new(RequestId::NONE),
         });
         let weak = Arc::downgrade(self);
         let worker_state = Arc::clone(&state);
@@ -604,7 +649,7 @@ impl PoolInner {
         let workers = self.workers.lock().expect("reader pool lock");
         let quarantined = workers
             .iter()
-            .filter(|worker| worker.state.status.load(Ordering::Acquire) == QUARANTINED)
+            .filter(|worker| WorkerStatus::load(&worker.state.status) == WorkerStatus::Quarantined)
             .count();
         if quarantined >= self.config.max_quarantined {
             self.metrics
@@ -624,7 +669,7 @@ impl PoolInner {
         let start = self.next_worker_index.fetch_add(1, Ordering::Relaxed);
         for offset in 0..count {
             let worker = &workers[(start + offset) % count];
-            if worker.state.status.load(Ordering::Acquire) == READY
+            if WorkerStatus::load(&worker.state.status) == WorkerStatus::Ready
                 && !worker.sender.is_closed()
                 && worker.sender.capacity() > 0
             {
@@ -642,28 +687,31 @@ impl PoolInner {
         })
     }
 
-    fn quarantine_if_still_active(&self, worker_id: usize, request_id: usize) {
+    fn quarantine_if_still_active(&self, worker_id: usize, request_id: RequestId) {
         let workers = self.workers.lock().expect("reader pool lock");
         let Some(worker) = workers.iter().find(|worker| worker.id == worker_id) else {
             return;
         };
         if !worker.state.active.load(Ordering::Acquire)
-            || worker.state.active_request.load(Ordering::Acquire) != request_id
+            || !RequestId::is_active(&worker.state.active_request, request_id)
         {
             return;
         }
         let existing = workers
             .iter()
-            .filter(|candidate| candidate.state.status.load(Ordering::Acquire) == QUARANTINED)
+            .filter(|candidate| {
+                WorkerStatus::load(&candidate.state.status) == WorkerStatus::Quarantined
+            })
             .count();
         if existing >= self.config.max_quarantined {
             return;
         }
-        if worker
-            .state
-            .status
-            .compare_exchange(READY, QUARANTINED, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
+        if WorkerStatus::compare_exchange(
+            &worker.state.status,
+            WorkerStatus::Ready,
+            WorkerStatus::Quarantined,
+        )
+        .is_ok()
         {
             self.metrics.quarantined.fetch_add(1, Ordering::Relaxed);
             self.metrics
@@ -679,7 +727,7 @@ impl PoolInner {
                 return;
             };
             let worker = workers.remove(position);
-            worker.state.status.load(Ordering::Acquire) == QUARANTINED
+            WorkerStatus::load(&worker.state.status) == WorkerStatus::Quarantined
         };
         if !was_quarantined {
             return;
@@ -719,7 +767,7 @@ fn run_worker(
                 .unwrap_or(u64::MAX),
             Ordering::Relaxed,
         );
-        if state.status.load(Ordering::Acquire) != READY {
+        if WorkerStatus::load(&state.status) != WorkerStatus::Ready {
             (request.run)(
                 &connection,
                 target.as_ref(),
@@ -738,7 +786,7 @@ fn run_worker(
             );
             continue;
         }
-        state.active_request.store(request.id, Ordering::Release);
+        request.id.activate(&state.active_request);
         state.active.store(true, Ordering::Release);
         metrics.in_flight.fetch_add(1, Ordering::Relaxed);
         let started = Instant::now();
@@ -749,8 +797,8 @@ fn run_worker(
         );
         metrics.in_flight.fetch_sub(1, Ordering::Relaxed);
         state.active.store(false, Ordering::Release);
-        state.active_request.store(NO_REQUEST, Ordering::Release);
-        if state.status.load(Ordering::Acquire) == QUARANTINED {
+        RequestId::clear(&state.active_request);
+        if WorkerStatus::load(&state.status) == WorkerStatus::Quarantined {
             return true;
         }
     }
