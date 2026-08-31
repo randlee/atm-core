@@ -1,5 +1,72 @@
 {
   "schema_version": 1,
   "revision": 1,
-  "entries": []
+  "entries": [
+    {
+      "host_label": "rand-m5.local",
+      "target": "read-fanout",
+      "p50_floor": 754.8485109810853,
+      "approved_by": "quality-mgr (AV.4 approval 2026-08-31)",
+      "effective_from": "2026-08-31T21:19:10Z",
+      "rationale": "Minimum p50 throughput across three clean official AV.4 campaigns; approved without revision.",
+      "seeded_runs": 3,
+      "source_campaigns": [
+        "20260831T210351Z-rand-m5.local-read-read-fanout",
+        "20260831T210445Z-rand-m5.local-read-read-fanout",
+        "20260831T210540Z-rand-m5.local-read-read-fanout"
+      ],
+      "corpus_seed": "av4-corpus-v1",
+      "corpus_generator_version": "av4-corpus-generator-1",
+      "harness_version": "av4-read-benchmark-1",
+      "fanout": 32,
+      "mailbox_pool_size": 4,
+      "mailbox_queue_depth": 16,
+      "search_pool_size": 2,
+      "search_queue_depth": 8
+    },
+    {
+      "host_label": "rand-m5.local",
+      "target": "query-fts",
+      "p50_floor": 753.0965761111854,
+      "approved_by": "quality-mgr (AV.4 approval 2026-08-31)",
+      "effective_from": "2026-08-31T21:19:10Z",
+      "rationale": "Minimum p50 throughput across three clean official AV.4 campaigns; approved without revision.",
+      "seeded_runs": 3,
+      "source_campaigns": [
+        "20260831T210351Z-rand-m5.local-read-query-fts",
+        "20260831T210445Z-rand-m5.local-read-query-fts",
+        "20260831T210540Z-rand-m5.local-read-query-fts"
+      ],
+      "corpus_seed": "av4-corpus-v1",
+      "corpus_generator_version": "av4-corpus-generator-1",
+      "harness_version": "av4-read-benchmark-1",
+      "fanout": 32,
+      "mailbox_pool_size": 4,
+      "mailbox_queue_depth": 16,
+      "search_pool_size": 2,
+      "search_queue_depth": 8
+    },
+    {
+      "host_label": "rand-m5.local",
+      "target": "read-under-write-load",
+      "p50_floor": 739.2049099275857,
+      "approved_by": "quality-mgr (AV.4 approval 2026-08-31)",
+      "effective_from": "2026-08-31T21:19:10Z",
+      "rationale": "Minimum p50 throughput across three clean official AV.4 campaigns; approved without revision.",
+      "seeded_runs": 3,
+      "source_campaigns": [
+        "20260831T210351Z-rand-m5.local-read-read-under-write-load",
+        "20260831T210445Z-rand-m5.local-read-read-under-write-load",
+        "20260831T210540Z-rand-m5.local-read-read-under-write-load"
+      ],
+      "corpus_seed": "av4-corpus-v1",
+      "corpus_generator_version": "av4-corpus-generator-1",
+      "harness_version": "av4-read-benchmark-1",
+      "fanout": 32,
+      "mailbox_pool_size": 4,
+      "mailbox_queue_depth": 16,
+      "search_pool_size": 2,
+      "search_queue_depth": 8
+    }
+  ]
 }
