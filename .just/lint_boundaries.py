@@ -262,6 +262,13 @@ IO_FORBIDDEN_SOURCE_EXCEPTIONS: dict[tuple[str, str], tuple[str, ...]] = {
         r"\bTcpListener::bind\s*\(",
         r"\bstd::net::SocketAddr\b",
     ),
+    # PeerConfigStore stores a SocketAddr as inert control-plane metadata; it
+    # neither opens nor owns a socket.  Keep the exception exact so any real
+    # socket operation in the contract remains visible to the policy scan.
+    (
+        "BOUNDARY-PeerConfigStore",
+        "socket_io",
+    ): (r"\bstd::net::SocketAddr\b",),
 }
 SCB_CONFIG_ALLOWLIST_PATH = Path(".just/allowlists/scb_config_allowlist.toml")
 SCB_CONFIG_FIXTURE_PATH = Path(".just/fixtures/scb_config_known_bad.rs")
@@ -378,6 +385,7 @@ class BoundaryRecord:
     allowed_test_double_paths: tuple[str, ...]
     forbidden_test_bypasses: tuple[str, ...]
     io_forbidden_source_modules: tuple[tuple[str, tuple[str, ...]], ...]
+    no_in_repo_implementation: bool
     lint_rules: tuple[str, ...]
     review_gates: tuple[str, ...]
     status_state: str
@@ -1350,6 +1358,14 @@ def build_boundary_record(
     raw_io_forbidden_source_modules = nested_get(
         data, ("enforcement", "io_forbidden_source_modules")
     )
+    raw_no_in_repo_implementation = nested_get(
+        data, ("enforcement", "no_in_repo_implementation")
+    )
+    no_in_repo_implementation = raw_no_in_repo_implementation is True
+    if raw_no_in_repo_implementation is not None and not isinstance(
+        raw_no_in_repo_implementation, bool
+    ):
+        errors.append("enforcement.no_in_repo_implementation must be a boolean")
     io_forbidden_source_modules: list[tuple[str, tuple[str, ...]]] = []
     io_forbidden_source_module_errors: list[str] = []
     if raw_io_forbidden_source_modules is not None:
@@ -1451,6 +1467,8 @@ def build_boundary_record(
             errors.append("implementation.module must be null when implementation.visibility is trait_only")
         if implementation_constructor != "none":
             errors.append("implementation.constructor must be none when implementation.visibility is trait_only")
+    elif no_in_repo_implementation:
+        errors.append("enforcement.no_in_repo_implementation is only valid for trait_only boundaries")
     else:
         if implementation_type is None:
             errors.append("implementation.type is required for concrete boundaries")
@@ -1554,6 +1572,7 @@ def build_boundary_record(
         allowed_test_double_paths=tuple(allowed_test_double_paths),
         forbidden_test_bypasses=tuple(forbidden_test_bypasses),
         io_forbidden_source_modules=tuple(io_forbidden_source_modules),
+        no_in_repo_implementation=no_in_repo_implementation,
         lint_rules=tuple(lint_rules),
         review_gates=tuple(review_gates),
         status_state=status_state,
@@ -1953,6 +1972,70 @@ def resolve_module_file(repo_root: Path, module_path: str) -> list[Path]:
     return [path for path in candidates if path.exists()]
 
 
+def trait_implementation_source_files(repo_root: Path, trait: str | None) -> list[Path]:
+    """Return production source files that implement a trait-only boundary.
+
+    This supports the explicit ``no_in_repo_implementation`` assertion.  It
+    is intentionally *not* the default source-policy target: an I/O policy on
+    a trait contract constrains that contract, while concrete adapters may
+    legitimately own the I/O the trait excludes.
+    """
+    if trait is None:
+        return []
+    pattern = re.compile(
+        rf"\bimpl(?:\s*<[^>{{;]*>)?\s+(?:[A-Za-z0-9_:<> ,]+::)?{re.escape(trait)}"
+        r"(?:\s*<[^>{{;]*>)?\s+for\b"
+    )
+    paths: list[Path] = []
+    for info in manifest_info(repo_root):
+        for path in source_files_for_crate(info):
+            lines = path.read_text(encoding="utf-8").splitlines()
+            test_scope = rust_file_test_scope(path, lines)
+            if any(
+                not test_scope[index] and not is_comment_line(line) and pattern.search(line)
+                for index, line in enumerate(lines)
+            ):
+                paths.append(path)
+    return paths
+
+
+def trait_contract_source_regions(repo_root: Path, trait: str | None) -> list[tuple[Path, frozenset[int]]]:
+    """Return production source regions that declare a trait-only contract.
+
+    The declaration is the natural default for a trait-only record's
+    ``io_forbidden`` policy.  Explicit tag mappings can extend this to a
+    helper or adapter module when the policy is intentionally about that
+    module (as the AV.1a reader records do).  Deriving the declaration keeps
+    ordinary contract records covered if files move without turning adapter
+    implementations into false policy violations.
+    """
+    if trait is None:
+        return []
+    pattern = re.compile(
+        rf"\bpub(?:\s*\([^)]*\))?\s+trait\s+{re.escape(trait)}\b"
+    )
+    regions: list[tuple[Path, frozenset[int]]] = []
+    for info in manifest_info(repo_root):
+        for path in source_files_for_crate(info):
+            lines = path.read_text(encoding="utf-8").splitlines()
+            test_scope = rust_file_test_scope(path, lines)
+            for index, line in enumerate(lines):
+                if test_scope[index] or is_comment_line(line) or not pattern.search(line):
+                    continue
+                depth = 0
+                opened = False
+                end_index = index
+                for candidate_index in range(index, len(lines)):
+                    candidate = lines[candidate_index]
+                    depth += candidate.count("{") - candidate.count("}")
+                    opened = opened or "{" in candidate
+                    end_index = candidate_index
+                    if opened and depth <= 0:
+                        break
+                regions.append((path, frozenset(range(index + 1, end_index + 2))))
+    return regions
+
+
 def collect_io_forbidden_source_violations(
     repo_root: Path,
     records: list[BoundaryRecord],
@@ -1987,10 +2070,39 @@ def collect_io_forbidden_source_violations(
                     )
                 )
                 continue
-            if not record.is_active:
-                continue
             declared_source_modules = dict(record.io_forbidden_source_modules).get(tag, ())
-            if record.implementation_module is None and not declared_source_modules:
+            derived_source_regions = (
+                trait_contract_source_regions(repo_root, record.public_trait)
+                if record.implementation_visibility == "trait_only"
+                else []
+            )
+            derived_source_paths = [path for path, _ in derived_source_regions]
+            implementation_source_paths = (
+                trait_implementation_source_files(repo_root, record.public_trait)
+                if record.no_in_repo_implementation
+                else []
+            )
+            if record.no_in_repo_implementation and implementation_source_paths:
+                violations.append(
+                    BoundaryViolation(
+                        record.location,
+                        f"{record.boundary_id} declares no_in_repo_implementation but production impl sites exist",
+                    )
+                )
+            if (
+                record.implementation_module is None
+                and not declared_source_modules
+                and not derived_source_paths
+                and not record.no_in_repo_implementation
+            ):
+                violations.append(
+                    BoundaryViolation(
+                        record.location,
+                        f"{record.boundary_id} declares io_forbidden {tag!r} but has no scannable source modules; declare no_in_repo_implementation or source modules",
+                    )
+                )
+                continue
+            if not record.is_active:
                 continue
             source_modules = tuple(
                 module
@@ -2008,11 +2120,27 @@ def collect_io_forbidden_source_violations(
                     if source_path not in seen_source_paths:
                         seen_source_paths.add(source_path)
                         source_paths.append(source_path)
+            explicit_source_paths = set(source_paths)
+            contract_lines_by_path = {
+                source_path: line_numbers
+                for source_path, line_numbers in derived_source_regions
+                if source_path not in explicit_source_paths
+            }
+            for source_path in derived_source_paths:
+                if source_path not in seen_source_paths:
+                    seen_source_paths.add(source_path)
+                    source_paths.append(source_path)
             for source_path in source_paths:
                 rel_source = source_path.relative_to(repo_root).as_posix()
                 source_lines = source_path.read_text(encoding="utf-8").splitlines()
                 test_scope = rust_file_test_scope(source_path, source_lines)
                 for line_number, line in enumerate(source_lines, start=1):
+                    contract_line_numbers = contract_lines_by_path.get(source_path)
+                    if (
+                        contract_line_numbers is not None
+                        and line_number not in contract_line_numbers
+                    ):
+                        continue
                     if is_comment_line(line):
                         continue
                     if tag in {"background_work", "write_capable_connection"} and test_scope[

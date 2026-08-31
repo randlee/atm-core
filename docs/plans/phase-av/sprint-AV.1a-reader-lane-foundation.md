@@ -370,6 +370,23 @@ guard, while `#[cfg(test)]` in-memory setup stays outside production-policy
 scope. Validation reports `just validate` honestly as failing only at the
 known dependency-currency gate above.
 
+## QA round 3 closure
+
+AV1A-I6's full trait-only I/O-policy sweep is implemented by
+`0ca86ecafb342b9f68fa298b6a1bdaf81970c44f`. All 34 records with a non-empty
+`io_forbidden` policy now have a non-vacuous source target: 23 derive the
+production trait-contract declaration region, the pre-existing AV.1a reader
+mapping remains explicit for its helper modules, and 11 retired/planned
+contracts assert `no_in_repo_implementation = true`, which the lint verifies
+against production `impl Trait for Type` sites. The scan fails closed for any
+record lacking all three forms of coverage. The sweep surfaced one
+`SocketAddr` metadata false positive in `PeerConfigStore`; it is covered by a
+single exact source exception, leaving socket operations themselves guarded.
+`python3 .just/lint_boundaries.py` passes. As in round 2, `just validate` is
+reported honestly after the full validation run rather than described as a
+clean pass while dependency-currency remains an external gate. QA owns the
+finding's final closure after independent verification.
+
 ## Out of scope
 
 - Any handler change in `atm-http-runtime` — AV.1b.

@@ -37,6 +37,7 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["service_runtime_store::default_runtime"]
 
 [enforcement]
+no_in_repo_implementation = true
 lint_rules = ["SCB-RETAINED-001", "SCB-SINGLETON-001"]
 review_gates = ["no_ambient_runtime_factory_leakage"]
 
