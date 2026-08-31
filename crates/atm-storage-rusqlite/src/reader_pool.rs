@@ -361,7 +361,7 @@ impl ReaderPool {
         T: Send + 'static,
         F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
     {
-        let expires_at = Instant::now() + deadline;
+        let expires_at = deadline_at(deadline)?;
         let reservation = self.reserve_worker()?;
         let request_id = self.inner.next_request.fetch_add(1, Ordering::Relaxed);
         let (reply, response) = tokio::sync::oneshot::channel();
@@ -429,7 +429,7 @@ impl ReaderPool {
         T: Send + 'static,
         F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
     {
-        let expires_at = Instant::now() + deadline;
+        let expires_at = deadline_at(deadline)?;
         let reservation = self.reserve_worker()?;
         let request_id = self.inner.next_request.fetch_add(1, Ordering::Relaxed);
         let (reply, response) = mpsc::sync_channel(1);
@@ -541,6 +541,14 @@ impl ReaderPool {
             }
         }
     }
+}
+
+fn deadline_at(deadline: Duration) -> Result<Instant, ReadLaneError> {
+    Instant::now()
+        .checked_add(deadline)
+        .ok_or(ReadLaneError::DeadlineExpired {
+            stage: "computing reader deadline",
+        })
 }
 
 impl PoolInner {
@@ -753,7 +761,7 @@ fn run_worker(
 mod tests {
     use super::{
         DEFAULT_DOCTOR_READER_CONFIG, DEFAULT_MAX_READER_CONNECTIONS, ReaderPool, ReaderPoolConfig,
-        validate_connection_budget,
+        deadline_at, validate_connection_budget,
     };
     use crate::shared_db::SharedDbTarget;
     use std::sync::Arc;
@@ -801,6 +809,16 @@ mod tests {
         assert!(message.contains("search_pool=2"));
         assert!(message.contains("doctor_pool=4"));
         assert!(message.contains("max_connections=21"));
+    }
+
+    #[test]
+    fn unrepresentable_reader_deadline_fails_closed() {
+        assert_eq!(
+            deadline_at(Duration::MAX),
+            Err(atm_storage::ReadLaneError::DeadlineExpired {
+                stage: "computing reader deadline",
+            })
+        );
     }
 
     #[tokio::test]
