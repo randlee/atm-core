@@ -211,25 +211,48 @@ def _atm_binary() -> str:
     raise ReadBenchmarkError("release-built atm is required; run cargo build --release first")
 
 
+def _ensure_member(atm: str, env: Mapping[str, str], team: str, agent: str) -> None:
+    """Create one corpus member, accepting an exact existing registration.
+
+    Diagnostic lanes are intentionally re-runnable.  A prior lane may have
+    seeded the deterministic roster before failing during measurement, so an
+    ``add-member`` duplicate is safe only when the public members view proves
+    that the requested agent is already registered in that same team.
+    """
+    add = [atm, "teams", "add-member", team, agent, "--json"]
+    result = _run(add, env)
+    if result.returncode == 0:
+        return
+    members = _run([atm, "members", "--team", team, "--json"], env)
+    if members.returncode == 0:
+        try:
+            payload = json.loads(members.stdout)
+        except json.JSONDecodeError:
+            payload = None
+        if isinstance(payload, dict) and any(
+            isinstance(item, dict)
+            and (item.get("name") == agent or item.get("agent_id") == f"{agent}@{team}")
+            for item in payload.get("members", [])
+        ):
+            return
+    raise ReadBenchmarkError(result.stderr.strip() or f"could not create {agent}@{team}")
+
+
 def prepare_corpus(atm: str, env: Mapping[str, str], corpus: Corpus) -> None:
     """Create and seed the corpus through public CLI commands only."""
     driver_team = "av4-driver"
     driver_agent = "av4-driver"
-    add = [atm, "teams", "add-member", driver_team, driver_agent, "--json"]
-    result = _run(add, env)
-    if result.returncode:
-        raise ReadBenchmarkError(result.stderr.strip() or "could not create AV.4 driver")
+    _ensure_member(atm, env, driver_team, driver_agent)
     for member in corpus.members:
-        add_member = [atm, "teams", "add-member", member.team, member.agent, "--json"]
-        result = _run(add_member, env)
-        if result.returncode:
-            raise ReadBenchmarkError(result.stderr.strip() or f"could not create {member}")
+        _ensure_member(atm, env, member.team, member.agent)
         body = _fixed_body(
             f"{CORPUS_SEED} team={member.team} agent={member.agent} ordinal=0",
             CORPUS_PAYLOAD_BYTES,
         )
-        send = [atm, "send", f"{member.agent}@{member.team}", body, "--json"]
-        result = _run(send, env)
+        result = _run(
+            [atm, "send", f"{member.agent}@{member.team}", body, "--json"],
+            env,
+        )
         if result.returncode:
             raise ReadBenchmarkError(result.stderr.strip() or f"could not seed {member}")
 
