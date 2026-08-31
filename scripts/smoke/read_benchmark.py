@@ -10,6 +10,7 @@ CLI, which keeps the benchmark on the product read path.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -22,7 +23,17 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
+
+from scripts.smoke.benchmark_baselines import BenchmarkBaselineError, load_baselines
+from scripts.smoke.benchmark_report import BenchmarkReportError, compose, regenerate_index, render_envelope
+from scripts.smoke.benchmark_policy import classify_status
+from scripts.smoke.benchmark_schema import (
+    BaselineEntry,
+    BaselineSet,
+    distribution,
+    require_non_decreasing_baselines,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -41,12 +52,24 @@ SEARCH_QUEUE_DEPTH = 8
 WARMUP_SECONDS = 2.0
 MEASUREMENT_SECONDS = 5.0
 SUCCESS_RATE_FLOOR = 0.999
+# D7 mixed-mode budget: the AV.1a contract requires a bounded p95 while the
+# runtime metric is not yet exported. Keep the source next to the value so a
+# future AV.1b change can replace both in one reviewed edit.
+MIXED_READ_P95_BUDGET_MS = 1000.0
+MIXED_READ_P95_BUDGET_SOURCE = "AV.1a D5 interim p95 ceiling; replace when reader metrics are exported"
 WRITER_RATE_PER_SECOND = 8.0
 WRITER_PAYLOAD_BYTES = 256
 CORPUS_SEED = "av4-corpus-v1"
 CORPUS_GENERATOR_VERSION = "av4-corpus-generator-1"
+CORPUS_MESSAGES_PER_MEMBER = 1
+CORPUS_PAYLOAD_BYTES = 256
+CORPUS_SKEW_PROFILE = "uniform:one-message-per-member"
 HARNESS_VERSION = "av4-read-benchmark-1"
 RATCHET_TOLERANCE_PCT = 5
+# Flip this checked-in marker to True only in the reviewed merge-forward that
+# contains AV.1b's reader-handler cutover and exported D5 metrics.  Diagnostic
+# runs remain available while it is False; official/seeding runs fail closed.
+AV1B_CUTOVER_LANDED = False
 
 
 class ReadBenchmarkError(RuntimeError):
@@ -127,27 +150,12 @@ def deterministic_corpus(seed: str = CORPUS_SEED) -> Corpus:
     return Corpus(seed, CORPUS_GENERATOR_VERSION, members)
 
 
-def percentile(values: Sequence[float], fraction: float) -> float:
-    """Return an unrounded nearest-rank percentile for ratchet comparison."""
-    if not values:
-        raise ReadBenchmarkError("cannot calculate a percentile over no samples")
-    if not 0.0 <= fraction <= 1.0:
-        raise ReadBenchmarkError("percentile fraction must be between zero and one")
-    ordered = sorted(values)
-    rank = max(0, min(len(ordered) - 1, int((len(ordered) - 1) * fraction)))
-    return ordered[rank]
-
-
-def metric_distribution(values: Sequence[float]) -> dict[str, float]:
-    if not values:
-        raise ReadBenchmarkError("a clean report requires latency samples")
-    return {
-        "min": min(values),
-        "p50": percentile(values, 0.50),
-        "p95": percentile(values, 0.95),
-        "p99": percentile(values, 0.99),
-        "max": max(values),
-    }
+def _fixed_body(prefix: str, size: int) -> str:
+    """Pad deterministic payloads to the recorded byte size."""
+    encoded_prefix = prefix.encode("utf-8")
+    if len(encoded_prefix) > size:
+        raise ReadBenchmarkError(f"payload prefix exceeds configured size {size}")
+    return prefix + "x" * (size - len(encoded_prefix))
 
 
 def validate_workload_contract(
@@ -163,7 +171,8 @@ def validate_workload_contract(
     """Fail closed on every D7 contract omission before floor publication."""
     if family.family_id not in FAMILY_BY_ID:
         raise ReadBenchmarkError(f"unknown read benchmark family {family.family_id!r}")
-    if len({member.team for member in corpus.members}) < 8 or len(corpus.members) < 32:
+    team_counts = Counter(member.team for member in corpus.members)
+    if len(team_counts) < 8 or len(corpus.members) < 32 or min(team_counts.values(), default=0) < 4:
         raise ReadBenchmarkError("corpus must contain at least 8 teams and 4 agents per team")
     if not corpus.seed or not corpus.generator_version:
         raise ReadBenchmarkError("corpus seed and generator version are required")
@@ -177,58 +186,6 @@ def validate_workload_contract(
         raise ReadBenchmarkError(
             f"success rate {success_rate:.6f} is below {SUCCESS_RATE_FLOOR:.4f}"
         )
-
-
-def load_read_baselines(path: Path = BASELINES_PATH) -> dict[str, dict[str, dict[str, Any]]]:
-    """Load the additive family section of the reviewed baselines.json."""
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ReadBenchmarkError(f"invalid read baselines {path}: {error}") from error
-    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
-        raise ReadBenchmarkError("read baselines require schema_version=1")
-    families = payload.get("read_families", {})
-    if not isinstance(families, dict):
-        raise ReadBenchmarkError("read_families must be an object")
-    unknown = set(families) - set(FAMILY_BY_ID)
-    if unknown:
-        raise ReadBenchmarkError(f"unknown read baseline families: {sorted(unknown)}")
-    return families
-
-
-def ratchet_floor(
-    *,
-    family_id: str,
-    host_label: str,
-    campaign_p50s: Sequence[float],
-    source_campaigns: Sequence[str],
-    corpus: Corpus,
-    previous: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Seed from exactly three clean campaigns and ratchet upward only."""
-    if len(campaign_p50s) != 3 or len(source_campaigns) != 3:
-        raise ReadBenchmarkError("a floor requires exactly three source campaigns")
-    if any(value < 0 for value in campaign_p50s):
-        raise ReadBenchmarkError("campaign p50 values cannot be negative")
-    observed_floor = min(campaign_p50s)
-    prior_floor = float(previous.get("p50_floor", 0)) if previous else 0.0
-    floor = max(prior_floor, observed_floor * (1 - RATCHET_TOLERANCE_PCT / 100))
-    return {
-        "p50_floor": floor,
-        "seeded_runs": 3,
-        "ratchet_tolerance_pct": RATCHET_TOLERANCE_PCT,
-        "source_campaigns": list(source_campaigns),
-        "corpus_seed": corpus.seed,
-        "corpus_generator_version": corpus.generator_version,
-        "fanout": FANOUT,
-        "mailbox_pool_size": MAILBOX_POOL_SIZE,
-        "mailbox_queue_depth": MAILBOX_QUEUE_DEPTH,
-        "search_pool_size": SEARCH_POOL_SIZE,
-        "search_queue_depth": SEARCH_QUEUE_DEPTH,
-        "harness_version": HARNESS_VERSION,
-    }
 
 
 def _run(command: Sequence[str], env: Mapping[str, str], timeout: float = 30.0) -> subprocess.CompletedProcess[str]:
@@ -267,7 +224,10 @@ def prepare_corpus(atm: str, env: Mapping[str, str], corpus: Corpus) -> None:
         result = _run(add_member, env)
         if result.returncode:
             raise ReadBenchmarkError(result.stderr.strip() or f"could not create {member}")
-        body = f"{CORPUS_SEED} team={member.team} agent={member.agent} ordinal=0"
+        body = _fixed_body(
+            f"{CORPUS_SEED} team={member.team} agent={member.agent} ordinal=0",
+            CORPUS_PAYLOAD_BYTES,
+        )
         send = [atm, "send", f"{member.agent}@{member.team}", body, "--json"]
         result = _run(send, env)
         if result.returncode:
@@ -299,7 +259,13 @@ def _observe(
     try:
         result = _run(_operation_command(atm, family, member), env, timeout=15.0)
     except ReadBenchmarkError as error:
-        return RequestObservation((time.perf_counter() - started) * 1000, False, error=str(error))
+        detail = str(error)
+        return RequestObservation(
+            (time.perf_counter() - started) * 1000,
+            False,
+            timed_out="timed out" in detail.lower(),
+            error=detail,
+        )
     elapsed = (time.perf_counter() - started) * 1000
     if result.returncode == 0:
         return RequestObservation(elapsed, True)
@@ -335,35 +301,63 @@ def _run_window(
 
 def _writer_loop(
     atm: str, corpus: Corpus, env: Mapping[str, str], stop: threading.Event,
-    counter: list[int],
+    counter: list[int], errors: list[str],
 ) -> None:
     interval = 1.0 / WRITER_RATE_PER_SECOND
     sent = 0
     while not stop.is_set():
         member = corpus.members[sent % len(corpus.members)]
-        body = (f"av4-writer {sent:08d} " + "x" * WRITER_PAYLOAD_BYTES)
+        body = _fixed_body(f"av4-writer {sent:08d} ", WRITER_PAYLOAD_BYTES)
         writer_env = dict(env)
         writer_env.update({"ATM_IDENTITY": "av4-driver", "ATM_TEAM": "av4-driver"})
-        _run([atm, "send", f"{member.agent}@{member.team}", body, "--json"], writer_env, timeout=15.0)
+        try:
+            result = _run(
+                [atm, "send", f"{member.agent}@{member.team}", body, "--json"],
+                writer_env,
+                timeout=15.0,
+            )
+            if result.returncode:
+                errors.append(result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}")
+        except ReadBenchmarkError as error:
+            errors.append(str(error))
         sent += 1
         counter[0] = sent
         stop.wait(interval)
-    return sent
 
 
 def _diagnostics(family: ReadFamily, observations: Sequence[RequestObservation]) -> dict[str, Any]:
     latencies = [item.elapsed_ms for item in observations]
     timeout_count = sum(item.timed_out for item in observations)
+    error_count = sum(not item.success for item in observations)
+    def unavailable() -> dict[str, Any]:
+        return {
+            "value": None,
+            "status": "unimplemented",
+            "source": "cli-not-exposed",
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+        }
     return {
         "lane": family.lane,
         "pool_size": family.pool_size,
         "queue_depth": family.queue_depth,
-        "wait_ms": {"p50": 0.0, "p95": 0.0, "p99": 0.0, "source": "cli-observation"},
-        "execution_ms": metric_distribution(latencies),
-        "deadline_expiries": {"total": timeout_count, "by_outcome": {"timeout": timeout_count}},
-        "saturation_events": 0,
-        "quarantine_gauge": 0,
-        "wal_health": {"status": "not-exposed-by-cli", "source": "cli-observation"},
+        "in_flight": unavailable(),
+        "wait_ms": unavailable(),
+        "execution_ms": distribution([float(value) for value in latencies]),
+        "deadline_expiries": {
+            "observed_cli_timeouts": timeout_count,
+            "expired_in_queue": unavailable(),
+            "interrupted_while_active": unavailable(),
+            "quarantined": unavailable(),
+            "other_cli_errors": error_count - timeout_count,
+        },
+        "saturation_events": unavailable(),
+        "quarantined_worker_gauge": unavailable(),
+        "retired_replaced_workers": unavailable(),
+        "quarantine_exhausted_rejections": unavailable(),
+        "wal_health": {
+            "last_checkpoint_outcome": unavailable(),
+            "current_wal_frame_count": unavailable(),
+        },
     }
 
 
@@ -376,9 +370,10 @@ def run_family(atm: str, family: ReadFamily, corpus: Corpus, env: Mapping[str, s
     stop = threading.Event()
     writer_thread: threading.Thread | None = None
     writer_counter = [0]
+    writer_errors: list[str] = []
     if family.mixed_writes:
         writer_thread = threading.Thread(
-            target=_writer_loop, args=(atm, corpus, env, stop, writer_counter),
+            target=_writer_loop, args=(atm, corpus, env, stop, writer_counter, writer_errors),
             name="atm-read-writer", daemon=True,
         )
         writer_thread.start()
@@ -395,75 +390,89 @@ def run_family(atm: str, family: ReadFamily, corpus: Corpus, env: Mapping[str, s
         success_rate=success_rate,
     )
     latencies = [item.elapsed_ms for item in observations]
+    throughput = successes / elapsed if elapsed else 0.0
     result: dict[str, Any] = {
         "family": family.family_id,
         "description": family.description,
-        "status": "PASS",
+        "status": classify_status(
+            lifecycle_complete=bool(observations),
+            messages_requested=len(observations),
+            messages_admitted=successes,
+            messages_durable=successes,
+            p50_admissions_per_second=throughput,
+            baseline_p50_floor=0.0,
+        ),
         "fanout": FANOUT,
         "pool_size": family.pool_size,
         "queue_depth": family.queue_depth,
         "windows": {"warmup_seconds": WARMUP_SECONDS, "measurement_seconds": MEASUREMENT_SECONDS},
         "requests": {"total": len(observations), "successful": successes, "success_rate": success_rate},
-        "throughput_requests_per_second": successes / elapsed if elapsed else 0.0,
+        "throughput_requests_per_second": throughput,
         # The fixed-window runner has one aggregate sample today.  Keep the
         # distribution-shaped field so future interval samples extend the
         # existing report contract without a schema change.
-        "throughput_per_second": metric_distribution(
-            [successes / elapsed if elapsed else 0.0]
-        ),
-        "latency_ms": metric_distribution(latencies),
+        "throughput_per_second": distribution([throughput]),
+        "latency_ms": distribution([float(value) for value in latencies]),
         "diagnostics": _diagnostics(family, observations),
+        "mixed_read_p95_budget_ms": MIXED_READ_P95_BUDGET_MS if family.mixed_writes else None,
+        "mixed_read_p95_budget_source": MIXED_READ_P95_BUDGET_SOURCE if family.mixed_writes else None,
         "writer": {
             "rate_per_second": WRITER_RATE_PER_SECOND,
             "payload_bytes": WRITER_PAYLOAD_BYTES,
             "throughput_per_second": writer_counter[0] / elapsed if elapsed else 0.0,
         } if family.mixed_writes else None,
     }
-    if family.mixed_writes and result["latency_ms"]["p95"] > 1000.0:
+    if family.mixed_writes and result["latency_ms"]["p95"] > MIXED_READ_P95_BUDGET_MS:
         result["status"] = "FAIL"
         result["failure"] = "read p95 exceeded the 1000ms mixed-mode budget"
+    if family.mixed_writes and writer_errors:
+        result["status"] = "FAIL"
+        result["failure"] = f"writer errors observed: {writer_errors[0]}"
+        result["writer"]["errors"] = writer_errors
     return result
 
 
-def apply_floor(result: dict[str, Any], baseline: Mapping[str, Any]) -> None:
-    """Apply an immutable p50 floor without rounding the comparison."""
-    required = {
-        "seeded_runs", "source_campaigns", "corpus_seed", "corpus_generator_version",
-        "fanout", "mailbox_pool_size", "mailbox_queue_depth",
-        "search_pool_size", "search_queue_depth", "harness_version",
-    }
-    if baseline.get("seeded_runs") != 3 or not isinstance(baseline.get("source_campaigns"), list):
+def apply_floor(result: dict[str, Any], baseline: BaselineEntry) -> None:
+    """Apply the shared reviewed baseline floor without rounding the comparison."""
+    if baseline.target not in FAMILY_BY_ID:
+        raise ReadBenchmarkError(f"baseline target is not a read family: {baseline.target!r}")
+    if baseline.seeded_runs != 3 or baseline.source_campaigns is None:
         raise ReadBenchmarkError("read baseline must cite exactly three clean source campaigns")
-    if len(baseline["source_campaigns"]) != 3 or not required.issubset(baseline):
-        raise ReadBenchmarkError("read baseline is missing D7 provenance or lane settings")
-    if (
-        baseline.get("corpus_seed") != CORPUS_SEED
-        or baseline.get("corpus_generator_version") != CORPUS_GENERATOR_VERSION
-    ):
+    if len(baseline.source_campaigns) != 3 or any(not campaign.strip() for campaign in baseline.source_campaigns):
+        raise ReadBenchmarkError("read baseline must cite exactly three non-empty source campaigns")
+    if baseline.corpus_seed != CORPUS_SEED or baseline.corpus_generator_version != CORPUS_GENERATOR_VERSION:
         raise ReadBenchmarkError("read baseline corpus provenance does not match this harness")
-    if baseline.get("fanout", 0) < FANOUT:
-        raise ReadBenchmarkError("read baseline fanout is below the D7 minimum")
+    if baseline.harness_version != HARNESS_VERSION:
+        raise ReadBenchmarkError("read baseline harness provenance does not match this harness")
     if (
-        baseline.get("mailbox_pool_size"), baseline.get("mailbox_queue_depth")
-    ) != (MAILBOX_POOL_SIZE, MAILBOX_QUEUE_DEPTH):
-        raise ReadBenchmarkError("read baseline mailbox lane settings do not match production defaults")
-    if (
-        baseline.get("search_pool_size"), baseline.get("search_queue_depth")
-    ) != (SEARCH_POOL_SIZE, SEARCH_QUEUE_DEPTH):
-        raise ReadBenchmarkError("read baseline search lane settings do not match production defaults")
-    floor = baseline.get("p50_floor")
-    if not isinstance(floor, (int, float)) or floor < 0:
-        raise ReadBenchmarkError("read baseline p50_floor must be a non-negative number")
-    result["baseline_p50_floor"] = floor
-    if result["throughput_per_second"]["p50"] < floor:
+        baseline.fanout is None
+        or baseline.fanout < FANOUT
+        or (baseline.mailbox_pool_size, baseline.mailbox_queue_depth)
+        != (MAILBOX_POOL_SIZE, MAILBOX_QUEUE_DEPTH)
+        or (baseline.search_pool_size, baseline.search_queue_depth)
+        != (SEARCH_POOL_SIZE, SEARCH_QUEUE_DEPTH)
+    ):
+        raise ReadBenchmarkError("read baseline lane settings do not match this harness")
+    result["baseline_p50_floor"] = baseline.p50_floor
+    if result["throughput_per_second"]["p50"] < baseline.p50_floor:
         result["status"] = "FAIL"
         result["failure"] = (
             f"p50 throughput {result['throughput_per_second']['p50']} "
-            f"is below baseline floor {floor}"
+            f"is below baseline floor {baseline.p50_floor}"
         )
 
 
-def _report_html(payload: Mapping[str, Any]) -> tuple[str, str]:
+def _check_baseline_revision(previous: BaselineSet, current: BaselineSet) -> None:
+    """Delegate ratchet validation to the repository-wide schema contract."""
+    try:
+        require_non_decreasing_baselines(previous, current)
+    except ValueError as error:
+        raise ReadBenchmarkError(str(error)) from error
+
+
+def _report_variables(
+    payload: Mapping[str, Any], html_path: Path, json_path: Path,
+) -> dict[str, Any]:
     """Build safe HTML fragments consumed by the existing sc-compose template."""
     esc = lambda value: html.escape(str(value), quote=True)
     summary = (
@@ -497,14 +506,12 @@ def _report_html(payload: Mapping[str, Any]) -> tuple[str, str]:
             indent=2, sort_keys=True,
         ))
         + "</pre></section>"
+        "<section><h2>D5 implementation status</h2>"
+        "<p>Reader-lane runtime gauges are explicitly marked unimplemented "
+        "until the AV.1b reader cutover publishes them. Null values are not "
+        "zero measurements.</p></section>"
     )
-    return summary, sections
-
-
-def render_report(payload: Mapping[str, Any], json_path: Path, html_path: Path) -> None:
-    """Render through the checked-in sc-compose ``view-report`` contract."""
-    summary, sections = _report_html(payload)
-    variables = {
+    return {
         "output_path": str(html_path),
         "json_output_path": str(json_path),
         "title": "ATM read/query benchmark",
@@ -516,20 +523,6 @@ def render_report(payload: Mapping[str, Any], json_path: Path, html_path: Path) 
         "sections_html": sections,
         "footer_html": "Generated from the existing sc-compose view-report template.",
     }
-    html_path.parent.mkdir(parents=True, exist_ok=True)
-    with json_path.with_suffix(".variables.json").open("w", encoding="utf-8") as handle:
-        json.dump(variables, handle, sort_keys=True)
-    variables_path = json_path.with_suffix(".variables.json")
-    try:
-        result = subprocess.run(
-            ["sc-compose", "render", "--root", str(ROOT), "--file", str(ROOT / ".just/templates/view-report.html.j2"),
-             "--var-file", str(variables_path), "--output", str(html_path)],
-            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
-        )
-        if result.returncode:
-            raise ReadBenchmarkError(result.stderr.strip() or result.stdout.strip() or "sc-compose render failed")
-    finally:
-        variables_path.unlink(missing_ok=True)
 
 
 def build_payload(results: Sequence[dict[str, Any]], corpus: Corpus, host_label: str) -> dict[str, Any]:
@@ -540,17 +533,32 @@ def build_payload(results: Sequence[dict[str, Any]], corpus: Corpus, host_label:
         "schema_version": 1,
         "report_type": "read-query-benchmark",
         "campaign_id": campaign_id,
+        # Each family has a stable derived campaign identity.  Just's three
+        # subordinate targets compose into this envelope, so provenance keeps
+        # all three IDs instead of collapsing them into one opaque run.
+        "campaign_ids": [f"{campaign_id}-{item['family']}" for item in results],
         "generated_at": started.isoformat().replace("+00:00", "Z"),
         "host_label": host_label,
         "status": status,
         "harness_version": HARNESS_VERSION,
         "source_revision": _source_revision(),
         "fanout": FANOUT,
+        "mixed_mode_budget": {
+            "p95_latency_ms": MIXED_READ_P95_BUDGET_MS,
+            "source": MIXED_READ_P95_BUDGET_SOURCE,
+        },
         "corpus": {
             "seed": corpus.seed,
             "generator_version": corpus.generator_version,
+            "message_count": len(corpus.members) * CORPUS_MESSAGES_PER_MEMBER,
+            "messages_per_member": CORPUS_MESSAGES_PER_MEMBER,
+            "message_size_distribution": {
+                "kind": "fixed",
+                "payload_bytes": CORPUS_PAYLOAD_BYTES,
+            },
             "team_count": len({member.team for member in corpus.members}),
             "agents_per_team": 4,
+            "skew_profile": CORPUS_SKEW_PROFILE,
         },
         "families": list(results),
     }
@@ -561,6 +569,15 @@ def _source_revision() -> str:
     return result.stdout.strip() if result.returncode == 0 else "unknown"
 
 
+def require_av1b_cutover() -> None:
+    """Keep official floors off the serialized path until AV.1b is live."""
+    if not AV1B_CUTOVER_LANDED:
+        raise ReadBenchmarkError(
+            "official read campaign is gated until AV.1b reader cutover lands; "
+            "flip AV1B_CUTOVER_LANDED in the reviewed merge-forward"
+        )
+
+
 def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
     if not family_ids:
         raise ReadBenchmarkError("at least one family is required")
@@ -569,12 +586,27 @@ def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
         raise ReadBenchmarkError(f"unknown family in {family_ids!r}")
     if not diagnostic_only and len(families) != len(FAMILIES):
         raise ReadBenchmarkError("only just benchmark-read may publish official evidence")
+    if not diagnostic_only:
+        require_av1b_cutover()
     host_label = os.environ.get("ATM_CAPACITY_HOST_LABEL", "local")
-    baselines = load_read_baselines()
+    try:
+        baselines = load_baselines(BASELINES_PATH)
+    except BenchmarkBaselineError as error:
+        raise ReadBenchmarkError(str(error)) from error
+    previous_path = BASELINES_PATH.with_name("baselines.previous.json")
+    if previous_path.exists():
+        try:
+            _check_baseline_revision(load_baselines(previous_path), baselines)
+        except BenchmarkBaselineError as error:
+            raise ReadBenchmarkError(str(error)) from error
     if not diagnostic_only:
         missing = [
-            family.family_id for family in families
-            if not isinstance(baselines.get(family.family_id, {}).get(host_label), dict)
+            family.family_id
+            for family in families
+            if not any(
+                entry.host_label == host_label and entry.target == family.family_id
+                for entry in baselines.entries
+            )
         ]
         if missing:
             raise ReadBenchmarkError(
@@ -593,36 +625,90 @@ def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
     results = [run_family(atm, family, corpus, env) for family in families]
     if not diagnostic_only:
         for result in results:
-            apply_floor(result, baselines[result["family"]][host_label])
+            apply_floor(result, baselines.entry_for(host_label, result["family"]))
     payload = build_payload(results, corpus, host_label)
+    if not diagnostic_only:
+        payload["baseline_revision"] = baselines.revision
     if diagnostic_only:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0 if payload["status"] == "PASS" else 1
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     json_path = REPORT_DIR / f"{payload['campaign_id']}.json"
     html_path = REPORT_DIR / "index.html"
-    json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    render_report(payload, json_path, html_path)
-    REPORT_ENVELOPE.write_text(json.dumps({
-        "schema_version": 1,
-        "report_type": "benchmark",
-        "generated_at": payload["generated_at"],
-        "host_label": payload["host_label"],
-        "report_html": "read-query-benchmark/index.html",
-    }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    family_artifacts: list[Path] = []
+    artifact_paths = [json_path, html_path]
+    try:
+        payload["partial_artifact"] = False
+        json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        for result in results:
+            family_id = result["family"]
+            family_json = REPORT_DIR / f"{payload['campaign_id']}-{family_id}.json"
+            family_html = REPORT_DIR / f"{payload['campaign_id']}-{family_id}.xhtml"
+            family_payload = {**payload, "campaign_id": f"{payload['campaign_id']}-{family_id}", "families": [result]}
+            family_json.write_text(
+                json.dumps(family_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            compose(
+                ROOT / ".just/templates/view-report.html.j2",
+                _report_variables(family_payload, family_html, family_json),
+                family_html,
+            )
+            family_artifacts.extend((family_json, family_html))
+        compose(
+            ROOT / ".just/templates/view-report.html.j2",
+            _report_variables(payload, html_path, json_path),
+            html_path,
+        )
+        artifact_paths.extend(family_artifacts)
+        payload["partial_artifact"] = any(not path.is_file() for path in artifact_paths)
+        if payload["partial_artifact"]:
+            json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            validate_workload_contract(
+                family=FAMILIES[0], corpus=corpus, fanout=FANOUT,
+                warmup_seconds=WARMUP_SECONDS, measurement_seconds=MEASUREMENT_SECONDS,
+                partial_artifact=True,
+            )
+        render_envelope(
+            (),
+            report_root=REPORTS_ROOT,
+            report_name="read-query-benchmark",
+            generated_at=payload["generated_at"],
+            host_label=payload["host_label"],
+            report_html="read-query-benchmark/index.html",
+        )
+        regenerate_index()
+        check = subprocess.run(
+            ["just", "reports-index", "--check"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if check.returncode:
+            raise ReadBenchmarkError(
+                check.stderr.strip() or check.stdout.strip() or "reports-index check failed"
+            )
+    except Exception:
+        for path in artifact_paths + family_artifacts:
+            path.unlink(missing_ok=True)
+        REPORT_ENVELOPE.unlink(missing_ok=True)
+        raise
     print(f"read benchmark report: {json_path}")
     return 0 if payload["status"] == "PASS" else 1
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--family", choices=[*FAMILY_BY_ID, "all"], default="all")
+    parser.add_argument("--family", choices=[*FAMILY_BY_ID])
+    parser.add_argument("--families", nargs="+", choices=[*FAMILY_BY_ID])
     parser.add_argument("--diagnostic-only", action="store_true")
     args = parser.parse_args(argv)
-    selected = list(FAMILY_BY_ID) if args.family == "all" else [args.family]
+    selected = args.families or ([args.family] if args.family else list(FAMILY_BY_ID))
     try:
         return execute(selected, diagnostic_only=args.diagnostic_only)
-    except ReadBenchmarkError as error:
+    except (ReadBenchmarkError, BenchmarkReportError) as error:
         print(f"read benchmark: {error}", file=sys.stderr)
         return 1
 

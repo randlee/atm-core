@@ -105,6 +105,11 @@ sprint.
         entry, never a comparison against the old floor.
       - *Writer load (mixed mode):* sustained writer rate and payload
         profile fixed in config and recorded in the report.
+      - *Mixed-mode read budget:* the interim p95 ceiling is **1000 ms**,
+        sourced from the AV.1a D5 contract while runtime reader timing
+        metrics are unimplemented. The harness records this named source in
+        every mixed-mode report; AV.1b replaces the entry only through a
+        reviewed configuration change when exported metrics become available.
       - *Timing windows (every in-scope campaign, reference Mac host):*
         an explicit warm-up window (excluded from metrics) and a
         measurement window, both durations fixed in config and recorded

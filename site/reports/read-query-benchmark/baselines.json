@@ -1,9 +1,5 @@
 {
   "schema_version": 1,
   "revision": 1,
-  "read_families": {
-    "read-fanout": {},
-    "query-fts": {},
-    "read-under-write-load": {}
-  }
+  "entries": []
 }
