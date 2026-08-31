@@ -86,6 +86,13 @@ sprint.
       any *other* callable/type reference in that region fails the
       test, so a freshly named semaphore/bridge type or a new
       writer-queued async read fails without appearing on any list.
+      The D1 names are derived from the signatures of the two allowed ports
+      (`AsyncMailboxRuntime` and `DoctorProjection`), plus the named response
+      wrappers and a small explicit Rust prelude/core set. Expression-path
+      enum variants such as `ApiRequest::Doctor` and
+      `ResponseEnvelope::Doctor` are not treated as independent type
+      dependencies. This admits the ports' own request/context/error types
+      without accepting unrelated callable surfaces.
       The deny list (extend
       `crates/atm-architecture/tests/boundary_enforcement.rs:3389-3431`
       with `BlockingCoreBridge`, `ControlPathSyncBridge`,
@@ -218,13 +225,11 @@ fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
   / A2b after AV.1b because the D2b mechanism-independent behavior test is
   not yet live.
 - 2026-08-31 Round-2 part 1 fixed merge-forward gate defects `AV3-B5/B6`
-  (`deca61e6e`): the composition surface is derived from
+  (`deca61e6e`, `357b9c040`): the composition surface is derived from
   `AsyncMailboxRuntime` signatures plus explicit prelude/D2 names, and the
-  read handler assertion parses each named handler independently. Against the
-  real AV.1b tree the composition gate passes; the `doctor` handler remains
-  intentionally rejected pending ownership of `AtmError`, `Box`, `Doctor`,
-  `DoctorProjectionContext`, `Ok`, `Ordering`, `Relaxed`, and `Some` rather
-  than weakening the D1 allowlist.
+  read handler assertion parses each named handler independently. D1 now
+  derives the allowed port-signature types and ignores enum-variant expression
+  paths; all 91 architecture tests pass against the real AV.1b tree.
 
 This is the authoritative acceptance checklist.
 
