@@ -8,10 +8,11 @@ status: planned
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 dependency_relations:
-  - related: AV.1
+  - related: AV.1b
     relation: must_follow
     rationale: The gates assert the post-cutover state (bridge deleted from
-      read paths, WriteOp pure). Merge-forward AV.1 → AV.3 before every round.
+      read paths, WriteOp pure). Merge-forward AV.1b → AV.3 before every
+      round.
   - related: AV.2
     relation: parallel_safe
     rationale: AV.3 edits tests/lint tooling; AV.2 edits normative docs only.
@@ -32,7 +33,7 @@ test, then fail lint — never depend on reviewer vigilance.
 This is the authoritative deliverable checklist.
 
 - [ ] D1 — `BlockingCoreBridge` deleted (uncompilable gate): after the
-      AV.1 cutover, remove the type and its remaining mutation-path
+      AV.1b cutover, remove the type and its remaining mutation-path
       usages in favor of the writer-ingress path, so no read path can be
       re-bridged without reintroducing a deleted type. I-5 found no
       boundary TOML governing the handler→writer edge; add a narrow TOML
@@ -49,7 +50,7 @@ This is the authoritative deliverable checklist.
       the existing Python checks, `justfile:112+` / `.just/`) asserting
       the `WriteOp` enum declares no pure-read variant and the
       read-handler file contains no bridge/spawn-blocking strings.
-- [ ] D4 — Liveness tests owned as a permanent CI gate: the AV.1 D10
+- [ ] D4 — Liveness tests owned as a permanent CI gate: the AV.1b D5
       stalled-op + read-storm and bounded-overload tests are wired into
       `just test` and documented as a release gate (removal requires an
       ADR change).
@@ -103,5 +104,5 @@ This is the authoritative validation checklist.
 
 ## Out of scope
 
-- The reader-lane implementation itself — AV.1.
+- The reader-lane implementation itself — AV.1a/AV.1b.
 - Normative requirement text — AV.2.

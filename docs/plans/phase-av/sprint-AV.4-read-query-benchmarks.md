@@ -8,10 +8,15 @@ status: planned
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 dependency_relations:
-  - related: AV.1
+  - related: AV.1b
     relation: must_follow
-    rationale: Benchmarks drive the reader lane and consume the AV.1 D9
-      metrics seams; merge-forward AV.1 → AV.4 before every round.
+    rationale: Benchmarks drive the cutover read path and consume the AV.1a
+      D5 metrics seams through it; merge-forward AV.1b → AV.4 before every
+      round.
+  - related: AV.2
+    relation: parallel_safe
+    rationale: AV.2 edits normative docs only; no intersection with
+      benchmark harness/report files.
   - related: AV.3
     relation: parallel_safe
     rationale: Benchmark harness/report files do not intersect architecture
@@ -42,7 +47,7 @@ This is the authoritative deliverable checklist.
 - [ ] D4 — Ratcheted floors: per-host-label entries in `baselines.json`
       for the new families, standard 3-clean-run seeding rules; floors
       compare like AO2 (p50 vs. floor, unrounded comparison).
-- [ ] D5 — Reader-lane diagnostics in reports: AV.1 D9 metrics
+- [ ] D5 — Reader-lane diagnostics in reports: AV.1a D5 metrics
       (queue depth, wait vs. execution time, deadline expiries,
       saturation events) captured per campaign so a floor breach is
       diagnosable from the committed artifact.

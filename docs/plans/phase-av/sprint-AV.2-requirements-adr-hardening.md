@@ -8,14 +8,18 @@ status: planned
 recommended_agent: Cipher-311d
 recommended_model: fast
 dependency_relations:
-  - related: AV.1
+  - related: AV.1a/AV.1b
     relation: parallel_safe
-    rationale: AV.2 edits docs/requirements.md and docs/adr/ only; AV.1 edits
-      crates only. No file, contract, or artifact intersection.
+    rationale: AV.2 edits docs/requirements.md and docs/adr/ only; AV.1a and
+      AV.1b edit crates only. No file, contract, or artifact intersection.
   - related: AV.3
     relation: parallel_safe
     rationale: AV.3 edits tests/lint tooling; AV.2 edits normative docs. The
       ADR here cites gate names but does not depend on their landing order.
+  - related: AV.4
+    relation: parallel_safe
+    rationale: AV.4 edits benchmark harness/report files; no intersection
+      with normative docs.
 ---
 
 # AV.2 — Requirements and ADR hardening for read concurrency
@@ -76,5 +80,5 @@ This is the authoritative validation checklist.
 
 ## Out of scope
 
-- Any code or test change — AV.1/AV.3.
+- Any code or test change — AV.1a/AV.1b/AV.3.
 - Benchmark documentation — AV.4.

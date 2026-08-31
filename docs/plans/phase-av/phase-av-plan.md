@@ -2,21 +2,26 @@
 title: "Phase AV — Async mailbox-read cutover completion, hardening, and read benchmarks"
 phase: AV
 branch: plan/phase-av
-dev_branch: fix/mailbox-read-blocking-serialization (provisioned by team-lead, held clean off develop)
+sprint_branches: per-sprint, declared in each sprint doc's frontmatter
+  (AV.1a reuses fix/mailbox-read-blocking-serialization, provisioned by
+  team-lead and held clean off develop)
 status: hardening-in-progress
 owner: fenix (plan author); arch-ctm (investigations I-1..I-5, implementation on approval)
 base_revision: 938767c72 (develop)
 integration_branch: integrate/phase-av
 dependency_relations:
-  - prerequisite: AV.1
+  - prerequisite: AV.1a
+    dependent: AV.1b
+    relation: must_follow
+  - prerequisite: AV.1b
     dependent: AV.3
     relation: must_follow
-  - prerequisite: AV.1
+  - prerequisite: AV.1b
     dependent: AV.4
     relation: must_follow
   - related: AV.2
     relation: parallel_safe
-    scope: parallel_safe with AV.1, AV.3, and AV.4 (docs-only footprint)
+    scope: parallel_safe with AV.1a, AV.1b, AV.3, and AV.4 (docs-only footprint)
   - related: AV.3/AV.4
     relation: parallel_safe
     scope: gates vs. benchmark files, non-intersecting
@@ -150,15 +155,17 @@ criteria, and required validation. This section is a map only.
 
 | Sprint | Doc | Scope |
 |---|---|---|
-| AV.1 | [sprint-AV.1-reader-lane-cutover.md](./sprint-AV.1-reader-lane-cutover.md) | Bounded RO WAL reader pool, async mailbox-read capability through the storage boundary, read-family handler cutover, hidden-mutation split, doctor decomposition, read deadline enforcement, writer purity, metrics seams, liveness tests. |
+| AV.1a | [sprint-AV.1a-reader-lane-foundation.md](./sprint-AV.1a-reader-lane-foundation.md) | Bounded RO WAL reader pool, async mailbox-read capability through the storage boundary, read deadline enforcement, metrics seams. Runtime-inert: no handler consumes it yet. |
+| AV.1b | [sprint-AV.1b-read-handler-cutover.md](./sprint-AV.1b-read-handler-cutover.md) | The atomic behavior change: read-family handler cutover, hidden-mutation split, doctor decomposition, writer purity, liveness tests. Atomicity rationale recorded in the sprint doc. |
 | AV.2 | [sprint-AV.2-requirements-adr-hardening.md](./sprint-AV.2-requirements-adr-hardening.md) | Normative MUST rules for read concurrency and race-tolerant state; reader/writer-lane ADR with the AL13-G7 regression as history; Phase-AM deletion-ledger entries. |
 | AV.3 | [sprint-AV.3-mechanical-hard-gates.md](./sprint-AV.3-mechanical-hard-gates.md) | BlockingCoreBridge deletion (uncompilable gate), read-family architecture guard, WriteOp purity lint, liveness tests owned as permanent CI gates. |
 | AV.4 | [sprint-AV.4-read-query-benchmarks.md](./sprint-AV.4-read-query-benchmarks.md) | Massively parallel read/peek/list and query/search benchmark families, mixed read-under-write-load mode, ratcheted per-host floors, reader-lane diagnostics in reports. |
 
 Dependency relations (rationale in each sprint doc's frontmatter):
-AV.1→AV.3 and AV.1→AV.4 are `must_follow` (gates and benchmarks assert
-the post-cutover state; merge-forward before every round); AV.2 is
-`parallel_safe` with all others; AV.3∥AV.4 are `parallel_safe`.
+AV.1a→AV.1b, AV.1b→AV.3, and AV.1b→AV.4 are `must_follow` (cutover
+consumes the foundation; gates and benchmarks assert the post-cutover
+state; merge-forward before every round); AV.2 is `parallel_safe` with
+all others; AV.3∥AV.4 are `parallel_safe`.
 
 ## 4. Execution notes
 
