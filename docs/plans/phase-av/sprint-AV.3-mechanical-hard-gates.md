@@ -45,24 +45,31 @@ sprint.
       by its own contract), `heartbeat` (`:644-675`) and
       `queue_get_next` (`:677-701`) — whose only bridged work is the
       synchronous roster check `validate_heartbeat_member` plus
-      in-memory operations — and the four `graft_receiver_*` handlers
+      in-memory operations — the four `graft_receiver_*` handlers
       (`:703-800`), which bridge the same roster check plus the
-      synchronous `GraftReceiverEndpointStore`. Deleting the type
-      outright is therefore not reachable from AV's scope (quality-mgr
-      AV-R1-B1). What this sprint does instead:
+      synchronous `GraftReceiverEndpointStore`, and `clear_messages`
+      (`:557-576`), a **mutation** that runs the synchronous
+      `atm_core::clear::clear_mail_with_runtime` and has no
+      writer-ingress `WriteOp` today (it is not a read and is not on
+      the acceptance contract). That is 12 bridge call sites at HEAD:
+      AV.1b D1 migrates 4 (list/peek/read/doctor); these **eight**
+      remain. Deleting the type outright is therefore not reachable
+      from AV's scope (quality-mgr AV-R1-B1/AV-R2-B1). What this sprint
+      does instead:
       1. rename the type to `ControlPathSyncBridge` and delete the
          identifier `BlockingCoreBridge` from `crates/` — any read path
          re-bridged under the old name fails to compile, and the new
          name states the residual scope;
       2. an architecture test asserts the **exact** set of
-         `ControlPathSyncBridge::run` call sites (the seven enumerated
-         above, by handler name); any new call site — read-family or
-         otherwise — fails the test;
-      3. the residual control-path migration (an async roster/member
-         validation port + an async graft-receiver-store port, after
+         `ControlPathSyncBridge::run` call sites (the eight enumerated
+         above, by enclosing handler name); any new call site —
+         read-family or otherwise — fails the test;
+      3. the residual control-path/mutation migration (an async
+         roster/member validation port, an async graft-receiver-store
+         port, and a `WriteOp::ClearMailbox` ingress op for clear, after
          which the bridge is deleted for real) is **explicitly out of
          AV scope** and recorded as follow-up `AV-FU-1` in the phase plan
-         §4, with the seven sites listed. It is not hidden behind "the
+         §4, with the eight sites listed. It is not hidden behind "the
          bridge is gone".
 
       I-5 found no boundary TOML governing the handler→writer edge; add
@@ -158,8 +165,11 @@ fn http_runtime_read_handlers_never_touch_writer_lane() {
 // D1 — exact residual call-site set for the renamed bridge.
 #[test]
 fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
-    const RESIDUAL: [&str; 7] = [
-        "retry_deferred_marker", "heartbeat", "queue_get_next",
+    // Enclosing handler fn of each `.run(` call site (12 at HEAD − 4
+    // migrated by AV.1b). The deferred-marker site lives inside `send`.
+    const RESIDUAL: [&str; 8] = [
+        "send" /* retry_deferred_marker */, "clear_messages",
+        "heartbeat", "queue_get_next",
         "graft_receiver_register", "graft_receiver_refresh",
         "graft_receiver_unregister", "graft_receiver_lookup",
     ];
@@ -177,10 +187,11 @@ This is the authoritative acceptance checklist.
       production-source occurrences; remaining mentions exist only in
       named documentation paths (`docs/adr/`, `docs/plans/`, the
       phase-AV closeout record — AV.2 D4) as historical rationale;
-      (2) the D1 call-site test enumerates exactly the seven residual
-      `ControlPathSyncBridge::run` sites and no read-family handler is
-      among them; (3) `AV-FU-1` is recorded in the phase plan §4 with
-      those seven sites — the residual is tracked, not implied closed.
+      (2) the D1 call-site test enumerates exactly the eight residual
+      `ControlPathSyncBridge::run` sites (incl. `clear_messages`) and
+      no read-family handler is among them; (3) `AV-FU-1` is recorded
+      in the phase plan §4 with those eight sites — the residual is
+      tracked, not implied closed.
 - [ ] A2 — Every D5 scratch mutation (spawn_blocking reintroduction,
       newly named bridge type, writer-queued async read,
       composition-layer single permit, new bridge call site in a read
@@ -210,6 +221,7 @@ This is the authoritative validation checklist.
 
 - The reader-lane implementation itself — AV.1a/AV.1b.
 - Normative requirement text — AV.2.
-- Migrating the seven residual control-path bridge callers (roster
-  validation, graft-receiver store, deferred marker) to async ports and
-  deleting the bridge for real — follow-up `AV-FU-1` (phase plan §4).
+- Migrating the eight residual bridge callers (roster validation,
+  graft-receiver store, deferred marker, clear) to async ports / writer
+  ingress and deleting the bridge for real — follow-up `AV-FU-1` (phase
+  plan §4).

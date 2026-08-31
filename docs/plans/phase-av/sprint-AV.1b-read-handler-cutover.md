@@ -276,9 +276,10 @@ This is the authoritative validation checklist.
 ## Out of scope
 
 - Reader pool/capability internals — AV.1a.
-- Renaming/narrowing the residual `BlockingCoreBridge` (control-path
-  callers: deferred marker, heartbeat, queue-get-next, graft receiver)
-  and the enforcement gates — AV.3; migrating those callers off the
-  bridge — follow-up `AV-FU-1`.
+- Renaming/narrowing the residual `BlockingCoreBridge` (eight non-read
+  callers: deferred marker, clear, heartbeat, queue-get-next, graft
+  receiver ×4) and the enforcement gates — AV.3; migrating those callers
+  off the bridge — follow-up `AV-FU-1`. `clear_messages` stays on the
+  bridge this sprint (A7 covers its behavior parity).
 - Requirements/ADR text — AV.2. Benchmarks — AV.4.
 - Any change to the frozen legacy synchronous daemon.

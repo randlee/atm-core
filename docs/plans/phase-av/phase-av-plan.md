@@ -222,17 +222,21 @@ which replaces manual merge-forward.
   D6/A6). Any AV.4 work beyond that bound needs Rand's sign-off first.
 - Explicit residual — follow-up **AV-FU-1** (out of AV scope, not
   hidden): after AV.3, `ControlPathSyncBridge` (renamed from
-  `BlockingCoreBridge`) remains with exactly seven **non-read**
-  call sites in `crates/atm-http-runtime/src/storage_and_nudge_router.rs`:
-  `retry_deferred_marker` (deferred-queue marker, intentionally
-  synchronous by contract), `heartbeat`, `queue_get_next` (synchronous
-  roster check `validate_heartbeat_member` + in-memory work),
+  `BlockingCoreBridge`) remains with exactly **eight** non-read call
+  sites in `crates/atm-http-runtime/src/storage_and_nudge_router.rs`
+  (12 at HEAD, 4 migrated by AV.1b): the deferred-queue marker inside
+  `send` (`retry_deferred_marker`, intentionally synchronous by
+  contract), `clear_messages` (mutation via synchronous
+  `clear_mail_with_runtime`; no writer-ingress op exists yet),
+  `heartbeat`, `queue_get_next` (synchronous roster check
+  `validate_heartbeat_member` + in-memory work), and
   `graft_receiver_register` / `_refresh` / `_unregister` / `_lookup`
   (roster check + synchronous `GraftReceiverEndpointStore`). None is a
   mailbox read; none is on the acceptance contract. Deleting the bridge
-  for real requires an async roster/member-validation port and an async
-  graft-receiver-store port — a separate, later plan. AV.3 A1 pins the
-  call-site set so it cannot grow silently in the meantime.
+  for real requires an async roster/member-validation port, an async
+  graft-receiver-store port, and a `WriteOp::ClearMailbox` ingress op —
+  a separate, later plan. AV.3 A1 pins the call-site set so it cannot
+  grow silently in the meantime.
 - Plan QA: quality-mgr review before any implementation dispatch.
 
 ## 5. QA history
@@ -242,3 +246,4 @@ which replaces manual merge-forward.
 | — | 2026-08-31 | — | pending | I-1..I-5 evidence incorporated (msg 01M1AJVGB9V5WXBGS2SF03KTS8); awaiting quality-mgr round 1. |
 | crit-1..3 | 2026-08-31 | arch-ctm (critical-plan-reviewer) | cap-exhausted / not converged | 3 cycles (reviewed 49945f609 → b213f279e → 7af2b2ecf). Cycle 3 residual: CRIT-014 (explicit mailbox/doctor port split), CRIT-015 (supervisor lifecycle/fault contract), M1 (metric outcomes) — all corrected at 39f3d23ed, unverified by arch-ctm (no cycle 4 permitted). |
 | qm-r1 | 2026-08-31 | quality-mgr (req-qa, arch-qa, ruthless-boundary-qa) @ 7af2b2ecf | FAIL 3B/5I/1m | B1 bridge deletion unreachable → AV.3 D1 rename+enumerate, `AV-FU-1`; B2 frozen AM ledger → AV.2 D4 phase-AV closeout record; B3 `RequestDeadline` in atm-storage → storage-owned `ReadDeadline`; I1 pool defaults/knob location/connection budget (AV.1a D2); I2 per-job transaction scoping + WAL-health test (AV.1a D2/A3d); I3 freeze exception recorded (AV.4 D6/A6, §4); I4 boundary TOML records (AV.1a D1a); I5 `SearchReader` re-hosted as second pool instance (AV.1a D2a, AV.4 D2); M1 composition-layer gate sibling (AV.3 D2/D5). Report: PR #1108 comment. |
+| qm-r2 | 2026-08-31 | quality-mgr @ 399527808 | FAIL (narrow) 2B | 7/9 r1 verified fixed. AV-R2-B1: residual enumeration omitted `clear_messages` (:566) → 8 residual sites everywhere (AV.3 D1/A1/RESIDUAL, §4 AV-FU-1, AV.1b out-of-scope). AV-R2-B2: connection-budget arithmetic (16 vs 22) → per-lane `max_quarantined`, worst case 22 / steady 12 under 32 (AV.1a D2, contract, A3e). Report: PR #1108 comment. |

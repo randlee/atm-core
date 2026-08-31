@@ -100,8 +100,13 @@ sprint.
       asserted at startup: `1` writer + `pool_size` mailbox readers +
       `search_pool_size` (D2a) + `doctor_pool_size` (AV.1b D3) +
       `max_quarantined` (transient zombie budget) + the existing analyst
-      RO connection. With all defaults that is `1 + 4 + 2 + 4 + 4 + 1 =
-      16`. A `max_connections` knob (default 32) caps the sum;
+      RO connection. `max_quarantined` is **per lane** (each lane's
+      default equals its own `pool_size`, per D4/A3c), so the transient
+      term is the sum over lanes: mailbox 4 + search 2 + doctor 4 = 10.
+      With all defaults the worst-case total is therefore
+      `1 + 4 + 2 + 4 + 10 + 1 = 22` (steady state, no quarantined
+      workers: 12). A `max_connections` knob (default 32, leaving 10
+      of headroom over the worst case) caps the sum;
       composition fails closed at startup with an actionable error if
       the configured sum exceeds it, so no combination of knobs can
       silently exceed the per-process fd/connection ceiling.
@@ -242,8 +247,9 @@ pub struct ReaderPoolConfig {
 // Composition-time connection budget (D2). Fails closed at startup.
 pub struct ConnectionBudget { pub max_connections: NonZeroUsize /* default 32 */ }
 // asserted: 1 (writer) + mailbox.pool_size + search.pool_size
-//         + doctor.pool_size + Σ max_quarantined + 1 (analyst RO)
+//         + doctor.pool_size + Σ_lanes max_quarantined + 1 (analyst RO)
 //         <= max_connections
+// defaults: 1 + 4 + 2 + 4 + (4 + 2 + 4) + 1 = 22  <= 32
 ```
 
 ## Acceptance criteria
@@ -288,8 +294,10 @@ This is the authoritative acceptance checklist.
       read transaction open across jobs makes the test fail
       (demonstrated once, reverted).
 - [ ] A3e — Connection budget (D2): composition with the default knobs
-      opens exactly the documented connection count (asserted by
-      counting opened connections in a test build); a configuration whose
+      opens exactly 12 connections at steady state and never more than
+      the documented worst case of 22 under the A3c quarantine scenario
+      (asserted by counting opened connections in a test build); a
+      configuration whose
       sum exceeds `max_connections` fails startup with an error naming
       each contributing knob.
 - [ ] A3f — Search lane re-host (D2a): every existing search test passes
