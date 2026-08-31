@@ -326,8 +326,19 @@
         "AV1A-M11 (open)",
         "16 closed AV1A records — regression check"
       ],
-      "verdict": "DISPATCHED",
-      "ack_message_id": "01M1BNJZN0T3BMJMFS7RK8G3SZ"
+      "verdict": "PASS 22/22 (100%)",
+      "ack_message_id": "01M1BNJZN0T3BMJMFS7RK8G3SZ",
+      "verdict_message_id": "01M1C8Y72T8DW24W3Y6P3Q8GH5",
+      "verdict_at": "2026-08-31T16:02:24Z",
+      "pr_comment_id": "5480976757",
+      "closures_sha": "88cb4381e",
+      "closed_findings": [
+        "AV1A-I6",
+        "AV1A-M10",
+        "AV1A-M11"
+      ],
+      "adjudications": "mail-store just-test blockage did not reproduce at f31a35484 in clean worktree, ruled not-a-finding (local dev-worktree state); just validate stops at known external dependency-currency gate, out of scope; concrete-owner delegation carve-out ruled formally with one NEW important non-blocking finding RBQA-AV1A-R5-F001 (sqlite_owner_roots directory-membership exemption, 3 undeclared implementers) routed to fenix triage",
+      "rust_qa_numbers": "lint_boundaries PASS 15.2s; pytest .just/tests 528/10/13 subtests incl 56/56 boundary; just lint 32/32; just test PASS; atm-architecture 81; workspace-minus-daemon 1528"
     },
     {
       "aich_sprint": "AV3",
