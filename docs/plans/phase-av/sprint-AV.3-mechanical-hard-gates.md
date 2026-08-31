@@ -109,14 +109,16 @@ sprint.
       permits `StorageAsyncMailboxRuntime`, `RequestDeadline`,
       `ReadDeadline`, `AtmError`/`ReadLaneError`, the ordinary mailbox
       domain values (`MailboxScope`, `Message`, `MessageKey`,
-      `MessageQuery`), and all public
-      `atm_core::read::selection` values
+      `MessageQuery`), all public `atm_core::read::selection` values
       (`MailboxSelectionRequest`, `MailboxSelectionCandidate`,
-      `MailboxSelectionResult`, `SelectedMailboxMessage`). It derives only
-      the production `impl AsyncMailboxRuntime for
-      StorageAsyncMailboxRuntime` with `syn`; `#[cfg(test)]` writer fakes
-      are outside the asserted region. `AsyncMessageStore` and
-      `MessageStore` deliberately remain absent from the positive allowlist.
+      `MailboxSelectionResult`, `SelectedMailboxMessage`), and the
+      `Unstarted`/`Active` state-handoff lifecycle states. It derives its
+      remaining type names from the production `AsyncMailboxRuntime` trait's
+      `syn`-parsed signatures plus a small explicit Rust-prelude set; the
+      asserted region is only the production `impl AsyncMailboxRuntime for
+      StorageAsyncMailboxRuntime`, so `#[cfg(test)]` writer fakes are outside
+      it. `AsyncMessageStore` and `MessageStore` deliberately remain absent
+      from the positive allowlist.
 - [ ] D2b — Behavior gate (mechanism-independent): tests run each
       read-family endpoint against an **instrumented writer ingress
       that records every submission** (op variant, origin, outcome)
