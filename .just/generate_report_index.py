@@ -249,7 +249,11 @@ def discover_envelopes(reports_root: Path) -> list[Envelope]:
             if is_root_envelope or is_explicit_envelope:
                 envelopes.append(parse_envelope(source, reports_root))
             continue
-        if is_root_envelope or is_explicit_envelope or {"report_type", "report_html"} & payload.keys():
+        # A nested benchmark artifact may carry ``report_type`` as data while
+        # intentionally lacking the public envelope's ``report_html`` field.
+        # Treat only the complete pair as an envelope; using set intersection
+        # here incorrectly rejected valid family artifacts during indexing.
+        if is_root_envelope or is_explicit_envelope or {"report_type", "report_html"} <= payload.keys():
             envelopes.append(parse_envelope(source, reports_root))
         elif (
             source.parent.parent.parent.parent.name == "smoke"
