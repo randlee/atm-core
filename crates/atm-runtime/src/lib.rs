@@ -19,6 +19,8 @@ pub use composition::{
 pub use doctor_projection::{
     DoctorProjection, DoctorProjectionConfig, DoctorProjectionContext, StorageDoctorProjection,
 };
+#[cfg(feature = "test-utils")]
+pub use mailbox_runtime::test_utils;
 pub use mailbox_runtime::{
     AsyncMailboxRuntime, HandoffConfig, StateHandoffDiagnostics, StateHandoffSupervisor,
     SupervisorState,

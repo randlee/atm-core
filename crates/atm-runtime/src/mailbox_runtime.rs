@@ -18,7 +18,7 @@ use atm_core::read::selection::{
 };
 use atm_storage::{
     AsyncMailboxReader, AsyncMessageStore, AtmError, IsoTimestamp, MailboxScope, Message,
-    MessageKey, MessageQuery, ReadDeadline,
+    MessageKey, MessageQuery, MessageStore, ReadDeadline,
 };
 
 /// Bounded, composition-owned handoff settings for post-read state updates.
@@ -407,6 +407,135 @@ pub trait AsyncMailboxRuntime: Send + Sync {
 pub struct StorageAsyncMailboxRuntime {
     reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     state_handoff: StateHandoffLifecycle,
+}
+
+/// Test-only writer ingress instrumentation for router behavior gates.
+///
+/// It remains in this crate because `AsyncMessageStore` extends the sealed
+/// storage contract; HTTP-runtime tests can observe handoff effects without
+/// creating an unauthorized writer implementation at that boundary.
+#[cfg(feature = "test-utils")]
+pub mod test_utils {
+    use super::*;
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum RecordedWriterOutcome {
+        Applied,
+        Rejected,
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub struct RecordedWriterSubmission {
+        pub message_ids: Vec<MessageKey>,
+        pub outcome: RecordedWriterOutcome,
+    }
+
+    #[derive(Clone, Default)]
+    pub struct RecordingWriterIngress {
+        inner: Arc<RecordingWriterIngressInner>,
+    }
+
+    #[derive(Default)]
+    struct RecordingWriterIngressInner {
+        reject: std::sync::atomic::AtomicBool,
+        submissions: Mutex<Vec<RecordedWriterSubmission>>,
+    }
+
+    impl RecordingWriterIngress {
+        #[must_use]
+        pub fn submissions(&self) -> Vec<RecordedWriterSubmission> {
+            self.inner
+                .submissions
+                .lock()
+                .expect("recording writer ingress mutex")
+                .clone()
+        }
+
+        pub fn set_rejecting(&self, rejecting: bool) {
+            self.inner
+                .reject
+                .store(rejecting, std::sync::atomic::Ordering::Release);
+        }
+    }
+
+    pub fn mailbox_runtime_with_recording_ingress(
+        reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
+        config: HandoffConfig,
+    ) -> Result<(StorageAsyncMailboxRuntime, RecordingWriterIngress), AtmError> {
+        let ingress = RecordingWriterIngress::default();
+        let runtime = StorageAsyncMailboxRuntime::new(
+            reader,
+            Arc::new(RecordingWriter {
+                ingress: ingress.clone(),
+            }),
+        )
+        .with_state_handoff(config)?;
+        Ok((runtime, ingress))
+    }
+
+    struct RecordingWriter {
+        ingress: RecordingWriterIngress,
+    }
+
+    impl atm_storage::contract::sealed::Sealed for RecordingWriter {}
+
+    impl MessageStore for RecordingWriter {
+        fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
+            unreachable!("behavior recorder receives only read-display transitions")
+        }
+
+        fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
+            unreachable!("behavior recorder receives only read-display transitions")
+        }
+
+        fn load_message(&self, _key: &MessageKey) -> Result<Option<Message>, AtmError> {
+            unreachable!("behavior recorder receives only read-display transitions")
+        }
+
+        fn list_messages(&self, _query: &MessageQuery) -> Result<Vec<Message>, AtmError> {
+            unreachable!("behavior recorder receives only read-display transitions")
+        }
+
+        fn delete_message(&self, _key: &MessageKey) -> Result<(), AtmError> {
+            unreachable!("behavior recorder receives only read-display transitions")
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AsyncMessageStore for RecordingWriter {
+        async fn apply_read_display_state_async(
+            &self,
+            _scope: MailboxScope,
+            message_ids: Vec<MessageKey>,
+            _seen_watermark: Option<IsoTimestamp>,
+        ) -> Result<(), AtmError> {
+            let rejecting = self
+                .ingress
+                .inner
+                .reject
+                .load(std::sync::atomic::Ordering::Acquire);
+            self.ingress
+                .inner
+                .submissions
+                .lock()
+                .expect("recording writer ingress mutex")
+                .push(RecordedWriterSubmission {
+                    message_ids,
+                    outcome: if rejecting {
+                        RecordedWriterOutcome::Rejected
+                    } else {
+                        RecordedWriterOutcome::Applied
+                    },
+                });
+            if rejecting {
+                Err(AtmError::daemon_unavailable(
+                    "test recording writer ingress rejected read-state handoff",
+                ))
+            } else {
+                Ok(())
+            }
+        }
+    }
 }
 
 /// Before startup composition temporarily holds the writer ingress needed to

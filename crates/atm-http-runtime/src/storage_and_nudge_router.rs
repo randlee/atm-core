@@ -1041,6 +1041,7 @@ mod tests {
     };
     use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
+    use atm_runtime::test_utils::{RecordedWriterOutcome, mailbox_runtime_with_recording_ingress};
     use atm_runtime::{
         DoctorProjection, DoctorProjectionConfig, DoctorProjectionContext, HandoffConfig,
         StorageDoctorProjection,
@@ -2504,6 +2505,168 @@ mod tests {
         assert!(
             matches!(read, ResponseEnvelope::Receive(outcome) if outcome.count == 1 && outcome.mutation_applied)
         );
+    }
+
+    #[tokio::test]
+    async fn read_family_uses_only_the_supervised_recording_writer_handoff() {
+        let fixture = fixture(true, None, None);
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(write_request(
+                    fixture.home_dir.clone(),
+                    fixture.current_dir.clone(),
+                )))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("seed mailbox");
+
+        let assembly = open_sqlite_boundary(&fixture.database_path).expect("reopen async boundary");
+        let (mailbox_runtime, ingress) = mailbox_runtime_with_recording_ingress(
+            assembly
+                .service_runtime
+                .async_mailbox_reader()
+                .expect("async mailbox reader"),
+            HandoffConfig {
+                handoff_retry_deadline: Duration::from_millis(20),
+                ..HandoffConfig::default()
+            },
+        )
+        .expect("start recording handoff");
+        let doctor_projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig::default(),
+            assembly.service_runtime,
+            assembly.doctor_ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start doctor projection");
+        let router = fixture
+            .router
+            .clone()
+            .with_async_mailbox_runtime(Arc::new(mailbox_runtime))
+            .with_doctor_projection(Arc::new(doctor_projection));
+        let root = fixture.home_dir.clone();
+        let list = atm_core::list::ListQuery::new(
+            root.clone(),
+            root.clone(),
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query");
+        let peek = atm_core::read::PeekQuery::new(
+            root.clone(),
+            root.clone(),
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("peek query");
+        let read = atm_core::read::ReadQuery::new(
+            root.clone(),
+            root,
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query");
+
+        for request in [
+            ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                list,
+            ))),
+            ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::Peek(
+                peek,
+            ))),
+            ApiRequest::Doctor(atm_core::doctor::DoctorQuery::default()),
+        ] {
+            router
+                .dispatch(
+                    request,
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("non-read-display endpoint succeeds");
+            assert!(
+                ingress.submissions().is_empty(),
+                "list, peek, and doctor never submit writer work"
+            );
+        }
+
+        router
+            .dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::Receive(
+                    read.clone(),
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("read response is independent of writer completion");
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while ingress.submissions().is_empty() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("read handoff reaches recording ingress");
+        assert!(
+            ingress
+                .submissions()
+                .iter()
+                .all(|submission| submission.outcome == RecordedWriterOutcome::Applied),
+            "read submits only its supervised display-state handoff"
+        );
+
+        ingress.set_rejecting(true);
+        router
+            .dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::Receive(
+                    read,
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("writer rejection never feeds the read response");
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !ingress
+                .submissions()
+                .iter()
+                .any(|submission| submission.outcome == RecordedWriterOutcome::Rejected)
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("supervisor records the rejecting handoff path");
     }
 
     #[tokio::test]

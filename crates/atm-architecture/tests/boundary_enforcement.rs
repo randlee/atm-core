@@ -3722,78 +3722,6 @@ fn av3_blocking_core_bridge_crate_scan_rejects_a_stray_reintroduction() {
     );
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Av3WriterIngressPath {
-    None,
-    StateHandoffSupervisor,
-    DirectWriter,
-}
-
-trait Av3InstrumentedWriterIngress {
-    fn record(&mut self, handler: &str, path: Av3WriterIngressPath);
-}
-
-#[derive(Default)]
-struct Av3IngressRecorder(BTreeMap<String, Av3WriterIngressPath>);
-
-impl Av3InstrumentedWriterIngress for Av3IngressRecorder {
-    fn record(&mut self, handler: &str, path: Av3WriterIngressPath) {
-        self.0.insert(handler.to_owned(), path);
-    }
-}
-
-fn av3_assert_supervised_read_ingress(handler: &str, path: Av3WriterIngressPath) {
-    assert!(
-        matches!(
-            path,
-            Av3WriterIngressPath::None | Av3WriterIngressPath::StateHandoffSupervisor
-        ),
-        "D2b `{handler}` must not obtain response data through writer ingress"
-    );
-}
-
-#[test]
-fn av3_d2b_scaffold_accepts_only_the_supervised_read_state_handoff() {
-    let router = read_source(
-        &workspace_root().join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"),
-    );
-    if !router.contains("AsyncMailboxRuntime") {
-        return;
-    }
-    let mut recorder = Av3IngressRecorder::default();
-    for handler in read_handler_names() {
-        let body = av3_handler_region(&router, &[&handler]);
-        let path = if handler == "receive_messages" && body.contains("StateHandoffSupervisor") {
-            Av3WriterIngressPath::StateHandoffSupervisor
-        } else if body.contains("StorageWriterIngress") || body.contains("submit_async") {
-            Av3WriterIngressPath::DirectWriter
-        } else {
-            Av3WriterIngressPath::None
-        };
-        recorder.record(&handler, path);
-    }
-    for (endpoint, path) in recorder.0 {
-        av3_assert_supervised_read_ingress(&endpoint, path);
-    }
-}
-
-#[test]
-fn av3_d2b_scaffold_rejects_a_writer_lane_read_fixture() {
-    let source = "async fn list_messages() { StorageWriterIngress::submit_async(); }";
-    let body = av3_handler_region(source, &["list_messages"]);
-    let path = if body.contains("StorageWriterIngress") {
-        Av3WriterIngressPath::DirectWriter
-    } else {
-        Av3WriterIngressPath::None
-    };
-    let rejection =
-        std::panic::catch_unwind(|| av3_assert_supervised_read_ingress("list_messages", path));
-    assert!(
-        rejection.is_err(),
-        "D2b must reject a read handler routed to the writer lane"
-    );
-}
-
 #[test]
 fn herdr_constructors_have_one_composition_root_call_site() {
     let root = workspace_root();
@@ -4321,18 +4249,40 @@ fn av3_bridge_run_call_sites_by_enclosing_fn(source: &str) -> BTreeSet<String> {
 fn av3_function_calls_bridge_run(block: &syn::Block, bridge_fields: &BTreeSet<String>) -> bool {
     struct BridgeRunVisitor<'a> {
         bridge_fields: &'a BTreeSet<String>,
+        bridge_locals: BTreeSet<String>,
         found: bool,
     }
 
     impl<'ast> Visit<'ast> for BridgeRunVisitor<'_> {
+        fn visit_local(&mut self, local: &'ast syn::Local) {
+            if local.init.as_ref().is_some_and(|init| {
+                init.expr
+                    .to_token_stream()
+                    .to_string()
+                    .contains("ControlPathSyncBridge")
+            }) && let syn::Pat::Ident(binding) = &local.pat
+            {
+                self.bridge_locals.insert(binding.ident.to_string());
+            }
+            syn::visit::visit_local(self, local);
+        }
+
         fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
-            let is_bridge_run = call.method == "run"
-                && matches!(
-                    call.receiver.as_ref(),
-                    syn::Expr::Field(field)
-                        if matches!(field.base.as_ref(), syn::Expr::Path(path) if path.path.is_ident("self"))
-                            && matches!(&field.member, syn::Member::Named(field) if self.bridge_fields.contains(&field.to_string()))
-                );
+            let receiver_is_bridge = matches!(
+                call.receiver.as_ref(),
+                syn::Expr::Field(field)
+                    if matches!(field.base.as_ref(), syn::Expr::Path(path) if path.path.is_ident("self"))
+                        && matches!(&field.member, syn::Member::Named(field) if self.bridge_fields.contains(&field.to_string()))
+            ) || matches!(
+                call.receiver.as_ref(),
+                syn::Expr::Path(path)
+                    if path.path.segments.last().is_some_and(|segment| self.bridge_locals.contains(&segment.ident.to_string()))
+            ) || call
+                .receiver
+                .to_token_stream()
+                .to_string()
+                .contains("ControlPathSyncBridge");
+            let is_bridge_run = call.method == "run" && receiver_is_bridge;
             self.found |= is_bridge_run;
             syn::visit::visit_expr_method_call(self, call);
         }
@@ -4340,6 +4290,7 @@ fn av3_function_calls_bridge_run(block: &syn::Block, bridge_fields: &BTreeSet<St
 
     let mut visitor = BridgeRunVisitor {
         bridge_fields,
+        bridge_locals: BTreeSet::new(),
         found: false,
     };
     visitor.visit_block(block);
