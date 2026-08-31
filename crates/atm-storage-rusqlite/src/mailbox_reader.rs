@@ -66,7 +66,7 @@ impl MailboxReader {
     ) -> Result<Option<Message>, ReadLaneError> {
         self.pool
             .submit(deadline.remaining(), move |connection, target| {
-                load_message(connection, target, &scope, &key).map_err(storage_error)
+                load_message(connection, target, &scope, &key)
             })
             .await
     }
@@ -267,8 +267,8 @@ fn load_message(
     target: &SharedDbTarget,
     scope: &MailboxScope,
     key: &MessageKey,
-) -> Result<Option<Message>, AtmError> {
-    let transaction = open_reader_transaction(connection, target)?;
+) -> Result<Option<Message>, ReadLaneError> {
+    let transaction = open_reader_transaction(connection, target).map_err(storage_error)?;
     let row = transaction
         .query_row(
             "SELECT team, agent, envelope_json FROM mail_messages WHERE message_key = ?1;",
@@ -282,23 +282,33 @@ fn load_message(
             },
         )
         .optional()
-        .map_err(|error| sqlite_error(target, "failed to load mailbox reader record", error))?;
+        .map_err(|error| {
+            storage_error(sqlite_error(
+                target,
+                "failed to load mailbox reader record",
+                error,
+            ))
+        })?;
     let message = row
         .map(|(team, agent, envelope_json)| {
             let team = team.parse().map_err(|error| {
-                AtmError::validation(format!("failed to parse sqlite team: {error}"))
+                storage_error(AtmError::validation(format!(
+                    "failed to parse sqlite team: {error}"
+                )))
             })?;
             let agent = agent.parse().map_err(|error| {
-                AtmError::validation(format!("failed to parse sqlite agent: {error}"))
+                storage_error(AtmError::validation(format!(
+                    "failed to parse sqlite agent: {error}"
+                )))
             })?;
             if scope.team != team || scope.agent != agent {
-                return Err(AtmError::validation(
-                    "mailbox scope does not authorize this record",
-                ));
+                return Err(ReadLaneError::UnauthorizedScope);
             }
-            let state = load_state(&transaction, target, &team, &agent, key)?;
+            let state =
+                load_state(&transaction, target, &team, &agent, key).map_err(storage_error)?;
             let envelope = apply_state(
-                deserialize_json(&envelope_json, "sqlite message envelope")?,
+                deserialize_json(&envelope_json, "sqlite message envelope")
+                    .map_err(storage_error)?,
                 state.as_ref(),
             );
             Ok(Message {
@@ -309,7 +319,7 @@ fn load_message(
             })
         })
         .transpose()?;
-    close_reader_transaction(transaction, target)?;
+    close_reader_transaction(transaction, target).map_err(storage_error)?;
     Ok(message)
 }
 

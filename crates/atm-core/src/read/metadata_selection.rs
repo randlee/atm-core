@@ -7,8 +7,8 @@ use crate::boundary;
 use crate::error::AtmError;
 use crate::schema::InboxMessage;
 use crate::service_runtime_store::RetainedMailboxRuntime;
-use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
-use crate::types::{DisplayBucket, IsoTimestamp, ReadSelection, TeamName};
+use crate::threading::ThreadIndex;
+use crate::types::{IsoTimestamp, TeamName};
 
 use super::selection::{
     MailboxSelectionCandidate, MailboxSelectionRequest, classify_mailbox_candidates,
@@ -283,73 +283,6 @@ fn load_logical_current_record<R: RetainedMailboxRuntime>(
         })
 }
 
-pub(crate) fn logical_current_messages(messages: Vec<ClassifiedMessage>) -> Vec<ClassifiedMessage> {
-    let projected = messages
-        .iter()
-        .map(|message| message.envelope.clone())
-        .collect::<Vec<_>>();
-    let thread_index = ThreadIndex::new(&projected);
-
-    messages
-        .into_iter()
-        .filter(|message| {
-            message
-                .envelope
-                .message_id
-                .is_none_or(|message_id| thread_index.is_terminal(message_id))
-        })
-        .map(|mut message| {
-            if let Some(message_id) = message.envelope.message_id
-                && let Some(logical) = thread_index.logical_current_envelope(message_id)
-            {
-                message.envelope = logical;
-            }
-            message
-        })
-        .collect()
-}
-
-pub(crate) fn bucket_counts_for(messages: &[ClassifiedMessage]) -> BucketCounts {
-    messages.iter().fold(
-        BucketCounts {
-            unread: 0,
-            pending_ack: 0,
-            history: 0,
-        },
-        |mut counts, message| {
-            if hidden_from_normal_views(&message.envelope) {
-                return counts;
-            }
-            match message.bucket {
-                DisplayBucket::Unread => counts.unread += 1,
-                DisplayBucket::PendingAck => counts.pending_ack += 1,
-                DisplayBucket::History => counts.history += 1,
-            }
-            counts
-        },
-    )
-}
-
-pub(crate) fn select_messages(
-    messages: &[ClassifiedMessage],
-    selection_mode: ReadSelection,
-    seen_watermark: Option<IsoTimestamp>,
-) -> Vec<ClassifiedMessage> {
-    let watermark = if selection_mode == ReadSelection::All {
-        None
-    } else {
-        seen_watermark
-    };
-
-    let visible = messages
-        .iter()
-        .filter(|message| !hidden_for_selection(&message.envelope, selection_mode))
-        .cloned()
-        .collect::<Vec<_>>();
-
-    filters::apply_selection_mode(visible, selection_mode, watermark)
-}
-
 pub(crate) fn sort_and_limit_selected(selected: &mut Vec<ClassifiedMessage>, limit: Option<usize>) {
     selected.sort_by(|left, right| {
         right
@@ -363,35 +296,4 @@ pub(crate) fn sort_and_limit_selected(selected: &mut Vec<ClassifiedMessage>, lim
     if let Some(limit) = limit {
         selected.truncate(limit);
     }
-}
-
-#[cfg(test)]
-pub(crate) fn effective_display_envelope(
-    envelope: &InboxMessage,
-    thread_index: &ThreadIndex<'_>,
-) -> InboxMessage {
-    let Some(message_id) = envelope.message_id else {
-        return envelope.clone();
-    };
-    if thread_index.is_terminal(message_id) {
-        return envelope.clone();
-    }
-
-    let mut historical = envelope.clone();
-    historical.read = true;
-    historical.pending_ack_at = None;
-    historical
-}
-
-fn hidden_from_normal_views(envelope: &InboxMessage) -> bool {
-    let now = IsoTimestamp::now();
-    is_expired_ephemeral(envelope, now) || (is_ephemeral(envelope) && envelope.read)
-}
-
-fn hidden_for_selection(envelope: &InboxMessage, selection_mode: ReadSelection) -> bool {
-    let now = IsoTimestamp::now();
-    if is_expired_ephemeral(envelope, now) {
-        return true;
-    }
-    selection_mode != ReadSelection::All && is_ephemeral(envelope) && envelope.read
 }

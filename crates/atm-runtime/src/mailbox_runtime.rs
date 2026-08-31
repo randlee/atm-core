@@ -18,7 +18,7 @@ use atm_core::read::selection::{
 };
 use atm_storage::{
     AsyncMailboxReader, AsyncMessageStore, AtmError, IsoTimestamp, MailboxScope, Message,
-    MessageKey, MessageQuery, ReadDeadline, ReadLaneError,
+    MessageKey, MessageQuery, ReadDeadline,
 };
 
 /// Bounded, composition-owned handoff settings for post-read state updates.
@@ -578,7 +578,7 @@ impl StorageAsyncMailboxRuntime {
                 .reader
                 .mailbox_member_exists(command.scope().clone(), read_deadline(deadline)?)
                 .await
-                .map_err(read_error)?
+                .map_err(AtmError::from)?
         {
             return Err(AtmError::agent_not_found(
                 &command.scope().agent,
@@ -590,7 +590,7 @@ impl StorageAsyncMailboxRuntime {
                 .reader
                 .load_seen_watermark(command.scope().clone(), read_deadline(deadline)?)
                 .await
-                .map_err(read_error)?;
+                .map_err(AtmError::from)?;
             command = command.with_seen_watermark(watermark);
         }
         Ok(command)
@@ -606,7 +606,7 @@ impl StorageAsyncMailboxRuntime {
                 .reader
                 .mailbox_member_exists(command.scope().clone(), read_deadline(deadline)?)
                 .await
-                .map_err(read_error)?
+                .map_err(AtmError::from)?
         {
             return Err(AtmError::agent_not_found(
                 &command.scope().agent,
@@ -618,7 +618,7 @@ impl StorageAsyncMailboxRuntime {
                 .reader
                 .load_seen_watermark(command.scope().clone(), read_deadline(deadline)?)
                 .await
-                .map_err(read_error)?;
+                .map_err(AtmError::from)?;
             command = command.with_seen_watermark(watermark);
         }
         Ok(command)
@@ -634,7 +634,7 @@ impl StorageAsyncMailboxRuntime {
             .reader
             .list_messages(scope.clone(), query(&scope), read_deadline(deadline)?)
             .await
-            .map_err(read_error)?;
+            .map_err(AtmError::from)?;
         Ok(select_mailbox_candidates(
             messages.into_iter().map(selection_candidate).collect(),
             &request,
@@ -723,7 +723,7 @@ impl StorageAsyncMailboxRuntime {
             .reader
             .load_message(scope, key, deadline)
             .await
-            .map_err(read_error)?;
+            .map_err(AtmError::from)?;
         Ok(select_mailbox_candidates(
             message.into_iter().map(selection_candidate).collect(),
             &request,
@@ -755,10 +755,6 @@ fn read_deadline(deadline: RequestDeadline) -> Result<ReadDeadline, AtmError> {
         .and_then(ReadDeadline::new)
 }
 
-fn read_error(error: ReadLaneError) -> AtmError {
-    AtmError::daemon_unavailable(error.to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -772,8 +768,8 @@ mod tests {
     use atm_core::types::ReadSelection;
     use atm_storage::testing::InMemoryMailboxReader;
     use atm_storage::{
-        AgentName, AsyncMessageStore, AtmError, IsoTimestamp, MailboxScope, Message,
-        MessageEnvelope, MessageKey, MessageQuery, MessageStore, TeamName,
+        AgentName, AsyncMessageStore, AtmError, AtmErrorCode, IsoTimestamp, MailboxScope, Message,
+        MessageEnvelope, MessageKey, MessageQuery, MessageStore, ReadLaneError, TeamName,
     };
 
     use super::{
@@ -1356,6 +1352,35 @@ mod tests {
                 .expect("recording writer mutex")
                 .push(message_ids);
             Ok(())
+        }
+    }
+
+    #[test]
+    fn reader_lane_error_conversion_preserves_distinct_codes_and_causes() {
+        let cases = [
+            (
+                ReadLaneError::UnauthorizedScope,
+                AtmErrorCode::MailboxReadFailed,
+            ),
+            (
+                ReadLaneError::Saturated { reason: "test" },
+                AtmErrorCode::DaemonConnectionSaturated,
+            ),
+            (
+                ReadLaneError::DeadlineExpired { stage: "test" },
+                AtmErrorCode::MailboxLockTimeout,
+            ),
+            (
+                ReadLaneError::Unavailable {
+                    message: "test".to_owned(),
+                },
+                AtmErrorCode::DaemonUnavailable,
+            ),
+        ];
+        for (lane_error, expected_code) in cases {
+            let error = AtmError::from(lane_error);
+            assert_eq!(error.code(), expected_code);
+            assert!(error.cause().is_some());
         }
     }
 }

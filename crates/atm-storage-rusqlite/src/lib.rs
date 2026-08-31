@@ -24,6 +24,7 @@ mod search_schema;
 mod search_store;
 mod shared_db;
 mod shared_db_diagnostics;
+mod shared_db_reader_lanes;
 mod template_catalog_schema;
 mod template_catalog_store;
 mod writer;
@@ -999,7 +1000,7 @@ mod tests {
     fn reader_lane_configuration_is_threaded_through_storage_factory_and_validated() {
         let root = tempfile::tempdir().expect("temporary storage root");
         let config = ReaderLanesConfig {
-            max_connections: 21,
+            max_connections: std::num::NonZeroUsize::new(21).expect("non-zero maximum connections"),
             ..ReaderLanesConfig::default()
         };
         let error = SqliteStorageFactory::at_path(root.path().join("mail.db"))
@@ -1037,11 +1038,15 @@ mod tests {
             .expect("bounded read");
         backend.checkpoint_wal().expect("checkpoint");
         let metrics = backend.reader_lane_metrics();
-        assert_eq!(metrics.mailbox.lane, "mailbox");
-        assert_eq!(metrics.search.lane, "search");
-        assert_eq!(metrics.mailbox.last_checkpoint_succeeded, Some(true));
-        assert!(metrics.mailbox.current_wal_frames.is_some());
-        assert_eq!(metrics.search.last_checkpoint_succeeded, Some(true));
+        let mailbox = metrics.lane("mailbox").expect("mailbox lane metrics");
+        let search = metrics.lane("search").expect("search lane metrics");
+        assert_eq!(metrics.iter().count(), 2);
+        assert!(metrics.lane("doctor").is_none());
+        assert_eq!(mailbox.lane, "mailbox");
+        assert_eq!(search.lane, "search");
+        assert_eq!(mailbox.last_checkpoint_succeeded, Some(true));
+        assert!(mailbox.current_wal_frames.is_some());
+        assert_eq!(search.last_checkpoint_succeeded, Some(true));
     }
 
     #[tokio::test]
@@ -1051,7 +1056,9 @@ mod tests {
             Arc::new(SqliteStorageBackend::new(root.path().join("mail.db")).expect("backend"));
         let writer = backend.async_message_store();
         let reader = backend.async_mailbox_reader();
+        let search = backend.async_message_search_store();
         let scope = MailboxScope::new(team(), agent());
+        let (checkpoint_tx, mut checkpoint_rx) = tokio::sync::mpsc::unbounded_channel();
         let writer_task = tokio::spawn(async move {
             for index in 0..24 {
                 writer
@@ -1061,6 +1068,9 @@ mod tests {
                     ))
                     .await
                     .expect("writer admission");
+                checkpoint_tx
+                    .send(())
+                    .expect("checkpoint sampler remains live");
             }
         });
         let reader_task = {
@@ -1084,13 +1094,49 @@ mod tests {
                 }
             })
         };
+        let search_task = tokio::spawn(async move {
+            for _ in 0..24 {
+                search
+                    .search_async(
+                        MessageSearchQuery::default(),
+                        SearchDeadline::new(std::time::Duration::from_secs(1))
+                            .expect("search deadline"),
+                    )
+                    .await
+                    .expect("search reader response");
+            }
+        });
+        let sampler_backend = Arc::clone(&backend);
+        let checkpoint_task = tokio::spawn(async move {
+            let mut samples = Vec::new();
+            while checkpoint_rx.recv().await.is_some() {
+                sampler_backend
+                    .checkpoint_wal()
+                    .expect("progressing checkpoint");
+                let metrics = sampler_backend.reader_lane_metrics();
+                let frames = metrics
+                    .lane("mailbox")
+                    .expect("mailbox lane metrics")
+                    .current_wal_frames
+                    .expect("checkpoint records mailbox WAL frames");
+                assert!(frames <= 512, "WAL frames stay bounded during load");
+                samples.push(frames);
+            }
+            samples
+        });
         writer_task.await.expect("writer join");
         reader_task.await.expect("reader join");
-        backend.checkpoint_wal().expect("checkpoint");
+        search_task.await.expect("search join");
+        let samples = checkpoint_task.await.expect("checkpoint sampler join");
+        assert_eq!(samples.len(), 24, "sample every writer commit during load");
         let metrics = backend.reader_lane_metrics();
-        assert_eq!(metrics.mailbox.current_quarantined_workers, 0);
-        assert_eq!(metrics.mailbox.last_checkpoint_succeeded, Some(true));
-        assert!(metrics.mailbox.current_wal_frames.is_some());
+        let mailbox = metrics.lane("mailbox").expect("mailbox lane metrics");
+        let search = metrics.lane("search").expect("search lane metrics");
+        assert_eq!(mailbox.current_quarantined_workers, 0);
+        assert_eq!(mailbox.last_checkpoint_succeeded, Some(true));
+        assert!(mailbox.current_wal_frames.is_some());
+        assert_eq!(search.last_checkpoint_succeeded, Some(true));
+        assert!(search.current_wal_frames.is_some());
     }
 
     fn message(key: &str, text: &str) -> Message {
@@ -3090,10 +3136,10 @@ mod tests {
         assert!(listed.contains(&second));
         assert_eq!(
             reader
-                .load_message(scope, first.message_key.clone(), deadline)
+                .load_message(scope.clone(), first.message_key.clone(), deadline)
                 .await
                 .expect("reader load"),
-            Some(first)
+            Some(first.clone())
         );
 
         let denied = reader
@@ -3111,6 +3157,42 @@ mod tests {
             .await
             .expect_err("mismatched scope must fail at the boundary");
         assert_eq!(denied, ReadLaneError::UnauthorizedScope);
+
+        let denied_load = reader
+            .load_message(
+                MailboxScope::new("other-team".parse().expect("team"), agent()),
+                first.message_key.clone(),
+                deadline,
+            )
+            .await
+            .expect_err("cross-team load must fail at the storage boundary");
+        assert_eq!(denied_load, ReadLaneError::UnauthorizedScope);
+
+        let other_agent: AgentName = "other-agent".parse().expect("agent");
+        let denied_list = reader
+            .list_messages(
+                scope.clone(),
+                MessageQuery {
+                    team: team(),
+                    agent: other_agent.clone(),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                },
+                deadline,
+            )
+            .await
+            .expect_err("cross-agent list must fail at the storage boundary");
+        assert_eq!(denied_list, ReadLaneError::UnauthorizedScope);
+        let denied_cross_agent_load = reader
+            .load_message(
+                MailboxScope::new(team(), other_agent),
+                second.message_key.clone(),
+                deadline,
+            )
+            .await
+            .expect_err("cross-agent load must fail at the storage boundary");
+        assert_eq!(denied_cross_agent_load, ReadLaneError::UnauthorizedScope);
     }
 
     #[tokio::test]

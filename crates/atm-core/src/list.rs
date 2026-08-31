@@ -10,11 +10,11 @@ use crate::observability::ObservabilityPort;
 use crate::read::{
     BucketCounts, ClassifiedMessage, filters,
     metadata_selection::{
-        bucket_counts_for, classify_mailbox_metadata_rows,
-        filter_metadata_backed_contains_candidates, logical_current_messages, select_messages,
+        classify_mailbox_metadata_rows, filter_metadata_backed_contains_candidates,
         sort_and_limit_selected,
     },
     normalize_contains_filter,
+    selection::{bucket_counts_for, logical_current_messages, select_classified_messages},
 };
 use crate::schema::AtmMessageId;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
@@ -292,7 +292,7 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         query.timestamp_filter,
         query.task_filter.as_ref(),
     );
-    let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
+    let selected = select_classified_messages(&filtered, query.selection_mode, seen_watermark);
     let mut selected = filter_metadata_backed_contains_candidates(
         runtime,
         &query.home_dir,

@@ -16,7 +16,7 @@ roots = ["atm_runtime::composition::assemble_runtime"]
 
 [ownership]
 io_owns = ["bounded_read_submission", "mailbox_read_result"]
-io_forbidden = ["socket_io", "process_spawn"]
+io_forbidden = ["write_capable_connection", "writer_lane", "socket_io", "process_spawn"]
 
 [dependencies]
 allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
