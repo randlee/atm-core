@@ -159,11 +159,11 @@ criteria, and required validation. This section is a map only.
 
 | Sprint | Doc | Scope |
 |---|---|---|
-| AV.1a | [sprint-AV.1a-reader-lane-foundation.md](./sprint-AV.1a-reader-lane-foundation.md) | Bounded RO WAL reader pool, sealed scope-enforcing async mailbox-read capability through the storage boundary, `AsyncMailboxRuntime` port + pure-selection extraction, cancellable read deadlines with capacity reclamation, metrics seams. Runtime-inert: no handler consumes it yet. |
+| AV.1a | [sprint-AV.1a-reader-lane-foundation.md](./sprint-AV.1a-reader-lane-foundation.md) | Bounded RO WAL reader pool (defaults, per-job transaction scoping, startup connection budget), sealed scope-enforcing async mailbox-read capability with storage-owned `ReadDeadline` and boundary TOML records, `SearchReader` re-hosted as a second pool instance, `AsyncMailboxRuntime` port + pure-selection extraction, cancellable read deadlines with capacity reclamation, per-lane metrics seams. Runtime-inert: no handler consumes it yet. |
 | AV.1b | [sprint-AV.1b-read-handler-cutover.md](./sprint-AV.1b-read-handler-cutover.md) | The atomic behavior change: read-family handler cutover through the async port, hidden-mutation split under a single admission-based handoff protocol, typed doctor decomposition with per-leg lanes/deadlines, writer purity, liveness tests. Atomicity rationale recorded in the sprint doc. |
-| AV.2 | [sprint-AV.2-requirements-adr-hardening.md](./sprint-AV.2-requirements-adr-hardening.md) | Normative MUST rules for read concurrency and race-tolerant state; reader/writer-lane ADR with the AL13-G7 regression as history; Phase-AM deletion-ledger entries. |
-| AV.3 | [sprint-AV.3-mechanical-hard-gates.md](./sprint-AV.3-mechanical-hard-gates.md) | BlockingCoreBridge deletion (uncompilable gate), read-family architecture guard, WriteOp purity lint, liveness tests owned as permanent CI gates. |
-| AV.4 | [sprint-AV.4-read-query-benchmarks.md](./sprint-AV.4-read-query-benchmarks.md) | Massively parallel read/peek/list and query/search benchmark families, mixed read-under-write-load mode, ratcheted per-host floors, reader-lane diagnostics in reports. |
+| AV.2 | [sprint-AV.2-requirements-adr-hardening.md](./sprint-AV.2-requirements-adr-hardening.md) | Normative MUST rules for read concurrency and race-tolerant state; reader/writer-lane ADR with the AL13-G7 regression as history; phase-AV closeout record (the Phase-AM ledger is frozen and is not edited). |
+| AV.3 | [sprint-AV.3-mechanical-hard-gates.md](./sprint-AV.3-mechanical-hard-gates.md) | `BlockingCoreBridge` identifier deleted and residual bridge renamed/narrowed to an exact enumerated control-path call-site set (residual migration = `AV-FU-1`), read-family architecture guard incl. the `atm-runtime` composition layer, WriteOp purity lint, liveness tests owned as permanent CI gates. |
+| AV.4 | [sprint-AV.4-read-query-benchmarks.md](./sprint-AV.4-read-query-benchmarks.md) | Massively parallel read/peek/list and query/search benchmark families, mixed read-under-write-load mode, ratcheted per-host floors, reader-lane diagnostics in reports — additive family registration only, under the recorded benchmark-infra freeze exception (mandate 8). |
 
 Dependency relations (rationale in each sprint doc's frontmatter):
 AV.1a→AV.1b, AV.1b→AV.3, and AV.1b→AV.4 are `must_follow` (cutover
@@ -215,6 +215,24 @@ which replaces manual merge-forward.
   AV.0 completion proof (`gh stack view --json`): _pending_.
 - Adjacent-work sequencing: the #1030 WPERF plan touches the same writer
   path — coordinate worktrees/merge order with team-lead.
+- Benchmark-infra freeze: a standing directive freezes new
+  benchmark-infrastructure work. AV.4 is the one recorded exception,
+  authorized by mandate 8 (§2) and bounded to additive family
+  registration on the existing send-message-benchmark machinery (AV.4
+  D6/A6). Any AV.4 work beyond that bound needs Rand's sign-off first.
+- Explicit residual — follow-up **AV-FU-1** (out of AV scope, not
+  hidden): after AV.3, `ControlPathSyncBridge` (renamed from
+  `BlockingCoreBridge`) remains with exactly seven **non-read**
+  call sites in `crates/atm-http-runtime/src/storage_and_nudge_router.rs`:
+  `retry_deferred_marker` (deferred-queue marker, intentionally
+  synchronous by contract), `heartbeat`, `queue_get_next` (synchronous
+  roster check `validate_heartbeat_member` + in-memory work),
+  `graft_receiver_register` / `_refresh` / `_unregister` / `_lookup`
+  (roster check + synchronous `GraftReceiverEndpointStore`). None is a
+  mailbox read; none is on the acceptance contract. Deleting the bridge
+  for real requires an async roster/member-validation port and an async
+  graft-receiver-store port — a separate, later plan. AV.3 A1 pins the
+  call-site set so it cannot grow silently in the meantime.
 - Plan QA: quality-mgr review before any implementation dispatch.
 
 ## 5. QA history
@@ -222,3 +240,5 @@ which replaces manual merge-forward.
 | Round | Date | Reviewer | Result | Notes |
 |---|---|---|---|---|
 | — | 2026-08-31 | — | pending | I-1..I-5 evidence incorporated (msg 01M1AJVGB9V5WXBGS2SF03KTS8); awaiting quality-mgr round 1. |
+| crit-1..3 | 2026-08-31 | arch-ctm (critical-plan-reviewer) | cap-exhausted / not converged | 3 cycles (reviewed 49945f609 → b213f279e → 7af2b2ecf). Cycle 3 residual: CRIT-014 (explicit mailbox/doctor port split), CRIT-015 (supervisor lifecycle/fault contract), M1 (metric outcomes) — all corrected at 39f3d23ed, unverified by arch-ctm (no cycle 4 permitted). |
+| qm-r1 | 2026-08-31 | quality-mgr (req-qa, arch-qa, ruthless-boundary-qa) @ 7af2b2ecf | FAIL 3B/5I/1m | B1 bridge deletion unreachable → AV.3 D1 rename+enumerate, `AV-FU-1`; B2 frozen AM ledger → AV.2 D4 phase-AV closeout record; B3 `RequestDeadline` in atm-storage → storage-owned `ReadDeadline`; I1 pool defaults/knob location/connection budget (AV.1a D2); I2 per-job transaction scoping + WAL-health test (AV.1a D2/A3d); I3 freeze exception recorded (AV.4 D6/A6, §4); I4 boundary TOML records (AV.1a D1a); I5 `SearchReader` re-hosted as second pool instance (AV.1a D2a, AV.4 D2); M1 composition-layer gate sibling (AV.3 D2/D5). Report: PR #1108 comment. |

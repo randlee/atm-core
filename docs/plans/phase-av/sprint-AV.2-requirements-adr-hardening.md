@@ -72,9 +72,16 @@ sprint.
       semantics split (reads cancellable, writes run-to-completion),
       with the AL3→AL13-G7 single-permit regression recorded as
       motivating history (phase-av-plan.md §1.1).
-- [ ] D4 — Phase-AM deletion ledger updated: `BlockingCoreBridge` and
-      sync read-bridge remnants added as deletion targets with their
-      file paths.
+- [ ] D4 — Phase-AV closeout record (phase-owned; the Phase-AM ledger
+      `docs/plans/phase-am/am1-removal-ledger.md` is a **frozen closeout
+      ledger** and receives no new entries): create
+      `docs/plans/phase-av/av-closeout-record.md` listing, with file
+      paths, (a) what AV.3 removes/renames (`BlockingCoreBridge` →
+      `ControlPathSyncBridge`; `WriteOp::ListMessages`;
+      `SharedDb::submit_list_messages_async`; the bespoke
+      `search_reader.rs` loop) and (b) the residual `AV-FU-1` bridge
+      call sites that remain by design. The D3 ADR cross-references this
+      record; nothing in AV writes to any Phase-AM document.
 
 ## Contract samples
 
@@ -115,11 +122,13 @@ This is the authoritative acceptance checklist.
 
 - [ ] A1 — Requirements text uses testable MUST/MUST NOT statements; no
       aspirational "should" for the lane-separation rules.
-- [ ] A2 — The ADR names the concrete types/modules (BlockingCoreBridge,
-      WriteOp, AsyncMailboxReader) and cross-references the AV.3 gates
-      that enforce it.
-- [ ] A3 — No contradiction with ADR-036 storage topology or the
-      Phase-AM deletion plan; ledger entries point at real paths.
+- [ ] A2 — The ADR names the concrete types/modules (BlockingCoreBridge
+      → ControlPathSyncBridge, WriteOp, AsyncMailboxReader, ReadDeadline)
+      and cross-references the AV.3 gates that enforce it, the AV.1a D1a
+      boundary records, and the D4 closeout record.
+- [ ] A3 — No contradiction with ADR-036 storage topology or the frozen
+      Phase-AM closeout ledger (which is read, never edited); every path
+      in the AV closeout record exists at the cited revision.
 - [ ] A4 — D2 language matches the phase plan §1.2 contract verbatim in
       substance (either-value race outcome, zero writer-lane
       coordination).
@@ -133,8 +142,9 @@ This is the authoritative acceptance checklist.
 This is the authoritative validation checklist.
 
 - [ ] `just lint` (doc checks)
-- [ ] Cross-reference check: every file path cited in the ADR and
-      ledger entries exists at the cited revision.
+- [ ] Cross-reference check: every file path cited in the ADR and the
+      AV closeout record exists at the cited revision; `git diff --stat`
+      shows no change under `docs/plans/phase-am/`.
 - [ ] quality-mgr doc review PASS.
 
 ## Out of scope

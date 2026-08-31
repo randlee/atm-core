@@ -44,7 +44,11 @@ sprint.
       concurrent readers), reporting p50 throughput and tail latency
       (p95/p99).
 - [ ] D2 — Query benchmark family: search/filtered-list (FTS path)
-      under the same parallel load, same metrics.
+      under the same parallel load, same metrics. This measures the
+      AV.1a D2a search lane (the `SearchReader` re-hosted on the pool
+      type with its own `search_pool_size`), not the pre-AV
+      single-thread reader; the campaign records the search-lane pool
+      size and queue depth exactly as it does for the mailbox lane.
 - [ ] D3 — Mixed mode: read/query benchmarks while sustained writer
       activity runs (the defect scenario), asserting read latency stays
       within budget while writes proceed.
@@ -57,7 +61,24 @@ sprint.
       diagnosable from the committed artifact.
 - [ ] D6 — Harness/report/schema extensions land via the shared-contract
       rules: separate PR, team-lead visibility, macOS/Windows impact
-      stated.
+      stated — **within the benchmark-infra freeze exception below**.
+
+      **Benchmark-infra freeze exception (normative scope bound):** a
+      standing directive freezes new benchmark-infrastructure work
+      (behavioral rules over machinery; infra:product ratio watched).
+      AV.4 exists because phase mandate 8 (phase plan §2, Rand
+      2026-08-30/31) explicitly requires read/query benchmark targets
+      with ratcheted floors; that mandate is the authorization for this
+      sprint and is recorded here as the exception. To keep the
+      exception narrow the sprint is bound to **additive family
+      registration only**: reuse the existing send-message-benchmark
+      runner, report renderer, `baselines.json` ratchet code, manifest
+      and `reports-index` contract; add the three families, their
+      config, and the AV.1a D5 diagnostics fields. No new harness
+      framework, runner abstraction, report renderer, schema version
+      bump, or CI job type. Anything beyond additive family registration
+      is out of scope and requires Rand's sign-off before dispatch.
+      quality-mgr verifies the bound at sprint QA (A6).
 - [ ] D7 — Normative workload/baseline contract (reproducibility). The
       following are contract, not guidance; a campaign missing or
       partially implementing any element is a **hard campaign failure**
@@ -76,9 +97,11 @@ sprint.
         distribution (multi-team: ≥8 teams × ≥4 agents, skew profile
         recorded) committed in the harness config; the corpus generator
         version and seed appear in every report.
-      - *Concurrency settings:* fan-out (≥32 concurrent readers),
-        reader-pool size, and queue depth are explicit config recorded
-        per campaign; changing any of them starts a new baseline family
+      - *Concurrency settings:* fan-out (≥32 concurrent client
+        requests), mailbox-lane and search-lane pool size and queue
+        depth (production defaults per AV.1a D2/D2a: 4/16 and 2/8 —
+        never raised to make a floor) are explicit config recorded per
+        campaign; changing any of them starts a new baseline family
         entry, never a comparison against the old floor.
       - *Writer load (mixed mode):* sustained writer rate and payload
         profile fixed in config and recorded in the report.
@@ -127,8 +150,10 @@ follow the existing send-message-benchmark entry conventions:
       ],
       "corpus_seed": "<recorded-seed>",
       "fanout": 32,
-      "pool_size": 0,
-      "queue_depth": 0,
+      "mailbox_pool_size": 4,
+      "mailbox_queue_depth": 16,
+      "search_pool_size": 2,
+      "search_queue_depth": 8,
       "harness_version": "<version>"
     }
   },
@@ -166,6 +191,12 @@ This is the authoritative acceptance checklist.
       evidence.
 - [ ] A4 — Official evidence only from isolated non-interactive
       accounts (m5-atmbench); no interactive-account campaign is cited.
+- [ ] A6 — Freeze-exception bound (D6) verified: the sprint diff touches
+      only family registration/config, report field additions, and
+      baseline entries; no new runner, renderer, schema version, or CI
+      job type. Mixed-mode reports (D3) include the AV.1a D5 WAL-health
+      gauges so checkpoint starvation under read-plus-write load is
+      visible in the committed artifact.
 
 ## Required validation
 

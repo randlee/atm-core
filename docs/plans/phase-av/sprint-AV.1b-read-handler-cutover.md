@@ -171,9 +171,11 @@ sprint.
       output for the healthy case.
 
       **Control-lane capacity (normative):** the core-doctor leg runs on
-      a bounded **multi-worker** control lane — `doctor_pool_size`
-      workers (default 4) each with its own RO connection, a bounded
-      queue (`doctor_queue_depth`, default 16), and per-request
+      a bounded **multi-worker** control lane — a third instance of the
+      AV.1a D2 pool type — `doctor_pool_size` workers (default 4) each
+      with its own RO connection, a bounded queue (`doctor_queue_depth`,
+      default 16; both knobs in the shared `[reader_lanes]` section and
+      counted in the AV.1a D2 connection budget), and per-request
       deadline; beyond pool + queue, doctor fails explicitly with
       `Saturated`, never queues indefinitely. Rationale for the bound:
       doctor is low-frequency control-plane traffic, and the bound
@@ -274,7 +276,9 @@ This is the authoritative validation checklist.
 ## Out of scope
 
 - Reader pool/capability internals — AV.1a.
-- Deleting `BlockingCoreBridge` remnants used by mutation paths and the
-  enforcement gates — AV.3.
+- Renaming/narrowing the residual `BlockingCoreBridge` (control-path
+  callers: deferred marker, heartbeat, queue-get-next, graft receiver)
+  and the enforcement gates — AV.3; migrating those callers off the
+  bridge — follow-up `AV-FU-1`.
 - Requirements/ADR text — AV.2. Benchmarks — AV.4.
 - Any change to the frozen legacy synchronous daemon.

@@ -36,13 +36,38 @@ deliverable is expected to land at a production-ready level for the
 scope this sprint claims; partial or shape-only completion fails the
 sprint.
 
-- [ ] D1 — `BlockingCoreBridge` deleted (uncompilable gate): after the
-      AV.1b cutover, remove the type and its remaining mutation-path
-      usages in favor of the writer-ingress path, so no read path can be
-      re-bridged without reintroducing a deleted type. I-5 found no
-      boundary TOML governing the handler→writer edge; add a narrow TOML
-      rule only if sc-lint-boundary supports semantic call-edge policy —
-      otherwise D2 is the enforcement layer.
+- [ ] D1 — `BlockingCoreBridge` identifier deleted; residual bridge
+      narrowed and enumerated (uncompilable + exact-call-site gate).
+      After the AV.1b cutover the bridge still has **non-read**
+      callers that this phase does not migrate and that have no
+      writer-ingress equivalent: the deferred-queue marker
+      (`storage_and_nudge_router.rs:62-68`, intentionally synchronous
+      by its own contract), `heartbeat` (`:644-675`) and
+      `queue_get_next` (`:677-701`) — whose only bridged work is the
+      synchronous roster check `validate_heartbeat_member` plus
+      in-memory operations — and the four `graft_receiver_*` handlers
+      (`:703-800`), which bridge the same roster check plus the
+      synchronous `GraftReceiverEndpointStore`. Deleting the type
+      outright is therefore not reachable from AV's scope (quality-mgr
+      AV-R1-B1). What this sprint does instead:
+      1. rename the type to `ControlPathSyncBridge` and delete the
+         identifier `BlockingCoreBridge` from `crates/` — any read path
+         re-bridged under the old name fails to compile, and the new
+         name states the residual scope;
+      2. an architecture test asserts the **exact** set of
+         `ControlPathSyncBridge::run` call sites (the seven enumerated
+         above, by handler name); any new call site — read-family or
+         otherwise — fails the test;
+      3. the residual control-path migration (an async roster/member
+         validation port + an async graft-receiver-store port, after
+         which the bridge is deleted for real) is **explicitly out of
+         AV scope** and recorded as follow-up `AV-FU-1` in the phase plan
+         §4, with the seven sites listed. It is not hidden behind "the
+         bridge is gone".
+
+      I-5 found no boundary TOML governing the handler→writer edge; add
+      a narrow TOML rule only if sc-lint-boundary supports semantic
+      call-edge policy — otherwise D2 is the enforcement layer.
 - [ ] D2 — Read-family architecture guard, positive-obligation first:
       the primary gate is a **handler dependency allowlist / typed
       boundary assertion** — the read-handler region's dependency
@@ -56,11 +81,24 @@ sprint.
       writer-queued async read fails without appearing on any list.
       The deny list (extend
       `crates/atm-architecture/tests/boundary_enforcement.rs:3389-3431`
-      with `BlockingCoreBridge`, `spawn_blocking`, sync
-      `*_with_runtime` read/list/doctor APIs,
+      with `BlockingCoreBridge`, `ControlPathSyncBridge`,
+      `spawn_blocking`, sync `*_with_runtime` read/list/doctor APIs,
       `MessageStore::list_messages`, writer ingress types) is retained
       as defense in depth, not the primary mechanism. Existing
       direct-SQLite prohibition retained.
+
+      **Composition-layer sibling (same test file):** the gate also
+      covers the `atm-runtime` module(s) implementing
+      `AsyncMailboxRuntime` and `DoctorProjection` (AV.1a D6 / AV.1b
+      D3), because a single-permit gate reintroduced *there* would be
+      invisible to a handler-region scan. Allowlist for that region: the
+      `AsyncMailboxReader` handle, the search/doctor lane handles, the
+      pure `atm-core::read::selection` module, and the
+      `StateHandoffSupervisor`. Deny list there additionally includes
+      `tokio::sync::Semaphore`/`Mutex` acquisition around a storage
+      read, `spawn_blocking`, `ControlPathSyncBridge`, and any
+      `StorageWriterIngress` submission other than through the
+      supervisor.
 - [ ] D2b — Behavior gate (mechanism-independent): tests run each
       read-family endpoint against an **instrumented writer ingress
       that records every submission** (op variant, origin, outcome)
@@ -87,8 +125,12 @@ sprint.
       cover, at minimum: (a) reintroducing `spawn_blocking` in a read
       handler; (b) a **newly named** blocking-bridge type wrapping a
       1-permit semaphore in the read path; (c) routing an async read
-      through the writer queue. Each must trip D2/D2b (and A3's lint
-      where applicable).
+      through the writer queue; (d) a 1-permit semaphore wrapped around
+      the storage read inside the `atm-runtime` `AsyncMailboxRuntime`
+      implementation (composition layer, not the handler); (e) a new
+      `ControlPathSyncBridge::run` call site added to a read-family
+      handler. Each must trip D1/D2/D2b (and A3's lint where
+      applicable).
 
 ## Code contracts
 
@@ -100,6 +142,7 @@ fn http_runtime_read_handlers_never_touch_writer_lane() {
     let read_region = handler_region(&src, READ_FAMILY_HANDLERS);
     for banned in [
         "BlockingCoreBridge",
+        "ControlPathSyncBridge",
         "spawn_blocking",
         "list_mail_with_runtime",
         "peek_mail_with_runtime",
@@ -111,21 +154,38 @@ fn http_runtime_read_handlers_never_touch_writer_lane() {
         assert!(!read_region.contains(banned), "read path references {banned}");
     }
 }
+
+// D1 — exact residual call-site set for the renamed bridge.
+#[test]
+fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
+    const RESIDUAL: [&str; 7] = [
+        "retry_deferred_marker", "heartbeat", "queue_get_next",
+        "graft_receiver_register", "graft_receiver_refresh",
+        "graft_receiver_unregister", "graft_receiver_lookup",
+    ];
+    let sites = bridge_run_call_sites_by_enclosing_fn("storage_and_nudge_router.rs");
+    assert_eq!(sites, RESIDUAL.iter().map(|s| s.to_string()).collect::<BTreeSet<_>>());
+}
 ```
 
 ## Acceptance criteria
 
 This is the authoritative acceptance checklist.
 
-- [ ] A1 — `BlockingCoreBridge` no longer exists in the workspace.
-      Two-part check: (1) a grep under `crates/` returns **zero**
-      production-source occurrences; (2) remaining mentions exist only
-      in named documentation paths (`docs/adr/`, `docs/plans/`,
-      Phase-AM deletion ledger) as historical rationale.
+- [ ] A1 — Bridge gate, three-part check: (1) a grep for
+      `BlockingCoreBridge` under `crates/` returns **zero**
+      production-source occurrences; remaining mentions exist only in
+      named documentation paths (`docs/adr/`, `docs/plans/`, the
+      phase-AV closeout record — AV.2 D4) as historical rationale;
+      (2) the D1 call-site test enumerates exactly the seven residual
+      `ControlPathSyncBridge::run` sites and no read-family handler is
+      among them; (3) `AV-FU-1` is recorded in the phase plan §4 with
+      those seven sites — the residual is tracked, not implied closed.
 - [ ] A2 — Every D5 scratch mutation (spawn_blocking reintroduction,
-      newly named bridge type, writer-queued async read) fails
-      `cargo test -p atm-architecture` and/or the D2b behavior tests
-      (demonstrated once each, then reverted).
+      newly named bridge type, writer-queued async read,
+      composition-layer single permit, new bridge call site in a read
+      handler) fails `cargo test -p atm-architecture` and/or the D2b
+      behavior tests (demonstrated once each, then reverted).
 - [ ] A2b — D2b behavior tests pass on the real cutover code: recorded
       writer submissions are zero for list/peek/doctor and at most the
       named `ApplyReadDisplayState` handoff for read; all four endpoints
@@ -150,3 +210,6 @@ This is the authoritative validation checklist.
 
 - The reader-lane implementation itself — AV.1a/AV.1b.
 - Normative requirement text — AV.2.
+- Migrating the seven residual control-path bridge callers (roster
+  validation, graft-receiver store, deferred marker) to async ports and
+  deleting the bridge for real — follow-up `AV-FU-1` (phase plan §4).
