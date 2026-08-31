@@ -46,8 +46,11 @@ sprint.
 - [ ] D2 — Read-family architecture guard, positive-obligation first:
       the primary gate is a **handler dependency allowlist / typed
       boundary assertion** — the read-handler region's dependency
-      surface must consist of the `AsyncMailboxRuntime` /
-      `DoctorProjection` async ports (plus enumerated inert helpers);
+      surface must match the AV.1b D1 split exactly — list/peek/read
+      handlers may reference only the `AsyncMailboxRuntime` port, the
+      doctor handler only the `DoctorProjection` port (plus enumerated
+      inert helpers); a mailbox handler touching `DoctorProjection` or
+      vice versa also fails;
       any *other* callable/type reference in that region fails the
       test, so a freshly named semaphore/bridge type or a new
       writer-queued async read fails without appearing on any list.

@@ -193,8 +193,9 @@ This is the authoritative acceptance checklist.
       without any rusqlite dependency; existing handler behavior is
       byte-for-byte unchanged (no handler file modified this sprint).
 - [ ] A5 — Metrics seams (D5) observable in a test via the exported
-      counters/gauges, including the interrupted vs. abandoned split and
-      worker-replacement count.
+      counters/gauges, including the three D4 deadline outcomes (expired-in-queue,
+      interrupted-while-active, quarantined) as distinct counters, the
+      quarantined-worker gauge, and the retired/replaced worker count.
 - [ ] A6 — Async-port parity (D6): parity tests prove the
       `AsyncMailboxRuntime` port and the existing synchronous core path
       produce identical results for read, peek, list, missing-record,

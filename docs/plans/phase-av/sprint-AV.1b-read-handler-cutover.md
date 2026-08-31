@@ -48,11 +48,15 @@ sprint.
 
 - [ ] D1 — Read-family handler cutover in
       `storage_and_nudge_router.rs`: list (:493-511), peek (:514-533),
-      read (:536-555), doctor (:579-637) route through the AV.1a D6
-      `AsyncMailboxRuntime` port (which composes the reader lane, the
-      extracted pure selection module, and the writer-lane state
-      handoff); none acquires the `BlockingCoreBridge` permit, and no
-      handler re-implements selection/authorization logic inline. The
+      read (:536-555) route through the AV.1a D6 `AsyncMailboxRuntime`
+      port (which composes the reader lane, the extracted pure selection
+      module, and the writer-lane state handoff); doctor (:579-637)
+      routes through the separate async `DoctorProjection` port (D3) —
+      this exact split (mailbox family → `AsyncMailboxRuntime`; doctor →
+      `DoctorProjection`) is the one architecture, asserted by A1 and
+      the AV.3 D2 allowlist. None acquires the `BlockingCoreBridge`
+      permit, and no handler re-implements selection/authorization
+      logic inline. The
       port preserves today's team/agent authorization and visibility
       filters; the AV.1a A6 parity suite (read/peek/list/missing-record/
       state-transition) is extended here to run through the live
@@ -93,6 +97,27 @@ sprint.
          convenience.
       4. *Permitted races:* once buffered, ordering/visibility races
          with concurrent reads are "don't care" per phase plan §1.2.
+      5. *Supervisor lifecycle and fault contract:* the supervisor task
+         is owned by the `AsyncMailboxRuntime` composition, which holds
+         its monitored `JoinHandle`. **Startup readiness:** handlers do
+         not admit reads until the supervisor reports ready; failed
+         startup fails runtime construction (fail closed). **Task
+         fault (error/panic/cancellation):** the runtime atomically
+         flips the handoff to `Unavailable` — new `try_push` calls are
+         rejected (counted as `read_state_handoff_rejected{reason=
+         unavailable}`, doctor reports the handoff leg degraded) while
+         reads keep returning — the buffer is retained, and the runtime
+         restarts the supervisor (bounded attempts, `supervisor_max_
+         restarts`) which drains the preserved buffer. Restart-budget
+         exhaustion is a runtime fault: the runtime fails closed (this
+         *is* the process-exit loss case, not a third one). **Permanent
+         writer failure:** each transition carries a retry deadline
+         (`handoff_retry_deadline`, backoff-bounded); exhaustion means
+         the writer lane is permanently failed, which is likewise a
+         runtime fault → fail closed. A stalled retry loop is detected
+         by the same deadline. Metrics: supervisor state gauge
+         (ready/unavailable/restarting), restart count, retry-deadline
+         exhaustions, buffered depth.
 
       Tests: writer ingress saturated (read returns within budget,
       supervisor applies the transition once capacity frees); writer
@@ -102,7 +127,13 @@ sprint.
       read); process restart with buffered transitions (messages
       re-presented as unread, none missing); response-before-commit
       (read returns before the transition is applied; a later read
-      observes it).
+      observes it); supervisor failed startup (runtime construction
+      fails, no reads admitted); forced supervisor exit with queued
+      transitions (handoff flips Unavailable, reads still succeed within
+      budget, restarted supervisor drains the preserved buffer, none
+      lost); restart-budget exhaustion and permanent writer failure
+      (runtime fails closed, never silent success with stranded
+      transitions).
 - [ ] D3 — Doctor decomposition: a typed `DoctorProjection` boundary
       owned by `atm-runtime` (beside the AV.1a D6 port) replaces the
       bridged sync doctor call. Each source leg is enumerated with its
@@ -116,7 +147,28 @@ sprint.
       Legs run under bounded structured concurrency (join with per-leg
       deadline; one slow leg degrades its own section, never the whole
       report). Doctor acquires neither mailbox reader-pool permits nor
-      the writer lane.
+      the writer lane. Contract (indicative; see Code contracts):
+
+      ```rust
+      #[async_trait]
+      pub trait DoctorProjection: Send + Sync {
+          async fn project(&self, scope: DoctorScope, deadline: RequestDeadline)
+              -> Result<DoctorReport, DoctorError>;
+      }
+      pub struct DoctorReport { pub legs: Vec<LegResult> /* one per leg */ }
+      pub enum LegResult { Ok(LegReport), Degraded { leg: LegId, reason: LegDegraded } }
+      pub enum LegDegraded { DeadlineExpired, Unavailable(String) }
+      pub enum DoctorError {              // whole-request outcomes only
+          Saturated { pool_size: NonZeroUsize, queue_depth: usize },
+          DeadlineExpired { waited: Duration },
+      }
+      ```
+      Per-leg degradation is a *successful* report with `Degraded`
+      entries; `DoctorError` is reserved for whole-request control-lane
+      saturation or overall deadline expiry. Tests cover both classes
+      (per-leg degraded assembly; whole-request `Saturated`; overall
+      deadline) plus live-handler parity against the current doctor
+      output for the healthy case.
 
       **Control-lane capacity (normative):** the core-doctor leg runs on
       a bounded **multi-worker** control lane — `doctor_pool_size`
@@ -160,10 +212,13 @@ WriteOp::ApplyReadDisplayState {
 
 // D2 supervisor surface (indicative), owned by the AsyncMailboxRuntime
 // composition. try_push is synchronous and never awaits the writer.
-pub struct StateHandoffSupervisor { /* bounded buffer + retry task */ }
+pub struct StateHandoffSupervisor { /* bounded buffer + monitored retry task */ }
 impl StateHandoffSupervisor {
-    pub fn try_push(&self, op: WriteOp) -> Result<(), HandoffRejected>; // BufferFull only
+    pub async fn start(cfg: HandoffConfig, ingress: WriterIngress) -> Result<Self, HandoffStartupError>; // readiness-gated
+    pub fn try_push(&self, op: WriteOp) -> Result<(), HandoffRejected>; // BufferFull | Unavailable
+    pub fn state(&self) -> SupervisorState;                              // Ready | Unavailable | Restarting
 }
+pub struct HandoffConfig { handoff_buffer: usize, handoff_retry_deadline: Duration, supervisor_max_restarts: u32 }
 ```
 
 ## Acceptance criteria
@@ -171,7 +226,9 @@ impl StateHandoffSupervisor {
 This is the authoritative acceptance checklist (phase contract points
 1–6 mapped to testable statements).
 
-- [ ] A1 — No mailbox read/peek/list/doctor path references
+- [ ] A1 — list/peek/read handlers depend only on `AsyncMailboxRuntime`
+      and the doctor handler only on `DoctorProjection` (the D1 split);
+      no mailbox read/peek/list/doctor path references
       `BlockingCoreBridge`, `spawn_blocking`, or sync `*_with_runtime`
       read APIs (verified by grep + architecture test).
 - [ ] A2 — Liveness test: with one housekeeping/mutation job stalled and
@@ -187,7 +244,9 @@ This is the authoritative acceptance checklist (phase contract points
       afterward. All D2 protocol tests pass: writer saturation,
       writer unavailable-then-recovers, buffer-full explicit rejection
       with fail-safe unread semantic, restart re-presentation,
-      response-before-commit.
+      response-before-commit, and the D2.5 lifecycle cases (failed
+      startup, forced supervisor exit with preserved buffer, restart
+      exhaustion / permanent writer failure fail-closed).
 - [ ] A5 — Doctor fan-out liveness per D3: ≥8 concurrent cross-team
       doctor calls complete within deadline while the mailbox reader
       pool, the writer lane, and one doctor dependency are all saturated

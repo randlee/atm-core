@@ -58,8 +58,13 @@ sprint.
       fail-safe: the affected message remains unread/unseen and is
       re-presented — never hidden or lost. Race tolerance (D2) governs
       observation only and MUST NOT be cited as authorization for
-      discarding a transition. Recorded as a product decision in the
-      D3 ADR (decision, alternatives considered incl. permanent drop and
+      discarding a transition. The handoff supervisor MUST have a
+      defined lifecycle: readiness-gated startup, monitored task,
+      atomic Unavailable state with buffer preservation and bounded
+      restart on task fault, and fail-closed runtime behavior on
+      restart exhaustion or permanent writer failure — so that no
+      supervisor fault can strand transitions behind successful
+      responses. Recorded as a product decision in the D3 ADR (decision, alternatives considered incl. permanent drop and
       write-through, consequence for operators).
 - [ ] D3 — New ADR `docs/adr/` (next free number): reader/writer lane
       architecture — bounded RO WAL reader pool, ordered writer lane
@@ -96,8 +101,12 @@ supervised, bounded, non-blocking in-process handoff that owns writer
 admission and retry; the read path MUST NOT await the writer lane. A
 transition may be lost only on handoff-buffer overflow (counted, surfaced
 in doctor) or process exit; the consequence MUST be fail-safe — the message
-remains unread/unseen and is re-presented. R-STATE-RACE-1 governs
-observation only and does not authorize discarding a transition.
+remains unread/unseen and is re-presented. The supervisor MUST be
+readiness-gated and monitored; on task fault it MUST atomically reject new
+handoffs (Unavailable), preserve its buffer, and restart within a bounded
+budget; restart exhaustion or permanent writer failure MUST fail the runtime
+closed. R-STATE-RACE-1 governs observation only and does not authorize
+discarding a transition.
 ```
 
 ## Acceptance criteria
