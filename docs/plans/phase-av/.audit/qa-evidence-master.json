@@ -206,8 +206,8 @@
       "assignment_time_utc": "2026-08-31T09:13:00Z",
       "assignment_message_id": "01M1BHFR9HK39DAHQFZDDAV44H",
       "assignment_shared_path": "/Users/randlee/.atm/.config/atm/share/atm-dev/av1a-qa-r3-task.xml (reference copy; task sent inline via --stdin)",
-      "assignment_summary": "Round-3 QA for AV.1a after fix-r2 checkpoint 0ad444fbb (atop c9389888c integrate merge, atop b25c42f4c), PR #1112; re-verify AV1A-M4 residual, AV1A-I6, AV1A-M9; regression-check 14 closed records (task phase-av-sprint-av1a-qa-r3).",
-      "evidence": "QA-AV1A-R3 dispatched 2026-08-31T09:13Z (msg 01M1BHFR9HK39DAHQFZDDAV44H) on arch-ctm checkpoint 0ad444fbb (msg 01M1BHDER73HQFA6CNT7E23NHF; full validation + AV.1b merge-forward still running at dispatch, completion message to follow). fenix pre-checks: b25c42f4c ancestor of 0ad444fbb on origin; fix diff c9389888c..0ad444fbb = .just/lint_boundaries.py, .just/tests/test_lint_boundaries.py, both AV.1a TOMLs, sprint doc (168+/15-); crates/atm-http-runtime + crates/atm-daemon diff empty. Fix-r2 assignment msg 01M1BGX8Z14VV3ZZADYHCDGRVC (inline resend after --file path-ref truncation). Result pending."
+      "assignment_summary": "Round-3 QA for AV.1a after fix-r2 checkpoint 0ad444fbb, superseded by amended d057032e8 (atop c9389888c integrate merge, atop b25c42f4c), PR #1112; re-verify AV1A-M4 residual, AV1A-I6, AV1A-M9; regression-check 14 closed records (task phase-av-sprint-av1a-qa-r3).",
+      "evidence": "QA-AV1A-R3 dispatched 2026-08-31T09:13Z (msg 01M1BHFR9HK39DAHQFZDDAV44H) on arch-ctm checkpoint 0ad444fbb (msg 01M1BHDER73HQFA6CNT7E23NHF; full validation + AV.1b merge-forward still running at dispatch, completion message to follow). fenix pre-checks: b25c42f4c ancestor of 0ad444fbb on origin; fix diff c9389888c..0ad444fbb = .just/lint_boundaries.py, .just/tests/test_lint_boundaries.py, both AV.1a TOMLs, sprint doc (168+/15-); crates/atm-http-runtime + crates/atm-daemon diff empty. Fix-r2 assignment msg 01M1BGX8Z14VV3ZZADYHCDGRVC (inline resend after --file path-ref truncation). Result pending. 09:13Z: arch-ctm amended the checkpoint force-with-lease to d057032e8 (msg 01M1BHGVYTTB652FD30SX30WPB; diff 0ad444fbb..d057032e8 = .just/tests/test_view_boundaries.py +2); quality-mgr redirected to d057032e8 (msg 01M1BHJ0BGT2HWAFYH0ZTQXQXX); arch-ctm told not to force-push again once QA holds a SHA."
     },
     {
       "aich_sprint": "AV3",
@@ -258,6 +258,31 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "QA-AV3-R4 dispatched 2026-08-31T06:36Z (msg 01M1B8E5GGXAAWCXEER9RQKH03; ACK 01M1B8EP2TDBJQBPFNAGKCKF7Z) on completion HEAD 2c1962abf (fenix verified 8905f1046 is an ancestor; Crimson-2f4c formal completion msg 01M1B8GS05ZZZPH2M3N8F0REBT). VERDICT PASS 3/3 (100%) @ 2c1962abf, PR #1113 comment 5474679527 (msg 01M1B8H60TWAQWC7HB2Q5ZG2E8): AV3-B4/M4/M5 FIXED (req-qa carry-forward + rust-qa execution + quality-mgr firsthand diff review), CLOSED on integrate/phase-av @ 73171728f (closedBy quality-mgr). Execution: 94/94 arch tests incl. three composition-gate tests, pytest 29/29, just lint 34/34 with arch-gates live by default (A4). Regression: all 8 previously closed AV3 records intact. AV3-I3 remains the only open AV.3 record, deferred to A2b (round 2, must_follow AV.1b). Scope conformance clean: no production crate code touched. Post-PASS: AV.1b merge-forward (c9b71d720) exposed 2 arch-gate failures; quality-mgr ruled both AV.3 gate defects (msg 01M1BG9Z99RSCN9A322GVQSSZW) -> AV3-B5 (composition allowlist too narrow) + AV3-B6 (handler-gate parser) triaged blocking, committed integrate/phase-av @ 44f7ce643. Fix-r4 / round-2 part 1 (task phase-av-sprint-av3-fix-r4) dispatched to Crimson-2f4c 2026-08-31T09:05Z msg 01M1BGTWVA7MYSEYY9PT8FMYM7 (share av3-fix-r4-task.xml). Remaining round-2 items (AV3-I3/A2b, D1 rename, D4) still to dispatch."
+    },
+    {
+      "run_id": "QA-AV3-R5",
+      "aich_sprint": "AV3",
+      "phase_sprint": "AV.3",
+      "pass": null,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-08-31T09:15:00Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M1BHK8BAJ3Q89VNPBX4EW7RQ",
+      "assignment_from": "fenix",
+      "assignment_shared_path": "/Users/randlee/.atm/.config/atm/share/atm-dev/av3-qa-r5-task.xml (reference copy; task sent inline via --stdin)",
+      "assignment_summary": "Round-5 QA for AV.3 after fix-r4 (AV3-B5/B6 gate defects + D1 derivation per quality-mgr per-symbol ruling), PR #1113, HEAD 422f226f4 (task phase-av-sprint-av3-qa-r5).",
+      "result_time_utc": null,
+      "result_time_pst": null,
+      "result_message_id": null,
+      "result_from": null,
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": null,
+      "blockers": null,
+      "important": null,
+      "minor": null,
+      "count_basis": "headline/reviewer",
+      "evidence": "QA-AV3-R5 dispatched 2026-08-31T09:15Z (msg 01M1BHK8BAJ3Q89VNPBX4EW7RQ) on 4989b90d1, HEAD updated to 422f226f4 (msg 01M1BHK0CN9AQ82R9F5DJXSE5D Crimson completion; docs +1/-1). Fix-r4 chain c9b71d720 -> deca61e6e (B5/B6) -> d73637f6b (docs) -> 357b9c040 (D1 derivation per ruling 01M1BH4JMJK2W0PKMW2PNQRMH0, relayed 01M1BH5FZQ2V0XPX1ND6BSGCNT) -> 4989b90d1 (docs) -> 422f226f4 (docs); fenix verified linear ancestry and diff limited to crates/atm-architecture/tests/boundary_enforcement.rs + sprint doc, zero production crate code. Crimson-reported validation: cargo test -p atm-architecture 91 boundary-enforcement / 97 package, fmt, clippy -D warnings, just lint 34/34, pytest .just/tests 527 passed/10 skipped. Cipher merging 422f226f4 into AV.4 (interim merge 4e35fbe9d carried only d73637f6b). Result pending."
     }
   ]
 }
