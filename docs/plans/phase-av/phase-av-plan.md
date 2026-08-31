@@ -212,7 +212,17 @@ which replaces manual merge-forward.
   of manual merge-forward; merges remain merge-commit only (never
   squash).
 
-  AV.0 completion proof (`gh stack view --json`): _pending_.
+  AV.0 completion proof (`gh stack view --json`, captured 2026-08-31):
+
+  ```json
+  {"trunk":"integrate/phase-av","branches":[
+    {"name":"fix/mailbox-read-blocking-serialization","pr":1112},
+    {"name":"feature/av1b-read-handler-cutover","pr":1115},
+    {"name":"docs/av2-read-concurrency-requirements","pr":1110},
+    {"name":"feature/av3-read-concurrency-gates","pr":1113},
+    {"name":"feature/av4-read-query-benchmarks","pr":1114}
+  ]}
+  ```
 - Adjacent-work sequencing: the #1030 WPERF plan touches the same writer
   path — coordinate worktrees/merge order with team-lead.
 - Benchmark-infra freeze: a standing directive freezes new

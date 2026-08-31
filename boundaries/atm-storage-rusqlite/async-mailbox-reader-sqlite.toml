@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-AsyncMailboxReader-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteAsyncMailboxReaderAdapter"
+
+[public]
+trait = "AsyncMailboxReader"
+
+[implementation]
+type = "MailboxReader"
+module = "atm_storage_rusqlite::mailbox_reader"
+visibility = "private"
+constructor = "private"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["sqlite", "bounded_read_submission", "read_only_connections"]
+io_forbidden = ["write_capable_connection", "writer_lane", "socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm -> atm-storage-rusqlite", "atm-daemon -> atm-storage-rusqlite", "atm-graft -> atm-storage-rusqlite", "atm-runtime -> atm-storage-rusqlite", "atm-storage-rusqlite -> atm-runtime"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["MailboxReader"]
+
+[contracts]
+request_types = ["MailboxScope", "MessageQuery", "MessageKey", "ReadDeadline"]
+response_types = ["Message"]
+error_types = ["ReadLaneError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+io_forbidden_source_modules = { write_capable_connection = ["atm_storage_rusqlite::shared_db_reader_lanes", "atm_storage_rusqlite::reader_pool"], writer_lane = ["atm_storage_rusqlite::reader_pool"], socket_io = ["atm_storage_rusqlite::mailbox_reader", "atm_storage_rusqlite::shared_db_reader_lanes", "atm_storage_rusqlite::reader_pool"], process_spawn = ["atm_storage_rusqlite::mailbox_reader", "atm_storage_rusqlite::shared_db_reader_lanes", "atm_storage_rusqlite::reader_pool"] }
+lint_rules = ["LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES"]
+review_gates = ["no_public_impl", "no_public_constructor", "no_public_reexport"]
+
+[status]
+state = "active"
+notes = ["MailboxReader owns independent defensive read-only SQLite worker connections."]
