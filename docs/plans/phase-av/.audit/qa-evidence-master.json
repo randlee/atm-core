@@ -298,7 +298,8 @@
         "f31a35484 docs(av1a): record implementation scan coverage"
       ],
       "early_signal_message_id": "01M1BNF3193FHBHPZPAXSRAKX9",
-      "early_signal": "quality-mgr @ eb9744b4b+f68257608: GAP-1/GAP-2/M10 FIXED, zero-implementer fail-closed violation proven live, lint real-tree PASS, pytest test_lint_boundaries.py 56/56, waiver count 14"
+      "early_signal": "quality-mgr @ eb9744b4b+f68257608: GAP-1/GAP-2/M10 FIXED, zero-implementer fail-closed violation proven live, lint real-tree PASS, pytest test_lint_boundaries.py 56/56, waiver count 14 ; addendum @ f31a35484: M11 verified, split 19/1/14 of 34 recomputed via lint parser",
+      "early_signal_addendum_message_id": "01M1BNJBMB6FJ5GEG7R2NKZDF6"
     },
     {
       "run_id": "QA-AV1A-R5",
@@ -317,7 +318,8 @@
         "AV1A-M11 (open)",
         "16 closed AV1A records — regression check"
       ],
-      "verdict": "DISPATCHED"
+      "verdict": "DISPATCHED",
+      "ack_message_id": "01M1BNJZN0T3BMJMFS7RK8G3SZ"
     },
     {
       "aich_sprint": "AV3",
