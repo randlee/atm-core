@@ -188,6 +188,11 @@ fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
   generic functions, `#[cfg(test)]` exclusion, and bridge construction/type
   forms are semantic Rust properties; string scanning cannot make that
   contract robust. Commits: `27bd384eb`, `06b73c9f8`, `3a1736a7b`.
+- 2026-08-31 QA-r2 fixes: `AV3-B3` masks raw, raw-byte, and byte string
+  literals before balancing handler braces. `AV3-I2` replaces the D2b
+  tautology with an `AsyncMailboxRuntime`-activated ingress recorder that
+  derives each path from the real router handler body and proves a writer-lane
+  fixture is rejected. AV.1b will activate the supervised state-handoff path.
 
 This is the authoritative acceptance checklist.
 

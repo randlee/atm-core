@@ -3651,27 +3651,68 @@ enum Av3WriterIngressPath {
     DirectWriter,
 }
 
+trait Av3InstrumentedWriterIngress {
+    fn record(&mut self, handler: &str, path: Av3WriterIngressPath);
+}
+
+#[derive(Default)]
+struct Av3IngressRecorder(BTreeMap<String, Av3WriterIngressPath>);
+
+impl Av3InstrumentedWriterIngress for Av3IngressRecorder {
+    fn record(&mut self, handler: &str, path: Av3WriterIngressPath) {
+        self.0.insert(handler.to_owned(), path);
+    }
+}
+
+fn av3_assert_supervised_read_ingress(handler: &str, path: Av3WriterIngressPath) {
+    assert!(
+        matches!(
+            path,
+            Av3WriterIngressPath::None | Av3WriterIngressPath::StateHandoffSupervisor
+        ),
+        "D2b `{handler}` must not obtain response data through writer ingress"
+    );
+}
+
 #[test]
 fn av3_d2b_scaffold_accepts_only_the_supervised_read_state_handoff() {
-    let endpoints = [
-        ("list", Av3WriterIngressPath::None),
-        ("peek", Av3WriterIngressPath::None),
-        ("doctor", Av3WriterIngressPath::None),
-        ("read", Av3WriterIngressPath::StateHandoffSupervisor),
-    ];
-    for (endpoint, path) in endpoints {
-        assert!(
-            matches!(
-                path,
-                Av3WriterIngressPath::None | Av3WriterIngressPath::StateHandoffSupervisor
-            ),
-            "D2b `{endpoint}` must not obtain response data through writer ingress"
-        );
+    let router = read_source(
+        &workspace_root().join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"),
+    );
+    if !router.contains("AsyncMailboxRuntime") {
+        return;
     }
-    assert_ne!(
-        Av3WriterIngressPath::DirectWriter,
-        Av3WriterIngressPath::StateHandoffSupervisor,
-        "a direct writer submission is never the AV.1b supervisor handoff"
+    let mut recorder = Av3IngressRecorder::default();
+    for handler in read_handler_names() {
+        let body = av3_handler_region(&router, &[&handler]);
+        let path = if handler == "receive_messages" && body.contains("StateHandoffSupervisor") {
+            Av3WriterIngressPath::StateHandoffSupervisor
+        } else if body.contains("StorageWriterIngress") || body.contains("submit_async") {
+            Av3WriterIngressPath::DirectWriter
+        } else {
+            Av3WriterIngressPath::None
+        };
+        recorder.record(&handler, path);
+    }
+    for (endpoint, path) in recorder.0 {
+        av3_assert_supervised_read_ingress(&endpoint, path);
+    }
+}
+
+#[test]
+fn av3_d2b_scaffold_rejects_a_writer_lane_read_fixture() {
+    let source = "async fn list_messages() { StorageWriterIngress::submit_async(); }";
+    let body = av3_handler_region(source, &["list_messages"]);
+    let path = if body.contains("StorageWriterIngress") {
+        Av3WriterIngressPath::DirectWriter
+    } else {
+        Av3WriterIngressPath::None
+    };
+    let rejection =
+        std::panic::catch_unwind(|| av3_assert_supervised_read_ingress("list_messages", path));
+    assert!(
+        rejection.is_err(),
+        "D2b must reject a read handler routed to the writer lane"
     );
 }
 

@@ -21,6 +21,11 @@ class ReadConcurrencyGateTests(unittest.TestCase):
         source = 'async fn receive_messages<T>() { /* } */ let value = "{"; call(value); }'
         self.assertEqual(extract_fn_body(source, "receive_messages"), '{ /* } */ let value = "{"; call(value); }')
 
+    def test_extract_fn_body_ignores_raw_and_byte_string_braces(self) -> None:
+        for literal in ['r#"a"b}c"#', 'r##"a"#b}c"##', 'b"a}c"', 'br"a}c"']:
+            source = f"fn list_messages() {{ let x = {literal}; BlockingCoreBridge::run(); }}"
+            self.assertIn("BlockingCoreBridge::run", extract_fn_body(source, "list_messages"))
+
     def test_handler_names_match_the_checked_in_contract(self) -> None:
         self.assertEqual(READ_HANDLERS, ("list_messages", "peek_messages", "receive_messages", "doctor"))
 
