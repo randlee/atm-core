@@ -24,6 +24,7 @@ mod search_schema;
 mod search_store;
 mod shared_db;
 mod shared_db_diagnostics;
+mod shared_db_reader_lanes;
 mod template_catalog_schema;
 mod template_catalog_store;
 mod writer;
@@ -44,8 +45,8 @@ pub use crate::observability::{
 };
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMailboxReader,
-    AsyncMessageStore, GraftReceiverEndpointStore, MailboxBucketCounts, Message, MessageKey,
-    MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    AsyncMessageStore, GraftReceiverEndpointStore, MailboxBucketCounts, MailboxScope, Message,
+    MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 use atm_storage::schema::MessageEnvelope;
 #[cfg(test)]
@@ -615,8 +616,15 @@ impl MessageStore for SqliteMessageStore {
 
 #[async_trait::async_trait]
 impl AsyncMessageStore for SqliteMessageStore {
-    async fn list_messages_async(&self, query: MessageQuery) -> Result<Vec<Message>, AtmError> {
-        self.db.submit_list_messages_async(query).await
+    async fn apply_read_display_state_async(
+        &self,
+        scope: MailboxScope,
+        message_ids: Vec<MessageKey>,
+        seen_watermark: Option<IsoTimestamp>,
+    ) -> Result<(), AtmError> {
+        self.db
+            .submit_read_display_state_async(scope, message_ids, seen_watermark)
+            .await
     }
 
     async fn save_message_if_absent_async(
@@ -992,7 +1000,7 @@ mod tests {
     fn reader_lane_configuration_is_threaded_through_storage_factory_and_validated() {
         let root = tempfile::tempdir().expect("temporary storage root");
         let config = ReaderLanesConfig {
-            max_connections: 21,
+            max_connections: std::num::NonZeroUsize::new(21).expect("non-zero maximum connections"),
             ..ReaderLanesConfig::default()
         };
         let error = SqliteStorageFactory::at_path(root.path().join("mail.db"))
@@ -1030,11 +1038,15 @@ mod tests {
             .expect("bounded read");
         backend.checkpoint_wal().expect("checkpoint");
         let metrics = backend.reader_lane_metrics();
-        assert_eq!(metrics.mailbox.lane, "mailbox");
-        assert_eq!(metrics.search.lane, "search");
-        assert_eq!(metrics.mailbox.last_checkpoint_succeeded, Some(true));
-        assert!(metrics.mailbox.current_wal_frames.is_some());
-        assert_eq!(metrics.search.last_checkpoint_succeeded, Some(true));
+        let mailbox = metrics.lane("mailbox").expect("mailbox lane metrics");
+        let search = metrics.lane("search").expect("search lane metrics");
+        assert_eq!(metrics.iter().count(), 2);
+        assert!(metrics.lane("doctor").is_none());
+        assert_eq!(mailbox.lane, "mailbox");
+        assert_eq!(search.lane, "search");
+        assert_eq!(mailbox.last_checkpoint_succeeded, Some(true));
+        assert!(mailbox.current_wal_frames.is_some());
+        assert_eq!(search.last_checkpoint_succeeded, Some(true));
     }
 
     #[tokio::test]
@@ -1044,7 +1056,9 @@ mod tests {
             Arc::new(SqliteStorageBackend::new(root.path().join("mail.db")).expect("backend"));
         let writer = backend.async_message_store();
         let reader = backend.async_mailbox_reader();
+        let search = backend.async_message_search_store();
         let scope = MailboxScope::new(team(), agent());
+        let (checkpoint_tx, mut checkpoint_rx) = tokio::sync::mpsc::unbounded_channel();
         let writer_task = tokio::spawn(async move {
             for index in 0..24 {
                 writer
@@ -1054,6 +1068,9 @@ mod tests {
                     ))
                     .await
                     .expect("writer admission");
+                checkpoint_tx
+                    .send(())
+                    .expect("checkpoint sampler remains live");
             }
         });
         let reader_task = {
@@ -1077,13 +1094,49 @@ mod tests {
                 }
             })
         };
+        let search_task = tokio::spawn(async move {
+            for _ in 0..24 {
+                search
+                    .search_async(
+                        MessageSearchQuery::default(),
+                        SearchDeadline::new(std::time::Duration::from_secs(1))
+                            .expect("search deadline"),
+                    )
+                    .await
+                    .expect("search reader response");
+            }
+        });
+        let sampler_backend = Arc::clone(&backend);
+        let checkpoint_task = tokio::spawn(async move {
+            let mut samples = Vec::new();
+            while checkpoint_rx.recv().await.is_some() {
+                sampler_backend
+                    .checkpoint_wal()
+                    .expect("progressing checkpoint");
+                let metrics = sampler_backend.reader_lane_metrics();
+                let frames = metrics
+                    .lane("mailbox")
+                    .expect("mailbox lane metrics")
+                    .current_wal_frames
+                    .expect("checkpoint records mailbox WAL frames");
+                assert!(frames <= 512, "WAL frames stay bounded during load");
+                samples.push(frames);
+            }
+            samples
+        });
         writer_task.await.expect("writer join");
         reader_task.await.expect("reader join");
-        backend.checkpoint_wal().expect("checkpoint");
+        search_task.await.expect("search join");
+        let samples = checkpoint_task.await.expect("checkpoint sampler join");
+        assert_eq!(samples.len(), 24, "sample every writer commit during load");
         let metrics = backend.reader_lane_metrics();
-        assert_eq!(metrics.mailbox.current_quarantined_workers, 0);
-        assert_eq!(metrics.mailbox.last_checkpoint_succeeded, Some(true));
-        assert!(metrics.mailbox.current_wal_frames.is_some());
+        let mailbox = metrics.lane("mailbox").expect("mailbox lane metrics");
+        let search = metrics.lane("search").expect("search lane metrics");
+        assert_eq!(mailbox.current_quarantined_workers, 0);
+        assert_eq!(mailbox.last_checkpoint_succeeded, Some(true));
+        assert!(mailbox.current_wal_frames.is_some());
+        assert_eq!(search.last_checkpoint_succeeded, Some(true));
+        assert!(search.current_wal_frames.is_some());
     }
 
     fn message(key: &str, text: &str) -> Message {
@@ -3024,30 +3077,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sqlite_backend_async_mailbox_projection_uses_the_writer_lane() {
+    async fn read_display_state_is_the_only_async_reader_followup_admitted_to_writer() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.async_message_store();
-        let first = message("atm:async-projection-first", "first");
-        let second = message("atm:async-projection-second", "second");
+        let original = message("atm:read-state", "read state");
         backend
             .message_store()
-            .save_messages_atomically(&[first.clone(), second.clone()])
+            .save_message(&original)
             .expect("seed mailbox");
 
-        let projection = store
-            .list_messages_async(MessageQuery {
-                team: team(),
-                agent: agent(),
-                sender: None,
-                task_id: None,
-                limit: None,
-            })
+        store
+            .apply_read_display_state_async(
+                MailboxScope::new(team(), agent()),
+                vec![original.message_key.clone()],
+                Some(IsoTimestamp::now()),
+            )
             .await
-            .expect("async writer-owned mailbox projection");
+            .expect("writer applies the explicit read state transition");
 
-        assert_eq!(projection.len(), 2);
-        assert!(projection.contains(&first));
-        assert!(projection.contains(&second));
+        let stored = backend
+            .message_store()
+            .load_message(&original.message_key)
+            .expect("load transitioned message")
+            .expect("message remains durable");
+        assert!(stored.envelope.read);
+        assert_eq!(stored.envelope.text, original.envelope.text);
     }
 
     #[tokio::test]
@@ -3082,10 +3136,10 @@ mod tests {
         assert!(listed.contains(&second));
         assert_eq!(
             reader
-                .load_message(scope, first.message_key.clone(), deadline)
+                .load_message(scope.clone(), first.message_key.clone(), deadline)
                 .await
                 .expect("reader load"),
-            Some(first)
+            Some(first.clone())
         );
 
         let denied = reader
@@ -3103,6 +3157,96 @@ mod tests {
             .await
             .expect_err("mismatched scope must fail at the boundary");
         assert_eq!(denied, ReadLaneError::UnauthorizedScope);
+
+        let denied_load = reader
+            .load_message(
+                MailboxScope::new("other-team".parse().expect("team"), agent()),
+                first.message_key.clone(),
+                deadline,
+            )
+            .await
+            .expect_err("cross-team load must fail at the storage boundary");
+        assert_eq!(denied_load, ReadLaneError::UnauthorizedScope);
+
+        let other_agent: AgentName = "other-agent".parse().expect("agent");
+        let denied_list = reader
+            .list_messages(
+                scope.clone(),
+                MessageQuery {
+                    team: team(),
+                    agent: other_agent.clone(),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                },
+                deadline,
+            )
+            .await
+            .expect_err("cross-agent list must fail at the storage boundary");
+        assert_eq!(denied_list, ReadLaneError::UnauthorizedScope);
+        let denied_cross_agent_load = reader
+            .load_message(
+                MailboxScope::new(team(), other_agent),
+                second.message_key.clone(),
+                deadline,
+            )
+            .await
+            .expect_err("cross-agent load must fail at the storage boundary");
+        assert_eq!(denied_cross_agent_load, ReadLaneError::UnauthorizedScope);
+    }
+
+    #[tokio::test]
+    async fn dedicated_mailbox_reader_projects_roster_and_durable_seen_state() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let scope = MailboxScope::new(team(), agent());
+        backend
+            .roster_store()
+            .save_roster(&RosterSnapshot {
+                team_name: team(),
+                members: vec![RosterMember {
+                    team_name: team(),
+                    agent_name: agent(),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Worker,
+                    model: ModelName::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Map::new(),
+                }],
+                refreshed_at: None,
+            })
+            .expect("seed roster");
+        let original = message("atm:reader-seen", "read state");
+        let watermark = IsoTimestamp::now();
+        backend
+            .message_store()
+            .save_message(&original)
+            .expect("seed mailbox");
+        backend
+            .async_message_store()
+            .apply_read_display_state_async(
+                scope.clone(),
+                vec![original.message_key],
+                Some(watermark),
+            )
+            .await
+            .expect("write seen state");
+
+        let reader = backend.async_mailbox_reader();
+        let deadline = ReadDeadline::new(std::time::Duration::from_secs(1)).expect("deadline");
+        assert!(
+            reader
+                .mailbox_member_exists(scope.clone(), deadline)
+                .await
+                .expect("read-only roster projection")
+        );
+        assert_eq!(
+            reader
+                .load_seen_watermark(scope, deadline)
+                .await
+                .expect("read-only seen projection"),
+            Some(watermark)
+        );
     }
 
     #[test]

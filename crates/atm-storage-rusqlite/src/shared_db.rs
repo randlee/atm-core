@@ -1,23 +1,21 @@
-use crate::mailbox_reader::{MailboxReaderMetrics, start_mailbox_reader};
-#[cfg(test)]
-use crate::observability::NullSqliteObservability;
-use crate::observability::SqliteObservability;
-use crate::reader_pool::ReaderLanesConfig;
-use crate::search_reader::SearchReader;
-use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
+pub(crate) use crate::shared_db_reader_lanes::SharedDb;
+use crate::writer::{WriteOp, WriteOpResult, validate_upsert_message_request};
 use atm_storage::AsyncMailboxReader;
 use atm_storage::TemplateMessageAdmission;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
-    MessageQuery,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
-use rusqlite::{Connection, Error as RusqliteError, OpenFlags, TransactionBehavior};
-use std::path::{Path, PathBuf};
+#[cfg(test)]
+use rusqlite::OpenFlags;
+use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};
+use std::path::PathBuf;
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(test)]
+use std::sync::{LazyLock, Mutex};
 
 // Search projection writes touch several B-trees and FTS segments inside the
 // sole durable writer transaction.  The SQLite default is only 2 MiB, which
@@ -26,6 +24,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 const WRITER_CACHE_KIB: i64 = 32 * 1024;
 #[cfg(test)]
 static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
+#[cfg(test)]
+static OPENED_CONNECTIONS: LazyLock<Mutex<std::collections::HashMap<String, usize>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
 
 pub(crate) const DB_MIGRATIONS: &str = r#"
 CREATE TABLE IF NOT EXISTS mail_messages (
@@ -68,6 +69,13 @@ CREATE TABLE IF NOT EXISTS mail_message_states (
     FOREIGN KEY (team, agent, message_key)
         REFERENCES mail_messages(team, agent, message_key)
         ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS mail_seen_watermarks (
+    team TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    watermark TEXT NOT NULL,
+    PRIMARY KEY (team, agent)
 );
 
 CREATE TABLE IF NOT EXISTS team_roster (
@@ -181,120 +189,38 @@ impl SharedDbTarget {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct SharedDb {
-    pub(crate) target: Arc<SharedDbTarget>,
-    writer: Arc<SqliteWriter>,
-    pub(crate) search_reader: Arc<SearchReader>,
-    mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
-    pub(crate) mailbox_reader_metrics: MailboxReaderMetrics,
-    pub(crate) observability: Arc<dyn SqliteObservability>,
+/// Test-only instrumentation at the concrete SQLite open sites. Entries are
+/// keyed by the target so parallel tests cannot contaminate each other's
+/// connection-budget evidence.
+#[cfg(test)]
+pub(crate) fn reset_opened_connection_count(target: &SharedDbTarget) {
+    OPENED_CONNECTIONS
+        .lock()
+        .expect("opened connection counter lock")
+        .insert(target.display(), 0);
+}
+
+#[cfg(test)]
+pub(crate) fn record_opened_connection(target: &SharedDbTarget) {
+    let mut counters = OPENED_CONNECTIONS
+        .lock()
+        .expect("opened connection counter lock");
+    if let Some(count) = counters.get_mut(&target.display()) {
+        *count += 1;
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn opened_connection_count(target: &SharedDbTarget) -> usize {
+    OPENED_CONNECTIONS
+        .lock()
+        .expect("opened connection counter lock")
+        .get(&target.display())
+        .copied()
+        .unwrap_or_default()
 }
 
 impl SharedDb {
-    pub(crate) fn target(&self) -> &SharedDbTarget {
-        self.target.as_ref()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn open_in_memory_for_test() -> Result<Self, AtmError> {
-        Self::open_in_memory_with_observability(Arc::new(NullSqliteObservability))
-    }
-
-    #[cfg(test)]
-    pub(crate) fn open_in_memory_with_observability(
-        observability: Arc<dyn SqliteObservability>,
-    ) -> Result<Self, AtmError> {
-        Self::open_in_memory_with_reader_lanes(observability, ReaderLanesConfig::default())
-    }
-
-    #[cfg(test)]
-    pub(crate) fn open_in_memory_with_reader_lanes(
-        observability: Arc<dyn SqliteObservability>,
-        reader_lanes: ReaderLanesConfig,
-    ) -> Result<Self, AtmError> {
-        reader_lanes.validate()?;
-        let target = Arc::new(SharedDbTarget::InMemory {
-            uri: format!(
-                "file:atm-storage-rusqlite-{}?mode=memory&cache=shared",
-                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
-            ),
-        });
-        let writer = Arc::new(SqliteWriter::start(
-            Arc::clone(&target),
-            Arc::clone(&observability),
-        )?);
-        let search_reader = Arc::new(SearchReader::start(
-            Arc::clone(&target),
-            reader_lanes.search,
-        )?);
-        let (mailbox_reader, mailbox_reader_metrics) =
-            start_mailbox_reader(Arc::clone(&target), reader_lanes.mailbox)?;
-        Ok(Self {
-            target,
-            writer,
-            search_reader,
-            mailbox_reader,
-            mailbox_reader_metrics,
-            observability,
-        })
-    }
-
-    #[allow(
-        dead_code,
-        reason = "Production construction delegates through ReaderLanesConfig; this direct observability constructor remains a backend test seam."
-    )]
-    pub(crate) fn open_with_observability(
-        path: impl AsRef<Path>,
-        observability: Arc<dyn SqliteObservability>,
-    ) -> Result<Self, AtmError> {
-        Self::open_with_reader_lanes(path, observability, ReaderLanesConfig::default())
-    }
-
-    pub(crate) fn open_with_reader_lanes(
-        path: impl AsRef<Path>,
-        observability: Arc<dyn SqliteObservability>,
-        reader_lanes: ReaderLanesConfig,
-    ) -> Result<Self, AtmError> {
-        reader_lanes.validate()?;
-        let path = path.as_ref().to_path_buf();
-        if let Some(parent) = path.parent() {
-            // Accepted risk: durable-state root creation happens during boundary
-            // assembly and is allowed to block on the host filesystem once.
-            std::fs::create_dir_all(parent).map_err(|error| {
-                AtmError::mailbox_write(format!(
-                    "failed to create sqlite parent directory {}: {error}",
-                    parent.display()
-                ))
-            })?;
-        }
-
-        let target = Arc::new(SharedDbTarget::Path(path));
-        let writer = Arc::new(SqliteWriter::start(
-            Arc::clone(&target),
-            Arc::clone(&observability),
-        )?);
-        let search_reader = Arc::new(SearchReader::start(
-            Arc::clone(&target),
-            reader_lanes.search,
-        )?);
-        let (mailbox_reader, mailbox_reader_metrics) =
-            start_mailbox_reader(Arc::clone(&target), reader_lanes.mailbox)?;
-        tracing::debug!(
-            writer_handles = 1,
-            path = %target.display(),
-            "sqlite boundary assembly opened"
-        );
-        Ok(Self {
-            target,
-            writer,
-            search_reader,
-            mailbox_reader,
-            mailbox_reader_metrics,
-            observability,
-        })
-    }
-
     /// Call only from backend-owned blocking code paths.
     ///
     /// Accepted risk: this is enforced as a crate-internal contract rather
@@ -351,7 +277,7 @@ impl SharedDb {
             .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
             WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -412,7 +338,7 @@ impl SharedDb {
             } => Err(AtmError::daemon_unavailable(
                 "sqlite writer reported a duplicate without its retained record",
             )),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -420,6 +346,28 @@ impl SharedDb {
             | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async message upsert",
             )),
+        }
+    }
+
+    pub(crate) async fn submit_read_display_state_async(
+        &self,
+        mailbox: atm_storage::MailboxScope,
+        message_ids: Vec<atm_storage::MessageKey>,
+        seen_watermark: Option<atm_storage::IsoTimestamp>,
+    ) -> Result<(), AtmError> {
+        match self
+            .writer
+            .submit_async(WriteOp::ApplyReadDisplayState {
+                mailbox,
+                message_ids,
+                seen_watermark,
+            })
+            .await?
+        {
+            WriteOpResult::ReadDisplayStateApplied => Ok(()),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for async read display state: {other:?}"
+            ))),
         }
     }
 
@@ -463,7 +411,7 @@ impl SharedDb {
         let result = self.writer.submit(WriteOp::UpsertMessages(records))?;
         match result {
             WriteOpResult::UpsertMessages => Ok(()),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -484,7 +432,7 @@ impl SharedDb {
             .submit(WriteOp::Acknowledge { source, builder })?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
@@ -506,34 +454,13 @@ impl SharedDb {
             .await?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
             | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async acknowledgement admission",
-            )),
-        }
-    }
-
-    pub(crate) async fn submit_list_messages_async(
-        &self,
-        query: MessageQuery,
-    ) -> Result<Vec<Message>, AtmError> {
-        match self
-            .writer
-            .submit_async(WriteOp::ListMessages(query))
-            .await?
-        {
-            WriteOpResult::Messages(messages) => Ok(messages),
-            WriteOpResult::UpsertMessage { .. }
-            | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_)
-            | WriteOpResult::TemplateRegistration(_)
-            | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
-                "sqlite writer returned the wrong result for async mailbox projection",
             )),
         }
     }
@@ -649,44 +576,13 @@ pub(crate) fn open_connection_for_target(target: &SharedDbTarget) -> Result<Conn
         .map_err(|error| sqlite_open_error(target, error))?,
     };
     configure_connection(&mut connection, target)?;
+    #[cfg(test)]
+    record_opened_connection(target);
     Ok(connection)
 }
 
 /// Opens a connection which is physically read-only for durable databases and
 /// configured defensively for the bounded reader lanes.
-pub(crate) fn open_read_connection_for_target(
-    target: &SharedDbTarget,
-) -> Result<Connection, AtmError> {
-    let mut connection = match target {
-        SharedDbTarget::Path(path) => Connection::open_with_flags(
-            path,
-            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-        )
-        .map_err(|error| sqlite_open_error(target, error))?,
-        #[cfg(test)]
-        // Shared in-memory fixtures cannot be reopened READ_ONLY. `query_only`
-        // below preserves the no-write capability contract in tests.
-        SharedDbTarget::InMemory { uri } => Connection::open_with_flags(
-            uri,
-            OpenFlags::SQLITE_OPEN_READ_WRITE
-                | OpenFlags::SQLITE_OPEN_CREATE
-                | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-        )
-        .map_err(|error| sqlite_open_error(target, error))?,
-    };
-    configure_connection(&mut connection, target)?;
-    connection
-        .execute_batch("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA defensive=ON;")
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to configure defensive read-only sqlite connection",
-                error,
-            )
-        })?;
-    Ok(connection)
-}
-
 pub(crate) fn open_writer_connection_for_target(
     target: &SharedDbTarget,
 ) -> Result<Connection, AtmError> {
@@ -1048,7 +944,7 @@ fn table_exists(
         })
 }
 
-fn sqlite_open_error(target: &SharedDbTarget, source: RusqliteError) -> AtmError {
+pub(crate) fn sqlite_open_error(target: &SharedDbTarget, source: RusqliteError) -> AtmError {
     sqlite_error(
         target,
         format!("failed to open sqlite database {}", target.display()),
@@ -1128,6 +1024,8 @@ pub(crate) fn sqlite_thread_mode(mode: Option<ThreadMode>) -> Option<&'static st
 mod tests {
 
     use super::*;
+    use crate::observability::NullSqliteObservability;
+    use crate::shared_db_reader_lanes::open_read_connection_for_target;
 
     #[test]
     fn defensive_reader_connection_rejects_writes() {

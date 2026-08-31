@@ -10,11 +10,11 @@ use crate::observability::ObservabilityPort;
 use crate::read::{
     BucketCounts, ClassifiedMessage, filters,
     metadata_selection::{
-        bucket_counts_for, classify_mailbox_metadata_rows,
-        filter_metadata_backed_contains_candidates, logical_current_messages, select_messages,
+        classify_mailbox_metadata_rows, filter_metadata_backed_contains_candidates,
         sort_and_limit_selected,
     },
     normalize_contains_filter,
+    selection::{bucket_counts_for, logical_current_messages, select_classified_messages},
 };
 use crate::schema::AtmMessageId;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
@@ -121,6 +121,116 @@ pub struct ListOutcome {
     pub bucket_counts: BucketCounts,
 }
 
+/// Prepared, storage-neutral list command for the Tokio mailbox reader lane.
+/// Target resolution and list policy live here rather than in an HTTP handler.
+#[derive(Debug, Clone)]
+pub struct AsyncListCommand {
+    scope: atm_storage::MailboxScope,
+    selection: crate::read::selection::MailboxSelectionRequest,
+    explicit_target: bool,
+    selection_mode: ReadSelection,
+    limit: Option<usize>,
+    loads_seen_watermark: bool,
+}
+
+impl AsyncListCommand {
+    #[must_use]
+    pub fn scope(&self) -> &atm_storage::MailboxScope {
+        &self.scope
+    }
+
+    #[must_use]
+    pub fn selection(&self) -> &crate::read::selection::MailboxSelectionRequest {
+        &self.selection
+    }
+
+    #[must_use]
+    pub fn explicit_target(&self) -> bool {
+        self.explicit_target
+    }
+
+    #[must_use]
+    pub fn requires_seen_watermark(&self) -> bool {
+        self.loads_seen_watermark
+    }
+
+    #[must_use]
+    pub fn with_seen_watermark(mut self, seen_watermark: Option<IsoTimestamp>) -> Self {
+        self.selection.seen_watermark = seen_watermark;
+        self
+    }
+}
+
+/// Prepares daemon list policy without accessing caller-owned paths or a
+/// synchronous storage runtime.
+pub fn prepare_async_list(query: &ListQuery) -> Result<AsyncListCommand, AtmError> {
+    let target = resolve_target(
+        query.target_address.as_ref(),
+        &query.caller_identity,
+        &query.caller_team,
+        None,
+    )?;
+    let loads_seen_watermark =
+        query.seen_state_filter && query.selection_mode != ReadSelection::All;
+    Ok(AsyncListCommand {
+        scope: atm_storage::MailboxScope::new(target.team, target.agent),
+        selection: crate::read::selection::MailboxSelectionRequest {
+            selection_mode: query.selection_mode,
+            seen_watermark: None,
+            message_id_filter: None,
+            sender_filter: query.sender_filter.clone(),
+            participant_filter: None,
+            timestamp_filter: query.timestamp_filter,
+            task_filter: query.task_filter.clone(),
+            contains_filter: query.contains_filter.clone(),
+        },
+        explicit_target: target.explicit,
+        selection_mode: query.selection_mode,
+        limit: query.limit,
+        loads_seen_watermark,
+    })
+}
+
+/// Assembles a protocol list response after the async runtime has performed
+/// bounded roster/seen-state projection and reader-lane selection.
+#[must_use]
+pub fn complete_async_list(
+    command: &AsyncListCommand,
+    mut selection: crate::read::selection::MailboxSelectionResult,
+) -> ListOutcome {
+    crate::read::selection::sort_and_limit_mailbox_selection(
+        &mut selection.selected,
+        command.limit,
+    );
+    let rows = selection
+        .selected
+        .iter()
+        .map(|message| ListRow {
+            message_id: message.envelope.message_id,
+            summary: message.envelope.summary.clone().unwrap_or_default(),
+            from: message.envelope.from.clone(),
+            timestamp: message.envelope.timestamp,
+            read: message.envelope.read,
+            pending_ack: matches!(
+                atm_storage::derive_ack_requirement(&message.envelope),
+                atm_storage::AckRequirementState::RequiredPending
+            ),
+            task_id: message.envelope.task_id.clone(),
+        })
+        .collect::<Vec<_>>();
+    ListOutcome {
+        action: CommandAction::List,
+        team: command.scope.team.clone(),
+        agent: command.scope.agent.clone(),
+        selection_mode: command.selection_mode,
+        history_collapsed: command.selection_mode != ReadSelection::All
+            && selection.bucket_counts.history > 0,
+        count: rows.len(),
+        rows,
+        bucket_counts: selection.bucket_counts,
+    }
+}
+
 pub fn list_mail(
     query: ListQuery,
     observability: &dyn ObservabilityPort,
@@ -182,7 +292,7 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         query.timestamp_filter,
         query.task_filter.as_ref(),
     );
-    let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
+    let selected = select_classified_messages(&filtered, query.selection_mode, seen_watermark);
     let mut selected = filter_metadata_backed_contains_candidates(
         runtime,
         &query.home_dir,

@@ -66,7 +66,31 @@ impl MailboxReader {
     ) -> Result<Option<Message>, ReadLaneError> {
         self.pool
             .submit(deadline.remaining(), move |connection, target| {
-                load_message(connection, target, &scope, &key).map_err(storage_error)
+                load_message(connection, target, &scope, &key)
+            })
+            .await
+    }
+
+    async fn submit_member_exists(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<bool, ReadLaneError> {
+        self.pool
+            .submit(deadline.remaining(), move |connection, target| {
+                mailbox_member_exists(connection, target, &scope).map_err(storage_error)
+            })
+            .await
+    }
+
+    async fn submit_seen_watermark(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<Option<IsoTimestamp>, ReadLaneError> {
+        self.pool
+            .submit(deadline.remaining(), move |connection, target| {
+                load_seen_watermark(connection, target, &scope).map_err(storage_error)
             })
             .await
     }
@@ -107,6 +131,22 @@ impl AsyncMailboxReader for MailboxReader {
         deadline: ReadDeadline,
     ) -> Result<Option<Message>, ReadLaneError> {
         self.submit_load(scope, key, deadline).await
+    }
+
+    async fn mailbox_member_exists(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<bool, ReadLaneError> {
+        self.submit_member_exists(scope, deadline).await
+    }
+
+    async fn load_seen_watermark(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<Option<IsoTimestamp>, ReadLaneError> {
+        self.submit_seen_watermark(scope, deadline).await
     }
 }
 
@@ -227,8 +267,8 @@ fn load_message(
     target: &SharedDbTarget,
     scope: &MailboxScope,
     key: &MessageKey,
-) -> Result<Option<Message>, AtmError> {
-    let transaction = open_reader_transaction(connection, target)?;
+) -> Result<Option<Message>, ReadLaneError> {
+    let transaction = open_reader_transaction(connection, target).map_err(storage_error)?;
     let row = transaction
         .query_row(
             "SELECT team, agent, envelope_json FROM mail_messages WHERE message_key = ?1;",
@@ -242,23 +282,33 @@ fn load_message(
             },
         )
         .optional()
-        .map_err(|error| sqlite_error(target, "failed to load mailbox reader record", error))?;
+        .map_err(|error| {
+            storage_error(sqlite_error(
+                target,
+                "failed to load mailbox reader record",
+                error,
+            ))
+        })?;
     let message = row
         .map(|(team, agent, envelope_json)| {
             let team = team.parse().map_err(|error| {
-                AtmError::validation(format!("failed to parse sqlite team: {error}"))
+                storage_error(AtmError::validation(format!(
+                    "failed to parse sqlite team: {error}"
+                )))
             })?;
             let agent = agent.parse().map_err(|error| {
-                AtmError::validation(format!("failed to parse sqlite agent: {error}"))
+                storage_error(AtmError::validation(format!(
+                    "failed to parse sqlite agent: {error}"
+                )))
             })?;
             if scope.team != team || scope.agent != agent {
-                return Err(AtmError::validation(
-                    "mailbox scope does not authorize this record",
-                ));
+                return Err(ReadLaneError::UnauthorizedScope);
             }
-            let state = load_state(&transaction, target, &team, &agent, key)?;
+            let state =
+                load_state(&transaction, target, &team, &agent, key).map_err(storage_error)?;
             let envelope = apply_state(
-                deserialize_json(&envelope_json, "sqlite message envelope")?,
+                deserialize_json(&envelope_json, "sqlite message envelope")
+                    .map_err(storage_error)?,
                 state.as_ref(),
             );
             Ok(Message {
@@ -269,8 +319,44 @@ fn load_message(
             })
         })
         .transpose()?;
-    close_reader_transaction(transaction, target)?;
+    close_reader_transaction(transaction, target).map_err(storage_error)?;
     Ok(message)
+}
+
+fn mailbox_member_exists(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    scope: &MailboxScope,
+) -> Result<bool, AtmError> {
+    connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM team_roster WHERE team_name = ?1 AND agent_name = ?2);",
+            params![scope.team.as_str(), scope.agent.as_str()],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|value| value != 0)
+        .map_err(|error| sqlite_error(target, "failed to validate mailbox roster member", error))
+}
+
+fn load_seen_watermark(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    scope: &MailboxScope,
+) -> Result<Option<IsoTimestamp>, AtmError> {
+    connection
+        .query_row(
+            "SELECT watermark FROM mail_seen_watermarks WHERE team = ?1 AND agent = ?2;",
+            params![scope.team.as_str(), scope.agent.as_str()],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| sqlite_error(target, "failed to load mailbox seen watermark", error))?
+        .map(|raw| {
+            raw.parse().map_err(|error| {
+                AtmError::validation(format!("failed to parse sqlite seen watermark: {error}"))
+            })
+        })
+        .transpose()
 }
 
 #[derive(Debug, Clone)]

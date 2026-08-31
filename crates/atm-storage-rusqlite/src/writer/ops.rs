@@ -6,8 +6,8 @@ use crate::search_schema::{
 };
 use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_error, sqlite_thread_mode};
 use atm_storage::contract::{
-    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message, MessageKey,
-    MessageQuery,
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, MailboxScope,
+    Message, MessageKey,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::MessageEnvelope;
@@ -35,7 +35,13 @@ type DecomposedWorkflowColumns<'a> = (
 
 #[derive(Clone)]
 pub(crate) enum WriteOp {
-    ListMessages(MessageQuery),
+    /// The sole mutation admitted from the asynchronous mailbox-read path.
+    /// It never carries immutable message contents or performs selection.
+    ApplyReadDisplayState {
+        mailbox: MailboxScope,
+        message_ids: Vec<MessageKey>,
+        seen_watermark: Option<IsoTimestamp>,
+    },
     UpsertMessage(Box<Message>),
     /// A related group of immutable records that must either all become
     /// visible or none do.  AI.31 uses this for the ACK reply and the
@@ -53,7 +59,16 @@ pub(crate) enum WriteOp {
 impl std::fmt::Debug for WriteOp {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ListMessages(_) => formatter.write_str("ListMessages(..)"),
+            Self::ApplyReadDisplayState {
+                mailbox,
+                message_ids,
+                seen_watermark,
+            } => formatter
+                .debug_struct("ApplyReadDisplayState")
+                .field("mailbox", mailbox)
+                .field("message_ids", &message_ids.len())
+                .field("seen_watermark", seen_watermark)
+                .finish(),
             Self::UpsertMessage(_) => formatter.write_str("UpsertMessage(..)"),
             Self::UpsertMessages(_) => formatter.write_str("UpsertMessages(..)"),
             Self::Acknowledge { source, .. } => formatter
@@ -78,7 +93,7 @@ impl std::fmt::Debug for WriteOp {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WriteOpResult {
-    Messages(Vec<Message>),
+    ReadDisplayStateApplied,
     UpsertMessage {
         inserted: bool,
         /// Populated only when an immutable-key duplicate won the admission
@@ -103,7 +118,18 @@ pub(crate) fn execute(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     match op {
-        WriteOp::ListMessages(query) => execute_list_messages(query, connection, target),
+        WriteOp::ApplyReadDisplayState {
+            mailbox,
+            message_ids,
+            seen_watermark,
+        } => execute_read_display_state(
+            mailbox,
+            message_ids,
+            *seen_watermark,
+            connection,
+            cache,
+            target,
+        ),
         WriteOp::UpsertMessage(request) => {
             execute_upsert_message(request, connection, cache, target)
         }
@@ -149,6 +175,55 @@ pub(crate) fn execute(
             }
         }
     }
+}
+
+fn execute_read_display_state(
+    mailbox: &MailboxScope,
+    message_ids: &[MessageKey],
+    seen_watermark: Option<IsoTimestamp>,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    let updated_at = IsoTimestamp::now().into_inner().to_rfc3339();
+    for message_key in message_ids {
+        let updated = cache
+            .mark_message_read(
+                connection,
+                params![
+                    mailbox.team.as_str(),
+                    mailbox.agent.as_str(),
+                    message_key.as_str(),
+                    updated_at,
+                ],
+            )
+            .map_err(|error| sqlite_error(target, "failed to mark mailbox message read", error))?;
+        if updated != 1 {
+            return Err(AtmError::mailbox_read(format!(
+                "message {} was not found for {}@{} while applying read display state",
+                message_key.as_str(),
+                mailbox.agent.as_str(),
+                mailbox.team.as_str(),
+            )));
+        }
+    }
+    if let Some(watermark) = seen_watermark {
+        connection
+            .execute(
+                "INSERT INTO mail_seen_watermarks(team, agent, watermark)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(team, agent) DO UPDATE SET watermark = excluded.watermark",
+                params![
+                    mailbox.team.as_str(),
+                    mailbox.agent.as_str(),
+                    watermark.into_inner().to_rfc3339(),
+                ],
+            )
+            .map_err(|error| {
+                sqlite_error(target, "failed to persist mailbox seen watermark", error)
+            })?;
+    }
+    Ok(WriteOpResult::ReadDisplayStateApplied)
 }
 
 fn execute_template_registration(
@@ -333,102 +408,6 @@ fn insert_template_if_absent(
         request.content_text.as_str(),
     )?;
     Ok(inserted)
-}
-
-fn execute_list_messages(
-    query: &MessageQuery,
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<WriteOpResult, AtmError> {
-    let limit = query
-        .limit
-        .map(|value| i64::try_from(value).unwrap_or(i64::MAX))
-        .unwrap_or(-1);
-    let mut statement = connection
-        .prepare(
-            "SELECT mail_messages.message_key, mail_messages.envelope_json,
-                    mail_message_states.read, mail_message_states.pending_ack_at,
-                    mail_message_states.acknowledged_at, mail_message_states.expires_at
-             FROM mail_messages
-             JOIN mail_message_states
-               ON mail_message_states.team = mail_messages.team
-              AND mail_message_states.agent = mail_messages.agent
-              AND mail_message_states.message_key = mail_messages.message_key
-             WHERE mail_messages.team = ?1
-               AND mail_messages.agent = ?2
-               AND (?3 IS NULL OR mail_messages.from_agent = ?3)
-               AND (?4 IS NULL OR json_extract(mail_messages.envelope_json, '$.taskId') = ?4)
-               AND mail_message_states.deleted_at IS NULL
-               AND (
-                    mail_message_states.expires_at IS NULL
-                    OR mail_message_states.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-               )
-             ORDER BY mail_messages.message_at DESC, mail_messages.message_key DESC
-             LIMIT ?5",
-        )
-        .map_err(|error| {
-            sqlite_error(target, "failed to prepare writer mailbox projection", error)
-        })?;
-    let rows = statement
-        .query_map(
-            params![
-                query.team.as_str(),
-                query.agent.as_str(),
-                query.sender.as_ref().map(|value| value.as_str()),
-                query.task_id.as_ref().map(|value| value.as_str()),
-                limit,
-            ],
-            |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, Option<String>>(3)?,
-                    row.get::<_, Option<String>>(4)?,
-                    row.get::<_, Option<String>>(5)?,
-                ))
-            },
-        )
-        .map_err(|error| {
-            sqlite_error(target, "failed to execute writer mailbox projection", error)
-        })?;
-
-    rows.map(|row| decode_mailbox_projection_row(row, query, target))
-        .collect::<Result<Vec<_>, _>>()
-        .map(WriteOpResult::Messages)
-}
-
-type MailboxProjectionRow = (
-    String,
-    String,
-    i64,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-);
-
-fn decode_mailbox_projection_row(
-    row: rusqlite::Result<MailboxProjectionRow>,
-    query: &MessageQuery,
-    target: &SharedDbTarget,
-) -> Result<Message, AtmError> {
-    let (message_key, envelope_json, read, pending_ack_at, acknowledged_at, expires_at) = row
-        .map_err(|error| {
-            sqlite_error(target, "failed to decode writer mailbox projection", error)
-        })?;
-    let mut envelope = serde_json::from_str::<MessageEnvelope>(&envelope_json).map_err(|_| {
-        AtmError::mailbox_read("failed to decode writer mailbox projection envelope")
-    })?;
-    envelope.read = read != 0;
-    envelope.pending_ack_at = parse_timestamp(pending_ack_at, "pending_ack_at")?;
-    envelope.acknowledged_at = parse_timestamp(acknowledged_at, "acknowledged_at")?;
-    envelope.expires_at = parse_timestamp(expires_at, "expires_at")?;
-    Ok(Message {
-        team: query.team.clone(),
-        agent: query.agent.clone(),
-        message_key: MessageKey::new(message_key)?,
-        envelope,
-    })
 }
 
 fn execute_acknowledgement(

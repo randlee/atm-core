@@ -9,10 +9,9 @@ use crate::reader_pool::{ReaderPool, ReaderPoolConfig};
 use crate::search_store::execute_search;
 use crate::shared_db::SharedDbTarget;
 
-const READER_DEADLINE: Duration = Duration::from_secs(10);
-
 pub(crate) struct SearchReader {
     pool: ReaderPool,
+    request_deadline: Duration,
 }
 
 impl std::fmt::Debug for SearchReader {
@@ -29,16 +28,17 @@ impl SearchReader {
         config: ReaderPoolConfig,
     ) -> Result<Self, AtmError> {
         Ok(Self {
+            request_deadline: config.request_deadline,
             pool: ReaderPool::start("search", target, config)?,
         })
     }
 
     pub(crate) fn submit(&self, query: MessageSearchQuery) -> Result<MessageSearchPage, AtmError> {
         self.pool
-            .submit_blocking(READER_DEADLINE, move |connection, target| {
+            .submit_blocking(self.request_deadline, move |connection, target| {
                 execute_search(&query, connection, target).map_err(read_lane_error)
             })
-            .map_err(to_atm_error)
+            .map_err(AtmError::from)
     }
 
     pub(crate) async fn submit_async(
@@ -51,7 +51,7 @@ impl SearchReader {
                 execute_search(&query, connection, target).map_err(read_lane_error)
             })
             .await
-            .map_err(to_atm_error)
+            .map_err(AtmError::from)
     }
 
     pub(crate) fn metrics(&self) -> crate::reader_pool::ReaderLaneMetricsSnapshot {
@@ -77,10 +77,6 @@ fn read_lane_error(error: AtmError) -> ReadLaneError {
     ReadLaneError::Unavailable {
         message: error.message().to_owned(),
     }
-}
-
-fn to_atm_error(error: ReadLaneError) -> AtmError {
-    AtmError::daemon_unavailable(error.to_string())
 }
 
 #[cfg(test)]
