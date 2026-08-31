@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T05:59:41Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-30T19:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV3 ;
@@ -31,8 +33,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3467 ;
   triage:snippet "fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "2c6040b28" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
@@ -42,8 +44,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3504 ;
   triage:snippet "fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "2c6040b28" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
@@ -53,8 +55,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3467 ;
   triage:snippet "fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "4a97f0dd1a" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-5/4a97f0dd1a> .
@@ -64,8 +66,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3504 ;
   triage:snippet "fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "4a97f0dd1a" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-5/4a97f0dd1a> .

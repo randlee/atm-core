@@ -15,7 +15,9 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope ".just/*.py and crates/atm-architecture/tests/*.rs for brace/region scanners" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T05:59:41Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-31T05:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV3 ;
@@ -30,8 +32,8 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 2109 ;
   triage:snippet "brace_depth = line.count(...) - line.count(...)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "2c6040b28" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
@@ -41,8 +43,8 @@
   triage:file ".just/check_read_concurrency_gates.py" ;
   triage:line 39 ;
   triage:snippet "def extract_fn_body(source: str, fn_name: str) -> str:" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "2c6040b28" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
@@ -52,8 +54,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3815 ;
   triage:snippet "fn extract_fn_body<'source>(source: &'source str, fn_name: &str)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "2c6040b28" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .

@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope ".just/*.py scanners and .just/tests fixtures and crates/atm-architecture/tests/boundary_enforcement.rs for every hardcoded handler/function-name list referring to the storage_and_nudge_router read handlers" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T05:59:41Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-31T06:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV3 ;
@@ -31,8 +33,8 @@
   triage:file ".just/check_read_concurrency_gates.py" ;
   triage:line 31 ;
   triage:snippet "READ_HANDLERS = (\"list\", \"peek\", \"read\", \"doctor\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "2c6040b283e5ad85d1e21a1ec61c28ec7274879a" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
@@ -42,8 +44,8 @@
   triage:file ".just/tests/test_check_read_concurrency_gates.py" ;
   triage:line 54 ;
   triage:snippet "# Test fixture with wrong handler names" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "2c6040b283e5ad85d1e21a1ec61c28ec7274879a" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
@@ -53,8 +55,8 @@
   triage:file ".just/check_read_concurrency_gates.py" ;
   triage:line 31 ;
   triage:snippet "READ_HANDLERS = (\"list\", \"peek\", \"read\", \"doctor\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "4a97f0dd1a36a37cdcfe0a1209dc6c7de233f107" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-5/4a97f0dd1> .
@@ -64,8 +66,8 @@
   triage:file ".just/tests/test_check_read_concurrency_gates.py" ;
   triage:line 54 ;
   triage:snippet "# Test fixture with wrong handler names" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "4a97f0dd1a36a37cdcfe0a1209dc6c7de233f107" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-5/4a97f0dd1> .
