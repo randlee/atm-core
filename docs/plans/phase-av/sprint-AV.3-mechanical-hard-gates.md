@@ -151,7 +151,7 @@ sprint.
       `just lint` also runs the `arch-gates` task (`cargo test -p
       atm-architecture --quiet`) so the D1/D2/D2b architecture assertions
       remain live at the routinely cited lint entry point.
-- [ ] D5 — Scratch-mutation demonstrations (recorded, then reverted)
+- [x] D5 — Scratch-mutation demonstrations (recorded, then reverted)
       cover, at minimum: (a) reintroducing `spawn_blocking` in a read
       handler; (b) a **newly named** blocking-bridge type wrapping a
       1-permit semaphore in the read path; (c) routing an async read
@@ -215,7 +215,7 @@ This is the authoritative acceptance checklist.
       no read-family handler is among them; (3) `AV-FU-1` is recorded
       in the phase plan §4 with those eight sites — the residual is
       tracked, not implied closed.
-- [ ] A2 — Every D5 scratch mutation (spawn_blocking reintroduction,
+- [x] A2 — Every D5 scratch mutation (spawn_blocking reintroduction,
       newly named bridge type, writer-queued async read,
       composition-layer single permit, new bridge call site in a read
       handler) fails `cargo test -p atm-architecture` and/or the D2b
@@ -225,7 +225,7 @@ This is the authoritative acceptance checklist.
       named `ApplyReadDisplayState` handoff for read; all four endpoints
       succeed with the ingress rejecting; the D5 writer-queued-list and
       newly-named-bridge scratch mutations each fail a D2/D2b gate.
-- [ ] A3 — Adding a pure-read `WriteOp` variant fails `just lint`
+- [x] A3 — Adding a pure-read `WriteOp` variant fails `just lint`
       (demonstrated once with a scratch mutation, then reverted).
 - [x] A4 — All gates run in default `just lint` / `just test` with no
       opt-in flags.
@@ -234,10 +234,10 @@ This is the authoritative acceptance checklist.
 
 This is the authoritative validation checklist.
 
-- [ ] `just lint`
-- [ ] `just test`
+- [x] `just lint`
+- [x] `just test`
 - [ ] `just validate`
-- [ ] Scratch-mutation demonstrations for A2/A3 recorded in the sprint
+- [x] Scratch-mutation demonstrations for A2/A3 recorded in the sprint
       QA history (live proof the gate trips before automated QA).
 
 ## Out of scope
@@ -264,3 +264,16 @@ This is the authoritative validation checklist.
   real-router recording ingress behavior test (`e8d5886c2`); D4 makes the
   liveness and overload tests fail closed through the default lint gate
   (`6dd4d5a59`). Parent AV.2 merge-forward is `ae5e72d0c`.
+- 2026-08-31 Current merged validation at `7627bbbca`: 89
+  boundary-enforcement tests plus 6 companion atm-architecture tests (95
+  package total), 177 atm-http-runtime tests, `just lint` 34/34, and the
+  `.just` Python suite 536 passed / 10 skipped. `just validate` reached all
+  local gates but exits 1 only because its dependency-currency preflight says
+  the repository pins for sc-ecosystem and Wyvern are not latest releases.
+- 2026-08-31 D5 scratch demonstrations (each reverted): a list-handler
+  `spawn_blocking` failed `av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies`;
+  a newly named `FreshSemaphoreGate` and a `StorageWriterIngress` call each
+  failed that allowlist gate; a one-permit `Semaphore` in the runtime
+  composition failed `av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives`;
+  a new list-handler `ControlPathSyncBridge::run` failed the exact D1 set;
+  and a `WriteOp::ListMessages` variant failed the read-concurrency lint.
