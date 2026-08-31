@@ -1654,6 +1654,44 @@ constructor = "none"''',
                 rendered,
             )
 
+    def test_trait_only_io_policy_rejects_undeclared_sqlite_implementation(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            trait_boundary = BASE_BOUNDARY_TOML.replace(
+                'trait = "MailStore"', 'trait = "ContractStore"'
+            ).replace(
+                'io_forbidden = ["socket_io"]', 'io_forbidden = ["direct_sqlite_io"]'
+            )
+            trait_boundary = trait_boundary.replace(
+                '''[implementation]
+type = "SqliteMailStore"
+module = "atm_storage_rusqlite::mail_store"
+visibility = "private"
+constructor = "private"''',
+                '''[implementation]
+visibility = "trait_only"
+constructor = "none"''',
+            ).replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=trait_boundary)
+            (repo_root / "crates/atm-storage-rusqlite/src/lib.rs").write_text(
+                "pub trait ContractStore {}\n"
+                "struct SqliteContractStore;\n"
+                "impl ContractStore for SqliteContractStore {\n"
+                "    fn open() { let _ = rusqlite::Connection::open(\"adapter.db\"); }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertTrue(any("forbids io 'direct_sqlite_io'" in item for item in rendered), rendered)
+
     def test_trait_only_io_policy_delegates_sqlite_adapter_to_concrete_owner(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -1678,7 +1716,10 @@ constructor = "none"''',
             sqlite_boundary = BASE_BOUNDARY_TOML.replace(
                 'boundary_id = "BOUNDARY-MailStore-Sqlite"',
                 'boundary_id = "BOUNDARY-ContractStore-Sqlite"',
-            ).replace('trait = "MailStore"', 'trait = "ContractStore"')
+            ).replace('trait = "MailStore"', 'trait = "ContractStore"').replace(
+                'module = "atm_storage_rusqlite::mail_store"',
+                'module = "atm_storage_rusqlite"',
+            )
             self.write_toml_record(
                 repo_root,
                 "atm-storage-rusqlite",

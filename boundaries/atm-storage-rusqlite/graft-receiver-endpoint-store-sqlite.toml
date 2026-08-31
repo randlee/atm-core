@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-GraftReceiverEndpointStore-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteGraftReceiverEndpointStore"
+
+[public]
+trait = "GraftReceiverEndpointStore"
+
+[implementation]
+type = "SqliteGraftReceiverEndpointStore"
+module = "atm_storage_rusqlite::graft_receiver_endpoint_store"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["sqlite", "graft_receiver_lease_persistence"]
+io_forbidden = ["message_delivery", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SqliteGraftReceiverEndpointStore", "rusqlite::Connection"]
+
+[contracts]
+request_types = ["GraftReceiverRegistration", "TeamName", "AgentName", "OwnerGeneration"]
+response_types = ["GraftReceiverLease"]
+error_types = ["GraftEndpointStoreError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-GRAFT-RECEIVER-ENDPOINT-STORE-SQLITE"]
+review_gates = ["private_sqlite_impl", "local_ingress_only"]
+
+[status]
+state = "concrete_landed"
