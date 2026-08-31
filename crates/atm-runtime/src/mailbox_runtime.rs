@@ -18,7 +18,7 @@ use atm_core::read::selection::{
 };
 use atm_storage::{
     AsyncMailboxReader, AsyncMessageStore, AtmError, IsoTimestamp, MailboxScope, Message,
-    MessageKey, MessageQuery, MessageStore, ReadDeadline,
+    MessageKey, MessageQuery, ReadDeadline,
 };
 
 /// Bounded, composition-owned handoff settings for post-read state updates.
@@ -417,6 +417,7 @@ pub struct StorageAsyncMailboxRuntime {
 #[cfg(feature = "test-utils")]
 pub mod test_utils {
     use super::*;
+    use atm_storage::MessageStore;
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum RecordedWriterOutcome {
