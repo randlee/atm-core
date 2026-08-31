@@ -212,7 +212,17 @@ which replaces manual merge-forward.
   of manual merge-forward; merges remain merge-commit only (never
   squash).
 
-  AV.0 completion proof (`gh stack view --json`): _pending_.
+  AV.0 completion proof (`gh stack view --json`, team-lead, 2026-08-31,
+  msg 01M1AQN768YNDBZPHJYJ53EDDY): trunk `integrate/phase-av` created
+  off `develop@db08f4591` (post PR #1108 merge) and pushed; stack
+  `integrate/phase-av ← fix/mailbox-read-blocking-serialization ←
+  feature/av1b-read-handler-cutover ← docs/av2-read-concurrency-requirements
+  ← feature/av3-read-concurrency-gates ← feature/av4-read-query-benchmarks`,
+  all five branches on origin at `db08f4591` (empty layers), none
+  merged/queued/needing rebase. PRs open automatically via
+  `gh stack submit --auto` once a branch receives its first commit
+  (GitHub refuses a zero-diff PR). AV.1a (arch-ctm) and AV.2
+  (Cipher-311d) dispatched 2026-08-31 after Rand merged the plan.
 - Adjacent-work sequencing: the #1030 WPERF plan touches the same writer
   path — coordinate worktrees/merge order with team-lead.
 - Benchmark-infra freeze: a standing directive freezes new
