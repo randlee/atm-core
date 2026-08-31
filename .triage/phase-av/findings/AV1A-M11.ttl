@@ -1,0 +1,77 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV1A-M11>
+  a triage:Finding ;
+  triage:findingId "AV1A-M11" ;
+  triage:title "AV.1a sprint-doc 'QA round 3 closure' entry miscounts derived trait-contract-region records: says 23, enumeration is 22" ;
+  triage:description "Docs/plans/phase-av/sprint-AV.1a-reader-lane-foundation.md lines 375-387 ('QA round 3 closure' entry added in 1e81aade8) claims '23 derive the production trait-contract declaration region' when req-qa's independent enumeration of the 34 previously-skipped trait_only records is 11 no_in_repo_implementation waivers + 1 explicit reader mapping + 22 derived. The closure note must be regenerated at fix time to reflect the actual tree state, not just decremented — the fix-r4 sweep will change the split again." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T16:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1A ;
+  triage:foundAt "2026-08-31T09:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M11/AV1a-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV1A-M11/AV1a-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/sprint-AV.1a-reader-lane-foundation.md" ;
+  triage:line 377 ;
+  triage:snippet "23 derive the production trait-contract declaration region" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "1e81aade8" ;
+  triage:occursIn <urn:atm:triage:worktree/AV1a/1e81aade8> .
+
+<urn:atm:triage:worktree/integrate/phase-av/dc2f56002>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate/phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "dc2f56002" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AV1a/1e81aade8>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "1e81aade8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV1b/93c361a43>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "93c361a43" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV2/21d578887>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "21d578887" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV3/c78288c4d>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "c78288c4d" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV4/3a09e2a6f>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "3a09e2a6f" ;
+  triage:orderIndex 5 .
