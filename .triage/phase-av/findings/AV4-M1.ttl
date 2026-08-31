@@ -15,7 +15,9 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T03:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-30T18:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV4 ;
@@ -28,8 +30,8 @@
   triage:file "scripts/smoke/read_benchmark.py" ;
   triage:line 45 ;
   triage:snippet "MIXED_READ_P95_BUDGET_MS = 1000.0  # AV.4 D3 budget pending AV.1a runtime metric publication." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "64a32e6f9" ;
   triage:occursIn <urn:atm:triage:worktree/av4/64a32e6f9> .

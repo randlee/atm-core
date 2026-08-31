@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T03:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-30T19:34:15Z"^^xsd:dateTime ;
   triage:foundIn triage:AV4 ;
@@ -28,8 +30,8 @@
   triage:file "scripts/smoke/read_benchmark.py" ;
   triage:line 410 ;
   triage:snippet "saturation_events: unavailable()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "64a32e6f9" ;
   triage:occursIn <urn:atm:triage:worktree/AV4/64a32e6f9> .

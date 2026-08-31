@@ -15,7 +15,9 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T03:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-30T19:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV4 ;
@@ -31,8 +33,8 @@
   triage:file "scripts/smoke/read_benchmark.py" ;
   triage:line 175 ;
   triage:snippet "partial_artifact: bool = False," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "64a32e6f9" ;
   triage:occursIn <urn:atm:triage:worktree/AV5/64a32e6f9> .
@@ -42,8 +44,8 @@
   triage:file "scripts/smoke/read_benchmark.py" ;
   triage:line 189 ;
   triage:snippet "if partial_artifact:" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "64a32e6f9" ;
   triage:occursIn <urn:atm:triage:worktree/AV5/64a32e6f9> .
@@ -53,8 +55,8 @@
   triage:file "scripts/smoke/test_read_benchmark.py" ;
   triage:line 62 ;
   triage:snippet "def test_missing_seed_warmup_and_partial_artifacts_fail_closed(self) -> None:" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "64a32e6f9" ;
   triage:occursIn <urn:atm:triage:worktree/AV5/64a32e6f9> .
@@ -64,8 +66,8 @@
   triage:file "scripts/smoke/test_read_benchmark.py" ;
   triage:line 78 ;
   triage:snippet "partial_artifact=True," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "64a32e6f9" ;
   triage:occursIn <urn:atm:triage:worktree/AV5/64a32e6f9> .
