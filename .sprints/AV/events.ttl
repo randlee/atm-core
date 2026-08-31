@@ -36,3 +36,10 @@ triage:a4 a triage:Assignment ;
 triage:c3 a triage:Completion ;
     triage:ofSprint triage:AV4 ;
     triage:at "2026-08-31T02:23:29Z"^^xsd:dateTime .
+
+# AV.3 dev completion (pre-AV.1b scope: gate scaffolding + tests; D1 deletion /
+# A2b-on-real-cutover / D4 are must_follow AV.1b): Crimson-2f4c validation
+# checkpoint msg 01M1AT99DWJYVQJVJRBJ1EMV0Y (PR #1113 @ 2c6040b28)
+triage:c4 a triage:Completion ;
+    triage:ofSprint triage:AV3 ;
+    triage:at "2026-08-31T02:27:28Z"^^xsd:dateTime .
