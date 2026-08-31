@@ -217,6 +217,14 @@ fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
   lint check (`c231b86b5`). `AV3-I3` remains explicitly deferred to round 2
   / A2b after AV.1b because the D2b mechanism-independent behavior test is
   not yet live.
+- 2026-08-31 Round-2 part 1 fixed merge-forward gate defects `AV3-B5/B6`
+  (`deca61e6e`): the composition surface is derived from
+  `AsyncMailboxRuntime` signatures plus explicit prelude/D2 names, and the
+  read handler assertion parses each named handler independently. Against the
+  real AV.1b tree the composition gate passes; the `doctor` handler remains
+  intentionally rejected pending ownership of `AtmError`, `Box`, `Doctor`,
+  `DoctorProjectionContext`, `Ok`, `Ordering`, `Relaxed`, and `Some` rather
+  than weakening the D1 allowlist.
 
 This is the authoritative acceptance checklist.
 
