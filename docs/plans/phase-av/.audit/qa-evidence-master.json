@@ -308,6 +308,31 @@
       "minor": 2,
       "count_basis": "headline/reviewer",
       "evidence": "QA-AV3-R5 dispatched 2026-08-31T09:15Z (msg 01M1BHK8BAJ3Q89VNPBX4EW7RQ) on 4989b90d1, HEAD updated to 422f226f4 (msg 01M1BHK0CN9AQ82R9F5DJXSE5D Crimson completion; docs +1/-1). Fix-r4 chain c9b71d720 -> deca61e6e (B5/B6) -> d73637f6b (docs) -> 357b9c040 (D1 derivation per ruling 01M1BH4JMJK2W0PKMW2PNQRMH0, relayed 01M1BH5FZQ2V0XPX1ND6BSGCNT) -> 4989b90d1 (docs) -> 422f226f4 (docs); fenix verified linear ancestry and diff limited to crates/atm-architecture/tests/boundary_enforcement.rs + sprint doc, zero production crate code. Crimson-reported validation: cargo test -p atm-architecture 91 boundary-enforcement / 97 package, fmt, clippy -D warnings, just lint 34/34, pytest .just/tests 527 passed/10 skipped. Cipher merging 422f226f4 into AV.4 (interim merge 4e35fbe9d carried only d73637f6b). Result pending. VERDICT PASS 2/2 (100%) @ 422f226f4 (msg 01M1BJ69XRDWD9JNM0100TNTGC; PR #1113 comment 5476376396): AV3-B5/B6 FIXED, closed on integrate/phase-av @ 7a7ae712d (ancestry both directions; AV.4 occurrences carried by 7697d6c78). Independent execution: 91/91 boundary-enforcement / 97/97 package, workspace 1560/0, just lint 34/34, pytest 527 pass/10 skip, clippy clean; D1 gate live against the real doctor handler; deny lists byte-stable vs c9b71d720. Two NEW minor findings to triage (AV3-M6 sprint-doc closeout staleness: frontmatter status planned :8 + unchecked D1-D5/A1-A4 boxes; AV3-M7 QA-history omits the 97 package total). Future-round lint_gap candidate (not a finding): theoretical trait-signature-widening evasion of the handler allowlist."
+    },
+    {
+      "run_id": "FIX-AV3-R5",
+      "aich_sprint": "AV3",
+      "phase_sprint": "AV.3",
+      "pass": null,
+      "run_type": "fix",
+      "assignment_time_utc": "2026-08-31T09:34:00Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M1BJPCYFCXJZ8DK66VQZNAMQ",
+      "assignment_from": "fenix",
+      "assignment_shared_path": "/Users/randlee/.atm/.config/atm/share/atm-dev/av3-fix-r5-task.xml (reference copy; task sent inline via --stdin)",
+      "assignment_summary": "AV.3 round 2 part 2 (task phase-av-sprint-av3-fix-r5, assignee Crimson-2f4c): finish the sprint — D1 BlockingCoreBridge->ControlPathSyncBridge rename + exact-call-site test, A1(3) AV-FU-1, A2b/AV3-I3 real instrumented-ingress behavior test on the real AV.1b cutover, D4 liveness CI gate, D5/A2/A3 scratch demonstrations, AV3-M6 sprint-doc truthful status/checkboxes + QA-history relocation, AV3-M7 91/97 wording.",
+      "result_time_utc": null,
+      "result_time_pst": null,
+      "result_message_id": null,
+      "result_from": null,
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": null,
+      "blockers": null,
+      "important": null,
+      "minor": null,
+      "count_basis": "headline/reviewer",
+      "evidence": "FIX-AV3-R5 dispatched 2026-08-31T09:34Z to Crimson-2f4c (msg 01M1BJPCYFCXJZ8DK66VQZNAMQ, 13.8 KB inline) on 7ff985064 after QA-r5 PASS 2/2. Triage inputs: AV3-I3 (deferred->dispatch), AV3-M6, AV3-M7 committed on integrate/phase-av @ b88803c95 (validate-findings pass 40/40). Rule restated: behavior-gate failures against real AV.1b handlers are reported as candidate AV.1b findings, never relaxed. Result pending."
     }
   ]
 }
