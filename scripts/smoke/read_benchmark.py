@@ -244,7 +244,14 @@ def _operation_command(atm: str, family: ReadFamily, member: CorpusMember) -> li
     # Python's process-randomized ``hash()``.
     operation_index = int(member.agent[-2:]) % 3
     operation = ("peek", "list", "read")[operation_index]
-    return [atm, operation, "--all", "--team", member.team, "--json", "--no-since-last-seen"]
+    command = [atm, operation, "--all", "--team", member.team, "--json"]
+    # ``--no-since-last-seen`` is a read/peek selector; ``atm list`` has no
+    # equivalent flag and rejects unknown arguments. Keep the family matrix
+    # command-valid while preserving the no-mutation read contract where the
+    # option exists.
+    if operation != "list":
+        command.append("--no-since-last-seen")
+    return command
 
 
 def _observe(
