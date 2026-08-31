@@ -59,11 +59,19 @@ sprint.
       as defense in depth, not the primary mechanism. Existing
       direct-SQLite prohibition retained.
 - [ ] D2b — Behavior gate (mechanism-independent): tests run each
-      read-family endpoint (list/peek/read/doctor) against an
-      instrumented store whose **writer lane fails every submission** —
-      each endpoint must still succeed. Any read path routed through
-      writer-lane machinery, under any type name, fails this test
-      regardless of what the source scan can see.
+      read-family endpoint against an **instrumented writer ingress
+      that records every submission** (op variant, origin, outcome)
+      and can be switched to reject. Assertions: `list`, `peek`, and
+      `doctor` make **zero** writer submissions; `read` makes either
+      zero submissions or only `WriteOp::ApplyReadDisplayState` via the
+      AV.1b supervisor handoff — never any other variant, never a
+      pure-read op, and never a submission whose *result* feeds the
+      response data. Separately, with the ingress set to reject, every
+      endpoint still succeeds and the read's handoff rejection is
+      observed via the supervisor metrics, not via the response. Any
+      read path that obtains data through writer machinery, under any
+      type name, fails these assertions regardless of what the source
+      scan can see.
 - [ ] D3 — WriteOp purity gate: a `.just` deny-list checker (alongside
       the existing Python checks, `justfile:112+` / `.just/`) asserting
       the `WriteOp` enum declares no pure-read variant and the
@@ -115,9 +123,11 @@ This is the authoritative acceptance checklist.
       newly named bridge type, writer-queued async read) fails
       `cargo test -p atm-architecture` and/or the D2b behavior tests
       (demonstrated once each, then reverted).
-- [ ] A2b — D2b behavior tests pass on the real cutover code: all four
-      read-family endpoints succeed against the writer-lane-failing
-      instrumented store.
+- [ ] A2b — D2b behavior tests pass on the real cutover code: recorded
+      writer submissions are zero for list/peek/doctor and at most the
+      named `ApplyReadDisplayState` handoff for read; all four endpoints
+      succeed with the ingress rejecting; the D5 writer-queued-list and
+      newly-named-bridge scratch mutations each fail a D2/D2b gate.
 - [ ] A3 — Adding a pure-read `WriteOp` variant fails `just lint`
       (demonstrated once with a scratch mutation, then reverted).
 - [ ] A4 — All gates run in default `just lint` / `just test` with no

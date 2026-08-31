@@ -3,9 +3,12 @@ title: "Phase AV — Async mailbox-read cutover completion, hardening, and read 
 phase: AV
 branch: plan/phase-av
 sprint_branches: per-sprint, declared in each sprint doc's frontmatter;
-  all five form one `gh stack` rooted at integrate/phase-av (AV.1a reuses
+  all five WILL form one `gh stack` rooted at integrate/phase-av once
+  provisioning task AV.0 completes (AV.1a reuses the already-existing
   fix/mailbox-read-blocking-serialization, provisioned by team-lead and
-  held clean off develop, adopted as the bottom of the stack)
+  held clean off develop, to be adopted as the bottom of the stack).
+  Current state: only fix/mailbox-read-blocking-serialization exists;
+  integrate/phase-av and the four successor branches are not yet created.
 status: hardening-in-progress
 owner: fenix (plan author); arch-ctm (investigations I-1..I-5, implementation on approval)
 base_revision: 938767c72 (develop)
@@ -166,16 +169,23 @@ Dependency relations (rationale in each sprint doc's frontmatter):
 AV.1a→AV.1b, AV.1b→AV.3, and AV.1b→AV.4 are `must_follow` (cutover
 consumes the foundation; gates and benchmarks assert the post-cutover
 state); AV.2 is `parallel_safe` with all others; AV.3∥AV.4 are
-`parallel_safe`. Propagation of parent changes happens by restacking the
-`gh stack` (see §4), which replaces manual merge-forward.
+`parallel_safe`. Once the stack is provisioned (task AV.0, §4),
+propagation of parent changes happens by restacking the `gh stack`,
+which replaces manual merge-forward.
 
 ## 4. Execution notes
 
 - All daemon work targets the Tokio+Axum `atm-http-runtime` path only;
   the frozen legacy sync daemon is untouched (AGENTS.md hard rule).
-- Branch strategy — stacked branches (`gh stack`): all five sprint
-  branches form one stack rooted at `integrate/phase-av`, in stack order
-  AV.1a → AV.1b → AV.2 → AV.3 → AV.4:
+- Branch strategy — stacked branches (`gh stack`), **planned, not yet
+  provisioned**: all five sprint branches will form one stack rooted at
+  `integrate/phase-av`, in stack order AV.1a → AV.1b → AV.2 → AV.3 →
+  AV.4. Provisioning is task **AV.0** (owner: team-lead; pre-implementation
+  gate for every sprint): create `integrate/phase-av` from `develop`,
+  create the four successor branches, run the commands below, and record
+  the non-interactive `gh stack view --json` output in this section as
+  completion proof. No sprint may be dispatched, and restack may not be
+  cited as a propagation mechanism, until that proof is recorded here:
 
   ```sh
   gh stack init --base integrate/phase-av \
@@ -187,18 +197,22 @@ state); AV.2 is `parallel_safe` with all others; AV.3∥AV.4 are
   gh stack submit --auto   # bottom PR targets integrate/phase-av; each other PR targets its parent
   ```
 
-  Operate the stack via the `/gh-stack` skill
-  (`~/.claude/skills/gh-stack/SKILL.md`) — non-interactive rules apply
-  (positional branch args, `submit --auto`, `view --json`,
+  Operate the stack via the `/gh-stack` skill — installed for Claude
+  agents at `~/.claude/skills/gh-stack/SKILL.md` and for Codex agents at
+  `~/.codex/skills/gh-stack/SKILL.md` (same content) — non-interactive
+  rules apply (positional branch args, `submit --auto`, `view --json`,
   `rerere.enabled`). A successor skill is being developed on
   synaptic-canvas; adopt it when it lands.
 
-  AV.1a adopts the existing held branch
+  AV.1a will adopt the existing held branch
   `fix/mailbox-read-blocking-serialization`. Stack order is the
   dependency chain; AV.2's mid-stack position is ordering convenience
   only (it is `parallel_safe` with everything and carries no code).
-  Parent changes propagate by restacking instead of manual
-  merge-forward; merges remain merge-commit only (never squash).
+  Once AV.0 is complete, parent changes propagate by restacking instead
+  of manual merge-forward; merges remain merge-commit only (never
+  squash).
+
+  AV.0 completion proof (`gh stack view --json`): _pending_.
 - Adjacent-work sequencing: the #1030 WPERF plan touches the same writer
   path — coordinate worktrees/merge order with team-lead.
 - Plan QA: quality-mgr review before any implementation dispatch.

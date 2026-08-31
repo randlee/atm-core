@@ -62,11 +62,15 @@ sprint.
       following are contract, not guidance; a campaign missing or
       partially implementing any element is a **hard campaign failure**
       (invalid artifact, never seeds or gates a floor):
-      - *Entry point:* one `just` target per family
-        (`just benchmark-read-fanout`, `just benchmark-query-fts`,
-        `just benchmark-read-under-write-load`) plus an umbrella
-        `just benchmark-read` running all three; exact names final in
-        the harness PR, recorded in the report schema.
+      - *Entry point (normative names):* the official campaign
+        entrypoint is exactly `just benchmark-read`; it runs the three
+        exact subordinate targets `just benchmark-read-fanout`,
+        `just benchmark-query-fts`, and
+        `just benchmark-read-under-write-load`. These names are
+        contract (renaming requires a plan amendment). Official
+        evidence is produced only by `just benchmark-read`; a
+        subordinate target alone is a diagnostic run, never a floor
+        seed or gate.
       - *Corpus:* a fixed seeded corpus generated deterministically from
         a recorded seed — message count, size distribution, team/mailbox
         distribution (multi-team: ≥8 teams × ≥4 agents, skew profile
@@ -78,9 +82,12 @@ sprint.
         entry, never a comparison against the old floor.
       - *Writer load (mixed mode):* sustained writer rate and payload
         profile fixed in config and recorded in the report.
-      - *Windows:* explicit warm-up window (excluded from metrics) and
-        measurement window, both recorded; measurement only begins after
-        warm-up completes.
+      - *Timing windows (every in-scope campaign, reference Mac host):*
+        an explicit warm-up window (excluded from metrics) and a
+        measurement window, both durations fixed in config and recorded
+        in the report; measurement begins only after warm-up completes.
+        A future Windows campaign contract is out of scope here and, if
+        added later, defines its own windows separately.
       - *Success-rate and latency limits:* a campaign is clean only if
         request success rate meets the configured threshold (≥99.9%
         unless the config records a different value with rationale) and
@@ -139,10 +146,10 @@ weakening the recorded-provenance requirement.
 
 This is the authoritative acceptance checklist.
 
-- [ ] A1 — `just benchmark` (or the family-specific target) runs all
-      three families end-to-end on a dedicated benchmark account and
-      publishes through the existing manifest/report contract; partial
-      artifacts are invalid.
+- [ ] A1 — `just benchmark-read` (the sole official entrypoint) runs
+      all three families end-to-end on a dedicated benchmark account
+      and publishes through the existing manifest/report contract;
+      partial artifacts are invalid.
 - [ ] A2 — Mixed-mode campaign demonstrates reads meeting budget while
       the writer sustains load; the report shows both read latency and
       concurrent write throughput.
@@ -165,8 +172,9 @@ This is the authoritative acceptance checklist.
 This is the authoritative validation checklist.
 
 - [ ] `just lint`, `just test` (harness unit tests)
-- [ ] One full campaign on the reference Mac host with committed
-      artifacts under `site/reports/`
+- [ ] One full `just benchmark-read` campaign on the reference Mac host
+      (m5-atmbench account) with committed artifacts under
+      `site/reports/`
 - [ ] `just reports-index --check`
 - [ ] A3 scratch-regression demonstration recorded in sprint QA history.
 

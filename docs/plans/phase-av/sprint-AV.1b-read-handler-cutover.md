@@ -67,30 +67,42 @@ sprint.
       1. *Response eligibility:* the read response is eligible to return
          as soon as read-only selection completes. It NEVER awaits
          writer-lane *execution* or durability.
-      2. *Admission:* before returning, the read flow awaits only
-         **enqueue admission** — a bounded, non-blocking-in-practice
-         `try_enqueue` onto the writer ingress. Admission either
-         succeeds immediately or fails immediately; there is no
-         unbounded wait on writer capacity in the read path.
-      3. *Admission failure:* if the writer ingress is saturated or
-         unavailable, the state transition is **dropped, counted, and
-         logged** (a `read_state_handoff_dropped` metric with reason
-         saturated/unavailable) and the read response still returns
-         success. Dropping is authorized ONLY at this admission point —
-         a transition that was admitted is executed or fails loudly
-         through normal writer-lane error handling; silent loss after
-         admission is not race-tolerance, it is a bug.
-      4. *Permitted races:* once admitted, ordering/visibility races
-         with concurrent reads are "don't care" per phase plan §1.2. No
-         retry loop in the read path; observability (metric + log) is
-         the recovery surface.
+      2. *Supervised handoff (non-blocking, durable-in-process):* the
+         read flow hands the transition to a **state-handoff
+         supervisor** — a dedicated async task owned by the
+         `AsyncMailboxRuntime` composition with its own bounded buffer
+         (`handoff_buffer` config). The read path performs only a
+         synchronous `try_push` into that buffer; it NEVER awaits writer
+         admission, writer capacity, or writer execution. The
+         supervisor, not the read path, awaits writer-ingress admission
+         with its own deadline and retries with backoff while the
+         writer lane is saturated or temporarily unavailable.
+      3. *Loss is not authorized by race tolerance.* Race tolerance
+         (§1.2) governs what a concurrent read may *observe*; it does
+         not license discarding a requested transition. A transition may
+         be lost in exactly two circumstances, both explicit: (a) the
+         supervisor buffer is full at `try_push` (counted as
+         `read_state_handoff_rejected`, logged, and surfaced as a
+         degraded section in doctor); (b) process exit with unapplied
+         buffered transitions. In both cases the **end-user semantic is
+         fail-safe: the message simply remains unread/unseen and is
+         presented again on the next read** — a message is never hidden
+         or lost. This semantic is recorded as a normative requirement
+         by AV.2 (`R-STATE-HANDOFF-1`) and in the AV.2 ADR; it is the
+         product decision this sprint implements, not an implementation
+         convenience.
+      4. *Permitted races:* once buffered, ordering/visibility races
+         with concurrent reads are "don't care" per phase plan §1.2.
 
-      Tests: writer-lane saturated at admission (read succeeds, drop
-      counted); writer-lane execution failure after admission (error
-      surfaced via writer-lane error path/metrics, read unaffected);
-      response-before-commit (read returns before the admitted
-      transition is applied; a subsequent read observes it
-      eventually).
+      Tests: writer ingress saturated (read returns within budget,
+      supervisor applies the transition once capacity frees); writer
+      lane unavailable then recovers (transition applied after recovery,
+      read unaffected); supervisor buffer full (explicit rejection
+      counted, read still succeeds, message still unread on the next
+      read); process restart with buffered transitions (messages
+      re-presented as unread, none missing); response-before-commit
+      (read returns before the transition is applied; a later read
+      observes it).
 - [ ] D3 — Doctor decomposition: a typed `DoctorProjection` boundary
       owned by `atm-runtime` (beside the AV.1a D6 port) replaces the
       bridged sync doctor call. Each source leg is enumerated with its
@@ -104,11 +116,25 @@ sprint.
       Legs run under bounded structured concurrency (join with per-leg
       deadline; one slow leg degrades its own section, never the whole
       report). Doctor acquires neither mailbox reader-pool permits nor
-      the writer lane; its control lane has its own explicit bound.
-      Test: saturate a doctor control-plane dependency while BOTH the
-      mailbox reader pool and the writer lane are saturated — doctor
-      returns a within-deadline report with the slow leg marked
-      degraded, and mailbox reads remain unaffected.
+      the writer lane.
+
+      **Control-lane capacity (normative):** the core-doctor leg runs on
+      a bounded **multi-worker** control lane — `doctor_pool_size`
+      workers (default 4) each with its own RO connection, a bounded
+      queue (`doctor_queue_depth`, default 16), and per-request
+      deadline; beyond pool + queue, doctor fails explicitly with
+      `Saturated`, never queues indefinitely. Rationale for the bound:
+      doctor is low-frequency control-plane traffic, and the bound
+      exists to protect the database from a doctor storm — it is
+      resource management, not serialization; a single-worker lane is
+      explicitly non-compliant (it would relocate the one-permit
+      regression). Tests: (i) ≥8 concurrent doctor calls across distinct
+      teams complete within budget while one doctor control-plane
+      dependency is saturated and BOTH the mailbox reader pool and the
+      writer lane are saturated — each report returns within deadline
+      with only the slow leg marked degraded; (ii) one deliberately slow
+      doctor request delays neither an independent doctor request nor an
+      independent mailbox read beyond its budget.
 - [ ] D4 — Writer purity: `WriteOp::ListMessages`
       (`writer/ops.rs:37,106`), `SharedDb::submit_list_messages_async`
       (`shared_db.rs:482-501`), and the writer-routed
@@ -123,8 +149,8 @@ sprint.
 ```rust
 // Writer-lane state transition replacing the hidden read-flow mutation
 // (D2). Handoff follows the D2 protocol: response is eligible on
-// selection completion; only bounded enqueue ADMISSION is awaited;
-// admission failure drops-with-count; post-admission loss is a bug.
+// selection completion; the read path only try_pushes into the
+// supervisor buffer; the supervisor owns writer admission + retry.
 // (Extends the existing WriteOp enum in writer/ops.rs.)
 WriteOp::ApplyReadDisplayState {
     mailbox: MailboxId,
@@ -132,11 +158,12 @@ WriteOp::ApplyReadDisplayState {
     seen_watermark: Option<Watermark>,
 }
 
-// D2 admission surface on the writer ingress (indicative):
-pub enum HandoffAdmission {
-    Admitted,
-    Rejected(HandoffRejection),   // Saturated | Unavailable — counted + logged,
-}                                 // read response returns success regardless
+// D2 supervisor surface (indicative), owned by the AsyncMailboxRuntime
+// composition. try_push is synchronous and never awaits the writer.
+pub struct StateHandoffSupervisor { /* bounded buffer + retry task */ }
+impl StateHandoffSupervisor {
+    pub fn try_push(&self, op: WriteOp) -> Result<(), HandoffRejected>; // BufferFull only
+}
 ```
 
 ## Acceptance criteria
@@ -154,16 +181,19 @@ This is the authoritative acceptance checklist (phase contract points
 - [ ] A3 — Overload test: reads beyond pool + queue capacity fail
       explicitly with `Saturated`/`DeadlineExpired`, not by queuing
       indefinitely.
-- [ ] A4 — Read flows perform no writer-lane *execution* work before
-      returning (bounded enqueue admission per the D2 protocol is the
-      only writer-lane touch); display/seen mutations are observed on
-      the writer lane afterward. D2 protocol tests pass: saturation
-      drop-with-count, post-admission writer failure surfaced loudly,
+- [ ] A4 — Read flows perform zero writer-lane work before returning
+      (the only touch is a synchronous `try_push` into the supervisor
+      buffer); display/seen mutations are observed on the writer lane
+      afterward. All D2 protocol tests pass: writer saturation,
+      writer unavailable-then-recovers, buffer-full explicit rejection
+      with fail-safe unread semantic, restart re-presentation,
       response-before-commit.
-- [ ] A5 — Doctor completes within deadline while both the mailbox
-      reader pool and writer lane are saturated, including the D3 case
-      where a doctor control-plane dependency is also saturated (slow
-      leg reported degraded, report still returned).
+- [ ] A5 — Doctor fan-out liveness per D3: ≥8 concurrent cross-team
+      doctor calls complete within deadline while the mailbox reader
+      pool, the writer lane, and one doctor dependency are all saturated
+      (slow leg degraded, reports still returned); a slow doctor delays
+      neither another doctor nor a mailbox read; doctor beyond control
+      lane capacity fails explicitly.
 - [ ] A6 — `WriteOp` contains no pure-read variant; the writer queue
       receives no read traffic under a read-only workload (asserted via
       writer metrics in a test).

@@ -48,6 +48,19 @@ sprint.
       race-tolerant — a read racing a state change may return either
       value; consequently no requirement may demand read-your-writes,
       snapshot pinning, or reader/writer fencing on mailbox reads.
+- [ ] D2a — Read-state handoff semantics codified (`R-STATE-HANDOFF-1`):
+      read/seen state transitions requested by a read flow MUST be
+      handed to a supervised, non-blocking, bounded in-process handoff
+      that owns writer admission and retry; the read path MUST NOT
+      await the writer. Loss of a transition is permitted only on
+      handoff-buffer overflow (explicitly counted and surfaced in
+      doctor) or process exit, and the end-user consequence MUST be
+      fail-safe: the affected message remains unread/unseen and is
+      re-presented — never hidden or lost. Race tolerance (D2) governs
+      observation only and MUST NOT be cited as authorization for
+      discarding a transition. Recorded as a product decision in the
+      D3 ADR (decision, alternatives considered incl. permanent drop and
+      write-through, consequence for operators).
 - [ ] D3 — New ADR `docs/adr/` (next free number): reader/writer lane
       architecture — bounded RO WAL reader pool, ordered writer lane
       scoped to durable admission + state transitions, deadline
@@ -77,6 +90,14 @@ R-STATE-RACE-1 (MUST NOT): Primary message records are immutable; mutable
 message state (read/ack/seen) is race-tolerant — a read racing a state
 change may return either value. No requirement may demand read-your-writes,
 snapshot pinning, or reader/writer fencing on mailbox reads.
+
+R-STATE-HANDOFF-1 (MUST): Read-flow state transitions MUST be handed to a
+supervised, bounded, non-blocking in-process handoff that owns writer
+admission and retry; the read path MUST NOT await the writer lane. A
+transition may be lost only on handoff-buffer overflow (counted, surfaced
+in doctor) or process exit; the consequence MUST be fail-safe — the message
+remains unread/unseen and is re-presented. R-STATE-RACE-1 governs
+observation only and does not authorize discarding a transition.
 ```
 
 ## Acceptance criteria
@@ -93,6 +114,10 @@ This is the authoritative acceptance checklist.
 - [ ] A4 — D2 language matches the phase plan §1.2 contract verbatim in
       substance (either-value race outcome, zero writer-lane
       coordination).
+- [ ] A5 — D2a/`R-STATE-HANDOFF-1` matches AV.1b D2 protocol exactly
+      (supervised handoff, two explicit loss cases, fail-safe unread
+      consequence) and the ADR records it as a product decision with
+      alternatives.
 
 ## Required validation
 

@@ -154,6 +154,8 @@ pub enum ReadLaneError {
 pub struct ReaderPoolConfig {
     pub pool_size: NonZeroUsize,   // N independent RO WAL workers
     pub queue_depth: usize,        // bounded submission queue
+    pub interrupt_grace: Duration, // interrupt → quarantine threshold
+    pub max_quarantined: usize,    // zombie budget; exhausted ⇒ fail closed
 }
 ```
 
@@ -173,8 +175,15 @@ This is the authoritative acceptance checklist.
       an *active* blocked query, proves the statement is interrupted and
       the worker's capacity is reclaimed, and a subsequent independent
       read on that worker completes within budget. Existing queue-wait
-      and saturation tests retained. Worker-replacement path covered
-      (unresponsive worker torn down, pool size restored).
+      and saturation tests retained.
+- [ ] A3c — Adversarial quarantine test (D4): with a test-double worker
+      that ignores interrupt, repeated deadline expiries prove (1) the
+      worker is quarantined and receives no new jobs, (2) no replacement
+      is spawned while it is alive (worker + connection counts stay
+      bounded at `pool_size + max_quarantined` at most), (3) once
+      `max_quarantined` is exhausted new reads are rejected explicitly
+      with `Saturated`, and (4) when the blocked call finally returns
+      the worker retires and capacity is restored — never before.
 - [ ] A3b — Boundary authorization (D1): negative tests prove a
       cross-team or cross-agent `load_message`/`list_messages` with a
       mismatched `MailboxScope` is rejected at the storage boundary, and
