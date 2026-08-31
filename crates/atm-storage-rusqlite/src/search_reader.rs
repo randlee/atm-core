@@ -38,7 +38,7 @@ impl SearchReader {
             .submit_blocking(READER_DEADLINE, move |connection, target| {
                 execute_search(&query, connection, target).map_err(read_lane_error)
             })
-            .map_err(to_atm_error)
+            .map_err(AtmError::from)
     }
 
     pub(crate) async fn submit_async(
@@ -51,7 +51,7 @@ impl SearchReader {
                 execute_search(&query, connection, target).map_err(read_lane_error)
             })
             .await
-            .map_err(to_atm_error)
+            .map_err(AtmError::from)
     }
 
     pub(crate) fn metrics(&self) -> crate::reader_pool::ReaderLaneMetricsSnapshot {
@@ -77,10 +77,6 @@ fn read_lane_error(error: AtmError) -> ReadLaneError {
     ReadLaneError::Unavailable {
         message: error.message().to_owned(),
     }
-}
-
-fn to_atm_error(error: ReadLaneError) -> AtmError {
-    AtmError::daemon_unavailable(error.to_string())
 }
 
 #[cfg(test)]

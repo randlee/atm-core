@@ -9,7 +9,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
 use crate::types::{
     AgentName, HostName, IsoTimestamp, LocalCapability, MemberKey, ModelName, OwnerGeneration,
@@ -420,6 +420,21 @@ impl fmt::Display for ReadLaneError {
 }
 
 impl std::error::Error for ReadLaneError {}
+
+/// Translates the storage-owned reader-lane outcomes exactly once into the
+/// stable ATM error vocabulary. The original lane outcome remains attached as
+/// the machine-visible cause instead of being flattened into unavailability.
+impl From<ReadLaneError> for AtmError {
+    fn from(error: ReadLaneError) -> Self {
+        let code = match &error {
+            ReadLaneError::UnauthorizedScope => AtmErrorCode::MailboxReadFailed,
+            ReadLaneError::Saturated { .. } => AtmErrorCode::DaemonConnectionSaturated,
+            ReadLaneError::DeadlineExpired { .. } => AtmErrorCode::MailboxLockTimeout,
+            ReadLaneError::Unavailable { .. } => AtmErrorCode::DaemonUnavailable,
+        };
+        AtmError::new(code, "bounded mailbox reader lane request failed").with_cause(error)
+    }
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
