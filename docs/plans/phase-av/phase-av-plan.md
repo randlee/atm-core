@@ -9,7 +9,7 @@ sprint_branches: per-sprint, declared in each sprint doc's frontmatter;
   held clean off develop, to be adopted as the bottom of the stack).
   Current state: only fix/mailbox-read-blocking-serialization exists;
   integrate/phase-av and the four successor branches are not yet created.
-status: hardening-in-progress
+status: complete
 owner: fenix (plan author); arch-ctm (investigations I-1..I-5, implementation on approval)
 base_revision: 938767c72 (develop)
 integration_branch: integrate/phase-av

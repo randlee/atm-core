@@ -5,7 +5,7 @@ title: Mechanical hard gates against read-serialization regression
 branch: feature/av3-read-concurrency-gates
 integration_branch: integrate/phase-av
 stack_parent: feature/av2-read-concurrency-requirements (dependency is on AV.1b below it) — planned; stack provisioned by task AV.0 (phase plan §4)
-status: in-review
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 dependency_relations:
