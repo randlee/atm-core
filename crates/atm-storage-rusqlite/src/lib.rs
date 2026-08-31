@@ -1031,11 +1031,15 @@ mod tests {
             .expect("bounded read");
         backend.checkpoint_wal().expect("checkpoint");
         let metrics = backend.reader_lane_metrics();
-        assert_eq!(metrics.mailbox.lane, "mailbox");
-        assert_eq!(metrics.search.lane, "search");
-        assert_eq!(metrics.mailbox.last_checkpoint_succeeded, Some(true));
-        assert!(metrics.mailbox.current_wal_frames.is_some());
-        assert_eq!(metrics.search.last_checkpoint_succeeded, Some(true));
+        let mailbox = metrics.lane("mailbox").expect("mailbox lane metrics");
+        let search = metrics.lane("search").expect("search lane metrics");
+        assert_eq!(metrics.iter().count(), 2);
+        assert!(metrics.lane("doctor").is_none());
+        assert_eq!(mailbox.lane, "mailbox");
+        assert_eq!(search.lane, "search");
+        assert_eq!(mailbox.last_checkpoint_succeeded, Some(true));
+        assert!(mailbox.current_wal_frames.is_some());
+        assert_eq!(search.last_checkpoint_succeeded, Some(true));
     }
 
     #[tokio::test]
@@ -1104,7 +1108,8 @@ mod tests {
                     .expect("progressing checkpoint");
                 let metrics = sampler_backend.reader_lane_metrics();
                 let frames = metrics
-                    .mailbox
+                    .lane("mailbox")
+                    .expect("mailbox lane metrics")
                     .current_wal_frames
                     .expect("checkpoint records mailbox WAL frames");
                 assert!(frames <= 512, "WAL frames stay bounded during load");
@@ -1118,11 +1123,13 @@ mod tests {
         let samples = checkpoint_task.await.expect("checkpoint sampler join");
         assert_eq!(samples.len(), 24, "sample every writer commit during load");
         let metrics = backend.reader_lane_metrics();
-        assert_eq!(metrics.mailbox.current_quarantined_workers, 0);
-        assert_eq!(metrics.mailbox.last_checkpoint_succeeded, Some(true));
-        assert!(metrics.mailbox.current_wal_frames.is_some());
-        assert_eq!(metrics.search.last_checkpoint_succeeded, Some(true));
-        assert!(metrics.search.current_wal_frames.is_some());
+        let mailbox = metrics.lane("mailbox").expect("mailbox lane metrics");
+        let search = metrics.lane("search").expect("search lane metrics");
+        assert_eq!(mailbox.current_quarantined_workers, 0);
+        assert_eq!(mailbox.last_checkpoint_succeeded, Some(true));
+        assert!(mailbox.current_wal_frames.is_some());
+        assert_eq!(search.last_checkpoint_succeeded, Some(true));
+        assert!(search.current_wal_frames.is_some());
     }
 
     fn message(key: &str, text: &str) -> Message {

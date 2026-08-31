@@ -9,10 +9,10 @@ use atm_storage::AtmError;
 
 impl SharedDb {
     pub(crate) fn reader_lane_metrics(&self) -> ReaderLanesMetricsSnapshot {
-        ReaderLanesMetricsSnapshot {
-            mailbox: self.mailbox_reader_metrics.snapshot(),
-            search: self.search_reader.metrics(),
-        }
+        ReaderLanesMetricsSnapshot::from_lanes([
+            self.mailbox_reader_metrics.snapshot(),
+            self.search_reader.metrics(),
+        ])
     }
 
     pub(crate) fn checkpoint_wal(&self) -> Result<(), AtmError> {

@@ -5,6 +5,7 @@
 //! Tokio callers only await bounded channels and oneshots: normal read fan-out
 //! never passes through a global blocking bridge.
 
+use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak, mpsc};
@@ -40,6 +41,41 @@ impl WorkerStatus {
             Ordering::AcqRel,
             Ordering::Acquire,
         )
+    }
+}
+
+#[repr(usize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CheckpointStatus {
+    Unobserved = 0,
+    Failed = 1,
+    Succeeded = 2,
+}
+
+impl CheckpointStatus {
+    fn load(source: &AtomicUsize) -> Self {
+        match source.load(Ordering::Acquire) {
+            value if value == Self::Unobserved as usize => Self::Unobserved,
+            value if value == Self::Failed as usize => Self::Failed,
+            value if value == Self::Succeeded as usize => Self::Succeeded,
+            value => unreachable!("invalid reader checkpoint status {value}"),
+        }
+    }
+
+    fn from_result(succeeded: bool) -> Self {
+        if succeeded {
+            Self::Succeeded
+        } else {
+            Self::Failed
+        }
+    }
+
+    fn as_option(self) -> Option<bool> {
+        match self {
+            Self::Unobserved => None,
+            Self::Failed => Some(false),
+            Self::Succeeded => Some(true),
+        }
     }
 }
 
@@ -87,12 +123,31 @@ pub struct ReaderLaneMetricsSnapshot {
     pub current_wal_frames: Option<u64>,
 }
 
-/// Backend-neutral value export for AV.4 diagnostics. The doctor lane joins
-/// this same shape in AV.1b; no reader metric requires a writer-lane permit.
+/// Backend-neutral value export for reader diagnostics. Lanes are keyed by
+/// name so a future lane can join without changing this public value shape.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReaderLanesMetricsSnapshot {
-    pub mailbox: ReaderLaneMetricsSnapshot,
-    pub search: ReaderLaneMetricsSnapshot,
+    lanes: BTreeMap<&'static str, ReaderLaneMetricsSnapshot>,
+}
+
+impl ReaderLanesMetricsSnapshot {
+    pub(crate) fn from_lanes(lanes: impl IntoIterator<Item = ReaderLaneMetricsSnapshot>) -> Self {
+        Self {
+            lanes: lanes
+                .into_iter()
+                .map(|snapshot| (snapshot.lane, snapshot))
+                .collect(),
+        }
+    }
+
+    #[must_use]
+    pub fn lane(&self, name: &str) -> Option<&ReaderLaneMetricsSnapshot> {
+        self.lanes.get(name)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&'static str, &ReaderLaneMetricsSnapshot)> {
+        self.lanes.iter().map(|(&name, snapshot)| (name, snapshot))
+    }
 }
 
 #[derive(Debug)]
@@ -138,18 +193,13 @@ impl ReaderLaneMetrics {
             retired_replaced_workers: AtomicU64::new(0),
             quarantine_exhausted_rejections: AtomicU64::new(0),
             pool_size: AtomicUsize::new(pool_size),
-            last_checkpoint_succeeded: AtomicUsize::new(0),
+            last_checkpoint_succeeded: AtomicUsize::new(CheckpointStatus::Unobserved as usize),
             current_wal_frames: AtomicU64::new(0),
         }
     }
 
     fn snapshot(&self) -> ReaderLaneMetricsSnapshot {
-        let checkpoint = match self.last_checkpoint_succeeded.load(Ordering::Relaxed) {
-            0 => None,
-            1 => Some(false),
-            _ => Some(true),
-        };
-        let frames = self.current_wal_frames.load(Ordering::Relaxed);
+        let checkpoint = CheckpointStatus::load(&self.last_checkpoint_succeeded);
         ReaderLaneMetricsSnapshot {
             lane: self.lane,
             queue_depth: self.queue_depth.load(Ordering::Relaxed),
@@ -166,16 +216,19 @@ impl ReaderLaneMetrics {
                 .quarantine_exhausted_rejections
                 .load(Ordering::Relaxed),
             pool_size: self.pool_size.load(Ordering::Relaxed),
-            last_checkpoint_succeeded: checkpoint,
-            current_wal_frames: frames.checked_sub(1),
+            last_checkpoint_succeeded: checkpoint.as_option(),
+            current_wal_frames: checkpoint
+                .as_option()
+                .map(|_| self.current_wal_frames.load(Ordering::Relaxed)),
         }
     }
 
     fn record_wal_health(&self, checkpoint_succeeded: bool, frames: u64) {
-        self.last_checkpoint_succeeded
-            .store(usize::from(checkpoint_succeeded) + 1, Ordering::Relaxed);
-        self.current_wal_frames
-            .store(frames.saturating_add(1), Ordering::Relaxed);
+        self.current_wal_frames.store(frames, Ordering::Relaxed);
+        self.last_checkpoint_succeeded.store(
+            CheckpointStatus::from_result(checkpoint_succeeded) as usize,
+            Ordering::Release,
+        );
     }
 }
 
@@ -192,6 +245,7 @@ pub(crate) struct ReaderPoolConfig {
     pub(crate) pool_size: NonZeroUsize,
     pub(crate) queue_depth: NonZeroUsize,
     pub(crate) interrupt_grace: Duration,
+    pub(crate) request_deadline: Duration,
     pub(crate) max_quarantined: NonZeroUsize,
 }
 
@@ -201,6 +255,7 @@ impl ReaderPoolConfig {
             pool_size: NonZeroUsize::new(4).expect("non-zero mailbox pool size"),
             queue_depth: NonZeroUsize::new(16).expect("non-zero mailbox queue depth"),
             interrupt_grace: Duration::from_millis(250),
+            request_deadline: Duration::from_secs(10),
             max_quarantined: NonZeroUsize::new(4).expect("non-zero mailbox quarantine budget"),
         }
     }
@@ -210,6 +265,7 @@ impl ReaderPoolConfig {
             pool_size: NonZeroUsize::new(2).expect("non-zero search pool size"),
             queue_depth: NonZeroUsize::new(8).expect("non-zero search queue depth"),
             interrupt_grace: Duration::from_millis(250),
+            request_deadline: Duration::from_secs(10),
             max_quarantined: NonZeroUsize::new(2).expect("non-zero search quarantine budget"),
         }
     }
@@ -221,6 +277,7 @@ pub(crate) const DEFAULT_DOCTOR_READER_CONFIG: ReaderPoolConfig = ReaderPoolConf
     pool_size: NonZeroUsize::new(4).expect("non-zero doctor pool size"),
     queue_depth: NonZeroUsize::new(16).expect("non-zero doctor queue depth"),
     interrupt_grace: Duration::from_millis(250),
+    request_deadline: Duration::from_secs(10),
     max_quarantined: NonZeroUsize::new(4).expect("non-zero doctor quarantine budget"),
 };
 
@@ -799,8 +856,8 @@ fn run_worker(
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_DOCTOR_READER_CONFIG, DEFAULT_MAX_READER_CONNECTIONS, ReaderPool, ReaderPoolConfig,
-        deadline_at, validate_connection_budget,
+        DEFAULT_DOCTOR_READER_CONFIG, DEFAULT_MAX_READER_CONNECTIONS, ReaderLaneMetrics,
+        ReaderPool, ReaderPoolConfig, deadline_at, validate_connection_budget,
     };
     use crate::shared_db::SharedDbTarget;
     use std::num::NonZeroUsize;
@@ -834,6 +891,7 @@ mod tests {
             pool_size: NonZeroUsize::new(pool_size).expect("non-zero test pool size"),
             queue_depth: NonZeroUsize::new(queue_depth).expect("non-zero test queue depth"),
             interrupt_grace,
+            request_deadline: Duration::from_secs(10),
             max_quarantined: NonZeroUsize::new(max_quarantined)
                 .expect("non-zero test quarantine budget"),
         }
@@ -848,6 +906,33 @@ mod tests {
             DEFAULT_MAX_READER_CONNECTIONS,
         )
         .expect("1 writer + 4 mailbox + 2 search + 4 doctor + 10 quarantine + 1 analyst = 22");
+    }
+
+    #[test]
+    fn reader_lane_default_deadline_is_config_owned() {
+        let expected = Duration::from_secs(10);
+        assert_eq!(
+            ReaderPoolConfig::mailbox_defaults().request_deadline,
+            expected
+        );
+        assert_eq!(
+            ReaderPoolConfig::search_defaults().request_deadline,
+            expected
+        );
+        assert_eq!(DEFAULT_DOCTOR_READER_CONFIG.request_deadline, expected);
+    }
+
+    #[test]
+    fn wal_metrics_distinguish_unobserved_from_zero_frame_checkpoint() {
+        let metrics = ReaderLaneMetrics::new("test", 1);
+        let unobserved = metrics.snapshot();
+        assert_eq!(unobserved.last_checkpoint_succeeded, None);
+        assert_eq!(unobserved.current_wal_frames, None);
+
+        metrics.record_wal_health(false, 0);
+        let observed = metrics.snapshot();
+        assert_eq!(observed.last_checkpoint_succeeded, Some(false));
+        assert_eq!(observed.current_wal_frames, Some(0));
     }
 
     #[test]

@@ -9,10 +9,9 @@ use crate::reader_pool::{ReaderPool, ReaderPoolConfig};
 use crate::search_store::execute_search;
 use crate::shared_db::SharedDbTarget;
 
-const READER_DEADLINE: Duration = Duration::from_secs(10);
-
 pub(crate) struct SearchReader {
     pool: ReaderPool,
+    request_deadline: Duration,
 }
 
 impl std::fmt::Debug for SearchReader {
@@ -29,13 +28,14 @@ impl SearchReader {
         config: ReaderPoolConfig,
     ) -> Result<Self, AtmError> {
         Ok(Self {
+            request_deadline: config.request_deadline,
             pool: ReaderPool::start("search", target, config)?,
         })
     }
 
     pub(crate) fn submit(&self, query: MessageSearchQuery) -> Result<MessageSearchPage, AtmError> {
         self.pool
-            .submit_blocking(READER_DEADLINE, move |connection, target| {
+            .submit_blocking(self.request_deadline, move |connection, target| {
                 execute_search(&query, connection, target).map_err(read_lane_error)
             })
             .map_err(AtmError::from)
