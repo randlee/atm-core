@@ -13,6 +13,7 @@ if str(JUST_DIR) not in sys.path:
 from check_read_concurrency_gates import check
 from check_read_concurrency_gates import extract_fn_body
 from check_read_concurrency_gates import READ_HANDLERS
+from check_read_concurrency_gates import REQUIRED_LIVENESS_TESTS
 from check_read_concurrency_gates import write_op_variants
 
 
@@ -36,6 +37,12 @@ class ReadConcurrencyGateTests(unittest.TestCase):
 
     def test_handler_names_match_the_checked_in_contract(self) -> None:
         self.assertEqual(READ_HANDLERS, ("list_messages", "peek_messages", "receive_messages", "doctor"))
+
+    def test_d2b_behavior_gate_is_a_required_permanent_test(self) -> None:
+        self.assertIn(
+            "read_family_uses_only_the_supervised_recording_writer_handoff",
+            REQUIRED_LIVENESS_TESTS,
+        )
 
     def test_write_op_variants_extracts_tuple_and_struct_variants(self) -> None:
         source = """pub(crate) enum WriteOp {
@@ -95,6 +102,8 @@ async fn mailbox_and_doctor_fanout_stays_live_while_the_legacy_bridge_is_occupie
 async fn doctor_projection_serves_parallel_control_requests_without_the_read_bridge() {}
 #[tokio::test]
 async fn doctor_projection_rejects_control_lane_overload_explicitly() {}
+#[tokio::test]
+async fn read_family_uses_only_the_supervised_recording_writer_handoff() {}
 async fn list_messages() {}
 async fn peek_messages() {}
 async fn receive_messages() {}

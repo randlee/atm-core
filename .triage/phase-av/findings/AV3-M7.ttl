@@ -15,8 +15,11 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-31T18:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:resolutionNote "QA-r6 @ ddc723a01: count citations corrected — doc now cites 91 boundary / 97 package and 89+6=95 architecture tests, consistent with rust-qa r6 execution (95 atm-architecture tests)." ;
   triage:triagedAt "2026-08-31T09:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV3 ;
   triage:foundAt "2026-08-31T09:27:00Z"^^xsd:dateTime ;
@@ -29,8 +32,8 @@
   triage:file "docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md" ;
   triage:line 232 ;
   triage:snippet "all 91 architecture tests pass against the real AV.1b tree" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "7ff985064" ;
   triage:occursIn <urn:atm:triage:worktree/av3/7ff985064> .
@@ -40,8 +43,8 @@
   triage:file "docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md" ;
   triage:line 232 ;
   triage:snippet "all 91 architecture tests pass against the real AV.1b tree" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "7697d6c78" ;
   triage:occursIn <urn:atm:triage:worktree/av4/7697d6c78> .

@@ -15,8 +15,11 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
+  triage:closedAt "2026-08-31T18:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:resolutionNote "QA-r6 @ ddc723a01: D2b textual-substring evasion eliminated — AST-based syn::Ident scanners with allowlist derived from trait signatures (boundary_enforcement.rs:3433-3720), decoy-immunity test present, plus behavioral test read_family_uses_only_the_supervised_recording_writer_handoff; rust-qa MP2 mutation probe confirmed the behavior gate fails on a supervised-handoff bypass." ;
   triage:triagedAt "2026-08-31T07:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV3 ;
   triage:foundAt "2026-08-31T06:20:00Z"^^xsd:dateTime ;
@@ -29,8 +32,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3688 ;
   triage:snippet "let path = if handler == 'receive_messages' && body.contains('StateHandoffSupervisor')" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "8905f1046" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-B4> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3688 ;
   triage:snippet "let path = if handler == 'receive_messages' && body.contains('StateHandoffSupervisor')" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "a36bff376" ;
   triage:occursIn <urn:atm:triage:worktree/AV3-B5> .

@@ -42,6 +42,7 @@ REQUIRED_LIVENESS_TESTS = (
     "mailbox_and_doctor_fanout_stays_live_while_the_legacy_bridge_is_occupied",
     "doctor_projection_serves_parallel_control_requests_without_the_read_bridge",
     "doctor_projection_rejects_control_lane_overload_explicitly",
+    "read_family_uses_only_the_supervised_recording_writer_handoff",
 )
 
 
