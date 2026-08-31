@@ -4,7 +4,7 @@ sprint: AV.1a
 title: Reader-lane foundation (capability, pool, threading)
 branch: fix/mailbox-read-blocking-serialization
 integration_branch: integrate/phase-av
-stack_parent: integrate/phase-av (stack bottom)
+stack_parent: integrate/phase-av (stack bottom) — planned; stack provisioned by task AV.0 (phase plan §4)
 status: planned
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
@@ -59,15 +59,31 @@ sprint.
       pool interrupts the running SQLite statement via the connection's
       interrupt handle (`rusqlite::InterruptHandle`), the worker maps
       `SQLITE_INTERRUPT` to `DeadlineExpired` and returns to service
-      (capacity reclaimed, connection reusable). A worker that fails to
-      respond within a bounded grace period is torn down and replaced so
-      configured pool size is restored. Queue-wait expiry (never
-      dispatched) is tracked separately from active-query interruption.
+      (capacity reclaimed, connection reusable). Cooperative interrupt is
+      the ONLY reclamation path — a thread inside a blocked synchronous
+      SQLite call is never force-terminated.
+
+      **Non-responsive worker lifecycle (normative):** if a worker has
+      not returned within the grace period after interrupt, it is
+      *quarantined*: removed from the scheduler so it receives no new
+      jobs, but left alive. A quarantined worker *retires* only when its
+      blocked call actually returns (its connection is then closed, and
+      only then may a replacement be spawned). Effective capacity is
+      `pool_size − quarantined_count`; the plan never claims configured
+      capacity is restored while a quarantined worker is still alive.
+      Quarantine is a finite zombie-resource budget
+      (`ReaderPoolConfig::max_quarantined`, default `pool_size`); once
+      it is exhausted the lane **fails closed** — new reads are rejected
+      with `ReadLaneError::Saturated { .. }` (reason recorded as
+      quarantine-exhausted) rather than spawning further workers or
+      connections. Queue-wait expiry (never dispatched) is tracked
+      separately from active-query interruption and from quarantine.
       Saturation beyond pool + queue capacity fails explicitly.
 - [ ] D5 — Reader-lane metrics seams: queue depth/saturation, in-flight
       count, wait vs. execution duration, deadline-expiry count split by
       outcome (expired-in-queue vs. interrupted-while-active vs.
-      abandoned/worker-replaced), worker-replacement count, pool size —
+      quarantined), current quarantined-worker gauge, retired/replaced
+      worker count, quarantine-exhausted rejections, pool size —
       exported so AV.4 floors can diagnose regressions.
 - [ ] D6 — Async mailbox runtime port (the async core-service seam the
       cutover consumes): a Tokio-only `AsyncMailboxRuntime` port in
