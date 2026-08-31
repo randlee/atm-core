@@ -1,14 +1,19 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+#[cfg(test)]
 use crate::address::MessageParticipantFilter;
 use crate::boundary;
 use crate::error::AtmError;
 use crate::schema::InboxMessage;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
-use crate::types::{DisplayBucket, IsoTimestamp, MessageClass, ReadSelection, TeamName};
+use crate::types::{DisplayBucket, IsoTimestamp, ReadSelection, TeamName};
 
+use super::selection::{
+    MailboxSelectionCandidate, MailboxSelectionRequest, classify_mailbox_candidates,
+    select_classified_mailbox_candidates,
+};
 use super::{BucketCounts, ClassifiedMessage, ReadQuery, filters, state};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,96 +27,47 @@ pub(crate) fn selection_state_for_mailbox_metadata_rows(
     query: &ReadQuery,
     seen_watermark: Option<IsoTimestamp>,
 ) -> (BucketCounts, Vec<ClassifiedMessage>) {
-    let classified_all = classify_mailbox_metadata_rows(rows);
-    if let Some(message_id) = query.message_id_filter() {
-        let selected = classified_all
-            .iter()
-            .filter(|message| message.envelope.message_id == Some(*message_id))
-            .filter(|message| {
-                filters::matches_participant_filter(
-                    message,
-                    query.mailbox.participant_filter.as_ref(),
-                )
-            })
-            .cloned()
-            .collect();
-        let logical_current = logical_current_messages(classified_all);
-        let bucket_counts = bucket_counts_for(&logical_current);
-        return (bucket_counts, selected);
+    let candidates = rows.iter().map(metadata_candidate).collect::<Vec<_>>();
+    let request =
+        MailboxSelectionRequest::from_read_query(query, seen_watermark).without_contains();
+    select_classified_mailbox_candidates(candidates, &request)
+}
+
+fn metadata_candidate(row: &boundary::MailStoreMailboxMetadataRow) -> MailboxSelectionCandidate {
+    MailboxSelectionCandidate {
+        message_key: row.message_key.to_string(),
+        envelope: InboxMessage {
+            from: row.from_agent.clone(),
+            source_chat_id: row.source_chat_id.clone(),
+            // Metadata rows deliberately carry no durable body. The retained
+            // sync path reloads it only for the existing contains behavior.
+            text: String::new(),
+            timestamp: row.message_at,
+            read: row.read,
+            source_team: None,
+            destination_chat_id: row.destination_chat_id.clone(),
+            summary: row.summary.clone(),
+            message_id: row.message_id,
+            requires_ack: row.requires_ack,
+            pending_ack_at: row.pending_ack.then_some(row.message_at),
+            acknowledged_at: row.acknowledged_at,
+            acknowledges_message_id: None,
+            parent_message_id: row.parent_message_id,
+            thread_mode: row.thread_mode,
+            expires_at: row.expires_at,
+            task_id: row.task_id.clone(),
+            extra: serde_json::Map::new(),
+        },
     }
-    let logical_current = logical_current_messages(classified_all);
-    let bucket_counts = bucket_counts_for(&logical_current);
-    let filtered = apply_metadata_only_filters(
-        logical_current,
-        query.mailbox.sender_filter.as_ref(),
-        query.mailbox.participant_filter.as_ref(),
-        query.mailbox.timestamp_filter,
-        query.mailbox.task_filter.as_ref(),
-    );
-    let selected = select_messages(&filtered, query.selection_mode(), seen_watermark);
-    (bucket_counts, selected)
 }
 
 pub(crate) fn classify_mailbox_metadata_rows(
     rows: &[boundary::MailStoreMailboxMetadataRow],
 ) -> Vec<ClassifiedMessage> {
-    let projected = rows
-        .iter()
-        .enumerate()
-        .map(|(index, row)| ClassifiedMessage {
-            source_index: index.into(),
-            source_path: PathBuf::from(row.message_key.as_ref()),
-            bucket: DisplayBucket::Unread,
-            class: MessageClass::Unread,
-            envelope: InboxMessage {
-                from: row.from_agent.clone(),
-                source_chat_id: row.source_chat_id.clone(),
-                // Metadata rows intentionally do not carry durable message body
-                // text. AD.20 keeps this projection empty so later contains
-                // evaluation cannot accidentally treat summary-only data as the
-                // durable body contract.
-                text: String::new(),
-                timestamp: row.message_at,
-                read: row.read,
-                source_team: None,
-                destination_chat_id: row.destination_chat_id.clone(),
-                summary: row.summary.clone(),
-                message_id: row.message_id,
-                requires_ack: row.requires_ack,
-                pending_ack_at: row.pending_ack.then_some(row.message_at),
-                acknowledged_at: row.acknowledged_at,
-                acknowledges_message_id: None,
-                parent_message_id: row.parent_message_id,
-                thread_mode: row.thread_mode,
-                expires_at: row.expires_at,
-                task_id: row.task_id.clone(),
-                extra: serde_json::Map::new(),
-            },
-        })
-        .collect::<Vec<_>>();
-    let envelopes = projected
-        .iter()
-        .map(|message| message.envelope.clone())
-        .collect::<Vec<_>>();
-    let thread_index = ThreadIndex::new(&envelopes);
-
-    projected
-        .into_iter()
-        .map(|message| {
-            let effective = effective_display_envelope(&message.envelope, &thread_index);
-            let class = state::classify_message(&effective);
-            let bucket = state::display_bucket_for_class(class);
-            ClassifiedMessage {
-                source_index: message.source_index,
-                source_path: message.source_path,
-                bucket,
-                class,
-                envelope: effective,
-            }
-        })
-        .collect()
+    classify_mailbox_candidates(rows.iter().map(metadata_candidate).collect())
 }
 
+#[cfg(test)]
 pub(crate) fn apply_metadata_only_filters(
     messages: Vec<ClassifiedMessage>,
     sender_filter: Option<&crate::types::AgentName>,
@@ -409,6 +365,7 @@ pub(crate) fn sort_and_limit_selected(selected: &mut Vec<ClassifiedMessage>, lim
     }
 }
 
+#[cfg(test)]
 pub(crate) fn effective_display_envelope(
     envelope: &InboxMessage,
     thread_index: &ThreadIndex<'_>,

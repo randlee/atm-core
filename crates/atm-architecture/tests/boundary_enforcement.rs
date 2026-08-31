@@ -12,6 +12,7 @@ use std::{
 };
 
 use cargo_metadata::{DependencyKind, MetadataCommand};
+use quote::ToTokens;
 use serde::Deserialize;
 use syn::visit::Visit;
 
@@ -3438,8 +3439,8 @@ async fn list_messages() { reader.list().await }
 async fn receive_mailbox() { reader.read().await }
 async fn heartbeat() { ControlPathSyncBridge::run(); }
 "#;
-    let region = handler_region(source, &["list_messages", "receive_mailbox"]);
-    assert!(region.contains("reader.list()") && region.contains("reader.read()"));
+    let region = av3_handler_region(source, &["list_messages", "receive_mailbox"]);
+    assert!(region.contains("reader . list") && region.contains("reader . read"));
     assert!(
         !region.contains("ControlPathSyncBridge"),
         "handler-region scans must not confuse an allowed residual control-path caller with a read handler"
@@ -3458,8 +3459,34 @@ impl Router {
 }
 "#;
     assert_eq!(
-        bridge_run_call_sites_by_enclosing_fn(source),
+        av3_bridge_run_call_sites_by_enclosing_fn(source),
         BTreeSet::from(["send".to_owned()]),
+    );
+}
+
+#[test]
+fn av3_ast_scanners_ignore_comments_literals_and_test_module_decoys() {
+    let source = r##"
+#[cfg(test)] mod tests { async fn list_messages() { FreshSemaphoreGate::acquire(); } }
+async fn list_messages<T>() { /* } fn fake() */ let note = "{ fn fake() }"; reader.list().await; }
+"##;
+    let region = av3_handler_region(source, &["list_messages"]);
+    assert!(region.contains("reader . list"));
+    assert!(!region.contains("FreshSemaphoreGate"));
+}
+
+#[test]
+fn av3_bridge_scanner_catches_arc_fields_and_inline_construction() {
+    let source = r#"
+struct Router { bridge: std::sync::Arc<ControlPathSyncBridge> }
+impl Router {
+  async fn field_path(&self) { self.bridge.run().await; }
+  async fn inline_path<T>(&self) { let bridge = ControlPathSyncBridge::new(); bridge.run().await; }
+}
+"#;
+    assert_eq!(
+        av3_bridge_run_call_sites_by_enclosing_fn(source),
+        BTreeSet::from(["field_path".to_owned(), "inline_path".to_owned()]),
     );
 }
 
@@ -3473,14 +3500,20 @@ fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies() {
     if !router.contains("AsyncMailboxRuntime") {
         return;
     }
-    let read_region = handler_region(
+    let handlers = read_handler_names();
+    let read_region = av3_handler_region(
         &router,
+        &handlers.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    av3_assert_allowlisted_types(
+        &read_region,
         &[
-            "list_messages",
-            "peek_messages",
-            "receive_messages",
-            "doctor",
+            "AsyncMailboxRuntime",
+            "DoctorProjection",
+            "ApiResponse",
+            "ResponseEnvelope",
         ],
+        "read-handler",
     );
     for prohibited in [
         "BlockingCoreBridge",
@@ -3501,6 +3534,21 @@ fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies() {
 }
 
 #[test]
+fn av3_allowlist_rejects_a_freshly_named_read_gate() {
+    let region = av3_handler_region(
+        "async fn list_messages() { FreshSemaphoreGate::acquire().await; }",
+        &["list_messages"],
+    );
+    let result = std::panic::catch_unwind(|| {
+        av3_assert_allowlisted_types(&region, &["AsyncMailboxRuntime"], "read-handler")
+    });
+    assert!(
+        result.is_err(),
+        "the positive allowlist must reject renamed gates"
+    );
+}
+
+#[test]
 fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives() {
     let mailbox_runtime = workspace_root().join("crates/atm-runtime/src/mailbox_runtime.rs");
     if !mailbox_runtime.exists() {
@@ -3514,6 +3562,16 @@ fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()
     assert!(
         source.contains("reader: Arc<dyn AsyncMailboxReader"),
         "the AsyncMailboxRuntime composition must use the reader-lane capability"
+    );
+    av3_assert_allowlisted_types(
+        implementation,
+        &[
+            "AsyncMailboxReader",
+            "StateHandoffSupervisor",
+            "ReadDeadline",
+            "AtmError",
+        ],
+        "AsyncMailboxRuntime composition",
     );
     for prohibited in [
         "spawn_blocking",
@@ -3558,9 +3616,103 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
         "graft_receiver_lookup".to_owned(),
     ]);
     assert_eq!(
-        bridge_run_call_sites_by_enclosing_fn(production_router),
+        av3_bridge_run_call_sites_by_enclosing_fn(production_router),
         residual,
         "AV-FU-1 owns the only permitted residual ControlPathSyncBridge::run call sites"
+    );
+}
+
+#[test]
+fn av3_blocking_core_bridge_is_absent_from_all_production_crates_after_rename() {
+    let root = workspace_root();
+    let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
+    if !router.contains("ControlPathSyncBridge") {
+        return;
+    }
+    let findings = av3_identifier_findings(&root.join("crates"), "BlockingCoreBridge");
+    assert!(
+        findings.is_empty(),
+        "AV.3 D1 forbids BlockingCoreBridge in production crates: {findings:?}"
+    );
+}
+
+#[test]
+fn av3_blocking_core_bridge_crate_scan_rejects_a_stray_reintroduction() {
+    assert_eq!(
+        av3_identifier_findings_in_source("struct BlockingCoreBridge;", "BlockingCoreBridge"),
+        vec!["BlockingCoreBridge"]
+    );
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Av3WriterIngressPath {
+    None,
+    StateHandoffSupervisor,
+    DirectWriter,
+}
+
+trait Av3InstrumentedWriterIngress {
+    fn record(&mut self, handler: &str, path: Av3WriterIngressPath);
+}
+
+#[derive(Default)]
+struct Av3IngressRecorder(BTreeMap<String, Av3WriterIngressPath>);
+
+impl Av3InstrumentedWriterIngress for Av3IngressRecorder {
+    fn record(&mut self, handler: &str, path: Av3WriterIngressPath) {
+        self.0.insert(handler.to_owned(), path);
+    }
+}
+
+fn av3_assert_supervised_read_ingress(handler: &str, path: Av3WriterIngressPath) {
+    assert!(
+        matches!(
+            path,
+            Av3WriterIngressPath::None | Av3WriterIngressPath::StateHandoffSupervisor
+        ),
+        "D2b `{handler}` must not obtain response data through writer ingress"
+    );
+}
+
+#[test]
+fn av3_d2b_scaffold_accepts_only_the_supervised_read_state_handoff() {
+    let router = read_source(
+        &workspace_root().join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"),
+    );
+    if !router.contains("AsyncMailboxRuntime") {
+        return;
+    }
+    let mut recorder = Av3IngressRecorder::default();
+    for handler in read_handler_names() {
+        let body = av3_handler_region(&router, &[&handler]);
+        let path = if handler == "receive_messages" && body.contains("StateHandoffSupervisor") {
+            Av3WriterIngressPath::StateHandoffSupervisor
+        } else if body.contains("StorageWriterIngress") || body.contains("submit_async") {
+            Av3WriterIngressPath::DirectWriter
+        } else {
+            Av3WriterIngressPath::None
+        };
+        recorder.record(&handler, path);
+    }
+    for (endpoint, path) in recorder.0 {
+        av3_assert_supervised_read_ingress(&endpoint, path);
+    }
+}
+
+#[test]
+fn av3_d2b_scaffold_rejects_a_writer_lane_read_fixture() {
+    let source = "async fn list_messages() { StorageWriterIngress::submit_async(); }";
+    let body = av3_handler_region(source, &["list_messages"]);
+    let path = if body.contains("StorageWriterIngress") {
+        Av3WriterIngressPath::DirectWriter
+    } else {
+        Av3WriterIngressPath::None
+    };
+    let rejection =
+        std::panic::catch_unwind(|| av3_assert_supervised_read_ingress("list_messages", path));
+    assert!(
+        rejection.is_err(),
+        "D2b must reject a read handler routed to the writer lane"
     );
 }
 
@@ -3757,55 +3909,170 @@ fn read_source(path: &Path) -> String {
 /// rather than the whole router file. The residual control-path bridge stays
 /// in that file after AV.1b, so file-wide token checks would either reject an
 /// allowed mutation/control-path caller or permit a read-handler regression.
-fn handler_region(source: &str, handlers: &[&str]) -> String {
+fn av3_handler_region(source: &str, handlers: &[&str]) -> String {
+    let functions = av3_production_functions(source);
     handlers
         .iter()
-        .map(|handler| extract_fn_body(source, handler))
+        .map(|handler| {
+            functions.get(*handler).unwrap_or_else(|| {
+                panic!("AV.3 handler `{handler}` is missing from production source")
+            })
+        })
+        .cloned()
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn av3_assert_allowlisted_types(region: &str, allowed: &[&str], scope: &str) {
+    let syntax = syn::parse_file(&format!("fn gate() {region}"))
+        .unwrap_or_else(|error| panic!("AV.3 {scope} fixture must parse: {error}"));
+    struct TypeVisitor {
+        names: BTreeSet<String>,
+    }
+    impl<'ast> Visit<'ast> for TypeVisitor {
+        fn visit_expr_path(&mut self, path: &'ast syn::ExprPath) {
+            for segment in &path.path.segments {
+                let name = segment.ident.to_string();
+                if name.chars().next().is_some_and(char::is_uppercase) {
+                    self.names.insert(name);
+                }
+            }
+            syn::visit::visit_expr_path(self, path);
+        }
+        fn visit_path(&mut self, path: &'ast syn::Path) {
+            if let Some(segment) = path.segments.last() {
+                let name = segment.ident.to_string();
+                if name.chars().next().is_some_and(char::is_uppercase) {
+                    self.names.insert(name);
+                }
+            }
+            syn::visit::visit_path(self, path);
+        }
+    }
+    let mut visitor = TypeVisitor {
+        names: BTreeSet::new(),
+    };
+    visitor.visit_file(&syntax);
+    let unexpected = visitor
+        .names
+        .into_iter()
+        .filter(|name| !allowed.contains(&name.as_str()))
+        .collect::<Vec<_>>();
+    assert!(
+        unexpected.is_empty(),
+        "AV.3 {scope} allowlist rejects unlisted type(s): {unexpected:?}"
+    );
+}
+
+fn av3_identifier_findings(root: &Path, identifier: &str) -> Vec<String> {
+    let mut files = Vec::new();
+    collect_rust_files(root, &mut files);
+    files
+        .into_iter()
+        .filter_map(|path| {
+            (!av3_identifier_findings_in_source(&read_source(&path), identifier).is_empty())
+                .then(|| path.display().to_string())
+        })
+        .collect()
+}
+
+fn av3_identifier_findings_in_source(source: &str, identifier: &str) -> Vec<String> {
+    let syntax = syn::parse_file(source).expect("AV.3 production source must parse");
+    struct IdentifierVisitor<'a> {
+        identifier: &'a str,
+        findings: Vec<String>,
+    }
+    impl<'ast> Visit<'ast> for IdentifierVisitor<'_> {
+        fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+            if item.attrs.iter().any(is_test_configuration_attribute) {
+                return;
+            }
+            syn::visit::visit_item_mod(self, item);
+        }
+        fn visit_ident(&mut self, ident: &'ast syn::Ident) {
+            if ident == self.identifier {
+                self.findings.push(ident.to_string());
+            }
+            syn::visit::visit_ident(self, ident);
+        }
+    }
+    let mut visitor = IdentifierVisitor {
+        identifier,
+        findings: Vec::new(),
+    };
+    visitor.visit_file(&syntax);
+    visitor.findings
+}
+
+fn read_handler_names() -> Vec<String> {
+    include_str!("../../../.just/allowlists/read_concurrency_handlers.txt")
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
 }
 
 /// Enumerate enclosing functions of calls routed through the narrowly named
 /// AV.3 residual bridge. The field name is discovered from its type so this is
 /// a call-site policy instead of a second field-name API.
-fn bridge_run_call_sites_by_enclosing_fn(source: &str) -> BTreeSet<String> {
-    let bridge_fields = source
-        .lines()
-        .filter_map(|line| line.split_once(": ControlPathSyncBridge"))
-        .map(|(field, _)| field.trim())
-        .filter(|field| {
-            !field.is_empty()
-                && field
-                    .chars()
-                    .all(|character| character == '_' || character.is_ascii_alphanumeric())
+fn av3_bridge_run_call_sites_by_enclosing_fn(source: &str) -> BTreeSet<String> {
+    let syntax = syn::parse_file(source).expect("AV.3 source must parse as Rust");
+    let fields = syntax
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Struct(item) => Some(item),
+            _ => None,
+        })
+        .flat_map(|item| item.fields.iter())
+        .filter_map(|field| {
+            field
+                .ty
+                .to_token_stream()
+                .to_string()
+                .contains("ControlPathSyncBridge")
+                .then(|| field.ident.as_ref().map(ToString::to_string))
+                .flatten()
         })
         .collect::<BTreeSet<_>>();
-    function_names(source)
+    av3_production_functions(source)
         .into_iter()
-        .filter(|function| {
-            let body = extract_fn_body(source, function);
-            body.contains("ControlPathSyncBridge::run(")
-                || (body.contains(".run(")
-                    && bridge_fields
-                        .iter()
-                        .any(|field| body.contains(&format!("self.{field}"))))
+        .filter_map(|(name, body)| {
+            let field_call = fields
+                .iter()
+                .any(|field| body.contains(&format!("self . {field}")));
+            ((body.contains("ControlPathSyncBridge") || field_call) && body.contains(". run"))
+                .then_some(name)
         })
         .collect()
 }
 
-fn function_names(source: &str) -> BTreeSet<String> {
-    source
-        .lines()
-        .filter_map(|line| line.split_once("fn "))
-        .filter_map(|(_, tail)| tail.split_once('(').map(|(name, _)| name.trim()))
-        .filter(|name| {
-            !name.is_empty()
-                && name
-                    .chars()
-                    .all(|character| character == '_' || character.is_ascii_alphanumeric())
-        })
-        .map(ToOwned::to_owned)
-        .collect()
+fn av3_production_functions(source: &str) -> BTreeMap<String, String> {
+    let syntax = syn::parse_file(source).expect("AV.3 source must parse as Rust");
+    let mut functions = BTreeMap::new();
+    for item in syntax.items {
+        match item {
+            syn::Item::Fn(function) => {
+                functions.insert(
+                    function.sig.ident.to_string(),
+                    function.block.to_token_stream().to_string(),
+                );
+            }
+            syn::Item::Impl(implementation) => {
+                for member in implementation.items {
+                    if let syn::ImplItem::Fn(function) = member {
+                        functions.insert(
+                            function.sig.ident.to_string(),
+                            function.block.to_token_stream().to_string(),
+                        );
+                    }
+                }
+            }
+            syn::Item::Mod(module) if module.attrs.iter().any(is_test_configuration_attribute) => {}
+            _ => {}
+        }
+    }
+    functions
 }
 
 /// Returns the brace-delimited body (inclusive of the braces) of the first

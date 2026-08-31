@@ -1,10 +1,11 @@
+use crate::mailbox_reader::{MailboxReaderMetrics, start_mailbox_reader};
 #[cfg(test)]
 use crate::observability::NullSqliteObservability;
-use crate::observability::{
-    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
-};
+use crate::observability::SqliteObservability;
+use crate::reader_pool::ReaderLanesConfig;
 use crate::search_reader::SearchReader;
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
+use atm_storage::AsyncMailboxReader;
 use atm_storage::TemplateMessageAdmission;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
@@ -12,9 +13,7 @@ use atm_storage::contract::{
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
-#[cfg(test)]
-use rusqlite::OpenFlags;
-use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};
+use rusqlite::{Connection, Error as RusqliteError, OpenFlags, TransactionBehavior};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 #[cfg(test)]
@@ -184,10 +183,12 @@ impl SharedDbTarget {
 
 #[derive(Clone)]
 pub(crate) struct SharedDb {
-    target: Arc<SharedDbTarget>,
+    pub(crate) target: Arc<SharedDbTarget>,
     writer: Arc<SqliteWriter>,
-    search_reader: Arc<SearchReader>,
-    observability: Arc<dyn SqliteObservability>,
+    pub(crate) search_reader: Arc<SearchReader>,
+    mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
+    pub(crate) mailbox_reader_metrics: MailboxReaderMetrics,
+    pub(crate) observability: Arc<dyn SqliteObservability>,
 }
 
 impl SharedDb {
@@ -204,6 +205,15 @@ impl SharedDb {
     pub(crate) fn open_in_memory_with_observability(
         observability: Arc<dyn SqliteObservability>,
     ) -> Result<Self, AtmError> {
+        Self::open_in_memory_with_reader_lanes(observability, ReaderLanesConfig::default())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn open_in_memory_with_reader_lanes(
+        observability: Arc<dyn SqliteObservability>,
+        reader_lanes: ReaderLanesConfig,
+    ) -> Result<Self, AtmError> {
+        reader_lanes.validate()?;
         let target = Arc::new(SharedDbTarget::InMemory {
             uri: format!(
                 "file:atm-storage-rusqlite-{}?mode=memory&cache=shared",
@@ -214,19 +224,39 @@ impl SharedDb {
             Arc::clone(&target),
             Arc::clone(&observability),
         )?);
-        let search_reader = Arc::new(SearchReader::start(Arc::clone(&target))?);
+        let search_reader = Arc::new(SearchReader::start(
+            Arc::clone(&target),
+            reader_lanes.search,
+        )?);
+        let (mailbox_reader, mailbox_reader_metrics) =
+            start_mailbox_reader(Arc::clone(&target), reader_lanes.mailbox)?;
         Ok(Self {
             target,
             writer,
             search_reader,
+            mailbox_reader,
+            mailbox_reader_metrics,
             observability,
         })
     }
 
+    #[allow(
+        dead_code,
+        reason = "Production construction delegates through ReaderLanesConfig; this direct observability constructor remains a backend test seam."
+    )]
     pub(crate) fn open_with_observability(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
     ) -> Result<Self, AtmError> {
+        Self::open_with_reader_lanes(path, observability, ReaderLanesConfig::default())
+    }
+
+    pub(crate) fn open_with_reader_lanes(
+        path: impl AsRef<Path>,
+        observability: Arc<dyn SqliteObservability>,
+        reader_lanes: ReaderLanesConfig,
+    ) -> Result<Self, AtmError> {
+        reader_lanes.validate()?;
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
             // Accepted risk: durable-state root creation happens during boundary
@@ -244,7 +274,12 @@ impl SharedDb {
             Arc::clone(&target),
             Arc::clone(&observability),
         )?);
-        let search_reader = Arc::new(SearchReader::start(Arc::clone(&target))?);
+        let search_reader = Arc::new(SearchReader::start(
+            Arc::clone(&target),
+            reader_lanes.search,
+        )?);
+        let (mailbox_reader, mailbox_reader_metrics) =
+            start_mailbox_reader(Arc::clone(&target), reader_lanes.mailbox)?;
         tracing::debug!(
             writer_handles = 1,
             path = %target.display(),
@@ -254,6 +289,8 @@ impl SharedDb {
             target,
             writer,
             search_reader,
+            mailbox_reader,
+            mailbox_reader_metrics,
             observability,
         })
     }
@@ -501,6 +538,10 @@ impl SharedDb {
         }
     }
 
+    pub(crate) fn mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
+        Arc::clone(&self.mailbox_reader)
+    }
+
     pub(crate) fn error(&self, message: impl Into<String>, source: RusqliteError) -> AtmError {
         sqlite_error(self.target.as_ref(), message, source)
     }
@@ -511,37 +552,6 @@ impl SharedDb {
             #[cfg(test)]
             SharedDbTarget::InMemory { .. } => None,
         }
-    }
-
-    pub(crate) fn checkpoint_wal(&self) -> Result<(), AtmError> {
-        #[cfg(test)]
-        if matches!(self.target.as_ref(), SharedDbTarget::InMemory { .. }) {
-            return Ok(());
-        }
-
-        let result = self.with_connection(|connection| {
-            connection
-                .query_row("PRAGMA wal_checkpoint(PASSIVE);", [], |_row| Ok(()))
-                .map_err(|error| {
-                    sqlite_error(
-                        self.target.as_ref(),
-                        "failed to checkpoint sqlite wal during daemon shutdown",
-                        error,
-                    )
-                })
-        });
-        match &result {
-            Ok(()) => {}
-            Err(error) => self
-                .observability
-                .emit_or_warn(SqliteObservabilityEvent::new(
-                    "wal_checkpoint",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message().to_owned(),
-                    Some(error.code()),
-                )),
-        }
-        result
     }
 
     fn open_connection(&self) -> Result<Connection, AtmError> {
@@ -639,6 +649,41 @@ pub(crate) fn open_connection_for_target(target: &SharedDbTarget) -> Result<Conn
         .map_err(|error| sqlite_open_error(target, error))?,
     };
     configure_connection(&mut connection, target)?;
+    Ok(connection)
+}
+
+/// Opens a connection which is physically read-only for durable databases and
+/// configured defensively for the bounded reader lanes.
+pub(crate) fn open_read_connection_for_target(
+    target: &SharedDbTarget,
+) -> Result<Connection, AtmError> {
+    let mut connection = match target {
+        SharedDbTarget::Path(path) => Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(|error| sqlite_open_error(target, error))?,
+        #[cfg(test)]
+        // Shared in-memory fixtures cannot be reopened READ_ONLY. `query_only`
+        // below preserves the no-write capability contract in tests.
+        SharedDbTarget::InMemory { uri } => Connection::open_with_flags(
+            uri,
+            OpenFlags::SQLITE_OPEN_READ_WRITE
+                | OpenFlags::SQLITE_OPEN_CREATE
+                | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(|error| sqlite_open_error(target, error))?,
+    };
+    configure_connection(&mut connection, target)?;
+    connection
+        .execute_batch("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA defensive=ON;")
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to configure defensive read-only sqlite connection",
+                error,
+            )
+        })?;
     Ok(connection)
 }
 
@@ -1083,6 +1128,23 @@ pub(crate) fn sqlite_thread_mode(mode: Option<ThreadMode>) -> Option<&'static st
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn defensive_reader_connection_rejects_writes() {
+        let database = tempfile::NamedTempFile::new().expect("temporary database");
+        let target = SharedDbTarget::Path(database.path().to_path_buf());
+        let writer = open_connection_for_target(&target).expect("writer connection");
+        writer
+            .execute_batch("CREATE TABLE read_only_probe (value INTEGER);")
+            .expect("create fixture table");
+        let reader = open_read_connection_for_target(&target).expect("defensive reader");
+        assert!(
+            reader
+                .execute("INSERT INTO read_only_probe (value) VALUES (1)", [])
+                .is_err(),
+            "reader lanes must reject writes through query_only/READ_ONLY"
+        );
+    }
 
     #[test]
     fn ensure_schema_drops_the_retired_peer_sync_policy_table() {

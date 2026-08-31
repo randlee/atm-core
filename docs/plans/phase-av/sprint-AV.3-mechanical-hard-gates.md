@@ -180,6 +180,20 @@ fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
 
 ## Acceptance criteria
 
+## QA history
+
+- 2026-08-31 QA-r1 fixes: `AV3-B1/B2/B3/I1/I2/M1/M2/M3` use a shared
+  checked-in handler contract, hardened Python literal-aware scanner, and
+  `syn` AST for Rust source gates. AST is chosen because handler ownership,
+  generic functions, `#[cfg(test)]` exclusion, and bridge construction/type
+  forms are semantic Rust properties; string scanning cannot make that
+  contract robust. Commits: `27bd384eb`, `06b73c9f8`, `3a1736a7b`.
+- 2026-08-31 QA-r2 fixes: `AV3-B3` masks raw, raw-byte, and byte string
+  literals before balancing handler braces. `AV3-I2` replaces the D2b
+  tautology with an `AsyncMailboxRuntime`-activated ingress recorder that
+  derives each path from the real router handler body and proves a writer-lane
+  fixture is rejected. AV.1b will activate the supervised state-handoff path.
+
 This is the authoritative acceptance checklist.
 
 - [ ] A1 — Bridge gate, three-part check: (1) a grep for

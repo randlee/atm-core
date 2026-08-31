@@ -7,6 +7,7 @@
 
 mod composition;
 mod legacy_storage_adapters;
+pub mod mailbox_runtime;
 pub mod workflow_telemetry;
 
 pub use atm_storage::{StorageFactory, StorageHandles};

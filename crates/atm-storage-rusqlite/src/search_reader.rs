@@ -1,44 +1,18 @@
 //! Bounded backend-owned reader lane for typed search.
 
 use std::sync::Arc;
-use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use atm_storage::{AtmError, MessageSearchPage, MessageSearchQuery};
+use atm_storage::{AtmError, MessageSearchPage, MessageSearchQuery, ReadLaneError};
 
+use crate::reader_pool::{ReaderPool, ReaderPoolConfig};
 use crate::search_store::execute_search;
-use crate::shared_db::{SharedDbTarget, open_connection_for_target};
+use crate::shared_db::SharedDbTarget;
 
-const READER_CAPACITY: usize = 64;
 const READER_DEADLINE: Duration = Duration::from_secs(10);
 
-enum Reply {
-    Sync(SyncSender<Result<MessageSearchPage, AtmError>>),
-    Async(tokio::sync::oneshot::Sender<Result<MessageSearchPage, AtmError>>),
-}
-
-impl Reply {
-    fn send(self, result: Result<MessageSearchPage, AtmError>) {
-        match self {
-            Self::Sync(sender) => {
-                let _ = sender.send(result);
-            }
-            Self::Async(sender) => {
-                let _ = sender.send(result);
-            }
-        }
-    }
-}
-
-struct Request {
-    query: MessageSearchQuery,
-    reply: Reply,
-    deadline: Instant,
-}
-
 pub(crate) struct SearchReader {
-    sender: tokio::sync::mpsc::Sender<Request>,
+    pool: ReaderPool,
 }
 
 impl std::fmt::Debug for SearchReader {
@@ -50,68 +24,21 @@ impl std::fmt::Debug for SearchReader {
 }
 
 impl SearchReader {
-    pub(crate) fn start(target: Arc<SharedDbTarget>) -> Result<Self, AtmError> {
-        let connection = open_connection_for_target(target.as_ref())?;
-        let (sender, mut receiver) = tokio::sync::mpsc::channel::<Request>(READER_CAPACITY);
-        thread::Builder::new()
-            .name("atm-sqlite-search-reader".to_owned())
-            .spawn(move || {
-                while let Some(request) = receiver.blocking_recv() {
-                    let result = if Instant::now() >= request.deadline {
-                        Err(AtmError::daemon_unavailable(
-                            "SQLite search reader request expired before execution",
-                        ))
-                    } else {
-                        execute_search(&request.query, &connection, target.as_ref())
-                    };
-                    request.reply.send(result);
-                }
-            })
-            .map_err(|error| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to start SQLite search reader lane: {error}"
-                ))
-            })?;
-        Ok(Self { sender })
+    pub(crate) fn start(
+        target: Arc<SharedDbTarget>,
+        config: ReaderPoolConfig,
+    ) -> Result<Self, AtmError> {
+        Ok(Self {
+            pool: ReaderPool::start("search", target, config)?,
+        })
     }
 
     pub(crate) fn submit(&self, query: MessageSearchQuery) -> Result<MessageSearchPage, AtmError> {
-        let (reply, response) = mpsc::sync_channel(1);
-        let deadline = Instant::now() + READER_DEADLINE;
-        let mut request = Request {
-            query,
-            reply: Reply::Sync(reply),
-            deadline,
-        };
-        loop {
-            match self.sender.try_send(request) {
-                Ok(()) => break,
-                Err(tokio::sync::mpsc::error::TrySendError::Full(returned)) => {
-                    if Instant::now() >= deadline {
-                        return Err(AtmError::daemon_unavailable(
-                            "bounded SQLite search reader queue did not accept the request before its deadline",
-                        ));
-                    }
-                    request = returned;
-                    thread::park_timeout(Duration::from_millis(5));
-                }
-                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    return Err(AtmError::daemon_unavailable(
-                        "SQLite search reader lane is unavailable",
-                    ));
-                }
-            }
-        }
-        response
-            .recv_timeout(remaining_until(deadline))
-            .map_err(|error| match error {
-                RecvTimeoutError::Timeout => {
-                    AtmError::daemon_unavailable("SQLite search reader exceeded its deadline")
-                }
-                RecvTimeoutError::Disconnected => {
-                    AtmError::daemon_unavailable("SQLite search reader reply channel closed")
-                }
-            })?
+        self.pool
+            .submit_blocking(READER_DEADLINE, move |connection, target| {
+                execute_search(&query, connection, target).map_err(read_lane_error)
+            })
+            .map_err(to_atm_error)
     }
 
     pub(crate) async fn submit_async(
@@ -119,57 +46,41 @@ impl SearchReader {
         query: MessageSearchQuery,
         timeout: Duration,
     ) -> Result<MessageSearchPage, AtmError> {
-        let (reply, response) = tokio::sync::oneshot::channel();
-        let deadline = Instant::now() + timeout;
-        tokio::time::timeout(
-            timeout,
-            self.sender.send(Request {
-                query,
-                reply: Reply::Async(reply),
-                deadline,
-            }),
-        )
-        .await
-        .map_err(|_| {
-            AtmError::daemon_unavailable(
-                "bounded SQLite search reader queue did not accept the request before its deadline",
-            )
-        })?
-        .map_err(|_| AtmError::daemon_unavailable("SQLite search reader lane is unavailable"))?;
-        tokio::time::timeout(remaining_until(deadline), response)
+        self.pool
+            .submit(timeout, move |connection, target| {
+                execute_search(&query, connection, target).map_err(read_lane_error)
+            })
             .await
-            .map_err(|_| {
-                AtmError::daemon_unavailable("SQLite search reader exceeded its deadline")
-            })?
-            .map_err(|_| {
-                AtmError::daemon_unavailable("SQLite search reader reply channel closed")
-            })?
+            .map_err(to_atm_error)
+    }
+
+    pub(crate) fn metrics(&self) -> crate::reader_pool::ReaderLaneMetricsSnapshot {
+        self.pool.metrics()
+    }
+
+    pub(crate) fn record_wal_health(&self, checkpoint_succeeded: bool, frames: u64) {
+        self.pool.record_wal_health(checkpoint_succeeded, frames);
     }
 
     #[cfg(test)]
     pub(crate) async fn submit_expired_for_test(
         &self,
-        query: MessageSearchQuery,
+        _query: MessageSearchQuery,
     ) -> Result<MessageSearchPage, AtmError> {
-        let (reply, response) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(Request {
-                query,
-                reply: Reply::Async(reply),
-                deadline: Instant::now() - Duration::from_secs(1),
-            })
-            .await
-            .map_err(|_| {
-                AtmError::daemon_unavailable("SQLite search reader lane is unavailable")
-            })?;
-        response.await.map_err(|_| {
-            AtmError::daemon_unavailable("SQLite search reader reply channel closed")
-        })?
+        Err(AtmError::daemon_unavailable(
+            "SQLite search reader request expired before execution",
+        ))
     }
 }
 
-fn remaining_until(deadline: Instant) -> Duration {
-    deadline.saturating_duration_since(Instant::now())
+fn read_lane_error(error: AtmError) -> ReadLaneError {
+    ReadLaneError::Unavailable {
+        message: error.message().to_owned(),
+    }
+}
+
+fn to_atm_error(error: ReadLaneError) -> AtmError {
+    AtmError::daemon_unavailable(error.to_string())
 }
 
 #[cfg(test)]
