@@ -3435,10 +3435,10 @@ fn al3_replacement_runtime_cannot_restore_legacy_or_blocking_runtime_constructs(
 fn av3_handler_region_scanner_isolated_to_named_handlers() {
     let source = r#"
 async fn list_messages() { reader.list().await }
-async fn read_messages() { reader.read().await }
+async fn receive_mailbox() { reader.read().await }
 async fn heartbeat() { ControlPathSyncBridge::run(); }
 "#;
-    let region = handler_region(source, &["list_messages", "read_messages"]);
+    let region = handler_region(source, &["list_messages", "receive_mailbox"]);
     assert!(region.contains("reader.list()") && region.contains("reader.read()"));
     assert!(
         !region.contains("ControlPathSyncBridge"),
@@ -3454,7 +3454,7 @@ struct Router {
 }
 impl Router {
     async fn send(&self) { self.control_path_sync_bridge.run().await; }
-    async fn read_messages(&self) { reader.read().await; }
+    async fn receive_mailbox(&self) { reader.read().await; }
 }
 "#;
     assert_eq!(
