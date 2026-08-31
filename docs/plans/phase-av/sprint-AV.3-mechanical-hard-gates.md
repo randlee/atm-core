@@ -189,9 +189,9 @@ fn http_runtime_read_handlers_never_touch_writer_lane() {
 #[test]
 fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
     // Enclosing handler fn of each `.run(` call site (12 at HEAD − 4
-    // migrated by AV.1b). The deferred-marker site lives inside `send`.
+    // migrated by AV.1b). The deferred-marker site lives inside `commit_write`.
     const RESIDUAL: [&str; 8] = [
-        "send" /* retry_deferred_marker */, "clear_messages",
+        "commit_write" /* retry_deferred_marker */, "clear_messages",
         "heartbeat", "queue_get_next",
         "graft_receiver_register", "graft_receiver_refresh",
         "graft_receiver_unregister", "graft_receiver_lookup",

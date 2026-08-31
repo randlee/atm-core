@@ -235,7 +235,7 @@ which replaces manual merge-forward.
   `BlockingCoreBridge`) remains with exactly **eight** non-read call
   sites in `crates/atm-http-runtime/src/storage_and_nudge_router.rs`
   (12 at HEAD, 4 migrated by AV.1b): the deferred-queue marker inside
-  `send` (`retry_deferred_marker`, intentionally synchronous by
+  `commit_write` (`retry_deferred_marker`, intentionally synchronous by
   contract), `clear_messages` (mutation via synchronous
   `clear_mail_with_runtime`; no writer-ingress op exists yet),
   `heartbeat`, `queue_get_next` (synchronous roster check

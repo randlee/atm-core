@@ -3679,10 +3679,6 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
     let router = read_source(
         &workspace_root().join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"),
     );
-    // The D1 rename is intentionally held until AV.1b is merged forward.
-    if !router.contains("ControlPathSyncBridge") {
-        return;
-    }
     let production_router = router
         .split("\n#[cfg(test)]\nmod tests")
         .next()
@@ -3692,7 +3688,7 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
         "D1 deletes the legacy BlockingCoreBridge identifier from production source"
     );
     let residual = BTreeSet::from([
-        "send".to_owned(),
+        "commit_write".to_owned(),
         "clear_messages".to_owned(),
         "heartbeat".to_owned(),
         "queue_get_next".to_owned(),
@@ -3711,10 +3707,6 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
 #[test]
 fn av3_blocking_core_bridge_is_absent_from_all_production_crates_after_rename() {
     let root = workspace_root();
-    let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
-    if !router.contains("ControlPathSyncBridge") {
-        return;
-    }
     let findings = av3_identifier_findings(&root.join("crates"), "BlockingCoreBridge");
     assert!(
         findings.is_empty(),
@@ -4304,16 +4296,54 @@ fn av3_bridge_run_call_sites_by_enclosing_fn(source: &str) -> BTreeSet<String> {
                 .flatten()
         })
         .collect::<BTreeSet<_>>();
-    av3_production_functions(source)
-        .into_iter()
-        .filter_map(|(name, body)| {
-            let field_call = fields
-                .iter()
-                .any(|field| body.contains(&format!("self . {field}")));
-            ((body.contains("ControlPathSyncBridge") || field_call) && body.contains(". run"))
-                .then_some(name)
-        })
-        .collect()
+    let mut call_sites = BTreeSet::new();
+    let mut record_call_site = |name: &syn::Ident, block: &syn::Block| {
+        if av3_function_calls_bridge_run(block, &fields) {
+            call_sites.insert(name.to_string());
+        }
+    };
+    for item in syntax.items {
+        match item {
+            syn::Item::Fn(function) => record_call_site(&function.sig.ident, &function.block),
+            syn::Item::Impl(implementation) => {
+                for member in implementation.items {
+                    if let syn::ImplItem::Fn(function) = member {
+                        record_call_site(&function.sig.ident, &function.block);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    call_sites
+}
+
+fn av3_function_calls_bridge_run(block: &syn::Block, bridge_fields: &BTreeSet<String>) -> bool {
+    struct BridgeRunVisitor<'a> {
+        bridge_fields: &'a BTreeSet<String>,
+        found: bool,
+    }
+
+    impl<'ast> Visit<'ast> for BridgeRunVisitor<'_> {
+        fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
+            let is_bridge_run = call.method == "run"
+                && matches!(
+                    call.receiver.as_ref(),
+                    syn::Expr::Field(field)
+                        if matches!(field.base.as_ref(), syn::Expr::Path(path) if path.path.is_ident("self"))
+                            && matches!(&field.member, syn::Member::Named(field) if self.bridge_fields.contains(&field.to_string()))
+                );
+            self.found |= is_bridge_run;
+            syn::visit::visit_expr_method_call(self, call);
+        }
+    }
+
+    let mut visitor = BridgeRunVisitor {
+        bridge_fields,
+        found: false,
+    };
+    visitor.visit_block(block);
+    visitor.found
 }
 
 fn av3_production_functions(source: &str) -> BTreeMap<String, String> {
