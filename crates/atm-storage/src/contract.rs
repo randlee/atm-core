@@ -7,6 +7,7 @@ use std::num::NonZeroU16;
 use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
@@ -341,6 +342,85 @@ pub struct MessageQuery {
     pub limit: Option<usize>,
 }
 
+/// The mailbox a read operation is authorized to inspect.
+///
+/// This deliberately travels with every asynchronous mailbox request instead
+/// of relying on callers to keep the team and agent embedded in a query in
+/// sync.  Backends must reject a mismatch before they schedule database work.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MailboxScope {
+    pub team: TeamName,
+    pub agent: AgentName,
+}
+
+impl MailboxScope {
+    #[must_use]
+    pub const fn new(team: TeamName, agent: AgentName) -> Self {
+        Self { team, agent }
+    }
+
+    #[must_use]
+    pub fn permits(&self, query: &MessageQuery) -> bool {
+        self.team == query.team && self.agent == query.agent
+    }
+}
+
+/// A storage-owned deadline for the bounded mailbox reader lane.
+///
+/// `atm-storage` intentionally does not depend on `atm-core`; the Tokio
+/// runtime translates its request deadline at its boundary before calling the
+/// reader capability.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReadDeadline {
+    remaining: Duration,
+}
+
+impl ReadDeadline {
+    pub fn new(remaining: Duration) -> Result<Self, AtmError> {
+        if remaining.is_zero() {
+            return Err(AtmError::validation(
+                "mailbox read deadline must be non-zero",
+            ));
+        }
+        Ok(Self { remaining })
+    }
+
+    #[must_use]
+    pub const fn remaining(self) -> Duration {
+        self.remaining
+    }
+}
+
+/// Explicit resource-management outcomes from a bounded reader lane.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReadLaneError {
+    UnauthorizedScope,
+    Saturated { reason: &'static str },
+    DeadlineExpired { stage: &'static str },
+    Unavailable { message: String },
+}
+
+impl fmt::Display for ReadLaneError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnauthorizedScope => {
+                formatter.write_str("mailbox scope does not authorize this read")
+            }
+            Self::Saturated { reason } => {
+                write!(formatter, "mailbox reader lane is saturated: {reason}")
+            }
+            Self::DeadlineExpired { stage } => {
+                write!(formatter, "mailbox reader deadline expired while {stage}")
+            }
+            Self::Unavailable { message } => {
+                write!(formatter, "mailbox reader lane is unavailable: {message}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ReadLaneError {}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum RosterMemberKind {
@@ -612,6 +692,28 @@ pub trait AsyncMessageStore: MessageStore {
     ) -> Result<AcknowledgementCommit, AtmError> {
         self.acknowledge_message_atomically(&source, builder)
     }
+}
+
+/// Tokio-safe, read-only mailbox capability.
+///
+/// This is intentionally separate from [`AsyncMessageStore`]: the latter is
+/// the ordered durable writer lane.  Implementations of this trait must not
+/// acquire that writer lane or a write-capable database connection.
+#[async_trait::async_trait]
+pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
+    async fn list_messages(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError>;
+
+    async fn load_message(
+        &self,
+        scope: MailboxScope,
+        key: MessageKey,
+        deadline: ReadDeadline,
+    ) -> Result<Option<Message>, ReadLaneError>;
 }
 
 pub trait RosterStore: sealed::Sealed + Send + Sync {

@@ -22,4 +22,5 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+atm-storage = { path = "../atm-storage", version = "1.4.6", features = ["test-utils"] }
 serde_json.workspace = true

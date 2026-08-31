@@ -3,9 +3,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::{
-    AsyncMessageSearchStore, AsyncMessageStore, AtmError, GraftReceiverEndpointStore,
-    MessageSearchStore, MessageStore, NudgeTemplateOverrideStore, PeerConfigStore,
-    PendingNudgeStore, RosterStore, TemplateCatalogStore,
+    AsyncMailboxReader, AsyncMessageSearchStore, AsyncMessageStore, AtmError,
+    GraftReceiverEndpointStore, MessageSearchStore, MessageStore, NudgeTemplateOverrideStore,
+    PeerConfigStore, PendingNudgeStore, RosterStore, TemplateCatalogStore,
 };
 
 /// Backend-neutral handles returned by the selected durable storage backend.
@@ -13,6 +13,7 @@ use crate::{
 pub struct StorageHandles {
     message_store: Arc<dyn MessageStore + Send + Sync>,
     async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
+    async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     roster_store: Arc<dyn RosterStore + Send + Sync>,
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
@@ -32,6 +33,7 @@ pub struct StorageHandles {
 pub struct StorageHandleParts {
     pub message_store: Arc<dyn MessageStore + Send + Sync>,
     pub async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
+    pub async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     pub roster_store: Arc<dyn RosterStore + Send + Sync>,
     pub nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pub pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
@@ -70,6 +72,7 @@ impl StorageHandles {
         Self {
             message_store: parts.message_store,
             async_message_store: parts.async_message_store,
+            async_mailbox_reader: parts.async_mailbox_reader,
             roster_store: parts.roster_store,
             nudge_template_override_store: parts.nudge_template_override_store,
             pending_nudge_store: parts.pending_nudge_store,
@@ -88,6 +91,11 @@ impl StorageHandles {
     /// Returns the Tokio-safe durable message-admission boundary.
     pub fn async_message_store(&self) -> Arc<dyn AsyncMessageStore + Send + Sync> {
         Arc::clone(&self.async_message_store)
+    }
+
+    /// Returns the bounded read-only mailbox lane selected by composition.
+    pub fn async_mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
+        Arc::clone(&self.async_mailbox_reader)
     }
 
     pub fn roster_store(&self) -> Arc<dyn RosterStore + Send + Sync> {

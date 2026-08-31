@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-AsyncMailboxReader"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "AsyncMailboxReader"
+
+[public]
+trait = "AsyncMailboxReader"
+notes = "Tokio-facing bounded read-only mailbox contract; it exposes neither a writer permit nor a database connection."
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = ["atm_runtime::composition::assemble_runtime"]
+
+[ownership]
+io_owns = ["bounded_read_submission", "mailbox_read_result"]
+io_forbidden = ["socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["MailboxScope", "MessageQuery", "MessageKey", "ReadDeadline"]
+response_types = ["Message"]
+error_types = ["ReadLaneError"]
+
+[testing]
+allowed_test_double_paths = ["crate::testing::InMemoryMailboxReader"]
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-MESSAGESTORE-REFERENCES"]
+review_gates = ["no_backend_specific_async_contract", "no_writer_lane_read_submission"]
+
+[status]
+state = "concrete_landed"
+notes = ["The SQLite adapter owns bounded read-only workers; runtime callers await this capability directly."]

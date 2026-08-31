@@ -3,6 +3,7 @@ pub(crate) mod metadata_selection;
 pub(crate) mod render;
 mod request;
 pub(crate) mod seen_state;
+pub mod selection;
 pub(crate) mod state;
 pub(crate) mod wait;
 
