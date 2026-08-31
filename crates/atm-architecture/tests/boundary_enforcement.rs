@@ -3511,12 +3511,8 @@ fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies() {
         &router,
         &handlers.iter().map(String::as_str).collect::<Vec<_>>(),
     );
-    let allowed = [
-        "AsyncMailboxRuntime",
-        "DoctorProjection",
-        "ApiResponse",
-        "ResponseEnvelope",
-    ];
+    let allowed = av3_read_handler_allowed_types();
+    let allowed = allowed.iter().map(String::as_str).collect::<Vec<_>>();
     for (handler, region) in &read_regions {
         av3_assert_allowlisted_types(region, &allowed, &format!("read-handler `{handler}`"));
     }
@@ -3541,6 +3537,30 @@ fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies() {
             "AV.3 read-handler dependency boundary rejects `{prohibited}`"
         );
     }
+}
+
+#[test]
+fn av3_handler_allowlist_derives_port_signatures_and_ignores_envelope_variants() {
+    let allowed = av3_read_handler_allowed_types();
+    for permitted in [
+        "AtmError",
+        "Box",
+        "DoctorProjectionContext",
+        "Ok",
+        "Ordering",
+        "Some",
+    ] {
+        assert!(
+            allowed.contains(permitted),
+            "D1 allowlist must derive or document `{permitted}`"
+        );
+    }
+    let allowed = allowed.iter().map(String::as_str).collect::<Vec<_>>();
+    av3_assert_allowlisted_types(
+        "{ let _ = Some(DoctorProjectionContext::default()); std::sync::atomic::Ordering::Relaxed; ResponseEnvelope::Doctor(Box::new(report)); }",
+        &allowed,
+        "read-handler envelope fixture",
+    );
 }
 
 #[test]
@@ -4018,17 +4038,27 @@ fn av3_handler_regions(source: &str, handlers: &[&str]) -> BTreeMap<String, Stri
 fn av3_assert_allowlisted_types(region: &str, allowed: &[&str], scope: &str) {
     let syntax = syn::parse_file(&format!("fn gate() {region}"))
         .unwrap_or_else(|error| panic!("AV.3 {scope} fixture must parse: {error}"));
-    av3_assert_allowlisted_syntax_types(&syntax, allowed, scope);
+    av3_assert_allowlisted_syntax_types(&syntax, allowed, scope, false);
 }
 
 fn av3_assert_allowlisted_item_types(region: &str, allowed: &[&str], scope: &str) {
     let syntax = syn::parse_file(region)
         .unwrap_or_else(|error| panic!("AV.3 {scope} fixture must parse: {error}"));
-    av3_assert_allowlisted_syntax_types(&syntax, allowed, scope);
+    av3_assert_allowlisted_syntax_types(&syntax, allowed, scope, true);
 }
 
-fn av3_assert_allowlisted_syntax_types(syntax: &syn::File, allowed: &[&str], scope: &str) {
-    let unexpected = av3_type_names_in_syntax(syntax)
+fn av3_assert_allowlisted_syntax_types(
+    syntax: &syn::File,
+    allowed: &[&str],
+    scope: &str,
+    include_expression_variants: bool,
+) {
+    let type_names = if include_expression_variants {
+        av3_type_names_in_syntax(syntax)
+    } else {
+        av3_handler_type_names_in_syntax(syntax)
+    };
+    let unexpected = type_names
         .into_iter()
         .filter(|name| !allowed.contains(&name.as_str()))
         .collect::<Vec<_>>();
@@ -4041,17 +4071,32 @@ fn av3_assert_allowlisted_syntax_types(syntax: &syn::File, allowed: &[&str], sco
 #[derive(Default)]
 struct Av3TypeNameVisitor {
     names: BTreeSet<String>,
+    include_expression_variants: bool,
 }
 
 impl<'ast> Visit<'ast> for Av3TypeNameVisitor {
     fn visit_expr_path(&mut self, path: &'ast syn::ExprPath) {
-        for segment in &path.path.segments {
+        let segment_count = path.path.segments.len();
+        for (index, segment) in path.path.segments.iter().enumerate() {
             let name = segment.ident.to_string();
-            if name.chars().next().is_some_and(char::is_uppercase) {
+            if name.chars().next().is_some_and(char::is_uppercase)
+                && (self.include_expression_variants
+                    || segment_count == 1
+                    || index + 1 < segment_count)
+            {
                 self.names.insert(name);
             }
         }
-        syn::visit::visit_expr_path(self, path);
+        if self.include_expression_variants {
+            syn::visit::visit_expr_path(self, path);
+        } else {
+            if let Some(qself) = &path.qself {
+                self.visit_type(&qself.ty);
+            }
+            for segment in &path.path.segments {
+                self.visit_path_arguments(&segment.arguments);
+            }
+        }
     }
 
     fn visit_path(&mut self, path: &'ast syn::Path) {
@@ -4066,6 +4111,15 @@ impl<'ast> Visit<'ast> for Av3TypeNameVisitor {
 }
 
 fn av3_type_names_in_syntax(syntax: &syn::File) -> BTreeSet<String> {
+    let mut visitor = Av3TypeNameVisitor {
+        include_expression_variants: true,
+        ..Av3TypeNameVisitor::default()
+    };
+    visitor.visit_file(syntax);
+    visitor.names
+}
+
+fn av3_handler_type_names_in_syntax(syntax: &syn::File) -> BTreeSet<String> {
     let mut visitor = Av3TypeNameVisitor::default();
     visitor.visit_file(syntax);
     visitor.names
@@ -4095,29 +4149,60 @@ fn av3_async_mailbox_runtime_allowed_types(source: &str) -> BTreeSet<String> {
         "Unstarted",
         "Active",
     ];
-    let syntax =
-        syn::parse_file(source).expect("AV.3 AsyncMailboxRuntime source must parse as Rust");
+    PRELUDE
+        .iter()
+        .chain(DOCUMENTED_EXTRAS)
+        .map(|name| (*name).to_owned())
+        .chain(av3_trait_signature_types(source, "AsyncMailboxRuntime"))
+        .collect()
+}
+
+fn av3_read_handler_allowed_types() -> BTreeSet<String> {
+    const D1_NAMED_TYPES: &[&str] = &[
+        "ApiResponse",
+        "AsyncMailboxRuntime",
+        "DoctorProjection",
+        "ResponseEnvelope",
+    ];
+    const PRELUDE_AND_CORE: &[&str] = &[
+        "Box", "Err", "None", "Ok", "Option", "Ordering", "Result", "Self", "Some", "String", "Vec",
+    ];
+    let root = workspace_root();
+    let mailbox_runtime = read_source(&root.join("crates/atm-runtime/src/mailbox_runtime.rs"));
+    let doctor_projection = read_source(&root.join("crates/atm-runtime/src/doctor_projection.rs"));
+    D1_NAMED_TYPES
+        .iter()
+        .chain(PRELUDE_AND_CORE)
+        .map(|name| (*name).to_owned())
+        .chain(av3_trait_signature_types(
+            &mailbox_runtime,
+            "AsyncMailboxRuntime",
+        ))
+        .chain(av3_trait_signature_types(
+            &doctor_projection,
+            "DoctorProjection",
+        ))
+        .collect()
+}
+
+fn av3_trait_signature_types(source: &str, trait_name: &str) -> BTreeSet<String> {
+    let syntax = syn::parse_file(source).expect("AV.3 trait source must parse as Rust");
     let trait_item = syntax
         .items
         .iter()
         .find_map(|item| match item {
             syn::Item::Trait(item)
                 if !item.attrs.iter().any(is_test_configuration_attribute)
-                    && item.ident == "AsyncMailboxRuntime" =>
+                    && item.ident == trait_name =>
             {
                 Some(item)
             }
             _ => None,
         })
-        .expect("AV.1b must define AsyncMailboxRuntime");
+        .unwrap_or_else(|| panic!("AV.3 requires trait `{trait_name}`"));
     let trait_syntax = syn::parse_file(&trait_item.to_token_stream().to_string())
-        .expect("AsyncMailboxRuntime trait item must parse as Rust");
-    PRELUDE
-        .iter()
-        .chain(DOCUMENTED_EXTRAS)
-        .map(|name| (*name).to_owned())
-        .chain(av3_type_names_in_syntax(&trait_syntax))
-        .collect()
+        .unwrap_or_else(|error| panic!("AV.3 trait `{trait_name}` must parse: {error}"));
+    av3_type_names_in_syntax(&trait_syntax)
 }
 
 fn av3_async_mailbox_runtime_impl_region(source: &str) -> String {
