@@ -13,7 +13,8 @@ use std::time::{Duration, Instant};
 use atm_storage::{AtmError, ReadLaneError};
 use rusqlite::{Connection, InterruptHandle};
 
-use crate::shared_db::{SharedDbTarget, open_read_connection_for_target};
+use crate::shared_db::SharedDbTarget;
+use crate::shared_db_reader_lanes::open_read_connection_for_target;
 
 const READY: usize = 0;
 const QUARANTINED: usize = 1;

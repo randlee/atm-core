@@ -24,6 +24,7 @@ mod search_schema;
 mod search_store;
 mod shared_db;
 mod shared_db_diagnostics;
+mod shared_db_reader_lanes;
 mod template_catalog_schema;
 mod template_catalog_store;
 mod writer;
