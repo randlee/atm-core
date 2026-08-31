@@ -234,8 +234,8 @@ This is the authoritative acceptance checklist.
 
 This is the authoritative validation checklist.
 
-- [ ] `just lint`
-- [ ] `just test`
+- [x] `just lint`
+- [x] `just test`
 - [ ] `just validate`
 - [ ] Scratch-mutation demonstrations for A2/A3 recorded in the sprint
       QA history (live proof the gate trips before automated QA).
@@ -264,3 +264,9 @@ This is the authoritative validation checklist.
   real-router recording ingress behavior test (`e8d5886c2`); D4 makes the
   liveness and overload tests fail closed through the default lint gate
   (`6dd4d5a59`). Parent AV.2 merge-forward is `ae5e72d0c`.
+- 2026-08-31 Current merged validation at `7627bbbca`: 89
+  boundary-enforcement tests plus 6 companion atm-architecture tests (95
+  package total), 177 atm-http-runtime tests, `just lint` 34/34, and the
+  `.just` Python suite 536 passed / 10 skipped. `just validate` reached all
+  local gates but exits 1 only because its dependency-currency preflight says
+  the repository pins for sc-ecosystem and Wyvern are not latest releases.
