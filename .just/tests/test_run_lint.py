@@ -57,6 +57,7 @@ resolver = "2"
         self.assertIn("pytests", names)
         self.assertIn("sc-boundary", names)
         self.assertIn("sc-portability", names)
+        self.assertIn("read-concurrency-gates", names)
 
     def test_resolve_task_names_rejects_unknown_target(self) -> None:
         with self.assertRaises(ValueError):

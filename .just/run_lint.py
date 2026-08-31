@@ -43,6 +43,7 @@ PYTHON_LINT_ORDER = (
     "identities",
     "env-var-boundary",
     "runtime-observation-boundary",
+    "read-concurrency-gates",
     "fixed-sleep",
     "ttl-triage",
     "lines",
@@ -122,6 +123,10 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "runtime-observation-boundary": LintTask(
             "runtime-observation-boundary",
             [*python_command, str(repo_root / ".just/check_runtime_observation_boundary.py")],
+        ),
+        "read-concurrency-gates": LintTask(
+            "read-concurrency-gates",
+            [*python_command, str(repo_root / ".just/check_read_concurrency_gates.py")],
         ),
         "lines": LintTask("lines", [*python_command, str(repo_root / ".just/check_line_counts.py")]),
         "boundaries": LintTask("boundaries", [*python_command, str(repo_root / ".just/lint_boundaries.py")]),

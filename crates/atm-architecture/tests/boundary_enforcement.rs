@@ -3432,6 +3432,139 @@ fn al3_replacement_runtime_cannot_restore_legacy_or_blocking_runtime_constructs(
 }
 
 #[test]
+fn av3_handler_region_scanner_isolated_to_named_handlers() {
+    let source = r#"
+async fn list_messages() { reader.list().await }
+async fn read_messages() { reader.read().await }
+async fn heartbeat() { ControlPathSyncBridge::run(); }
+"#;
+    let region = handler_region(source, &["list_messages", "read_messages"]);
+    assert!(region.contains("reader.list()") && region.contains("reader.read()"));
+    assert!(
+        !region.contains("ControlPathSyncBridge"),
+        "handler-region scans must not confuse an allowed residual control-path caller with a read handler"
+    );
+}
+
+#[test]
+fn av3_bridge_run_scanner_reports_the_enclosing_function() {
+    let source = r#"
+struct Router {
+    control_path_sync_bridge: ControlPathSyncBridge,
+}
+impl Router {
+    async fn send(&self) { self.control_path_sync_bridge.run().await; }
+    async fn read_messages(&self) { reader.read().await; }
+}
+"#;
+    assert_eq!(
+        bridge_run_call_sites_by_enclosing_fn(source),
+        BTreeSet::from(["send".to_owned()]),
+    );
+}
+
+#[test]
+fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies() {
+    let router = read_source(
+        &workspace_root().join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"),
+    );
+    // AV.1b is intentionally in flight while AV.3 scaffolding is prepared.
+    // Its port is the atomic activation marker for this source guard.
+    if !router.contains("AsyncMailboxRuntime") {
+        return;
+    }
+    let read_region = handler_region(
+        &router,
+        &[
+            "list_messages",
+            "peek_messages",
+            "receive_messages",
+            "doctor",
+        ],
+    );
+    for prohibited in [
+        "BlockingCoreBridge",
+        "ControlPathSyncBridge",
+        "spawn_blocking",
+        "list_mail_with_runtime",
+        "peek_mail_with_runtime",
+        "read_mail_with_runtime",
+        "run_doctor_with_runtime",
+        "MessageStore::list_messages",
+        "StorageWriterIngress",
+    ] {
+        assert!(
+            !read_region.contains(prohibited),
+            "AV.3 read-handler dependency boundary rejects `{prohibited}`"
+        );
+    }
+}
+
+#[test]
+fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives() {
+    let mailbox_runtime = workspace_root().join("crates/atm-runtime/src/mailbox_runtime.rs");
+    if !mailbox_runtime.exists() {
+        return;
+    }
+    let source = read_source(&mailbox_runtime);
+    let implementation = source
+        .split("impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime")
+        .nth(1)
+        .expect("AV.1a composition must implement AsyncMailboxRuntime");
+    assert!(
+        source.contains("reader: Arc<dyn AsyncMailboxReader"),
+        "the AsyncMailboxRuntime composition must use the reader-lane capability"
+    );
+    for prohibited in [
+        "spawn_blocking",
+        "ControlPathSyncBridge",
+        "BlockingCoreBridge",
+        "StorageWriterIngress",
+        "Semaphore",
+        "Mutex",
+    ] {
+        assert!(
+            !implementation.contains(prohibited),
+            "AV.3 composition boundary rejects read serialization primitive `{prohibited}`"
+        );
+    }
+}
+
+#[test]
+fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() {
+    let router = read_source(
+        &workspace_root().join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"),
+    );
+    // The D1 rename is intentionally held until AV.1b is merged forward.
+    if !router.contains("ControlPathSyncBridge") {
+        return;
+    }
+    let production_router = router
+        .split("\n#[cfg(test)]\nmod tests")
+        .next()
+        .expect("router production/test split");
+    assert!(
+        !production_router.contains("BlockingCoreBridge"),
+        "D1 deletes the legacy BlockingCoreBridge identifier from production source"
+    );
+    let residual = BTreeSet::from([
+        "send".to_owned(),
+        "clear_messages".to_owned(),
+        "heartbeat".to_owned(),
+        "queue_get_next".to_owned(),
+        "graft_receiver_register".to_owned(),
+        "graft_receiver_refresh".to_owned(),
+        "graft_receiver_unregister".to_owned(),
+        "graft_receiver_lookup".to_owned(),
+    ]);
+    assert_eq!(
+        bridge_run_call_sites_by_enclosing_fn(production_router),
+        residual,
+        "AV-FU-1 owns the only permitted residual ControlPathSyncBridge::run call sites"
+    );
+}
+
+#[test]
 fn herdr_constructors_have_one_composition_root_call_site() {
     let root = workspace_root();
     let mut rust_files = Vec::new();
@@ -3618,6 +3751,61 @@ fn documented_boundary_section<'a>(docs: &'a str, name: &str) -> Option<&'a str>
 fn read_source(path: &Path) -> String {
     fs::read_to_string(path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+}
+
+/// AV.3 source-scanner primitives deliberately operate on function bodies,
+/// rather than the whole router file. The residual control-path bridge stays
+/// in that file after AV.1b, so file-wide token checks would either reject an
+/// allowed mutation/control-path caller or permit a read-handler regression.
+fn handler_region(source: &str, handlers: &[&str]) -> String {
+    handlers
+        .iter()
+        .map(|handler| extract_fn_body(source, handler))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Enumerate enclosing functions of calls routed through the narrowly named
+/// AV.3 residual bridge. The field name is discovered from its type so this is
+/// a call-site policy instead of a second field-name API.
+fn bridge_run_call_sites_by_enclosing_fn(source: &str) -> BTreeSet<String> {
+    let bridge_fields = source
+        .lines()
+        .filter_map(|line| line.split_once(": ControlPathSyncBridge"))
+        .map(|(field, _)| field.trim())
+        .filter(|field| {
+            !field.is_empty()
+                && field
+                    .chars()
+                    .all(|character| character == '_' || character.is_ascii_alphanumeric())
+        })
+        .collect::<BTreeSet<_>>();
+    function_names(source)
+        .into_iter()
+        .filter(|function| {
+            let body = extract_fn_body(source, function);
+            body.contains("ControlPathSyncBridge::run(")
+                || (body.contains(".run(")
+                    && bridge_fields
+                        .iter()
+                        .any(|field| body.contains(&format!("self.{field}"))))
+        })
+        .collect()
+}
+
+fn function_names(source: &str) -> BTreeSet<String> {
+    source
+        .lines()
+        .filter_map(|line| line.split_once("fn "))
+        .filter_map(|(_, tail)| tail.split_once('(').map(|(name, _)| name.trim()))
+        .filter(|name| {
+            !name.is_empty()
+                && name
+                    .chars()
+                    .all(|character| character == '_' || character.is_ascii_alphanumeric())
+        })
+        .map(ToOwned::to_owned)
+        .collect()
 }
 
 /// Returns the brace-delimited body (inclusive of the braces) of the first
