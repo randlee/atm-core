@@ -1,0 +1,94 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-M11>
+  a triage:Finding ;
+  triage:findingId "AV3-M11" ;
+  triage:title "docs/project-plan.md Phase AV sprint-status table lists only AV.2 — missing AV.1a (merged, PR #1112), AV.1b, AV.3, AV.4 rows" ;
+  triage:description "The Phase AV sprint status table in docs/project-plan.md (line 1584) contains only an AV.2 row. AV.1a is already MERGED via PR #1112 (the clear defect); AV.1b (PR #1115), AV.3 (PR #1113), AV.4 (PR #1114) rows are absent entirely. Verified firsthand by quality-mgr at ddc723a01 during AV.3 QA-r6. Table must reflect all Phase AV sprints with current status." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T18:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T18:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M11/AV2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M11/AV3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M11/AV4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-M11/AV2-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1584 ;
+  triage:snippet "| `AV.2` | `complete` | ... (table incomplete: missing AV.1a,AV.1b,AV.3,AV.4)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av2-read-concurrency-requirements" ;
+  triage:headSha "614b21987" ;
+  triage:occursIn <urn:atm:triage:worktree/AV2/614b21987> .
+
+<urn:atm:triage:occurrence/AV3-M11/AV3-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1584 ;
+  triage:snippet "| `AV.2` | `complete` | ... (table incomplete: missing AV.1a,AV.1b,AV.3,AV.4)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "ddc723a01" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3/ddc723a01> .
+
+<urn:atm:triage:occurrence/AV3-M11/AV4-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1584 ;
+  triage:snippet "| `AV.2` | `complete` | ... (table incomplete: missing AV.1a,AV.1b,AV.3,AV.4)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "b2c23a885" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/b2c23a885> .
+
+<urn:atm:triage:worktree/AV1B/aadf7d3d8>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "aadf7d3d8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV2/614b21987>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av2-read-concurrency-requirements" ;
+  triage:branch "feature/av2-read-concurrency-requirements" ;
+  triage:headSha "614b21987" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV3/ddc723a01>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "ddc723a01" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV4/b2c23a885>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "b2c23a885" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/INTEGRATE/2d1595709>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate/phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "2d1595709" ;
+  triage:orderIndex 5 .
