@@ -44,8 +44,8 @@ pub use crate::observability::{
 };
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMailboxReader,
-    AsyncMessageStore, GraftReceiverEndpointStore, MailboxBucketCounts, Message, MessageKey,
-    MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    AsyncMessageStore, GraftReceiverEndpointStore, MailboxBucketCounts, MailboxScope, Message,
+    MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 use atm_storage::schema::MessageEnvelope;
 #[cfg(test)]
@@ -615,6 +615,17 @@ impl MessageStore for SqliteMessageStore {
 
 #[async_trait::async_trait]
 impl AsyncMessageStore for SqliteMessageStore {
+    async fn apply_read_display_state_async(
+        &self,
+        scope: MailboxScope,
+        message_ids: Vec<MessageKey>,
+        seen_watermark: Option<IsoTimestamp>,
+    ) -> Result<(), AtmError> {
+        self.db
+            .submit_read_display_state_async(scope, message_ids, seen_watermark)
+            .await
+    }
+
     async fn save_message_if_absent_async(
         &self,
         message: Message,
@@ -3017,6 +3028,34 @@ mod tests {
             Some(original),
             "duplicate admission receives the existing immutable record"
         );
+    }
+
+    #[tokio::test]
+    async fn read_display_state_is_the_only_async_reader_followup_admitted_to_writer() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.async_message_store();
+        let original = message("atm:read-state", "read state");
+        backend
+            .message_store()
+            .save_message(&original)
+            .expect("seed mailbox");
+
+        store
+            .apply_read_display_state_async(
+                MailboxScope::new(team(), agent()),
+                vec![original.message_key.clone()],
+                Some(IsoTimestamp::now()),
+            )
+            .await
+            .expect("writer applies the explicit read state transition");
+
+        let stored = backend
+            .message_store()
+            .load_message(&original.message_key)
+            .expect("load transitioned message")
+            .expect("message remains durable");
+        assert!(stored.envelope.read);
+        assert_eq!(stored.envelope.text, original.envelope.text);
     }
 
     #[tokio::test]

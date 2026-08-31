@@ -6,7 +6,8 @@ use crate::search_schema::{
 };
 use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_error, sqlite_thread_mode};
 use atm_storage::contract::{
-    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message, MessageKey,
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, MailboxScope,
+    Message, MessageKey,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::MessageEnvelope;
@@ -34,6 +35,13 @@ type DecomposedWorkflowColumns<'a> = (
 
 #[derive(Clone)]
 pub(crate) enum WriteOp {
+    /// The sole mutation admitted from the asynchronous mailbox-read path.
+    /// It never carries immutable message contents or performs selection.
+    ApplyReadDisplayState {
+        mailbox: MailboxScope,
+        message_ids: Vec<MessageKey>,
+        seen_watermark: Option<IsoTimestamp>,
+    },
     UpsertMessage(Box<Message>),
     /// A related group of immutable records that must either all become
     /// visible or none do.  AI.31 uses this for the ACK reply and the
@@ -51,6 +59,16 @@ pub(crate) enum WriteOp {
 impl std::fmt::Debug for WriteOp {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::ApplyReadDisplayState {
+                mailbox,
+                message_ids,
+                seen_watermark,
+            } => formatter
+                .debug_struct("ApplyReadDisplayState")
+                .field("mailbox", mailbox)
+                .field("message_ids", &message_ids.len())
+                .field("seen_watermark", seen_watermark)
+                .finish(),
             Self::UpsertMessage(_) => formatter.write_str("UpsertMessage(..)"),
             Self::UpsertMessages(_) => formatter.write_str("UpsertMessages(..)"),
             Self::Acknowledge { source, .. } => formatter
@@ -75,6 +93,7 @@ impl std::fmt::Debug for WriteOp {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WriteOpResult {
+    ReadDisplayStateApplied,
     UpsertMessage {
         inserted: bool,
         /// Populated only when an immutable-key duplicate won the admission
@@ -99,6 +118,18 @@ pub(crate) fn execute(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     match op {
+        WriteOp::ApplyReadDisplayState {
+            mailbox,
+            message_ids,
+            seen_watermark,
+        } => execute_read_display_state(
+            mailbox,
+            message_ids,
+            *seen_watermark,
+            connection,
+            cache,
+            target,
+        ),
         WriteOp::UpsertMessage(request) => {
             execute_upsert_message(request, connection, cache, target)
         }
@@ -144,6 +175,55 @@ pub(crate) fn execute(
             }
         }
     }
+}
+
+fn execute_read_display_state(
+    mailbox: &MailboxScope,
+    message_ids: &[MessageKey],
+    seen_watermark: Option<IsoTimestamp>,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    let updated_at = IsoTimestamp::now().into_inner().to_rfc3339();
+    for message_key in message_ids {
+        let updated = cache
+            .mark_message_read(
+                connection,
+                params![
+                    mailbox.team.as_str(),
+                    mailbox.agent.as_str(),
+                    message_key.as_str(),
+                    updated_at,
+                ],
+            )
+            .map_err(|error| sqlite_error(target, "failed to mark mailbox message read", error))?;
+        if updated != 1 {
+            return Err(AtmError::mailbox_read(format!(
+                "message {} was not found for {}@{} while applying read display state",
+                message_key.as_str(),
+                mailbox.agent.as_str(),
+                mailbox.team.as_str(),
+            )));
+        }
+    }
+    if let Some(watermark) = seen_watermark {
+        connection
+            .execute(
+                "INSERT INTO mail_seen_watermarks(team, agent, watermark)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(team, agent) DO UPDATE SET watermark = excluded.watermark",
+                params![
+                    mailbox.team.as_str(),
+                    mailbox.agent.as_str(),
+                    watermark.into_inner().to_rfc3339(),
+                ],
+            )
+            .map_err(|error| {
+                sqlite_error(target, "failed to persist mailbox seen watermark", error)
+            })?;
+    }
+    Ok(WriteOpResult::ReadDisplayStateApplied)
 }
 
 fn execute_template_registration(

@@ -40,6 +40,20 @@ impl WriterStatementCache {
         )?;
         statement.execute(params)
     }
+
+    pub(crate) fn mark_message_read<P: Params>(
+        &mut self,
+        connection: &Connection,
+        params: P,
+    ) -> SqlResult<usize> {
+        let mut statement = cached(
+            connection,
+            "UPDATE mail_message_states
+             SET read = 1, updated_at = ?4, nudge_pending_at = NULL
+             WHERE team = ?1 AND agent = ?2 AND message_key = ?3 AND deleted_at IS NULL;",
+        )?;
+        statement.execute(params)
+    }
 }
 
 fn cached<'a>(connection: &'a Connection, sql: &str) -> SqlResult<CachedStatement<'a>> {

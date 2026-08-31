@@ -8,3 +8,11 @@ Source: `docs/plans/phase-av/sprint-AV.1b-read-handler-cutover.md`.
 - [x] D4/A6 — Delete `WriteOp::ListMessages`, the shared-db async writer-list method, and the async-store delegation; threaded-message projection now uses the bounded reader capability. Reader-focused storage tests cover the replacement path.
 - [ ] D5/A2/A3 — Add deterministic router-fixture liveness and bounded-overload tests for concurrent list/peek/read/doctor requests.
 - [ ] Closeout — Update sprint frontmatter (`status`, `branch`, `worktree`) and planning index; run lint, full tests, validate, architecture tests, and isolated live-stall proof; commit/push and notify Fenix.
+
+## Checkpoint evidence
+
+- D2 foundation: explicit SQLite `ApplyReadDisplayState` and the bounded
+  `StateHandoffSupervisor` are implemented. Focused tests cover response-before-
+  commit, buffer-full rejection, transient recovery, permanent writer failure
+  with retained queue, and startup without a Tokio runtime. Handler cutover,
+  metrics/doctor projection, and forced-worker-restart coverage remain open.

@@ -651,6 +651,20 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
 /// async backpressure without exposing its transaction queue or database.
 #[async_trait::async_trait]
 pub trait AsyncMessageStore: MessageStore {
+    /// Applies the narrow state transition requested by a successful mailbox
+    /// read. Selection remains reader-lane work; this is the sole ordered
+    /// writer-lane follow-up and is deliberately asynchronous.
+    async fn apply_read_display_state_async(
+        &self,
+        _scope: MailboxScope,
+        _message_ids: Vec<MessageKey>,
+        _seen_watermark: Option<IsoTimestamp>,
+    ) -> Result<(), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement async mailbox read-state transition",
+        ))
+    }
+
     /// Makes one immutable message durable, or returns the record that already
     /// owns its key, without blocking the Tokio request executor.
     async fn save_message_if_absent_async(

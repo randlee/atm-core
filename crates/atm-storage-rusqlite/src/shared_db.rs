@@ -69,6 +69,13 @@ CREATE TABLE IF NOT EXISTS mail_message_states (
         ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS mail_seen_watermarks (
+    team TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    watermark TEXT NOT NULL,
+    PRIMARY KEY (team, agent)
+);
+
 CREATE TABLE IF NOT EXISTS team_roster (
     team_name TEXT NOT NULL,
     agent_name TEXT NOT NULL,
@@ -350,7 +357,8 @@ impl SharedDb {
             .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
             WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
-            WriteOpResult::UpsertMessages
+            WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
@@ -410,13 +418,36 @@ impl SharedDb {
             } => Err(AtmError::daemon_unavailable(
                 "sqlite writer reported a duplicate without its retained record",
             )),
-            WriteOpResult::UpsertMessages
+            WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
             | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async message upsert",
             )),
+        }
+    }
+
+    pub(crate) async fn submit_read_display_state_async(
+        &self,
+        mailbox: atm_storage::MailboxScope,
+        message_ids: Vec<atm_storage::MessageKey>,
+        seen_watermark: Option<atm_storage::IsoTimestamp>,
+    ) -> Result<(), AtmError> {
+        match self
+            .writer
+            .submit_async(WriteOp::ApplyReadDisplayState {
+                mailbox,
+                message_ids,
+                seen_watermark,
+            })
+            .await?
+        {
+            WriteOpResult::ReadDisplayStateApplied => Ok(()),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for async read display state: {other:?}"
+            ))),
         }
     }
 
@@ -460,7 +491,8 @@ impl SharedDb {
         let result = self.writer.submit(WriteOp::UpsertMessages(records))?;
         match result {
             WriteOpResult::UpsertMessages => Ok(()),
-            WriteOpResult::UpsertMessage { .. }
+            WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
@@ -480,7 +512,8 @@ impl SharedDb {
             .submit(WriteOp::Acknowledge { source, builder })?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::UpsertMessage { .. }
+            WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
@@ -501,7 +534,8 @@ impl SharedDb {
             .await?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::UpsertMessage { .. }
+            WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
