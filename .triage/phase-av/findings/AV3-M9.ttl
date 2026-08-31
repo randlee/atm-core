@@ -1,0 +1,89 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-M9>
+  a triage:Finding ;
+  triage:findingId "AV3-M9" ;
+  triage:title "D4 liveness gate (.just/check_read_concurrency_gates.py REQUIRED_LIVENESS_TESTS) does not name the new D2b behavior test read_family_uses_only_the_supervised_recording_writer_handoff" ;
+  triage:description "The fix-r5 D4 gate fail-closes on the AV.1b D5 liveness test names but the new A2b/D2b behavior test in crates/atm-http-runtime/src/storage_and_nudge_router.rs (~:2510-2670) is enforced today only as a plain #[tokio::test]; adding its name to REQUIRED_LIVENESS_TESTS (or a sibling REQUIRED_READ_PURITY_TESTS list) keeps the gate consistent with the sprint's 'removal requires an ADR change' claim." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "tooling" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "all AV.3 gate-bearing tests (D1 exact-call-site, D2/D2b behavior, D4 liveness) vs the names the .just gate asserts" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T10:06:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T10:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M9/M9-gate> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M9/M9-test> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-M9/M9-gate>
+  a triage:Occurrence ;
+  triage:file ".just/check_read_concurrency_gates.py" ;
+  triage:line 41 ;
+  triage:snippet "REQUIRED_LIVENESS_TESTS = (" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "c78288c4d" ;
+  triage:occursIn <urn:atm:triage:worktree/av3/c78288c4d> .
+
+<urn:atm:triage:occurrence/AV3-M9/M9-test>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 2511 ;
+  triage:snippet "async fn read_family_uses_only_the_supervised_recording_writer_handoff()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "c78288c4d" ;
+  triage:occursIn <urn:atm:triage:worktree/av3/c78288c4d> .
+
+<urn:atm:triage:worktree/integrate/av/dc2f56002>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate/phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "dc2f56002" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/av1b/1e81aade8>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "1e81aade8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/av1b-2/93c361a43>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "93c361a43" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/av2/21d578887>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "21d578887" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/av3/c78288c4d>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "c78288c4d" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/av4/3a09e2a6f>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "3a09e2a6f" ;
+  triage:orderIndex 5 .
