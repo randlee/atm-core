@@ -15,8 +15,11 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-31T16:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:resolutionNote "QA-r5 @ f31a35484 (fix-r4: eb9744b4b implementer scan + f68257608 M10 waiver + f31a35484 M11 recount). All occurrences verified fixed firsthand + req-qa/rust-qa/boundary-guard/ruthless. Battery: lint_boundaries PASS, pytest .just/tests 528/10, just lint 32/32, just test PASS, atm-architecture 81, workspace 1528." ;
   triage:triagedAt "2026-08-31T16:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV1A ;
   triage:foundAt "2026-08-31T09:58:00Z"^^xsd:dateTime ;
@@ -28,8 +31,8 @@
   triage:file "docs/plans/phase-av/sprint-AV.1a-reader-lane-foundation.md" ;
   triage:line 377 ;
   triage:snippet "23 derive the production trait-contract declaration region" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "1e81aade8" ;
   triage:occursIn <urn:atm:triage:worktree/AV1a/1e81aade8> .

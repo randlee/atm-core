@@ -861,8 +861,8 @@ mod tests {
     };
     use crate::shared_db::SharedDbTarget;
     use std::num::NonZeroUsize;
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, mpsc};
     use std::time::{Duration, Instant};
 
     static NEXT_TEST_POOL_ID: AtomicUsize = AtomicUsize::new(1);
@@ -964,22 +964,33 @@ mod tests {
     #[tokio::test]
     async fn two_reader_workers_execute_independent_queries_in_parallel() {
         let pool = test_pool(test_config(2, 2, Duration::from_millis(250), 2));
-        let started = Instant::now();
+        let (left_arrived_tx, left_arrived_rx) = mpsc::sync_channel(1);
+        let (right_arrived_tx, right_arrived_rx) = mpsc::sync_channel(1);
         let (left, right) = tokio::join!(
-            pool.submit(Duration::from_secs(1), |_, _| {
-                std::thread::park_timeout(Duration::from_millis(80));
-                Ok::<_, atm_storage::ReadLaneError>("left")
+            pool.submit(Duration::from_secs(10), move |_, _| {
+                let _ = left_arrived_tx.send(());
+                Ok::<_, atm_storage::ReadLaneError>((
+                    "left",
+                    right_arrived_rx
+                        .recv_timeout(Duration::from_secs(5))
+                        .is_ok(),
+                ))
             }),
-            pool.submit(Duration::from_secs(1), |_, _| {
-                std::thread::park_timeout(Duration::from_millis(80));
-                Ok::<_, atm_storage::ReadLaneError>("right")
+            pool.submit(Duration::from_secs(10), move |_, _| {
+                let _ = right_arrived_tx.send(());
+                Ok::<_, atm_storage::ReadLaneError>((
+                    "right",
+                    left_arrived_rx.recv_timeout(Duration::from_secs(5)).is_ok(),
+                ))
             })
         );
-        assert_eq!(left.expect("left query"), "left");
-        assert_eq!(right.expect("right query"), "right");
+        let (left_name, left_observed_right) = left.expect("left query");
+        let (right_name, right_observed_left) = right.expect("right query");
+        assert_eq!(left_name, "left");
+        assert_eq!(right_name, "right");
         assert!(
-            started.elapsed() < Duration::from_millis(145),
-            "two worker pool must not serialize independent reads"
+            left_observed_right && right_observed_left,
+            "two worker pool must keep both independent reads in flight simultaneously"
         );
     }
 
