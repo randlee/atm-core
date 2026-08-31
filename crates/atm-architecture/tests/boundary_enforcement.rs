@@ -3465,6 +3465,32 @@ impl Router {
 }
 
 #[test]
+fn av3_ast_scanners_ignore_comments_literals_and_test_module_decoys() {
+    let source = r##"
+#[cfg(test)] mod tests { async fn list_messages() { FreshSemaphoreGate::acquire(); } }
+async fn list_messages<T>() { /* } fn fake() */ let note = "{ fn fake() }"; reader.list().await; }
+"##;
+    let region = av3_handler_region(source, &["list_messages"]);
+    assert!(region.contains("reader . list"));
+    assert!(!region.contains("FreshSemaphoreGate"));
+}
+
+#[test]
+fn av3_bridge_scanner_catches_arc_fields_and_inline_construction() {
+    let source = r#"
+struct Router { bridge: std::sync::Arc<ControlPathSyncBridge> }
+impl Router {
+  async fn field_path(&self) { self.bridge.run().await; }
+  async fn inline_path<T>(&self) { let bridge = ControlPathSyncBridge::new(); bridge.run().await; }
+}
+"#;
+    assert_eq!(
+        av3_bridge_run_call_sites_by_enclosing_fn(source),
+        BTreeSet::from(["field_path".to_owned(), "inline_path".to_owned()]),
+    );
+}
+
+#[test]
 fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies() {
     let router = read_source(
         &workspace_root().join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"),
