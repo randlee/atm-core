@@ -1975,10 +1975,11 @@ def resolve_module_file(repo_root: Path, module_path: str) -> list[Path]:
 def trait_implementation_source_files(repo_root: Path, trait: str | None) -> list[Path]:
     """Return production source files that implement a trait-only boundary.
 
-    This supports the explicit ``no_in_repo_implementation`` assertion.  It
-    is intentionally *not* the default source-policy target: an I/O policy on
-    a trait contract constrains that contract, while concrete adapters may
-    legitimately own the I/O the trait excludes.
+    This supports both the explicit ``no_in_repo_implementation`` assertion
+    and the default source-policy target for a trait-only contract. A policy
+    must cover the production implementation sites that exercise the trait;
+    scanning its declaration alone leaves an out-of-crate implementation
+    ungoverned.
     """
     if trait is None:
         return []
@@ -2036,6 +2037,56 @@ def trait_contract_source_regions(repo_root: Path, trait: str | None) -> list[tu
     return regions
 
 
+def concrete_trait_implementation_delegates(
+    repo_root: Path,
+    records: list[BoundaryRecord],
+) -> tuple[set[Path], tuple[Path, ...]]:
+    """Return concrete implementation modules and SQLite-owning crate roots.
+
+    A trait contract must reach each production implementation file.  When an
+    implementation is already a declared concrete boundary module, that
+    concrete boundary remains the single policy owner for the module; scanning
+    it again through the abstract trait would conflate permitted adapter I/O
+    with contract I/O.  SQLite adapters are package-owned because several
+    private adapter modules are intentionally constructed below the shared
+    SQLite boundary's crate-root module.
+    """
+    concrete_modules: set[Path] = set()
+    sqlite_owner_roots: list[Path] = []
+    aliases = manifest_by_alias(repo_root)
+    for record in records:
+        if not record.is_active or record.implementation_visibility == "trait_only":
+            continue
+        if record.implementation_module is not None:
+            concrete_modules.update(
+                resolve_module_file(repo_root, record.implementation_module)
+            )
+        if "sqlite" in record.io_owns:
+            owner = aliases.get(record.owner_package)
+            if owner is not None:
+                sqlite_owner_roots.append(owner.path.parent / "src")
+    return concrete_modules, tuple(sqlite_owner_roots)
+
+
+def concrete_owner_delegates_trait_implementation(
+    source_path: Path,
+    tag: str,
+    concrete_modules: set[Path],
+    sqlite_owner_roots: tuple[Path, ...],
+) -> bool:
+    """Whether a concrete boundary, rather than an abstract trait, owns I/O.
+
+    This is source ownership, not an exception: the concrete record still
+    scans the module under its own policy.  It only applies to implementation
+    files discovered from a trait-only contract, never to the contract region.
+    """
+    if source_path in concrete_modules:
+        return True
+    return tag == "direct_sqlite_io" and any(
+        source_path.is_relative_to(root) for root in sqlite_owner_roots
+    )
+
+
 def collect_io_forbidden_source_violations(
     repo_root: Path,
     records: list[BoundaryRecord],
@@ -2059,6 +2110,9 @@ def collect_io_forbidden_source_violations(
         key: tuple(re.compile(pattern, re.IGNORECASE) for pattern in patterns)
         for key, patterns in IO_FORBIDDEN_SOURCE_EXCEPTIONS.items()
     }
+    concrete_modules, sqlite_owner_roots = concrete_trait_implementation_delegates(
+        repo_root, records
+    )
     for record in records:
         for tag in record.io_forbidden:
             patterns = compiled_patterns.get(tag)
@@ -2071,15 +2125,20 @@ def collect_io_forbidden_source_violations(
                 )
                 continue
             declared_source_modules = dict(record.io_forbidden_source_modules).get(tag, ())
+            is_unmapped_trait_contract = (
+                record.implementation_visibility == "trait_only"
+                and not declared_source_modules
+                and not record.no_in_repo_implementation
+            )
             derived_source_regions = (
                 trait_contract_source_regions(repo_root, record.public_trait)
-                if record.implementation_visibility == "trait_only"
+                if is_unmapped_trait_contract
                 else []
             )
             derived_source_paths = [path for path, _ in derived_source_regions]
             implementation_source_paths = (
                 trait_implementation_source_files(repo_root, record.public_trait)
-                if record.no_in_repo_implementation
+                if record.implementation_visibility == "trait_only"
                 else []
             )
             if record.no_in_repo_implementation and implementation_source_paths:
@@ -2089,6 +2148,14 @@ def collect_io_forbidden_source_violations(
                         f"{record.boundary_id} declares no_in_repo_implementation but production impl sites exist",
                     )
                 )
+            if is_unmapped_trait_contract and not implementation_source_paths:
+                violations.append(
+                    BoundaryViolation(
+                        record.location,
+                        f"{record.boundary_id} declares io_forbidden {tag!r} but has no production implementation source modules; declare no_in_repo_implementation or source modules",
+                    )
+                )
+                continue
             if (
                 record.implementation_module is None
                 and not declared_source_modules
@@ -2130,7 +2197,19 @@ def collect_io_forbidden_source_violations(
                 if source_path not in seen_source_paths:
                     seen_source_paths.add(source_path)
                     source_paths.append(source_path)
+            for source_path in implementation_source_paths:
+                if source_path not in seen_source_paths:
+                    seen_source_paths.add(source_path)
+                    source_paths.append(source_path)
             for source_path in source_paths:
+                implementation_is_concretely_owned = (
+                    source_path in implementation_source_paths
+                    and concrete_owner_delegates_trait_implementation(
+                        source_path, tag, concrete_modules, sqlite_owner_roots
+                    )
+                )
+                if implementation_is_concretely_owned:
+                    continue
                 rel_source = source_path.relative_to(repo_root).as_posix()
                 source_lines = source_path.read_text(encoding="utf-8").splitlines()
                 test_scope = rust_file_test_scope(source_path, source_lines)
@@ -2138,6 +2217,7 @@ def collect_io_forbidden_source_violations(
                     contract_line_numbers = contract_lines_by_path.get(source_path)
                     if (
                         contract_line_numbers is not None
+                        and source_path not in implementation_source_paths
                         and line_number not in contract_line_numbers
                     ):
                         continue
