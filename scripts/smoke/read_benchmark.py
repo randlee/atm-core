@@ -66,10 +66,11 @@ CORPUS_PAYLOAD_BYTES = 256
 CORPUS_SKEW_PROFILE = "uniform:one-message-per-member"
 HARNESS_VERSION = "av4-read-benchmark-1"
 RATCHET_TOLERANCE_PCT = 5
-# Flip this checked-in marker to True only in the reviewed merge-forward that
-# contains AV.1b's reader-handler cutover and exported D5 metrics.  Diagnostic
-# runs remain available while it is False; official/seeding runs fail closed.
-AV1B_CUTOVER_LANDED = False
+# AV.1b's reader-handler cutover is merged in the reviewed phase-av
+# merge-forward (PR #1115). Keep official/seeding runs gated until this
+# explicit provenance marker changes in that merge-forward; diagnostics remain
+# available independently.
+AV1B_CUTOVER_LANDED = True
 
 
 class ReadBenchmarkError(RuntimeError):
