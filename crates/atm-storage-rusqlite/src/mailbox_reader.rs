@@ -70,6 +70,30 @@ impl MailboxReader {
             })
             .await
     }
+
+    async fn submit_member_exists(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<bool, ReadLaneError> {
+        self.pool
+            .submit(deadline.remaining(), move |connection, target| {
+                mailbox_member_exists(connection, target, &scope).map_err(storage_error)
+            })
+            .await
+    }
+
+    async fn submit_seen_watermark(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<Option<IsoTimestamp>, ReadLaneError> {
+        self.pool
+            .submit(deadline.remaining(), move |connection, target| {
+                load_seen_watermark(connection, target, &scope).map_err(storage_error)
+            })
+            .await
+    }
 }
 
 pub(crate) fn start_mailbox_reader(
@@ -107,6 +131,22 @@ impl AsyncMailboxReader for MailboxReader {
         deadline: ReadDeadline,
     ) -> Result<Option<Message>, ReadLaneError> {
         self.submit_load(scope, key, deadline).await
+    }
+
+    async fn mailbox_member_exists(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<bool, ReadLaneError> {
+        self.submit_member_exists(scope, deadline).await
+    }
+
+    async fn load_seen_watermark(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<Option<IsoTimestamp>, ReadLaneError> {
+        self.submit_seen_watermark(scope, deadline).await
     }
 }
 
@@ -281,6 +321,42 @@ fn load_message(
         .transpose()?;
     close_reader_transaction(transaction, target).map_err(storage_error)?;
     Ok(message)
+}
+
+fn mailbox_member_exists(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    scope: &MailboxScope,
+) -> Result<bool, AtmError> {
+    connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM team_roster WHERE team_name = ?1 AND agent_name = ?2);",
+            params![scope.team.as_str(), scope.agent.as_str()],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|value| value != 0)
+        .map_err(|error| sqlite_error(target, "failed to validate mailbox roster member", error))
+}
+
+fn load_seen_watermark(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    scope: &MailboxScope,
+) -> Result<Option<IsoTimestamp>, AtmError> {
+    connection
+        .query_row(
+            "SELECT watermark FROM mail_seen_watermarks WHERE team = ?1 AND agent = ?2;",
+            params![scope.team.as_str(), scope.agent.as_str()],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| sqlite_error(target, "failed to load mailbox seen watermark", error))?
+        .map(|raw| {
+            raw.parse().map_err(|error| {
+                AtmError::validation(format!("failed to parse sqlite seen watermark: {error}"))
+            })
+        })
+        .transpose()
 }
 
 #[derive(Debug, Clone)]

@@ -14,7 +14,7 @@ use crate::contract::{
     GraftReceiverRegistration, MailboxScope, Message, MessageKey, MessageQuery, ReadDeadline,
     ReadLaneError, sealed,
 };
-use crate::types::{AgentName, OwnerGeneration, TeamName};
+use crate::types::{AgentName, IsoTimestamp, OwnerGeneration, TeamName};
 
 /// A `GraftReceiverEndpointStore` that accepts every write and reports no
 /// lease. Used by callers that need a wired store to compile against but
@@ -76,6 +76,8 @@ impl GraftReceiverEndpointStore for NoopGraftReceiverEndpointStore {
 #[derive(Debug, Default)]
 pub struct InMemoryMailboxReader {
     messages: std::sync::Mutex<Vec<Message>>,
+    seen_watermarks:
+        std::sync::Mutex<std::collections::BTreeMap<(TeamName, AgentName), IsoTimestamp>>,
 }
 
 impl InMemoryMailboxReader {
@@ -83,6 +85,7 @@ impl InMemoryMailboxReader {
     pub fn with_messages(messages: Vec<Message>) -> Self {
         Self {
             messages: std::sync::Mutex::new(messages),
+            seen_watermarks: std::sync::Mutex::new(std::collections::BTreeMap::new()),
         }
     }
 }
@@ -136,5 +139,34 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
             Some(_) => Err(ReadLaneError::UnauthorizedScope),
             None => Ok(None),
         }
+    }
+
+    async fn mailbox_member_exists(
+        &self,
+        scope: MailboxScope,
+        _deadline: ReadDeadline,
+    ) -> Result<bool, ReadLaneError> {
+        let messages = self
+            .messages
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory mailbox reader lock poisoned".to_owned(),
+            })?;
+        Ok(messages
+            .iter()
+            .any(|message| message.team == scope.team && message.agent == scope.agent))
+    }
+
+    async fn load_seen_watermark(
+        &self,
+        scope: MailboxScope,
+        _deadline: ReadDeadline,
+    ) -> Result<Option<IsoTimestamp>, ReadLaneError> {
+        self.seen_watermarks
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory mailbox reader seen-state lock poisoned".to_owned(),
+            })
+            .map(|watermarks| watermarks.get(&(scope.team, scope.agent)).copied())
     }
 }

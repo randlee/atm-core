@@ -88,6 +88,30 @@ pub struct MailboxSelectionResult {
     pub selected: Vec<SelectedMailboxMessage>,
 }
 
+/// Applies the stable mailbox display order to an async-reader result.
+///
+/// The retained path orders by timestamp, message id, and source position
+/// before applying its display limit.  The reader result does not carry the
+/// transient source index, so its stable durable message key is the final
+/// tie-breaker instead.  Keeping this policy here prevents the runtime or an
+/// HTTP adapter from inventing a second ordering rule.
+pub fn sort_and_limit_mailbox_selection(
+    selected: &mut Vec<SelectedMailboxMessage>,
+    limit: Option<usize>,
+) {
+    selected.sort_by(|left, right| {
+        right
+            .envelope
+            .timestamp
+            .cmp(&left.envelope.timestamp)
+            .then_with(|| right.envelope.message_id.cmp(&left.envelope.message_id))
+            .then_with(|| right.message_key.cmp(&left.message_key))
+    });
+    if let Some(limit) = limit {
+        selected.truncate(limit);
+    }
+}
+
 /// Selects fully materialized records. This is the public, storage-neutral
 /// seam consumed by `atm-runtime`.
 #[must_use]

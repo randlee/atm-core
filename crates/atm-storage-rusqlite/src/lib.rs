@@ -45,8 +45,8 @@ pub use crate::observability::{
 };
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMailboxReader,
-    AsyncMessageStore, GraftReceiverEndpointStore, MailboxBucketCounts, Message, MessageKey,
-    MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    AsyncMessageStore, GraftReceiverEndpointStore, MailboxBucketCounts, MailboxScope, Message,
+    MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 use atm_storage::schema::MessageEnvelope;
 #[cfg(test)]
@@ -616,8 +616,15 @@ impl MessageStore for SqliteMessageStore {
 
 #[async_trait::async_trait]
 impl AsyncMessageStore for SqliteMessageStore {
-    async fn list_messages_async(&self, query: MessageQuery) -> Result<Vec<Message>, AtmError> {
-        self.db.submit_list_messages_async(query).await
+    async fn apply_read_display_state_async(
+        &self,
+        scope: MailboxScope,
+        message_ids: Vec<MessageKey>,
+        seen_watermark: Option<IsoTimestamp>,
+    ) -> Result<(), AtmError> {
+        self.db
+            .submit_read_display_state_async(scope, message_ids, seen_watermark)
+            .await
     }
 
     async fn save_message_if_absent_async(
@@ -3070,30 +3077,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sqlite_backend_async_mailbox_projection_uses_the_writer_lane() {
+    async fn read_display_state_is_the_only_async_reader_followup_admitted_to_writer() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.async_message_store();
-        let first = message("atm:async-projection-first", "first");
-        let second = message("atm:async-projection-second", "second");
+        let original = message("atm:read-state", "read state");
         backend
             .message_store()
-            .save_messages_atomically(&[first.clone(), second.clone()])
+            .save_message(&original)
             .expect("seed mailbox");
 
-        let projection = store
-            .list_messages_async(MessageQuery {
-                team: team(),
-                agent: agent(),
-                sender: None,
-                task_id: None,
-                limit: None,
-            })
+        store
+            .apply_read_display_state_async(
+                MailboxScope::new(team(), agent()),
+                vec![original.message_key.clone()],
+                Some(IsoTimestamp::now()),
+            )
             .await
-            .expect("async writer-owned mailbox projection");
+            .expect("writer applies the explicit read state transition");
 
-        assert_eq!(projection.len(), 2);
-        assert!(projection.contains(&first));
-        assert!(projection.contains(&second));
+        let stored = backend
+            .message_store()
+            .load_message(&original.message_key)
+            .expect("load transitioned message")
+            .expect("message remains durable");
+        assert!(stored.envelope.read);
+        assert_eq!(stored.envelope.text, original.envelope.text);
     }
 
     #[tokio::test]
@@ -3185,6 +3193,60 @@ mod tests {
             .await
             .expect_err("cross-agent load must fail at the storage boundary");
         assert_eq!(denied_cross_agent_load, ReadLaneError::UnauthorizedScope);
+    }
+
+    #[tokio::test]
+    async fn dedicated_mailbox_reader_projects_roster_and_durable_seen_state() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let scope = MailboxScope::new(team(), agent());
+        backend
+            .roster_store()
+            .save_roster(&RosterSnapshot {
+                team_name: team(),
+                members: vec![RosterMember {
+                    team_name: team(),
+                    agent_name: agent(),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Worker,
+                    model: ModelName::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Map::new(),
+                }],
+                refreshed_at: None,
+            })
+            .expect("seed roster");
+        let original = message("atm:reader-seen", "read state");
+        let watermark = IsoTimestamp::now();
+        backend
+            .message_store()
+            .save_message(&original)
+            .expect("seed mailbox");
+        backend
+            .async_message_store()
+            .apply_read_display_state_async(
+                scope.clone(),
+                vec![original.message_key],
+                Some(watermark),
+            )
+            .await
+            .expect("write seen state");
+
+        let reader = backend.async_mailbox_reader();
+        let deadline = ReadDeadline::new(std::time::Duration::from_secs(1)).expect("deadline");
+        assert!(
+            reader
+                .mailbox_member_exists(scope.clone(), deadline)
+                .await
+                .expect("read-only roster projection")
+        );
+        assert_eq!(
+            reader
+                .load_seen_watermark(scope, deadline)
+                .await
+                .expect("read-only seen projection"),
+            Some(watermark)
+        );
     }
 
     #[test]

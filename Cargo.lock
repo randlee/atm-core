@@ -291,6 +291,7 @@ dependencies = [
  "agent-team-mail-core",
  "async-trait",
  "atm-herdr",
+ "atm-runtime",
  "atm-runtime-test-support",
  "atm-storage",
  "axum",
@@ -337,6 +338,7 @@ name = "atm-runtime"
 version = "1.4.6"
 dependencies = [
  "agent-team-mail-core",
+ "async-trait",
  "atm-storage",
  "serde_json",
  "tokio",
