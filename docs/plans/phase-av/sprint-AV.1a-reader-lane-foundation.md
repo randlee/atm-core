@@ -6,7 +6,7 @@ branch: fix/mailbox-read-blocking-serialization
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/fix/mailbox-read-blocking-serialization
 integration_branch: integrate/phase-av
 stack_parent: integrate/phase-av (stack bottom) — planned; stack provisioned by task AV.0 (phase plan §4)
-status: in_progress
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 dependency_relations:
@@ -333,6 +333,28 @@ This is the authoritative validation checklist.
       this sprint's reader-lane implementation.
 - [x] Architecture/boundary tests green (`cargo test -p atm-architecture`);
       `python3 .just/lint_boundaries.py` green with the D1a records.
+
+## QA round 1 closure
+
+All AV.1a round-1 findings are implemented before this status transition:
+AV1A-B2 `f81db7eb13b2ae9940ce51e17780673f34258af4`; AV1A-I1
+`f00643c69ef6bcb0511903236bbcb5e8515d8b70`; AV1A-I2
+`bf347f711b76331bc781fc8371324f5e37cbc249`; AV1A-I3/I4
+`5e717719bfad355203a09d29b45a58fb56b21e91`; AV1A-I5
+`fd2d02191ad23d229d8af8f8b0577d5cbbb2705f`; AV1A-M1
+`32cde39158a31df172674d8930a34803b9ebcc3f`; AV1A-M2
+`cb96ef022adec670fe1f3a4d7cc654f53f0c05b6` (with WAL-state completion in
+M8); AV1A-M3 `2b6c95958975ea59894d3598efbbed7ae771a8d8`; AV1A-M4
+`1517df1f57ffc98a45547912b9051612b0352739`; AV1A-M5
+`7212f4a6a83f5145796a05807df639bb8333bed4`; AV1A-M6
+`487a8be08114af7ed812ccd6c1ebeeeb322a7567`; AV1A-M7
+`e2f172fcc929ae606a3c0d5ec2563c52ea844df1`; and AV1A-M8
+`73c0a4bf1d36a87a8b31d517754a86bfb0aa76d5`.
+
+Validation before closure: `cargo test --workspace --exclude atm-daemon`,
+`cargo test -p atm-architecture`, `just lint`, and
+`python3 .just/lint_boundaries.py` pass. `just validate` passes on the
+current pinned toolchain.
 
 ## Out of scope
 

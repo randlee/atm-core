@@ -23,6 +23,7 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-daemon", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-storage-rusqlite"),
     ("atm-storage", "atm-core"),
+    ("atm-storage", "atm-daemon"),
     ("atm-storage", "atm-storage-rusqlite"),
     ("atm-storage-rusqlite", "atm-core"),
     ("atm-storage-rusqlite", "atm-runtime"),
@@ -1628,16 +1629,8 @@ fn atm_must_not_depend_on_atm_storage_rusqlite() {
 }
 
 #[test]
-fn guarded_runtime_boundaries_forbid_their_declared_crate_edges() {
-    for (source, target) in [
-        ("atm", "atm-daemon"),
-        ("atm-daemon", "atm-runtime"),
-        ("atm-http-runtime", "atm"),
-        ("atm-http-runtime", "atm-daemon-bootstrap"),
-        ("atm-http-runtime", "atm-graft"),
-        ("atm-http-runtime", "atm-storage-rusqlite"),
-        ("atm-daemon-bootstrap", "atm-graft"),
-    ] {
+fn guarded_boundaries_forbid_every_declared_crate_edge() {
+    for &(source, target) in EXPECTED_FORBIDDEN_EDGES {
         assert_forbidden_edge_absent(source, target);
     }
 }
@@ -2460,15 +2453,19 @@ fn direct_normal_workspace_dependencies() -> BTreeMap<String, BTreeSet<String>> 
 }
 
 #[test]
-fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes() {
+fn al1_http_runtime_has_only_authorized_contract_ports_and_excludes_retired_transport_shapes() {
     let dependencies = direct_normal_workspace_dependencies();
     let actual = dependencies
         .get("atm-http-runtime")
         .expect("AL.1 HTTP runtime package must exist");
     assert_eq!(
         actual,
-        &BTreeSet::from(["agent-team-mail-core".to_string(), "atm-herdr".to_string(),]),
-        "atm-http-runtime may depend on ATM core contracts and the Herdr process adapter"
+        &BTreeSet::from([
+            "agent-team-mail-core".to_string(),
+            "atm-herdr".to_string(),
+            "atm-runtime".to_string(),
+        ]),
+        "atm-http-runtime may depend only on core contracts, the Tokio-owned async runtime ports, and the Herdr process adapter"
     );
 
     let root = workspace_root();
@@ -3555,21 +3552,33 @@ fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()
         return;
     }
     let source = read_source(&mailbox_runtime);
-    let implementation = source
-        .split("impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime")
-        .nth(1)
-        .expect("AV.1a composition must implement AsyncMailboxRuntime");
+    let implementation = av3_async_mailbox_runtime_impl_region(&source);
     assert!(
         source.contains("reader: Arc<dyn AsyncMailboxReader"),
         "the AsyncMailboxRuntime composition must use the reader-lane capability"
     );
-    av3_assert_allowlisted_types(
-        implementation,
+    av3_assert_allowlisted_item_types(
+        &implementation,
         &[
+            "AsyncMailboxRuntime",
+            "StorageAsyncMailboxRuntime",
             "AsyncMailboxReader",
             "StateHandoffSupervisor",
+            "MailboxSelectionRequest",
+            "MailboxSelectionCandidate",
+            "MailboxSelectionResult",
+            "SelectedMailboxMessage",
+            "MailboxScope",
+            "Message",
+            "MessageKey",
+            "MessageQuery",
+            "RequestDeadline",
             "ReadDeadline",
             "AtmError",
+            "ReadLaneError",
+            "Result",
+            "Ok",
+            "Self",
         ],
         "AsyncMailboxRuntime composition",
     );
@@ -3586,6 +3595,45 @@ fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()
             "AV.3 composition boundary rejects read serialization primitive `{prohibited}`"
         );
     }
+}
+
+#[test]
+fn av3_async_mailbox_runtime_composition_rejects_production_writer_and_gate_fixtures() {
+    for prohibited in ["FreshSemaphoreGate", "AsyncMessageStore"] {
+        let source = format!(
+            "impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {{ fn compose(&self) {{ {prohibited}::acquire(); }} }}"
+        );
+        let implementation = av3_async_mailbox_runtime_impl_region(&source);
+        let rejection = std::panic::catch_unwind(|| {
+            av3_assert_allowlisted_item_types(
+                &implementation,
+                &["AsyncMailboxRuntime", "StorageAsyncMailboxRuntime", "Self"],
+                "synthetic AsyncMailboxRuntime composition",
+            )
+        });
+        assert!(
+            rejection.is_err(),
+            "the production composition guard must reject `{prohibited}`"
+        );
+    }
+}
+
+#[test]
+fn av3_async_mailbox_runtime_composition_excludes_cfg_test_writer_fake() {
+    let source = r#"
+impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime { fn compose(&self) {} }
+#[cfg(test)] mod tests { fn writer_fake() { AsyncMessageStore::acquire(); } }
+"#;
+    let implementation = av3_async_mailbox_runtime_impl_region(source);
+    assert!(
+        !implementation.contains("AsyncMessageStore"),
+        "the production composition region must exclude cfg(test) writer fakes"
+    );
+    av3_assert_allowlisted_item_types(
+        &implementation,
+        &["AsyncMailboxRuntime", "StorageAsyncMailboxRuntime", "Self"],
+        "synthetic AsyncMailboxRuntime composition",
+    );
 }
 
 #[test]
@@ -3844,10 +3892,10 @@ fn guarded_boundary_files() -> Vec<PathBuf> {
         root.join("boundaries/atm-http-runtime/member-state-transition-sink.toml"),
         root.join("boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"),
         root.join("boundaries/atm-runtime/runtime-composition.toml"),
-        root.join("boundaries/atm-storage/tls.toml"),
         root.join("boundaries/atm-template-sc-compose/sc-composer.toml"),
         root.join("boundaries/atm-herdr/herdr-process-adapter.toml"),
     ];
+    files.extend(boundary_files_in("atm-storage"));
     let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))
         .expect("boundaries/atm-storage-rusqlite directory must be readable")
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -3856,6 +3904,23 @@ fn guarded_boundary_files() -> Vec<PathBuf> {
     sqlite_files.sort();
     files.extend(sqlite_files);
     files
+}
+
+#[test]
+fn guarded_boundaries_include_every_atm_storage_record() {
+    let root = workspace_root();
+    let guarded_storage_files = guarded_boundary_files()
+        .into_iter()
+        .filter(|path| path.parent() == Some(root.join("boundaries/atm-storage").as_path()))
+        .collect::<BTreeSet<_>>();
+    let storage_boundary_files = boundary_files_in("atm-storage")
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(
+        guarded_storage_files, storage_boundary_files,
+        "the architecture guard must sweep every boundaries/atm-storage TOML record"
+    );
 }
 
 fn daemon_boundary_files() -> Vec<PathBuf> {
@@ -3926,6 +3991,16 @@ fn av3_handler_region(source: &str, handlers: &[&str]) -> String {
 fn av3_assert_allowlisted_types(region: &str, allowed: &[&str], scope: &str) {
     let syntax = syn::parse_file(&format!("fn gate() {region}"))
         .unwrap_or_else(|error| panic!("AV.3 {scope} fixture must parse: {error}"));
+    av3_assert_allowlisted_syntax_types(&syntax, allowed, scope);
+}
+
+fn av3_assert_allowlisted_item_types(region: &str, allowed: &[&str], scope: &str) {
+    let syntax = syn::parse_file(region)
+        .unwrap_or_else(|error| panic!("AV.3 {scope} fixture must parse: {error}"));
+    av3_assert_allowlisted_syntax_types(&syntax, allowed, scope);
+}
+
+fn av3_assert_allowlisted_syntax_types(syntax: &syn::File, allowed: &[&str], scope: &str) {
     struct TypeVisitor {
         names: BTreeSet<String>,
     }
@@ -3952,7 +4027,7 @@ fn av3_assert_allowlisted_types(region: &str, allowed: &[&str], scope: &str) {
     let mut visitor = TypeVisitor {
         names: BTreeSet::new(),
     };
-    visitor.visit_file(&syntax);
+    visitor.visit_file(syntax);
     let unexpected = visitor
         .names
         .into_iter()
@@ -3962,6 +4037,34 @@ fn av3_assert_allowlisted_types(region: &str, allowed: &[&str], scope: &str) {
         unexpected.is_empty(),
         "AV.3 {scope} allowlist rejects unlisted type(s): {unexpected:?}"
     );
+}
+
+fn av3_async_mailbox_runtime_impl_region(source: &str) -> String {
+    let syntax =
+        syn::parse_file(source).expect("AV.3 AsyncMailboxRuntime source must parse as Rust");
+    syntax
+        .items
+        .into_iter()
+        .filter_map(|item| match item {
+            syn::Item::Impl(implementation)
+                if !implementation
+                    .attrs
+                    .iter()
+                    .any(is_test_configuration_attribute)
+                    && implementation.self_ty.to_token_stream().to_string()
+                        == "StorageAsyncMailboxRuntime"
+                    && implementation.trait_.as_ref().is_some_and(|(_, path, _)| {
+                        path.segments
+                            .last()
+                            .is_some_and(|segment| segment.ident == "AsyncMailboxRuntime")
+                    }) =>
+            {
+                Some(implementation.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .next()
+        .expect("AV.1a composition must implement AsyncMailboxRuntime")
 }
 
 fn av3_identifier_findings(root: &Path, identifier: &str) -> Vec<String> {

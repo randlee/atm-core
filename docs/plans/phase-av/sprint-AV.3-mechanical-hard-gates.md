@@ -105,7 +105,18 @@ sprint.
       `tokio::sync::Semaphore`/`Mutex` acquisition around a storage
       read, `spawn_blocking`, `ControlPathSyncBridge`, and any
       `StorageWriterIngress` submission other than through the
-      supervisor.
+      supervisor. The activated AV.1a composition assertion additionally
+      permits `StorageAsyncMailboxRuntime`, `RequestDeadline`,
+      `ReadDeadline`, `AtmError`/`ReadLaneError`, the ordinary mailbox
+      domain values (`MailboxScope`, `Message`, `MessageKey`,
+      `MessageQuery`), and all public
+      `atm_core::read::selection` values
+      (`MailboxSelectionRequest`, `MailboxSelectionCandidate`,
+      `MailboxSelectionResult`, `SelectedMailboxMessage`). It derives only
+      the production `impl AsyncMailboxRuntime for
+      StorageAsyncMailboxRuntime` with `syn`; `#[cfg(test)]` writer fakes
+      are outside the asserted region. `AsyncMessageStore` and
+      `MessageStore` deliberately remain absent from the positive allowlist.
 - [ ] D2b — Behavior gate (mechanism-independent): tests run each
       read-family endpoint against an **instrumented writer ingress
       that records every submission** (op variant, origin, outcome)
@@ -127,7 +138,10 @@ sprint.
 - [ ] D4 — Liveness tests owned as a permanent CI gate: the AV.1b D5
       stalled-op + read-storm and bounded-overload tests are wired into
       `just test` and documented as a release gate (removal requires an
-      ADR change).
+      ADR change). Until that permanent round-2 CI job lands, default
+      `just lint` also runs the `arch-gates` task (`cargo test -p
+      atm-architecture --quiet`) so the D1/D2/D2b architecture assertions
+      remain live at the routinely cited lint entry point.
 - [ ] D5 — Scratch-mutation demonstrations (recorded, then reverted)
       cover, at minimum: (a) reintroducing `spawn_blocking` in a read
       handler; (b) a **newly named** blocking-bridge type wrapping a
@@ -193,6 +207,14 @@ fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
   tautology with an `AsyncMailboxRuntime`-activated ingress recorder that
   derives each path from the real router handler body and proves a writer-lane
   fixture is rejected. AV.1b will activate the supervised state-handoff path.
+- 2026-08-31 QA-r3 passed the original scope and exposed three merge-forward
+  defects: `AV3-B4` now derives the production-only
+  `StorageAsyncMailboxRuntime` implementation with `syn` and checks its D2/D6
+  allowlist (`be0e458dd`); `AV3-M4` requires exact raw-string closing hash
+  counts (`71898a6f2`); and `AV3-M5` makes Rust architecture gates a default
+  lint check (`c231b86b5`). `AV3-I3` remains explicitly deferred to round 2
+  / A2b after AV.1b because the D2b mechanism-independent behavior test is
+  not yet live.
 
 This is the authoritative acceptance checklist.
 

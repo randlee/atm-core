@@ -213,6 +213,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bsqlite_(?:open|connect|transaction|query|write)\s*\(",
     ),
     "storage_write": (r"\bstorage_write\b", r"\b(?:write|put|insert|update)_storage\s*\("),
+    "write_capable_connection": (
+        r"\bopen_writer_connection_for_target\s*\(",
+        r"\bConnection::open(?:_with_flags)?\s*\(",
+    ),
+    "writer_lane": (r"\bSqliteWriter\b", r"\b(?:writer|write)_lane\b"),
     "task_changed_notifications": (r"\btask_changed_notifications\b", r"\bTaskChanged(?:Notification|Event)?\b", r"\btask_changed\b"),
     "template_rendering": (r"\btemplate_rendering\b", r"\b(?:render|render_template)\s*\(", r"\bTemplateRenderer\b"),
     "tls_handshake": (r"\b(?:rustls|native_tls)::", r"\b(?:Client|Server)Connection\b", r"\b(?:tls|TLS)[^\n]*handshake\b"),

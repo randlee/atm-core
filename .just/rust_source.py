@@ -22,8 +22,16 @@ def code_mask(source: str) -> str:
         elif raw_match := re.match(r"(?:br|rb|r)(?P<hashes>#+)?\"", source[index:]):
             hashes = raw_match.group("hashes") or ""
             delimiter = f'"{hashes}'
-            end = source.find(delimiter, index + len(raw_match.group(0)))
-            end = len(source) if end < 0 else end + len(delimiter)
+            search_from = index + len(raw_match.group(0))
+            while True:
+                closing_start = source.find(delimiter, search_from)
+                if closing_start < 0:
+                    end = len(source)
+                    break
+                end = closing_start + len(delimiter)
+                if end == len(source) or source[end] != "#":
+                    break
+                search_from = end
         elif source.startswith('b"', index):
             quote = '"'
             end = index + 2

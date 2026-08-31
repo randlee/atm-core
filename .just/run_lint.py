@@ -56,7 +56,7 @@ PYTHON_LINT_ORDER = (
     "pytests",
 )
 EXTRA_LINTS = ("sc-boundary", "sc-portability")
-CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear")
+CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear", "arch-gates")
 FAST_LINT_ORDER = (
     "fmt",
     "version",
@@ -74,7 +74,7 @@ FAST_LINT_ORDER = (
     "pytests",
 )
 HIGH_VOLUME_LINTS = {"identities", "lines"}
-CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "sc-boundary", "sc-portability", "manifests"}
+CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "sc-boundary", "sc-portability", "manifests", "arch-gates"}
 COUNT_PATTERNS = (
     ("total violations:", "violations"),
     ("errors:", "errors"),
@@ -113,6 +113,7 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "modules": LintTask("modules", [*python_command, str(repo_root / ".just/lint_cargo_modules.py")]),
         "deny": LintTask("deny", [*python_command, str(repo_root / ".just/lint_cargo_deny.py")]),
         "shear": LintTask("shear", [*python_command, str(repo_root / ".just/lint_cargo_shear.py")]),
+        "arch-gates": LintTask("arch-gates", ["cargo", "test", "-p", "atm-architecture", "--quiet"]),
         "version": LintTask("version", [*python_command, str(repo_root / ".just/check_version_sync.py")]),
         "identities": LintTask(
             "identities", [*python_command, str(repo_root / ".just/check_test_identity_literals.py")]

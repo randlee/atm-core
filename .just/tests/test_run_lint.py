@@ -49,6 +49,7 @@ resolver = "2"
         self.assertIn("capability-degradation", names)
         self.assertIn("deny", names)
         self.assertIn("shear", names)
+        self.assertIn("arch-gates", names)
         self.assertIn("fixed-sleep", names)
         self.assertIn("ttl-triage", names)
         self.assertIn("spell", names)
@@ -262,6 +263,7 @@ resolver = "2"
             )
             self.assertEqual(tasks["deny"].command[-1], str(repo_root / ".just/lint_cargo_deny.py"))
             self.assertEqual(tasks["shear"].command[-1], str(repo_root / ".just/lint_cargo_shear.py"))
+            self.assertEqual(tasks["arch-gates"].command, ["cargo", "test", "-p", "atm-architecture", "--quiet"])
             self.assertEqual(
                 tasks["fixed-sleep"].command[-1],
                 str(repo_root / ".just/check_fixed_sleep_hygiene.py"),

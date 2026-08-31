@@ -86,21 +86,21 @@ artifact = "atm-http-runtime"
 package = "atm-http-runtime"
 cargo_toml = "crates/atm-http-runtime/Cargo.toml"
 publish = true
-publish_order = 6
+publish_order = 7
 wait_after_publish_seconds = 30
 [[crates]]
 artifact = "atm-daemon-client"
 package = "atm-daemon-client"
 cargo_toml = "crates/atm-daemon-client/Cargo.toml"
 publish = true
-publish_order = 7
+publish_order = 8
 wait_after_publish_seconds = 30
 [[crates]]
 artifact = "atm-runtime"
 package = "atm-runtime"
 cargo_toml = "crates/atm-runtime/Cargo.toml"
 publish = true
-publish_order = 8
+publish_order = 6
 wait_after_publish_seconds = 30
 [[crates]]
 artifact = "atm-template-sc-compose"

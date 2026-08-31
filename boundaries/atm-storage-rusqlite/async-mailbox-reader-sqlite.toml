@@ -17,7 +17,7 @@ roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
 
 [ownership]
 io_owns = ["sqlite", "bounded_read_submission", "read_only_connections"]
-io_forbidden = ["socket_io", "process_spawn"]
+io_forbidden = ["writer_lane", "socket_io", "process_spawn"]
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
