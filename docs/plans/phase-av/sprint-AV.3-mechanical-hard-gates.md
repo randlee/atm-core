@@ -138,7 +138,10 @@ sprint.
 - [ ] D4 — Liveness tests owned as a permanent CI gate: the AV.1b D5
       stalled-op + read-storm and bounded-overload tests are wired into
       `just test` and documented as a release gate (removal requires an
-      ADR change).
+      ADR change). Until that permanent round-2 CI job lands, default
+      `just lint` also runs the `arch-gates` task (`cargo test -p
+      atm-architecture --quiet`) so the D1/D2/D2b architecture assertions
+      remain live at the routinely cited lint entry point.
 - [ ] D5 — Scratch-mutation demonstrations (recorded, then reverted)
       cover, at minimum: (a) reintroducing `spawn_blocking` in a read
       handler; (b) a **newly named** blocking-bridge type wrapping a
