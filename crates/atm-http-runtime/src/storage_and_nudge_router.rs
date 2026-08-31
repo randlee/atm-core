@@ -1041,11 +1041,11 @@ mod tests {
     };
     use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
-    use atm_runtime::test_utils::{RecordedWriterOutcome, mailbox_runtime_with_recording_ingress};
     use atm_runtime::{
         DoctorProjection, DoctorProjectionConfig, DoctorProjectionContext, HandoffConfig,
         StorageDoctorProjection,
     };
+    use atm_runtime_test_support::{RecordedWriterOutcome, mailbox_runtime_with_recording_ingress};
     use atm_runtime_test_support::{
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
         open_graft_receiver_endpoint_store, open_sqlite_boundary,

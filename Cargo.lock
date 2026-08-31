@@ -340,6 +340,7 @@ version = "1.4.6"
 dependencies = [
  "agent-team-mail-core",
  "async-trait",
+ "atm-runtime-test-support",
  "atm-storage",
  "serde_json",
  "tokio",
@@ -351,7 +352,9 @@ name = "atm-runtime-test-support"
 version = "1.4.6"
 dependencies = [
  "agent-team-mail-core",
+ "async-trait",
  "atm-runtime",
+ "atm-storage",
  "atm-storage-rusqlite",
 ]
 
