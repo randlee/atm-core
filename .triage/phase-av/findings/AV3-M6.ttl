@@ -1,0 +1,137 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-M6>
+  a triage:Finding ;
+  triage:findingId "AV3-M6" ;
+  triage:title "Sprint-doc status field and checkboxes disagree with recorded QA history" ;
+  triage:description "The sprint-AV.3 plan doc frontmatter shows `status: planned` (line 8) and all deliverable (D1-D5), acceptance (A1-A4), and validation checkboxes are unchecked, even though QA-r2 part-1 records 91/91 architecture tests passing. The fix is to truthfully reflect the delivered items (check D2/D2b/D3/A1/A3/A4 as applicable; leave A2b/D1/D4/D5 unchecked with reference to deferred items and round-2 part-2)." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T09:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T09:27:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M6/AV3-M6-0> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M6/AV3-M6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M6/AV3-M6-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M6/AV3-M6-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M6/AV3-M6-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M6/AV3-M6-5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-M6/AV3-M6-0>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md" ;
+  triage:line 8 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "525496650" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/525496650> .
+
+<urn:atm:triage:occurrence/AV3-M6/AV3-M6-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md" ;
+  triage:line 8 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "d057032e8" ;
+  triage:occursIn <urn:atm:triage:worktree/mailbox-serial/d057032e8> .
+
+<urn:atm:triage:occurrence/AV3-M6/AV3-M6-2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md" ;
+  triage:line 8 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "e7401d4a8" ;
+  triage:occursIn <urn:atm:triage:worktree/av1b-cutover/e7401d4a8> .
+
+<urn:atm:triage:occurrence/AV3-M6/AV3-M6-3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md" ;
+  triage:line 8 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "a0418ac9f" ;
+  triage:occursIn <urn:atm:triage:worktree/av2-reqs/a0418ac9f> .
+
+<urn:atm:triage:occurrence/AV3-M6/AV3-M6-4>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md" ;
+  triage:line 8 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "7ff985064" ;
+  triage:occursIn <urn:atm:triage:worktree/av3-gates/7ff985064> .
+
+<urn:atm:triage:occurrence/AV3-M6/AV3-M6-5>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md" ;
+  triage:line 8 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "7697d6c78" ;
+  triage:occursIn <urn:atm:triage:worktree/av4-benchmarks/7697d6c78> .
+
+<urn:atm:triage:worktree/integrate-phase-av/525496650>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "525496650" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/mailbox-serial/d057032e8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "d057032e8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/av1b-cutover/e7401d4a8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "e7401d4a8" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/av2-reqs/a0418ac9f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "a0418ac9f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/av3-gates/7ff985064>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "7ff985064" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/av4-benchmarks/7697d6c78>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "7697d6c78" ;
+  triage:orderIndex 5 .
