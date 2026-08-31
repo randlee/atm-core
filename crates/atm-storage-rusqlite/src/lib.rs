@@ -668,6 +668,7 @@ impl std::fmt::Debug for SqliteStorageBackend {
 #[derive(Debug, Clone, Default)]
 pub struct SqliteStorageFactory {
     database_path: Option<PathBuf>,
+    reader_lanes: reader_pool::ReaderLanesConfig,
 }
 
 impl SqliteStorageFactory {
@@ -679,7 +680,20 @@ impl SqliteStorageFactory {
     pub fn at_path(path: impl Into<PathBuf>) -> Self {
         Self {
             database_path: Some(path.into()),
+            reader_lanes: reader_pool::ReaderLanesConfig::default(),
         }
+    }
+
+    #[allow(
+        dead_code,
+        reason = "The composition root uses default ReaderLanesConfig until AV.1b exposes config-file parsing; this builder seam is intentionally testable now."
+    )]
+    pub(crate) fn with_reader_lanes(
+        mut self,
+        reader_lanes: reader_pool::ReaderLanesConfig,
+    ) -> Self {
+        self.reader_lanes = reader_lanes;
+        self
     }
 
     fn database_path(&self, durable_state_root: &Path) -> PathBuf {
@@ -691,7 +705,10 @@ impl SqliteStorageFactory {
 
 impl StorageFactory for SqliteStorageFactory {
     fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError> {
-        let backend = SqliteStorageBackend::new(self.database_path(durable_state_root))?;
+        let backend = SqliteStorageBackend::new_with_reader_lanes(
+            self.database_path(durable_state_root),
+            self.reader_lanes,
+        )?;
         Ok(StorageHandles::from_parts(StorageHandleParts {
             message_store: backend.message_store(),
             async_message_store: backend.async_message_store(),
@@ -713,11 +730,38 @@ impl SqliteStorageBackend {
         Self::new_with_observability(path, Arc::new(NullSqliteObservability))
     }
 
+    pub(crate) fn new_with_reader_lanes(
+        path: impl AsRef<Path>,
+        reader_lanes: reader_pool::ReaderLanesConfig,
+    ) -> Result<Self, AtmError> {
+        Self::new_with_observability_and_reader_lanes(
+            path,
+            Arc::new(NullSqliteObservability),
+            reader_lanes,
+        )
+    }
+
     pub fn new_with_observability(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
     ) -> Result<Self, AtmError> {
-        let db = Arc::new(SharedDb::open_with_observability(path, observability)?);
+        Self::new_with_observability_and_reader_lanes(
+            path,
+            observability,
+            reader_pool::ReaderLanesConfig::default(),
+        )
+    }
+
+    fn new_with_observability_and_reader_lanes(
+        path: impl AsRef<Path>,
+        observability: Arc<dyn SqliteObservability>,
+        reader_lanes: reader_pool::ReaderLanesConfig,
+    ) -> Result<Self, AtmError> {
+        let db = Arc::new(SharedDb::open_with_reader_lanes(
+            path,
+            observability,
+            reader_lanes,
+        )?);
         Ok(Self {
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
@@ -888,7 +932,8 @@ impl SqliteStorageBackend {
 
 #[cfg(test)]
 mod tests {
-    use super::SqliteStorageBackend;
+    use super::{SqliteStorageBackend, SqliteStorageFactory};
+    use crate::reader_pool::ReaderLanesConfig;
     use atm_storage::contract::{
         AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, MailboxScope, Message,
         MessageKey, MessageQuery, ReadDeadline, ReadLaneError, RosterHarness, RosterMember,
@@ -900,8 +945,8 @@ mod tests {
         AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
         DecomposedMessageRecord, InstanceTag, MergedVarsJson, MessageSearchQuery, SearchAtom,
         SearchDeadline, SearchExpression, SearchGroupBy, SearchGroupField, SearchKey, SearchLimit,
-        SearchMetadataMatch, SearchValue, SimpleAggregate, TemplateFirstSeen, TemplateFrontmatter,
-        TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
+        SearchMetadataMatch, SearchValue, SimpleAggregate, StorageFactory, TemplateFirstSeen,
+        TemplateFrontmatter, TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
         TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
     };
     use chrono::Utc;
@@ -931,6 +976,22 @@ mod tests {
 
     fn agent() -> AgentName {
         "test-agent".parse().expect("agent")
+    }
+
+    #[test]
+    fn reader_lane_configuration_is_threaded_through_storage_factory_and_validated() {
+        let root = tempfile::tempdir().expect("temporary storage root");
+        let config = ReaderLanesConfig {
+            max_connections: 21,
+            ..ReaderLanesConfig::default()
+        };
+        let error = SqliteStorageFactory::at_path(root.path().join("mail.db"))
+            .with_reader_lanes(config)
+            .open(root.path())
+            .expect_err("over-budget reader lane configuration must fail startup");
+        let message = error.message();
+        assert!(message.contains("mailbox_pool=4"));
+        assert!(message.contains("max_connections=21"));
     }
 
     fn message(key: &str, text: &str) -> Message {

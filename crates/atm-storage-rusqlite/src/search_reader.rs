@@ -24,9 +24,12 @@ impl std::fmt::Debug for SearchReader {
 }
 
 impl SearchReader {
-    pub(crate) fn start(target: Arc<SharedDbTarget>) -> Result<Self, AtmError> {
+    pub(crate) fn start(
+        target: Arc<SharedDbTarget>,
+        config: ReaderPoolConfig,
+    ) -> Result<Self, AtmError> {
         Ok(Self {
-            pool: ReaderPool::start("search", target, ReaderPoolConfig::search_defaults())?,
+            pool: ReaderPool::start("search", target, config)?,
         })
     }
 

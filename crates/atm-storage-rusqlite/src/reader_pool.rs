@@ -174,6 +174,37 @@ pub(crate) const DEFAULT_DOCTOR_READER_CONFIG: ReaderPoolConfig = ReaderPoolConf
 
 pub(crate) const DEFAULT_MAX_READER_CONNECTIONS: usize = 32;
 
+/// The one composition-owned `[reader_lanes]` configuration surface.
+///
+/// AV.1a keeps it backend-local because no HTTP handler reads it; the storage
+/// factory accepts one value and validates the whole connection budget before
+/// opening any worker. This prevents mailbox/search/doctor knobs from drifting
+/// into per-handler constants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ReaderLanesConfig {
+    pub(crate) mailbox: ReaderPoolConfig,
+    pub(crate) search: ReaderPoolConfig,
+    pub(crate) doctor: ReaderPoolConfig,
+    pub(crate) max_connections: usize,
+}
+
+impl Default for ReaderLanesConfig {
+    fn default() -> Self {
+        Self {
+            mailbox: ReaderPoolConfig::mailbox_defaults(),
+            search: ReaderPoolConfig::search_defaults(),
+            doctor: DEFAULT_DOCTOR_READER_CONFIG,
+            max_connections: DEFAULT_MAX_READER_CONNECTIONS,
+        }
+    }
+}
+
+impl ReaderLanesConfig {
+    pub(crate) fn validate(self) -> Result<(), AtmError> {
+        validate_connection_budget(self.mailbox, self.search, self.doctor, self.max_connections)
+    }
+}
+
 pub(crate) fn validate_connection_budget(
     mailbox: ReaderPoolConfig,
     search: ReaderPoolConfig,

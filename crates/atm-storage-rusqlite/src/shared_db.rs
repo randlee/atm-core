@@ -1,14 +1,10 @@
-use crate::mailbox_reader::DEFAULT_MAILBOX_READER_CONFIG;
 use crate::mailbox_reader::start_mailbox_reader;
 #[cfg(test)]
 use crate::observability::NullSqliteObservability;
 use crate::observability::{
     SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
-use crate::reader_pool::{
-    DEFAULT_DOCTOR_READER_CONFIG, DEFAULT_MAX_READER_CONNECTIONS, ReaderPoolConfig,
-    validate_connection_budget,
-};
+use crate::reader_pool::ReaderLanesConfig;
 use crate::search_reader::SearchReader;
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
 use atm_storage::AsyncMailboxReader;
@@ -210,6 +206,15 @@ impl SharedDb {
     pub(crate) fn open_in_memory_with_observability(
         observability: Arc<dyn SqliteObservability>,
     ) -> Result<Self, AtmError> {
+        Self::open_in_memory_with_reader_lanes(observability, ReaderLanesConfig::default())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn open_in_memory_with_reader_lanes(
+        observability: Arc<dyn SqliteObservability>,
+        reader_lanes: ReaderLanesConfig,
+    ) -> Result<Self, AtmError> {
+        reader_lanes.validate()?;
         let target = Arc::new(SharedDbTarget::InMemory {
             uri: format!(
                 "file:atm-storage-rusqlite-{}?mode=memory&cache=shared",
@@ -220,8 +225,11 @@ impl SharedDb {
             Arc::clone(&target),
             Arc::clone(&observability),
         )?);
-        let search_reader = Arc::new(SearchReader::start(Arc::clone(&target))?);
-        let mailbox_reader = start_mailbox_reader(Arc::clone(&target))?;
+        let search_reader = Arc::new(SearchReader::start(
+            Arc::clone(&target),
+            reader_lanes.search,
+        )?);
+        let mailbox_reader = start_mailbox_reader(Arc::clone(&target), reader_lanes.mailbox)?;
         Ok(Self {
             target,
             writer,
@@ -231,16 +239,23 @@ impl SharedDb {
         })
     }
 
+    #[allow(
+        dead_code,
+        reason = "Production construction delegates through ReaderLanesConfig; this direct observability constructor remains a backend test seam."
+    )]
     pub(crate) fn open_with_observability(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
     ) -> Result<Self, AtmError> {
-        validate_connection_budget(
-            DEFAULT_MAILBOX_READER_CONFIG,
-            ReaderPoolConfig::search_defaults(),
-            DEFAULT_DOCTOR_READER_CONFIG,
-            DEFAULT_MAX_READER_CONNECTIONS,
-        )?;
+        Self::open_with_reader_lanes(path, observability, ReaderLanesConfig::default())
+    }
+
+    pub(crate) fn open_with_reader_lanes(
+        path: impl AsRef<Path>,
+        observability: Arc<dyn SqliteObservability>,
+        reader_lanes: ReaderLanesConfig,
+    ) -> Result<Self, AtmError> {
+        reader_lanes.validate()?;
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
             // Accepted risk: durable-state root creation happens during boundary
@@ -258,8 +273,11 @@ impl SharedDb {
             Arc::clone(&target),
             Arc::clone(&observability),
         )?);
-        let search_reader = Arc::new(SearchReader::start(Arc::clone(&target))?);
-        let mailbox_reader = start_mailbox_reader(Arc::clone(&target))?;
+        let search_reader = Arc::new(SearchReader::start(
+            Arc::clone(&target),
+            reader_lanes.search,
+        )?);
+        let mailbox_reader = start_mailbox_reader(Arc::clone(&target), reader_lanes.mailbox)?;
         tracing::debug!(
             writer_handles = 1,
             path = %target.display(),

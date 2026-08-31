@@ -14,17 +14,14 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::reader_pool::{ReaderPool, ReaderPoolConfig};
 use crate::shared_db::{SharedDbTarget, deserialize_json, sqlite_error};
 
-pub(crate) const DEFAULT_MAILBOX_READER_CONFIG: ReaderPoolConfig =
-    ReaderPoolConfig::mailbox_defaults();
-
 struct MailboxReader {
     pool: ReaderPool,
 }
 
 impl MailboxReader {
-    fn start(target: Arc<SharedDbTarget>) -> Result<Self, AtmError> {
+    fn start(target: Arc<SharedDbTarget>, config: ReaderPoolConfig) -> Result<Self, AtmError> {
         Ok(Self {
-            pool: ReaderPool::start("mailbox", target, DEFAULT_MAILBOX_READER_CONFIG)?,
+            pool: ReaderPool::start("mailbox", target, config)?,
         })
     }
 
@@ -60,8 +57,9 @@ impl MailboxReader {
 
 pub(crate) fn start_mailbox_reader(
     target: Arc<SharedDbTarget>,
+    config: ReaderPoolConfig,
 ) -> Result<Arc<dyn AsyncMailboxReader + Send + Sync>, AtmError> {
-    Ok(Arc::new(MailboxReader::start(target)?))
+    Ok(Arc::new(MailboxReader::start(target, config)?))
 }
 
 #[async_trait::async_trait]
