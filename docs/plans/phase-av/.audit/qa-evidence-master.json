@@ -306,7 +306,8 @@
       "dev_validation": "boundary pytest 56 passed; just lint 32/32; cargo test --workspace --exclude atm-daemon passed; fmt/clippy clean; no lint findings from implementer scan; no atm-http-runtime/atm-daemon diff; just test blocked by pre-existing mail-store.toml allowlist (stale atm-daemon dependent, tempfile absent) — routed to quality-mgr; just validate reaches dependency-currency only (sc-composer 1.5.0 vs 1.6.0, Wyvern 0.5.0 vs 0.6.0)",
       "av2_merge_forward_sha": "a9fc11c8cbdf62d8b4b52522c873522664c15ea3",
       "av2_merge_forward_message_id": "01M1BP54V20JVQ3WBP478G6MFP",
-      "av2_merge_forward_note": "Cipher merged origin/feature/av1b-read-handler-cutover @ 60585aaa9 into docs/av2-read-concurrency-requirements (no rebase); just lint 32/32; worktree clean; AV.4 still held. fenix verified 60585aaa9 and f31a35484 are ancestors of a9fc11c8c."
+      "av2_merge_forward_note": "Cipher merged origin/feature/av1b-read-handler-cutover @ 60585aaa9 into docs/av2-read-concurrency-requirements (no rebase); just lint 32/32; worktree clean; AV.4 still held. fenix verified 60585aaa9 and f31a35484 are ancestors of a9fc11c8c.",
+      "av2_branch_rename_note": "2026-08-31T15:57Z: AV.2 branch renamed docs/av2-read-concurrency-requirements -> feature/av2-read-concurrency-requirements (sprint-branch naming defect confirmed by Rand via team-lead msg 01M1C8HNAE94KQ40QH105BEG3H). GitHub rename auto-retargeted PR #1113 base; PR #1110 was closed by the rename and recreated as PR #1117 (same head a9fc11c8c, QA history remains on #1110). Local worktree moved to ../atm-core-worktrees/feature/av2-read-concurrency-requirements. Historical triage TTL/doc references to the old name left as-is (snapshot data)."
     },
     {
       "run_id": "QA-AV1A-R5",
