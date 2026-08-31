@@ -8,7 +8,7 @@ use atm_storage::contract::{
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
-use rusqlite::{Connection, Error as RusqliteError, OpenFlags, TransactionBehavior};
+use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};
 use std::path::PathBuf;
 use std::sync::Arc;
 #[cfg(test)]

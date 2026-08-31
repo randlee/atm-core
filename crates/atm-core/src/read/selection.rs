@@ -205,7 +205,7 @@ fn message_matches_contains(message: &ClassifiedMessage, needle: Option<&str>) -
     needle.is_none_or(|value| filters::text_contains_needle(Some(&message.envelope.text), value))
 }
 
-fn logical_current_messages(messages: Vec<ClassifiedMessage>) -> Vec<ClassifiedMessage> {
+pub(crate) fn logical_current_messages(messages: Vec<ClassifiedMessage>) -> Vec<ClassifiedMessage> {
     let projected = messages
         .iter()
         .map(|message| message.envelope.clone())
@@ -230,7 +230,7 @@ fn logical_current_messages(messages: Vec<ClassifiedMessage>) -> Vec<ClassifiedM
         .collect()
 }
 
-fn bucket_counts_for(messages: &[ClassifiedMessage]) -> BucketCounts {
+pub(crate) fn bucket_counts_for(messages: &[ClassifiedMessage]) -> BucketCounts {
     messages.iter().fold(
         BucketCounts {
             unread: 0,
@@ -251,7 +251,7 @@ fn bucket_counts_for(messages: &[ClassifiedMessage]) -> BucketCounts {
     )
 }
 
-fn effective_display_envelope(
+pub(crate) fn effective_display_envelope(
     envelope: &InboxMessage,
     thread_index: &ThreadIndex<'_>,
 ) -> InboxMessage {
@@ -272,12 +272,31 @@ fn hidden_from_normal_views(envelope: &InboxMessage) -> bool {
     is_expired_ephemeral(envelope, now) || (is_ephemeral(envelope) && envelope.read)
 }
 
-fn hidden_for_selection(envelope: &InboxMessage, selection_mode: ReadSelection) -> bool {
+pub(crate) fn hidden_for_selection(envelope: &InboxMessage, selection_mode: ReadSelection) -> bool {
     let now = IsoTimestamp::now();
     if is_expired_ephemeral(envelope, now) {
         return true;
     }
     selection_mode != ReadSelection::All && is_ephemeral(envelope) && envelope.read
+}
+
+pub(crate) fn select_classified_messages(
+    messages: &[ClassifiedMessage],
+    selection_mode: ReadSelection,
+    seen_watermark: Option<IsoTimestamp>,
+) -> Vec<ClassifiedMessage> {
+    let watermark = (selection_mode != ReadSelection::All)
+        .then_some(seen_watermark)
+        .flatten();
+    filters::apply_selection_mode(
+        messages
+            .iter()
+            .filter(|message| !hidden_for_selection(&message.envelope, selection_mode))
+            .cloned()
+            .collect(),
+        selection_mode,
+        watermark,
+    )
 }
 
 #[cfg(test)]
