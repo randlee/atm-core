@@ -9,7 +9,6 @@ use atm_storage::AsyncMailboxReader;
 use atm_storage::TemplateMessageAdmission;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
-    MessageQuery,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
@@ -351,8 +350,7 @@ impl SharedDb {
             .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
             WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
-            WriteOpResult::Messages(_)
-            | WriteOpResult::UpsertMessages
+            WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
@@ -412,8 +410,7 @@ impl SharedDb {
             } => Err(AtmError::daemon_unavailable(
                 "sqlite writer reported a duplicate without its retained record",
             )),
-            WriteOpResult::Messages(_)
-            | WriteOpResult::UpsertMessages
+            WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
@@ -463,8 +460,7 @@ impl SharedDb {
         let result = self.writer.submit(WriteOp::UpsertMessages(records))?;
         match result {
             WriteOpResult::UpsertMessages => Ok(()),
-            WriteOpResult::Messages(_)
-            | WriteOpResult::UpsertMessage { .. }
+            WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
@@ -484,8 +480,7 @@ impl SharedDb {
             .submit(WriteOp::Acknowledge { source, builder })?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::Messages(_)
-            | WriteOpResult::UpsertMessage { .. }
+            WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
@@ -506,34 +501,12 @@ impl SharedDb {
             .await?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::Messages(_)
-            | WriteOpResult::UpsertMessage { .. }
+            WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
             | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async acknowledgement admission",
-            )),
-        }
-    }
-
-    pub(crate) async fn submit_list_messages_async(
-        &self,
-        query: MessageQuery,
-    ) -> Result<Vec<Message>, AtmError> {
-        match self
-            .writer
-            .submit_async(WriteOp::ListMessages(query))
-            .await?
-        {
-            WriteOpResult::Messages(messages) => Ok(messages),
-            WriteOpResult::UpsertMessage { .. }
-            | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_)
-            | WriteOpResult::TemplateRegistration(_)
-            | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
-                "sqlite writer returned the wrong result for async mailbox projection",
             )),
         }
     }
