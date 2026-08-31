@@ -37,6 +37,7 @@ allowed_test_double_paths = ["crate::testing::InMemoryMailboxReader"]
 forbidden_test_bypasses = []
 
 [enforcement]
+io_forbidden_source_modules = { write_capable_connection = ["atm_storage_rusqlite::shared_db_reader_lanes", "atm_storage_rusqlite::reader_pool"], writer_lane = ["atm_storage_rusqlite::reader_pool"] }
 lint_rules = ["LINT-BOUNDARY-MESSAGESTORE-REFERENCES"]
 review_gates = ["no_backend_specific_async_contract", "no_writer_lane_read_submission"]
 

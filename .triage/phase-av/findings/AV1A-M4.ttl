@@ -1,0 +1,178 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV1A-M4>
+  a triage:Finding ;
+  triage:findingId "AV1A-M4" ;
+  triage:title "async-mailbox-reader boundary io_forbidden copies the write-store baseline; RO guarantee lives only in a runtime test" ;
+  triage:description "boundaries/atm-storage/async-mailbox-reader.toml (and -sqlite.toml) io_forbidden copies the write-store baseline verbatim; sprint doc D1a asks for a write-capable-connection restriction, so the read-only guarantee lives only in the A3 runtime test, not the boundary lint. Add the restriction to the boundary record / lint. boundary-guard." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1A ;
+  triage:foundAt "2026-08-31T06:33:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK1-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK3-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK4-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK5-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK1-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/async-mailbox-reader.toml" ;
+  triage:line 19 ;
+  triage:snippet "io_forbidden = [socket_io, process_spawn]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/WK1> .
+
+<urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK1-2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage-rusqlite/async-mailbox-reader-sqlite.toml" ;
+  triage:line 20 ;
+  triage:snippet "io_forbidden = [socket_io, process_spawn]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/WK1> .
+
+<urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK2-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/async-mailbox-reader.toml" ;
+  triage:line 19 ;
+  triage:snippet "io_forbidden = [socket_io, process_spawn]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:occursIn <urn:atm:triage:worktree/WK2> .
+
+<urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK2-2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage-rusqlite/async-mailbox-reader-sqlite.toml" ;
+  triage:line 20 ;
+  triage:snippet "io_forbidden = [socket_io, process_spawn]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:occursIn <urn:atm:triage:worktree/WK2> .
+
+<urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK3-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/async-mailbox-reader.toml" ;
+  triage:line 19 ;
+  triage:snippet "io_forbidden = [socket_io, process_spawn]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:occursIn <urn:atm:triage:worktree/WK3> .
+
+<urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK3-2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage-rusqlite/async-mailbox-reader-sqlite.toml" ;
+  triage:line 20 ;
+  triage:snippet "io_forbidden = [socket_io, process_spawn]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:occursIn <urn:atm:triage:worktree/WK3> .
+
+<urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK4-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/async-mailbox-reader.toml" ;
+  triage:line 19 ;
+  triage:snippet "io_forbidden = [socket_io, process_spawn]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/WK4> .
+
+<urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK4-2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage-rusqlite/async-mailbox-reader-sqlite.toml" ;
+  triage:line 20 ;
+  triage:snippet "io_forbidden = [socket_io, process_spawn]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/WK4> .
+
+<urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK5-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/async-mailbox-reader.toml" ;
+  triage:line 19 ;
+  triage:snippet "io_forbidden = [socket_io, process_spawn]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/WK5> .
+
+<urn:atm:triage:occurrence/AV1A-M4/AV1A-M4-WK5-2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage-rusqlite/async-mailbox-reader-sqlite.toml" ;
+  triage:line 20 ;
+  triage:snippet "io_forbidden = [socket_io, process_spawn]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/WK5> .
+
+<urn:atm:triage:worktree/WK1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/WK2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/WK3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/WK4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/WK5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:orderIndex 5 .

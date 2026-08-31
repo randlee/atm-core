@@ -215,7 +215,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "storage_write": (r"\bstorage_write\b", r"\b(?:write|put|insert|update)_storage\s*\("),
     "write_capable_connection": (
         r"\bopen_writer_connection_for_target\s*\(",
-        r"\bConnection::open(?:_with_flags)?\s*\(",
+        r"\bConnection::open\s*\(",
+        # A flagged SQLite open is write-capable only when its declared flags
+        # include a write/create capability. Read-only workers explicitly use
+        # SQLITE_OPEN_READ_ONLY and remain permitted.
+        r"\bConnection::open_with_flags\s*\([^\n]*(?:SQLITE_OPEN_READ_WRITE|SQLITE_OPEN_CREATE)",
     ),
     "writer_lane": (r"\bSqliteWriter\b", r"\b(?:writer|write)_lane\b"),
     "task_changed_notifications": (r"\btask_changed_notifications\b", r"\bTaskChanged(?:Notification|Event)?\b", r"\btask_changed\b"),
@@ -230,6 +234,12 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\btransport\b",
     ),
 }
+
+WRITE_CAPABLE_OPEN_WITH_FLAGS_RE = re.compile(
+    r"\bConnection::open_with_flags\s*\(.*?"
+    r"\b(?:SQLITE_OPEN_READ_WRITE|SQLITE_OPEN_CREATE)\b",
+    re.IGNORECASE | re.DOTALL,
+)
 
 # Some boundaries expose a facade from ``lib.rs`` while their concrete
 # implementation is deliberately split into private modules. Keep those
@@ -367,6 +377,7 @@ class BoundaryRecord:
     forbidden_references: tuple[str, ...]
     allowed_test_double_paths: tuple[str, ...]
     forbidden_test_bypasses: tuple[str, ...]
+    io_forbidden_source_modules: tuple[tuple[str, tuple[str, ...]], ...]
     lint_rules: tuple[str, ...]
     review_gates: tuple[str, ...]
     status_state: str
@@ -1336,6 +1347,37 @@ def build_boundary_record(
         field_name="enforcement.review_gates",
         allow_empty=False,
     )
+    raw_io_forbidden_source_modules = nested_get(
+        data, ("enforcement", "io_forbidden_source_modules")
+    )
+    io_forbidden_source_modules: list[tuple[str, tuple[str, ...]]] = []
+    io_forbidden_source_module_errors: list[str] = []
+    if raw_io_forbidden_source_modules is not None:
+        if not isinstance(raw_io_forbidden_source_modules, dict):
+            io_forbidden_source_module_errors.append(
+                "enforcement.io_forbidden_source_modules must map io_forbidden tags to source-module lists"
+            )
+        else:
+            for tag, raw_modules in raw_io_forbidden_source_modules.items():
+                if not isinstance(tag, str) or tag not in io_forbidden:
+                    io_forbidden_source_module_errors.append(
+                        "enforcement.io_forbidden_source_modules keys must name declared ownership.io_forbidden tags"
+                    )
+                    continue
+                modules = as_string_list(raw_modules)
+                if not modules:
+                    io_forbidden_source_module_errors.append(
+                        f"enforcement.io_forbidden_source_modules.{tag} must be a non-empty list of strings"
+                    )
+                    continue
+                for module in modules:
+                    error = validate_rust_path(
+                        module,
+                        field_name=f"enforcement.io_forbidden_source_modules.{tag} entry",
+                    )
+                    if error:
+                        io_forbidden_source_module_errors.append(error)
+                io_forbidden_source_modules.append((tag, tuple(modules)))
 
     errors.extend(
         composition_errors
@@ -1349,6 +1391,7 @@ def build_boundary_record(
         + test_bypass_errors
         + lint_rule_errors
         + review_gate_errors
+        + io_forbidden_source_module_errors
     )
 
     for label, value in (
@@ -1510,6 +1553,7 @@ def build_boundary_record(
         forbidden_references=tuple(forbidden_references),
         allowed_test_double_paths=tuple(allowed_test_double_paths),
         forbidden_test_bypasses=tuple(forbidden_test_bypasses),
+        io_forbidden_source_modules=tuple(io_forbidden_source_modules),
         lint_rules=tuple(lint_rules),
         review_gates=tuple(review_gates),
         status_state=status_state,
@@ -1915,12 +1959,12 @@ def collect_io_forbidden_source_violations(
 ) -> list[BoundaryViolation]:
     """Enforce ``ownership.io_forbidden`` against concrete implementation modules.
 
-    A boundary record may describe a trait-only contract or a retired module;
-    those records have no implementation region to inspect.  Concrete active
-    records are deliberately checked only in their declared implementation
-    module so sibling boundaries in the same crate do not contaminate one
-    another.  Unknown tags are reported as policy errors instead of being
-    silently ignored, which keeps the mapping table mechanically complete.
+    A boundary record may declare tag-specific concrete source modules in
+    ``enforcement.io_forbidden_source_modules``. This lets a trait-only
+    contract guard its authorized adapter and lets a concrete boundary include
+    a private helper without scanning unrelated sibling ownership. Unknown
+    tags are reported as policy errors instead of being silently ignored,
+    which keeps the mapping table mechanically complete.
     """
 
     violations: list[BoundaryViolation] = []
@@ -1943,12 +1987,19 @@ def collect_io_forbidden_source_violations(
                     )
                 )
                 continue
-            if not record.is_active or record.implementation_visibility == "trait_only":
+            if not record.is_active:
                 continue
-            if record.implementation_module is None:
+            declared_source_modules = dict(record.io_forbidden_source_modules).get(tag, ())
+            if record.implementation_module is None and not declared_source_modules:
                 continue
-            source_modules = (record.implementation_module,) + IMPLEMENTATION_SOURCE_MODULES.get(
-                record.boundary_id, ()
+            source_modules = tuple(
+                module
+                for module in (
+                    record.implementation_module,
+                    *IMPLEMENTATION_SOURCE_MODULES.get(record.boundary_id, ()),
+                    *declared_source_modules,
+                )
+                if module is not None
             )
             source_paths: list[Path] = []
             seen_source_paths: set[Path] = set()
@@ -1964,7 +2015,9 @@ def collect_io_forbidden_source_violations(
                 for line_number, line in enumerate(source_lines, start=1):
                     if is_comment_line(line):
                         continue
-                    if tag == "background_work" and test_scope[line_number - 1]:
+                    if tag in {"background_work", "write_capable_connection"} and test_scope[
+                        line_number - 1
+                    ]:
                         continue
                     if any(
                         pattern.search(line)
@@ -1977,6 +2030,17 @@ def collect_io_forbidden_source_violations(
                         (pattern.pattern for pattern in patterns if pattern.search(line)),
                         None,
                     )
+                    if (
+                        matched_pattern is None
+                        and tag == "write_capable_connection"
+                        and "Connection::open_with_flags" in line
+                    ):
+                        call_window = "\n".join(source_lines[line_number - 1 : line_number + 8])
+                        call_end = call_window.find(")\n")
+                        if call_end >= 0:
+                            call_window = call_window[: call_end + 1]
+                        if WRITE_CAPABLE_OPEN_WITH_FLAGS_RE.search(call_window):
+                            matched_pattern = "Connection::open_with_flags(... WRITE/CREATE flags ...)"
                     if matched_pattern is None:
                         continue
                     violations.append(

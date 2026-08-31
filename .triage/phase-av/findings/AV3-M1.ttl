@@ -1,0 +1,96 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-M1>
+  a triage:Finding ;
+  triage:findingId "AV3-M1" ;
+  triage:title "Three independent brace-depth scanners with no shared primitive or parity check" ;
+  triage:description "lint_boundaries.py, check_read_concurrency_gates.py, and boundary_enforcement.rs now each carry their own brace-depth scanner with no shared primitive or parity test — the mechanism by which AV3-B2 went undetected. Reviewer id RBQA-AV3-005. Expected to be remediated together with AV3-B3 by the syn-AST vs hardened-string decision." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "duplication" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope ".just/*.py and crates/atm-architecture/tests/*.rs for brace/region scanners" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T05:59:41Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T05:33:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M1/AV3-M1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M1/AV3-M1-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M1/AV3-M1-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-M1/AV3-M1-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 2109 ;
+  triage:snippet "brace_depth = line.count(...) - line.count(...)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
+
+<urn:atm:triage:occurrence/AV3-M1/AV3-M1-2>
+  a triage:Occurrence ;
+  triage:file ".just/check_read_concurrency_gates.py" ;
+  triage:line 39 ;
+  triage:snippet "def extract_fn_body(source: str, fn_name: str) -> str:" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
+
+<urn:atm:triage:occurrence/AV3-M1/AV3-M1-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3815 ;
+  triage:snippet "fn extract_fn_body<'source>(source: &'source str, fn_name: &str)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
+
+<urn:atm:triage:worktree/AV3-1/8938ed6ab>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "8938ed6ab" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV3-2/db08f459>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "db08f459" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV3-3/f37063fdd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "f37063fdd" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV3-4/2c6040b28>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV3-5/4a97f0dd1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd1" ;
+  triage:orderIndex 5 .
