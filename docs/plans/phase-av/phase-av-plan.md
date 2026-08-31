@@ -156,8 +156,8 @@ criteria, and required validation. This section is a map only.
 
 | Sprint | Doc | Scope |
 |---|---|---|
-| AV.1a | [sprint-AV.1a-reader-lane-foundation.md](./sprint-AV.1a-reader-lane-foundation.md) | Bounded RO WAL reader pool, async mailbox-read capability through the storage boundary, read deadline enforcement, metrics seams. Runtime-inert: no handler consumes it yet. |
-| AV.1b | [sprint-AV.1b-read-handler-cutover.md](./sprint-AV.1b-read-handler-cutover.md) | The atomic behavior change: read-family handler cutover, hidden-mutation split, doctor decomposition, writer purity, liveness tests. Atomicity rationale recorded in the sprint doc. |
+| AV.1a | [sprint-AV.1a-reader-lane-foundation.md](./sprint-AV.1a-reader-lane-foundation.md) | Bounded RO WAL reader pool, sealed scope-enforcing async mailbox-read capability through the storage boundary, `AsyncMailboxRuntime` port + pure-selection extraction, cancellable read deadlines with capacity reclamation, metrics seams. Runtime-inert: no handler consumes it yet. |
+| AV.1b | [sprint-AV.1b-read-handler-cutover.md](./sprint-AV.1b-read-handler-cutover.md) | The atomic behavior change: read-family handler cutover through the async port, hidden-mutation split under a single admission-based handoff protocol, typed doctor decomposition with per-leg lanes/deadlines, writer purity, liveness tests. Atomicity rationale recorded in the sprint doc. |
 | AV.2 | [sprint-AV.2-requirements-adr-hardening.md](./sprint-AV.2-requirements-adr-hardening.md) | Normative MUST rules for read concurrency and race-tolerant state; reader/writer-lane ADR with the AL13-G7 regression as history; Phase-AM deletion-ledger entries. |
 | AV.3 | [sprint-AV.3-mechanical-hard-gates.md](./sprint-AV.3-mechanical-hard-gates.md) | BlockingCoreBridge deletion (uncompilable gate), read-family architecture guard, WriteOp purity lint, liveness tests owned as permanent CI gates. |
 | AV.4 | [sprint-AV.4-read-query-benchmarks.md](./sprint-AV.4-read-query-benchmarks.md) | Massively parallel read/peek/list and query/search benchmark families, mixed read-under-write-load mode, ratcheted per-host floors, reader-lane diagnostics in reports. |

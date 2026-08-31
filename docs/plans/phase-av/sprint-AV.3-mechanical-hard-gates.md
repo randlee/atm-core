@@ -43,13 +43,27 @@ sprint.
       boundary TOML governing the handler→writer edge; add a narrow TOML
       rule only if sc-lint-boundary supports semantic call-edge policy —
       otherwise D2 is the enforcement layer.
-- [ ] D2 — Read-family architecture guard: extend the existing
-      http-runtime scan in
+- [ ] D2 — Read-family architecture guard, positive-obligation first:
+      the primary gate is a **handler dependency allowlist / typed
+      boundary assertion** — the read-handler region's dependency
+      surface must consist of the `AsyncMailboxRuntime` /
+      `DoctorProjection` async ports (plus enumerated inert helpers);
+      any *other* callable/type reference in that region fails the
+      test, so a freshly named semaphore/bridge type or a new
+      writer-queued async read fails without appearing on any list.
+      The deny list (extend
       `crates/atm-architecture/tests/boundary_enforcement.rs:3389-3431`
-      to assert the read-handler region references none of:
-      `BlockingCoreBridge`, `spawn_blocking`, sync `*_with_runtime`
-      read/list/doctor APIs, `MessageStore::list_messages`, writer
-      ingress types. Existing direct-SQLite prohibition retained.
+      with `BlockingCoreBridge`, `spawn_blocking`, sync
+      `*_with_runtime` read/list/doctor APIs,
+      `MessageStore::list_messages`, writer ingress types) is retained
+      as defense in depth, not the primary mechanism. Existing
+      direct-SQLite prohibition retained.
+- [ ] D2b — Behavior gate (mechanism-independent): tests run each
+      read-family endpoint (list/peek/read/doctor) against an
+      instrumented store whose **writer lane fails every submission** —
+      each endpoint must still succeed. Any read path routed through
+      writer-lane machinery, under any type name, fails this test
+      regardless of what the source scan can see.
 - [ ] D3 — WriteOp purity gate: a `.just` deny-list checker (alongside
       the existing Python checks, `justfile:112+` / `.just/`) asserting
       the `WriteOp` enum declares no pure-read variant and the
@@ -58,6 +72,12 @@ sprint.
       stalled-op + read-storm and bounded-overload tests are wired into
       `just test` and documented as a release gate (removal requires an
       ADR change).
+- [ ] D5 — Scratch-mutation demonstrations (recorded, then reverted)
+      cover, at minimum: (a) reintroducing `spawn_blocking` in a read
+      handler; (b) a **newly named** blocking-bridge type wrapping a
+      1-permit semaphore in the read path; (c) routing an async read
+      through the writer queue. Each must trip D2/D2b (and A3's lint
+      where applicable).
 
 ## Code contracts
 
@@ -86,11 +106,18 @@ fn http_runtime_read_handlers_never_touch_writer_lane() {
 
 This is the authoritative acceptance checklist.
 
-- [ ] A1 — `BlockingCoreBridge` no longer exists in the workspace; a
-      grep for it in `crates/` returns only historical docs/ADRs.
-- [ ] A2 — Reintroducing `spawn_blocking` or a sync read API into the
-      read-handler region fails `cargo test -p atm-architecture`
-      (demonstrated once with a scratch mutation, then reverted).
+- [ ] A1 — `BlockingCoreBridge` no longer exists in the workspace.
+      Two-part check: (1) a grep under `crates/` returns **zero**
+      production-source occurrences; (2) remaining mentions exist only
+      in named documentation paths (`docs/adr/`, `docs/plans/`,
+      Phase-AM deletion ledger) as historical rationale.
+- [ ] A2 — Every D5 scratch mutation (spawn_blocking reintroduction,
+      newly named bridge type, writer-queued async read) fails
+      `cargo test -p atm-architecture` and/or the D2b behavior tests
+      (demonstrated once each, then reverted).
+- [ ] A2b — D2b behavior tests pass on the real cutover code: all four
+      read-family endpoints succeed against the writer-lane-failing
+      instrumented store.
 - [ ] A3 — Adding a pure-read `WriteOp` variant fails `just lint`
       (demonstrated once with a scratch mutation, then reverted).
 - [ ] A4 — All gates run in default `just lint` / `just test` with no

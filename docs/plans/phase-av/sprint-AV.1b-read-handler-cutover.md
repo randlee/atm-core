@@ -48,18 +48,67 @@ sprint.
 
 - [ ] D1 — Read-family handler cutover in
       `storage_and_nudge_router.rs`: list (:493-511), peek (:514-533),
-      read (:536-555), doctor (:579-637) serve from the AV.1a reader
-      lane; none acquires the `BlockingCoreBridge` permit.
+      read (:536-555), doctor (:579-637) route through the AV.1a D6
+      `AsyncMailboxRuntime` port (which composes the reader lane, the
+      extracted pure selection module, and the writer-lane state
+      handoff); none acquires the `BlockingCoreBridge` permit, and no
+      handler re-implements selection/authorization logic inline. The
+      port preserves today's team/agent authorization and visibility
+      filters; the AV.1a A6 parity suite (read/peek/list/missing-record/
+      state-transition) is extended here to run through the live
+      handlers. The frozen legacy synchronous daemon is not modified.
 - [ ] D2 — Hidden-mutation split: `apply_display_mutations_to_store`
       (`atm-core/src/read/mod.rs:354-365`) and the seen-watermark write
-      (:211-225) become explicit writer-lane state transitions enqueued
-      after read-only selection returns (race-tolerant per phase plan
-      §1.2).
-- [ ] D3 — Doctor decomposition: core doctor projection
-      (`doctor/mod.rs:130-170,173-230`) is an async, independently
-      bounded control-plane composition; Herdr-presence leg stays
-      separately timed; doctor acquires neither reader-pool permits nor
-      the writer lane.
+      (:211-225) become explicit writer-lane state transitions governed
+      by exactly one handoff protocol (below); there is no other
+      permitted mutation path from a read flow.
+
+      **Mutation-handoff protocol (normative for this sprint):**
+      1. *Response eligibility:* the read response is eligible to return
+         as soon as read-only selection completes. It NEVER awaits
+         writer-lane *execution* or durability.
+      2. *Admission:* before returning, the read flow awaits only
+         **enqueue admission** — a bounded, non-blocking-in-practice
+         `try_enqueue` onto the writer ingress. Admission either
+         succeeds immediately or fails immediately; there is no
+         unbounded wait on writer capacity in the read path.
+      3. *Admission failure:* if the writer ingress is saturated or
+         unavailable, the state transition is **dropped, counted, and
+         logged** (a `read_state_handoff_dropped` metric with reason
+         saturated/unavailable) and the read response still returns
+         success. Dropping is authorized ONLY at this admission point —
+         a transition that was admitted is executed or fails loudly
+         through normal writer-lane error handling; silent loss after
+         admission is not race-tolerance, it is a bug.
+      4. *Permitted races:* once admitted, ordering/visibility races
+         with concurrent reads are "don't care" per phase plan §1.2. No
+         retry loop in the read path; observability (metric + log) is
+         the recovery surface.
+
+      Tests: writer-lane saturated at admission (read succeeds, drop
+      counted); writer-lane execution failure after admission (error
+      surfaced via writer-lane error path/metrics, read unaffected);
+      response-before-commit (read returns before the admitted
+      transition is applied; a subsequent read observes it
+      eventually).
+- [ ] D3 — Doctor decomposition: a typed `DoctorProjection` boundary
+      owned by `atm-runtime` (beside the AV.1a D6 port) replaces the
+      bridged sync doctor call. Each source leg is enumerated with its
+      owning layer, lane, and its own deadline:
+      | Leg | Owner | Lane |
+      |---|---|---|
+      | core doctor projection (`doctor/mod.rs:130-170,173-230`) | atm-core via a dedicated bounded control-plane worker | control lane (own bound) |
+      | roster/lease validation | runtime roster component | control lane |
+      | peer-config / runtime-health | runtime config/health components | in-process async (no storage) |
+      | Herdr presence | herdr client | own timeout, already separately timed |
+      Legs run under bounded structured concurrency (join with per-leg
+      deadline; one slow leg degrades its own section, never the whole
+      report). Doctor acquires neither mailbox reader-pool permits nor
+      the writer lane; its control lane has its own explicit bound.
+      Test: saturate a doctor control-plane dependency while BOTH the
+      mailbox reader pool and the writer lane are saturated — doctor
+      returns a within-deadline report with the slow leg marked
+      degraded, and mailbox reads remain unaffected.
 - [ ] D4 — Writer purity: `WriteOp::ListMessages`
       (`writer/ops.rs:37,106`), `SharedDb::submit_list_messages_async`
       (`shared_db.rs:482-501`), and the writer-routed
@@ -73,14 +122,21 @@ sprint.
 
 ```rust
 // Writer-lane state transition replacing the hidden read-flow mutation
-// (D2). Enqueued after the read returns; loss/reorder races are
-// acceptable per the race-tolerant state contract.
+// (D2). Handoff follows the D2 protocol: response is eligible on
+// selection completion; only bounded enqueue ADMISSION is awaited;
+// admission failure drops-with-count; post-admission loss is a bug.
 // (Extends the existing WriteOp enum in writer/ops.rs.)
 WriteOp::ApplyReadDisplayState {
     mailbox: MailboxId,
     message_ids: Vec<MessageId>,
     seen_watermark: Option<Watermark>,
 }
+
+// D2 admission surface on the writer ingress (indicative):
+pub enum HandoffAdmission {
+    Admitted,
+    Rejected(HandoffRejection),   // Saturated | Unavailable — counted + logged,
+}                                 // read response returns success regardless
 ```
 
 ## Acceptance criteria
@@ -98,10 +154,16 @@ This is the authoritative acceptance checklist (phase contract points
 - [ ] A3 — Overload test: reads beyond pool + queue capacity fail
       explicitly with `Saturated`/`DeadlineExpired`, not by queuing
       indefinitely.
-- [ ] A4 — Read flows perform zero writer-lane work before returning;
-      display/seen mutations are observed on the writer lane afterward.
-- [ ] A5 — Doctor completes while both the reader pool and writer lane
-      are saturated.
+- [ ] A4 — Read flows perform no writer-lane *execution* work before
+      returning (bounded enqueue admission per the D2 protocol is the
+      only writer-lane touch); display/seen mutations are observed on
+      the writer lane afterward. D2 protocol tests pass: saturation
+      drop-with-count, post-admission writer failure surfaced loudly,
+      response-before-commit.
+- [ ] A5 — Doctor completes within deadline while both the mailbox
+      reader pool and writer lane are saturated, including the D3 case
+      where a doctor control-plane dependency is also saturated (slow
+      leg reported degraded, report still returned).
 - [ ] A6 — `WriteOp` contains no pure-read variant; the writer queue
       receives no read traffic under a read-only workload (asserted via
       writer metrics in a test).
