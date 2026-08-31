@@ -3113,6 +3113,60 @@ mod tests {
         assert_eq!(denied, ReadLaneError::UnauthorizedScope);
     }
 
+    #[tokio::test]
+    async fn dedicated_mailbox_reader_projects_roster_and_durable_seen_state() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let scope = MailboxScope::new(team(), agent());
+        backend
+            .roster_store()
+            .save_roster(&RosterSnapshot {
+                team_name: team(),
+                members: vec![RosterMember {
+                    team_name: team(),
+                    agent_name: agent(),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Worker,
+                    model: ModelName::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Map::new(),
+                }],
+                refreshed_at: None,
+            })
+            .expect("seed roster");
+        let original = message("atm:reader-seen", "read state");
+        let watermark = IsoTimestamp::now();
+        backend
+            .message_store()
+            .save_message(&original)
+            .expect("seed mailbox");
+        backend
+            .async_message_store()
+            .apply_read_display_state_async(
+                scope.clone(),
+                vec![original.message_key],
+                Some(watermark),
+            )
+            .await
+            .expect("write seen state");
+
+        let reader = backend.async_mailbox_reader();
+        let deadline = ReadDeadline::new(std::time::Duration::from_secs(1)).expect("deadline");
+        assert!(
+            reader
+                .mailbox_member_exists(scope.clone(), deadline)
+                .await
+                .expect("read-only roster projection")
+        );
+        assert_eq!(
+            reader
+                .load_seen_watermark(scope, deadline)
+                .await
+                .expect("read-only seen projection"),
+            Some(watermark)
+        );
+    }
+
     #[test]
     fn sqlite_backend_commits_related_messages_through_one_writer_operation() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");

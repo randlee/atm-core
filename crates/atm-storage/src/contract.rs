@@ -716,6 +716,22 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
         key: MessageKey,
         deadline: ReadDeadline,
     ) -> Result<Option<Message>, ReadLaneError>;
+
+    /// Bounded roster projection used only to validate an explicitly
+    /// addressed mailbox. It remains on the read-only lane.
+    async fn mailbox_member_exists(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<bool, ReadLaneError>;
+
+    /// Bounded durable seen-state projection. The daemon never reads a
+    /// caller-owned seen-state file while servicing an HTTP mailbox request.
+    async fn load_seen_watermark(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<Option<IsoTimestamp>, ReadLaneError>;
 }
 
 pub trait RosterStore: sealed::Sealed + Send + Sync {
