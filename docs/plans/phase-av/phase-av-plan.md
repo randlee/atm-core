@@ -3,19 +3,23 @@ title: "Phase AV — Async mailbox-read cutover completion, hardening, and read 
 phase: AV
 branch: plan/phase-av
 dev_branch: fix/mailbox-read-blocking-serialization (provisioned by team-lead, held clean off develop)
-status: draft-ready-for-qa
+status: hardening-in-progress
 owner: fenix (plan author); arch-ctm (investigations I-1..I-5, implementation on approval)
 base_revision: 938767c72 (develop)
+integration_branch: integrate/phase-av
 dependency_relations:
-  - prerequisite: AV.1
-    dependent: AV.2
-    relation: parallel_safe
   - prerequisite: AV.1
     dependent: AV.3
     relation: must_follow
   - prerequisite: AV.1
     dependent: AV.4
     relation: must_follow
+  - related: AV.2
+    relation: parallel_safe
+    scope: parallel_safe with AV.1, AV.3, and AV.4 (docs-only footprint)
+  - related: AV.3/AV.4
+    relation: parallel_safe
+    scope: gates vs. benchmark files, non-intersecting
 ---
 
 # Phase AV — Async mailbox-read cutover completion, hardening, and read benchmarks
@@ -141,124 +145,20 @@ Additional phase mandates (Rand, 2026-08-30/31):
 
 ## 3. Sprints
 
-### AV.1 — Reader-lane implementation (cutover completion)
+Sprint docs are the authoritative source for deliverables, acceptance
+criteria, and required validation. This section is a map only.
 
-Implement the bounded multi-reader capability on
-`fix/mailbox-read-blocking-serialization`:
+| Sprint | Doc | Scope |
+|---|---|---|
+| AV.1 | [sprint-AV.1-reader-lane-cutover.md](./sprint-AV.1-reader-lane-cutover.md) | Bounded RO WAL reader pool, async mailbox-read capability through the storage boundary, read-family handler cutover, hidden-mutation split, doctor decomposition, read deadline enforcement, writer purity, metrics seams, liveness tests. |
+| AV.2 | [sprint-AV.2-requirements-adr-hardening.md](./sprint-AV.2-requirements-adr-hardening.md) | Normative MUST rules for read concurrency and race-tolerant state; reader/writer-lane ADR with the AL13-G7 regression as history; Phase-AM deletion-ledger entries. |
+| AV.3 | [sprint-AV.3-mechanical-hard-gates.md](./sprint-AV.3-mechanical-hard-gates.md) | BlockingCoreBridge deletion (uncompilable gate), read-family architecture guard, WriteOp purity lint, liveness tests owned as permanent CI gates. |
+| AV.4 | [sprint-AV.4-read-query-benchmarks.md](./sprint-AV.4-read-query-benchmarks.md) | Massively parallel read/peek/list and query/search benchmark families, mixed read-under-write-load mode, ratcheted per-host floors, reader-lane diagnostics in reports. |
 
-- **Reader pool** (I-2): bounded pool of N independent read-only worker
-  connections in `atm-storage-rusqlite`, generalizing `SearchReader`'s
-  bounded mpsc/oneshot/deadline worker shape (`search_reader.rs:40-75`)
-  to N workers. Connection substrate is the existing secure RO
-  precedent — analyst `open_defensive_connection`
-  (`analyst_query.rs:206-221`): `SQLITE_OPEN_READ_ONLY | NO_MUTEX` with
-  `query_only=ON; trusted_schema=OFF; defensive=ON`. WAL is already
-  established by writer startup (`shared_db.rs:645-650`, setup
-  :594-623), so RO readers get native WAL concurrency for free.
-- **New async mailbox-read capability** (I-4): a separately named async
-  read trait/handle added to `atm-storage` (`contract.rs` — today's
-  `AsyncMessageStore` is write-oriented, :573-617), threaded through
-  `StorageHandles` (`factory.rs:12-35,89-92`), `LocalServiceRuntime`
-  (`service_runtime.rs:145-166,325-344`), and composition
-  (`atm-runtime/src/composition.rs:153-170`). Implemented only by
-  `atm-storage-rusqlite`; no rusqlite types leak into
-  `atm-http-runtime`. Surface: metadata projection (list/peek) +
-  record-body load. Per ADR-036 storage topology.
-- **Read-family handlers off the bridge** (I-1): list (:493-511), peek
-  (:514-533), read (:536-555), and doctor (:579-637) in
-  `storage_and_nudge_router.rs` move onto the reader lane end-to-end.
-  Sync fresh-connection read paths (`service_runtime_store.rs:170-191`
-  `list_messages`, :201-213 `load_message`) are subsumed.
-- **Hidden mutation split** (I-1): the read flow's
-  `apply_display_mutations_to_store` (`read/mod.rs:354-365`) and
-  seen-watermark write (:211-225) become explicit state-transition
-  operations on the writer capability, enqueued after the read-only
-  selection returns (acceptable-race per §1.2). `persist_message_state`
-  (`service_runtime_store.rs:273-295`) stays writer-lane.
-- **Doctor decomposition** (I-3): core doctor projection
-  (`doctor/mod.rs:130-170,173-230`; roster :368-385,653-662; peer-config
-  reads :269-273) becomes an async, independently bounded control-plane
-  composition; the router's runtime-health supplement
-  (`storage_and_nudge_router.rs:612+`) and the async Herdr-presence leg
-  (:623-637) remain separately timed. Doctor acquires neither mailbox
-  reader permits nor the writer lane.
-- **Deadline enforcement**: read jobs are cancellable at the request
-  deadline — reads are abandonable; only durable writes retain
-  run-to-completion semantics.
-- **Writer purity** (I-2): `WriteOp::ListMessages`
-  (`writer/ops.rs:37,106`), `submit_list_messages_async`
-  (`shared_db.rs:482-501`), and the writer-routed
-  `list_messages_async` delegation (`lib.rs:612-615`) are removed, not
-  preserved — the writer lane carries only ordered mutations.
-- **Metrics seams for AV.4** (I-2): reader-lane queue depth /
-  saturation, in-flight count, wait vs. execution duration,
-  deadline-expiry count, and pool size — without these, AV.4's
-  concurrency and latency-under-write-storm floors cannot diagnose a
-  regression.
-
-**Acceptance:** contract points 1–6, including the deterministic
-stalled-housekeeping + read-storm liveness proof and the explicit
-bounded-overload failure proof, running in the standard `just test`
-gate (test home per I-5: the real-HTTP router fixture at
-`storage_and_nudge_router.rs:1053+`, fixture :1300-1450).
-
-### AV.2 — Requirements + ADR hardening
-
-- Amend `docs/requirements.md`: read-family operations MUST be
-  concurrent; MUST NOT share a concurrency bound with, or be ordered
-  behind, any write/housekeeping lane; state-read races are defined
-  "don't care" (schema contract codified so it cannot be re-fenced
-  "for safety" later).
-- New ADR recording the reader/writer lane architecture, the deadline
-  semantics split (reads cancellable, writes run-to-completion), and the
-  AL13-G7 regression as motivating history.
-- Phase-AM deletion ledger gains the sync read-bridge remnants.
-
-### AV.3 — Mechanical hard gates
-
-Strongest first; grounded on the I-5 enforcement-seam inventory:
-
-1. **Uncompilable, not linted:** delete `BlockingCoreBridge` at cutover
-   completion — a future "quick bridge" fails the build. I-5 found no
-   existing boundary TOML governing the handler→writer edge; the
-   architecture guard (item 2) is the primary mechanism, with a narrow
-   TOML rule added only if sc-lint-boundary supports semantic call-edge
-   policy. Remnants go on the Phase-AM deletion ledger (AV.2).
-2. **Architecture guard:** extend the existing http-runtime scan in
-   `crates/atm-architecture/tests/boundary_enforcement.rs:3389-3431`
-   with a read-family rule: the handler region
-   (`storage_and_nudge_router.rs:493-637`) must not reference
-   `BlockingCoreBridge`, `spawn_blocking`, sync `*_with_runtime`
-   read/list/doctor APIs, `MessageStore::list_messages`, or writer
-   ingress. The existing direct-SQLite prohibition stays.
-3. **WriteOp purity gate:** a small `.just` source deny-list checker
-   (alongside the existing Python checks, `justfile:112+` / `.just/`)
-   asserting `WriteOp` has no pure-read variant and the read-handler
-   file has no bridge/spawn-blocking strings; a Rust architecture test
-   covers the semantic call paths.
-4. **Liveness test as permanent CI** (delivered in AV.1, owned as a gate
-   here): in the router fixture (`storage_and_nudge_router.rs:1053+`),
-   stall a housekeeping/mutation test seam, fire 10× concurrent
-   list/peek/read/doctor across distinct teams, assert each returns
-   within its request budget with writer-state commit separately
-   awaited; plus the explicit bounded-overload failure case. Runs in
-   standard `just test`.
-
-### AV.4 — Read and query benchmarks (massively parallel proof)
-
-New benchmark family beside send-message-benchmark:
-
-- **Read targets:** concurrent `read`/`peek`/`list` against a seeded
-  mailbox corpus at high reader counts; p50 throughput + tail latency.
-- **Query targets:** search/filtered-list (FTS path) under the same
-  parallel load.
-- **Mixed mode:** read/query performance while sustained writer activity
-  runs — the exact scenario that exposed this defect.
-- Ratcheted floors in `baselines.json` per host label, standard
-  3-clean-run rules — a read-serialization regression becomes a FAIL
-  campaign, not an anecdote.
-- Harness/report/schema extensions follow the shared-contract rules
-  (separate PR, team-lead visibility, macOS/Windows impact stated).
+Dependency relations (rationale in each sprint doc's frontmatter):
+AV.1→AV.3 and AV.1→AV.4 are `must_follow` (gates and benchmarks assert
+the post-cutover state; merge-forward before every round); AV.2 is
+`parallel_safe` with all others; AV.3∥AV.4 are `parallel_safe`.
 
 ## 4. Execution notes
 
