@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from types import SimpleNamespace
 from unittest import mock
 import unittest
@@ -97,7 +97,8 @@ class Av1bReadUnderStallTests(unittest.TestCase):
             self.assertEqual(json.loads(evidence.read_text(encoding="utf-8"))["failure"], "too slow")
 
     def test_parse_args_rejects_a_budget_the_cli_cannot_enforce(self):
-        with self.assertRaises(SystemExit):
-            RUNNER.parse_args(
-                ["--team", "proof-team", "--actor", "proof-agent", "--budget-ms", "2500", "--evidence-out", "proof.json"]
-            )
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                RUNNER.parse_args(
+                    ["--team", "proof-team", "--actor", "proof-agent", "--budget-ms", "2500", "--evidence-out", "proof.json"]
+                )
