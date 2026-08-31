@@ -12,10 +12,12 @@ mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;
 #[cfg(test)]
 mod mailbox_metadata;
+mod mailbox_reader;
 mod nudge_template_override_store;
 mod observability;
 mod peer_config_store;
 mod pending_nudge_store;
+mod reader_pool;
 mod roster_store;
 mod search_reader;
 mod search_schema;
@@ -38,9 +40,9 @@ pub use crate::observability::{
     SqliteObservabilityOutcome,
 };
 use atm_storage::contract::{
-    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMessageStore,
-    GraftReceiverEndpointStore, MailboxBucketCounts, Message, MessageKey, MessageQuery,
-    MessageStore, PeerConfigStore, RosterStore,
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMailboxReader,
+    AsyncMessageStore, GraftReceiverEndpointStore, MailboxBucketCounts, Message, MessageKey,
+    MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 use atm_storage::schema::MessageEnvelope;
 #[cfg(test)]
@@ -650,6 +652,7 @@ pub struct SqliteStorageBackend {
     template_catalog_store: Arc<dyn TemplateCatalogStore>,
     message_search_store: Arc<dyn MessageSearchStore>,
     async_message_search_store: Arc<dyn AsyncMessageSearchStore>,
+    async_mailbox_reader: Arc<dyn AsyncMailboxReader>,
 }
 
 impl std::fmt::Debug for SqliteStorageBackend {
@@ -692,6 +695,7 @@ impl StorageFactory for SqliteStorageFactory {
         Ok(StorageHandles::from_parts(StorageHandleParts {
             message_store: backend.message_store(),
             async_message_store: backend.async_message_store(),
+            async_mailbox_reader: backend.async_mailbox_reader(),
             roster_store: backend.roster_store(),
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
@@ -728,6 +732,7 @@ impl SqliteStorageBackend {
             template_catalog_store: template_catalog_store(Arc::clone(&db)),
             message_search_store: search_store(Arc::clone(&db)),
             async_message_search_store: async_search_store(Arc::clone(&db)),
+            async_mailbox_reader: db.mailbox_reader(),
         })
     }
 
@@ -748,6 +753,7 @@ impl SqliteStorageBackend {
             template_catalog_store: template_catalog_store(Arc::clone(&db)),
             message_search_store: search_store(Arc::clone(&db)),
             async_message_search_store: async_search_store(Arc::clone(&db)),
+            async_mailbox_reader: db.mailbox_reader(),
         })
     }
 
@@ -757,6 +763,10 @@ impl SqliteStorageBackend {
 
     pub fn async_message_store(&self) -> Arc<dyn AsyncMessageStore + Send + Sync> {
         self.message_store.clone()
+    }
+
+    pub fn async_mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
+        self.async_mailbox_reader.clone()
     }
 
     pub fn save_message_record(
@@ -880,8 +890,9 @@ impl SqliteStorageBackend {
 mod tests {
     use super::SqliteStorageBackend;
     use atm_storage::contract::{
-        AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, Message, MessageKey,
-        MessageQuery, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
+        AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, MailboxScope, Message,
+        MessageKey, MessageQuery, ReadDeadline, ReadLaneError, RosterHarness, RosterMember,
+        RosterMemberKind, RosterSnapshot,
     };
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, IsoTimestamp, ModelName, TeamName};
@@ -2884,6 +2895,61 @@ mod tests {
         assert_eq!(projection.len(), 2);
         assert!(projection.contains(&first));
         assert!(projection.contains(&second));
+    }
+
+    #[tokio::test]
+    async fn dedicated_mailbox_reader_enforces_scope_and_reads_without_writer_submission() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let first = message("atm:reader-first", "first");
+        let second = message("atm:reader-second", "second");
+        backend
+            .message_store()
+            .save_messages_atomically(&[first.clone(), second.clone()])
+            .expect("seed mailbox");
+        let scope = MailboxScope::new(team(), agent());
+        let reader = backend.async_mailbox_reader();
+        let deadline = ReadDeadline::new(std::time::Duration::from_secs(1)).expect("deadline");
+
+        let listed = reader
+            .list_messages(
+                scope.clone(),
+                MessageQuery {
+                    team: team(),
+                    agent: agent(),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                },
+                deadline,
+            )
+            .await
+            .expect("reader list");
+        assert_eq!(listed.len(), 2);
+        assert!(listed.contains(&first));
+        assert!(listed.contains(&second));
+        assert_eq!(
+            reader
+                .load_message(scope, first.message_key.clone(), deadline)
+                .await
+                .expect("reader load"),
+            Some(first)
+        );
+
+        let denied = reader
+            .list_messages(
+                MailboxScope::new("other-team".parse().expect("team"), agent()),
+                MessageQuery {
+                    team: team(),
+                    agent: agent(),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                },
+                deadline,
+            )
+            .await
+            .expect_err("mismatched scope must fail at the boundary");
+        assert_eq!(denied, ReadLaneError::UnauthorizedScope);
     }
 
     #[test]

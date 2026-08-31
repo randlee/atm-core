@@ -1,10 +1,17 @@
+use crate::mailbox_reader::DEFAULT_MAILBOX_READER_CONFIG;
+use crate::mailbox_reader::start_mailbox_reader;
 #[cfg(test)]
 use crate::observability::NullSqliteObservability;
 use crate::observability::{
     SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
+use crate::reader_pool::{
+    DEFAULT_DOCTOR_READER_CONFIG, DEFAULT_MAX_READER_CONNECTIONS, ReaderPoolConfig,
+    validate_connection_budget,
+};
 use crate::search_reader::SearchReader;
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
+use atm_storage::AsyncMailboxReader;
 use atm_storage::TemplateMessageAdmission;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
@@ -12,9 +19,7 @@ use atm_storage::contract::{
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
-#[cfg(test)]
-use rusqlite::OpenFlags;
-use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};
+use rusqlite::{Connection, Error as RusqliteError, OpenFlags, TransactionBehavior};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 #[cfg(test)]
@@ -187,6 +192,7 @@ pub(crate) struct SharedDb {
     target: Arc<SharedDbTarget>,
     writer: Arc<SqliteWriter>,
     search_reader: Arc<SearchReader>,
+    mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     observability: Arc<dyn SqliteObservability>,
 }
 
@@ -215,10 +221,12 @@ impl SharedDb {
             Arc::clone(&observability),
         )?);
         let search_reader = Arc::new(SearchReader::start(Arc::clone(&target))?);
+        let mailbox_reader = start_mailbox_reader(Arc::clone(&target))?;
         Ok(Self {
             target,
             writer,
             search_reader,
+            mailbox_reader,
             observability,
         })
     }
@@ -227,6 +235,12 @@ impl SharedDb {
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
     ) -> Result<Self, AtmError> {
+        validate_connection_budget(
+            DEFAULT_MAILBOX_READER_CONFIG,
+            ReaderPoolConfig::search_defaults(),
+            DEFAULT_DOCTOR_READER_CONFIG,
+            DEFAULT_MAX_READER_CONNECTIONS,
+        )?;
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
             // Accepted risk: durable-state root creation happens during boundary
@@ -245,6 +259,7 @@ impl SharedDb {
             Arc::clone(&observability),
         )?);
         let search_reader = Arc::new(SearchReader::start(Arc::clone(&target))?);
+        let mailbox_reader = start_mailbox_reader(Arc::clone(&target))?;
         tracing::debug!(
             writer_handles = 1,
             path = %target.display(),
@@ -254,6 +269,7 @@ impl SharedDb {
             target,
             writer,
             search_reader,
+            mailbox_reader,
             observability,
         })
     }
@@ -501,6 +517,10 @@ impl SharedDb {
         }
     }
 
+    pub(crate) fn mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
+        Arc::clone(&self.mailbox_reader)
+    }
+
     pub(crate) fn error(&self, message: impl Into<String>, source: RusqliteError) -> AtmError {
         sqlite_error(self.target.as_ref(), message, source)
     }
@@ -639,6 +659,41 @@ pub(crate) fn open_connection_for_target(target: &SharedDbTarget) -> Result<Conn
         .map_err(|error| sqlite_open_error(target, error))?,
     };
     configure_connection(&mut connection, target)?;
+    Ok(connection)
+}
+
+/// Opens a connection which is physically read-only for durable databases and
+/// configured defensively for the bounded reader lanes.
+pub(crate) fn open_read_connection_for_target(
+    target: &SharedDbTarget,
+) -> Result<Connection, AtmError> {
+    let mut connection = match target {
+        SharedDbTarget::Path(path) => Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(|error| sqlite_open_error(target, error))?,
+        #[cfg(test)]
+        // Shared in-memory fixtures cannot be reopened READ_ONLY. `query_only`
+        // below preserves the no-write capability contract in tests.
+        SharedDbTarget::InMemory { uri } => Connection::open_with_flags(
+            uri,
+            OpenFlags::SQLITE_OPEN_READ_WRITE
+                | OpenFlags::SQLITE_OPEN_CREATE
+                | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(|error| sqlite_open_error(target, error))?,
+    };
+    configure_connection(&mut connection, target)?;
+    connection
+        .execute_batch("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA defensive=ON;")
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to configure defensive read-only sqlite connection",
+                error,
+            )
+        })?;
     Ok(connection)
 }
 
