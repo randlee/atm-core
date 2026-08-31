@@ -36,6 +36,8 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
 [enforcement]
+# No production implementer exists; cfg(test) doubles are intentionally ignored by the policy sweep.
+no_in_repo_implementation = true
 lint_rules = ["LINT-BOUNDARY-STATUS-SOURCE-REFERENCES"]
 review_gates = ["no_status_leakage_into_roster_store"]
 
