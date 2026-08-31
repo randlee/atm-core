@@ -12,13 +12,17 @@ if str(JUST_DIR) not in sys.path:
 
 from check_read_concurrency_gates import check
 from check_read_concurrency_gates import extract_fn_body
+from check_read_concurrency_gates import READ_HANDLERS
 from check_read_concurrency_gates import write_op_variants
 
 
 class ReadConcurrencyGateTests(unittest.TestCase):
     def test_extract_fn_body_stops_at_matching_brace(self) -> None:
-        source = "async fn read() { if ready { call(); } }\nasync fn doctor() {}"
-        self.assertEqual(extract_fn_body(source, "read"), "{ if ready { call(); } }")
+        source = 'async fn receive_messages<T>() { /* } */ let value = "{"; call(value); }'
+        self.assertEqual(extract_fn_body(source, "receive_messages"), '{ /* } */ let value = "{"; call(value); }')
+
+    def test_handler_names_match_the_checked_in_contract(self) -> None:
+        self.assertEqual(READ_HANDLERS, ("list_messages", "peek_messages", "receive_messages", "doctor"))
 
     def test_write_op_variants_extracts_tuple_and_struct_variants(self) -> None:
         source = """pub(crate) enum WriteOp {
@@ -51,9 +55,9 @@ class ReadConcurrencyGateTests(unittest.TestCase):
             ops.parent.mkdir(parents=True)
             router.write_text(
                 """struct AsyncMailboxRuntime;
-async fn list() { BlockingCoreBridge::run(); }
-async fn peek() {}
-async fn read() {}
+async fn list_messages() { BlockingCoreBridge::run(); }
+async fn peek_messages() {}
+async fn receive_messages() {}
 async fn doctor() {}
 """,
                 encoding="utf-8",

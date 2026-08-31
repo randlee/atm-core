@@ -12,6 +12,7 @@ use std::{
 };
 
 use cargo_metadata::{DependencyKind, MetadataCommand};
+use quote::ToTokens;
 use serde::Deserialize;
 use syn::visit::Visit;
 
@@ -3438,8 +3439,8 @@ async fn list_messages() { reader.list().await }
 async fn receive_mailbox() { reader.read().await }
 async fn heartbeat() { ControlPathSyncBridge::run(); }
 "#;
-    let region = handler_region(source, &["list_messages", "receive_mailbox"]);
-    assert!(region.contains("reader.list()") && region.contains("reader.read()"));
+    let region = av3_handler_region(source, &["list_messages", "receive_mailbox"]);
+    assert!(region.contains("reader . list") && region.contains("reader . read"));
     assert!(
         !region.contains("ControlPathSyncBridge"),
         "handler-region scans must not confuse an allowed residual control-path caller with a read handler"
@@ -3458,7 +3459,7 @@ impl Router {
 }
 "#;
     assert_eq!(
-        bridge_run_call_sites_by_enclosing_fn(source),
+        av3_bridge_run_call_sites_by_enclosing_fn(source),
         BTreeSet::from(["send".to_owned()]),
     );
 }
@@ -3473,14 +3474,10 @@ fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies() {
     if !router.contains("AsyncMailboxRuntime") {
         return;
     }
-    let read_region = handler_region(
+    let handlers = read_handler_names();
+    let read_region = av3_handler_region(
         &router,
-        &[
-            "list_messages",
-            "peek_messages",
-            "receive_messages",
-            "doctor",
-        ],
+        &handlers.iter().map(String::as_str).collect::<Vec<_>>(),
     );
     for prohibited in [
         "BlockingCoreBridge",
@@ -3558,7 +3555,7 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
         "graft_receiver_lookup".to_owned(),
     ]);
     assert_eq!(
-        bridge_run_call_sites_by_enclosing_fn(production_router),
+        av3_bridge_run_call_sites_by_enclosing_fn(production_router),
         residual,
         "AV-FU-1 owns the only permitted residual ControlPathSyncBridge::run call sites"
     );
@@ -3757,55 +3754,89 @@ fn read_source(path: &Path) -> String {
 /// rather than the whole router file. The residual control-path bridge stays
 /// in that file after AV.1b, so file-wide token checks would either reject an
 /// allowed mutation/control-path caller or permit a read-handler regression.
-fn handler_region(source: &str, handlers: &[&str]) -> String {
+fn av3_handler_region(source: &str, handlers: &[&str]) -> String {
+    let functions = av3_production_functions(source);
     handlers
         .iter()
-        .map(|handler| extract_fn_body(source, handler))
+        .map(|handler| {
+            functions.get(*handler).unwrap_or_else(|| {
+                panic!("AV.3 handler `{handler}` is missing from production source")
+            })
+        })
+        .cloned()
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn read_handler_names() -> Vec<String> {
+    include_str!("../../../.just/allowlists/read_concurrency_handlers.txt")
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
 }
 
 /// Enumerate enclosing functions of calls routed through the narrowly named
 /// AV.3 residual bridge. The field name is discovered from its type so this is
 /// a call-site policy instead of a second field-name API.
-fn bridge_run_call_sites_by_enclosing_fn(source: &str) -> BTreeSet<String> {
-    let bridge_fields = source
-        .lines()
-        .filter_map(|line| line.split_once(": ControlPathSyncBridge"))
-        .map(|(field, _)| field.trim())
-        .filter(|field| {
-            !field.is_empty()
-                && field
-                    .chars()
-                    .all(|character| character == '_' || character.is_ascii_alphanumeric())
+fn av3_bridge_run_call_sites_by_enclosing_fn(source: &str) -> BTreeSet<String> {
+    let syntax = syn::parse_file(source).expect("AV.3 source must parse as Rust");
+    let fields = syntax
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Struct(item) => Some(item),
+            _ => None,
+        })
+        .flat_map(|item| item.fields.iter())
+        .filter_map(|field| {
+            field
+                .ty
+                .to_token_stream()
+                .to_string()
+                .contains("ControlPathSyncBridge")
+                .then(|| field.ident.as_ref().map(ToString::to_string))
+                .flatten()
         })
         .collect::<BTreeSet<_>>();
-    function_names(source)
+    av3_production_functions(source)
         .into_iter()
-        .filter(|function| {
-            let body = extract_fn_body(source, function);
-            body.contains("ControlPathSyncBridge::run(")
-                || (body.contains(".run(")
-                    && bridge_fields
-                        .iter()
-                        .any(|field| body.contains(&format!("self.{field}"))))
+        .filter_map(|(name, body)| {
+            let field_call = fields
+                .iter()
+                .any(|field| body.contains(&format!("self . {field}")));
+            ((body.contains("ControlPathSyncBridge") || field_call) && body.contains(". run"))
+                .then_some(name)
         })
         .collect()
 }
 
-fn function_names(source: &str) -> BTreeSet<String> {
-    source
-        .lines()
-        .filter_map(|line| line.split_once("fn "))
-        .filter_map(|(_, tail)| tail.split_once('(').map(|(name, _)| name.trim()))
-        .filter(|name| {
-            !name.is_empty()
-                && name
-                    .chars()
-                    .all(|character| character == '_' || character.is_ascii_alphanumeric())
-        })
-        .map(ToOwned::to_owned)
-        .collect()
+fn av3_production_functions(source: &str) -> BTreeMap<String, String> {
+    let syntax = syn::parse_file(source).expect("AV.3 source must parse as Rust");
+    let mut functions = BTreeMap::new();
+    for item in syntax.items {
+        match item {
+            syn::Item::Fn(function) => {
+                functions.insert(
+                    function.sig.ident.to_string(),
+                    function.block.to_token_stream().to_string(),
+                );
+            }
+            syn::Item::Impl(implementation) => {
+                for member in implementation.items {
+                    if let syn::ImplItem::Fn(function) = member {
+                        functions.insert(
+                            function.sig.ident.to_string(),
+                            function.block.to_token_stream().to_string(),
+                        );
+                    }
+                }
+            }
+            syn::Item::Mod(module) if module.attrs.iter().any(is_test_configuration_attribute) => {}
+            _ => {}
+        }
+    }
+    functions
 }
 
 /// Returns the brace-delimited body (inclusive of the braces) of the first

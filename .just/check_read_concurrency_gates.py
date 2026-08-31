@@ -15,6 +15,7 @@ import re
 import sys
 
 from lint_common import discover_repo_root
+from rust_source import extract_fn_body
 
 
 ROUTER = Path("crates/atm-http-runtime/src/storage_and_nudge_router.rs")
@@ -28,32 +29,15 @@ ALLOWED_WRITE_OPS = {
     "AdmitTemplateMessage",
     "ApplyReadDisplayState",
 }
-READ_HANDLERS = ("list", "peek", "read", "doctor")
+HANDLER_LIST = Path(__file__).with_name("allowlists") / "read_concurrency_handlers.txt"
+READ_HANDLERS = tuple(
+    line for line in HANDLER_LIST.read_text(encoding="utf-8").splitlines() if line
+)
 PROHIBITED_READ_HANDLER_TERMS = (
     "BlockingCoreBridge",
     "ControlPathSyncBridge",
     "spawn_blocking",
 )
-
-
-def extract_fn_body(source: str, fn_name: str) -> str:
-    marker = f"fn {fn_name}("
-    signature_start = source.find(marker)
-    if signature_start < 0:
-        raise ValueError(f"read handler `{fn_name}` is missing")
-    body_start = source.find("{", signature_start)
-    if body_start < 0:
-        raise ValueError(f"read handler `{fn_name}` has no body")
-
-    depth = 0
-    for index, character in enumerate(source[body_start:], start=body_start):
-        if character == "{":
-            depth += 1
-        elif character == "}":
-            depth -= 1
-            if depth == 0:
-                return source[body_start : index + 1]
-    raise ValueError(f"read handler `{fn_name}` body is not closed")
 
 
 def write_op_variants(source: str) -> set[str]:

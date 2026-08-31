@@ -184,6 +184,7 @@ name = "atm-architecture"
 version = "1.4.6"
 dependencies = [
  "cargo_metadata",
+ "quote",
  "serde",
  "syn 2.0.119",
  "toml",
