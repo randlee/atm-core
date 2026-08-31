@@ -3,6 +3,7 @@ phase: AV
 sprint: AV.2
 title: Requirements and ADR hardening for read concurrency
 branch: docs/av2-read-concurrency-requirements
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/docs/av2-read-concurrency-requirements
 integration_branch: integrate/phase-av
 stack_parent: feature/av1b-read-handler-cutover (stack-order convenience only; no dependency) — planned; stack provisioned by task AV.0 (phase plan §4)
 status: complete
