@@ -1140,6 +1140,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn defensive_reader_connection_rejects_writes() {
+        let database = tempfile::NamedTempFile::new().expect("temporary database");
+        let target = SharedDbTarget::Path(database.path().to_path_buf());
+        let writer = open_connection_for_target(&target).expect("writer connection");
+        writer
+            .execute_batch("CREATE TABLE read_only_probe (value INTEGER);")
+            .expect("create fixture table");
+        let reader = open_read_connection_for_target(&target).expect("defensive reader");
+        assert!(
+            reader
+                .execute("INSERT INTO read_only_probe (value) VALUES (1)", [])
+                .is_err(),
+            "reader lanes must reject writes through query_only/READ_ONLY"
+        );
+    }
+
+    #[test]
     fn ensure_schema_drops_the_retired_peer_sync_policy_table() {
         let target = SharedDbTarget::InMemory {
             uri: format!(
