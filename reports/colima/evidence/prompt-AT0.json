@@ -1,0 +1,17 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT0-ack-discipline",
+  "agent": "claude-code",
+  "steps": [
+    {"name": "task-envelope-sent", "status": "pass", "detail": "Message sent with task-id AT0-TASK-1 and requires-ack flag"},
+    {"name": "envelope-received", "status": "pass", "detail": "Received with message_id 01M1CQPDVF9HVBQZBEY3JAGYQ9, task_id AT0-TASK-1, requires_ack true, in pending_ack bucket"},
+    {"name": "ack-sent", "status": "pass", "detail": "Acknowledged with reply message_id 01M1CQPJE4GPV03GSVWT247A7X, sent at 2026-08-31T20:20:47.172612226Z"},
+    {"name": "trivial-task-done", "status": "pass", "detail": "File /opt/testbed/at0/at0-proof.txt created with content 'at0-ok'"},
+    {"name": "completion-sent", "status": "pass", "detail": "Completion message sent with message_id 01M1CQPPA6MNHGYNH64JB484TG at 2026-08-31T20:20:51.142297022Z"},
+    {"name": "sender-history-order", "status": "pass", "detail": "Sender history shows ack (2026-08-31T20:20:47.172612226Z) before completion (2026-08-31T20:20:51.142297022Z), correct ordering verified"}
+  ],
+  "verdict": "pass",
+  "atm_versions": {"atm": "1.4.6", "hermes_atm": "unavailable", "atm_graft": "unavailable"},
+  "started_at": "2026-08-31T20:20:42.479751292Z",
+  "finished_at": "2026-08-31T20:20:51.142297022Z"
+}

@@ -1,0 +1,50 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "E0-graft-api-smoke",
+  "agent": "hermes",
+  "steps": [
+    {
+      "name": "import-check",
+      "status": "pass",
+      "detail": "Imported successfully. Exposes PyGraftSession, PyGraftSessionOptions, PyAgentAddress"
+    },
+    {
+      "name": "session-construction",
+      "status": "pass",
+      "detail": "Session constructed successfully with PyAgentAddress(fx-e0-alpha, e0-smoke, 1001)"
+    },
+    {
+      "name": "receiver-activation",
+      "status": "pass",
+      "detail": "Receiver activated successfully"
+    },
+    {
+      "name": "peer-send",
+      "status": "pass",
+      "detail": "Message sent: Sent to fx-e0-alpha@e0-smoke [message_id: 01M1CQ220Y7S67AGCFPM2JSP5W]"
+    },
+    {
+      "name": "nudge-receipt",
+      "status": "pass",
+      "detail": "Nudge received with correct sender format"
+    },
+    {
+      "name": "read-back",
+      "status": "pass",
+      "detail": "Successfully read message as fx-e0-alpha (plain format)"
+    },
+    {
+      "name": "session-close",
+      "status": "pass",
+      "detail": "Session closed successfully"
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {
+    "atm": "atm 1.4.6",
+    "hermes_atm": "",
+    "atm_graft": "unknown"
+  },
+  "started_at": "2026-08-31T20:09:24.873908+00:00",
+  "finished_at": "2026-08-31T20:09:35.078920+00:00"
+}
