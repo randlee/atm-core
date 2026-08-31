@@ -5,7 +5,7 @@ title: Massively parallel read and query benchmarks
 branch: feature/av4-read-query-benchmarks
 integration_branch: integrate/phase-av
 stack_parent: feature/av3-read-concurrency-gates (dependency is on AV.1b below it) — planned; stack provisioned by task AV.0 (phase plan §4)
-status: planned
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 dependency_relations:
