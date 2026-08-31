@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ATM read/query benchmark</title>
+  <style type="text/css">
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 24px; color: #1f2937; background: #f8fafc; }
+    header { margin-bottom: 20px; }
+    h1 { margin: 0 0 8px 0; }
+    h2 { margin-top: 0; }
+    .subtitle { color: #475569; margin: 0 0 8px 0; }
+    .generated-at { color: #64748b; font-size: 14px; margin: 0; }
+    .status { display: inline-block; margin-top: 10px; padding: 4px 10px; border-radius: 999px; font-weight: 700; border: 1px solid transparent; }
+    .status-pass { background: #f0fdf4; color: #065f46; border-color: #6ee7b7; }
+    .status-drift { background: #fffbeb; color: #92400e; border-color: #f59e0b; }
+    .status-error, .status-not-supported { background: #fef2f2; color: #991b1b; border-color: #ef4444; }
+    .status-info { background: #eff6ff; color: #1e40af; border-color: #3b82f6; }
+    .summary, .section, .recommendations, footer { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-top: 16px; }
+    .section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .section-actions { display: flex; gap: 8px; }
+    .icon-button { width: 30px; height: 30px; border-radius: 999px; border: 1px solid #cbd5e1; background: #ffffff; color: #334155; font-size: 14px; cursor: pointer; }
+    .icon-button:hover { background: #f8fafc; }
+    .fragments { margin-top: 8px; font-size: 14px; color: #475569; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+    th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #f3f4f6; }
+    .verdict { background: #f0fdf4; border-left: 4px solid #10b981; padding: 12px; margin-top: 12px; }
+    .impact { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px; margin-top: 12px; }
+    .action { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; margin-top: 12px; }
+    .warning { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px; margin-top: 12px; }
+    .scratchpad { margin-top: 12px; padding: 12px; border-left: 4px solid #3b82f6; background: #eff6ff; }
+    pre { background: #111827; color: #e5e7eb; padding: 12px; border-radius: 8px; overflow-x: auto; }
+    code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <!-- output_path: /Users/atmbench/github/atm-core/site/reports/read-query-benchmark/index.html -->
+  <!-- json_output_path: /Users/atmbench/github/atm-core/site/reports/read-query-benchmark/20260831T210540Z-rand-m5.local-read.json -->
+  <header>
+    <h1>ATM read/query benchmark</h1>
+    <p class="subtitle">AV.4 additive read benchmark families</p>
+    <p class="generated-at">Generated: 2026-08-31T21:05:40.109476Z</p>
+    <div class="status status-pass">PASS</div>
+  </header>
+
+  <section class="summary">
+&lt;p&gt;Read/query campaign &lt;code&gt;20260831T210540Z-rand-m5.local-read&lt;/code&gt; on &lt;code&gt;rand-m5.local&lt;/code&gt;.&lt;/p&gt;&lt;p&gt;Corpus seed &lt;code&gt;av4-corpus-v1&lt;/code&gt;; generator &lt;code&gt;av4-corpus-generator-1&lt;/code&gt;; fan-out 32.&lt;/p&gt;
+  </section>
+
+&lt;section&gt;&lt;h2&gt;Family metrics&lt;/h2&gt;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Family&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;th&gt;p50 requests/s&lt;/th&gt;&lt;th&gt;p50 latency ms&lt;/th&gt;&lt;th&gt;p95&lt;/th&gt;&lt;th&gt;p99&lt;/th&gt;&lt;th&gt;Success rate&lt;/th&gt;&lt;th&gt;Requests/s&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td&gt;read-fanout&lt;/td&gt;&lt;td&gt;PASS&lt;/td&gt;&lt;td&gt;754.8485109810853&lt;/td&gt;&lt;td&gt;22.575291979592294&lt;/td&gt;&lt;td&gt;37.44645894039422&lt;/td&gt;&lt;td&gt;40.52454105112702&lt;/td&gt;&lt;td&gt;1.000000&lt;/td&gt;&lt;td&gt;754.849&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;query-fts&lt;/td&gt;&lt;td&gt;PASS&lt;/td&gt;&lt;td&gt;753.0965761111854&lt;/td&gt;&lt;td&gt;23.24197895359248&lt;/td&gt;&lt;td&gt;37.636166089214385&lt;/td&gt;&lt;td&gt;40.20412499085069&lt;/td&gt;&lt;td&gt;1.000000&lt;/td&gt;&lt;td&gt;753.097&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;read-under-write-load&lt;/td&gt;&lt;td&gt;PASS&lt;/td&gt;&lt;td&gt;739.2049099275857&lt;/td&gt;&lt;td&gt;23.51604151772335&lt;/td&gt;&lt;td&gt;38.42174995224923&lt;/td&gt;&lt;td&gt;40.88720795698464&lt;/td&gt;&lt;td&gt;1.000000&lt;/td&gt;&lt;td&gt;739.205&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/section&gt;&lt;section&gt;&lt;h2&gt;Reader-lane diagnostics&lt;/h2&gt;&lt;pre&gt;{
+  &amp;quot;query-fts&amp;quot;: {
+    &amp;quot;deadline_expiries&amp;quot;: {
+      &amp;quot;expired_in_queue&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      },
+      &amp;quot;interrupted_while_active&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      },
+      &amp;quot;observed_cli_timeouts&amp;quot;: 0,
+      &amp;quot;other_cli_errors&amp;quot;: 0,
+      &amp;quot;quarantined&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      }
+    },
+    &amp;quot;execution_ms&amp;quot;: {
+      &amp;quot;max&amp;quot;: 45.16420792788267,
+      &amp;quot;min&amp;quot;: 5.413000006228685,
+      &amp;quot;p50&amp;quot;: 23.24197895359248,
+      &amp;quot;p95&amp;quot;: 37.636166089214385,
+      &amp;quot;p99&amp;quot;: 40.20412499085069
+    },
+    &amp;quot;in_flight&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;lane&amp;quot;: &amp;quot;search&amp;quot;,
+    &amp;quot;pool_size&amp;quot;: 2,
+    &amp;quot;quarantine_exhausted_rejections&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;quarantined_worker_gauge&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;queue_depth&amp;quot;: 8,
+    &amp;quot;retired_replaced_workers&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;saturation_events&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;wait_ms&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;wal_health&amp;quot;: {
+      &amp;quot;current_wal_frame_count&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      },
+      &amp;quot;last_checkpoint_outcome&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      }
+    }
+  },
+  &amp;quot;read-fanout&amp;quot;: {
+    &amp;quot;deadline_expiries&amp;quot;: {
+      &amp;quot;expired_in_queue&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      },
+      &amp;quot;interrupted_while_active&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      },
+      &amp;quot;observed_cli_timeouts&amp;quot;: 0,
+      &amp;quot;other_cli_errors&amp;quot;: 0,
+      &amp;quot;quarantined&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      }
+    },
+    &amp;quot;execution_ms&amp;quot;: {
+      &amp;quot;max&amp;quot;: 46.33691697381437,
+      &amp;quot;min&amp;quot;: 5.242042010650039,
+      &amp;quot;p50&amp;quot;: 22.575291979592294,
+      &amp;quot;p95&amp;quot;: 37.44645894039422,
+      &amp;quot;p99&amp;quot;: 40.52454105112702
+    },
+    &amp;quot;in_flight&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;lane&amp;quot;: &amp;quot;mailbox&amp;quot;,
+    &amp;quot;pool_size&amp;quot;: 4,
+    &amp;quot;quarantine_exhausted_rejections&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;quarantined_worker_gauge&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;queue_depth&amp;quot;: 16,
+    &amp;quot;retired_replaced_workers&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;saturation_events&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;wait_ms&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;wal_health&amp;quot;: {
+      &amp;quot;current_wal_frame_count&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      },
+      &amp;quot;last_checkpoint_outcome&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      }
+    }
+  },
+  &amp;quot;read-under-write-load&amp;quot;: {
+    &amp;quot;deadline_expiries&amp;quot;: {
+      &amp;quot;expired_in_queue&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      },
+      &amp;quot;interrupted_while_active&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      },
+      &amp;quot;observed_cli_timeouts&amp;quot;: 0,
+      &amp;quot;other_cli_errors&amp;quot;: 0,
+      &amp;quot;quarantined&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      }
+    },
+    &amp;quot;execution_ms&amp;quot;: {
+      &amp;quot;max&amp;quot;: 50.2962910104543,
+      &amp;quot;min&amp;quot;: 5.172999924980104,
+      &amp;quot;p50&amp;quot;: 23.51604151772335,
+      &amp;quot;p95&amp;quot;: 38.42174995224923,
+      &amp;quot;p99&amp;quot;: 40.88720795698464
+    },
+    &amp;quot;in_flight&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;lane&amp;quot;: &amp;quot;mailbox&amp;quot;,
+    &amp;quot;pool_size&amp;quot;: 4,
+    &amp;quot;quarantine_exhausted_rejections&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;quarantined_worker_gauge&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;queue_depth&amp;quot;: 16,
+    &amp;quot;retired_replaced_workers&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;saturation_events&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;wait_ms&amp;quot;: {
+      &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+      &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+      &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+      &amp;quot;value&amp;quot;: null
+    },
+    &amp;quot;wal_health&amp;quot;: {
+      &amp;quot;current_wal_frame_count&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      },
+      &amp;quot;last_checkpoint_outcome&amp;quot;: {
+        &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
+        &amp;quot;source&amp;quot;: &amp;quot;cli-not-exposed&amp;quot;,
+        &amp;quot;status&amp;quot;: &amp;quot;unimplemented&amp;quot;,
+        &amp;quot;value&amp;quot;: null
+      }
+    }
+  }
+}&lt;/pre&gt;&lt;/section&gt;&lt;section&gt;&lt;h2&gt;D5 implementation status&lt;/h2&gt;&lt;p&gt;Reader-lane runtime gauges are explicitly marked unimplemented until the AV.1b reader cutover publishes them. Null values are not zero measurements.&lt;/p&gt;&lt;/section&gt;
+
+
+  <footer>
+Generated from the existing sc-compose view-report template.
+  </footer>
+  <script type="text/javascript">
+    document.addEventListener("click", async function (event) {
+      const button = event.target.closest("[data-copy-text]");
+      if (!button) return;
+      const text = button.getAttribute("data-copy-text") || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        button.setAttribute("title", "Copied");
+      } catch (err) {
+        button.setAttribute("title", "Copy failed");
+      }
+    });
+  </script>
+</body>
+</html>
