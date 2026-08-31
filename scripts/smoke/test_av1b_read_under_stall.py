@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 from pathlib import Path
 import sys
 import tempfile
+from contextlib import redirect_stdout
 from types import SimpleNamespace
 from unittest import mock
 import unittest
@@ -85,10 +87,13 @@ class Av1bReadUnderStallTests(unittest.TestCase):
             evidence = Path(temporary) / "proof.json"
             failing = {"status": "FAIL", "failure": "too slow"}
             with mock.patch.object(RUNNER, "execute", return_value=failing):
-                self.assertEqual(
-                    RUNNER.main(["--team", "proof-team", "--actor", "proof-agent", "--evidence-out", str(evidence)]),
-                    1,
-                )
+                with redirect_stdout(io.StringIO()):
+                    self.assertEqual(
+                        RUNNER.main(
+                            ["--team", "proof-team", "--actor", "proof-agent", "--evidence-out", str(evidence)]
+                        ),
+                        1,
+                    )
             self.assertEqual(json.loads(evidence.read_text(encoding="utf-8"))["failure"], "too slow")
 
     def test_parse_args_rejects_a_budget_the_cli_cannot_enforce(self):
