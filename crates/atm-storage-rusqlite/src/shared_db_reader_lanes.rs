@@ -9,6 +9,8 @@ use crate::observability::NullSqliteObservability;
 use crate::observability::SqliteObservability;
 use crate::reader_pool::ReaderLanesConfig;
 use crate::search_reader::SearchReader;
+#[cfg(test)]
+use crate::shared_db::record_opened_connection;
 use crate::shared_db::{SharedDbTarget, configure_connection, sqlite_error, sqlite_open_error};
 use crate::writer::SqliteWriter;
 use atm_storage::{AsyncMailboxReader, AtmError};
@@ -157,5 +159,7 @@ pub(crate) fn open_read_connection_for_target(
                 error,
             )
         })?;
+    #[cfg(test)]
+    record_opened_connection(target);
     Ok(connection)
 }

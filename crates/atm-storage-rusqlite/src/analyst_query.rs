@@ -3,6 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+#[cfg(test)]
+use crate::shared_db::{SharedDbTarget, record_opened_connection};
 use atm_storage::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue, AtmError};
 use rusqlite::hooks::{AuthAction, AuthContext, Authorization};
 use rusqlite::{Connection, OpenFlags, params_from_iter, types::Value};
@@ -218,6 +220,8 @@ fn open_defensive_connection(path: &Path) -> Result<Connection, AtmError> {
                 .with_cause(error)
         })?;
     connection.authorizer(Some(authorizer));
+    #[cfg(test)]
+    record_opened_connection(&SharedDbTarget::Path(path.to_path_buf()));
     Ok(connection)
 }
 
@@ -452,12 +456,48 @@ fn single_statement_error() -> AtmError {
 
 #[cfg(test)]
 mod tests {
-    use super::sql_error;
+    use super::{open_defensive_connection, sql_error};
+    use crate::observability::NullSqliteObservability;
+    use crate::reader_pool::{DEFAULT_DOCTOR_READER_CONFIG, ReaderLanesConfig, ReaderPool};
+    use crate::shared_db::{
+        SharedDbTarget, opened_connection_count, reset_opened_connection_count,
+    };
+    use crate::shared_db_reader_lanes::SharedDb;
+    use std::sync::Arc;
 
     #[test]
     fn sqlite_errors_preserve_the_adapter_cause() {
         let error = sql_error(rusqlite::Error::InvalidQuery);
         assert!(error.message().starts_with("ATM analyst query failed"));
         assert_eq!(error.cause(), Some("Query is not read-only"));
+    }
+
+    #[test]
+    fn default_reader_lane_composition_opens_the_documented_connection_budget() {
+        let root = tempfile::tempdir().expect("temporary SQLite root");
+        let path = root.path().join("mail.db");
+        let target = SharedDbTarget::Path(path.clone());
+        reset_opened_connection_count(&target);
+
+        let _database = SharedDb::open_with_reader_lanes(
+            &path,
+            Arc::new(NullSqliteObservability),
+            ReaderLanesConfig::default(),
+        )
+        .expect("default writer, mailbox, and search lanes");
+        let _doctor = ReaderPool::start(
+            "doctor",
+            Arc::new(target.clone()),
+            DEFAULT_DOCTOR_READER_CONFIG,
+        )
+        .expect("default doctor lane");
+        let _analyst = open_defensive_connection(&path).expect("analyst read connection");
+
+        let opened = opened_connection_count(&target);
+        assert_eq!(opened, 12, "writer + mailbox + search + doctor + analyst");
+        assert!(
+            opened <= 22,
+            "opened connections must fit the worst-case cap"
+        );
     }
 }

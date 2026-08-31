@@ -15,6 +15,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(test)]
+use std::sync::{LazyLock, Mutex};
 
 // Search projection writes touch several B-trees and FTS segments inside the
 // sole durable writer transaction.  The SQLite default is only 2 MiB, which
@@ -23,6 +25,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 const WRITER_CACHE_KIB: i64 = 32 * 1024;
 #[cfg(test)]
 static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
+#[cfg(test)]
+static OPENED_CONNECTIONS: LazyLock<Mutex<std::collections::HashMap<String, usize>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
 
 pub(crate) const DB_MIGRATIONS: &str = r#"
 CREATE TABLE IF NOT EXISTS mail_messages (
@@ -176,6 +181,37 @@ impl SharedDbTarget {
             Self::InMemory { uri } => uri.clone(),
         }
     }
+}
+
+/// Test-only instrumentation at the concrete SQLite open sites. Entries are
+/// keyed by the target so parallel tests cannot contaminate each other's
+/// connection-budget evidence.
+#[cfg(test)]
+pub(crate) fn reset_opened_connection_count(target: &SharedDbTarget) {
+    OPENED_CONNECTIONS
+        .lock()
+        .expect("opened connection counter lock")
+        .insert(target.display(), 0);
+}
+
+#[cfg(test)]
+pub(crate) fn record_opened_connection(target: &SharedDbTarget) {
+    let mut counters = OPENED_CONNECTIONS
+        .lock()
+        .expect("opened connection counter lock");
+    if let Some(count) = counters.get_mut(&target.display()) {
+        *count += 1;
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn opened_connection_count(target: &SharedDbTarget) -> usize {
+    OPENED_CONNECTIONS
+        .lock()
+        .expect("opened connection counter lock")
+        .get(&target.display())
+        .copied()
+        .unwrap_or_default()
 }
 
 impl SharedDb {
@@ -533,6 +569,8 @@ pub(crate) fn open_connection_for_target(target: &SharedDbTarget) -> Result<Conn
         .map_err(|error| sqlite_open_error(target, error))?,
     };
     configure_connection(&mut connection, target)?;
+    #[cfg(test)]
+    record_opened_connection(target);
     Ok(connection)
 }
 
