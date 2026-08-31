@@ -15,7 +15,9 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T09:42:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-31T09:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV1A ;
@@ -32,8 +34,8 @@
   triage:file "docs/plans/phase-av/sprint-AV.1a-reader-lane-foundation.md" ;
   triage:line 356 ;
   triage:snippet "`just validate` passes on the current pinned toolchain" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "b25c42f4cfbb9953c006884ccfa3dc81ff914dc7" ;
   triage:occursIn <urn:atm:triage:worktree/fix-1> .
@@ -43,8 +45,8 @@
   triage:file "docs/plans/phase-av/sprint-AV.1a-reader-lane-foundation.md" ;
   triage:line 356 ;
   triage:snippet "`just validate` passes on the current pinned toolchain" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "44db1744f4739c3ce352014deed7a0ebbaff67c4" ;
   triage:occursIn <urn:atm:triage:worktree/av1b-2> .
@@ -54,8 +56,8 @@
   triage:file "docs/plans/phase-av/sprint-AV.1a-reader-lane-foundation.md" ;
   triage:line 356 ;
   triage:snippet "`just validate` passes on the current pinned toolchain" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "74a0c34250e9c4f2dc37250bf1b8fc6fa0156e4c" ;
   triage:occursIn <urn:atm:triage:worktree/av2-3> .
@@ -65,8 +67,8 @@
   triage:file "docs/plans/phase-av/sprint-AV.1a-reader-lane-foundation.md" ;
   triage:line 356 ;
   triage:snippet "`just validate` passes on the current pinned toolchain" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "c9b71d720c2ea23b13518d581e551420f5227064" ;
   triage:occursIn <urn:atm:triage:worktree/av3-4> .
@@ -76,8 +78,8 @@
   triage:file "docs/plans/phase-av/sprint-AV.1a-reader-lane-foundation.md" ;
   triage:line 356 ;
   triage:snippet "`just validate` passes on the current pinned toolchain" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "f103e4a617f3e9c6668a71eadcaf4ce8c67ee017" ;
   triage:occursIn <urn:atm:triage:worktree/av4-5> .
