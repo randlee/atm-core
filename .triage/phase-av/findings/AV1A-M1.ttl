@@ -15,7 +15,9 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T09:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-31T06:30:37Z"^^xsd:dateTime ;
   triage:foundIn triage:AV1A ;
@@ -37,8 +39,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 363 ;
   triage:snippet "let expires_at = Instant::now() + deadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/w1-16421b24d> .
@@ -48,8 +50,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 431 ;
   triage:snippet "let expires_at = Instant::now() + deadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/w1-16421b24d> .
@@ -59,8 +61,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 363 ;
   triage:snippet "let expires_at = Instant::now() + deadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "043aba984" ;
   triage:occursIn <urn:atm:triage:worktree/w2-043aba984> .
@@ -70,8 +72,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 431 ;
   triage:snippet "let expires_at = Instant::now() + deadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "043aba984" ;
   triage:occursIn <urn:atm:triage:worktree/w2-043aba984> .
@@ -81,8 +83,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 363 ;
   triage:snippet "let expires_at = Instant::now() + deadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "51de5f554" ;
   triage:occursIn <urn:atm:triage:worktree/w3-51de5f554> .
@@ -92,8 +94,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 431 ;
   triage:snippet "let expires_at = Instant::now() + deadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "51de5f554" ;
   triage:occursIn <urn:atm:triage:worktree/w3-51de5f554> .
@@ -103,8 +105,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 363 ;
   triage:snippet "let expires_at = Instant::now() + deadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "8905f1046" ;
   triage:occursIn <urn:atm:triage:worktree/w4-8905f1046> .
@@ -114,8 +116,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 431 ;
   triage:snippet "let expires_at = Instant::now() + deadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "8905f1046" ;
   triage:occursIn <urn:atm:triage:worktree/w4-8905f1046> .
@@ -125,8 +127,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 363 ;
   triage:snippet "let expires_at = Instant::now() + deadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "a36bff376" ;
   triage:occursIn <urn:atm:triage:worktree/w5-a36bff376> .
@@ -136,8 +138,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 431 ;
   triage:snippet "let expires_at = Instant::now() + deadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "a36bff376" ;
   triage:occursIn <urn:atm:triage:worktree/w5-a36bff376> .

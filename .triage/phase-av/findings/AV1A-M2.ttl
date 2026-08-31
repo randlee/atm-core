@@ -15,7 +15,9 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T09:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-31T06:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV1A ;
@@ -72,8 +74,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 19 ;
   triage:snippet "const QUARANTINED: usize = 1;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/W1/16421b24d> .
@@ -83,8 +85,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 20 ;
   triage:snippet "const NO_REQUEST: usize = usize::MAX;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/W1/16421b24d> .
@@ -94,8 +96,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 557 ;
   triage:snippet "active_request: AtomicUsize::new(NO_REQUEST)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/W1/16421b24d> .
@@ -105,8 +107,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 598 ;
   triage:snippet ".filter(|worker| worker.state.status.load(Ordering::Acquire) == QUARANTINED)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/W1/16421b24d> .
@@ -116,8 +118,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 648 ;
   triage:snippet ".filter(|candidate| candidate.state.status.load(Ordering::Acquire) == QUARANTINED)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/W1/16421b24d> .
@@ -127,8 +129,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 656 ;
   triage:snippet ".compare_exchange(READY, QUARANTINED, Ordering::AcqRel, Ordering::Acquire)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/W1/16421b24d> .
@@ -138,8 +140,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 673 ;
   triage:snippet "worker.state.status.load(Ordering::Acquire) == QUARANTINED" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/W1/16421b24d> .
@@ -149,8 +151,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 743 ;
   triage:snippet "state.active_request.store(NO_REQUEST, Ordering::Release);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/W1/16421b24d> .
@@ -160,8 +162,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 744 ;
   triage:snippet "if state.status.load(Ordering::Acquire) == QUARANTINED {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/W1/16421b24d> .
@@ -171,8 +173,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 19 ;
   triage:snippet "const QUARANTINED: usize = 1;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "043aba984" ;
   triage:occursIn <urn:atm:triage:worktree/W2/043aba984> .
@@ -182,8 +184,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 20 ;
   triage:snippet "const NO_REQUEST: usize = usize::MAX;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "043aba984" ;
   triage:occursIn <urn:atm:triage:worktree/W2/043aba984> .
@@ -193,8 +195,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 557 ;
   triage:snippet "active_request: AtomicUsize::new(NO_REQUEST)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "043aba984" ;
   triage:occursIn <urn:atm:triage:worktree/W2/043aba984> .
@@ -204,8 +206,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 598 ;
   triage:snippet ".filter(|worker| worker.state.status.load(Ordering::Acquire) == QUARANTINED)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "043aba984" ;
   triage:occursIn <urn:atm:triage:worktree/W2/043aba984> .
@@ -215,8 +217,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 648 ;
   triage:snippet ".filter(|candidate| candidate.state.status.load(Ordering::Acquire) == QUARANTINED)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "043aba984" ;
   triage:occursIn <urn:atm:triage:worktree/W2/043aba984> .
@@ -226,8 +228,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 656 ;
   triage:snippet ".compare_exchange(READY, QUARANTINED, Ordering::AcqRel, Ordering::Acquire)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "043aba984" ;
   triage:occursIn <urn:atm:triage:worktree/W2/043aba984> .
@@ -237,8 +239,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 673 ;
   triage:snippet "worker.state.status.load(Ordering::Acquire) == QUARANTINED" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "043aba984" ;
   triage:occursIn <urn:atm:triage:worktree/W2/043aba984> .
@@ -248,8 +250,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 743 ;
   triage:snippet "state.active_request.store(NO_REQUEST, Ordering::Release);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "043aba984" ;
   triage:occursIn <urn:atm:triage:worktree/W2/043aba984> .
@@ -259,8 +261,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 744 ;
   triage:snippet "if state.status.load(Ordering::Acquire) == QUARANTINED {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av1b-read-handler-cutover" ;
   triage:headSha "043aba984" ;
   triage:occursIn <urn:atm:triage:worktree/W2/043aba984> .
@@ -270,8 +272,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 19 ;
   triage:snippet "const QUARANTINED: usize = 1;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "51de5f554" ;
   triage:occursIn <urn:atm:triage:worktree/W3/51de5f554> .
@@ -281,8 +283,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 20 ;
   triage:snippet "const NO_REQUEST: usize = usize::MAX;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "51de5f554" ;
   triage:occursIn <urn:atm:triage:worktree/W3/51de5f554> .
@@ -292,8 +294,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 557 ;
   triage:snippet "active_request: AtomicUsize::new(NO_REQUEST)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "51de5f554" ;
   triage:occursIn <urn:atm:triage:worktree/W3/51de5f554> .
@@ -303,8 +305,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 598 ;
   triage:snippet ".filter(|worker| worker.state.status.load(Ordering::Acquire) == QUARANTINED)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "51de5f554" ;
   triage:occursIn <urn:atm:triage:worktree/W3/51de5f554> .
@@ -314,8 +316,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 648 ;
   triage:snippet ".filter(|candidate| candidate.state.status.load(Ordering::Acquire) == QUARANTINED)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "51de5f554" ;
   triage:occursIn <urn:atm:triage:worktree/W3/51de5f554> .
@@ -325,8 +327,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 656 ;
   triage:snippet ".compare_exchange(READY, QUARANTINED, Ordering::AcqRel, Ordering::Acquire)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "51de5f554" ;
   triage:occursIn <urn:atm:triage:worktree/W3/51de5f554> .
@@ -336,8 +338,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 673 ;
   triage:snippet "worker.state.status.load(Ordering::Acquire) == QUARANTINED" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "51de5f554" ;
   triage:occursIn <urn:atm:triage:worktree/W3/51de5f554> .
@@ -347,8 +349,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 743 ;
   triage:snippet "state.active_request.store(NO_REQUEST, Ordering::Release);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "51de5f554" ;
   triage:occursIn <urn:atm:triage:worktree/W3/51de5f554> .
@@ -358,8 +360,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 744 ;
   triage:snippet "if state.status.load(Ordering::Acquire) == QUARANTINED {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/av2-read-concurrency-requirements" ;
   triage:headSha "51de5f554" ;
   triage:occursIn <urn:atm:triage:worktree/W3/51de5f554> .
@@ -369,8 +371,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 19 ;
   triage:snippet "const QUARANTINED: usize = 1;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "8905f1046" ;
   triage:occursIn <urn:atm:triage:worktree/W4/8905f1046> .
@@ -380,8 +382,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 20 ;
   triage:snippet "const NO_REQUEST: usize = usize::MAX;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "8905f1046" ;
   triage:occursIn <urn:atm:triage:worktree/W4/8905f1046> .
@@ -391,8 +393,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 557 ;
   triage:snippet "active_request: AtomicUsize::new(NO_REQUEST)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "8905f1046" ;
   triage:occursIn <urn:atm:triage:worktree/W4/8905f1046> .
@@ -402,8 +404,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 598 ;
   triage:snippet ".filter(|worker| worker.state.status.load(Ordering::Acquire) == QUARANTINED)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "8905f1046" ;
   triage:occursIn <urn:atm:triage:worktree/W4/8905f1046> .
@@ -413,8 +415,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 648 ;
   triage:snippet ".filter(|candidate| candidate.state.status.load(Ordering::Acquire) == QUARANTINED)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "8905f1046" ;
   triage:occursIn <urn:atm:triage:worktree/W4/8905f1046> .
@@ -424,8 +426,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 656 ;
   triage:snippet ".compare_exchange(READY, QUARANTINED, Ordering::AcqRel, Ordering::Acquire)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "8905f1046" ;
   triage:occursIn <urn:atm:triage:worktree/W4/8905f1046> .
@@ -435,8 +437,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 673 ;
   triage:snippet "worker.state.status.load(Ordering::Acquire) == QUARANTINED" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "8905f1046" ;
   triage:occursIn <urn:atm:triage:worktree/W4/8905f1046> .
@@ -446,8 +448,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 743 ;
   triage:snippet "state.active_request.store(NO_REQUEST, Ordering::Release);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "8905f1046" ;
   triage:occursIn <urn:atm:triage:worktree/W4/8905f1046> .
@@ -457,8 +459,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 744 ;
   triage:snippet "if state.status.load(Ordering::Acquire) == QUARANTINED {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av3-read-concurrency-gates" ;
   triage:headSha "8905f1046" ;
   triage:occursIn <urn:atm:triage:worktree/W4/8905f1046> .
@@ -468,8 +470,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 19 ;
   triage:snippet "const QUARANTINED: usize = 1;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "a36bff376" ;
   triage:occursIn <urn:atm:triage:worktree/W5/a36bff376> .
@@ -479,8 +481,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 20 ;
   triage:snippet "const NO_REQUEST: usize = usize::MAX;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "a36bff376" ;
   triage:occursIn <urn:atm:triage:worktree/W5/a36bff376> .
@@ -490,8 +492,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 557 ;
   triage:snippet "active_request: AtomicUsize::new(NO_REQUEST)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "a36bff376" ;
   triage:occursIn <urn:atm:triage:worktree/W5/a36bff376> .
@@ -501,8 +503,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 598 ;
   triage:snippet ".filter(|worker| worker.state.status.load(Ordering::Acquire) == QUARANTINED)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "a36bff376" ;
   triage:occursIn <urn:atm:triage:worktree/W5/a36bff376> .
@@ -512,8 +514,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 648 ;
   triage:snippet ".filter(|candidate| candidate.state.status.load(Ordering::Acquire) == QUARANTINED)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "a36bff376" ;
   triage:occursIn <urn:atm:triage:worktree/W5/a36bff376> .
@@ -523,8 +525,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 656 ;
   triage:snippet ".compare_exchange(READY, QUARANTINED, Ordering::AcqRel, Ordering::Acquire)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "a36bff376" ;
   triage:occursIn <urn:atm:triage:worktree/W5/a36bff376> .
@@ -534,8 +536,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 673 ;
   triage:snippet "worker.state.status.load(Ordering::Acquire) == QUARANTINED" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "a36bff376" ;
   triage:occursIn <urn:atm:triage:worktree/W5/a36bff376> .
@@ -545,8 +547,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 743 ;
   triage:snippet "state.active_request.store(NO_REQUEST, Ordering::Release);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "a36bff376" ;
   triage:occursIn <urn:atm:triage:worktree/W5/a36bff376> .
@@ -556,8 +558,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 744 ;
   triage:snippet "if state.status.load(Ordering::Acquire) == QUARANTINED {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/av4-read-query-benchmarks" ;
   triage:headSha "a36bff376" ;
   triage:occursIn <urn:atm:triage:worktree/W5/a36bff376> .

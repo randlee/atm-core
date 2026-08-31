@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T09:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-30T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV1A ;
@@ -32,8 +34,8 @@
   triage:file "crates/atm-core/src/read/metadata_selection.rs" ;
   triage:line 286 ;
   triage:snippet "pub(crate) fn logical_current_messages(messages: Vec<ClassifiedMessage>)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/av1-fix/16421b24d> .
@@ -43,8 +45,8 @@
   triage:file "crates/atm-core/src/read/metadata_selection.rs" ;
   triage:line 333 ;
   triage:snippet "pub(crate) fn select_messages(...)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/av1-fix/16421b24d> .
@@ -54,8 +56,8 @@
   triage:file "crates/atm-core/src/read/selection.rs" ;
   triage:line 208 ;
   triage:snippet "fn logical_current_messages(messages: Vec<ClassifiedMessage>)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/av1-fix/16421b24d> .
@@ -65,8 +67,8 @@
   triage:file "crates/atm-core/src/read/metadata_selection.rs" ;
   triage:line 312 ;
   triage:snippet "pub(crate) fn bucket_counts_for(messages: &[ClassifiedMessage])" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/av1-fix/16421b24d> .
@@ -76,8 +78,8 @@
   triage:file "crates/atm-core/src/read/metadata_selection.rs" ;
   triage:line 336 ;
   triage:snippet "pub(crate) fn hidden_from_normal_views(...)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/mailbox-read-blocking-serialization" ;
   triage:headSha "16421b24d" ;
   triage:occursIn <urn:atm:triage:worktree/av1-fix/16421b24d> .
