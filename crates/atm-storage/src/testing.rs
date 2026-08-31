@@ -10,8 +10,9 @@
 use chrono::{DateTime, Utc};
 
 use crate::contract::{
-    GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
-    GraftReceiverRegistration, sealed,
+    AsyncMailboxReader, GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
+    GraftReceiverRegistration, MailboxScope, Message, MessageKey, MessageQuery, ReadDeadline,
+    ReadLaneError, sealed,
 };
 use crate::types::{AgentName, OwnerGeneration, TeamName};
 
@@ -67,5 +68,73 @@ impl GraftReceiverEndpointStore for NoopGraftReceiverEndpointStore {
         _now: DateTime<Utc>,
     ) -> Result<(), GraftEndpointStoreError> {
         Ok(())
+    }
+}
+
+/// Deterministic in-memory double for the sealed async mailbox-read contract.
+/// It is intentionally available only through the `test-utils` feature.
+#[derive(Debug, Default)]
+pub struct InMemoryMailboxReader {
+    messages: std::sync::Mutex<Vec<Message>>,
+}
+
+impl InMemoryMailboxReader {
+    #[must_use]
+    pub fn with_messages(messages: Vec<Message>) -> Self {
+        Self {
+            messages: std::sync::Mutex::new(messages),
+        }
+    }
+}
+
+impl sealed::Sealed for InMemoryMailboxReader {}
+
+#[async_trait::async_trait]
+impl AsyncMailboxReader for InMemoryMailboxReader {
+    async fn list_messages(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        if !scope.permits(&query) {
+            return Err(ReadLaneError::UnauthorizedScope);
+        }
+        let messages = self
+            .messages
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory mailbox reader lock poisoned".to_owned(),
+            })?;
+        let mut selected = messages
+            .iter()
+            .filter(|message| message.team == query.team && message.agent == query.agent)
+            .cloned()
+            .collect::<Vec<_>>();
+        if let Some(limit) = query.limit {
+            selected.truncate(limit);
+        }
+        Ok(selected)
+    }
+
+    async fn load_message(
+        &self,
+        scope: MailboxScope,
+        key: MessageKey,
+        _deadline: ReadDeadline,
+    ) -> Result<Option<Message>, ReadLaneError> {
+        let messages = self
+            .messages
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory mailbox reader lock poisoned".to_owned(),
+            })?;
+        match messages.iter().find(|message| message.message_key == key) {
+            Some(message) if message.team == scope.team && message.agent == scope.agent => {
+                Ok(Some(message.clone()))
+            }
+            Some(_) => Err(ReadLaneError::UnauthorizedScope),
+            None => Ok(None),
+        }
     }
 }
