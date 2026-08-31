@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV1A-I1>
+  a triage:Finding ;
+  triage:findingId "AV1A-I1" ;
+  triage:title "Selection semantics duplicated between metadata_selection.rs and read/selection.rs; list.rs consumes the old copies in production" ;
+  triage:description "crates/atm-core/src/read/metadata_selection.rs:286-397 (logical_current_messages, bucket_counts_for, select_messages, hidden_from_normal_views, hidden_for_selection, effective_display_envelope) near-byte-duplicates crates/atm-core/src/read/selection.rs:208-281, and list.rs:12-16,171,178 consumes the old copies in the production `atm list` path. D6's extraction is delivered (production read/peek delegates via metadata_selection::selection_state_for_mailbox_metadata_rows into selection.rs) so not blocking, but D6's invariant 'business semantics exist exactly once' is not achieved. Fix: make the metadata_selection copies delegate to / be replaced by selection.rs and route list.rs through the canonical entry point. Consolidated arch-qa ARCH-002 + req-qa 002 (downgraded) + ruthless F001." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1A ;
+  triage:foundAt "2026-08-31T06:33:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I1/AV1-O1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I1/AV1-O2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I1/AV1-O3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I1/AV1-O4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I1/AV1-O5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV1A-I1/AV1-O1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/metadata_selection.rs" ;
+  triage:line 286 ;
+  triage:snippet "pub(crate) fn logical_current_messages(messages: Vec<ClassifiedMessage>)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/av1-fix/16421b24d> .
+
+<urn:atm:triage:occurrence/AV1A-I1/AV1-O2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/metadata_selection.rs" ;
+  triage:line 333 ;
+  triage:snippet "pub(crate) fn select_messages(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/av1-fix/16421b24d> .
+
+<urn:atm:triage:occurrence/AV1A-I1/AV1-O3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/selection.rs" ;
+  triage:line 208 ;
+  triage:snippet "fn logical_current_messages(messages: Vec<ClassifiedMessage>)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/av1-fix/16421b24d> .
+
+<urn:atm:triage:occurrence/AV1A-I1/AV1-O4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/metadata_selection.rs" ;
+  triage:line 312 ;
+  triage:snippet "pub(crate) fn bucket_counts_for(messages: &[ClassifiedMessage])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/av1-fix/16421b24d> .
+
+<urn:atm:triage:occurrence/AV1A-I1/AV1-O5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/metadata_selection.rs" ;
+  triage:line 336 ;
+  triage:snippet "pub(crate) fn hidden_from_normal_views(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/av1-fix/16421b24d> .
+
+<urn:atm:triage:worktree/av1-fix/16421b24d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/av1b/043aba984>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/av2-docs/51de5f554>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/av3-gates/8905f1046>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/av4-bench/a36bff376>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:orderIndex 5 .

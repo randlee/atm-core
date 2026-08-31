@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV1A-M6>
+  a triage:Finding ;
+  triage:findingId "AV1A-M6" ;
+  triage:title "phase-av-plan.md §4 still records AV.0 provisioning proof as pending" ;
+  triage:description "docs/plans/phase-av/phase-av-plan.md §4 still records the AV.0 provisioning proof as 'pending' although the implementation exists (PR #1109) — doc staleness / sequencing record gap; update the plan doc. req-qa 007." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1A ;
+  triage:foundAt "2026-08-31T06:33:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M6/AV1A-M6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M6/AV1A-M6-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M6/AV1A-M6-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M6/AV1A-M6-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M6/AV1A-M6-5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV1A-M6/AV1A-M6-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/phase-av-plan.md" ;
+  triage:line 215 ;
+  triage:snippet "AV.0 completion proof (`gh stack view --json`): _pending_." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/AV1A-1/16421b24d> .
+
+<urn:atm:triage:occurrence/AV1A-M6/AV1A-M6-2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/phase-av-plan.md" ;
+  triage:line 215 ;
+  triage:snippet "AV.0 completion proof (`gh stack view --json`): _pending_." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:occursIn <urn:atm:triage:worktree/AV1A-2/043aba984> .
+
+<urn:atm:triage:occurrence/AV1A-M6/AV1A-M6-3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/phase-av-plan.md" ;
+  triage:line 215 ;
+  triage:snippet "AV.0 completion proof (`gh stack view --json`): _pending_." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:occursIn <urn:atm:triage:worktree/AV1A-3/51de5f554> .
+
+<urn:atm:triage:occurrence/AV1A-M6/AV1A-M6-4>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/phase-av-plan.md" ;
+  triage:line 215 ;
+  triage:snippet "AV.0 completion proof (`gh stack view --json`): _pending_." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/AV1A-4/8905f1046> .
+
+<urn:atm:triage:occurrence/AV1A-M6/AV1A-M6-5>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/phase-av-plan.md" ;
+  triage:line 215 ;
+  triage:snippet "AV.0 completion proof (`gh stack view --json`): _pending_." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/AV1A-5/a36bff376> .
+
+<urn:atm:triage:worktree/AV1A-1/16421b24d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV1A-2/043aba984>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV1A-3/51de5f554>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV1A-4/8905f1046>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV1A-5/a36bff376>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:orderIndex 5 .

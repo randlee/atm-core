@@ -1,0 +1,310 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV1A-I2>
+  a triage:Finding ;
+  triage:findingId "AV1A-I2" ;
+  triage:title "ReadLaneError -> AtmError conversion collapses all variants into daemon_unavailable" ;
+  triage:description "Both conversion sites (crates/atm-runtime/src/mailbox_runtime.rs and crates/atm-storage-rusqlite/src/search_reader.rs) flatten every ReadLaneError variant (UnauthorizedScope/Saturated/DeadlineExpired/Unavailable) into AtmError::daemon_unavailable(to_string()), bypassing the AtmErrorCode catalog and with_cause. Fix: one shared conversion mapping variants to distinct codes." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T06:33:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1A ;
+  triage:foundAt "2026-08-31T06:33:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV1-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV1-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV1-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV2-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV2-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV2-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV3-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV3-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV3-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV4-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV4-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV4-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV5-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV5-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-I2/AV5-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 161 ;
+  triage:snippet "AtmError::daemon_unavailable(\"mailbox request deadline expired\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/AV1/16421b24d> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV1-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 166 ;
+  triage:snippet "AtmError::daemon_unavailable(error.to_string())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/AV1/16421b24d> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV1-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 70 ;
+  triage:snippet "AtmError::daemon_unavailable(\"SQLite search reader request expired before execution\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/AV1/16421b24d> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV1-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 83 ;
+  triage:snippet "AtmError::daemon_unavailable(error.to_string())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/AV1/16421b24d> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 70 ;
+  triage:snippet "AtmError::daemon_unavailable(\"SQLite search reader request expired before execution\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:occursIn <urn:atm:triage:worktree/AV2/043aba984> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 83 ;
+  triage:snippet "AtmError::daemon_unavailable(error.to_string())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:occursIn <urn:atm:triage:worktree/AV2/043aba984> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV2-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 91 ;
+  triage:snippet "AtmError::daemon_unavailable(\"state-handoff supervisor must start inside the Tokio runtime\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:occursIn <urn:atm:triage:worktree/AV2/043aba984> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV2-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 400 ;
+  triage:snippet "AtmError::daemon_unavailable(\"mailbox request deadline expired\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:occursIn <urn:atm:triage:worktree/AV2/043aba984> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV2-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 405 ;
+  triage:snippet "AtmError::daemon_unavailable(error.to_string())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:occursIn <urn:atm:triage:worktree/AV2/043aba984> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 405 ;
+  triage:snippet "AtmError::daemon_unavailable(error.to_string())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:occursIn <urn:atm:triage:worktree/AV2/043aba984> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 70 ;
+  triage:snippet "AtmError::daemon_unavailable(\"SQLite search reader request expired before execution\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3/51de5f554> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV3-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 83 ;
+  triage:snippet "AtmError::daemon_unavailable(error.to_string())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3/51de5f554> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV3-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 161 ;
+  triage:snippet "AtmError::daemon_unavailable(\"mailbox request deadline expired\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/8905f1046> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 166 ;
+  triage:snippet "AtmError::daemon_unavailable(error.to_string())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/8905f1046> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 70 ;
+  triage:snippet "AtmError::daemon_unavailable(\"SQLite search reader request expired before execution\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/8905f1046> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV4-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 83 ;
+  triage:snippet "AtmError::daemon_unavailable(error.to_string())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/8905f1046> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV4-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 161 ;
+  triage:snippet "AtmError::daemon_unavailable(\"mailbox request deadline expired\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/AV5/a36bff376> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 166 ;
+  triage:snippet "AtmError::daemon_unavailable(error.to_string())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/AV5/a36bff376> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV5-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 70 ;
+  triage:snippet "AtmError::daemon_unavailable(\"SQLite search reader request expired before execution\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/AV5/a36bff376> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV5-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 83 ;
+  triage:snippet "AtmError::daemon_unavailable(error.to_string())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/AV5/a36bff376> .
+
+<urn:atm:triage:occurrence/AV1A-I2/AV5-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 161 ;
+  triage:snippet "AtmError::daemon_unavailable(error.to_string())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/AV5/a36bff376> .
+
+<urn:atm:triage:worktree/AV1/16421b24d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV2/043aba984>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV3/51de5f554>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV4/8905f1046>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV5/a36bff376>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:orderIndex 5 .

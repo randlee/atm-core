@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV1A-M7>
+  a triage:Finding ;
+  triage:findingId "AV1A-M7" ;
+  triage:title "Rust merge-gate guarded_boundary_files() hardcodes only tls.toml for boundaries/atm-storage/, excluding async-mailbox-reader.toml" ;
+  triage:description "crates/atm-architecture/tests/boundary_enforcement.rs guarded_boundary_files() hardcodes only tls.toml for boundaries/atm-storage/ (it sweeps the other two dirs), so async-mailbox-reader.toml is excluded from the Rust-level forbidden-edges cross-check (the Python gate does cover it). Add a directory sweep. ruthless F002." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "tooling" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1A ;
+  triage:foundAt "2026-08-31T06:33:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M7/AV1A-M7-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M7/AV1A-M7-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M7/AV1A-M7-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M7/AV1A-M7-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M7/AV1A-M7-5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV1A-M7/AV1A-M7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3553 ;
+  triage:snippet "fn guarded_boundary_files() -> Vec<PathBuf> hardcodes boundaries/atm-storage/tls.toml only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-mailbox/16421b24d> .
+
+<urn:atm:triage:occurrence/AV1A-M7/AV1A-M7-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3553 ;
+  triage:snippet "fn guarded_boundary_files() -> Vec<PathBuf> hardcodes boundaries/atm-storage/tls.toml only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:occursIn <urn:atm:triage:worktree/av1b-handler/043aba984> .
+
+<urn:atm:triage:occurrence/AV1A-M7/AV1A-M7-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3553 ;
+  triage:snippet "fn guarded_boundary_files() -> Vec<PathBuf> hardcodes boundaries/atm-storage/tls.toml only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:occursIn <urn:atm:triage:worktree/av2-docs/51de5f554> .
+
+<urn:atm:triage:occurrence/AV1A-M7/AV1A-M7-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3889 ;
+  triage:snippet "fn guarded_boundary_files() -> Vec<PathBuf> hardcodes boundaries/atm-storage/tls.toml only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/av3-gates/8905f1046> .
+
+<urn:atm:triage:occurrence/AV1A-M7/AV1A-M7-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3838 ;
+  triage:snippet "fn guarded_boundary_files() -> Vec<PathBuf> hardcodes boundaries/atm-storage/tls.toml only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/av4-benchmarks/a36bff376> .
+
+<urn:atm:triage:worktree/fix-mailbox/16421b24d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/av1b-handler/043aba984>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/av2-docs/51de5f554>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/av3-gates/8905f1046>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/av4-benchmarks/a36bff376>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:orderIndex 5 .

@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV1A-M5>
+  a triage:Finding ;
+  triage:findingId "AV1A-M5" ;
+  triage:title "A3d WAL test covers only the mailbox lane and samples frame count once post-hoc" ;
+  triage:description "The A3d WAL-bounded test covers only the mailbox lane and samples the frame count once after the fact — weaker than the acceptance wording 'all lanes / stays bounded'. Extend to the search lane and sample during load. req-qa 006." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1A ;
+  triage:foundAt "2026-08-31T06:33:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M5/AV1A-M5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M5/AV1A-M5-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M5/AV1A-M5-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M5/AV1A-M5-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M5/AV1A-M5-5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV1A-M5/AV1A-M5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 1072 ;
+  triage:snippet "async fn metrics_snapshot_exposes_lane_deadline_and_wal_health_seams() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/fix/mailbox-read-blocking-serialization/16421b24d> .
+
+<urn:atm:triage:occurrence/AV1A-M5/AV1A-M5-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 1072 ;
+  triage:snippet "async fn metrics_snapshot_exposes_lane_deadline_and_wal_health_seams() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/av1b-read-handler-cutover/043aba984> .
+
+<urn:atm:triage:occurrence/AV1A-M5/AV1A-M5-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 1072 ;
+  triage:snippet "async fn metrics_snapshot_exposes_lane_deadline_and_wal_health_seams() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:occursIn <urn:atm:triage:worktree/docs/av2-read-concurrency-requirements/51de5f554> .
+
+<urn:atm:triage:occurrence/AV1A-M5/AV1A-M5-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 1072 ;
+  triage:snippet "async fn metrics_snapshot_exposes_lane_deadline_and_wal_health_seams() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/av3-read-concurrency-gates/8905f1046> .
+
+<urn:atm:triage:occurrence/AV1A-M5/AV1A-M5-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 1072 ;
+  triage:snippet "async fn metrics_snapshot_exposes_lane_deadline_and_wal_health_seams() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/av4-read-query-benchmarks/a36bff376> .
+
+<urn:atm:triage:worktree/fix/mailbox-read-blocking-serialization/16421b24d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/feature/av1b-read-handler-cutover/043aba984>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/docs/av2-read-concurrency-requirements/51de5f554>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/feature/av3-read-concurrency-gates/8905f1046>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/feature/av4-read-query-benchmarks/a36bff376>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:orderIndex 5 .

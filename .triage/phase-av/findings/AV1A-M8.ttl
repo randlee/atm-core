@@ -1,0 +1,195 @@
+
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV1A-M8>
+  a triage:Finding ;
+  triage:findingId "AV1A-M8" ;
+  triage:title "READER_DEADLINE hardcoded in search_reader.rs outside the [reader_lanes] knob surface; ReaderLanesMetricsSnapshot fixed two-field shape" ;
+  triage:description "search_reader.rs:12 hardcodes READER_DEADLINE outside the single [reader_lanes] knob surface, and ReaderLanesMetricsSnapshot has a fixed two-field shape ahead of AV.1b's doctor lane. Route the deadline through settings and make the snapshot lane-extensible. ruthless F003/F004." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "design" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T06:32:43Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1A ;
+  triage:foundAt "2026-08-31T06:33:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M8/AV1A1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M8/AV1A1-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M8/AV1A2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M8/AV1A2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M8/AV1A3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M8/AV1A3-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M8/AV1A4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M8/AV1A4-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M8/AV1A5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M8/AV1A5-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV1A-M8/AV1A1-1>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 12 ;
+  triage:snippet "const READER_DEADLINE: Duration = Duration::from_secs(10);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/order1/16421b24d> .
+
+<urn:atm:triage:occurrence/AV1A-M8/AV1A1-2>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 46 ;
+  triage:snippet "pub struct ReaderLanesMetricsSnapshot {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:occursIn <urn:atm:triage:worktree/order1/16421b24d> .
+
+<urn:atm:triage:occurrence/AV1A-M8/AV1A2-1>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 12 ;
+  triage:snippet "const READER_DEADLINE: Duration = Duration::from_secs(10);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:occursIn <urn:atm:triage:worktree/order2/043aba984> .
+
+<urn:atm:triage:occurrence/AV1A-M8/AV1A2-2>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 46 ;
+  triage:snippet "pub struct ReaderLanesMetricsSnapshot {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:occursIn <urn:atm:triage:worktree/order2/043aba984> .
+
+<urn:atm:triage:occurrence/AV1A-M8/AV1A3-1>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 12 ;
+  triage:snippet "const READER_DEADLINE: Duration = Duration::from_secs(10);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:occursIn <urn:atm:triage:worktree/order3/51de5f554> .
+
+<urn:atm:triage:occurrence/AV1A-M8/AV1A3-2>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 46 ;
+  triage:snippet "pub struct ReaderLanesMetricsSnapshot {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:occursIn <urn:atm:triage:worktree/order3/51de5f554> .
+
+<urn:atm:triage:occurrence/AV1A-M8/AV1A4-1>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 12 ;
+  triage:snippet "const READER_DEADLINE: Duration = Duration::from_secs(10);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/order4/8905f1046> .
+
+<urn:atm:triage:occurrence/AV1A-M8/AV1A4-2>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 46 ;
+  triage:snippet "pub struct ReaderLanesMetricsSnapshot {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/order4/8905f1046> .
+
+<urn:atm:triage:occurrence/AV1A-M8/AV1A5-1>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-storage-rusqlite/src/search_reader.rs" ;
+  triage:line 12 ;
+  triage:snippet "const READER_DEADLINE: Duration = Duration::from_secs(10);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/order5/a36bff376> .
+
+<urn:atm:triage:occurrence/AV1A-M8/AV1A5-2>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 46 ;
+  triage:snippet "pub struct ReaderLanesMetricsSnapshot {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/order5/a36bff376> .
+
+<urn:atm:triage:worktree/order1/16421b24d>
+  a triage:WorktreeSnapshot ;
+
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/order2/043aba984>
+  a triage:WorktreeSnapshot ;
+
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/order3/51de5f554>
+  a triage:WorktreeSnapshot ;
+
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/order4/8905f1046>
+  a triage:WorktreeSnapshot ;
+
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/order5/a36bff376>
+  a triage:WorktreeSnapshot ;
+
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:orderIndex 5 .
+
