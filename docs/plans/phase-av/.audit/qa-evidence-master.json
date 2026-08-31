@@ -273,7 +273,7 @@
       "result_from": "arch-ctm",
       "result_shared_path": null,
       "result_temp_path": null,
-      "verdict": "PUSHED — completion message pending; AV.1b merge-forward pending (93c361a43)",
+      "verdict": "COMPLETE — f31a35484 (AV.1a) + 60585aaa9 (AV.1b); QA-r5 in progress",
       "blockers": null,
       "important": null,
       "minor": null,
@@ -299,7 +299,11 @@
       ],
       "early_signal_message_id": "01M1BNF3193FHBHPZPAXSRAKX9",
       "early_signal": "quality-mgr @ eb9744b4b+f68257608: GAP-1/GAP-2/M10 FIXED, zero-implementer fail-closed violation proven live, lint real-tree PASS, pytest test_lint_boundaries.py 56/56, waiver count 14 ; addendum @ f31a35484: M11 verified, split 19/1/14 of 34 recomputed via lint parser",
-      "early_signal_addendum_message_id": "01M1BNJBMB6FJ5GEG7R2NKZDF6"
+      "early_signal_addendum_message_id": "01M1BNJBMB6FJ5GEG7R2NKZDF6",
+      "completion_message_id": "01M1BP0E2DPX8Z6TFQKJYPFFZV",
+      "completed_at": "2026-08-31T10:31:24Z",
+      "av1b_merge_forward_sha": "60585aaa9",
+      "dev_validation": "boundary pytest 56 passed; just lint 32/32; cargo test --workspace --exclude atm-daemon passed; fmt/clippy clean; no lint findings from implementer scan; no atm-http-runtime/atm-daemon diff; just test blocked by pre-existing mail-store.toml allowlist (stale atm-daemon dependent, tempfile absent) — routed to quality-mgr; just validate reaches dependency-currency only (sc-composer 1.5.0 vs 1.6.0, Wyvern 0.5.0 vs 0.6.0)"
     },
     {
       "run_id": "QA-AV1A-R5",
