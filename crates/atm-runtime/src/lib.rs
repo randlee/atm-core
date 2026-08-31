@@ -15,6 +15,7 @@ pub use composition::{
     RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime, validate_enabled_peer_configuration,
     validate_enabled_peer_configuration_for_reload, with_installed_roster_store,
 };
+pub use mailbox_runtime::{AsyncMailboxRuntime, HandoffConfig, StateHandoffSupervisor};
 pub use workflow_telemetry::{
     WorkflowTelemetryConfig, WorkflowTelemetryDiagnostics, WorkflowTelemetryRuntime,
     WorkflowTelemetrySetup,

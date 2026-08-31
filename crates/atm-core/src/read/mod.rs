@@ -1,3 +1,4 @@
+pub mod async_projection;
 pub(crate) mod filters;
 pub(crate) mod metadata_selection;
 pub(crate) mod render;

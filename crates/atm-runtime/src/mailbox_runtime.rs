@@ -9,9 +9,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::api::RequestDeadline;
+use atm_core::list::{AsyncListCommand, ListOutcome, complete_async_list};
+use atm_core::read::ReadOutcome;
+use atm_core::read::async_projection::{AsyncReadCommand, complete_async_read};
 use atm_core::read::selection::{
     MailboxSelectionCandidate, MailboxSelectionRequest, MailboxSelectionResult,
-    select_mailbox_candidates,
+    select_mailbox_candidates, sort_and_limit_mailbox_selection,
 };
 use atm_storage::{
     AsyncMailboxReader, AsyncMessageStore, AtmError, IsoTimestamp, MailboxScope, Message,
@@ -63,6 +66,7 @@ struct ReadDisplayTransition {
 #[derive(Clone)]
 pub struct StateHandoffSupervisor {
     inner: Arc<StateHandoffInner>,
+    manager: Arc<ManagerTask>,
 }
 
 struct StateHandoffInner {
@@ -72,9 +76,22 @@ struct StateHandoffInner {
     queue_changed: tokio::sync::Notify,
     state: std::sync::atomic::AtomicU8,
     restart_count: std::sync::atomic::AtomicU32,
-    /// The composition owns this manager task.  It monitors every worker it
-    /// starts, while the shared queue remains outside worker ownership.
-    manager: Mutex<Option<tokio::task::JoinHandle<()>>>,
+}
+
+/// Owns the manager handle outside the state shared with the task itself.
+///
+/// Keeping this handle in `StateHandoffInner` would form an `Arc` cycle:
+/// manager task -> inner -> its own JoinHandle.  This separate owner aborts
+/// the task when the final runtime clone goes away and therefore releases the
+/// reader/writer boundary promptly in test and production shutdown paths.
+struct ManagerTask {
+    handle: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for ManagerTask {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
 }
 
 impl StateHandoffSupervisor {
@@ -99,16 +116,12 @@ impl StateHandoffSupervisor {
             queue_changed: tokio::sync::Notify::new(),
             state: std::sync::atomic::AtomicU8::new(STATE_READY),
             restart_count: std::sync::atomic::AtomicU32::new(0),
-            manager: Mutex::new(None),
         });
         let manager_inner = Arc::clone(&inner);
-        let manager = tokio::spawn(async move { supervise_handoff_worker(manager_inner).await });
-        inner
-            .manager
-            .lock()
-            .expect("state-handoff manager mutex poisoned")
-            .replace(manager);
-        Ok(Self { inner })
+        let manager = Arc::new(ManagerTask {
+            handle: tokio::spawn(async move { supervise_handoff_worker(manager_inner).await }),
+        });
+        Ok(Self { inner, manager })
     }
 
     pub fn try_push(
@@ -164,6 +177,14 @@ impl StateHandoffSupervisor {
         self.inner
             .restart_count
             .load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// Reports whether the composition-owned supervisor task has exited.
+    /// This is intentionally separate from the handoff state: a manager can
+    /// still be alive while it is restarting a worker.
+    #[must_use]
+    pub fn manager_finished(&self) -> bool {
+        self.manager.handle.is_finished()
     }
 }
 
@@ -258,11 +279,26 @@ const STATE_READY: u8 = 0;
 const STATE_UNAVAILABLE: u8 = 1;
 const STATE_RESTARTING: u8 = 2;
 
-#[allow(
-    async_fn_in_trait,
-    reason = "The Tokio-only port is an in-repository composition seam; callers do not implement it."
-)]
+#[async_trait::async_trait]
 pub trait AsyncMailboxRuntime: Send + Sync {
+    async fn list_command(
+        &self,
+        command: AsyncListCommand,
+        deadline: RequestDeadline,
+    ) -> Result<ListOutcome, AtmError>;
+
+    async fn peek_command(
+        &self,
+        command: AsyncReadCommand,
+        deadline: RequestDeadline,
+    ) -> Result<ReadOutcome, AtmError>;
+
+    async fn read_command(
+        &self,
+        command: AsyncReadCommand,
+        deadline: RequestDeadline,
+    ) -> Result<ReadOutcome, AtmError>;
+
     async fn list_mail(
         &self,
         scope: MailboxScope,
@@ -343,22 +379,81 @@ impl StorageAsyncMailboxRuntime {
     }
 }
 
+#[async_trait::async_trait]
 impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
+    async fn list_command(
+        &self,
+        command: AsyncListCommand,
+        deadline: RequestDeadline,
+    ) -> Result<ListOutcome, AtmError> {
+        let command = self.authorize_list(command, deadline).await?;
+        let selection = self
+            .select_all(
+                command.scope().clone(),
+                command.selection().clone(),
+                deadline,
+            )
+            .await?;
+        Ok(complete_async_list(&command, selection))
+    }
+
+    async fn peek_command(
+        &self,
+        command: AsyncReadCommand,
+        deadline: RequestDeadline,
+    ) -> Result<ReadOutcome, AtmError> {
+        let command = self.authorize_read(command, deadline).await?;
+        let selection = self
+            .select_for_read(
+                command.scope().clone(),
+                command.selection().clone(),
+                deadline,
+                command.wait_timeout(),
+            )
+            .await?;
+        let match_count = selection.selected.len();
+        let mut selection = selection;
+        sort_and_limit_mailbox_selection(&mut selection.selected, Some(1));
+        Ok(complete_async_read(&command, selection, match_count, false))
+    }
+
+    async fn read_command(
+        &self,
+        command: AsyncReadCommand,
+        deadline: RequestDeadline,
+    ) -> Result<ReadOutcome, AtmError> {
+        let command = self.authorize_read(command, deadline).await?;
+        let selection = self
+            .select_for_read(
+                command.scope().clone(),
+                command.selection().clone(),
+                deadline,
+                command.wait_timeout(),
+            )
+            .await?;
+        let match_count = selection.selected.len();
+        let mut selection = selection;
+        sort_and_limit_mailbox_selection(&mut selection.selected, Some(1));
+        let accepted = self.try_handoff_selected(
+            command.scope().clone(),
+            &selection,
+            command.updates_seen_state(),
+        )?;
+        Ok(complete_async_read(
+            &command,
+            selection,
+            match_count,
+            accepted,
+        ))
+    }
+
     async fn list_mail(
         &self,
         scope: MailboxScope,
         request: MailboxSelectionRequest,
         deadline: RequestDeadline,
     ) -> Result<MailboxSelectionResult, AtmError> {
-        let messages = self
-            .reader
-            .list_messages(scope.clone(), query(&scope), read_deadline(deadline)?)
-            .await
-            .map_err(read_error)?;
-        Ok(select_mailbox_candidates(
-            messages.into_iter().map(selection_candidate).collect(),
-            &request,
-        ))
+        self.select_all(scope, request, deadline).await
     }
 
     async fn peek_mail(
@@ -382,35 +477,154 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
         let selection = self
             .select_single(scope.clone(), key, request, read_deadline(deadline)?)
             .await?;
-        self.handoff_read_display_state(scope, &selection);
+        self.try_handoff_selected(scope, &selection, true)?;
         Ok(selection)
     }
 }
 
 impl StorageAsyncMailboxRuntime {
-    fn handoff_read_display_state(&self, scope: MailboxScope, selection: &MailboxSelectionResult) {
-        let StateHandoffLifecycle::Active(handoff) = &self.state_handoff else {
-            return;
+    async fn authorize_list(
+        &self,
+        mut command: AsyncListCommand,
+        deadline: RequestDeadline,
+    ) -> Result<AsyncListCommand, AtmError> {
+        if command.explicit_target()
+            && !self
+                .reader
+                .mailbox_member_exists(command.scope().clone(), read_deadline(deadline)?)
+                .await
+                .map_err(read_error)?
+        {
+            return Err(AtmError::agent_not_found(
+                &command.scope().agent,
+                &command.scope().team,
+            ));
+        }
+        if command.requires_seen_watermark() {
+            let watermark = self
+                .reader
+                .load_seen_watermark(command.scope().clone(), read_deadline(deadline)?)
+                .await
+                .map_err(read_error)?;
+            command = command.with_seen_watermark(watermark);
+        }
+        Ok(command)
+    }
+
+    async fn authorize_read(
+        &self,
+        mut command: AsyncReadCommand,
+        deadline: RequestDeadline,
+    ) -> Result<AsyncReadCommand, AtmError> {
+        if command.explicit_target()
+            && !self
+                .reader
+                .mailbox_member_exists(command.scope().clone(), read_deadline(deadline)?)
+                .await
+                .map_err(read_error)?
+        {
+            return Err(AtmError::agent_not_found(
+                &command.scope().agent,
+                &command.scope().team,
+            ));
+        }
+        if command.requires_seen_watermark() {
+            let watermark = self
+                .reader
+                .load_seen_watermark(command.scope().clone(), read_deadline(deadline)?)
+                .await
+                .map_err(read_error)?;
+            command = command.with_seen_watermark(watermark);
+        }
+        Ok(command)
+    }
+
+    async fn select_all(
+        &self,
+        scope: MailboxScope,
+        request: MailboxSelectionRequest,
+        deadline: RequestDeadline,
+    ) -> Result<MailboxSelectionResult, AtmError> {
+        let messages = self
+            .reader
+            .list_messages(scope.clone(), query(&scope), read_deadline(deadline)?)
+            .await
+            .map_err(read_error)?;
+        Ok(select_mailbox_candidates(
+            messages.into_iter().map(selection_candidate).collect(),
+            &request,
+        ))
+    }
+
+    async fn select_for_read(
+        &self,
+        scope: MailboxScope,
+        request: MailboxSelectionRequest,
+        deadline: RequestDeadline,
+        wait_timeout: Option<Duration>,
+    ) -> Result<MailboxSelectionResult, AtmError> {
+        let Some(wait_timeout) = wait_timeout else {
+            return self.select_all(scope, request, deadline).await;
         };
+        let wait_deadline = tokio::time::Instant::now() + wait_timeout;
+        loop {
+            let selection = self
+                .select_all(scope.clone(), request.clone(), deadline)
+                .await?;
+            if !selection.selected.is_empty() || tokio::time::Instant::now() >= wait_deadline {
+                return Ok(selection);
+            }
+            let request_remaining = deadline.remaining().ok_or_else(|| {
+                AtmError::daemon_unavailable("mailbox request deadline expired while awaiting mail")
+            })?;
+            let until_wait_deadline =
+                wait_deadline.saturating_duration_since(tokio::time::Instant::now());
+            let pause = Duration::from_millis(25)
+                .min(request_remaining)
+                .min(until_wait_deadline);
+            if pause.is_zero() {
+                return Ok(selection);
+            }
+            tokio::time::sleep(pause).await;
+        }
+    }
+
+    fn try_handoff_selected(
+        &self,
+        scope: MailboxScope,
+        selection: &MailboxSelectionResult,
+        update_seen_watermark: bool,
+    ) -> Result<bool, AtmError> {
         let message_ids = selection
             .selected
             .iter()
             .filter_map(|message| message.message_key.parse::<MessageKey>().ok())
             .collect::<Vec<_>>();
         if message_ids.is_empty() {
-            return;
+            return Ok(false);
         }
-        let seen_watermark = selection
-            .selected
-            .iter()
-            .map(|message| message.envelope.timestamp)
-            .max();
+        let StateHandoffLifecycle::Active(handoff) = &self.state_handoff else {
+            return Err(AtmError::daemon_unavailable(
+                "mailbox read handoff was not started before read admission",
+            ));
+        };
+        let seen_watermark = update_seen_watermark
+            .then(|| {
+                selection
+                    .selected
+                    .iter()
+                    .map(|message| message.envelope.timestamp)
+                    .max()
+            })
+            .flatten();
         if let Err(rejected) = handoff.try_push(scope, message_ids, seen_watermark) {
             tracing::warn!(
                 ?rejected,
                 "mailbox read-state handoff rejected; message remains unread"
             );
+            return Ok(false);
         }
+        Ok(true)
     }
 
     async fn select_single(
@@ -462,10 +676,15 @@ fn read_error(error: ReadLaneError) -> AtmError {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
 
+    use atm_core::list::{ListQuery, prepare_async_list};
+    use atm_core::read::ReadQuery;
+    use atm_core::read::async_projection::prepare_async_read;
     use atm_core::read::selection::MailboxSelectionRequest;
+    use atm_core::types::ReadSelection;
     use atm_storage::testing::InMemoryMailboxReader;
     use atm_storage::{
         AgentName, AsyncMessageStore, AtmError, IsoTimestamp, MailboxScope, Message,
@@ -483,6 +702,14 @@ mod tests {
             "team".parse::<TeamName>().expect("team"),
             "agent".parse::<AgentName>().expect("agent"),
         )
+    }
+
+    fn team() -> TeamName {
+        "team".parse().expect("team")
+    }
+
+    fn agent() -> AgentName {
+        "agent".parse().expect("agent")
     }
 
     fn message(key: &str, read: bool) -> Message {
@@ -672,6 +899,133 @@ mod tests {
         })
         .await
         .expect("writer followup eventually commits");
+    }
+
+    #[tokio::test]
+    async fn command_runtime_keeps_policy_in_core_and_writer_work_out_of_selection() {
+        let writer = Arc::new(RecordingWriter::default());
+        let runtime = StorageAsyncMailboxRuntime::new(
+            Arc::new(InMemoryMailboxReader::with_messages(vec![message(
+                "unread", false,
+            )])),
+            writer.clone(),
+        )
+        .with_state_handoff(HandoffConfig::default())
+        .expect("runtime handoff starts");
+        let query_root = PathBuf::from("/daemon-owned");
+        let read = ReadQuery::new(
+            query_root.clone(),
+            query_root.clone(),
+            agent(),
+            None,
+            team(),
+            ReadSelection::Unread,
+            false,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query");
+        let outcome = runtime
+            .read_command(
+                prepare_async_read(&read).expect("core prepares read policy"),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("runtime selects through reader lane");
+        assert_eq!(outcome.count, 1);
+        assert!(outcome.mutation_applied, "handoff admission is reported");
+
+        let list = ListQuery::new(
+            query_root.clone(),
+            query_root,
+            agent(),
+            None,
+            team(),
+            ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query");
+        let listed = runtime
+            .list_command(
+                prepare_async_list(&list).expect("core prepares list policy"),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("runtime lists through reader lane");
+        assert_eq!(listed.count, 1);
+        assert_eq!(
+            writer.applied().len(),
+            0,
+            "list never uses the writer handoff"
+        );
+    }
+
+    #[tokio::test]
+    async fn command_read_displays_and_handoffs_only_the_newest_message() {
+        let writer = Arc::new(RecordingWriter::default());
+        let runtime = StorageAsyncMailboxRuntime::new(
+            Arc::new(InMemoryMailboxReader::with_messages(vec![
+                message("first", false),
+                message("second", false),
+            ])),
+            writer.clone(),
+        )
+        .with_state_handoff(HandoffConfig::default())
+        .expect("runtime handoff starts");
+        let query_root = PathBuf::from("/daemon-owned");
+        let read = ReadQuery::new(
+            query_root.clone(),
+            query_root,
+            agent(),
+            None,
+            team(),
+            ReadSelection::Unread,
+            false,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query");
+
+        let outcome = runtime
+            .read_command(
+                prepare_async_read(&read).expect("core prepares read policy"),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("read response");
+        assert_eq!(outcome.count, 1);
+        assert_eq!(outcome.match_count, 2, "response preserves all-match count");
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let applied = writer.applied();
+                if !applied.is_empty() {
+                    return applied;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("handoff applies")
+        .iter()
+        .for_each(|transition| {
+            assert_eq!(transition.len(), 1, "only the displayed message is mutated");
+        });
     }
 
     #[tokio::test]

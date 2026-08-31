@@ -27,6 +27,7 @@ use atm_core::protocol::{
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
+use atm_runtime::AsyncMailboxRuntime;
 
 use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
@@ -147,6 +148,7 @@ pub struct StorageAndNudgeRouter {
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
     blocking_core_bridge: BlockingCoreBridge,
+    async_mailbox_runtime: Option<Arc<dyn AsyncMailboxRuntime>>,
     daemon_home: PathBuf,
     runtime_health: RuntimeHealth,
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
@@ -177,6 +179,7 @@ impl StorageAndNudgeRouter {
                 NonZeroUsize::new(1).expect("one non-storage core bridge operation"),
                 runtime_health.clone(),
             ),
+            async_mailbox_runtime: None,
             daemon_home,
             runtime_health,
             doctor_ports: None,
@@ -189,6 +192,17 @@ impl StorageAndNudgeRouter {
             bare_cli_queue_full_drops: Default::default(),
             member_state_transition_sink: None,
         }
+    }
+
+    /// Installs the composition-owned Tokio mailbox port.  AV.1b routes the
+    /// read family exclusively through this capability.
+    #[must_use]
+    pub fn with_async_mailbox_runtime(
+        mut self,
+        async_mailbox_runtime: Arc<dyn AsyncMailboxRuntime>,
+    ) -> Self {
+        self.async_mailbox_runtime = Some(async_mailbox_runtime);
+        self
     }
 
     #[cfg(test)]
@@ -495,20 +509,17 @@ impl StorageAndNudgeRouter {
         query: ListQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
-        let runtime = self.service_runtime.clone();
-        let observability = Arc::clone(&self.observability);
-        let home = self.daemon_home.clone();
-        self.blocking_core_bridge
-            .run(deadline, move || {
-                atm_core::list::list_mail_with_runtime(
-                    query.with_daemon_paths(home),
-                    observability.as_ref(),
-                    &runtime,
-                )
-                .map(ResponseEnvelope::List)
-                .map(ApiResponse::new)
-            })
+        let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "async mailbox runtime was not installed at daemon startup",
+            )
+        })?;
+        let command = atm_core::list::prepare_async_list(&query)?;
+        runtime
+            .list_command(command, deadline)
             .await
+            .map(ResponseEnvelope::List)
+            .map(ApiResponse::new)
     }
 
     async fn peek_messages(
@@ -516,21 +527,18 @@ impl StorageAndNudgeRouter {
         query: PeekQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
-        let runtime = self.service_runtime.clone();
-        let observability = Arc::clone(&self.observability);
-        let home = self.daemon_home.clone();
-        self.blocking_core_bridge
-            .run(deadline, move || {
-                atm_core::read::peek_mail_with_runtime(
-                    query.with_daemon_paths(home),
-                    observability.as_ref(),
-                    &runtime,
-                )
-                .map(Box::new)
-                .map(ResponseEnvelope::Peek)
-                .map(ApiResponse::new)
-            })
+        let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "async mailbox runtime was not installed at daemon startup",
+            )
+        })?;
+        let command = atm_core::read::async_projection::prepare_async_peek(&query)?;
+        runtime
+            .peek_command(command, deadline)
             .await
+            .map(Box::new)
+            .map(ResponseEnvelope::Peek)
+            .map(ApiResponse::new)
     }
 
     async fn receive_messages(
@@ -538,21 +546,18 @@ impl StorageAndNudgeRouter {
         query: ReadQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
-        let runtime = self.service_runtime.clone();
-        let observability = Arc::clone(&self.observability);
-        let home = self.daemon_home.clone();
-        self.blocking_core_bridge
-            .run(deadline, move || {
-                atm_core::read::read_mail_with_runtime(
-                    query.with_daemon_paths(home),
-                    observability.as_ref(),
-                    &runtime,
-                )
-                .map(Box::new)
-                .map(ResponseEnvelope::Receive)
-                .map(ApiResponse::new)
-            })
+        let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "async mailbox runtime was not installed at daemon startup",
+            )
+        })?;
+        let command = atm_core::read::async_projection::prepare_async_read(&query)?;
+        runtime
+            .read_command(command, deadline)
             .await
+            .map(Box::new)
+            .map(ResponseEnvelope::Receive)
+            .map(ApiResponse::new)
     }
 
     async fn clear_messages(
@@ -1040,6 +1045,7 @@ mod tests {
     };
     use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
+    use atm_runtime::HandoffConfig;
     use atm_runtime_test_support::{
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
         open_graft_receiver_endpoint_store, open_sqlite_boundary,
@@ -2258,6 +2264,120 @@ mod tests {
             }
             other => panic!("expected doctor report, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn mailbox_handlers_use_the_async_runtime_for_list_peek_and_read() {
+        let fixture = fixture(true, None, None);
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("seed mailbox through canonical write path");
+
+        let assembly = open_sqlite_boundary(&fixture.database_path).expect("reopen async boundary");
+        let async_mailbox_runtime = assembly
+            .async_mailbox_runtime
+            .with_state_handoff(HandoffConfig::default())
+            .expect("start async mailbox handoff");
+        let router = fixture
+            .router
+            .clone()
+            .with_async_mailbox_runtime(Arc::new(async_mailbox_runtime));
+        let root = fixture.home_dir.clone();
+        let list = atm_core::list::ListQuery::new(
+            root.clone(),
+            root.clone(),
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query");
+        let listed = router
+            .dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    list,
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("list through async mailbox runtime")
+            .into_inner();
+        assert!(matches!(listed, ResponseEnvelope::List(outcome) if outcome.count == 1));
+
+        let peek = atm_core::read::PeekQuery::new(
+            root.clone(),
+            root.clone(),
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("peek query");
+        let peeked = router
+            .dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::Peek(
+                    peek,
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("peek through async mailbox runtime")
+            .into_inner();
+        assert!(matches!(peeked, ResponseEnvelope::Peek(outcome) if outcome.count == 1));
+
+        let read = atm_core::read::ReadQuery::new(
+            root.clone(),
+            root,
+            "recipient".parse().expect("recipient"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query");
+        let read = router
+            .dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::Receive(
+                    read,
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("read through async mailbox runtime")
+            .into_inner();
+        assert!(
+            matches!(read, ResponseEnvelope::Receive(outcome) if outcome.count == 1 && outcome.mutation_applied)
+        );
     }
 
     async fn post_write(app: axum::Router, write: &WriteRequest) -> axum::response::Response {
