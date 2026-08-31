@@ -27,7 +27,7 @@ use atm_core::protocol::{
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
-use atm_runtime::AsyncMailboxRuntime;
+use atm_runtime::{AsyncMailboxRuntime, DoctorProjection, DoctorProjectionContext};
 
 use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
@@ -149,6 +149,7 @@ pub struct StorageAndNudgeRouter {
     received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
     blocking_core_bridge: BlockingCoreBridge,
     async_mailbox_runtime: Option<Arc<dyn AsyncMailboxRuntime>>,
+    doctor_projection: Option<Arc<dyn DoctorProjection>>,
     daemon_home: PathBuf,
     runtime_health: RuntimeHealth,
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
@@ -180,6 +181,7 @@ impl StorageAndNudgeRouter {
                 runtime_health.clone(),
             ),
             async_mailbox_runtime: None,
+            doctor_projection: None,
             daemon_home,
             runtime_health,
             doctor_ports: None,
@@ -202,6 +204,14 @@ impl StorageAndNudgeRouter {
         async_mailbox_runtime: Arc<dyn AsyncMailboxRuntime>,
     ) -> Self {
         self.async_mailbox_runtime = Some(async_mailbox_runtime);
+        self
+    }
+
+    /// Installs the bounded, composition-owned doctor projection.  Doctor is
+    /// a control-plane request and must not share the mailbox read bridge.
+    #[must_use]
+    pub fn with_doctor_projection(mut self, doctor_projection: Arc<dyn DoctorProjection>) -> Self {
+        self.doctor_projection = Some(doctor_projection);
         self
     }
 
@@ -586,50 +596,31 @@ impl StorageAndNudgeRouter {
         query: DoctorQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
-        let runtime = self.service_runtime.clone();
-        let observability = Arc::clone(&self.observability);
-        let home = self.daemon_home.clone();
+        let doctor_projection = self.doctor_projection.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable("doctor projection was not installed at daemon startup")
+        })?;
         let runtime_health = self.runtime_health.clone();
         let bare_cli_queue_full_drops = self.bare_cli_queue_full_drops.clone();
-        let doctor_ports = self.doctor_ports.clone();
-        let presence_doctor = doctor_ports
-            .as_ref()
-            .map(|ports| Arc::clone(&ports.herdr_presence));
         let daemon_context = self.daemon_context.clone();
-        let mut report = self
-            .blocking_core_bridge
-            .run(deadline, move || {
-                let query = query.with_daemon_paths(home);
-                let mut report = match doctor_ports {
-                    Some(ports) => atm_core::doctor::run_doctor_with_runtime_ports(
-                        query,
-                        observability.as_ref(),
-                        &runtime,
-                        &ports,
-                        None,
-                    ),
-                    None => atm_core::doctor::run_doctor_with_runtime(
-                        query,
-                        observability.as_ref(),
-                        &runtime,
-                    ),
-                }?;
-                let mut runtime_status = runtime_health.snapshot();
-                runtime_status.bare_cli_queue_full_drops_total =
-                    bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
-                report.herdr_queue_pump.last_tick_at = runtime_status.herdr_queue_last_tick_at;
-                report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
-                report.runtime_status = Some(runtime_status);
-                report.daemon_context = daemon_context;
-                Ok(report)
-            })
+        let mut runtime_status = runtime_health.snapshot();
+        runtime_status.bare_cli_queue_full_drops_total =
+            bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
+        let mut report = doctor_projection
+            .project(
+                query.with_daemon_paths(self.daemon_home.clone()),
+                DoctorProjectionContext {
+                    runtime_status: Some(runtime_status),
+                    daemon_context,
+                },
+                deadline,
+            )
             .await?;
-        if let (Some(presence_doctor), Some(roster)) =
-            (presence_doctor, report.member_roster.as_ref())
-        {
-            let findings = presence_doctor.probe(roster, deadline).await;
-            atm_core::doctor::append_doctor_findings(&mut report, findings);
-        }
+        let runtime_status = report
+            .runtime_status
+            .as_ref()
+            .expect("projection retains runtime status");
+        report.herdr_queue_pump.last_tick_at = runtime_status.herdr_queue_last_tick_at;
+        report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
         Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
 
@@ -1045,7 +1036,10 @@ mod tests {
     };
     use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
-    use atm_runtime::HandoffConfig;
+    use atm_runtime::{
+        DoctorProjection, DoctorProjectionConfig, DoctorProjectionContext, HandoffConfig,
+        StorageDoctorProjection,
+    };
     use atm_runtime_test_support::{
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
         open_graft_receiver_endpoint_store, open_sqlite_boundary,
@@ -2235,6 +2229,15 @@ mod tests {
     #[tokio::test]
     async fn doctor_reports_bootstrap_injected_server_version() {
         let fixture = fixture(true, None, None);
+        let assembly =
+            open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
+        let doctor_projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig::default(),
+            assembly.service_runtime,
+            assembly.doctor_ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start doctor projection");
         let daemon_context = atm_core::doctor::DoctorExecutionContext {
             team: Some("daemon-team".parse().expect("team")),
             identity: Some("daemon-agent".parse().expect("agent")),
@@ -2246,6 +2249,7 @@ mod tests {
         let response = fixture
             .router
             .clone()
+            .with_doctor_projection(Arc::new(doctor_projection))
             .with_daemon_context(daemon_context.clone())
             .dispatch(
                 ApiRequest::new(atm_core::protocol::RequestEnvelope::Doctor(
@@ -2263,6 +2267,68 @@ mod tests {
                 assert_eq!(report.herdr_queue_pump.breaker, report.herdr_breaker);
             }
             other => panic!("expected doctor report, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn doctor_projection_serves_parallel_control_requests_without_the_read_bridge() {
+        let fixture = fixture(true, None, None);
+        let assembly =
+            open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
+        let projection = Arc::new(
+            StorageDoctorProjection::start(
+                DoctorProjectionConfig::default(),
+                assembly.service_runtime,
+                assembly.doctor_ports,
+                Arc::new(NullObservability),
+            )
+            .expect("start doctor projection"),
+        );
+        let mut tasks = Vec::new();
+        for _ in 0..8 {
+            let projection = Arc::clone(&projection);
+            tasks.push(tokio::spawn(async move {
+                projection
+                    .project(
+                        atm_core::doctor::DoctorQuery::default(),
+                        DoctorProjectionContext::default(),
+                        RequestDeadline::after(Duration::from_secs(1)),
+                    )
+                    .await
+            }));
+        }
+        for task in tasks {
+            task.await
+                .expect("join doctor request")
+                .expect("parallel doctor response");
+        }
+        assert!(
+            !projection.workers_finished(),
+            "a healthy projection retains its bounded control workers"
+        );
+    }
+
+    #[test]
+    fn mailbox_and_doctor_handlers_never_enter_the_blocking_core_bridge() {
+        let source = include_str!("storage_and_nudge_router.rs")
+            .split("\n#[cfg(test)]\nmod tests")
+            .next()
+            .expect("production source");
+        for handler in [
+            "list_messages",
+            "peek_messages",
+            "receive_messages",
+            "doctor",
+        ] {
+            let start = source
+                .find(&format!("async fn {handler}"))
+                .expect("handler exists");
+            let tail = &source[start..];
+            let end = tail.find("\n    async fn ").unwrap_or(tail.len());
+            assert!(
+                !tail[..end].contains("blocking_core_bridge"),
+                "{handler} must not acquire the global blocking bridge"
+            );
         }
     }
 
