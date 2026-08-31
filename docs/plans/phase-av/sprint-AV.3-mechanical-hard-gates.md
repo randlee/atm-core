@@ -207,6 +207,14 @@ fn control_path_sync_bridge_call_sites_are_exactly_the_enumerated_residual() {
   tautology with an `AsyncMailboxRuntime`-activated ingress recorder that
   derives each path from the real router handler body and proves a writer-lane
   fixture is rejected. AV.1b will activate the supervised state-handoff path.
+- 2026-08-31 QA-r3 passed the original scope and exposed three merge-forward
+  defects: `AV3-B4` now derives the production-only
+  `StorageAsyncMailboxRuntime` implementation with `syn` and checks its D2/D6
+  allowlist (`be0e458dd`); `AV3-M4` requires exact raw-string closing hash
+  counts (`71898a6f2`); and `AV3-M5` makes Rust architecture gates a default
+  lint check (`c231b86b5`). `AV3-I3` remains explicitly deferred to round 2
+  / A2b after AV.1b because the D2b mechanism-independent behavior test is
+  not yet live.
 
 This is the authoritative acceptance checklist.
 
