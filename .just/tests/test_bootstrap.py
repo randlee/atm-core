@@ -151,7 +151,9 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(manifest.sc_compose, "1.6.1")
         self.assertEqual(manifest.wyvern, "0.5.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
-        self.assertEqual(dict(manifest.python_packages)["sc-compose"], "1.6.1")
+        self.assertNotIn("sc-compose", dict(manifest.python_packages))
+        requirements = (SCRIPT.parents[1] / "tools" / "bootstrap-requirements.txt").read_text(encoding="utf-8")
+        self.assertNotIn("sc-compose==", requirements)
 
     def test_macos_homebrew_seed_formula_is_derived_from_the_exact_python_pin(self) -> None:
         manifest = bootstrap.load_manifest()
