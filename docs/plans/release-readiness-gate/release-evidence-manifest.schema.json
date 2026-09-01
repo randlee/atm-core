@@ -167,12 +167,7 @@
     },
     "floors": {
       "type": "array",
-      "minItems": 2,
-      "description": "Both benchmark families must carry at least one floor row (contains clauses); metric-level completeness per §3.2 (every tracked metric for a pass-terminal benchmark suite has a floors row) is a §2.3.3 self-verifier cross-check.",
-      "allOf": [
-        { "contains": { "properties": { "family": { "const": "send" } } } },
-        { "contains": { "properties": { "family": { "const": "read-query" } } } }
-      ],
+      "description": "Family-level completeness is CONDITIONAL on execution (root-level allOf): a benchmark family's floors row is required exactly when that family's suite reached pass/fail; a Rand-approved declared-skip of a benchmark family (§2.1/AC-3) requires no floors row for it — a measurement that never ran is never fabricated. Metric-level completeness per §3.2 (every tracked metric for a pass-terminal benchmark suite has a floors row) and the forbid direction (no floors row for a family whose suite did not execute) are §2.3.3 self-verifier cross-checks.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -200,7 +195,7 @@
       "type": "array",
       "minItems": 7,
       "maxItems": 7,
-      "description": "Closed repo-suite catalog (§3.4), each entry present EXACTLY once (seven contains-clauses + maxItems 7; self-verifier re-checks duplicates as defense-in-depth). conclusion is const 'success' because CI-greenness of all seven runs on the candidate commit is a §2.2.6 PRE-launch eligibility check: a red or missing run refuses the launch with the distinct 'candidate not CI-eligible' state before any suite executes — the manifest records the verified-green runs, it is never the reporting channel for a red CI run (that failure surfaces in CI itself, pre-launch).",
+      "description": "Closed repo-suite catalog (§3.4), each entry present EXACTLY once (seven contains-clauses + maxItems 7; self-verifier re-checks duplicates as defense-in-depth). conclusion is const 'success' because CI-greenness of all seven runs on the candidate commit is a §2.2.6 PRE-launch eligibility check, RE-VERIFIED at manifest-emission time (a conclusion that went red or disappeared in the window refuses the manifest with a refusal record — no snapshot-stale READY): a red or missing run refuses launch/emission with the 'candidate not CI-eligible' state — the manifest records verified-green runs, it is never the reporting channel for a red CI run (that failure surfaces in CI itself).",
       "allOf": [
         { "contains": { "properties": { "suite_id": { "const": "just-ci" } } } },
         { "contains": { "properties": { "suite_id": { "const": "test-graft-python" } } } },
@@ -250,5 +245,61 @@
         "validator_version": { "type": "string", "minLength": 1 }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "suites": {
+            "contains": {
+              "properties": {
+                "suite_id": { "const": "benchmark-send" },
+                "terminal_state": { "enum": ["pass", "fail"] }
+              },
+              "required": ["suite_id", "terminal_state"]
+            }
+          }
+        },
+        "required": ["suites"]
+      },
+      "then": {
+        "properties": {
+          "floors": {
+            "contains": {
+              "properties": { "family": { "const": "send" } },
+              "required": ["family"]
+            }
+          }
+        },
+        "description": "An executed (pass/fail) benchmark-send suite requires at least one send floors row; a declared-skip does not (§2.1/AC-3 — never fabricate a measurement that never ran)."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "suites": {
+            "contains": {
+              "properties": {
+                "suite_id": { "const": "benchmark-read-query" },
+                "terminal_state": { "enum": ["pass", "fail"] }
+              },
+              "required": ["suite_id", "terminal_state"]
+            }
+          }
+        },
+        "required": ["suites"]
+      },
+      "then": {
+        "properties": {
+          "floors": {
+            "contains": {
+              "properties": { "family": { "const": "read-query" } },
+              "required": ["family"]
+            }
+          }
+        },
+        "description": "An executed (pass/fail) benchmark-read-query suite requires at least one read-query floors row; a declared-skip does not (§2.1/AC-3)."
+      }
+    }
+  ]
 }

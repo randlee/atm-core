@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "run_kind": "release",
+  "candidate": {
+    "tag_candidate": "v1.5.0-rc1",
+    "commit_sha": "0000000000000000000000000000000000000000",
+    "branch": "develop"
+  },
+  "testbed_definitions": {
+    "repo": "randlee/atm-hermes-testbed",
+    "commit_sha": "1111111111111111111111111111111111111111"
+  },
+  "suites": [
+    {
+      "suite_id": "smoke-full",
+      "entrypoint": "just smoke thorough",
+      "terminal_state": "pass",
+      "evidence": [
+        {
+          "path": "site/reports/smoke/macos/m5-atmbench/2026-09-17-run.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "started_at": "2026-09-17T18:00:00Z",
+      "ended_at": "2026-09-17T18:40:12Z",
+      "host": "rand-m5.local",
+      "execution_identity": {
+        "execution_account": "m5-atmbench",
+        "uid": 503,
+        "home": "/Users/m5-atmbench",
+        "hostname": "rand-m5.local"
+      }
+    },
+    {
+      "suite_id": "benchmark-send",
+      "entrypoint": "just benchmark-official",
+      "terminal_state": "pass",
+      "evidence": [
+        {
+          "path": "site/reports/send-message-benchmark/2026-09-17-campaign.json",
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ],
+      "started_at": "2026-09-17T18:45:00Z",
+      "ended_at": "2026-09-17T19:18:44Z",
+      "host": "rand-m5.local",
+      "execution_identity": {
+        "execution_account": "m5-atmbench",
+        "uid": 503,
+        "home": "/Users/m5-atmbench",
+        "hostname": "rand-m5.local"
+      }
+    },
+    {
+      "suite_id": "benchmark-read-query",
+      "entrypoint": "just benchmark-read",
+      "terminal_state": "declared-skip",
+      "skip_reason": "EXAMPLE ONLY — illustrates a Rand-approved standing skip of a benchmark FAMILY (§2.1/AC-3): no floors row exists for read-query because no measurement ran — the family-level floors requirement is conditional on the suite executing (schema root allOf); real skips must cite the Rand-approved standing reason",
+      "evidence": [],
+      "started_at": "2026-09-17T19:20:00Z",
+      "ended_at": "2026-09-17T19:20:00Z"
+    },
+    {
+      "suite_id": "testbed-integration",
+      "entrypoint": "testbed runner, full tier set AT0-AT8",
+      "terminal_state": "pass",
+      "evidence": [
+        {
+          "path": "site/reports/testbed-integration/2026-09-17-tier-results.json",
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ],
+      "started_at": "2026-09-17T19:00:00Z",
+      "ended_at": "2026-09-17T21:28:03Z",
+      "host": "colima-host",
+      "execution_identity": {
+        "execution_account": "testbed-runner",
+        "uid": 502,
+        "home": "/home/testbed-runner",
+        "hostname": "colima-host"
+      }
+    }
+  ],
+  "floors": [
+    {
+      "family": "send",
+      "metric": "send_p50_msgs_per_sec",
+      "floor": 17000.0,
+      "observed_p50": 17510.0,
+      "met": true,
+      "ratchet_proposal": 16634.5
+    }
+  ],
+  "ci_runs": [
+    {
+      "suite_id": "just-ci",
+      "run_id": 123456800,
+      "conclusion": "success",
+      "commit_sha": "0000000000000000000000000000000000000000"
+    },
+    {
+      "suite_id": "test-graft-python",
+      "run_id": 123456801,
+      "conclusion": "success",
+      "commit_sha": "0000000000000000000000000000000000000000"
+    },
+    {
+      "suite_id": "test-hermes-graft-bridge",
+      "run_id": 123456802,
+      "conclusion": "success",
+      "commit_sha": "0000000000000000000000000000000000000000"
+    },
+    {
+      "suite_id": "test-hermes-graft-smoke",
+      "run_id": 123456803,
+      "conclusion": "success",
+      "commit_sha": "0000000000000000000000000000000000000000"
+    },
+    {
+      "suite_id": "test-admission-capacity",
+      "run_id": 123456804,
+      "conclusion": "success",
+      "commit_sha": "0000000000000000000000000000000000000000"
+    },
+    {
+      "suite_id": "test-queue-hooks-python",
+      "run_id": 123456805,
+      "conclusion": "success",
+      "commit_sha": "0000000000000000000000000000000000000000"
+    },
+    {
+      "suite_id": "test-queue-hooks-codex",
+      "run_id": 123456806,
+      "conclusion": "success",
+      "commit_sha": "0000000000000000000000000000000000000000"
+    }
+  ],
+  "verdict": "READY",
+  "generated_at": "2026-09-17T22:00:00Z",
+  "self_verification": {
+    "validated": true,
+    "validator_version": "example-0"
+  }
+}
