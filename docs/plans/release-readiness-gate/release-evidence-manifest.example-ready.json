@@ -142,8 +142,14 @@
       "commit_sha": "0000000000000000000000000000000000000000"
     },
     {
-      "suite_id": "test-queue-hooks",
+      "suite_id": "test-queue-hooks-python",
       "run_id": 123456795,
+      "conclusion": "success",
+      "commit_sha": "0000000000000000000000000000000000000000"
+    },
+    {
+      "suite_id": "test-queue-hooks-codex",
+      "run_id": 123456796,
       "conclusion": "success",
       "commit_sha": "0000000000000000000000000000000000000000"
     }

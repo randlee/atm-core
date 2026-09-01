@@ -96,6 +96,19 @@ just release-readiness <release-tag-candidate>
      `testbed_definitions.commit_sha` must identify the tier-definition
      revision actually executed, 1:1 (§3.3) — otherwise the testbed suite is
      `fail` with `fail_reason: "tier-definitions-mismatch"`.
+6. **CI-eligibility precondition** (distinct from INCOMPLETE-by-absence):
+   before launching any suite, the runner verifies that all seven §3.4
+   repo-suite CI runs are green (`success`) on the exact candidate commit —
+   a cheap API check, no test execution. If any is red or missing, the gate
+   refuses to launch with the named state **"candidate not CI-eligible"**:
+   no suite runs, no evidence is produced, and nothing is discarded. A red
+   CI run is a genuine product/test failure, but it terminated in CI and is
+   recorded there — CI itself is its evidence channel; the gate surfaces it
+   pre-launch instead of erasing hours of suite evidence after the fact.
+   INCOMPLETE-by-absence stays scoped to rule 1's definition (a suite that
+   never reached a terminal state mid-run). The manifest's `ci_runs[]`
+   records the verified-green runs; a non-green conclusion is deliberately
+   unrepresentable there because the launch never happens.
 
 ### 2.3 First-time-pass enforcement (no clerical QA rounds)
 
@@ -117,8 +130,11 @@ The mechanism that makes §1's first-time-pass requirement real:
 3. **Whole-set self-verification.** Before rendering a verdict, the gate
    re-validates the complete evidence set + manifest exactly as QA would:
    schema, sha256s, provenance fields, cross-references, reports-index,
-   duplicate-`suite_id` rejection (the schema's `contains` clauses enforce
-   at-least-once; exactly-once is completed here), **the §2.3.5
+   duplicate-`suite_id` rejection in **both `suites[]` and `ci_runs[]`**
+   (the schema's `contains` + `maxItems` clauses already mechanize
+   exactly-once; this re-check is defense-in-depth), **the floors
+   cross-check** (every §3.2 tracked metric of a pass-terminal benchmark
+   suite has a `floors[]` row for its family), **the §2.3.5
    anomaly-check set** (per-family D7 clean-run criteria, historical p50
    sanity band, wall-clock duration bounds, evidence-row counts vs declared
    workload — built in RRG.2, wired into this self-verification in RRG.4),
@@ -186,12 +202,12 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
 - AC-1: one launch (`just release-readiness <tag-candidate>`) drives every
   declared suite to a terminal state without operator input (§2.1, §2.2.1).
 - AC-2: manifest written only after all suites terminal; validates against
-  the committed schema **and** the §2.3.3 self-verifier (schema enforces
-  every catalog suite at-least-once; the self-verifier completes
-  exactly-once via duplicate-`suite_id` rejection — AC-7); verdict
-  `READY`/`NOT-READY` only — an incomplete run writes no manifest,
-  INCOMPLETE-by-absence; the manifest is the sole release-evidence pointer
-  (§2.2.1, §2.2.2, §4).
+  the committed schema **and** the §2.3.3 self-verifier (the schema
+  mechanizes exactly-once catalog completeness for `suites[]` and
+  `ci_runs[]` via `contains` + `maxItems`; the self-verifier re-checks
+  duplicates as defense-in-depth — AC-7); verdict `READY`/`NOT-READY`
+  only — an incomplete run writes no manifest, INCOMPLETE-by-absence; the
+  manifest is the sole release-evidence pointer (§2.2.1, §2.2.2, §4).
 - AC-3: `READY` requires all suites `pass` or Rand-approved
   `declared-skip`, plus green whole-set self-verification (§2.2.3, §2.3.3);
   anything else renders `NOT-READY`.
@@ -205,11 +221,13 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   definitions (§2.2.5).
 - AC-6: validate-at-emit in every suite adapter (§2.3.2).
 - AC-7: self-verification covers schema, sha256s, provenance,
-  cross-references, reports-index, duplicate-`suite_id` rejection
-  (exactly-once catalog completion), the §2.3.5 anomaly-check set
-  (checks built in RRG.2, wired in RRG.4), tier-row `detail` populated
-  and conformant to the RRG.3a tier-row schema (§3.3), version
-  sentinels consistent, tiers 1:1 vs pinned definitions (§2.3.3).
+  cross-references, reports-index, duplicate-`suite_id` rejection in both
+  `suites[]` and `ci_runs[]` (defense-in-depth behind the schema's
+  exactly-once), the floors cross-check (every §3.2 tracked metric of a
+  pass-terminal benchmark suite has a `floors[]` row), the §2.3.5
+  anomaly-check set (checks built in RRG.2, wired in RRG.4), tier-row
+  `detail` populated and conformant to the RRG.3a tier-row schema (§3.3),
+  version sentinels consistent, tiers 1:1 vs pinned definitions (§2.3.3).
 - AC-8: rehearsal mode green, `run_kind` separation enforced both
   directions, rehearsal output confined to the rehearsal root (§2.3.4).
 - AC-9: hosts per §2.4; shared daemon and interactive accounts untouched.
@@ -217,6 +235,13 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   a standing skip (§7.4, §8 Q3); tier-level dispositions (per-tier state
   incl. declared-skip, skip-vs-1:1 rule) are encoded per the RRG.3a
   tier-row schema (§3.3).
+- AC-11: `ci_runs` closed seven-id catalog, each entry exactly once with
+  `conclusion: "success"` pinned to the candidate commit (schema), and the
+  §2.2.6 CI-eligibility precondition: all seven runs verified green
+  **before any suite launches** — a red/missing run refuses the launch
+  ("candidate not CI-eligible", distinct from INCOMPLETE-by-absence);
+  never `READY`, and never evidence discarded, over a red repo suite
+  (§2.2.6, §3.4, §4).
 
 ## 3. Suite inventory (definition — existing tests only)
 
@@ -255,7 +280,8 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
 - Fixture: https://github.com/randlee/atm-hermes-testbed (Colima test
   fixture; tier definitions in testbed PR #2, tiers AT0–AT8).
 - Entry: testbed runner, full tier set (prompt tiers + infra tiers),
-  executed in one continuous session. The build under test is decided by
+  executed in one continuous session (validated by the §2.3.5 wall-clock
+  duration-bounds anomaly check). The build under test is decided by
   Rand at plan review (§8 Q2: tagged candidate build only, or also
   integrate builds); this plan does not preempt that decision.
 - Evidence: committed under an `evidence/…` branch/dir in atm-core exactly
@@ -281,20 +307,24 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
 
 ### 3.4 Repo test suites (recorded, not re-run)
 
-- Closed catalog, manifest `ci_runs[].suite_id` ids in parentheses:
-  `just ci` (lint + test → `just-ci`), test-graft-python
+- Closed catalog of seven, manifest `ci_runs[].suite_id` ids in
+  parentheses: `just ci` (lint + test → `just-ci`), test-graft-python
   (`test-graft-python`), test-hermes-graft-bridge
   (`test-hermes-graft-bridge`), test-hermes-graft-smoke
   (`test-hermes-graft-smoke`), test-admission-capacity
-  (`test-admission-capacity`), and test-queue-hooks-python + codex variant
-  (recorded as one entry, `test-queue-hooks`).
-- The gate records the green CI run ids for the exact release-candidate
-  commit in the manifest instead of re-executing them on the evidence
-  host. The schema requires all six catalog entries with
-  `conclusion: "success"`: a missing or non-green repo suite means no
-  manifest can be emitted for the launch (INCOMPLETE-by-absence) — a
-  partial `ci_runs` set is schema-invalid, never a silently reduced
-  evidence bar.
+  (`test-admission-capacity`), test-queue-hooks-python
+  (`test-queue-hooks-python`), and test-queue-hooks-codex
+  (`test-queue-hooks-codex`). The queue-hooks variants are **separate
+  entries, each independently green** — there is no combined entry and no
+  combination rule to get wrong.
+- CI-greenness of all seven runs on the exact release-candidate commit is
+  the §2.2.6 **pre-launch eligibility check**: a red or missing run
+  refuses the launch ("candidate not CI-eligible") before any suite
+  executes — the red run's evidence lives in CI itself. The gate records
+  the verified-green run ids in the manifest instead of re-executing them
+  on the evidence host; the schema requires all seven entries exactly once
+  with `conclusion: "success"`, so a partial `ci_runs` set is
+  schema-invalid, never a silently reduced evidence bar.
 
 ## 4. Release evidence manifest
 
@@ -315,11 +345,13 @@ Summary of the committed schema (normative source is the schema file):
 - `candidate` — tag-candidate, 40-hex commit SHA, branch;
 - `testbed_definitions` — pinned testbed repo + commit SHA (AC-5;
   top-level **required**);
-- `suites[]` — **closed catalog**: `suite_id` is the enum
-  `smoke-full` / `benchmark-send` / `benchmark-read-query` /
-  `testbed-integration`, and four `contains` clauses require every catalog
-  suite to be present (duplicate `suite_id` rejection is a §2.3.3
-  self-verifier check). Per suite: entrypoint, terminal state
+- `suites[]` — **closed catalog, exactly-once schema-mechanized**:
+  `suite_id` is the enum `smoke-full` / `benchmark-send` /
+  `benchmark-read-query` / `testbed-integration`; four `contains` clauses
+  require every catalog suite present and `maxItems: 4` forbids any
+  duplicate (the §2.3.3 self-verifier re-checks duplicate `suite_id`
+  rejection in both `suites[]` and `ci_runs[]` as defense-in-depth).
+  Per suite: entrypoint, terminal state
   (`pass`/`fail`/`declared-skip`), evidence paths each with sha256, and
   start/end timestamps. Conditionals: `pass`/`fail` **require** `host` +
   the execution-identity provenance object (AC-4); `fail` **requires**
@@ -334,15 +366,22 @@ Summary of the committed schema (normative source is the schema file):
   p50, met flag, optional ratchet proposal (harness-computed, §2.3.5).
   **Convention (schema-enforced): `ratchet_proposal` may be present only
   when `met` is true** — the harness never proposes ratcheting from a
-  breached measurement;
-- `ci_runs[]` — **closed repo-suite catalog** (§3.4): `suite_id` is the
-  enum `just-ci` / `test-graft-python` / `test-hermes-graft-bridge` /
-  `test-hermes-graft-smoke` / `test-admission-capacity` /
-  `test-queue-hooks` (covering both python and codex variants), all six
-  required present via `contains` clauses, each with run id and
-  `conclusion` fixed to `success` (only green runs are recordable — a
-  missing/non-green repo suite means the gate refuses to emit a manifest),
-  pinned to the candidate commit;
+  breached measurement. Family-level completeness is schema-mechanized
+  (`contains` clauses require at least one `send` and one `read-query`
+  row); metric-level completeness (every §3.2 tracked metric of a
+  pass-terminal benchmark suite has a floors row) is a named §2.3.3
+  self-verifier cross-check;
+- `ci_runs[]` — **closed repo-suite catalog, exactly-once
+  schema-mechanized** (§3.4): `suite_id` is the seven-id enum (`just-ci`,
+  `test-graft-python`, `test-hermes-graft-bridge`,
+  `test-hermes-graft-smoke`, `test-admission-capacity`,
+  `test-queue-hooks-python`, `test-queue-hooks-codex` — the queue-hooks
+  variants are separate, independently green entries); seven `contains`
+  clauses + `minItems`/`maxItems: 7` require each exactly once, each with
+  run id and `conclusion` fixed to `success`, pinned to the candidate
+  commit. Greenness is verified pre-launch (§2.2.6 CI-eligibility
+  precondition) — a red/missing run refuses the launch, so a non-green
+  conclusion is unrepresentable in a manifest;
 - `verdict` — `READY` / `NOT-READY` only. `INCOMPLETE` is deliberately
   unrepresentable: an incomplete run writes no manifest at all
   (INCOMPLETE-by-absence, §2.2.1);
@@ -381,11 +420,11 @@ direction.
 
 | # | Deliverable | must_follow | Assignee (proposed) |
 |---|---|---|---|
-| RRG.1 | Manifest schema (lifted from this plan's committed baseline) + `just release-readiness` orchestrator skeleton (suite registry, terminal-state tracking, fail-closed manifest render) + short ADR recording the terminal-state taxonomy, adapter composition model, and concurrency model (§5) | — | Cipher |
+| RRG.1 | Manifest schema (lifted from this plan's committed baseline) + `just release-readiness` orchestrator skeleton (suite registry, terminal-state tracking, fail-closed manifest render, **§2.2.6 CI-eligibility precondition check with the "candidate not CI-eligible" refusal state — AC-11**) + short ADR recording the terminal-state taxonomy, adapter composition model, and concurrency model (§5) | — | Cipher |
 | RRG.2 | Suite adapters: smoke + benchmark families (reuse existing runners; no new harness framework — additive composition only); includes closing §7.8 (send-family execution-identity provenance) so both benchmark families meet AC-4; **builds the §2.3.5 anomaly-check set** (D7 clean-run criteria, sanity band, duration bounds, evidence-row counts) emitting `fail`/`measurement-anomaly` | RRG.1 | Cipher |
 | RRG.3a | atm-core testbed adapter (manifest `testbed_definitions` pinning, AC-5 guard, §2.3.3 tier checks); **owns the tier-row evidence schema + example (§3.3)** and **owns the AC-10/§7.4 AT2/AT3 disposition logic** (fail-closed default, standing-skip encoding) | RRG.1 | Cipher |
 | RRG.3b | Testbed-repo tier definitions: merge testbed PR #2 and add Phase-AV coverage definitions (§7.1). Acceptance: §7.1–§7.3 items resolved (definitions exist for every executed row, AT8 reconciled, detail-population expectations encoded). Fallback if PR #2 stalls (external repo): the gate pins to a Rand-approved testbed commit SHA carrying the reviewed definitions — RRG.3a is not blocked, only the pin value changes | RRG.1; parallel-safe with RRG.3a (see note below) | Cipher (atm-hermes-testbed PR) |
-| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs; **wires the RRG.2 anomaly-check set and duplicate-`suite_id` rejection into §2.3.3 whole-set self-verification** (AC-7). Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
+| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs; **wires the RRG.2 anomaly-check set, duplicate-`suite_id` rejection across both `suites[]` and `ci_runs[]`, and the floors cross-check into §2.3.3 whole-set self-verification** (AC-7). Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
 
 RRG.3a/RRG.3b parallel-safety rationale: disjoint repos (RRG.3b edits only
 atm-hermes-testbed; RRG.3a edits only atm-core). Their sole coupling is the
@@ -523,3 +562,35 @@ owns; no sprint-local reinterpretation.
   both examples VALID, 6 new negative cases (partial ci_runs, non-green
   run, fail_reason-on-pass, skip_reason-on-fail, fail_reason-on-skip,
   ratchet-on-unmet-floor) verified REJECTED.
+- **r5 (2026-08-31, addressing quality-mgr r4 FAIL @ 8f354e2d2, msg
+  01M1DB4VKZH2BVDCR2VR7EC18T; all 10 r3 findings scored FIXED)**:
+  B1r4 `ci_runs` catalog had no §2.5 acceptance criterion → new AC-11
+  (closed seven-id catalog, exactly-once, const-success, §2.2.6
+  precondition), cross-referenced from §3.4/§4; precondition check owned
+  by RRG.1 (§6 cell). B2r4 red-CI runs were an evidentiary blackhole
+  (const-success unrecordable ⇒ INCOMPLETE-by-absence overloaded) —
+  design choice delegated to fenix, option (b) chosen → §2.2 rule 6
+  CI-eligibility precondition: before any suite launches, all seven §3.4
+  repo-suite runs are verified green on the exact candidate commit; a
+  red/missing run refuses the launch with the distinct named state
+  "candidate not CI-eligible" (no suite runs, no evidence produced,
+  nothing discarded — the red run's evidence lives in CI itself);
+  INCOMPLETE-by-absence stays scoped to §2.2.1's definition. I1r4
+  duplicate-`suite_id` scoping ambiguous → exactly-once is now
+  schema-mechanized for BOTH arrays (`contains` + `maxItems`: suites 4,
+  ci_runs 7); self-verifier duplicate rejection retained as
+  defense-in-depth, named for both arrays in §2.3.3/AC-2/AC-7. I2r4
+  floors had no completeness guard → schema: `minItems: 2` + `contains`
+  send + `contains` read-query (family-level); metric-level completeness
+  (every §3.2 tracked metric of a pass-terminal benchmark suite has a
+  floors row) added as a named §2.3.3/AC-7 self-verifier cross-check.
+  I3r4 queue-hooks python/codex combination rule was a clerical trap →
+  resolved MORE mechanically than suggested: split into two catalog ids
+  (`test-queue-hooks-python`, `test-queue-hooks-codex`; 7-id catalog),
+  each independently green — no combined entry, no combination rule to
+  get wrong (§3.4, schema enum). M1r4 §3.3 "one continuous session"
+  unverifiable → cross-referenced to the §2.3.5 wall-clock
+  duration-bounds anomaly check. All schema changes revalidated: both
+  examples VALID (each now carries all seven ci_runs), 5 new negative
+  cases (duplicate suites row, duplicate ci_runs row, 6-of-7 ci_runs,
+  missing read-query floor, empty floors) verified REJECTED.

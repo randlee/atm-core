@@ -49,7 +49,8 @@
     "suites": {
       "type": "array",
       "minItems": 4,
-      "description": "Every catalog suite must be present exactly once (the four contains-clauses under allOf enforce presence; the self-verifier additionally rejects duplicate suite_id values). A manifest missing any catalog suite is schema-invalid — completeness is verifiable from the manifest alone.",
+      "maxItems": 4,
+      "description": "Every catalog suite must be present EXACTLY once, schema-mechanized: the four contains-clauses enforce at-least-once and maxItems 4 forbids any duplicate. The self-verifier re-checks duplicate suite_id rejection as defense-in-depth. A manifest missing any catalog suite is schema-invalid — completeness is verifiable from the manifest alone.",
       "allOf": [
         { "contains": { "properties": { "suite_id": { "const": "smoke-full" } } } },
         { "contains": { "properties": { "suite_id": { "const": "benchmark-send" } } } },
@@ -166,6 +167,12 @@
     },
     "floors": {
       "type": "array",
+      "minItems": 2,
+      "description": "Both benchmark families must carry at least one floor row (contains clauses); metric-level completeness per §3.2 (every tracked metric for a pass-terminal benchmark suite has a floors row) is a §2.3.3 self-verifier cross-check.",
+      "allOf": [
+        { "contains": { "properties": { "family": { "const": "send" } } } },
+        { "contains": { "properties": { "family": { "const": "read-query" } } } }
+      ],
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -191,15 +198,17 @@
     },
     "ci_runs": {
       "type": "array",
-      "minItems": 6,
-      "description": "Closed repo-suite catalog (§3.4). Every catalog entry must be present with conclusion 'success' — the gate records green CI runs pinned to the candidate commit; a missing or non-green repo suite means no manifest is emitted (the gate refuses, INCOMPLETE-by-absence), so a partial ci_runs set is schema-invalid, never silently accepted.",
+      "minItems": 7,
+      "maxItems": 7,
+      "description": "Closed repo-suite catalog (§3.4), each entry present EXACTLY once (seven contains-clauses + maxItems 7; self-verifier re-checks duplicates as defense-in-depth). conclusion is const 'success' because CI-greenness of all seven runs on the candidate commit is a §2.2.6 PRE-launch eligibility check: a red or missing run refuses the launch with the distinct 'candidate not CI-eligible' state before any suite executes — the manifest records the verified-green runs, it is never the reporting channel for a red CI run (that failure surfaces in CI itself, pre-launch).",
       "allOf": [
         { "contains": { "properties": { "suite_id": { "const": "just-ci" } } } },
         { "contains": { "properties": { "suite_id": { "const": "test-graft-python" } } } },
         { "contains": { "properties": { "suite_id": { "const": "test-hermes-graft-bridge" } } } },
         { "contains": { "properties": { "suite_id": { "const": "test-hermes-graft-smoke" } } } },
         { "contains": { "properties": { "suite_id": { "const": "test-admission-capacity" } } } },
-        { "contains": { "properties": { "suite_id": { "const": "test-queue-hooks" } } } }
+        { "contains": { "properties": { "suite_id": { "const": "test-queue-hooks-python" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "test-queue-hooks-codex" } } } }
       ],
       "items": {
         "type": "object",
@@ -213,14 +222,15 @@
               "test-hermes-graft-bridge",
               "test-hermes-graft-smoke",
               "test-admission-capacity",
-              "test-queue-hooks"
+              "test-queue-hooks-python",
+              "test-queue-hooks-codex"
             ],
-            "description": "Closed catalog of §3.4 repo suites. test-queue-hooks covers both the python and codex variants of that CI job."
+            "description": "Closed catalog of §3.4 repo suites. The queue-hooks python and codex variants are separate entries — each must independently be green; there is no combined entry and no combination rule to get wrong."
           },
           "run_id": { "type": "integer", "minimum": 1 },
           "conclusion": {
             "const": "success",
-            "description": "Only green runs are recordable release evidence (§3.4)."
+            "description": "Only green runs are recordable (§2.2.6 CI-eligibility precondition; §3.4)."
           },
           "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
         }
