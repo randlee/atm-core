@@ -120,25 +120,53 @@ just release-readiness <release-tag-candidate>
      manifest never asserts a conclusion that is red at
      release-decision time. Suite evidence on disk is not discarded, but
      per §2.2.2 it is not release evidence without a validated manifest.
+     **Re-launch economics (explicit decision):** an emission-time refusal
+     ends the run; there is no resume path. Re-emitting a manifest after
+     the candidate is green again means re-running the full gate — the
+     accepted cost, because evidence integrity (one continuous gate run
+     per manifest, §2.3.5 duration-bounds anomaly check included) outranks
+     re-run economics. A resume/evidence-caching mechanism is deliberately
+     out of scope; introducing one later is a plan revision, not an
+     implementation choice.
      Ownership: RRG.1 owns the pre-launch check; RRG.4 wires the
      emission-time re-check into §2.3.3 self-verification (AC-11).
    - **Refusal is observable.** Every refusal (pre-launch or
-     emission-time) writes a minimal **refusal record** — a status
-     artifact outside the evidence roots (never under `site/reports/`)
-     naming the candidate (tag + commit SHA), a timestamp, the refusal
-     point (pre-launch | emission), and the exact red/missing run ids.
-     An operator can always distinguish never-launched from
-     refused-N-times, and see why. This record is NOT evidence and is
-     never referenced by a manifest; producing it is an explicit RRG.1
-     acceptance item (§6).
+     emission-time) writes a **refusal record** conforming to the
+     committed schema
+     [release-refusal-record.schema.json](release-refusal-record.schema.json)
+     (worked example:
+     [release-refusal-record.example.json](release-refusal-record.example.json)):
+     candidate (tag + 40-hex commit SHA + branch), `refused_at`
+     timestamp, `refusal_point` (`pre-launch` | `emission`), and the
+     exact red/missing runs (`ci_runs_not_green`, red entries citing the
+     run id, missing entries citing none). An emission-point record MAY
+     additionally list informational `suite_evidence_paths` already
+     produced on disk (never sha256'd, never evidence — the record must
+     not grow into a shadow manifest); a pre-launch record must not.
+     **Path convention:** records are written under
+     `release/refusals/<tag_candidate>/` — outside the evidence roots,
+     never under `site/reports/`. An operator can always distinguish
+     never-launched from refused-N-times, and see why. This record is
+     NOT evidence and is never referenced by a manifest; the writer is
+     built once in RRG.1 (explicit acceptance item, §6) and **reused —
+     not re-implemented — by RRG.4** for the emission point (explicit
+     RRG.4 acceptance item, §6).
    - **Rehearsal carve-out.** For `run_kind: "rehearsal"` (§2.3.4) the
      precondition and the emission-time re-check are **synthesized, not
      fetched**: no GitHub API call is made; the rehearsal harness
      fabricates the seven `ci_runs[]` rows with sentinel run ids
-     (1 through 7) and `commit_sha` = the rehearsal HEAD, `conclusion`
+     (1 through 7) and `commit_sha` set to the actual git HEAD commit SHA
+     of the tree at rehearsal invocation time, `conclusion`
      `success`. This is safe because rehearsal manifests are structurally
      non-evidence (rehearsal root + two-way refusal, §2.3.4), and it keeps
      RRG.4's green-rehearsal acceptance gate independent of live CI state.
+     Accepted residual: beyond `run_kind` and harness discipline, the
+     §2.3.4 two-way direction check (rehearsal output confined to the
+     rehearsal root, release manifests refusing rehearsal-root paths) is
+     the **sole** safeguard distinguishing a sentinel-bearing manifest
+     from release evidence — `run_id` values are not independently
+     validated against GitHub. This is a recorded acceptance, not an
+     oversight.
 
 ### 2.3 First-time-pass enforcement (no clerical QA rounds)
 
@@ -250,17 +278,28 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   manifest is the sole release-evidence pointer (§2.2.1, §2.2.2, §4).
 - AC-3: `READY` requires all suites `pass` or Rand-approved
   `declared-skip`, plus green whole-set self-verification (§2.2.3, §2.3.3);
-  anything else renders `NOT-READY`. A declared-skip of a benchmark family
-  drops that family's `floors[]` requirement (schema-conditional, §4) —
-  the skip never forces a fabricated measurement.
+  anything else renders `NOT-READY`. The `floors[]` requirement for a
+  benchmark family is schema-conditional on that family having **produced
+  a measurement** (§4): required for `pass` or `fail` with a
+  measurement-bearing `fail_reason` (`floor-breach`, `test-failure`,
+  `measurement-anomaly`, `provenance-missing`); NOT required for
+  `declared-skip` or for `fail`/`suite-error` (the suite could not
+  execute, §2.2.5/AC-5) — the schema never forces fabricating a
+  measurement that never ran.
 - AC-4: every executed suite (`pass`/`fail`) carries `host` + in-band
   execution-identity provenance — schema-required, so
   missing provenance ⇒ suite `fail` (`provenance-missing`); a
   `declared-skip` must NOT carry host/identity; never `READY` with a
-  provenance gap (§2.2.4, §4).
+  provenance gap (§2.2.4, §4). For a `fail` row whose suite never ran
+  (`suite-error`), the provenance identifies the **runner process that
+  adjudicated the terminal state** (the orchestrator's own
+  host/identity) — always real, never fabricated, so requiring it for
+  every `fail` does not recreate the fabricate-or-reject class.
 - AC-5: mechanical READY-refusal for absent declared benchmark families
   (suite `fail`/`suite-error`) and unpinned/mismatched testbed tier
-  definitions (§2.2.5).
+  definitions (§2.2.5). A `fail`/`suite-error` benchmark row is
+  schema-valid **without** a `floors[]` row (AC-3/§4): the mandated
+  NOT-READY path never demands a fabricated measurement.
 - AC-6: validate-at-emit in every suite adapter (§2.3.2).
 - AC-7: self-verification covers schema, sha256s, provenance,
   cross-references, reports-index, duplicate-`suite_id` rejection in both
@@ -283,8 +322,10 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   §2.2.6 CI-eligibility precondition: all seven runs verified green
   **before any suite launches** (RRG.1) AND **re-verified at
   manifest-emission time** (RRG.4 self-verification) — a red/missing run
-  at either point refuses with "candidate not CI-eligible" (distinct from
-  INCOMPLETE-by-absence) and writes the §2.2.6 refusal record; never
+  refuses with the point-specific named state ("candidate not CI-eligible"
+  pre-launch; "candidate no longer CI-eligible at emission" at emission —
+  both distinct from INCOMPLETE-by-absence) and writes the §2.2.6 refusal
+  record; never
   `READY`, and never evidence discarded, over a red repo suite — including
   one that went red between launch and emission (§2.2.6, §3.4, §4).
   A refused launch is AC-1's sole carve-out.
@@ -303,7 +344,9 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   become release evidence only when a validated release manifest references
   them.
 - Pass criteria: per-lane pass with no suppressed failures; analyze_logs
-  clean; acceptance per §2.5.
+  clean — both enforced at generation time by the RRG.2 smoke adapter
+  (validate-at-emit, AC-6), same wiring as the other three suites;
+  acceptance per §2.5.
 
 ### 3.2 Benchmarks — full
 
@@ -385,6 +428,11 @@ artifact — [release-evidence-manifest.schema.json](release-evidence-manifest.s
 (a `READY` run with a Rand-approved declared-skip of a benchmark family —
 no floors row for the skipped family, demonstrating the conditional
 floors requirement).
+The §2.2.6 refusal record has its own committed schema and worked
+example — [release-refusal-record.schema.json](release-refusal-record.schema.json)
+and [release-refusal-record.example.json](release-refusal-record.example.json)
+— so RRG.1 and RRG.4 implement one reviewed shape rather than each
+interpreting prose.
 RRG.1 lifts these into their final in-repo home next to the validator; the
 schema content in this plan is the reviewed baseline.
 
@@ -417,14 +465,21 @@ Summary of the committed schema (normative source is the schema file):
   **Convention (schema-enforced): `ratchet_proposal` may be present only
   when `met` is true** — the harness never proposes ratcheting from a
   breached measurement. Family-level completeness is schema-mechanized
-  **conditionally on execution** (root-level `allOf`: a family's suite
-  reaching `pass`/`fail` requires at least one floors row for that
-  family; a Rand-approved `declared-skip` of a benchmark family requires
-  none — the schema never forces fabricating a measurement that never
-  ran, per §2.1/AC-3); metric-level completeness (every §3.2 tracked
+  **conditionally on a produced measurement** (root-level `allOf`: a
+  family's suite reaching `pass`, or `fail` with a measurement-bearing
+  `fail_reason` — `floor-breach`, `test-failure`, `measurement-anomaly`,
+  `provenance-missing` — requires at least one floors row for that
+  family; a Rand-approved `declared-skip` requires none, and neither
+  does `fail`/`suite-error` (the AC-5 absent-family path executed
+  nothing) — the schema never forces fabricating a measurement that
+  never ran, per §2.1/AC-3/AC-5. The measurement-bearing set is a closed
+  whitelist: a future fail_reason defaults to NOT forcing a floors row.
+  Documented probe case: `fail`/`suite-error` with no floors row for
+  that family **validates**; `fail`/`floor-breach` without one is
+  rejected); metric-level completeness (every §3.2 tracked
   metric of a pass-terminal benchmark suite has a floors row) and the
-  forbid direction (no floors row for a non-executed family) are named
-  §2.3.3 self-verifier cross-checks;
+  forbid direction (no floors row for a family that produced no
+  measurement) are named §2.3.3 self-verifier cross-checks;
 - `ci_runs[]` — **closed repo-suite catalog, exactly-once
   schema-mechanized** (§3.4): `suite_id` is the seven-id enum (`just-ci`,
   `test-graft-python`, `test-hermes-graft-bridge`,
@@ -472,15 +527,36 @@ direction.
 - No mid-run team messaging is required; the run is attended only by its
   runner. Findings from a failed gate route through fenix triage as usual.
 
+### 5.1 Release-pipeline placement (trigger and gate point)
+
+- **Trigger (manual, once per candidate):** after the release-candidate
+  tag (`release-candidate-vX.Y.Z`, cut from `develop` via
+  `release-candidate.yml` per the publishing skill's release-state
+  strategy) exists, the operator (§8 Q1) launches
+  `just release-readiness <tag-candidate>` on the evidence host(s).
+  Nothing triggers the gate automatically; the §2.2.6 CI-eligibility
+  precondition is the gate's own first act, not a separate manual step.
+- **Gate point (publisher readiness preflight):** the gate's output — a
+  committed, validated `run_kind: "release"` manifest with
+  `verdict: "READY"` whose `candidate.commit_sha` equals the
+  release-candidate tag commit — becomes a **required input of the
+  publisher's readiness preflight**, i.e. it blocks the `main` merge,
+  before any tag/publish action. No READY manifest for the exact
+  candidate commit ⇒ readiness preflight fails; the final preflight on
+  `main` (exact-commit re-check, candidate-tag ancestry) is unchanged
+  and does not re-run the gate. Wiring the manifest check into the
+  preflight checklist is an RRG.4 documentation deliverable; the
+  publishing skill's preflight remains the enforcement location.
+
 ## 6. Implementation sprints (post-approval, definition→code)
 
 | # | Deliverable | must_follow | Assignee (proposed) |
 |---|---|---|---|
-| RRG.1 | Manifest schema (lifted from this plan's committed baseline) + `just release-readiness` orchestrator skeleton (suite registry, terminal-state tracking, fail-closed manifest render, **§2.2.6 CI-eligibility precondition check with the "candidate not CI-eligible" refusal state and the non-evidence refusal record (candidate, timestamp, refusal point, red/missing run ids) — both explicit acceptance items, AC-11**) + short ADR recording the terminal-state taxonomy, adapter composition model, concurrency model (§5), **and the §2.2.6 CI-eligibility/refusal-state semantics (snapshot-vs-emission verification, refusal observability, INCOMPLETE-vs-refusal boundary)** | — | Cipher |
+| RRG.1 | Manifest schema (lifted from this plan's committed baseline) + `just release-readiness` orchestrator skeleton (suite registry, terminal-state tracking, fail-closed manifest render, **§2.2.6 CI-eligibility precondition check with the "candidate not CI-eligible" refusal state and the refusal-record writer implementing the committed [release-refusal-record.schema.json](release-refusal-record.schema.json) (path convention `release/refusals/<tag_candidate>/`; built once here, reused by RRG.4) — both explicit acceptance items, AC-11**) + short ADR recording the terminal-state taxonomy, adapter composition model, concurrency model (§5), **and the §2.2.6 CI-eligibility/refusal-state semantics (snapshot-vs-emission verification, refusal observability, INCOMPLETE-vs-refusal boundary)** | — | Cipher |
 | RRG.2 | Suite adapters: smoke + benchmark families (reuse existing runners; no new harness framework — additive composition only); includes closing §7.8 (send-family execution-identity provenance) so both benchmark families meet AC-4; **builds the §2.3.5 anomaly-check set** (D7 clean-run criteria, sanity band, duration bounds, evidence-row counts) emitting `fail`/`measurement-anomaly` | RRG.1 | Cipher |
 | RRG.3a | atm-core testbed adapter (manifest `testbed_definitions` pinning, AC-5 guard, §2.3.3 tier checks); **owns the tier-row evidence schema + example (§3.3)** and **owns the AC-10/§7.4 AT2/AT3 disposition logic** (fail-closed default, standing-skip encoding) | RRG.1 | Cipher |
 | RRG.3b | Testbed-repo tier definitions: merge testbed PR #2 and add Phase-AV coverage definitions (§7.1). Acceptance: §7.1–§7.3 items resolved (definitions exist for every executed row, AT8 reconciled, detail-population expectations encoded). Fallback if PR #2 stalls (external repo): the gate pins to a Rand-approved testbed commit SHA carrying the reviewed definitions — RRG.3a is not blocked, only the pin value changes | RRG.1; parallel-safe with RRG.3a (see note below) | Cipher (atm-hermes-testbed PR) |
-| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs; **wires the RRG.2 anomaly-check set, duplicate-`suite_id` rejection across both `suites[]` and `ci_runs[]`, the floors cross-check (both directions), and the §2.2.6 emission-time CI re-verification into §2.3.3 whole-set self-verification** (AC-7, AC-11). Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8, using the §2.2 rule 6 rehearsal carve-out — no live GH API dependency) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
+| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs; **wires the RRG.2 anomaly-check set, duplicate-`suite_id` rejection across both `suites[]` and `ci_runs[]`, the floors cross-check (both directions), and the §2.2.6 emission-time CI re-verification into §2.3.3 whole-set self-verification** (AC-7, AC-11). **Explicit acceptance item: an emission-time refusal invokes the RRG.1 refusal-record writer with `refusal_point: "emission"` — reused, never re-implemented — so the AC-11 emission path cannot silently skip the record.** Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8, using the §2.2 rule 6 rehearsal carve-out — no live GH API dependency) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
 
 RRG.3a/RRG.3b parallel-safety rationale: disjoint repos (RRG.3b edits only
 atm-hermes-testbed; RRG.3a edits only atm-core). Their sole coupling is the
@@ -687,3 +763,54 @@ owns; no sprint-local reinterpretation.
   (send pass without send row; read-query pass without read-query row),
   duplicate rows and 6-of-7 ci_runs still REJECTED; skip-without-floors
   VALID only when the family's suite is declared-skip.
+- **r7 (2026-08-31, addressing quality-mgr r6 FAIL @ 4a6fcb17b, msg
+  01M1DCMPRX5CDQYR98ABDFDFYX; all 6 r5 findings scored FIXED, no
+  regressions; 1B/4I/4M)**: B1r6 `fail`/`suite-error` still forced a
+  fabricated floors row (second instance of the fabricate-or-reject
+  class, probe-confirmed: AC-5's own mandated NOT-READY scenario was
+  schema-unsatisfiable without inventing `observed_p50`) → floors
+  conditionals narrowed to a **produced measurement**: the root `allOf`
+  `if` now fires on `pass` OR `fail` with a measurement-bearing
+  `fail_reason` (`floor-breach`, `test-failure`, `measurement-anomaly`,
+  `provenance-missing` — a closed whitelist, so future fail reasons
+  default to NOT forcing a row); `declared-skip` and `fail`/`suite-error`
+  require none; AC-3/AC-5/§4 updated; documented probe case added
+  (suite-error without floors row validates). Fail-as-single-bucket
+  sweep run over the remaining schema conditionals per quality-mgr's
+  trajectory note: the `pass`/`fail` ⇒ host+execution_identity
+  conditional is intentionally kept (AC-4 note added: for `suite-error`
+  the provenance is the adjudicating runner's own identity — real, not
+  fabricated). I1r6 refusal-state naming contradiction → point-specific
+  names applied consistently ("candidate not CI-eligible" pre-launch,
+  "candidate no longer CI-eligible at emission") at §2.2 rule 6, AC-11,
+  and the schema ci_runs description. I2r6 refusal record had no
+  committed shape → new committed
+  release-refusal-record.schema.json + release-refusal-record.example.json
+  (candidate, refusal_point, refused_at, ci_runs_not_green with
+  red-requires-run_id / missing-forbids-run_id conditionals) and the
+  path convention `release/refusals/<tag_candidate>/`; §2.2 rule 6, §4,
+  and RRG.1 reference the schema instead of prose field lists. I3r6
+  emission path could skip the record → explicit RRG.4 acceptance item:
+  reuse the RRG.1 writer with `refusal_point: "emission"`, never
+  re-implement. I4r6 re-launch economics silent → explicit decision
+  recorded in §2.2 rule 6: no resume path, full re-run accepted
+  (evidence integrity outranks re-run cost); resume/caching is
+  deliberately out of scope and would be a plan revision. M1r6
+  "rehearsal HEAD" → reworded to the actual git HEAD commit SHA at
+  rehearsal invocation time. M2r6 → §3.1 pass criteria explicitly
+  RRG.2-adapter-enforced (validate-at-emit, AC-6). M3r6 → optional
+  informational `suite_evidence_paths` on emission-point refusal records
+  (schema-limited: never on pre-launch records, never sha256'd — the
+  record cannot grow into a shadow manifest). M4r6 → recorded acceptance
+  in §2.2 rule 6: the §2.3.4 two-way direction check is the sole
+  rehearsal/release safeguard; sentinel run_ids are not independently
+  validated. Additionally (Rand question at r7): new §5.1 fixes the
+  gate's release-pipeline placement — manual launch after the
+  release-candidate tag exists; the validated READY manifest for the
+  exact candidate commit is a required input of the publisher's
+  readiness preflight (blocks the `main` merge); final preflight on
+  `main` unchanged. Schema revalidated: all THREE manifest examples +
+  refusal example VALID; new probes — suite-error-without-floors VALID,
+  floor-breach-without-floors REJECTED, pre-launch record with
+  suite_evidence_paths REJECTED, missing-state record with run_id
+  REJECTED; all prior negative cases still REJECTED.

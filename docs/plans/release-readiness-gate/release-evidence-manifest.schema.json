@@ -195,7 +195,7 @@
       "type": "array",
       "minItems": 7,
       "maxItems": 7,
-      "description": "Closed repo-suite catalog (§3.4), each entry present EXACTLY once (seven contains-clauses + maxItems 7; self-verifier re-checks duplicates as defense-in-depth). conclusion is const 'success' because CI-greenness of all seven runs on the candidate commit is a §2.2.6 PRE-launch eligibility check, RE-VERIFIED at manifest-emission time (a conclusion that went red or disappeared in the window refuses the manifest with a refusal record — no snapshot-stale READY): a red or missing run refuses launch/emission with the 'candidate not CI-eligible' state — the manifest records verified-green runs, it is never the reporting channel for a red CI run (that failure surfaces in CI itself).",
+      "description": "Closed repo-suite catalog (§3.4), each entry present EXACTLY once (seven contains-clauses + maxItems 7; self-verifier re-checks duplicates as defense-in-depth). conclusion is const 'success' because CI-greenness of all seven runs on the candidate commit is a §2.2.6 PRE-launch eligibility check, RE-VERIFIED at manifest-emission time (a conclusion that went red or disappeared in the window refuses the manifest with a refusal record — no snapshot-stale READY): a red or missing run refuses with the point-specific named state — 'candidate not CI-eligible' at pre-launch, 'candidate no longer CI-eligible at emission' at emission — the manifest records verified-green runs, it is never the reporting channel for a red CI run (that failure surfaces in CI itself).",
       "allOf": [
         { "contains": { "properties": { "suite_id": { "const": "just-ci" } } } },
         { "contains": { "properties": { "suite_id": { "const": "test-graft-python" } } } },
@@ -252,11 +252,23 @@
         "properties": {
           "suites": {
             "contains": {
-              "properties": {
-                "suite_id": { "const": "benchmark-send" },
-                "terminal_state": { "enum": ["pass", "fail"] }
-              },
-              "required": ["suite_id", "terminal_state"]
+              "anyOf": [
+                {
+                  "properties": {
+                    "suite_id": { "const": "benchmark-send" },
+                    "terminal_state": { "const": "pass" }
+                  },
+                  "required": ["suite_id", "terminal_state"]
+                },
+                {
+                  "properties": {
+                    "suite_id": { "const": "benchmark-send" },
+                    "terminal_state": { "const": "fail" },
+                    "fail_reason": { "enum": ["floor-breach", "test-failure", "measurement-anomaly", "provenance-missing"] }
+                  },
+                  "required": ["suite_id", "terminal_state", "fail_reason"]
+                }
+              ]
             }
           }
         },
@@ -271,7 +283,7 @@
             }
           }
         },
-        "description": "An executed (pass/fail) benchmark-send suite requires at least one send floors row; a declared-skip does not (§2.1/AC-3 — never fabricate a measurement that never ran)."
+        "description": "A benchmark-send suite that produced a measurement (pass, or fail with a measurement-bearing fail_reason: floor-breach/test-failure/measurement-anomaly/provenance-missing) requires at least one send floors row. A declared-skip requires none, and neither does fail/suite-error — the suite could not execute at all (§2.2.5/AC-5), so requiring a floors row would force fabricating observed_p50 for a measurement that never ran (§2.1/AC-3). The measurement-bearing set is a closed whitelist: a future fail_reason defaults to NOT forcing a floors row; the §2.3.3 self-verifier's metric-level cross-check remains the completeness backstop."
       }
     },
     {
@@ -279,11 +291,23 @@
         "properties": {
           "suites": {
             "contains": {
-              "properties": {
-                "suite_id": { "const": "benchmark-read-query" },
-                "terminal_state": { "enum": ["pass", "fail"] }
-              },
-              "required": ["suite_id", "terminal_state"]
+              "anyOf": [
+                {
+                  "properties": {
+                    "suite_id": { "const": "benchmark-read-query" },
+                    "terminal_state": { "const": "pass" }
+                  },
+                  "required": ["suite_id", "terminal_state"]
+                },
+                {
+                  "properties": {
+                    "suite_id": { "const": "benchmark-read-query" },
+                    "terminal_state": { "const": "fail" },
+                    "fail_reason": { "enum": ["floor-breach", "test-failure", "measurement-anomaly", "provenance-missing"] }
+                  },
+                  "required": ["suite_id", "terminal_state", "fail_reason"]
+                }
+              ]
             }
           }
         },
@@ -298,7 +322,7 @@
             }
           }
         },
-        "description": "An executed (pass/fail) benchmark-read-query suite requires at least one read-query floors row; a declared-skip does not (§2.1/AC-3)."
+        "description": "A benchmark-read-query suite that produced a measurement (pass, or fail with a measurement-bearing fail_reason) requires at least one read-query floors row; declared-skip and fail/suite-error require none (§2.1/AC-3/AC-5 — same rule as the send-family conditional above)."
       }
     }
   ]
