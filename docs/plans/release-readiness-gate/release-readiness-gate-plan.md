@@ -56,21 +56,26 @@ just release-readiness <release-tag-candidate>
 ### 2.2 Execution-to-completeness rules
 
 1. The gate runs all suites to a terminal state (`pass` / `fail` /
-   `declared-skip`) before rendering any verdict. A crash or abandonment of
-   any suite makes the whole gate `INCOMPLETE`, which is a failure state.
-   The terminal-state taxonomy is exactly the manifest enum: `fail` means
+   `declared-skip`) before rendering any verdict. The suite terminal-state
+   taxonomy is exactly the manifest's `terminal_state` enum: `fail` means
    the suite ran and either produced a failing/invalid result or was
-   machine-invalidated (rule 4); `INCOMPLETE` is reserved for a suite that
-   never reached a terminal state (crash, abandonment, runner death).
+   machine-invalidated (rule 4). **INCOMPLETE-by-absence**: a run where any
+   suite never reaches a terminal state (crash, abandonment, runner death)
+   writes NO manifest at all — the gate outcome `INCOMPLETE` is signaled by
+   the absence of a validated manifest for the launch, never by a manifest
+   value. `INCOMPLETE` is therefore deliberately unrepresentable in the
+   schema (its `verdict` enum is `READY`/`NOT-READY` only): a manifest
+   claiming completeness for an incomplete run cannot exist. INCOMPLETE is
+   a failure state.
 2. Evidence is written incrementally per suite, but the **release evidence
    manifest** (§4) is written only after all suites reach a terminal state.
    The manifest is the **sole release-evidence pointer**: an artifact —
    including per-suite artifacts committed incrementally by existing suite
    conventions (§3.1 smoke) — is release evidence only when referenced,
    with its sha256, by a validated `run_kind: "release"` manifest. Artifacts
-   left behind by an `INCOMPLETE` or failed run remain committed history but
-   are inert: no manifest references them, so they are never release
-   evidence.
+   left behind by an incomplete run (no manifest — rule 1) or a failed run
+   remain committed history but are inert as release evidence unless a
+   validated manifest references them.
 3. The gate verdict is `READY` only when every suite passes (or is
    `declared-skip` with a Rand-approved standing reason) **and** the
    evidence manifest validates against its committed schema (§4).
@@ -120,8 +125,11 @@ The mechanism that makes §1's first-time-pass requirement real:
    carry `run_kind: "rehearsal"` and all rehearsal output is written under a
    dedicated rehearsal root (`site/reports/release-readiness/rehearsal/`)
    that the reports index and release tooling treat as non-evidence; the
-   self-verifier refuses a `release` manifest that references any path under
-   the rehearsal root, and vice versa. A green rehearsal is a hard
+   self-verifier owns *both* refusal directions — it refuses a `release`
+   manifest that references any path under the rehearsal root, and a
+   `rehearsal` manifest that references any path outside it
+   (`reports-index --check` re-checks only the release→rehearsal-root
+   direction as defense-in-depth; see §4). A green rehearsal is a hard
    acceptance criterion of the final implementation sprint (§6, RRG.4) —
    the gate is not "implemented" without one — and is also the pre-launch
    check before the real release run. (Rehearsal runs no tests, so it
@@ -129,16 +137,26 @@ The mechanism that makes §1's first-time-pass requirement real:
 5. **Single QA round by contract.** quality-mgr reviews a real gate run
    once. That review consists of (i) re-running the §2.3.3 machine checks —
    which the gate already ran, so they are green by construction — and
-   (ii) product-result judgment **only**: is a floor breach / test failure
-   real, and are the measured results plausible as product behavior.
-   Floor honesty itself is mechanized: the harness computes the manifest
-   `floors` section (observed p50 vs committed baselines, ratchet
-   proposals) — QA judges the product result, not the arithmetic. There is
-   **no third failure category**: a product-result finding renders the run
-   `NOT-READY` as a product failure (Rand's accepted exception); any other
-   reviewer finding is by definition a harness defect — the fix goes into
-   the validator/self-verifier (never "redo the form"), so that class can
-   never recur.
+   (ii) product-result review **only**: is a reported floor breach / test
+   failure real. Floor honesty itself is mechanized: the harness computes
+   the manifest `floors` section (observed p50 vs committed baselines,
+   ratchet proposals) — QA reviews the product result, not the arithmetic.
+   Result plausibility is **not reviewer discretion**: it is the enumerated
+   anomaly-check set the harness itself runs as part of §2.3.3 (per-family
+   D7 clean-run criteria; observed p50 within the family's historical
+   sanity band; wall-clock duration within declared bounds; evidence-row
+   counts matching the declared workload). Any anomaly-check hit is emitted
+   by the harness as suite `fail` with `fail_reason:
+   "measurement-anomaly"`, which is treated as a harness/environment defect:
+   fix the check or the environment and re-run — it is never a manual
+   override of a computed `READY`, and QA may not fail a `READY` manifest
+   on unenumerated plausibility grounds (a missing anomaly check is itself
+   a harness defect: add the check, don't hand-adjudicate). There is
+   **no third failure category**: a confirmed floor breach / test failure
+   renders the run `NOT-READY` as a product failure (Rand's accepted
+   exception); any other reviewer finding is by definition a harness
+   defect — the fix goes into the validator/self-verifier (never "redo the
+   form"), so that class can never recur.
 
 ### 2.4 Hosts and isolation
 
@@ -160,11 +178,18 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
 - AC-1: one launch (`just release-readiness <tag-candidate>`) drives every
   declared suite to a terminal state without operator input (§2.1, §2.2.1).
 - AC-2: manifest written only after all suites terminal; validates against
-  the committed schema; is the sole release-evidence pointer (§2.2.2, §4).
+  the committed schema (closed suite catalog present exactly once, verdict
+  `READY`/`NOT-READY` only — an incomplete run writes no manifest,
+  INCOMPLETE-by-absence); is the sole release-evidence pointer (§2.2.1,
+  §2.2.2, §4).
 - AC-3: `READY` requires all suites `pass` or Rand-approved
-  `declared-skip`, plus green whole-set self-verification (§2.2.3, §2.3.3).
-- AC-4: missing execution-identity provenance ⇒ suite `fail`
-  (`provenance-missing`); never `READY` (§2.2.4).
+  `declared-skip`, plus green whole-set self-verification (§2.2.3, §2.3.3);
+  anything else renders `NOT-READY`.
+- AC-4: every executed suite (`pass`/`fail`) carries `host` + in-band
+  execution-identity provenance — schema-required, so
+  missing provenance ⇒ suite `fail` (`provenance-missing`); a
+  `declared-skip` must NOT carry host/identity; never `READY` with a
+  provenance gap (§2.2.4, §4).
 - AC-5: mechanical READY-refusal for absent declared benchmark families and
   unpinned/mismatched testbed tier definitions (§2.2.5).
 - AC-6: validate-at-emit in every suite adapter (§2.3.2).
@@ -238,8 +263,11 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
 
 One committed JSON manifest per gate run. The schema is a committed plan
 artifact — [release-evidence-manifest.schema.json](release-evidence-manifest.schema.json)
-(JSON Schema 2020-12), with a worked example at
-[release-evidence-manifest.example.json](release-evidence-manifest.example.json).
+(JSON Schema 2020-12), with two worked examples:
+[release-evidence-manifest.example.json](release-evidence-manifest.example.json)
+(a `NOT-READY` run with a floor-breach fail and a declared-skip) and
+[release-evidence-manifest.example-ready.json](release-evidence-manifest.example-ready.json)
+(a fully green `READY` run — all four suites `pass`, both floors met).
 RRG.1 lifts these into their final in-repo home next to the validator; the
 schema content in this plan is the reviewed baseline.
 
@@ -248,23 +276,45 @@ Summary of the committed schema (normative source is the schema file):
 - `schema_version` (integer) — generation-time schema revision pin;
 - `run_kind` — `release` | `rehearsal` (§2.3.4 separation);
 - `candidate` — tag-candidate, 40-hex commit SHA, branch;
-- `testbed_definitions` — pinned testbed repo + commit SHA (AC-5);
-- `suites[]` — suite id, entrypoint, terminal state
-  (`pass`/`fail`+`fail_reason`/`declared-skip`+`skip_reason`), evidence
-  paths each with sha256, start/end timestamps, host, and the
-  execution-identity provenance object;
-- `floors[]` — family, metric, floor vs observed p50, met flag, optional
-  ratchet proposal (harness-computed, §2.3.5);
+- `testbed_definitions` — pinned testbed repo + commit SHA (AC-5;
+  top-level **required**);
+- `suites[]` — **closed catalog**: `suite_id` is the enum
+  `smoke-full` / `benchmark-send` / `benchmark-read-query` /
+  `testbed-integration`, and four `contains` clauses require every catalog
+  suite to be present (duplicate `suite_id` rejection is a §2.3.3
+  self-verifier check). Per suite: entrypoint, terminal state
+  (`pass`/`fail`/`declared-skip`), evidence paths each with sha256, and
+  start/end timestamps. Conditionals: `pass`/`fail` **require** `host` +
+  the execution-identity provenance object (AC-4); `fail` **requires**
+  `fail_reason` from the closed taxonomy (`provenance-missing`,
+  `tier-detail-missing`, `tier-definitions-mismatch`, `sentinel-mismatch`,
+  `floor-breach`, `test-failure`, `measurement-anomaly`, `suite-error` —
+  a new failure class is a schema revision, never free text);
+  `declared-skip` **requires** `skip_reason` and **forbids**
+  `host`/`execution_identity` (nothing executed — identity must not be
+  fabricated);
+- `floors[]` — family (`send` | `read-query`), metric, floor vs observed
+  p50, met flag, optional ratchet proposal (harness-computed, §2.3.5);
 - `ci_runs[]` — run ids + conclusions for the repo suites (§3.4) pinned to
   the candidate commit;
-- `verdict` — `READY` / `NOT-READY` / `INCOMPLETE`;
+- `verdict` — `READY` / `NOT-READY` only. `INCOMPLETE` is deliberately
+  unrepresentable: an incomplete run writes no manifest at all
+  (INCOMPLETE-by-absence, §2.2.1);
 - `self_verification` — must record `validated: true` + validator version.
 
 Manifest and all referenced artifacts are committed and pushed
 (discarded/unpublished attempts cannot be release evidence — same rule as
-benchmark D7). `just reports-index --check` extends to validate the
-manifest's referenced paths exist and that no `release` manifest references
-the rehearsal root.
+benchmark D7).
+
+Rehearsal/release separation ownership (two mechanisms, explicit
+direction split): the §2.3.4 **self-verifier** owns *both* directions —
+it refuses a `release` manifest referencing any path under the rehearsal
+root and a `rehearsal` manifest referencing any path outside it — and is
+the acceptance mechanism for AC-8. `just reports-index --check`
+additionally validates that the manifest's referenced paths exist and
+re-checks the release→rehearsal-root direction as defense-in-depth on
+every index run; it is a redundant backstop, not the owner of either
+direction.
 
 ## 5. Streamlined coordination (who runs what)
 
@@ -288,7 +338,7 @@ the rehearsal root.
 | RRG.1 | Manifest schema (lifted from this plan's committed baseline) + `just release-readiness` orchestrator skeleton (suite registry, terminal-state tracking, fail-closed manifest render) + short ADR recording the terminal-state taxonomy, adapter composition model, and concurrency model (§5) | — | Cipher |
 | RRG.2 | Suite adapters: smoke + benchmark families (reuse existing runners; no new harness framework — additive composition only); includes closing §7.8 (send-family execution-identity provenance) so both benchmark families meet AC-4 | RRG.1 | Cipher |
 | RRG.3a | atm-core testbed adapter (manifest `testbed_definitions` pinning, AC-5 guard, §2.3.3 tier checks) | RRG.1 | Cipher |
-| RRG.3b | Testbed-repo tier definitions: merge testbed PR #2 and add Phase-AV coverage definitions (§7.1). Acceptance: §7.1–§7.3 items resolved (definitions exist for every executed row, AT8 reconciled, detail-population expectations encoded). Fallback if PR #2 stalls (external repo): the gate pins to a Rand-approved testbed commit SHA carrying the reviewed definitions — RRG.3a is not blocked, only the pin value changes | RRG.1 (parallel-safe with RRG.3a) | Cipher (atm-hermes-testbed PR) |
+| RRG.3b | Testbed-repo tier definitions: merge testbed PR #2 and add Phase-AV coverage definitions (§7.1). Acceptance: §7.1–§7.3 items resolved (definitions exist for every executed row, AT8 reconciled, detail-population expectations encoded). Fallback if PR #2 stalls (external repo): the gate pins to a Rand-approved testbed commit SHA carrying the reviewed definitions — RRG.3a is not blocked, only the pin value changes | RRG.1. Parallel-safe with RRG.3a: disjoint repos (RRG.3b edits only atm-hermes-testbed; RRG.3a edits only atm-core) — their sole coupling is the pin value RRG.3a's manifest records, fixed at RRG.3b merge (or Rand-approved fallback SHA) | Cipher (atm-hermes-testbed PR) |
 | RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs. Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
 
 All sprints are ordinary dev worktrees off develop with quality-mgr QA;
@@ -369,3 +419,29 @@ owns; no sprint-local reinterpretation.
   order-vs-concurrency tension → §5: completeness is the guarantee, order
   carries no correctness weight. Also added §7.8 (send-family provenance
   gap, lane-3 minor (b)) discovered in the same window.
+- **r2 (2026-08-31, quality-mgr verdict FAIL @ 65998f2d1, msg
+  01M1D9D0FWS1FC59WQBKE4HC55)**: 14/16 r1 findings confirmed fixed; 4
+  Blocking, 3 Important, 2 Minor new/residual. B1r2 §2.3.5 "plausibility"
+  was reviewer discretion by another name → rewritten: plausibility is the
+  enumerated anomaly-check set the harness runs itself (D7 clean-run
+  criteria, historical sanity band, duration bounds, evidence-row counts);
+  a hit emits suite `fail`/`measurement-anomaly`; QA may not fail a `READY`
+  manifest on unenumerated grounds. B2r2 `INCOMPLETE` verdict unreachable
+  (manifest only written after all suites terminal) → INCOMPLETE-by-absence:
+  dropped from the verdict enum (`READY`/`NOT-READY` only); an incomplete
+  run writes no manifest (§2.2.1, §2.2.2, §4). B3r2 `testbed_definitions`
+  not in schema `required[]` → now top-level required. B4r2 no suite
+  catalog (free-text suite_id, minItems:1) → closed `suite_id` enum + four
+  `contains` clauses requiring every catalog suite; duplicates rejected by
+  self-verifier. I1r2 free-text `fail_reason` → closed 8-value enum (new
+  class = schema revision). I2r2 example fabricated interactive-account
+  identity on a declared-skip → schema conditionals: `pass`/`fail` require
+  host+identity, `declared-skip` forbids them; example rewritten. I3r2
+  example never demonstrated benchmark-send or READY →
+  example.json (NOT-READY, all four suites incl. benchmark-send) +
+  new example-ready.json (READY). M1r2 §4 vs §2.3.4
+  rehearsal-direction ambiguity → explicit ownership: self-verifier owns
+  both refusal directions; reports-index --check is release→rehearsal-root
+  defense-in-depth only. M2r2 RRG.3b parallel-safe annotation → §6 cell now
+  states disjoint repos + sole coupling (pin value). §2.5 AC-2/AC-3/AC-4
+  reconciled with the schema changes.

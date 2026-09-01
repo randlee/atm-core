@@ -17,12 +17,12 @@
       "terminal_state": "pass",
       "evidence": [
         {
-          "path": "site/reports/smoke/macos/m5-atmbench/2026-09-15-run.json",
+          "path": "site/reports/smoke/macos/m5-atmbench/2026-09-16-run.json",
           "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         }
       ],
-      "started_at": "2026-09-15T18:00:00Z",
-      "ended_at": "2026-09-15T18:42:11Z",
+      "started_at": "2026-09-16T18:00:00Z",
+      "ended_at": "2026-09-16T18:41:02Z",
       "host": "rand-m5.local",
       "execution_identity": {
         "execution_account": "m5-atmbench",
@@ -37,12 +37,12 @@
       "terminal_state": "pass",
       "evidence": [
         {
-          "path": "site/reports/send-message-benchmark/2026-09-15-campaign.json",
+          "path": "site/reports/send-message-benchmark/2026-09-16-campaign.json",
           "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
         }
       ],
-      "started_at": "2026-09-15T18:45:00Z",
-      "ended_at": "2026-09-15T19:20:33Z",
+      "started_at": "2026-09-16T18:45:00Z",
+      "ended_at": "2026-09-16T19:19:12Z",
       "host": "rand-m5.local",
       "execution_identity": {
         "execution_account": "m5-atmbench",
@@ -54,16 +54,15 @@
     {
       "suite_id": "benchmark-read-query",
       "entrypoint": "just benchmark-read",
-      "terminal_state": "fail",
-      "fail_reason": "floor-breach",
+      "terminal_state": "pass",
       "evidence": [
         {
-          "path": "site/reports/read-query-benchmark/2026-09-15-campaign.json",
+          "path": "site/reports/read-query-benchmark/2026-09-16-campaign.json",
           "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         }
       ],
-      "started_at": "2026-09-15T19:25:00Z",
-      "ended_at": "2026-09-15T20:15:47Z",
+      "started_at": "2026-09-16T19:25:00Z",
+      "ended_at": "2026-09-16T20:12:41Z",
       "host": "rand-m5.local",
       "execution_identity": {
         "execution_account": "m5-atmbench",
@@ -75,11 +74,22 @@
     {
       "suite_id": "testbed-integration",
       "entrypoint": "testbed runner, full tier set AT0-AT8",
-      "terminal_state": "declared-skip",
-      "skip_reason": "EXAMPLE ONLY — illustrates the declared-skip shape: no host or execution_identity may be recorded because nothing executed; real skips require a Rand-approved standing reason",
-      "evidence": [],
-      "started_at": "2026-09-15T19:00:00Z",
-      "ended_at": "2026-09-15T19:00:00Z"
+      "terminal_state": "pass",
+      "evidence": [
+        {
+          "path": "site/reports/testbed-integration/2026-09-16-tier-results.json",
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ],
+      "started_at": "2026-09-16T19:00:00Z",
+      "ended_at": "2026-09-16T21:30:19Z",
+      "host": "colima-host",
+      "execution_identity": {
+        "execution_account": "testbed-runner",
+        "uid": 502,
+        "home": "/home/testbed-runner",
+        "hostname": "colima-host"
+      }
     }
   ],
   "floors": [
@@ -87,28 +97,29 @@
       "family": "send",
       "metric": "send_p50_msgs_per_sec",
       "floor": 17000.0,
-      "observed_p50": 17350.0,
+      "observed_p50": 17420.0,
       "met": true,
-      "ratchet_proposal": 16482.5
+      "ratchet_proposal": 16549.0
     },
     {
       "family": "read-query",
       "metric": "read_fanout_p50_msgs_per_sec",
       "floor": 12000.0,
-      "observed_p50": 11400.0,
-      "met": false
+      "observed_p50": 13100.0,
+      "met": true,
+      "ratchet_proposal": 12445.0
     }
   ],
   "ci_runs": [
     {
       "suite_id": "just-ci",
-      "run_id": 123456789,
+      "run_id": 123456790,
       "conclusion": "success",
       "commit_sha": "0000000000000000000000000000000000000000"
     }
   ],
-  "verdict": "NOT-READY",
-  "generated_at": "2026-09-15T21:00:00Z",
+  "verdict": "READY",
+  "generated_at": "2026-09-16T22:00:00Z",
   "self_verification": {
     "validated": true,
     "validator_version": "example-0"

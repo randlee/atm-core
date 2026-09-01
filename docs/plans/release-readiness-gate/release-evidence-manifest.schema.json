@@ -8,6 +8,7 @@
     "schema_version",
     "run_kind",
     "candidate",
+    "testbed_definitions",
     "suites",
     "floors",
     "ci_runs",
@@ -39,7 +40,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["repo", "commit_sha"],
-      "description": "Pinned atm-hermes-testbed tier-definition revision the integration suite executed 1:1.",
+      "description": "Pinned atm-hermes-testbed tier-definition revision the integration suite executed 1:1. Required unconditionally: the testbed suite is always in the catalog.",
       "properties": {
         "repo": { "type": "string" },
         "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
@@ -47,7 +48,14 @@
     },
     "suites": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 4,
+      "description": "Every catalog suite must be present exactly once (the four contains-clauses under allOf enforce presence; the self-verifier additionally rejects duplicate suite_id values). A manifest missing any catalog suite is schema-invalid — completeness is verifiable from the manifest alone.",
+      "allOf": [
+        { "contains": { "properties": { "suite_id": { "const": "smoke-full" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "benchmark-send" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "benchmark-read-query" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "testbed-integration" } } } }
+      ],
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -57,20 +65,36 @@
           "terminal_state",
           "evidence",
           "started_at",
-          "ended_at",
-          "host",
-          "execution_identity"
+          "ended_at"
         ],
         "properties": {
-          "suite_id": { "type": "string", "minLength": 1 },
+          "suite_id": {
+            "enum": [
+              "smoke-full",
+              "benchmark-send",
+              "benchmark-read-query",
+              "testbed-integration"
+            ],
+            "description": "Closed suite catalog (§3). Repo test suites are recorded in ci_runs, not here. Windows enters the catalog only when an isolated Windows evidence account exists (§7.6)."
+          },
           "entrypoint": { "type": "string", "minLength": 1 },
           "terminal_state": { "enum": ["pass", "fail", "declared-skip"] },
           "fail_reason": {
-            "type": "string",
-            "description": "Required when terminal_state=fail. Machine-set reasons include provenance-missing, tier-detail-missing, tier-definitions-mismatch, sentinel-mismatch, floor-breach, test-failure."
+            "enum": [
+              "provenance-missing",
+              "tier-detail-missing",
+              "tier-definitions-mismatch",
+              "sentinel-mismatch",
+              "floor-breach",
+              "test-failure",
+              "measurement-anomaly",
+              "suite-error"
+            ],
+            "description": "Required when terminal_state=fail. Closed taxonomy: any new failure class is a schema revision, never free text."
           },
           "skip_reason": {
             "type": "string",
+            "minLength": 1,
             "description": "Required when terminal_state=declared-skip; must cite the Rand-approved standing reason."
           },
           "evidence": {
@@ -102,12 +126,26 @@
         },
         "allOf": [
           {
-            "if": { "properties": { "terminal_state": { "const": "fail" } } },
+            "if": { "properties": { "terminal_state": { "enum": ["pass", "fail"] } }, "required": ["terminal_state"] },
+            "then": {
+              "required": ["host", "execution_identity"],
+              "description": "A suite that executed must carry host + execution-identity provenance (AC-4)."
+            }
+          },
+          {
+            "if": { "properties": { "terminal_state": { "const": "fail" } }, "required": ["terminal_state"] },
             "then": { "required": ["fail_reason"] }
           },
           {
-            "if": { "properties": { "terminal_state": { "const": "declared-skip" } } },
-            "then": { "required": ["skip_reason"] }
+            "if": { "properties": { "terminal_state": { "const": "declared-skip" } }, "required": ["terminal_state"] },
+            "then": {
+              "required": ["skip_reason"],
+              "properties": {
+                "host": false,
+                "execution_identity": false
+              },
+              "description": "A declared-skip executed nothing: it must not fabricate execution identity."
+            }
           }
         ]
       }
@@ -119,7 +157,7 @@
         "additionalProperties": false,
         "required": ["family", "metric", "floor", "observed_p50", "met"],
         "properties": {
-          "family": { "type": "string", "minLength": 1 },
+          "family": { "enum": ["send", "read-query"] },
           "metric": { "type": "string", "minLength": 1 },
           "floor": { "type": "number" },
           "observed_p50": { "type": "number" },
@@ -142,7 +180,10 @@
         }
       }
     },
-    "verdict": { "enum": ["READY", "NOT-READY", "INCOMPLETE"] },
+    "verdict": {
+      "enum": ["READY", "NOT-READY"],
+      "description": "INCOMPLETE is deliberately not representable: a manifest exists only after every suite reached a terminal state (§2.2.2). An incomplete run is signaled by the ABSENCE of a validated manifest (INCOMPLETE-by-absence, §2.2.1)."
+    },
     "generated_at": { "type": "string", "format": "date-time" },
     "self_verification": {
       "type": "object",
