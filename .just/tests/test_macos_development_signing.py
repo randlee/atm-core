@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 from unittest import mock
 import unittest
 
@@ -137,6 +139,105 @@ class AppleDevelopmentSigningTests(unittest.TestCase):
         )
         with mock.patch.object(signing, "_run", side_effect=[verified, details]):
             self.assertTrue(signing.verify_apple_signature("/candidate/atm", signing.CLI_IDENTIFIER))
+
+
+@unittest.skipUnless(sys.platform == "darwin", "self-signed signing is macOS-only")
+class MacosSigningIdentityTests(unittest.TestCase):
+    def test_apple_identity_still_uses_team_identifier_verification(self) -> None:
+        verified = subprocess.CompletedProcess(["codesign"], 0, stdout="", stderr="")
+        details = subprocess.CompletedProcess(
+            ["codesign"],
+            0,
+            stdout="",
+            stderr=(
+                f"Identifier={signing.CLI_IDENTIFIER}\n"
+                f"TeamIdentifier={signing.DEFAULT_TEAM_IDENTIFIER}\n"
+            ),
+        )
+        with mock.patch.object(signing, "_run", side_effect=[verified, details]) as run:
+            self.assertTrue(signing.verify_apple_signature("/candidate/atm", signing.CLI_IDENTIFIER))
+        self.assertEqual(run.call_args_list, [
+            mock.call(["codesign", "--verify", "--strict", "/candidate/atm"]),
+            mock.call(["codesign", "-dvv", "/candidate/atm"]),
+        ])
+
+    def test_self_signed_identity_persists_and_reloads_from_file(self) -> None:
+        identity = signing.SigningIdentity("A" * 40, "atm-daemon-dev")
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with (
+                mock.patch.object(signing, "_valid_identities", return_value=(identity,)),
+                mock.patch.dict(
+                    signing.os.environ,
+                    {
+                        "ATM_SIGNING_IDENTITY": "atm-daemon-dev",
+                        "XDG_CONFIG_HOME": temporary_directory,
+                    },
+                    clear=True,
+                ),
+            ):
+                self.assertEqual(signing.resolve_apple_development_identity(), identity)
+                config_path = Path(temporary_directory) / "atm" / "signing-identity.json"
+                self.assertEqual(
+                    json.loads(config_path.read_text(encoding="utf-8")),
+                    {"common_name": "atm-daemon-dev", "fingerprint": "A" * 40},
+                )
+                with mock.patch.dict(
+                    signing.os.environ,
+                    {"XDG_CONFIG_HOME": temporary_directory},
+                    clear=True,
+                ):
+                    self.assertEqual(signing.resolve_apple_development_identity(), identity)
+
+    def test_self_signed_identity_verifies_with_matching_leaf_pin(self) -> None:
+        fingerprint = "B" * 40
+        verified = subprocess.CompletedProcess(["codesign"], 0, stdout="", stderr="")
+        details = subprocess.CompletedProcess(
+            ["codesign"],
+            0,
+            stdout="",
+            stderr=f"Identifier={signing.DAEMON_IDENTIFIER}\nAuthority=atm-daemon-dev\n",
+        )
+        pinned = subprocess.CompletedProcess(["codesign"], 0, stdout="", stderr="")
+        with mock.patch.object(signing, "_run", side_effect=[verified, details, pinned]) as run:
+            self.assertTrue(
+                signing.verify_apple_signature(
+                    "/candidate/atm-daemon",
+                    signing.DAEMON_IDENTIFIER,
+                    "",
+                    expected_leaf_fingerprint=fingerprint,
+                    expected_common_name="atm-daemon-dev",
+                )
+            )
+        self.assertEqual(
+            run.call_args_list[-1],
+            mock.call([
+                "codesign",
+                "--verify",
+                "--strict",
+                f'-R=certificate leaf = H"{fingerprint}"',
+                "/candidate/atm-daemon",
+            ]),
+        )
+
+    def test_self_signed_identity_rejects_wrong_leaf_pin(self) -> None:
+        verified = subprocess.CompletedProcess(["codesign"], 0, stdout="", stderr="")
+        details = subprocess.CompletedProcess(
+            ["codesign"],
+            0,
+            stdout="",
+            stderr=f"Identifier={signing.DAEMON_IDENTIFIER}\nAuthority=atm-daemon-dev\n",
+        )
+        pinned = subprocess.CompletedProcess(["codesign"], 1, stdout="", stderr="wrong leaf")
+        with mock.patch.object(signing, "_run", side_effect=[verified, details, pinned]):
+            self.assertFalse(
+                signing.verify_apple_signature(
+                    "/candidate/atm-daemon",
+                    signing.DAEMON_IDENTIFIER,
+                    "",
+                    expected_leaf_fingerprint="C" * 40,
+                    expected_common_name="atm-daemon-dev",
+                )
+            )
 
 
 if __name__ == "__main__":

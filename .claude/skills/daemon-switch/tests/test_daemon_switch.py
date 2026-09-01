@@ -204,6 +204,40 @@ class MacosDevelopmentSigningTests(unittest.TestCase):
             ],
         )
 
+    def test_self_signed_identity_uses_leaf_and_common_name_pins(self) -> None:
+        cli = Path("/candidate/atm")
+        daemon = Path("/candidate/atm-daemon")
+        identity = mock.Mock(team_identifier="", fingerprint="A" * 40, common_name="atm-daemon-dev")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "resolve_apple_development_identity", return_value=identity),
+            mock.patch.object(
+                DAEMON_SWITCH,
+                "macos_binary_has_development_signature",
+                return_value=True,
+            ) as signed,
+        ):
+            DAEMON_SWITCH.require_macos_development_signatures(cli, daemon)
+        self.assertEqual(
+            signed.call_args_list,
+            [
+                mock.call(
+                    cli,
+                    DAEMON_SWITCH.CLI_IDENTIFIER,
+                    "",
+                    leaf_fingerprint="A" * 40,
+                    common_name="atm-daemon-dev",
+                ),
+                mock.call(
+                    daemon,
+                    DAEMON_SWITCH.DAEMON_IDENTIFIER,
+                    "",
+                    leaf_fingerprint="A" * 40,
+                    common_name="atm-daemon-dev",
+                ),
+            ],
+        )
+
     def test_restore_accepts_homebrew_pair_without_development_identity(self) -> None:
         cli = Path("/opt/homebrew/opt/atm/bin/atm")
         daemon = Path("/opt/homebrew/opt/atm/bin/atm-daemon")

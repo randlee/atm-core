@@ -77,6 +77,24 @@ class SignDaemonDevTests(unittest.TestCase):
             self.assertEqual(sign_daemon_dev.main(), 1)
         self.assertIn("missing Apple identity", stderr.getvalue())
 
+    def test_self_signed_identity_uses_leaf_pin_verification(self) -> None:
+        identity = sign_daemon_dev.SigningIdentity("A" * 40, "atm-daemon-dev")
+        completed = subprocess.CompletedProcess(["codesign"], 0, stdout="", stderr="")
+        with (
+            mock.patch.object(sign_daemon_dev.subprocess, "run", return_value=completed),
+            mock.patch.object(sign_daemon_dev, "verify_apple_signature", return_value=True) as verify,
+        ):
+            sign_daemon_dev.sign_and_verify_binary(
+                Path("/candidate/atm-daemon"), sign_daemon_dev.DAEMON_IDENTIFIER, identity
+            )
+        verify.assert_called_once_with(
+            "/candidate/atm-daemon",
+            sign_daemon_dev.DAEMON_IDENTIFIER,
+            "",
+            expected_leaf_fingerprint="A" * 40,
+            expected_common_name="atm-daemon-dev",
+        )
+
     def test_account_secret_unlocks_only_the_current_login_keychain(self) -> None:
         completed = subprocess.CompletedProcess(["security"], 0, stdout="", stderr="")
         with tempfile.TemporaryDirectory() as temporary_directory:

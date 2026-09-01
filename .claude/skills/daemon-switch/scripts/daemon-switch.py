@@ -199,11 +199,24 @@ def macos_development_signing_identity_available() -> bool:
 
 
 def macos_binary_has_development_signature(
-    binary: Path, identifier: str, team_identifier: str
+    binary: Path,
+    identifier: str,
+    team_identifier: str,
+    *,
+    leaf_fingerprint: str | None = None,
+    common_name: str | None = None,
 ) -> bool:
-    """Prove one managed binary carries its stable Apple Development signature."""
+    """Prove one managed binary carries its selected stable signing identity."""
     try:
-        return verify_apple_signature(str(binary), identifier, team_identifier)
+        if leaf_fingerprint is None:
+            return verify_apple_signature(str(binary), identifier, team_identifier)
+        return verify_apple_signature(
+            str(binary),
+            identifier,
+            team_identifier,
+            expected_leaf_fingerprint=leaf_fingerprint,
+            expected_common_name=common_name,
+        )
     except (OSError, subprocess.SubprocessError):
         return False
 
@@ -224,9 +237,19 @@ def require_macos_development_signatures(cli: Path, daemon: Path) -> None:
         ("CLI", cli, CLI_IDENTIFIER),
         ("daemon", daemon, DAEMON_IDENTIFIER),
     ):
-        if not macos_binary_has_development_signature(binary, identifier, identity.team_identifier):
+        if identity.team_identifier:
+            signed = macos_binary_has_development_signature(binary, identifier, identity.team_identifier)
+        else:
+            signed = macos_binary_has_development_signature(
+                binary,
+                identifier,
+                identity.team_identifier,
+                leaf_fingerprint=identity.fingerprint,
+                common_name=identity.common_name,
+            )
+        if not signed:
             raise SwitchError(
-                f"{label} target is not strictly signed by the required Apple Development identity: "
+                f"{label} target is not strictly signed by the required signing identity: "
                 f"{binary}. "
                 "Build with `just build` or run `python3 .just/sign_daemon_dev.py` before daemon-switch."
             )
