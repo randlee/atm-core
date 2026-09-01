@@ -8,7 +8,7 @@
   a triage:Finding ;
   triage:findingId "AV-PROD-003" ;
   triage:title "Floor-breach official campaign aborts in engage_ratchet() before payload emission — evidence trail lost, contradicting D7 every-attempt-committed contract" ;
-  triage:description "quality-mgr delta review of 16704d9ac (msg 01M1D8J805J3312J077WMRSX6V): engage_ratchet() raises ReadBenchmarkError on any non-PASS result and execute() calls it before build_payload, so a floor-breach official campaign emits no campaign/family JSON, report, or envelope. Regresses prior behavior (failed campaign still emitted evidence, exit 1). Fail direction closed (no wrong evidence), hence important not blocking. Fix dispatched to Cipher-311d (msg 01M1D8RGQXK7CCS5NTTWHHP6RK): ratchet engages only on clean campaigns; dirty campaign records ratchet={engaged:false, reason} and still emits, exiting nonzero." ;
+  triage:description "quality-mgr delta review of 16704d9ac (msg 01M1D8J805J3312J077WMRSX6V): engage_ratchet() raises ReadBenchmarkError on any non-PASS result and execute() calls it before build_payload, so a floor-breach official campaign emits no campaign/family JSON, report, or envelope. Regresses prior behavior (failed campaign still emitted evidence, exit 1). Fail direction closed (no wrong evidence), hence important not blocking. Fix dispatched to Cipher-311d (msg 01M1D8RGQXK7CCS5NTTWHHP6RK): ratchet engages only on clean campaigns; dirty campaign records ratchet={engaged:false, reason} and still emits, exiting nonzero. CLOSURE RATIFICATION (quality-mgr): fix verified firsthand at 0b8e24c2a — dirty campaign returns {engaged: false, reason} from engage_ratchet (read_benchmark.py:671) instead of raising, execute() still emits full campaign/family JSON, report, and envelope and exits 1 (call site :881); emission behavior proven by test_floor_breach_still_emits_failed_campaign_and_envelope (6/6 focused tests pass); 0b8e24c2a verified as ancestor of integrate/phase-av both directions. Folded into the lane-3 combined PASS verdict over 846c58b40..0b8e24c2a (PR #1120 comment 5487180482)." ;
   triage:phaseId "phase-av" ;
   triage:triageMode "initial_pass" ;
   triage:category "FTQ" ;
@@ -22,9 +22,9 @@
   triage:foundAt "2026-09-01T01:15:31Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-003/AV-PROD-003-O1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-003/AV-PROD-003-O2> ;
-  triage:closedAt "2026-08-31T18:20:34Z"^^xsd:dateTime ;
-  triage:closedBy "Cipher-311d" ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-01T01:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AV-PROD-003/AV-PROD-003-O1>
   a triage:Occurrence ;
@@ -33,9 +33,11 @@
   triage:snippet "if any(result.get(\\\"status\\\") != \\\"PASS\\\" for result in results): return {\\\"engaged\\\": False, ...}" ;
   triage:status "fixed" ;
   triage:closed true ;
+  triage:fixedBy "0b8e24c2a" ;
+  triage:closedAt "2026-09-01T01:30:00Z"^^xsd:dateTime ;
   triage:branch "integrate/phase-av" ;
-  triage:headSha "f6d309e9b" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/f6d309e9b> .
+  triage:headSha "0b8e24c2a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/0b8e24c2a> .
 
 <urn:atm:triage:occurrence/AV-PROD-003/AV-PROD-003-O2>
   a triage:Occurrence ;
@@ -44,9 +46,11 @@
   triage:snippet "engage_ratchet(results, baselines, previous, host_label)" ;
   triage:status "fixed" ;
   triage:closed true ;
+  triage:fixedBy "0b8e24c2a" ;
+  triage:closedAt "2026-09-01T01:30:00Z"^^xsd:dateTime ;
   triage:branch "integrate/phase-av" ;
-  triage:headSha "f6d309e9b" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/f6d309e9b> .
+  triage:headSha "0b8e24c2a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/0b8e24c2a> .
 
 <urn:atm:triage:worktree/integrate-phase-av/f6d309e9b>
   a triage:WorktreeSnapshot ;
@@ -54,3 +58,10 @@
   triage:branch "integrate/phase-av" ;
   triage:headSha "f6d309e9b" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/integrate-phase-av/0b8e24c2a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "0b8e24c2a" ;
+  triage:orderIndex 1 .
