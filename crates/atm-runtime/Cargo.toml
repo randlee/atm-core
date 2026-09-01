@@ -20,6 +20,6 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-atm-runtime-test-support = { path = "../atm-runtime-test-support" }
-atm-storage = { path = "../atm-storage", version = "1.4.6", features = ["test-utils"] }
+atm-runtime-test-support.workspace = true
+atm-storage = { workspace = true, features = ["test-utils"] }
 serde_json.workspace = true
