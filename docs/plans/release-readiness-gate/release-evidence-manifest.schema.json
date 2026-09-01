@@ -91,7 +91,7 @@
               "measurement-anomaly",
               "suite-error"
             ],
-            "description": "Required when terminal_state=fail. Closed taxonomy: any new failure class is a schema revision, never free text."
+            "description": "Required when terminal_state=fail. Closed taxonomy: any new failure class is a schema revision, never free text. Each suite_id admits only its own subset (per-suite allOf conditionals below): a suite-inappropriate reason is a mislabel, rejected at the schema (§2.3.3 re-checks compatibility as defense-in-depth)."
           },
           "skip_reason": {
             "type": "string",
@@ -160,6 +160,27 @@
                 "execution_identity": false
               },
               "description": "A declared-skip executed nothing: it must not fabricate execution identity or carry a fail_reason."
+            }
+          },
+          {
+            "if": { "properties": { "suite_id": { "const": "smoke-full" }, "terminal_state": { "const": "fail" } }, "required": ["suite_id", "terminal_state"] },
+            "then": {
+              "properties": { "fail_reason": { "enum": ["test-failure", "provenance-missing", "suite-error"] } },
+              "description": "suite_id-scoped fail_reason subset: smoke has no floors, no measurement, and no tier/sentinel concepts — a benchmark- or testbed-only reason on a smoke row is a mislabel, rejected at the schema."
+            }
+          },
+          {
+            "if": { "properties": { "suite_id": { "enum": ["benchmark-send", "benchmark-read-query"] }, "terminal_state": { "const": "fail" } }, "required": ["suite_id", "terminal_state"] },
+            "then": {
+              "properties": { "fail_reason": { "enum": ["floor-breach", "test-failure", "measurement-anomaly", "provenance-missing", "suite-error"] } },
+              "description": "suite_id-scoped fail_reason subset: benchmark rows never carry testbed-only reasons (tier-detail-missing, tier-definitions-mismatch, sentinel-mismatch) — a mislabeled benchmark fail cannot dodge the floors-row requirement by borrowing a non-measurement-bearing reason."
+            }
+          },
+          {
+            "if": { "properties": { "suite_id": { "const": "testbed-integration" }, "terminal_state": { "const": "fail" } }, "required": ["suite_id", "terminal_state"] },
+            "then": {
+              "properties": { "fail_reason": { "enum": ["tier-detail-missing", "tier-definitions-mismatch", "sentinel-mismatch", "test-failure", "provenance-missing", "suite-error"] } },
+              "description": "suite_id-scoped fail_reason subset: testbed rows never carry benchmark-only reasons (floor-breach, measurement-anomaly)."
             }
           }
         ]

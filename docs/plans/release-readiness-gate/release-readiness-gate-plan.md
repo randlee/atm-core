@@ -294,7 +294,12 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   (`suite-error`), the provenance identifies the **runner process that
   adjudicated the terminal state** (the orchestrator's own
   host/identity) — always real, never fabricated, so requiring it for
-  every `fail` does not recreate the fabricate-or-reject class.
+  every `fail` does not recreate the fabricate-or-reject class. The same
+  source rule applies to `fail`/`provenance-missing` (rule 4: the
+  suite's **own artifact** lacked identity fields): the manifest row's
+  `host`/`execution_identity` are populated from the orchestrator's own
+  runtime context — recording who adjudicated the provenance gap, never
+  guessing what the suite's identity would have been.
 - AC-5: mechanical READY-refusal for absent declared benchmark families
   (suite `fail`/`suite-error`) and unpinned/mismatched testbed tier
   definitions (§2.2.5). A `fail`/`suite-error` benchmark row is
@@ -309,7 +314,11 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   row exists for a family whose suite did not execute), the §2.3.5
   anomaly-check set (checks built in RRG.2, wired in RRG.4), tier-row
   `detail` populated and conformant to the RRG.3a tier-row schema (§3.3),
-  version sentinels consistent, tiers 1:1 vs pinned definitions (§2.3.3).
+  version sentinels consistent, tiers 1:1 vs pinned definitions (§2.3.3),
+  and the suite_id↔`fail_reason` compatibility re-check (each suite's
+  `fail_reason` drawn from its own schema-scoped subset — defense-in-depth
+  behind the schema's per-suite conditionals; a suite-inappropriate
+  reason is a mislabel, never a valid row).
 - AC-8: rehearsal mode green, `run_kind` separation enforced both
   directions, rehearsal output confined to the rehearsal root (§2.3.4).
 - AC-9: hosts per §2.4; shared daemon and interactive accounts untouched.
@@ -329,6 +338,25 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   `READY`, and never evidence discarded, over a red repo suite — including
   one that went red between launch and emission (§2.2.6, §3.4, §4).
   A refused launch is AC-1's sole carve-out.
+- AC-12: **readiness-preflight release gate (§5.1).** The publisher's
+  readiness preflight — the rendered
+  `.claude/skills/publishing/preflight.xml.j2` assignment executed by the
+  named `publisher` teammate per the publishing skill's
+  `ref/release-state-strategy.md` (readiness preflight before a `main`
+  merge) — must, **mechanically** (RRG.4 delivers the check as code the
+  preflight invokes, not checklist prose; §2.3 no-clerical mandate
+  applies), before authorizing the `main` merge: (i) locate and
+  schema-validate the committed `run_kind: "release"` manifest and
+  require `verdict: "READY"`; (ii) verify the diff between the manifest's
+  `candidate.commit_sha` and the release-candidate tag commit is
+  version-metadata-only (the §5.1 minor-bump commit: `Cargo.toml`
+  workspace version, `Cargo.lock`, changelog — nothing else); and
+  (iii) verify the release-candidate tag's version equals the manifest's
+  `candidate.tag_candidate` — **the label is binding**: evidence approved
+  under one proposed version never authorizes releasing another. Any
+  check failing ⇒ readiness preflight fails; a non-metadata diff requires
+  a fresh gate run (§5.1). The final preflight on the exact `main` commit
+  is unchanged and never re-runs the gate.
 
 ## 3. Suite inventory (definition — existing tests only)
 
@@ -453,10 +481,19 @@ Summary of the committed schema (normative source is the schema file):
   (`pass`/`fail`/`declared-skip`), evidence paths each with sha256, and
   start/end timestamps. Conditionals: `pass`/`fail` **require** `host` +
   the execution-identity provenance object (AC-4); `fail` **requires**
-  `fail_reason` from the closed taxonomy (`provenance-missing`,
-  `tier-detail-missing`, `tier-definitions-mismatch`, `sentinel-mismatch`,
-  `floor-breach`, `test-failure`, `measurement-anomaly`, `suite-error` —
-  a new failure class is a schema revision, never free text);
+  `fail_reason` from the closed taxonomy (`provenance-missing` — rule 4
+  provenance gap; `tier-detail-missing` — unpopulated tier-row detail,
+  §3.3/§7.3; `tier-definitions-mismatch` — executed tiers not 1:1 vs the
+  pinned definitions, §2.2.5; `sentinel-mismatch` — version-sentinel
+  inconsistency caught by the §2.3.3 sentinel-consistency check;
+  `floor-breach`, `test-failure`, `measurement-anomaly` — §2.3.5;
+  `suite-error` — §2.2.5. A new failure class is a schema revision, never
+  free text). **Each `suite_id` admits only its own subset**
+  (schema-mechanized per-suite conditionals; §2.3.3/AC-7 re-check):
+  smoke never carries benchmark/testbed-only reasons, benchmark rows
+  never carry tier/sentinel reasons (so a mislabeled benchmark `fail`
+  cannot dodge the AC-3 floors-row requirement), testbed rows never carry
+  `floor-breach`/`measurement-anomaly`;
   `declared-skip` **requires** `skip_reason` and **forbids**
   `host`/`execution_identity` (nothing executed — identity must not be
   fabricated);
@@ -534,53 +571,67 @@ direction.
   against the intended `develop` commit. Nothing triggers the gate
   automatically; the §2.2.6 CI-eligibility precondition is the gate's
   own first act, not a separate manual step.
-- **Version-number management (Rand, 2026-08-31): the version bump is
-  gated BEHIND the gate, not ahead of it.** The gate runs against
-  `develop` at its **current** workspace version; the manifest's
-  `candidate.tag_candidate` is the **proposed** release version (a
-  label, e.g. `v1.5.0-rc1`) and makes no claim about `Cargo.toml`. No
-  minor-version bump commit may land until a `READY` manifest exists.
-  Order after `READY`: (1) the mechanical bump commit (workspace
-  `version` in `Cargo.toml`, `Cargo.lock`, changelog — nothing else)
-  lands on `develop`; (2) `release-candidate-vX.Y.Z` is cut on that
-  bump commit via `release-candidate.yml` (publishing skill
-  release-state strategy); (3) publisher preflights proceed. The
-  readiness preflight accepts the manifest for gated commit C against
-  candidate-tag commit C′ **iff `diff C..C′` is version-metadata-only**
-  (mechanically verified); any other delta fails the preflight and
-  requires a fresh gate run on the new tree. The seven §3.4 CI suites
-  still run green on C′ as ordinary merge hygiene — the manifest's
-  `ci_runs[]` remain pinned to C, the commit whose behavior the
-  evidence actually measured (a version-string bump changes no measured
-  behavior; that claim is exactly what the bump-only diff check
-  verifies). A failed gate therefore never strands a spent version
-  number: `NOT-READY` (or refusal/INCOMPLETE) means no bump commit
-  exists yet at all.
-- **Gate point (publisher readiness preflight):** the gate's output — a
-  committed, validated `run_kind: "release"` manifest with
-  `verdict: "READY"` — becomes a **required input of the publisher's
-  readiness preflight**, i.e. it blocks the `main` merge, before any
-  tag/publish action. Because the version bump lands only after `READY`
-  (above), the manifest's `candidate.commit_sha` **never equals the
-  release-candidate tag commit by definition**; the preflight's
-  acceptance rule is therefore match-modulo-bump: the tag commit's diff
-  against the gated commit must be version-metadata-only (mechanically
-  verified, see above). Anything else ⇒ readiness preflight fails and a
-  fresh gate run is required; the final preflight on `main`
-  (candidate-tag ancestry) is unchanged and does not re-run the gate.
-  Wiring the manifest + bump-only-diff check into the preflight
-  checklist is an RRG.4 documentation deliverable; the publishing
-  skill's preflight remains the enforcement location.
+- **Version-number management (Rand, 2026-08-31): patch++ per gate run;
+  the minor bump is gated BEHIND a passing run, never ahead of it.**
+  - **Every gate run is preceded by a mandated patch bump** on
+    `develop` (workspace `version` patch++ in `Cargo.toml` +
+    `Cargo.lock` — mechanical commit). Each attempt therefore executes
+    at a unique patch version (e.g. 1.5.1, 1.5.2, … across attempts),
+    so every attempt's manifest and evidence set are
+    version-distinguishable and no two runs ever share a version. The
+    patch++ commit must itself be CI-green before launch (§2.2.6
+    applies to the gated commit as always).
+  - **The release version is a minor bump applied only after `READY`**:
+    a passing run at e.g. 1.5.7 is followed by the mechanical minor
+    bump commit to 1.6.0 (version metadata + changelog, nothing else) —
+    the published version is always a clean `X.Y.0`, never the
+    accumulated attempt-patch number, and a failing gate never spends a
+    minor version. Order after `READY`: (1) minor bump commit lands on
+    `develop`; (2) `release-candidate-vX.Y.0` is cut on that bump
+    commit via `release-candidate.yml` (publishing skill release-state
+    strategy); (3) publisher preflights proceed.
+  - The manifest's `candidate.tag_candidate` names the **proposed**
+    release version (e.g. `v1.6.0`); `candidate.commit_sha` pins the
+    gated commit at its attempt-patch version — the manifest claims
+    what was measured, not what will be published.
+  - **Readiness-preflight acceptance is match-modulo-bump**: the
+    preflight accepts the `READY` manifest for gated commit C against
+    candidate-tag commit C′ **iff `diff C..C′` is version-metadata-only
+    (the minor bump)** — mechanically verified; any other delta fails
+    the preflight and requires a fresh gate run (which starts with its
+    own patch++). The seven §3.4 CI suites still run green on C′ as
+    ordinary merge hygiene — the manifest's `ci_runs[]` remain pinned
+    to C, the commit whose behavior the evidence actually measured (a
+    version-string bump changes no measured behavior; that claim is
+    exactly what the bump-only diff check verifies).
+- **Gate point (publisher readiness preflight — normative home:
+  AC-12):** the gate's output — a committed, validated
+  `run_kind: "release"` manifest with `verdict: "READY"` — is a
+  **required input of the publisher's readiness preflight**, i.e. it
+  blocks the `main` merge, before any tag/publish action. The concrete
+  enforcement mechanism, the three mechanized checks (READY manifest
+  schema-validation; bump-only diff between gated commit and candidate
+  tag commit; **binding** `tag_candidate` ↔ candidate-tag version
+  equality — evidence approved under one version label never releases
+  another), and the code-not-prose requirement live in **AC-12**; RRG.4
+  owns delivering that check as code invoked by the publishing skill's
+  readiness preflight (`preflight.xml.j2` / `publisher` teammate,
+  `ref/release-state-strategy.md`). Because the minor bump lands only
+  after `READY` (above), the manifest's `candidate.commit_sha` never
+  equals the tag commit by definition — hence AC-12's match-modulo-bump
+  rule. A non-metadata diff ⇒ fresh gate run (starting with its own
+  patch++); the final preflight on `main` (candidate-tag ancestry) is
+  unchanged and never re-runs the gate.
 
 ## 6. Implementation sprints (post-approval, definition→code)
 
 | # | Deliverable | must_follow | Assignee (proposed) |
 |---|---|---|---|
-| RRG.1 | Manifest schema (lifted from this plan's committed baseline) + `just release-readiness` orchestrator skeleton (suite registry, terminal-state tracking, fail-closed manifest render, **§2.2.6 CI-eligibility precondition check with the "candidate not CI-eligible" refusal state and the refusal-record writer implementing the committed [release-refusal-record.schema.json](release-refusal-record.schema.json) (path convention `release/refusals/<tag_candidate>/`; built once here, reused by RRG.4) — both explicit acceptance items, AC-11**) + short ADR recording the terminal-state taxonomy, adapter composition model, concurrency model (§5), **and the §2.2.6 CI-eligibility/refusal-state semantics (snapshot-vs-emission verification, refusal observability, INCOMPLETE-vs-refusal boundary)** | — | Cipher |
+| RRG.1 | Manifest schema (lifted from this plan's committed baseline, **including the suite_id-scoped `fail_reason` subsets** — per-suite schema conditionals) + `just release-readiness` orchestrator skeleton (suite registry, terminal-state tracking, fail-closed manifest render, **§2.2.6 CI-eligibility precondition check with the "candidate not CI-eligible" refusal state and the refusal-record writer implementing the committed [release-refusal-record.schema.json](release-refusal-record.schema.json) (path convention `release/refusals/<tag_candidate>/`; built once here, reused by RRG.4) — both explicit acceptance items, AC-11**) + short ADR recording the terminal-state taxonomy, adapter composition model, concurrency model (§5), **and the §2.2.6 CI-eligibility/refusal-state semantics (snapshot-vs-emission verification, refusal observability, INCOMPLETE-vs-refusal boundary)** | — | Cipher |
 | RRG.2 | Suite adapters: smoke + benchmark families (reuse existing runners; no new harness framework — additive composition only); includes closing §7.8 (send-family execution-identity provenance) so both benchmark families meet AC-4; **builds the §2.3.5 anomaly-check set** (D7 clean-run criteria, sanity band, duration bounds, evidence-row counts) emitting `fail`/`measurement-anomaly` | RRG.1 | Cipher |
 | RRG.3a | atm-core testbed adapter (manifest `testbed_definitions` pinning, AC-5 guard, §2.3.3 tier checks); **owns the tier-row evidence schema + example (§3.3)** and **owns the AC-10/§7.4 AT2/AT3 disposition logic** (fail-closed default, standing-skip encoding) | RRG.1 | Cipher |
 | RRG.3b | Testbed-repo tier definitions: merge testbed PR #2 and add Phase-AV coverage definitions (§7.1). Acceptance: §7.1–§7.3 items resolved (definitions exist for every executed row, AT8 reconciled, detail-population expectations encoded). Fallback if PR #2 stalls (external repo): the gate pins to a Rand-approved testbed commit SHA carrying the reviewed definitions — RRG.3a is not blocked, only the pin value changes | RRG.1; parallel-safe with RRG.3a (see note below) | Cipher (atm-hermes-testbed PR) |
-| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs; **wires the RRG.2 anomaly-check set, duplicate-`suite_id` rejection across both `suites[]` and `ci_runs[]`, the floors cross-check (both directions), and the §2.2.6 emission-time CI re-verification into §2.3.3 whole-set self-verification** (AC-7, AC-11). **Explicit acceptance item: an emission-time refusal invokes the RRG.1 refusal-record writer with `refusal_point: "emission"` — reused, never re-implemented — so the AC-11 emission path cannot silently skip the record.** Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8, using the §2.2 rule 6 rehearsal carve-out — no live GH API dependency) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
+| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs; **wires the RRG.2 anomaly-check set, duplicate-`suite_id` rejection across both `suites[]` and `ci_runs[]`, the floors cross-check (both directions), the suite_id↔`fail_reason` compatibility re-check, and the §2.2.6 emission-time CI re-verification into §2.3.3 whole-set self-verification** (AC-7, AC-11). **Explicit acceptance item: an emission-time refusal invokes the RRG.1 refusal-record writer with `refusal_point: "emission"` — reused, never re-implemented — so the AC-11 emission path cannot silently skip the record.** **Explicit acceptance item (AC-12): the publisher readiness preflight invokes an RRG.4-delivered mechanized check — READY-manifest schema validation, bump-only diff (gated commit ↔ candidate tag commit), and binding `tag_candidate` ↔ tag-version equality — as code, not checklist prose; the release gate is not deliverable without it.** Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8, using the §2.2 rule 6 rehearsal carve-out — no live GH API dependency) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
 
 RRG.3a/RRG.3b parallel-safety rationale: disjoint repos (RRG.3b edits only
 atm-hermes-testbed; RRG.3a edits only atm-core). Their sole coupling is the
@@ -852,3 +903,46 @@ owns; no sprint-local reinterpretation.
   seven CI suites additionally run green on the bump commit as ordinary
   merge hygiene. A NOT-READY/refused/incomplete run therefore never
   strands a spent version number.
+- **r8 (2026-08-31, fix round for quality-mgr r7 FAIL @ 1fe4b07be —
+  1B/4I/1M — plus Rand's second version-management directive)**:
+  - Rand directive (supersedes part of the r7 amendment): **patch++ per
+    gate run** — every gate attempt is preceded by a mandated mechanical
+    patch-bump commit on `develop`, so each attempt executes at a unique
+    patch version and no two runs share a version; the **minor bump to
+    `X.(Y+1).0` lands only after `READY`** (the published version is
+    always a clean `X.Y.0`, never an accumulated attempt-patch like
+    1.6.7). §5.1 version-management block rewritten accordingly;
+    match-modulo-bump preflight rule unchanged in substance.
+  - B1r7 (§5.1 requirements had no acceptance home) → new **AC-12** in
+    §2.5 (READY-manifest input + bump-only diff + binding tag_candidate
+    check, mechanized, named enforcement location) + explicit AC-12
+    acceptance item in §6 RRG.4 row; §5.1 gate-point bullet now defers
+    normatively to AC-12.
+  - I1r7 (global fail_reason enum permits suite-inappropriate mislabels)
+    → schema: per-suite `fail_reason` subset conditionals (smoke:
+    test-failure/provenance-missing/suite-error; benchmarks: + floor-
+    breach/measurement-anomaly, no tier/sentinel reasons; testbed: tier/
+    sentinel reasons + test-failure/provenance-missing/suite-error, no
+    floor-breach/measurement-anomaly); suite_id↔fail_reason
+    compatibility re-check named in §2.3.3/AC-7 and wired in RRG.4.
+  - I2r7 (provenance-missing row's identity source unstated) → AC-4
+    extended: orchestrator's own runtime context populates the row,
+    same source rule as the suite-error carve-out.
+  - I3r7 (documentation-only enforcement) → AC-12 names the concrete
+    mechanism (`preflight.xml.j2` assignment / `publisher` teammate /
+    `ref/release-state-strategy.md` readiness preflight) and requires
+    the check be delivered as code the preflight invokes (RRG.4
+    acceptance), not checklist prose.
+  - I4r7 (tag_candidate binding ambiguity) → resolved **binding**:
+    AC-12 check (iii) requires candidate-tag version == manifest
+    `tag_candidate`; evidence approved under one version label never
+    releases another.
+  - M1r7 → closed-taxonomy prose now cross-references every enum value
+    (tier-detail-missing → §3.3/§7.3; sentinel-mismatch → §2.3.3
+    sentinel-consistency check; etc.).
+  - Schema revalidated (probe battery + new suite-scoping probes): all
+    prior positives/negatives unchanged; benchmark fail with
+    tier-detail-missing / sentinel-mismatch now REJECTED; testbed fail
+    with floor-breach REJECTED; smoke fail with measurement-anomaly
+    REJECTED; testbed fail with tier-definitions-mismatch still VALID;
+    examples all VALID.
