@@ -49,28 +49,28 @@ deliverable is expected to land at a production-ready level for the
 scope this sprint claims; partial or shape-only completion fails the
 sprint.
 
-- [ ] D1 — Read benchmark family beside send-message-benchmark:
+- [x] D1 — Read benchmark family beside send-message-benchmark:
       concurrent `read`/`peek`/`list` against a seeded multi-team,
       multi-mailbox corpus at high reader counts (fan-out ≥ 32
       concurrent readers), reporting p50 throughput and tail latency
       (p95/p99).
-- [ ] D2 — Query benchmark family: search/filtered-list (FTS path)
+- [x] D2 — Query benchmark family: search/filtered-list (FTS path)
       under the same parallel load, same metrics. This measures the
       AV.1a D2a search lane (the `SearchReader` re-hosted on the pool
       type with its own `search_pool_size`), not the pre-AV
       single-thread reader; the campaign records the search-lane pool
       size and queue depth exactly as it does for the mailbox lane.
-- [ ] D3 — Mixed mode: read/query benchmarks while sustained writer
+- [x] D3 — Mixed mode: read/query benchmarks while sustained writer
       activity runs (the defect scenario), asserting read latency stays
       within budget while writes proceed.
-- [ ] D4 — Ratcheted floors: per-host-label entries in `baselines.json`
+- [x] D4 — Ratcheted floors: per-host-label entries in `baselines.json`
       for the new families, standard 3-clean-run seeding rules; floors
       compare like AO2 (p50 vs. floor, unrounded comparison).
-- [ ] D5 — Reader-lane diagnostics in reports: AV.1a D5 metrics
+- [x] D5 — Reader-lane diagnostics in reports: AV.1a D5 metrics
       (queue depth, wait vs. execution time, deadline expiries,
       saturation events) captured per campaign so a floor breach is
       diagnosable from the committed artifact.
-- [ ] D6 — Harness/report/schema extensions land via the shared-contract
+- [x] D6 — Harness/report/schema extensions land via the shared-contract
       rules: separate PR, team-lead visibility, macOS/Windows impact
       stated — **within the benchmark-infra freeze exception below**.
 
@@ -90,7 +90,7 @@ sprint.
       bump, or CI job type. Anything beyond additive family registration
       is out of scope and requires Rand's sign-off before dispatch.
       quality-mgr verifies the bound at sprint QA (A6).
-- [ ] D7 — Normative workload/baseline contract (reproducibility). The
+- [x] D7 — Normative workload/baseline contract (reproducibility). The
       following are contract, not guidance; a campaign missing or
       partially implementing any element is a **hard campaign failure**
       (invalid artifact, never seeds or gates a floor):
@@ -207,11 +207,11 @@ weakening the recorded-provenance requirement.
 
 This is the authoritative acceptance checklist.
 
-- [ ] A1 — `just benchmark-read` (the sole official entrypoint) runs
+- [x] A1 — `just benchmark-read` (the sole official entrypoint) runs
       all three families end-to-end on a dedicated benchmark account
       and publishes through the existing manifest/report contract;
       partial artifacts are invalid.
-- [ ] A2 — Mixed-mode campaign demonstrates reads meeting budget while
+- [x] A2 — Mixed-mode campaign demonstrates reads meeting budget while
       the writer sustains load; the report shows both read latency and
       concurrent write throughput.
 - [ ] A3 — Floors are seeded from 3 clean runs (per D7 clean-run
@@ -220,14 +220,14 @@ This is the authoritative acceptance checklist.
       settings, harness version); a synthetic serialization regression
       (e.g. pool size forced to 1 in a scratch build) fails the campaign
       (demonstrated once, then reverted).
-- [ ] A5 — D7 contract enforced by the harness: a run with a missing or
+- [x] A5 — D7 contract enforced by the harness: a run with a missing or
       partially implemented contract element (no warm-up window, corpus
       seed absent, success-rate below threshold, partial artifact)
       terminates as a hard campaign failure and cannot be published as
       evidence.
-- [ ] A4 — Official evidence only from isolated non-interactive
+- [x] A4 — Official evidence only from isolated non-interactive
       accounts (m5-atmbench); no interactive-account campaign is cited.
-- [ ] A6 — Freeze-exception bound (D6) verified: the sprint diff touches
+- [x] A6 — Freeze-exception bound (D6) verified: the sprint diff touches
       only family registration/config, report field additions, and
       baseline entries; no new runner, renderer, schema version, or CI
       job type. Mixed-mode reports (D3) include the AV.1a D5 WAL-health
@@ -238,12 +238,16 @@ This is the authoritative acceptance checklist.
 
 This is the authoritative validation checklist.
 
-- [ ] `just lint`, `just test` (harness unit tests)
-- [ ] One full `just benchmark-read` campaign on the reference Mac host
+- [ ] `just lint`, `just test` (harness unit tests) — deferred in the
+      AV-EXP-C6 micro scope-add; only focused new tests and static checks
+      were authorized.
+- [x] One full `just benchmark-read` campaign on the reference Mac host
       (m5-atmbench account) with committed artifacts under
       `site/reports/`
-- [ ] `just reports-index --check`
-- [ ] A3 scratch-regression demonstration recorded in sprint QA history.
+- [x] `just reports-index --check`
+- [ ] A3 scratch-regression demonstration recorded in sprint QA history —
+      deferred; no benchmark or diagnostic reruns were authorized by the
+      AV-EXP-C6 micro scope-add.
 
 ## Out of scope
 

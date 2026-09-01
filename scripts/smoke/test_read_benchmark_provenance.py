@@ -5,6 +5,7 @@ import unittest
 from unittest import mock
 
 from scripts.smoke import read_benchmark as benchmark
+from scripts.smoke import benchmark_account
 
 
 class ReadBenchmarkProvenanceTests(unittest.TestCase):
@@ -33,15 +34,33 @@ class ReadBenchmarkProvenanceTests(unittest.TestCase):
         self.assertEqual(payload["execution_identity"], identity.as_dict())
 
     def test_official_run_fails_closed_when_identity_capture_is_unavailable(self) -> None:
+        events: list[str] = []
+
+        def capture_failure() -> None:
+            events.append("capture")
+            raise benchmark.ReadBenchmarkError("identity unavailable")
+
         with mock.patch.object(
             benchmark, "capture_execution_identity",
-            side_effect=benchmark.ReadBenchmarkError("identity unavailable"),
+            side_effect=capture_failure,
         ):
-            with mock.patch.dict(
-                os.environ, {"ATM_CAPACITY_HOST_LABEL": "rand-m5.local"}, clear=False
+            with mock.patch.object(
+                benchmark, "load_baselines", side_effect=lambda _path: events.append("baselines")
+            ), mock.patch.object(
+                benchmark_account, "require_benchmark_account", side_effect=lambda: events.append("account")
+            ), mock.patch.object(
+                benchmark, "_atm_binary", side_effect=lambda: events.append("atm")
+            ), mock.patch.object(
+                benchmark, "deterministic_corpus", side_effect=lambda: events.append("corpus")
+            ), mock.patch.object(
+                benchmark, "prepare_corpus", side_effect=lambda *_args: events.append("prepare")
             ):
-                with self.assertRaisesRegex(benchmark.ReadBenchmarkError, "identity unavailable"):
-                    benchmark.execute(list(benchmark.FAMILY_BY_ID), diagnostic_only=False)
+                with mock.patch.dict(
+                    os.environ, {"ATM_CAPACITY_HOST_LABEL": "rand-m5.local"}, clear=False
+                ):
+                    with self.assertRaisesRegex(benchmark.ReadBenchmarkError, "identity unavailable"):
+                        benchmark.execute(list(benchmark.FAMILY_BY_ID), diagnostic_only=False)
+        self.assertEqual(events, ["capture"], "identity must be captured before setup/workload")
 
 
 if __name__ == "__main__":
