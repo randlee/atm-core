@@ -529,24 +529,48 @@ direction.
 
 ### 5.1 Release-pipeline placement (trigger and gate point)
 
-- **Trigger (manual, once per candidate):** after the release-candidate
-  tag (`release-candidate-vX.Y.Z`, cut from `develop` via
-  `release-candidate.yml` per the publishing skill's release-state
-  strategy) exists, the operator (§8 Q1) launches
-  `just release-readiness <tag-candidate>` on the evidence host(s).
-  Nothing triggers the gate automatically; the §2.2.6 CI-eligibility
-  precondition is the gate's own first act, not a separate manual step.
+- **Trigger (manual, once per candidate):** the operator (§8 Q1) launches
+  `just release-readiness <tag-candidate>` on the evidence host(s)
+  against the intended `develop` commit. Nothing triggers the gate
+  automatically; the §2.2.6 CI-eligibility precondition is the gate's
+  own first act, not a separate manual step.
+- **Version-number management (Rand, 2026-08-31): the version bump is
+  gated BEHIND the gate, not ahead of it.** The gate runs against
+  `develop` at its **current** workspace version; the manifest's
+  `candidate.tag_candidate` is the **proposed** release version (a
+  label, e.g. `v1.5.0-rc1`) and makes no claim about `Cargo.toml`. No
+  minor-version bump commit may land until a `READY` manifest exists.
+  Order after `READY`: (1) the mechanical bump commit (workspace
+  `version` in `Cargo.toml`, `Cargo.lock`, changelog — nothing else)
+  lands on `develop`; (2) `release-candidate-vX.Y.Z` is cut on that
+  bump commit via `release-candidate.yml` (publishing skill
+  release-state strategy); (3) publisher preflights proceed. The
+  readiness preflight accepts the manifest for gated commit C against
+  candidate-tag commit C′ **iff `diff C..C′` is version-metadata-only**
+  (mechanically verified); any other delta fails the preflight and
+  requires a fresh gate run on the new tree. The seven §3.4 CI suites
+  still run green on C′ as ordinary merge hygiene — the manifest's
+  `ci_runs[]` remain pinned to C, the commit whose behavior the
+  evidence actually measured (a version-string bump changes no measured
+  behavior; that claim is exactly what the bump-only diff check
+  verifies). A failed gate therefore never strands a spent version
+  number: `NOT-READY` (or refusal/INCOMPLETE) means no bump commit
+  exists yet at all.
 - **Gate point (publisher readiness preflight):** the gate's output — a
   committed, validated `run_kind: "release"` manifest with
-  `verdict: "READY"` whose `candidate.commit_sha` equals the
-  release-candidate tag commit — becomes a **required input of the
-  publisher's readiness preflight**, i.e. it blocks the `main` merge,
-  before any tag/publish action. No READY manifest for the exact
-  candidate commit ⇒ readiness preflight fails; the final preflight on
-  `main` (exact-commit re-check, candidate-tag ancestry) is unchanged
-  and does not re-run the gate. Wiring the manifest check into the
-  preflight checklist is an RRG.4 documentation deliverable; the
-  publishing skill's preflight remains the enforcement location.
+  `verdict: "READY"` — becomes a **required input of the publisher's
+  readiness preflight**, i.e. it blocks the `main` merge, before any
+  tag/publish action. Because the version bump lands only after `READY`
+  (above), the manifest's `candidate.commit_sha` **never equals the
+  release-candidate tag commit by definition**; the preflight's
+  acceptance rule is therefore match-modulo-bump: the tag commit's diff
+  against the gated commit must be version-metadata-only (mechanically
+  verified, see above). Anything else ⇒ readiness preflight fails and a
+  fresh gate run is required; the final preflight on `main`
+  (candidate-tag ancestry) is unchanged and does not re-run the gate.
+  Wiring the manifest + bump-only-diff check into the preflight
+  checklist is an RRG.4 documentation deliverable; the publishing
+  skill's preflight remains the enforcement location.
 
 ## 6. Implementation sprints (post-approval, definition→code)
 
@@ -814,3 +838,17 @@ owns; no sprint-local reinterpretation.
   floor-breach-without-floors REJECTED, pre-launch record with
   suite_evidence_paths REJECTED, missing-state record with run_id
   REJECTED; all prior negative cases still REJECTED.
+- **r7 amendment (2026-08-31, Rand version-management directive during
+  r7 review)**: §5.1 extended — the version bump is gated behind the
+  gate: the gate runs at develop's current version, `tag_candidate` is
+  the proposed version label only, and the minor bump commit may land
+  only after a READY manifest exists (bump → candidate cut → publisher
+  preflights). Consequence made explicit (Rand): the manifest's
+  `candidate.commit_sha` never equals the candidate tag commit by
+  definition; readiness preflight acceptance is match-modulo-bump — the
+  tag commit's diff against the gated commit must be
+  version-metadata-only (mechanically verified), anything else requires
+  a fresh gate run. `ci_runs[]` stays pinned to the gated commit; the
+  seven CI suites additionally run green on the bump commit as ordinary
+  merge hygiene. A NOT-READY/refused/incomplete run therefore never
+  strands a spent version number.
