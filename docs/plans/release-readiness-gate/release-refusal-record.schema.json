@@ -20,7 +20,7 @@
     "candidate": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tag_candidate", "commit_sha", "branch"],
+      "required": ["tag_candidate", "commit_sha", "branch", "workspace_version"],
       "properties": {
         "tag_candidate": {
           "type": "string",
@@ -32,7 +32,7 @@
         "workspace_version": {
           "type": "string",
           "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
-          "description": "OPTIONAL: the gated tree's Cargo.toml [workspace.package] version (§5.1 per-attempt patch++). Present when the refusal fired after the gate's first opening act recorded it (AC-13); absent for a pre-launch refusal that fired before the version was read."
+          "description": "REQUIRED: the gated tree's Cargo.toml [workspace.package] version (§5.1 per-attempt patch++). Act 1 of the gate's ordered opening acts records this version before the §2.2.6 precondition (Act 2) can fire a pre-launch refusal, so the version is available at every refusal point. A tree whose version cannot be read never reaches a refusal record at all — that is the §2.2 rule 7 named startup failure 'candidate version unreadable', not a refusal."
         }
       }
     },

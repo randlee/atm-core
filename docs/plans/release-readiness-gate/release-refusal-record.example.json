@@ -3,7 +3,8 @@
   "candidate": {
     "tag_candidate": "v1.6.0",
     "commit_sha": "0000000000000000000000000000000000000000",
-    "branch": "develop"
+    "branch": "develop",
+    "workspace_version": "1.5.7"
   },
   "refusal_point": "emission",
   "refused_at": "2026-09-17T21:55:00Z",

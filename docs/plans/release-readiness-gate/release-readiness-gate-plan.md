@@ -136,7 +136,9 @@ just release-readiness <release-tag-candidate>
      [release-refusal-record.schema.json](release-refusal-record.schema.json)
      (worked example:
      [release-refusal-record.example.json](release-refusal-record.example.json)):
-     candidate (tag + 40-hex commit SHA + branch), `refused_at`
+     candidate (tag + 40-hex commit SHA + branch + `workspace_version` —
+     always present: Act 1 records the version before Act 2 can refuse,
+     §5.1/AC-13), `refused_at`
      timestamp, `refusal_point` (`pre-launch` | `emission`), and the
      exact red/missing runs (`ci_runs_not_green`, red entries citing the
      run id, missing entries citing none). An emission-point record MAY
@@ -145,7 +147,14 @@ just release-readiness <release-tag-candidate>
      not grow into a shadow manifest); a pre-launch record must not.
      **Path convention:** records are written under
      `release/refusals/<tag_candidate>/` — outside the evidence roots,
-     never under `site/reports/`. An operator can always distinguish
+     never under `site/reports/` — with a **per-event filename**:
+     `<refused_at as compact UTC, e.g. 20260917T215500Z>-<refusal_point>.json`.
+     `tag_candidate` is constant across every §5.1 patch++ attempt, so
+     all of a candidate's refusals share one directory; the per-event
+     name is what preserves refused-N-times, and the writer **refuses to
+     overwrite an existing file** (fail-closed) rather than ever
+     collapsing two refusal events into one record (RRG.1 writer
+     acceptance item, §6). An operator can always distinguish
      never-launched from refused-N-times, and see why. This record is
      NOT evidence and is never referenced by a manifest; the writer is
      built once in RRG.1 (explicit acceptance item, §6) and **reused —
@@ -167,6 +176,25 @@ just release-readiness <release-tag-candidate>
      from release evidence — `run_id` values are not independently
      validated against GitHub. This is a recorded acceptance, not an
      oversight.
+7. **Named startup failures (distinct from the refusal taxonomy and from
+   INCOMPLETE-by-absence).** The gate's opening acts can themselves fail
+   before any suite runs, and each such failure is a **named,
+   self-describing pre-launch abort** — no suites run, no manifest is
+   written, and no refusal record is written (refusal records are
+   CI-eligibility-scoped, §2.2.6); the operator gets the named state,
+   never an unexplained crash:
+   - **"candidate version unreadable"** — Act 1 (§5.1/AC-13) cannot read
+     `[workspace.package] version` from the gated tree's `Cargo.toml`
+     (missing file, unparsable TOML, absent field). This is the only
+     scenario in which no `workspace_version` exists, which is why the
+     refusal record can require the field unconditionally.
+   - **"duration bounds unusable"** — the launch-time validation of the
+     committed `release/duration-bounds.json` (AC-14) fails: file
+     missing, schema-invalid, a catalog-suite entry absent, or an entry
+     with `min_seconds >= max_seconds`. A harness defect, never a
+     silent skip of the §2.3.5 duration checks.
+   Both states are adjudicated at launch, before the §2.2.6
+   precondition's cheap API check spends anything.
 
 ### 2.3 First-time-pass enforcement (no clerical QA rounds)
 
@@ -198,7 +226,7 @@ The mechanism that makes §1's first-time-pass requirement real:
    still `success` — see §2.2 rule 6), **the §2.3.5
    anomaly-check set** (per-family D7 clean-run criteria, historical p50
    sanity band, wall-clock duration bounds per the committed
-   `release/duration-bounds.json` (§2.3.5), evidence-row counts vs
+   `release/duration-bounds.json` (§2.3.5/AC-14), evidence-row counts vs
    declared workload — the benchmark/smoke checks built in RRG.2, the
    testbed-scoped duration-bounds check built in RRG.3a, all wired into
    this self-verification in RRG.4), **the AC-13 `workspace_version`
@@ -241,12 +269,22 @@ The mechanism that makes §1's first-time-pass requirement real:
    D7 clean-run criteria; observed p50 within the family's historical
    sanity band; wall-clock duration within the bounds declared in the
    committed `release/duration-bounds.json` — the bounds' single source
-   of truth, one min/max entry per catalog suite, seeded from the
-   durations of historical committed evidence runs and Rand-approved
-   before first use, exactly the `baselines.json` discipline (never
-   self-seeded by the harness; a bounds revision is a reviewed commit,
-   never a run-time adjustment) — RRG.2 declares the smoke + benchmark
-   entries, RRG.3a the testbed entry; evidence-row
+   of truth, one min/max entry per catalog suite, contracted by the
+   committed schema
+   [release-duration-bounds.schema.json](release-duration-bounds.schema.json)
+   (worked example:
+   [release-duration-bounds.example.json](release-duration-bounds.example.json))
+   and owned by **AC-14**: seeded from the durations of historical
+   committed evidence runs and Rand-approved before first use, exactly
+   the §3.2 `baselines.json` revision convention — mechanized via the
+   schema's required `revision`/`approved_by`/`approved_at` fields, so
+   an unapproved seed cannot validate (never self-seeded by the harness;
+   a bounds revision is a reviewed commit, never a run-time adjustment).
+   The **min** bound flags a short-circuited or truncated workload — a
+   suite finishing implausibly fast means work was skipped, not that a
+   genuine speedup is penalized; the **max** bound flags a stalled or
+   contaminated run. RRG.2 declares the smoke + benchmark
+   entries, RRG.3a the testbed entry (AC-14); evidence-row
    counts matching the declared workload). Any anomaly-check hit is emitted
    by the harness as suite `fail` with `fail_reason:
    "measurement-anomaly"`, which is treated as a harness/environment defect:
@@ -360,12 +398,18 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   `ref/release-state-strategy.md` (readiness preflight before a `main`
   merge) — must, **mechanically** (RRG.4 delivers the check as code the
   preflight invokes, not checklist prose; §2.3 no-clerical mandate
-  applies), before authorizing the `main` merge: (i) locate — via the §4
-  release-manifest path convention
-  (`site/reports/release-readiness/<tag_candidate>-<workspace_version>/manifest.json`,
-  `rehearsal/` excluded) — and
-  schema-validate the committed `run_kind: "release"` manifest and
-  require `verdict: "READY"`; (ii) verify the diff between the manifest's
+  applies), before authorizing the `main` merge: (i) locate the
+  committed `run_kind: "release"` manifest via the **§4 lookup
+  algorithm** — the preflight holds only `tag_candidate`, so it globs
+  `site/reports/release-readiness/<tag_candidate>-*/manifest.json`
+  (excluding `rehearsal/`), schema-validates each match, and selects
+  the one whose `verdict` is `"READY"`; §5.1 patch++ legitimately
+  leaves multiple attempt directories (NOT-READY ones included), so
+  **exactly one READY match is required**: zero READY matches fails
+  the preflight ("no READY manifest for candidate"), and more than one
+  fails closed ("ambiguous READY evidence" — impossible under the §5
+  serialized-launch precondition, checked anyway; the preflight never
+  picks arbitrarily); (ii) verify the diff between the manifest's
   `candidate.commit_sha` and the release-candidate tag commit is
   version-metadata-only (the §5.1 minor-bump commit: `Cargo.toml`
   workspace version, `Cargo.lock`, changelog — nothing else); and
@@ -394,6 +438,29 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   schema-patterned to the clean `vX.Y.0` release shape (§5.1; binding
   per AC-12 iii). RRG.1 owns the recording, RRG.4 wires both
   self-verifier checks.
+- AC-14: **the duration-bounds artifact is contracted, approved, and
+  fail-closed.** `release/duration-bounds.json` — the single source of
+  truth for the §2.3.5 wall-clock duration checks — must (i) conform to
+  the committed schema
+  [release-duration-bounds.schema.json](release-duration-bounds.schema.json)
+  (worked example
+  [release-duration-bounds.example.json](release-duration-bounds.example.json)):
+  a closed catalog with exactly one `min_seconds`/`max_seconds` entry
+  per §3 catalog suite, no extras; (ii) be validated at gate launch,
+  before the §2.2.6 precondition — a missing file, schema-invalid
+  content, a missing catalog-suite entry, or `min_seconds >=
+  max_seconds` aborts with the named §2.2 rule 7 startup failure
+  **"duration bounds unusable"** (a harness defect, never a silent skip
+  of the check), and the §2.3.3 self-verifier re-validates the artifact
+  at emission time as defense-in-depth; and (iii) carry the mechanized
+  approval marker — schema-required `revision`, `approved_by`,
+  `approved_at` fields per the §3.2 `baselines.json` revision
+  convention (e.g. revision 1, approved 2026-08-31) — so an unapproved
+  or self-seeded bounds file cannot validate; a bounds revision is a
+  reviewed commit, never a run-time adjustment. Ownership: RRG.2
+  declares the smoke + benchmark entries, RRG.3a the testbed entry,
+  RRG.4 wires launch-time validation, the emission-time re-validation,
+  and the named startup failure.
 
 ## 3. Suite inventory (definition — existing tests only)
 
@@ -496,8 +563,16 @@ subtree excluded from every release lookup, and the refusal-record dir
 `release/refusals/<tag_candidate>/` (§2.2.6) is outside it entirely.
 "Previously committed release manifests" (AC-13 ii) therefore means:
 every `manifest.json` under `site/reports/release-readiness/` excluding
-`rehearsal/`; "locate the committed READY manifest" (AC-12 i) resolves
-the same convention for the candidate's `tag_candidate`. The per-suite
+`rehearsal/`. **Lookup algorithm (AC-12 i)** — the readiness preflight
+holds only `tag_candidate`, while the convention is keyed by
+`tag_candidate` AND `workspace_version`, and §5.1 patch++ legitimately
+leaves multiple `<tag_candidate>-<wv>/` attempt directories (NOT-READY
+ones included): the preflight globs
+`site/reports/release-readiness/<tag_candidate>-*/manifest.json`
+(excluding `rehearsal/`), schema-validates each match, and requires
+**exactly one** with `verdict: "READY"` — zero READY matches fails the
+preflight ("no READY manifest for candidate"); more than one fails
+closed ("ambiguous READY evidence"), never an arbitrary pick. The per-suite
 evidence roots (`site/reports/smoke/`, benchmark report dirs, the
 testbed `evidence/…` location) hold suite evidence the manifest points
 INTO — never manifests. The schema is a committed plan
@@ -515,7 +590,9 @@ The §2.2.6 refusal record has its own committed schema and worked
 example — [release-refusal-record.schema.json](release-refusal-record.schema.json)
 and [release-refusal-record.example.json](release-refusal-record.example.json)
 — so RRG.1 and RRG.4 implement one reviewed shape rather than each
-interpreting prose.
+interpreting prose. The §2.3.5/AC-14 duration-bounds artifact likewise —
+[release-duration-bounds.schema.json](release-duration-bounds.schema.json)
+and [release-duration-bounds.example.json](release-duration-bounds.example.json).
 RRG.1 lifts these into their final in-repo home next to the validator; the
 schema content in this plan is the reviewed baseline.
 
@@ -702,11 +779,11 @@ direction.
 
 | # | Deliverable | must_follow | Assignee (proposed) |
 |---|---|---|---|
-| RRG.1 | Manifest schema (lifted from this plan's committed baseline, **including the suite_id-scoped `fail_reason` subsets** — per-suite schema conditionals) + `just release-readiness` orchestrator skeleton (suite registry, terminal-state tracking, fail-closed manifest render, **§2.2.6 CI-eligibility precondition check with the "candidate not CI-eligible" refusal state and the refusal-record writer implementing the committed [release-refusal-record.schema.json](release-refusal-record.schema.json) (path convention `release/refusals/<tag_candidate>/`; built once here, reused by RRG.4) — both explicit acceptance items, AC-11**; **explicit acceptance item (AC-13): the first of the gate's two ordered opening acts (§5.1) records the gated tree's `Cargo.toml` workspace version into `candidate.workspace_version`, and the manifest is written to the §4 release-manifest path convention** (self-verifier cross-checks wired in RRG.4)) + short ADR recording the terminal-state taxonomy, adapter composition model, concurrency model (§5), **and the §2.2.6 CI-eligibility/refusal-state semantics (snapshot-vs-emission verification, refusal observability, INCOMPLETE-vs-refusal boundary)** | — | Cipher |
-| RRG.2 | Suite adapters: smoke + benchmark families (reuse existing runners; no new harness framework — additive composition only); includes closing §7.8 (send-family execution-identity provenance) so both benchmark families meet AC-4; **builds the benchmark/smoke instances of the §2.3.5 anomaly-check set** (D7 clean-run criteria, sanity band, smoke+benchmark duration bounds — declaring their `release/duration-bounds.json` entries per §2.3.5's seeding discipline, evidence-row counts) emitting `fail`/`measurement-anomaly`; the testbed-scoped duration-bounds instance is RRG.3a's (one row below) | RRG.1 | Cipher |
-| RRG.3a | atm-core testbed adapter (manifest `testbed_definitions` pinning, AC-5 guard, §2.3.3 tier checks); **owns the tier-row evidence schema + example (§3.3)**, **owns the testbed-scoped wall-clock duration-bounds anomaly check** (validates §3.3's one-continuous-session guarantee, emits `fail`/`measurement-anomaly`, declares the testbed entry of `release/duration-bounds.json` per §2.3.5's seeding discipline; wired into whole-set self-verification by RRG.4), and **owns the AC-10/§7.4 AT2/AT3 disposition logic** (fail-closed default, standing-skip encoding) | RRG.1 | Cipher |
+| RRG.1 | Gate foundation — five enumerated deliverables: **(1)** manifest schema, lifted from this plan's committed baseline **including the suite_id-scoped `fail_reason` subsets** (per-suite schema conditionals); **(2)** `just release-readiness` orchestrator skeleton — suite registry, terminal-state tracking, fail-closed manifest render written to the §4 release-manifest path convention, **the two ordered opening acts (§5.1/AC-13: record the gated tree's `Cargo.toml` workspace version into `candidate.workspace_version`, then the §2.2.6 precondition)**, and the **§2.2 rule 7 named startup failures** ("candidate version unreadable"; "duration bounds unusable" via the AC-14 launch-time bounds validation) — explicit acceptance items (self-verifier cross-checks wired in RRG.4); **(3)** the **§2.2.6 CI-eligibility precondition check** with the "candidate not CI-eligible" refusal state (AC-11) — explicit acceptance item; **(4)** the **refusal-record writer** implementing the committed [release-refusal-record.schema.json](release-refusal-record.schema.json) — per-event filenames `<refused_at compact UTC>-<refusal_point>.json` under `release/refusals/<tag_candidate>/`, refusing to overwrite an existing record (§2.2 rule 6); built once here, reused by RRG.4 — explicit acceptance item; **(5)** short ADR recording the terminal-state taxonomy, adapter composition model, concurrency model (§5), and the §2.2.6 CI-eligibility/refusal-state semantics (snapshot-vs-emission verification, refusal observability, INCOMPLETE-vs-refusal boundary) | — | Cipher |
+| RRG.2 | Suite adapters: smoke + benchmark families (reuse existing runners; no new harness framework — additive composition only); includes closing §7.8 (send-family execution-identity provenance) so both benchmark families meet AC-4; **builds the benchmark/smoke instances of the §2.3.5 anomaly-check set** (D7 clean-run criteria, sanity band, smoke+benchmark duration bounds — declaring their `release/duration-bounds.json` entries per AC-14/§2.3.5, evidence-row counts) emitting `fail`/`measurement-anomaly`; the testbed-scoped duration-bounds instance is RRG.3a's (one row below) | RRG.1 | Cipher |
+| RRG.3a | atm-core testbed adapter (manifest `testbed_definitions` pinning, AC-5 guard, §2.3.3 tier checks); **owns the tier-row evidence schema + example (§3.3)**, **owns the testbed-scoped wall-clock duration-bounds anomaly check** (validates §3.3's one-continuous-session guarantee, emits `fail`/`measurement-anomaly`, declares the testbed entry of `release/duration-bounds.json` per AC-14/§2.3.5; wired into whole-set self-verification by RRG.4), and **owns the AC-10/§7.4 AT2/AT3 disposition logic** (fail-closed default, standing-skip encoding) | RRG.1 | Cipher |
 | RRG.3b | Testbed-repo tier definitions: merge testbed PR #2 and add Phase-AV coverage definitions (§7.1). Acceptance: §7.1–§7.3 items resolved (definitions exist for every executed row, AT8 reconciled, detail-population expectations encoded). Fallback if PR #2 stalls (external repo): the gate pins to a Rand-approved testbed commit SHA carrying the reviewed definitions — RRG.3a is not blocked, only the pin value changes | RRG.1; parallel-safe with RRG.3a (see note below) | Cipher (atm-hermes-testbed PR) |
-| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs; **wires the RRG.2 anomaly-check set, duplicate-`suite_id` rejection across both `suites[]` and `ci_runs[]`, the floors cross-check (both directions), the suite_id↔`fail_reason` compatibility re-check, the RRG.3a testbed duration-bounds check, the AC-13 `workspace_version` cross-checks (Cargo.toml match + cross-attempt uniqueness), and the §2.2.6 emission-time CI re-verification into §2.3.3 whole-set self-verification** (AC-7, AC-11, AC-13). **Explicit acceptance item: an emission-time refusal invokes the RRG.1 refusal-record writer with `refusal_point: "emission"` — reused, never re-implemented — so the AC-11 emission path cannot silently skip the record.** **Explicit acceptance item (AC-12): the publisher readiness preflight invokes an RRG.4-delivered mechanized check — READY-manifest schema validation, bump-only diff (gated commit ↔ candidate tag commit), and binding `tag_candidate` ↔ tag-version equality — as code, not checklist prose; the release gate is not deliverable without it.** Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8, using the §2.2 rule 6 rehearsal carve-out — no live GH API dependency) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
+| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs; **wires the RRG.2 anomaly-check set, duplicate-`suite_id` rejection across both `suites[]` and `ci_runs[]`, the floors cross-check (both directions), the suite_id↔`fail_reason` compatibility re-check, the RRG.3a testbed duration-bounds check, **the AC-14 duration-bounds artifact validation (launch-time gate on the committed [release-duration-bounds.schema.json](release-duration-bounds.schema.json), the "duration bounds unusable" named startup failure, and the emission-time re-validation)**, the AC-13 `workspace_version` cross-checks (Cargo.toml match + cross-attempt uniqueness), and the §2.2.6 emission-time CI re-verification into §2.3.3 whole-set self-verification** (AC-7, AC-11, AC-13, AC-14). **Explicit acceptance item: an emission-time refusal invokes the RRG.1 refusal-record writer with `refusal_point: "emission"` — reused, never re-implemented — so the AC-11 emission path cannot silently skip the record.** **Explicit acceptance item (AC-12): the publisher readiness preflight invokes an RRG.4-delivered mechanized check — the §4 lookup algorithm with both fail-closed edges (zero READY matches / more than one READY match), READY-manifest schema validation, bump-only diff (gated commit ↔ candidate tag commit), and binding `tag_candidate` ↔ tag-version equality — as code, not checklist prose; the release gate is not deliverable without it.** Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8, using the §2.2 rule 6 rehearsal carve-out — no live GH API dependency) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
 
 RRG.3a/RRG.3b parallel-safety rationale: disjoint repos (RRG.3b edits only
 atm-hermes-testbed; RRG.3a edits only atm-core). Their sole coupling is the
@@ -1090,10 +1167,11 @@ owns; no sprint-local reinterpretation.
     both §6 rows).
   - M1r9 (refusal-record candidate block lagged the manifest's) →
     refusal schema's `tag_candidate` now patterned `^v\d+\.\d+\.0$`
-    (same shape, same candidate) and an OPTIONAL `workspace_version`
-    (patterned `X.Y.Z`) added — present when the refusal fired after
-    the gate's first opening act recorded it, absent for a pre-launch
-    refusal that fired before the version was read.
+    (same shape, same candidate) and a `workspace_version`
+    (patterned `X.Y.Z`) added. *(Corrected in r11 per I1r10: the field
+    is REQUIRED — Act 1 always precedes any refusal point, so the
+    original present-when/absent-when framing was impossible under the
+    plan's own ordering.)*
   - M2r9 (cross-attempt uniqueness assumed serialized launches) → AC-13
     states the §5 single-runner serialized-launch **precondition**
     explicitly: gate launches are serialized; concurrent launches are
@@ -1103,3 +1181,62 @@ owns; no sprint-local reinterpretation.
     REJECTED, record without `workspace_version` still VALID (optional),
     record with malformed `workspace_version` REJECTED; all manifest
     probes unchanged.
+- **r11 (2026-09-01, fix round for quality-mgr r10 FAIL @ 1b18cb1b4 —
+  1B/4I/3M; r9 dispositions 4 Fixed / 2 Partial)**:
+  - B1r10 (duration-bounds artifact named but not contracted — the
+    B1r7/B2r8 unowned-normative-artifact class) → committed
+    **`release-duration-bounds.schema.json`** + worked example
+    (`release-duration-bounds.example.json`): closed catalog, exactly
+    one `min_seconds`/`max_seconds` entry per §3 suite, required
+    `revision`/`approved_by`/`approved_at` approval marker per the §3.2
+    `baselines.json` revision convention (unapproved seed cannot
+    validate). New **AC-14** owns shape, launch-time validation with
+    the fail-closed named startup failure **"duration bounds unusable"**
+    (missing file / schema-invalid / missing entry / `min >= max` —
+    harness defect, never silent skip), emission-time re-validation,
+    and RRG.2/RRG.3a entry-declaration + RRG.4 wiring ownership (all
+    three §6 rows updated).
+  - I1r10 (refusal `workspace_version` presence semantics impossible
+    under the plan's own ordering; example violated them) → field now
+    **REQUIRED** (Act 1 always records the version before Act 2 — the
+    only refusal source — can fire); present-when/absent-when framing
+    dropped from schema description, §2.2 rule 6, and the r10 M1r9
+    changelog line (corrected in place); example carries
+    `workspace_version: "1.5.7"`. The genuinely version-less scenario
+    is Act-1 failure — §2.2 rule 7's "candidate version unreadable",
+    not a refusal (I4r10).
+  - I2r10 (AC-12(i) locate step underdefined) → **§4 lookup algorithm**
+    stated in §4 and AC-12(i): glob
+    `site/reports/release-readiness/<tag_candidate>-*/manifest.json`
+    excluding `rehearsal/`, schema-validate matches, require **exactly
+    one** `verdict: "READY"` — zero fails ("no READY manifest for
+    candidate"), more than one fails closed ("ambiguous READY
+    evidence", never an arbitrary pick); RRG.4's AC-12 acceptance item
+    names both edges.
+  - I3r10 (refusal records under one constant-`tag_candidate` dir could
+    silently overwrite, falsifying refused-N-times) → **per-event
+    filename convention** in §2.2 rule 6:
+    `<refused_at compact UTC>-<refusal_point>.json`, writer refuses to
+    overwrite an existing record (fail-closed); named in the RRG.1
+    writer acceptance item.
+  - I4r10 (Act-1 failure had no named state) → new **§2.2 rule 7:
+    named startup failures**, distinct from the refusal taxonomy and
+    INCOMPLETE-by-absence: "candidate version unreadable" (Act-1
+    `Cargo.toml` read failure) and "duration bounds unusable" (AC-14);
+    both are pre-launch aborts — no suites, no manifest, no refusal
+    record, self-describing operator-facing state.
+  - M1r10 (RRG.1 cell consumability) → rewritten as five enumerated
+    deliverables.
+  - M2r10 (seeding discipline repeated verbatim) → canonical statement
+    lives in §2.3.5 + AC-14; §2.3.3 and the §6 rows cross-reference
+    (`per AC-14/§2.3.5`).
+  - M3r10 (min-bound rationale unstated) → §2.3.5 (and the bounds
+    schema description): min flags a short-circuited/truncated
+    workload — work skipped, not speed penalized; max flags a
+    stalled/contaminated run.
+  - Schema + examples revalidated: full probe battery green; new
+    probes — duration-bounds example VALID; missing suite entry,
+    extra non-catalog entry, missing `approved_by`/`revision`, and
+    malformed bound REJECTED; refusal record without
+    `workspace_version` now REJECTED (required); all prior manifest and
+    refusal probes unchanged.
