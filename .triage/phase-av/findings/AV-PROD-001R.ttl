@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-01T00:59:35Z"^^xsd:dateTime ;
+  triage:closedBy "Cipher-311d" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-31T14:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV4 ;
@@ -23,40 +25,40 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O3> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/read_benchmark.py" ;
   triage:line 366 ;
-  triage:snippet "host_label: machine identity, no execution_account" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "execution_identity captures execution_account, uid, home, hostname" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-av" ;
-  triage:headSha "c330637c2" ;
-  triage:occursIn <urn:atm:triage:worktree/av-int-1-c330637c2> .
+  triage:headSha "875b7d175" ;
+  triage:occursIn <urn:atm:triage:worktree/av-int-2-875b7d175> .
 
 <urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O2>
   a triage:Occurrence ;
   triage:file "site/reports/read-query-benchmark/baselines.json" ;
   triage:line 6 ;
-  triage:snippet "host_label only, missing execution_account field" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "baseline entries retain host_label; campaign provenance is in emitted execution_identity" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-av" ;
-  triage:headSha "c330637c2" ;
-  triage:occursIn <urn:atm:triage:worktree/av-int-1-c330637c2> .
+  triage:headSha "875b7d175" ;
+  triage:occursIn <urn:atm:triage:worktree/av-int-2-875b7d175> .
 
 <urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O3>
   a triage:Occurrence ;
   triage:file "site/reports/read-query-benchmark/20260831T210351Z-rand-m5.local-read.json" ;
   triage:line 3 ;
-  triage:snippet "host_label: rand-m5.local, execution_account absent" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "campaign JSON now embeds execution_identity alongside host_label" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-av" ;
-  triage:headSha "c330637c2" ;
-  triage:occursIn <urn:atm:triage:worktree/av-int-1-c330637c2> .
+  triage:headSha "875b7d175" ;
+  triage:occursIn <urn:atm:triage:worktree/av-int-2-875b7d175> .
 
 <urn:atm:triage:worktree/av-int-1-c330637c2>
   a triage:WorktreeSnapshot ;
@@ -64,3 +66,10 @@
   triage:branch "integrate/phase-av" ;
   triage:headSha "c330637c2" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/av-int-2-875b7d175>
+  a triage:WorktreeSnapshot ;
+  triage:path "." ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "875b7d175" ;
+  triage:orderIndex 2 .
