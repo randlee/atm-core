@@ -22,9 +22,18 @@
       "additionalProperties": false,
       "required": ["tag_candidate", "commit_sha", "branch"],
       "properties": {
-        "tag_candidate": { "type": "string", "minLength": 1 },
+        "tag_candidate": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+\\.0$",
+          "description": "Same shape as the manifest's candidate.tag_candidate (§5.1: proposed releases are always vX.Y.0) — the refusal record names the same candidate the gate refused."
+        },
         "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-        "branch": { "type": "string", "minLength": 1 }
+        "branch": { "type": "string", "minLength": 1 },
+        "workspace_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "OPTIONAL: the gated tree's Cargo.toml [workspace.package] version (§5.1 per-attempt patch++). Present when the refusal fired after the gate's first opening act recorded it (AC-13); absent for a pre-launch refusal that fired before the version was read."
+        }
       }
     },
     "refusal_point": {

@@ -41,7 +41,7 @@
         "workspace_version": {
           "type": "string",
           "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
-          "description": "The gated commit's Cargo.toml [workspace.package] version — the §5.1 mandatory per-attempt patch++ version (AC-13). Recorded by the orchestrator's first act from the checked-out gated tree; the self-verifier cross-checks it against Cargo.toml and refuses emission if any previously committed run_kind:release manifest under the evidence root records the same value — attempt distinctness is checkable, never asserted."
+          "description": "The gated commit's Cargo.toml [workspace.package] version — the §5.1 mandatory per-attempt patch++ version (AC-13). Recorded by the orchestrator's first act from the checked-out gated tree; the self-verifier cross-checks it against Cargo.toml and refuses emission if any previously committed run_kind:release manifest under the §4 release-manifest path convention (site/reports/release-readiness/<tag_candidate>-<workspace_version>/manifest.json; rehearsal/ excluded) records the same value — attempt distinctness is checkable, never asserted."
         }
       }
     },
