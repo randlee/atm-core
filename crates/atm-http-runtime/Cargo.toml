@@ -15,8 +15,8 @@ homepage.workspace = true
 test-support = []
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.6" }
-atm-herdr = { path = "../atm-herdr", version = "1.4.6" }
+atm-core.workspace = true
+atm-herdr.workspace = true
 base64.workspace = true
 axum.workspace = true
 hyper.workspace = true
@@ -36,9 +36,9 @@ ulid.workspace = true
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Memory"] }
 
 [dev-dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.6", features = ["test-utils"] }
-atm-herdr = { path = "../atm-herdr", version = "1.4.6", features = ["test-utils"] }
-atm-runtime-test-support = { path = "../atm-runtime-test-support" }
-atm-storage = { path = "../atm-storage", version = "1.4.6" }
+atm-core = { workspace = true, features = ["test-utils"] }
+atm-herdr = { workspace = true, features = ["test-utils"] }
+atm-runtime-test-support.workspace = true
+atm-storage.workspace = true
 serde_yaml = "0.9"
 tempfile = "3"

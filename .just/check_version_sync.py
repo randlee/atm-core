@@ -164,6 +164,9 @@ def validate_crate_versions(repo_root: Path, workspace_version: str) -> None:
     if not manifests:
         fail("no workspace member manifests found")
 
+    root_manifest = tomllib.loads(read_text(repo_root / "Cargo.toml"))
+    workspace = root_manifest.get("workspace", {})
+    workspace_dependencies = workspace.get("dependencies", {}) if isinstance(workspace, dict) else {}
     workspace_member_dirs = {manifest_path.parent.resolve() for manifest_path in manifests}
     manifest_payloads: dict[Path, tuple[str, dict, str]] = {}
     expected_versions: dict[Path, str] = {}
@@ -189,6 +192,26 @@ def validate_crate_versions(repo_root: Path, workspace_version: str) -> None:
         for section_name, dependencies in dependency_sections(manifest):
             for dependency_name, dependency in dependencies.items():
                 if not isinstance(dependency, dict):
+                    continue
+                if dependency.get("workspace") is True:
+                    workspace_dependency = workspace_dependencies.get(dependency_name)
+                    if not isinstance(workspace_dependency, dict):
+                        continue
+                    dependency_path = workspace_dependency.get("path")
+                    if not isinstance(dependency_path, str):
+                        continue
+                    resolved_path = (repo_root / dependency_path).resolve()
+                    if resolved_path not in workspace_member_dirs:
+                        continue
+                    if not publish_flags.get(resolved_path, True):
+                        continue
+                    dependency_version = expected_versions[resolved_path]
+                    pinned_version = workspace_dependency.get("version")
+                    if pinned_version != dependency_version:
+                        fail(
+                            f"{rel_manifest} [{section_name}.{dependency_name}]: "
+                            f'internal workspace dependency version must match target crate version "{dependency_version}"'
+                        )
                     continue
                 dependency_path = dependency.get("path")
                 if not isinstance(dependency_path, str):
