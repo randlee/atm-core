@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-EXP-C7>
+  a triage:Finding ;
+  triage:findingId "AV-EXP-C7" ;
+  triage:title "AV.3 mechanical gate gaps: no semaphore/writer-submission terms, search + queue_get_next handlers unscanned, body-local scan defeatable by indirection" ;
+  triage:description "Read concurrency gate implementation lacks semaphore/writer-submission term verification; search and queue_get_next handlers remain unscanned; body-local scan defeatable through indirection. Defined in .just/check_read_concurrency_gates.py and .just/allowlists/read_concurrency_handlers.txt." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C7/AV-C7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-EXP-C7/AV-C7-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_read_concurrency_gates.py" ;
+  triage:line 1 ;
+  triage:snippet "concurrency gate verification incomplete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40> .
+
+<urn:atm:triage:worktree/integrate-phase-av/846c58b40>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:orderIndex 0 .

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-EXP-C1>
+  a triage:Finding ;
+  triage:findingId "AV-EXP-C1" ;
+  triage:title "Supervisor terminal death: unrestartable mailbox handoff worker" ;
+  triage:description "Global OnceLock / static shutdown state leaks across test cases. Any 5s writer-lane error streak, or a row hard-deleted mid-handoff via FK CASCADE, permanently kills read/seen marking with no restart attempt (restart budget covers panics only), contra ADR-059 D2. Soft-delete has NO live writer (delete_message hard-deletes; only test-only raw writes set deleted_at) and read_mail is unrouted (router uses read_command only), so the originally-cited deterministic manufacture path is not live; the real class is hard-delete CASCADE + writer stalls." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AV-EXP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C1/C1-worker-err> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C1/C1-cascade-delete> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-EXP-C1/C1-worker-err>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 305 ;
+  triage:snippet "run_handoff_worker returns Err after deadline exhaustion, terminal STATE_UNAVAILABLE" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40f18affb8243abe7c6ae0824451ce963" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40f> .
+
+<urn:atm:triage:occurrence/AV-EXP-C1/C1-cascade-delete>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 201 ;
+  triage:snippet "0-row UPDATE on mark_message_read guard produces Err" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40f18affb8243abe7c6ae0824451ce963" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40f> .
+
+<urn:atm:triage:worktree/integrate-phase-av/846c58b40f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40f18affb8243abe7c6ae0824451ce963" ;
+  triage:orderIndex 0 .
