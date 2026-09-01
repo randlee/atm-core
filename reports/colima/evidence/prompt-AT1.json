@@ -1,0 +1,45 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT1-addressing-and-routing",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "same-team-send",
+      "status": "pass",
+      "detail": "ATM_IDENTITY=fx-at1-alpha atm send fx-at1-beta 'AT1-SAME-1' --team fx-at1: exit code 0, message sent with id 01M1CQV6CKCCFRA90MC6WAF5BP"
+    },
+    {
+      "name": "cross-team-send",
+      "status": "pass",
+      "detail": "ATM_IDENTITY=fx-at1-alpha atm send fx-at1b-gamma@fx-at1b 'AT1-XTEAM-1' --team fx-at1: exit code 0, message sent and verified in fx-at1b-gamma's read output"
+    },
+    {
+      "name": "unknown-recipient-typed-error",
+      "status": "pass",
+      "detail": "Unknown recipient command returned exit code 3 (non-zero as expected). Stderr contains 'Error(AtmError { code: AgentNotFound' in Rust debug format. Stdout empty. Error message: agent 'at1-does-not-exist' was not found in team 'fx-at1'"
+    },
+    {
+      "name": "identity-only-self-send-rejected",
+      "status": "pass",
+      "detail": "Identity-only self-send (fx-at1-alpha -> fx-at1-alpha without --host) rejected with exit code 3. Stderr contains error code 'SelfAddressedSendInvalid': 'self-addressed messages are invalid ATM input'"
+    },
+    {
+      "name": "host-qualified-self-send-exempted",
+      "status": "pass",
+      "detail": "Host-qualified self-send (fx-at1-alpha -> fx-at1-alpha with --host localhost --dry-run) succeeded with exit code 0. Self-send guard was bypassed as expected for host-qualified destinations"
+    },
+    {
+      "name": "help-text-matches-docs",
+      "status": "pass",
+      "detail": "atm send --help --host flag description: 'Route this send through the explicitly named host... This is wire-equivalent to a host-qualified recipient address.' Does not use exact wording 'qualifies the resolved recipient as agent@team.host' but conveys equivalent meaning through 'wire-equivalent to a host-qualified recipient address'"
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {
+    "atm": "1.4.6",
+    "hermes_atm": "not found",
+    "atm_graft": "not found"
+  },
+  "started_at": "2026-08-31T20:22:00Z",
+  "finished_at": "2026-08-31T20:24:06Z"
+}

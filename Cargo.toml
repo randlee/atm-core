@@ -43,6 +43,7 @@ tracing-subscriber = "0.3"
 cargo_metadata = "0.23"
 sc-observability = "=1.2.0"
 sc-observability-types = "=1.2.0"
+sc-lint-directives = { path = "crates/sc-lint-directives" }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tokio-rustls = "0.26"
 x509-parser = "0.16"
@@ -61,3 +62,16 @@ getrandom = "0.3"
 syn = { version = "2", features = ["full", "visit"] }
 semver = { version = "1", features = ["serde"] }
 async-trait = "0.1"
+atm-core = { package = "agent-team-mail-core", path = "crates/atm-core", version = "1.4.6" }
+atm-daemon-bootstrap = { path = "crates/atm-daemon-bootstrap", version = "1.4.6" }
+atm-daemon-client = { path = "crates/atm-daemon-client", version = "1.4.6" }
+atm-error = { path = "crates/atm-error", version = "1.4.6" }
+atm-graft = { path = "crates/atm-graft", version = "1.4.6" }
+atm-herdr = { path = "crates/atm-herdr", version = "1.4.6" }
+atm-http-runtime = { path = "crates/atm-http-runtime", version = "1.4.6" }
+atm-runtime = { path = "crates/atm-runtime", version = "1.4.6" }
+atm-runtime-test-support = { path = "crates/atm-runtime-test-support" }
+atm-storage = { path = "crates/atm-storage", version = "1.4.6" }
+atm-storage-rusqlite = { path = "crates/atm-storage-rusqlite", version = "1.4.6" }
+atm-template-sc-compose = { path = "crates/atm-template-sc-compose", version = "1.4.6" }
+peer-tls = { path = "crates/peer-tls", version = "1.4.6" }

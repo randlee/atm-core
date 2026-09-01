@@ -1739,6 +1739,7 @@ def collect_manifest_consistency_violations(repo_root: Path, records: list[Bound
 def collect_allowed_dependent_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
     infos = manifest_info(repo_root)
+    alias_map = manifest_by_alias(repo_root)
     workspace_aliases = {alias for info in infos for alias in info.aliases}
     records_by_owner: dict[str, list[BoundaryRecord]] = {}
     for record in records:
@@ -1759,7 +1760,8 @@ def collect_allowed_dependent_violations(repo_root: Path, records: list[Boundary
                     continue
                 for dependency_name, dependency in dependencies.items():
                     package_name = dependency_package_name(dependency_name, dependency)
-                    if package_name != owner_info.package_name:
+                    dependency_info = alias_map.get(package_name) or alias_map.get(dependency_name)
+                    if dependency_info is None or dependency_info.path != owner_info.path:
                         continue
                     depender_aliases = set(depender_info.aliases)
                     live_allowed_aliases.update(depender_aliases)

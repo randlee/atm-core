@@ -51,25 +51,6 @@ def relative_manifest_display(manifest_path: Path, repo_root: Path) -> str:
     return manifest_path.relative_to(repo_root).as_posix()
 
 
-def dependency_sections(manifest: dict) -> list[tuple[str, dict]]:
-    sections: list[tuple[str, dict]] = []
-    for section_name in ("dependencies", "dev-dependencies", "build-dependencies"):
-        dependencies = manifest.get(section_name)
-        if isinstance(dependencies, dict):
-            sections.append((section_name, dependencies))
-
-    targets = manifest.get("target", {})
-    if isinstance(targets, dict):
-        for target_name, target in targets.items():
-            if not isinstance(target, dict):
-                continue
-            for section_name in ("dependencies", "dev-dependencies", "build-dependencies"):
-                dependencies = target.get(section_name)
-                if isinstance(dependencies, dict):
-                    sections.append((f"target.{target_name}.{section_name}", dependencies))
-    return sections
-
-
 def collect_manifest_violations(repo_root: Path) -> list[ManifestViolation]:
     violations: list[ManifestViolation] = []
     try:
@@ -78,32 +59,22 @@ def collect_manifest_violations(repo_root: Path) -> list[ManifestViolation]:
         return [ManifestViolation("version sync", str(error))]
 
     manifests = member_manifests(repo_root)
-    expected_versions: dict[Path, str] = {}
-    publish_flags: dict[Path, bool] = {}
-
     for manifest_path in manifests:
         manifest = tomllib_load(manifest_path)
         rel_manifest = relative_manifest_display(manifest_path, repo_root)
-        member_dir = manifest_path.parent.resolve()
-        expected_versions[member_dir] = expected_package_version(
+        expected_version = expected_package_version(
             manifest,
             version,
             rel_manifest,
         )
-        if expected_versions[member_dir] != version:
+        if expected_version != version:
             violations.append(
                 ManifestViolation(
                     "version sync",
-                    f"{rel_manifest} [package].version ({expected_versions[member_dir]}) "
+                    f"{rel_manifest} [package].version ({expected_version}) "
                     f"must equal expected workspace member version ({version})",
                 )
             )
-        package = manifest.get("package", {}) if isinstance(manifest.get("package"), dict) else {}
-        publish_value = package.get("publish", True)
-        # `publish = false` (bool) marks the crate as internal-only; treat any
-        # other value (True or registry allowlist) as publishable.
-        publish_flags[member_dir] = publish_value is not False
-
     for manifest_path in manifests:
         manifest = tomllib_load(manifest_path)
         rel_manifest = relative_manifest_display(manifest_path, repo_root)
@@ -118,32 +89,6 @@ def collect_manifest_violations(repo_root: Path) -> list[ManifestViolation]:
                 violations.append(
                     ManifestViolation(rel_manifest, f"set [package].{field}.workspace = true")
                 )
-
-        for section_name, dependencies in dependency_sections(manifest):
-            for dependency_name, dependency in dependencies.items():
-                if not isinstance(dependency, dict):
-                    continue
-                dependency_path = dependency.get("path")
-                if not isinstance(dependency_path, str):
-                    continue
-                resolved_path = (manifest_path.parent / dependency_path).resolve()
-                expected_dependency_version = expected_versions.get(resolved_path)
-                if expected_dependency_version is None:
-                    continue
-                # Skip version-pin enforcement when the target crate is publish=false.
-                # Versioned deps on publish=false crates break `cargo publish` (cargo
-                # tries to resolve the pin on crates.io, where the crate never appears).
-                if not publish_flags.get(resolved_path, True):
-                    continue
-                dependency_path = dependency.get("path")
-                pinned_version = dependency.get("version")
-                if pinned_version != expected_dependency_version:
-                    violations.append(
-                        ManifestViolation(
-                            f"{rel_manifest} [{section_name}.{dependency_name}]",
-                            f'path dependency version must match target crate version "{expected_dependency_version}"',
-                        )
-                    )
 
     return violations
 

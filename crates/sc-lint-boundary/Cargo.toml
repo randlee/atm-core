@@ -23,7 +23,7 @@ anyhow.workspace = true
 cargo_metadata.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sc-lint-directives = { path = "../sc-lint-directives" }
+sc-lint-directives.workspace = true
 sc-lint-attributes = "0.5"
 clap = { version = "4", features = ["derive"] }
 syn = { version = "2", features = ["full", "parsing", "visit"] }
