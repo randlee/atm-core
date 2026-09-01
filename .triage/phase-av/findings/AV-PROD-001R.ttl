@@ -8,7 +8,7 @@
   a triage:Finding ;
   triage:findingId "AV-PROD-001R" ;
   triage:title "Evidence schema incomplete: JSON artifacts and reporting structure lack execution_account/uid/home fields for audit provenance" ;
-  triage:description "Residual finding extracted from AV-PROD-001 counter-evidence: arch-ctm prod review confirmed account-level execution (atmbench@rand-m5.local) for all official AV.4 campaigns; however, the reporting JSON schema in site/reports/read-query-benchmark/ and scripts/smoke/read_benchmark.py schema-emit code do not include execution_account, uid, home, or equivalent audit provenance fields. As-committed artifacts can PASS AV.4 because account identity was verified separately, but future audits cannot reconstruct that proof from the JSON alone. Requires post-merge schema enhancement per Rand's directive: add execution-account metadata capture to both campaign artifact JSON generation and smoke report envelope schema." ;
+  triage:description "Residual finding extracted from AV-PROD-001 counter-evidence: arch-ctm prod review confirmed account-level execution (atmbench@rand-m5.local) for all official AV.4 campaigns; however, the reporting JSON schema in site/reports/read-query-benchmark/ and scripts/smoke/read_benchmark.py schema-emit code do not include execution_account, uid, home, or equivalent audit provenance fields. As-committed artifacts can PASS AV.4 because account identity was verified separately, but future audits cannot reconstruct that proof from the JSON alone. Requires post-merge schema enhancement per Rand's directive: add execution-account metadata capture to both campaign artifact JSON generation and smoke report envelope schema. CLOSURE SCOPE (quality-mgr ratification): closed as future in-band provenance capture only, fixed at 875b7d175. This closure does NOT retroactively give existing AV.4 artifacts in-band provenance (they remain covered by the retained SSH/uid/ownership evidence under AV-PROD-001) and does NOT enforce m5-atmbench-only execution (account admission control is routed to Rand via the release-readiness gate plan)." ;
   triage:phaseId "phase-av" ;
   triage:triageMode "initial_pass" ;
   triage:category "evidence-schema" ;
@@ -16,8 +16,8 @@
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
   triage:status "fixed" ;
-  triage:closedAt "2026-09-01T00:59:35Z"^^xsd:dateTime ;
-  triage:closedBy "Cipher-311d" ;
+  triage:closedAt "2026-09-01T01:22:39Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-31T14:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV4 ;
@@ -25,7 +25,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O3> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O1>
   a triage:Occurrence ;
@@ -53,7 +53,7 @@
   a triage:Occurrence ;
   triage:file "site/reports/read-query-benchmark/20260831T210351Z-rand-m5.local-read.json" ;
   triage:line 3 ;
-  triage:snippet "campaign JSON now embeds execution_identity alongside host_label" ;
+  triage:snippet "historical campaign artifact intentionally unchanged (byte-identical, no execution_identity backfill); in-band identity applies to future campaigns only" ;
   triage:status "fixed" ;
   triage:closed true ;
   triage:branch "integrate/phase-av" ;
