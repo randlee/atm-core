@@ -140,8 +140,19 @@ sprint.
         runs ratchet the floor upward per the existing AO2 ratchet
         convention (floor rises to observed p50 minus the recorded
         tolerance percentage; tolerance value committed in
-        `baselines.json`, unrounded comparison). Floors never move down
-        without an explicitly approved reseed.
+        `baselines.json`, unrounded comparison). The runner must load
+        `baselines.previous.json` for every official run and fail closed
+        with an explicit reason when that state is missing or malformed;
+        ratchet state is never silently dormant. Floors never move down
+        without an explicitly approved reseed. The runner records the
+        in-memory candidate floor and both baseline revisions in each clean
+        campaign; changing the reviewed floor remains a separate commit.
+      - *Effective lane settings:* before seeding or measurement, the
+        runner queries the running daemon's `atm doctor --json` report and
+        requires its `reader_lanes.mailbox` and `reader_lanes.search`
+        pool/queue values to match this D7 contract. A report without those
+        effective settings, or with a mismatch, is a hard failure; Python
+        constants are not accepted as a proxy for daemon configuration.
       - *Provenance:* the committed baseline entry records the 3 source
         campaign IDs (report paths under `site/reports/`), host label,
         harness version, corpus seed; every campaign report is committed
@@ -152,6 +163,9 @@ sprint.
         field cannot be captured. `host_label` remains the operator-selected
         machine label and is not an execution-account assertion. Historical
         artifacts without this additive object remain valid and immutable.
+        Every campaign/report also carries the limitation note that these
+        floors are end-to-end CLI (spawn-dominated) sensors; deeper
+        lane-sensitivity redesign is deferred under AV-EXP-C6.
 
 ## Contract samples
 

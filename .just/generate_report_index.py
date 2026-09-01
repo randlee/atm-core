@@ -31,7 +31,9 @@ REQUIRED_FIELDS = frozenset(
 )
 # New benchmark producers may include in-band execution provenance.  Historical
 # envelopes do not carry it, so discovery must accept both shapes.
-OPTIONAL_FIELDS = frozenset({"execution_identity"})
+OPTIONAL_FIELDS = frozenset({
+    "execution_identity", "measurement_note", "effective_lane_settings", "ratchet",
+})
 SMOKE_STATUS_VALUES = frozenset({"PASS", "FAIL"})
 
 

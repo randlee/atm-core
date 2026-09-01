@@ -398,6 +398,9 @@ def render_envelope(
     generated_at: str | None = None,
     host_label: str | None = None,
     execution_identity: Mapping[str, Any] | None = None,
+    measurement_note: str | None = None,
+    effective_lane_settings: Mapping[str, Any] | None = None,
+    ratchet: Mapping[str, Any] | None = None,
 ) -> None:
     """Write the shared reports-index envelope for benchmark-family reports.
 
@@ -419,6 +422,15 @@ def render_envelope(
     }
     if execution_identity is not None:
         payload["execution_identity"] = dict(execution_identity)
+    if measurement_note is not None:
+        payload["measurement_note"] = measurement_note
+    if effective_lane_settings is not None:
+        payload["effective_lane_settings"] = {
+            lane: dict(values) if isinstance(values, Mapping) else values
+            for lane, values in effective_lane_settings.items()
+        }
+    if ratchet is not None:
+        payload["ratchet"] = dict(ratchet)
     (report_root / f"{report_name}.json").write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )

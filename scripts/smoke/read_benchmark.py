@@ -72,6 +72,10 @@ CORPUS_PAYLOAD_BYTES = 256
 CORPUS_SKEW_PROFILE = "uniform:one-message-per-member"
 HARNESS_VERSION = "av4-read-benchmark-1"
 RATCHET_TOLERANCE_PCT = 5
+MEASUREMENT_LIMITATION_NOTE = (
+    "Throughput floors are end-to-end CLI (spawn-dominated) sensors; deeper "
+    "lane-sensitivity redesign is deferred under AV-EXP-C6."
+)
 # AV.1b's reader-handler cutover is merged in the reviewed phase-av
 # merge-forward (PR #1115). Keep official/seeding runs gated until this
 # explicit provenance marker changes in that merge-forward; diagnostics remain
@@ -264,6 +268,79 @@ def _atm_binary() -> str:
     if found:
         return found
     raise ReadBenchmarkError("release-built atm is required; run cargo build --release first")
+
+
+def _parse_effective_lane_settings(payload: Any) -> dict[str, dict[str, int]]:
+    """Extract the daemon-reported reader-lane contract, or fail closed.
+
+    The benchmark must not infer effective settings from this module's
+    constants.  The daemon's doctor report is the runtime source of truth;
+    older daemons that do not publish ``reader_lanes`` are intentionally
+    rejected instead of producing misleading evidence.
+    """
+    if not isinstance(payload, dict):
+        raise ReadBenchmarkError("daemon doctor report must be a JSON object")
+    raw = payload.get("reader_lanes")
+    if raw is None and isinstance(payload.get("config"), dict):
+        raw = payload["config"].get("reader_lanes")
+    if not isinstance(raw, dict):
+        raise ReadBenchmarkError(
+            "daemon doctor report does not expose effective reader_lanes; "
+            "refusing to validate Python constants"
+        )
+    settings: dict[str, dict[str, int]] = {}
+    for lane in ("mailbox", "search"):
+        value = raw.get(lane)
+        if not isinstance(value, dict):
+            raise ReadBenchmarkError(f"daemon reader_lanes.{lane} is missing")
+        pool_size, queue_depth = value.get("pool_size"), value.get("queue_depth")
+        if (
+            isinstance(pool_size, bool) or not isinstance(pool_size, int) or pool_size < 1
+            or isinstance(queue_depth, bool) or not isinstance(queue_depth, int) or queue_depth < 1
+        ):
+            raise ReadBenchmarkError(
+                f"daemon reader_lanes.{lane} has invalid pool_size/queue_depth"
+            )
+        settings[lane] = {"pool_size": pool_size, "queue_depth": queue_depth}
+    return settings
+
+
+def load_effective_lane_settings(atm: str, env: Mapping[str, str]) -> dict[str, dict[str, int]]:
+    """Read effective lane settings from the running daemon's doctor report."""
+    result = _run([atm, "doctor", "--json"], env, timeout=15.0)
+    if result.returncode:
+        raise ReadBenchmarkError(
+            result.stderr.strip() or result.stdout.strip() or "daemon doctor failed"
+        )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise ReadBenchmarkError(f"daemon doctor returned invalid JSON: {error}") from error
+    return _parse_effective_lane_settings(payload)
+
+
+def validate_effective_lane_settings(
+    families: Sequence[ReadFamily], settings: Mapping[str, Mapping[str, int]],
+) -> None:
+    """Require the running daemon to match every D7 lane contract value."""
+    expected = {
+        "mailbox": (MAILBOX_POOL_SIZE, MAILBOX_QUEUE_DEPTH),
+        "search": (SEARCH_POOL_SIZE, SEARCH_QUEUE_DEPTH),
+    }
+    for lane, (pool_size, queue_depth) in expected.items():
+        actual = settings.get(lane)
+        if not isinstance(actual, Mapping):
+            raise ReadBenchmarkError(f"daemon reader-lanes report omitted {lane}")
+        observed = (actual.get("pool_size"), actual.get("queue_depth"))
+        if observed != (pool_size, queue_depth):
+            raise ReadBenchmarkError(
+                f"daemon {lane} lane settings {observed!r} do not satisfy D7 "
+                f"contract {(pool_size, queue_depth)!r}"
+            )
+    for family in families:
+        actual = settings[family.lane]
+        if (actual["pool_size"], actual["queue_depth"]) != (family.pool_size, family.queue_depth):
+            raise ReadBenchmarkError(f"family {family.family_id} lane settings disagree with daemon")
 
 
 def _ensure_member(atm: str, env: Mapping[str, str], team: str, agent: str) -> None:
@@ -555,6 +632,72 @@ def _check_baseline_revision(previous: BaselineSet, current: BaselineSet) -> Non
         raise ReadBenchmarkError(str(error)) from error
 
 
+def load_previous_baselines(path: Path) -> BaselineSet:
+    """Load the prior ratchet state; absence is an explicit hard failure."""
+    if not path.is_file():
+        raise ReadBenchmarkError(
+            f"official read campaign requires ratchet state at {path}; "
+            "missing baselines.previous.json is not a dormant ratchet"
+        )
+    try:
+        return load_baselines(path)
+    except BenchmarkBaselineError as error:
+        raise ReadBenchmarkError(
+            f"official read campaign cannot use malformed ratchet state {path}: {error}"
+        ) from error
+
+
+def ratchet_floor(observed_p50: float, tolerance_pct: float = RATCHET_TOLERANCE_PCT) -> float:
+    """Compute AO2's unrounded observed-p50-minus-tolerance candidate floor."""
+    if not isinstance(observed_p50, (int, float)) or isinstance(observed_p50, bool):
+        raise ReadBenchmarkError("ratchet observed p50 must be numeric")
+    if not isinstance(tolerance_pct, (int, float)) or isinstance(tolerance_pct, bool):
+        raise ReadBenchmarkError("ratchet tolerance must be numeric")
+    if observed_p50 < 0 or tolerance_pct < 0 or tolerance_pct >= 100:
+        raise ReadBenchmarkError("ratchet p50/tolerance values are outside the valid range")
+    return observed_p50 * (1.0 - tolerance_pct / 100.0)
+
+
+def engage_ratchet(
+    results: Sequence[Mapping[str, Any]], baselines: BaselineSet, previous: BaselineSet,
+    host_label: str,
+) -> dict[str, Any]:
+    """Record the ratchet proposal for a clean official campaign.
+
+    This is deliberately an in-memory proposal: changing reviewed floors is a
+    separate, reviewable commit.  The campaign records the exact candidate and
+    source state, while never lowering an existing floor.
+    """
+    if any(result.get("status") != "PASS" for result in results):
+        raise ReadBenchmarkError("ratchet engages only after a clean official campaign")
+    entries: list[dict[str, Any]] = []
+    for result in results:
+        target = result.get("family")
+        if not isinstance(target, str):
+            raise ReadBenchmarkError("ratchet result is missing a family")
+        current = baselines.entry_for(host_label, target)
+        prior = previous.entry_for(host_label, target)
+        observed = result.get("throughput_per_second", {}).get("p50")
+        candidate = ratchet_floor(observed)
+        entries.append({
+            "host_label": host_label,
+            "target": target,
+            "previous_floor": prior.p50_floor,
+            "current_floor": current.p50_floor,
+            "observed_p50": observed,
+            "candidate_floor": candidate,
+            "proposed_floor": max(current.p50_floor, candidate),
+        })
+    return {
+        "engaged": True,
+        "convention": "AO2 observed p50 minus tolerance",
+        "tolerance_pct": RATCHET_TOLERANCE_PCT,
+        "previous_revision": previous.revision,
+        "current_revision": baselines.revision,
+        "entries": entries,
+    }
+
+
 def _report_variables(
     payload: Mapping[str, Any], html_path: Path, json_path: Path,
 ) -> dict[str, Any]:
@@ -565,6 +708,7 @@ def _report_variables(
         f"<code>{esc(payload['host_label'])}</code>.</p>"
         f"<p>Corpus seed <code>{esc(payload['corpus']['seed'])}</code>; generator "
         f"<code>{esc(payload['corpus']['generator_version'])}</code>; fan-out {payload['fanout']}.</p>"
+        f"<p><strong>Measurement note:</strong> {esc(payload['measurement_note'])}</p>"
     )
     rows: list[str] = []
     for result in payload["families"]:
@@ -613,6 +757,8 @@ def _report_variables(
 def build_payload(
     results: Sequence[dict[str, Any]], corpus: Corpus, host_label: str,
     execution_identity: ExecutionIdentity,
+    *, effective_lane_settings: Mapping[str, Mapping[str, int]] | None = None,
+    ratchet: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     started = datetime.now(timezone.utc)
     campaign_id = f"{started.strftime('%Y%m%dT%H%M%SZ')}-{host_label}-read"
@@ -628,6 +774,12 @@ def build_payload(
         "generated_at": started.isoformat().replace("+00:00", "Z"),
         "host_label": host_label,
         "execution_identity": execution_identity.as_dict(),
+        "measurement_note": MEASUREMENT_LIMITATION_NOTE,
+        "effective_lane_settings": (
+            {lane: dict(values) for lane, values in effective_lane_settings.items()}
+            if effective_lane_settings is not None else None
+        ),
+        "ratchet": dict(ratchet) if ratchet is not None else None,
         "status": status,
         "harness_version": HARNESS_VERSION,
         "source_revision": _source_revision(),
@@ -686,11 +838,9 @@ def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
     except BenchmarkBaselineError as error:
         raise ReadBenchmarkError(str(error)) from error
     previous_path = BASELINES_PATH.with_name("baselines.previous.json")
-    if previous_path.exists():
-        try:
-            _check_baseline_revision(load_baselines(previous_path), baselines)
-        except BenchmarkBaselineError as error:
-            raise ReadBenchmarkError(str(error)) from error
+    previous = None if diagnostic_only else load_previous_baselines(previous_path)
+    if previous is not None:
+        _check_baseline_revision(previous, baselines)
     if not diagnostic_only:
         missing = [
             family.family_id
@@ -712,13 +862,22 @@ def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
     atm = _atm_binary()
     env = dict(os.environ)
     env.update({"ATM_IDENTITY": "av4-driver", "ATM_TEAM": "av4-driver"})
+    effective_lane_settings = load_effective_lane_settings(atm, env)
+    validate_effective_lane_settings(families, effective_lane_settings)
     corpus = deterministic_corpus()
     prepare_corpus(atm, env, corpus)
     results = [run_family(atm, family, corpus, env) for family in families]
     if not diagnostic_only:
         for result in results:
             apply_floor(result, baselines.entry_for(host_label, result["family"]))
-    payload = build_payload(results, corpus, host_label, execution_identity)
+    ratchet = (
+        engage_ratchet(results, baselines, previous, host_label)
+        if not diagnostic_only and previous is not None else None
+    )
+    payload = build_payload(
+        results, corpus, host_label, execution_identity,
+        effective_lane_settings=effective_lane_settings, ratchet=ratchet,
+    )
     if not diagnostic_only:
         payload["baseline_revision"] = baselines.revision
     if diagnostic_only:
@@ -768,6 +927,9 @@ def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
             host_label=payload["host_label"],
             report_html="read-query-benchmark/index.html",
             execution_identity=execution_identity.as_dict(),
+            measurement_note=payload["measurement_note"],
+            effective_lane_settings=payload["effective_lane_settings"],
+            ratchet=payload["ratchet"],
         )
         regenerate_index()
         check = subprocess.run(
