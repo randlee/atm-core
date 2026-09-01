@@ -1,0 +1,30 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-PROD-001>
+  a triage:Finding ;
+  triage:findingId "AV-PROD-001" ;
+  triage:title "Evidence provenance ambiguity clarified and residual schema gap identified" ;
+  triage:description "Original finding (arch-ctm prod review, msg 01M1D6WRFXDMWFPJ3NHZ02V9ZF): artifacts carried host_label=rand-m5.local with no execution-account field, raising ambiguity about isolated-account execution (required by phase-av-plan.md:155-160). Counter-evidence (Cipher-311d, msg 01M1D70416RTEK14FJ2KJR4CMN): all four campaigns (20260831T210351Z, 20260831T210445Z, 20260831T210540Z, 20260831T212118Z) ran via ssh atmbench@rand-m5.local, whoami=atmbench, HOME=/Users/atmbench, all reports/logs owned atmbench:staff, account daemon stopped after, shared randlee daemon untouched — host_label is machine identity only. Correction (arch-ctm, msg 01M1D72GEGNP7HPH0ZZ9JQZKFE): original 'DO-NOT-SHIP' withdrawn, revised to 'SHIP-WITH-CONDITIONS'; finding narrows to residual (AV-PROD-001R): JSON/report schema has host_label but NO execution_account/uid/home provenance field, preventing artifacts alone from proving isolated-account execution for future audits. Disposition: account-level provenance confirmed for AV.4; residual schema gap requires post-merge fix to reporting/JSON schema per Rand's directive." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "evidence-provenance" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "site/reports/" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-31T14:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-01T00:46:18Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/av-int-1-c330637c2>
+  a triage:WorktreeSnapshot ;
+  triage:path "." ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:orderIndex 1 .

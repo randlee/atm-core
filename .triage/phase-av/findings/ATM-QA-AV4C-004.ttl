@@ -21,7 +21,7 @@
   triage:closedBy "quality-mgr" ;
   triage:resolutionNote "Fixed @ eb67d77c2 on integrate/phase-av by fenix under docs-staleness standing auth (verified firsthand by quality-mgr): delta is exactly the status flips — sprint-AV.4:8 'planned' -> 'complete', project-plan Phase AV table AV.4 row 'planned (PR #1114 open)' -> 'complete (PR #1114 merged)', and the same-class stale AV.3 row 'in-review (PR #1113 open)' -> 'complete (PR #1113 merged)'. eb67d77c2 confirmed an ancestor of integrate/phase-av HEAD. No re-review round required for the docs flip per standing routing." ;
   triage:triagedAt "2026-08-31T21:15:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AV4CAMPAIGN ;
+  triage:foundIn triage:AV4 ;
   triage:foundAt "2026-08-31T21:15:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AV4C-004/INT-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AV4C-004/INT-2> ;

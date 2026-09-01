@@ -21,7 +21,7 @@
   triage:closedBy "quality-mgr" ;
   triage:resolutionNote "Fixed @ 07b9460ba on integrate/phase-av by fenix under docs-staleness standing auth (verified firsthand by quality-mgr): delta is exactly the two frontmatter flips — phase-av-plan.md:12 'hardening-in-progress' -> 'complete' and sprint-AV.3-mechanical-hard-gates.md:8 'in-review' -> 'complete'. 07b9460ba confirmed an ancestor of integrate/phase-av HEAD. No re-review round required for the 2-line docs flip per fenix routing." ;
   triage:triagedAt "2026-08-31T20:30:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AVPHASE ;
+  triage:foundIn triage:AV4 ;
   triage:foundAt "2026-08-31T20:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-FMS-001/INT-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-FMS-001/INT-2> ;

@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-PROD-001R>
+  a triage:Finding ;
+  triage:findingId "AV-PROD-001R" ;
+  triage:title "Evidence schema incomplete: JSON artifacts and reporting structure lack execution_account/uid/home fields for audit provenance" ;
+  triage:description "Residual finding extracted from AV-PROD-001 counter-evidence: arch-ctm prod review confirmed account-level execution (atmbench@rand-m5.local) for all official AV.4 campaigns; however, the reporting JSON schema in site/reports/read-query-benchmark/ and scripts/smoke/read_benchmark.py schema-emit code do not include execution_account, uid, home, or equivalent audit provenance fields. As-committed artifacts can PASS AV.4 because account identity was verified separately, but future audits cannot reconstruct that proof from the JSON alone. Requires post-merge schema enhancement per Rand's directive: add execution-account metadata capture to both campaign artifact JSON generation and smoke report envelope schema." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "evidence-schema" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T14:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-01T00:49:26Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 366 ;
+  triage:snippet "host_label: machine identity, no execution_account" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/av-int-1-c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O2>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/baselines.json" ;
+  triage:line 6 ;
+  triage:snippet "host_label only, missing execution_account field" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/av-int-1-c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-001R/AV-PROD-001R-O3>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T210351Z-rand-m5.local-read.json" ;
+  triage:line 3 ;
+  triage:snippet "host_label: rand-m5.local, execution_account absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/av-int-1-c330637c2> .
+
+<urn:atm:triage:worktree/av-int-1-c330637c2>
+  a triage:WorktreeSnapshot ;
+  triage:path "." ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:orderIndex 1 .
