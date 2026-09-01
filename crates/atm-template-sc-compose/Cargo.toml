@@ -15,8 +15,8 @@ name = "atm_template_sc_compose"
 [dependencies]
 atm-core.workspace = true
 atm-storage.workspace = true
-sc-composer = "=1.5.0"
-sc-sha = "=1.5.0"
+sc-composer = "=1.6.1"
+sc-sha = "=1.6.1"
 serde_json.workspace = true
 
 [dev-dependencies]

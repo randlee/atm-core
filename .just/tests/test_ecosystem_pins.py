@@ -58,7 +58,7 @@ class EcosystemPinTests(unittest.TestCase):
         _latest_wyvern: mock.Mock,
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
-            "sc-composer": "1.5.0",
+            "sc-composer": "1.6.1",
             "sc-observability": "1.2.0",
             "sc-observability-types": "1.2.0",
         }[dependency]
@@ -73,15 +73,20 @@ class EcosystemPinTests(unittest.TestCase):
 
     @mock.patch.object(VALIDATE_RELEASE, "maybe_file_dep_currency_issue", return_value="https://example.test/issue/1")
     @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.5.0")
-    @mock.patch.object(VALIDATE_RELEASE, "latest_registry_version", return_value="1.5.0")
+    @mock.patch.object(VALIDATE_RELEASE, "latest_registry_version")
     @mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value="/usr/bin/wyvern")
     def test_upstream_regression_reuses_issue_escape_hatch(
         self,
         _which: mock.Mock,
-        _latest_registry: mock.Mock,
+        latest_registry: mock.Mock,
         _latest_wyvern: mock.Mock,
         file_issue: mock.Mock,
     ) -> None:
+        latest_registry.side_effect = lambda _root, dependency: {
+            "sc-composer": "1.6.1",
+            "sc-observability": "1.5.0",
+            "sc-observability-types": "1.5.0",
+        }[dependency]
         findings: list[VALIDATE_RELEASE.Finding] = []
 
         VALIDATE_RELEASE.validate_ecosystem_currency(REPO_ROOT, findings, dry_run=True)
@@ -113,6 +118,7 @@ class EcosystemPinTests(unittest.TestCase):
             for relative_path in (
                 Path("Cargo.toml"),
                 Path("crates/atm-template-sc-compose/Cargo.toml"),
+                Path("tools/bootstrap.toml"),
                 *VALIDATE_RELEASE.WYVERN_PIN_FILES,
             ):
                 destination = root / relative_path
@@ -122,25 +128,37 @@ class EcosystemPinTests(unittest.TestCase):
                 path.write_text(path.read_text().replace("0.5.0", "0.6.0"), encoding="utf-8")
             evidence = root / "evidence.md"
             latest_registry.side_effect = lambda _root, dependency: {
-                "sc-composer": "1.5.0",
+                "sc-composer": "1.6.1",
                 "sc-observability": "1.2.0",
                 "sc-observability-types": "1.2.0",
             }[dependency]
             findings: list[VALIDATE_RELEASE.Finding] = []
-            with mock.patch.dict(
-                VALIDATE_RELEASE.os.environ,
-                {
-                    VALIDATE_RELEASE.ECOSYSTEM_FIX_FORWARD_ENV: "1",
-                    VALIDATE_RELEASE.ECOSYSTEM_KNOWN_GOOD_ENV: json.dumps(
-                        {
-                            "wyvern": "0.5.0",
-                            "sc-composer": "1.4.1",
-                            "sc-observability": "1.1.0",
-                        }
+            with (
+                mock.patch.dict(
+                    VALIDATE_RELEASE.os.environ,
+                    {
+                        VALIDATE_RELEASE.ECOSYSTEM_FIX_FORWARD_ENV: "1",
+                        VALIDATE_RELEASE.ECOSYSTEM_KNOWN_GOOD_ENV: json.dumps(
+                            {
+                                "wyvern": "0.5.0",
+                                "sc-composer": "1.4.1",
+                                "sc-observability": "1.1.0",
+                            }
+                        ),
+                        VALIDATE_RELEASE.ECOSYSTEM_EVIDENCE_ENV: str(evidence),
+                    },
+                    clear=False,
+                ),
+                mock.patch.object(
+                    VALIDATE_RELEASE,
+                    "run_capture",
+                    return_value=subprocess.CompletedProcess(
+                        args=["/usr/bin/tool", "--version"],
+                        returncode=0,
+                        stdout="sc-compose 1.6.1\n",
+                        stderr="",
                     ),
-                    VALIDATE_RELEASE.ECOSYSTEM_EVIDENCE_ENV: str(evidence),
-                },
-                clear=False,
+                ),
             ):
                 VALIDATE_RELEASE.validate_ecosystem_currency(root, findings)
 
@@ -167,7 +185,7 @@ class EcosystemPinTests(unittest.TestCase):
         _latest_wyvern: mock.Mock,
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
-            "sc-composer": "1.5.0",
+            "sc-composer": "1.6.1",
             "sc-observability": "1.2.0",
             "sc-observability-types": "1.2.0",
         }[dependency]
@@ -201,6 +219,7 @@ class EcosystemPinTests(unittest.TestCase):
             for relative_path in (
                 Path("Cargo.toml"),
                 Path("crates/atm-template-sc-compose/Cargo.toml"),
+                Path("tools/bootstrap.toml"),
                 *VALIDATE_RELEASE.WYVERN_PIN_FILES,
             ):
                 destination = root / relative_path
@@ -215,7 +234,7 @@ class EcosystemPinTests(unittest.TestCase):
                 )
             }
             latest_registry = {
-                "sc-composer": "1.5.0",
+                "sc-composer": "1.6.1",
                 "sc-observability": "1.2.0",
                 "sc-observability-types": "1.2.0",
             }
@@ -224,6 +243,16 @@ class EcosystemPinTests(unittest.TestCase):
                 mock.patch.object(VALIDATE_RELEASE, "latest_registry_version", side_effect=lambda _root, dependency: latest_registry[dependency]),
                 mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.5.0"),
                 mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value="/usr/bin/tool"),
+                mock.patch.object(
+                    VALIDATE_RELEASE,
+                    "run_capture",
+                    return_value=subprocess.CompletedProcess(
+                        args=["/usr/bin/tool", "--version"],
+                        returncode=0,
+                        stdout="sc-compose 1.6.1\n",
+                        stderr="",
+                    ),
+                ),
                 mock.patch.object(VALIDATE_RELEASE, "run_ecosystem_command", return_value=True),
                 mock.patch.dict(VALIDATE_RELEASE.os.environ, {VALIDATE_RELEASE.ECOSYSTEM_FIX_FORWARD_ENV: "1"}, clear=False),
             ):
@@ -234,6 +263,46 @@ class EcosystemPinTests(unittest.TestCase):
             }
             self.assertEqual(before, after)
             self.assertFalse(any("pinned back" in finding.summary for finding in findings))
+
+    def test_release_preflight_rejects_a_stale_but_functional_sc_compose_binary(self) -> None:
+        findings: list[VALIDATE_RELEASE.Finding] = []
+        with mock.patch.object(
+            VALIDATE_RELEASE,
+            "run_capture",
+            return_value=subprocess.CompletedProcess(
+                args=["sc-compose", "--version"],
+                returncode=0,
+                stdout="sc-compose 1.5.0\n",
+                stderr="",
+            ),
+        ):
+            accepted = VALIDATE_RELEASE.validate_pinned_sc_compose_binary(
+                REPO_ROOT, findings, "sc-compose"
+            )
+
+        self.assertFalse(accepted)
+        self.assertEqual(len(findings), 1)
+        self.assertIn("does not match", findings[0].summary)
+        self.assertIn("expected exactly 1.6.1", findings[0].detail)
+
+    def test_release_preflight_accepts_the_manifest_sc_compose_binary(self) -> None:
+        findings: list[VALIDATE_RELEASE.Finding] = []
+        with mock.patch.object(
+            VALIDATE_RELEASE,
+            "run_capture",
+            return_value=subprocess.CompletedProcess(
+                args=["sc-compose", "--version"],
+                returncode=0,
+                stdout="sc-compose 1.6.1\n",
+                stderr="",
+            ),
+        ):
+            accepted = VALIDATE_RELEASE.validate_pinned_sc_compose_binary(
+                REPO_ROOT, findings, "sc-compose"
+            )
+
+        self.assertTrue(accepted)
+        self.assertEqual(findings, [])
 
     def test_pin_rewriters_reject_ambiguous_two_match_fixtures(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

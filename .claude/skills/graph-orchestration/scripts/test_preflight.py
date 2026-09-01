@@ -28,7 +28,7 @@ def _module():
 def test_version_floor_is_semver_and_inclusive():
     preflight = _module()
     assert preflight._version("sc-compose 1.2.0") == (1, 2, 0)
-    assert preflight._version("sc-compose 1.5.1") > preflight.MIN_SC_COMPOSE
+    assert preflight._version("sc-compose 1.6.2") > preflight.MIN_SC_COMPOSE
     assert preflight._version("sc-compose 1.2.9") < preflight.MIN_SC_COMPOSE
     assert preflight._version("unknown") is None
 
@@ -56,7 +56,7 @@ def test_binding_rejects_old_python_wheel(monkeypatch):
     )
     result = preflight.check_sc_compose_binding()
     assert not result.ok
-    assert "required >= 1.2.0" in result.detail
+    assert "required >= 1.6.1" in result.detail
 
 
 def test_binding_failure_has_actionable_install_hint(monkeypatch):
@@ -122,7 +122,7 @@ def test_cli_returns_exit_two_and_json_on_forced_bad_python():
     assert payload["error"]["code"] == "DEPENDENCY.PREFLIGHT_FAILED"
 
 
-def test_python_binding_render_integration_when_1_2_or_newer_is_installed():
+def test_python_binding_render_integration_when_1_6_1_or_newer_is_installed():
     """Exercise the required maturin binding; missing setup is a test failure."""
 
     try:
@@ -132,11 +132,11 @@ def test_python_binding_render_integration_when_1_2_or_newer_is_installed():
         raise AssertionError(
             "sc-compose Python bindings not installed. Run: "
             "python3 -m pip install --user --break-system-packages "
-            "'sc-compose>=1.2.0' before running binding integration tests: "
+            "'sc-compose==1.6.1' before running binding integration tests: "
             f"{exc}"
         ) from exc
-    if _module()._version(version) < (1, 2, 0):
-        raise AssertionError(f"sc-compose Python binding {version} is below 1.2.0")
+    if _module()._version(version) < (1, 6, 1):
+        raise AssertionError(f"sc-compose Python binding {version} is below 1.6.1")
     assert sc_compose.render_template("Hello {{ name }}", {"name": "graph"}) == "Hello graph"
 
 

@@ -17,7 +17,7 @@ customization mechanism.
 Installation is three commands, run from the consumer repository root:
 
 ```bash
-# 1. Provision the exact pinned sc-compose 1.5.0 renderer wheel into a virtualenv.
+# 1. Provision the exact pinned sc-compose 1.6.1 renderer wheel into a virtualenv.
 python plugins/sc-publish/.github/scripts/bootstrap_sc_compose.py --venv <venv>
 
 # 2. Install: copy every kit file byte-for-byte and render the two release
