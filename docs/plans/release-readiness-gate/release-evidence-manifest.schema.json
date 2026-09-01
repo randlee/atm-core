@@ -133,18 +133,32 @@
             }
           },
           {
+            "if": { "properties": { "terminal_state": { "const": "pass" } }, "required": ["terminal_state"] },
+            "then": {
+              "properties": {
+                "fail_reason": false,
+                "skip_reason": false
+              },
+              "description": "A pass carries no failure or skip narrative — stray template values are the clerical class §2.3 bans."
+            }
+          },
+          {
             "if": { "properties": { "terminal_state": { "const": "fail" } }, "required": ["terminal_state"] },
-            "then": { "required": ["fail_reason"] }
+            "then": {
+              "required": ["fail_reason"],
+              "properties": { "skip_reason": false }
+            }
           },
           {
             "if": { "properties": { "terminal_state": { "const": "declared-skip" } }, "required": ["terminal_state"] },
             "then": {
               "required": ["skip_reason"],
               "properties": {
+                "fail_reason": false,
                 "host": false,
                 "execution_identity": false
               },
-              "description": "A declared-skip executed nothing: it must not fabricate execution identity."
+              "description": "A declared-skip executed nothing: it must not fabricate execution identity or carry a fail_reason."
             }
           }
         ]
@@ -163,19 +177,51 @@
           "observed_p50": { "type": "number" },
           "met": { "type": "boolean" },
           "ratchet_proposal": { "type": "number" }
-        }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "met": { "const": false } }, "required": ["met"] },
+            "then": {
+              "properties": { "ratchet_proposal": false },
+              "description": "A ratchet proposal exists only for a met floor (§4): the harness never proposes ratcheting from a breached measurement."
+            }
+          }
+        ]
       }
     },
     "ci_runs": {
       "type": "array",
+      "minItems": 6,
+      "description": "Closed repo-suite catalog (§3.4). Every catalog entry must be present with conclusion 'success' — the gate records green CI runs pinned to the candidate commit; a missing or non-green repo suite means no manifest is emitted (the gate refuses, INCOMPLETE-by-absence), so a partial ci_runs set is schema-invalid, never silently accepted.",
+      "allOf": [
+        { "contains": { "properties": { "suite_id": { "const": "just-ci" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "test-graft-python" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "test-hermes-graft-bridge" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "test-hermes-graft-smoke" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "test-admission-capacity" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "test-queue-hooks" } } } }
+      ],
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": ["suite_id", "run_id", "conclusion", "commit_sha"],
         "properties": {
-          "suite_id": { "type": "string", "minLength": 1 },
+          "suite_id": {
+            "enum": [
+              "just-ci",
+              "test-graft-python",
+              "test-hermes-graft-bridge",
+              "test-hermes-graft-smoke",
+              "test-admission-capacity",
+              "test-queue-hooks"
+            ],
+            "description": "Closed catalog of §3.4 repo suites. test-queue-hooks covers both the python and codex variants of that CI job."
+          },
           "run_id": { "type": "integer", "minimum": 1 },
-          "conclusion": { "type": "string", "minLength": 1 },
+          "conclusion": {
+            "const": "success",
+            "description": "Only green runs are recordable release evidence (§3.4)."
+          },
           "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
         }
       }

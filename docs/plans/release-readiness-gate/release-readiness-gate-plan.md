@@ -88,7 +88,10 @@ just release-readiness <release-tag-candidate>
 5. Mechanical READY-refusal guards (no forbidden path may depend on operator
    discipline):
    - a declared benchmark family absent from the tree (e.g. read/query
-     before PR #1120 merges) ⇒ runner refuses to render `READY`;
+     before PR #1120 merges) ⇒ that family's suite is recorded
+     `fail` with `fail_reason: "suite-error"` (the suite could not
+     execute at all), so the runner mechanically refuses to render
+     `READY`;
    - testbed tier-definition state not pinned and matched — the manifest's
      `testbed_definitions.commit_sha` must identify the tier-definition
      revision actually executed, 1:1 (§3.3) — otherwise the testbed suite is
@@ -114,6 +117,11 @@ The mechanism that makes §1's first-time-pass requirement real:
 3. **Whole-set self-verification.** Before rendering a verdict, the gate
    re-validates the complete evidence set + manifest exactly as QA would:
    schema, sha256s, provenance fields, cross-references, reports-index,
+   duplicate-`suite_id` rejection (the schema's `contains` clauses enforce
+   at-least-once; exactly-once is completed here), **the §2.3.5
+   anomaly-check set** (per-family D7 clean-run criteria, historical p50
+   sanity band, wall-clock duration bounds, evidence-row counts vs declared
+   workload — built in RRG.2, wired into this self-verification in RRG.4),
    **and the testbed evidence-form classes that caused the v1.4.6 churn
    (§7.2/§7.3): every tier row has populated `detail`, version sentinels are
    consistent across prompt files, and executed tiers match the pinned
@@ -178,10 +186,12 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
 - AC-1: one launch (`just release-readiness <tag-candidate>`) drives every
   declared suite to a terminal state without operator input (§2.1, §2.2.1).
 - AC-2: manifest written only after all suites terminal; validates against
-  the committed schema (closed suite catalog present exactly once, verdict
+  the committed schema **and** the §2.3.3 self-verifier (schema enforces
+  every catalog suite at-least-once; the self-verifier completes
+  exactly-once via duplicate-`suite_id` rejection — AC-7); verdict
   `READY`/`NOT-READY` only — an incomplete run writes no manifest,
-  INCOMPLETE-by-absence); is the sole release-evidence pointer (§2.2.1,
-  §2.2.2, §4).
+  INCOMPLETE-by-absence; the manifest is the sole release-evidence pointer
+  (§2.2.1, §2.2.2, §4).
 - AC-3: `READY` requires all suites `pass` or Rand-approved
   `declared-skip`, plus green whole-set self-verification (§2.2.3, §2.3.3);
   anything else renders `NOT-READY`.
@@ -190,17 +200,23 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   missing provenance ⇒ suite `fail` (`provenance-missing`); a
   `declared-skip` must NOT carry host/identity; never `READY` with a
   provenance gap (§2.2.4, §4).
-- AC-5: mechanical READY-refusal for absent declared benchmark families and
-  unpinned/mismatched testbed tier definitions (§2.2.5).
+- AC-5: mechanical READY-refusal for absent declared benchmark families
+  (suite `fail`/`suite-error`) and unpinned/mismatched testbed tier
+  definitions (§2.2.5).
 - AC-6: validate-at-emit in every suite adapter (§2.3.2).
 - AC-7: self-verification covers schema, sha256s, provenance,
-  cross-references, reports-index, tier-row `detail` populated, version
+  cross-references, reports-index, duplicate-`suite_id` rejection
+  (exactly-once catalog completion), the §2.3.5 anomaly-check set
+  (checks built in RRG.2, wired in RRG.4), tier-row `detail` populated
+  and conformant to the RRG.3a tier-row schema (§3.3), version
   sentinels consistent, tiers 1:1 vs pinned definitions (§2.3.3).
 - AC-8: rehearsal mode green, `run_kind` separation enforced both
   directions, rehearsal output confined to the rehearsal root (§2.3.4).
 - AC-9: hosts per §2.4; shared daemon and interactive accounts untouched.
 - AC-10: AT2 unresolved (#1121) ⇒ testbed suite `fail`, unless Rand grants
-  a standing skip (§7.4, §8 Q3).
+  a standing skip (§7.4, §8 Q3); tier-level dispositions (per-tier state
+  incl. declared-skip, skip-vs-1:1 rule) are encoded per the RRG.3a
+  tier-row schema (§3.3).
 
 ## 3. Suite inventory (definition — existing tests only)
 
@@ -249,15 +265,36 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   (digest/SHA/CI run id) recorded in-band; version sentinels consistent
   across prompt files; tier definitions pinned by testbed commit SHA in the
   manifest (`testbed_definitions`) and matched 1:1 by the executed set.
-- AT2/AT3 handling per §7.4 and AC-10.
+- **Tier-row evidence schema (RRG.3a acceptance deliverable)**: the
+  per-tier artifact — the exact evidence-form class that caused the v1.4.6
+  churn — gets its own committed schema + worked example, delivered by
+  RRG.3a and referenced from AC-7/AC-10: tier id drawn from the pinned
+  definition set, non-null `detail`, version-sentinel field, per-tier state
+  enum including `declared-skip`, and the explicit rule for how a skipped
+  tier interacts with the 1:1 tier-match check. It is deliberately NOT
+  committed in this plan: the tier-row shape is co-owned by the external
+  testbed repo whose definitions RRG.3b is still reconciling — pinning it
+  now would freeze a premature contract. RRG.3a is not acceptable without
+  it.
+- AT2/AT3 handling per §7.4 and AC-10; the tier-level representation of
+  those dispositions is part of the RRG.3a tier-row schema above.
 
 ### 3.4 Repo test suites (recorded, not re-run)
 
-- `just ci` (lint + test), test-graft-python, test-hermes-graft-bridge,
-  test-hermes-graft-smoke, test-admission-capacity,
-  test-queue-hooks-python(+codex).
+- Closed catalog, manifest `ci_runs[].suite_id` ids in parentheses:
+  `just ci` (lint + test → `just-ci`), test-graft-python
+  (`test-graft-python`), test-hermes-graft-bridge
+  (`test-hermes-graft-bridge`), test-hermes-graft-smoke
+  (`test-hermes-graft-smoke`), test-admission-capacity
+  (`test-admission-capacity`), and test-queue-hooks-python + codex variant
+  (recorded as one entry, `test-queue-hooks`).
 - The gate records the green CI run ids for the exact release-candidate
-  commit in the manifest instead of re-executing them on the evidence host.
+  commit in the manifest instead of re-executing them on the evidence
+  host. The schema requires all six catalog entries with
+  `conclusion: "success"`: a missing or non-green repo suite means no
+  manifest can be emitted for the launch (INCOMPLETE-by-absence) — a
+  partial `ci_runs` set is schema-invalid, never a silently reduced
+  evidence bar.
 
 ## 4. Release evidence manifest
 
@@ -294,9 +331,18 @@ Summary of the committed schema (normative source is the schema file):
   `host`/`execution_identity` (nothing executed — identity must not be
   fabricated);
 - `floors[]` — family (`send` | `read-query`), metric, floor vs observed
-  p50, met flag, optional ratchet proposal (harness-computed, §2.3.5);
-- `ci_runs[]` — run ids + conclusions for the repo suites (§3.4) pinned to
-  the candidate commit;
+  p50, met flag, optional ratchet proposal (harness-computed, §2.3.5).
+  **Convention (schema-enforced): `ratchet_proposal` may be present only
+  when `met` is true** — the harness never proposes ratcheting from a
+  breached measurement;
+- `ci_runs[]` — **closed repo-suite catalog** (§3.4): `suite_id` is the
+  enum `just-ci` / `test-graft-python` / `test-hermes-graft-bridge` /
+  `test-hermes-graft-smoke` / `test-admission-capacity` /
+  `test-queue-hooks` (covering both python and codex variants), all six
+  required present via `contains` clauses, each with run id and
+  `conclusion` fixed to `success` (only green runs are recordable — a
+  missing/non-green repo suite means the gate refuses to emit a manifest),
+  pinned to the candidate commit;
 - `verdict` — `READY` / `NOT-READY` only. `INCOMPLETE` is deliberately
   unrepresentable: an incomplete run writes no manifest at all
   (INCOMPLETE-by-absence, §2.2.1);
@@ -336,10 +382,15 @@ direction.
 | # | Deliverable | must_follow | Assignee (proposed) |
 |---|---|---|---|
 | RRG.1 | Manifest schema (lifted from this plan's committed baseline) + `just release-readiness` orchestrator skeleton (suite registry, terminal-state tracking, fail-closed manifest render) + short ADR recording the terminal-state taxonomy, adapter composition model, and concurrency model (§5) | — | Cipher |
-| RRG.2 | Suite adapters: smoke + benchmark families (reuse existing runners; no new harness framework — additive composition only); includes closing §7.8 (send-family execution-identity provenance) so both benchmark families meet AC-4 | RRG.1 | Cipher |
-| RRG.3a | atm-core testbed adapter (manifest `testbed_definitions` pinning, AC-5 guard, §2.3.3 tier checks) | RRG.1 | Cipher |
-| RRG.3b | Testbed-repo tier definitions: merge testbed PR #2 and add Phase-AV coverage definitions (§7.1). Acceptance: §7.1–§7.3 items resolved (definitions exist for every executed row, AT8 reconciled, detail-population expectations encoded). Fallback if PR #2 stalls (external repo): the gate pins to a Rand-approved testbed commit SHA carrying the reviewed definitions — RRG.3a is not blocked, only the pin value changes | RRG.1. Parallel-safe with RRG.3a: disjoint repos (RRG.3b edits only atm-hermes-testbed; RRG.3a edits only atm-core) — their sole coupling is the pin value RRG.3a's manifest records, fixed at RRG.3b merge (or Rand-approved fallback SHA) | Cipher (atm-hermes-testbed PR) |
-| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs. Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
+| RRG.2 | Suite adapters: smoke + benchmark families (reuse existing runners; no new harness framework — additive composition only); includes closing §7.8 (send-family execution-identity provenance) so both benchmark families meet AC-4; **builds the §2.3.5 anomaly-check set** (D7 clean-run criteria, sanity band, duration bounds, evidence-row counts) emitting `fail`/`measurement-anomaly` | RRG.1 | Cipher |
+| RRG.3a | atm-core testbed adapter (manifest `testbed_definitions` pinning, AC-5 guard, §2.3.3 tier checks); **owns the tier-row evidence schema + example (§3.3)** and **owns the AC-10/§7.4 AT2/AT3 disposition logic** (fail-closed default, standing-skip encoding) | RRG.1 | Cipher |
+| RRG.3b | Testbed-repo tier definitions: merge testbed PR #2 and add Phase-AV coverage definitions (§7.1). Acceptance: §7.1–§7.3 items resolved (definitions exist for every executed row, AT8 reconciled, detail-population expectations encoded). Fallback if PR #2 stalls (external repo): the gate pins to a Rand-approved testbed commit SHA carrying the reviewed definitions — RRG.3a is not blocked, only the pin value changes | RRG.1; parallel-safe with RRG.3a (see note below) | Cipher (atm-hermes-testbed PR) |
+| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs; **wires the RRG.2 anomaly-check set and duplicate-`suite_id` rejection into §2.3.3 whole-set self-verification** (AC-7). Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
+
+RRG.3a/RRG.3b parallel-safety rationale: disjoint repos (RRG.3b edits only
+atm-hermes-testbed; RRG.3a edits only atm-core). Their sole coupling is the
+pin value RRG.3a's manifest records, fixed at RRG.3b merge (or the
+Rand-approved fallback SHA).
 
 All sprints are ordinary dev worktrees off develop with quality-mgr QA;
 no test executions beyond each sprint's own new unit tests (rehearsal mode
@@ -445,3 +496,30 @@ owns; no sprint-local reinterpretation.
   defense-in-depth only. M2r2 RRG.3b parallel-safe annotation → §6 cell now
   states disjoint repos + sole coupling (pin value). §2.5 AC-2/AC-3/AC-4
   reconciled with the schema changes.
+- **r4 (2026-09-01, addressing quality-mgr r3 FAIL @ 856efe41c, msg
+  01M1DAASJ032FB3DE85VJ7T3TW; r2 dispositions scored 9/9 truthful)**:
+  B1r3 `ci_runs` had no closed catalog (empty/partial schema-valid; READY
+  example carried 1 of 6) → closed 6-id enum + `contains` clauses +
+  `conclusion` const `success` + minItems 6; §3.4 ids aligned; both
+  examples carry all six. B2r3 (B4r2 residual) AC-2 overclaimed
+  exactly-once as schema-enforced → AC-2 reworded to schema
+  (at-least-once) + self-verifier (duplicate rejection), duplicate
+  rejection added as an explicit §2.3.3/AC-7 item wired in RRG.4. B3r3
+  anomaly-check set claimed "part of §2.3.3" without being named or owned
+  there → named in §2.3.3 and AC-7 with ownership: checks built in RRG.2,
+  wired into self-verification in RRG.4 (§6 cells updated). I1r3 tier-row
+  evidence artifact had no schema/example or tier-level AT2/AT3
+  representation → RRG.3a acceptance deliverable defined in §3.3
+  (tier id enum, non-null detail, sentinel field, per-tier state enum
+  incl. declared-skip, skip-vs-1:1 rule), referenced from AC-7/AC-10;
+  deliberately not committed in-plan (testbed co-ownership, RRG.3b still
+  reconciling). I2r3 no symmetric forbids → schema now forbids
+  fail_reason/skip_reason off their own terminal states (pass forbids
+  both). I3r3 AC-10 disposition logic unowned → RRG.3a cell names it.
+  M1r3 absent-family fail_reason named: `suite-error` (§2.2.5/AC-5).
+  M2r3 ratchet_proposal-only-when-met stated in §4 and schema-enforced.
+  M3r3 example skip row cross-refs AC-10/§7.4. M4r3 RRG.3b rationale
+  moved to a note below the §6 table. All schema changes revalidated:
+  both examples VALID, 6 new negative cases (partial ci_runs, non-green
+  run, fail_reason-on-pass, skip_reason-on-fail, fail_reason-on-skip,
+  ratchet-on-unmet-floor) verified REJECTED.
