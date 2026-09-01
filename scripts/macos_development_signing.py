@@ -184,20 +184,6 @@ def _configured_identity(identities: Sequence[SigningIdentity]) -> SigningIdenti
     return resolved
 
 
-def _distinct_fingerprints(identities: Sequence[SigningIdentity]) -> tuple[SigningIdentity, ...]:
-    """Return identities once per certificate fingerprint, preserving keychain order.
-
-    ``security find-identity`` may emit the same certificate once for every
-    keychain in the active search list.  Those rows are aliases for one signing
-    identity, not an ambiguous choice.  Different fingerprints deliberately
-    remain distinct so the caller continues to fail closed.
-    """
-    selected: dict[str, SigningIdentity] = {}
-    for identity in identities:
-        selected.setdefault(identity.fingerprint, identity)
-    return tuple(selected.values())
-
-
 def _identity_exists_but_is_not_valid() -> bool:
     result = _run(["security", "find-identity", "-p", "codesigning"])
     return result.returncode == 0 and any(
@@ -212,7 +198,7 @@ def resolve_apple_development_identity() -> SigningIdentity:
     valid_identities = _valid_identities()
     if override:
         override_fingerprint = _validated_fingerprint(override)
-        candidates = _distinct_fingerprints(tuple(
+        candidates = unique_identities(tuple(
             resolved
             for identity in valid_identities
             if (
@@ -234,7 +220,7 @@ def resolve_apple_development_identity() -> SigningIdentity:
     if configured is not None:
         return configured
 
-    candidates = _distinct_fingerprints(tuple(
+    candidates = unique_identities(tuple(
         resolved
         for identity in valid_identities
         if identity.common_name.startswith(APPLE_DEVELOPMENT_PREFIX)
@@ -279,3 +265,16 @@ def verify_apple_signature(
         pinned = _run(["codesign", "--verify", "--strict", f"-R={requirement}", binary])
         return pinned.returncode == 0
     return f"TeamIdentifier={expected_team_identifier}" in output.splitlines()
+
+
+def verify_signing_identity(binary: str, expected_identifier: str, identity: SigningIdentity) -> bool:
+    """Verify a binary using the selected identity's appropriate authority mode."""
+    if identity.team_identifier:
+        return verify_apple_signature(binary, expected_identifier, identity.team_identifier)
+    return verify_apple_signature(
+        binary,
+        expected_identifier,
+        identity.team_identifier,
+        expected_leaf_fingerprint=identity.fingerprint,
+        expected_common_name=identity.common_name,
+    )

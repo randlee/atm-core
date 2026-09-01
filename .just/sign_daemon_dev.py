@@ -20,7 +20,7 @@ from macos_development_signing import (  # noqa: E402
     SigningIdentity,
     SigningIdentityError,
     resolve_apple_development_identity,
-    verify_apple_signature,
+    verify_signing_identity,
 )
 
 
@@ -95,15 +95,7 @@ def sign_and_verify_binary(binary: Path, identifier: str, identity: SigningIdent
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    verification_kwargs = {}
-    if not identity.team_identifier:
-        verification_kwargs = {
-            "expected_leaf_fingerprint": identity.fingerprint,
-            "expected_common_name": identity.common_name,
-        }
-    if not verify_apple_signature(
-        str(binary), identifier, identity.team_identifier, **verification_kwargs
-    ):
+    if not verify_signing_identity(str(binary), identifier, identity):
         raise SigningIdentityError(
             f"post-sign verification failed for {binary}; expected {identifier} "
             "and the configured signing identity."

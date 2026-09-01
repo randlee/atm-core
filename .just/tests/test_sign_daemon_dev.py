@@ -45,7 +45,7 @@ class SignDaemonDevTests(unittest.TestCase):
             mock.patch.object(sign_daemon_dev, "unlock_login_keychain") as unlock,
             mock.patch.object(sign_daemon_dev, "resolve_apple_development_identity", return_value=identity),
             mock.patch.object(sign_daemon_dev.subprocess, "run", return_value=completed) as run,
-            mock.patch.object(sign_daemon_dev, "verify_apple_signature", return_value=True),
+            mock.patch.object(sign_daemon_dev, "verify_signing_identity", return_value=True),
             mock.patch.object(sign_daemon_dev.Path, "is_file", side_effect=[True] * len(sign_daemon_dev.MANAGED_TARGETS)),
         ):
             self.assertEqual(sign_daemon_dev.main(), 0)
@@ -82,7 +82,7 @@ class SignDaemonDevTests(unittest.TestCase):
         completed = subprocess.CompletedProcess(["codesign"], 0, stdout="", stderr="")
         with (
             mock.patch.object(sign_daemon_dev.subprocess, "run", return_value=completed),
-            mock.patch.object(sign_daemon_dev, "verify_apple_signature", return_value=True) as verify,
+            mock.patch.object(sign_daemon_dev, "verify_signing_identity", return_value=True) as verify,
         ):
             sign_daemon_dev.sign_and_verify_binary(
                 Path("/candidate/atm-daemon"), sign_daemon_dev.DAEMON_IDENTIFIER, identity
@@ -90,9 +90,7 @@ class SignDaemonDevTests(unittest.TestCase):
         verify.assert_called_once_with(
             "/candidate/atm-daemon",
             sign_daemon_dev.DAEMON_IDENTIFIER,
-            "",
-            expected_leaf_fingerprint="A" * 40,
-            expected_common_name="atm-daemon-dev",
+            identity,
         )
 
     def test_account_secret_unlocks_only_the_current_login_keychain(self) -> None:

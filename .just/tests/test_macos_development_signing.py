@@ -143,6 +143,24 @@ class AppleDevelopmentSigningTests(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform == "darwin", "self-signed signing is macOS-only")
 class MacosSigningIdentityTests(unittest.TestCase):
+    def assert_configured_identity_error(
+        self,
+        config_text: str,
+        identities: tuple[signing.SigningIdentity, ...],
+        message: str,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            config_path = Path(temporary_directory) / "atm" / "signing-identity.json"
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(config_text, encoding="utf-8")
+            with mock.patch.dict(
+                signing.os.environ,
+                {"XDG_CONFIG_HOME": temporary_directory},
+                clear=True,
+            ):
+                with self.assertRaisesRegex(signing.SigningIdentityError, message):
+                    signing._configured_identity(identities)
+
     def test_apple_identity_still_uses_team_identifier_verification(self) -> None:
         verified = subprocess.CompletedProcess(["codesign"], 0, stdout="", stderr="")
         details = subprocess.CompletedProcess(
@@ -187,6 +205,56 @@ class MacosSigningIdentityTests(unittest.TestCase):
                     clear=True,
                 ):
                     self.assertEqual(signing.resolve_apple_development_identity(), identity)
+
+    def test_configured_identity_rejects_malformed_json(self) -> None:
+        self.assert_configured_identity_error(
+            "{not-json",
+            (),
+            "unable to read signing identity configuration",
+        )
+
+    def test_configured_identity_rejects_missing_fingerprint(self) -> None:
+        self.assert_configured_identity_error(
+            '{"common_name":"atm-daemon-dev"}',
+            (),
+            "40-character fingerprint",
+        )
+
+    def test_configured_identity_rejects_invalid_fingerprint(self) -> None:
+        self.assert_configured_identity_error(
+            '{"common_name":"atm-daemon-dev","fingerprint":"wrong"}',
+            (),
+            "40-character fingerprint",
+        )
+
+    def test_configured_identity_rejects_missing_common_name(self) -> None:
+        self.assert_configured_identity_error(
+            '{"fingerprint":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}',
+            (),
+            "common_name",
+        )
+
+    def test_configured_identity_rejects_invalid_common_name(self) -> None:
+        self.assert_configured_identity_error(
+            '{"common_name":"","fingerprint":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}',
+            (),
+            "common_name",
+        )
+
+    def test_configured_identity_rejects_identity_missing_from_keychain(self) -> None:
+        self.assert_configured_identity_error(
+            '{"common_name":"atm-daemon-dev","fingerprint":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}',
+            (signing.SigningIdentity("B" * 40, "atm-daemon-dev"),),
+            "not installed exactly once",
+        )
+
+    def test_configured_identity_rejects_duplicate_keychain_identity(self) -> None:
+        identity = signing.SigningIdentity("A" * 40, "atm-daemon-dev")
+        self.assert_configured_identity_error(
+            '{"common_name":"atm-daemon-dev","fingerprint":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}',
+            (identity, identity),
+            "not installed exactly once",
+        )
 
     def test_self_signed_identity_verifies_with_matching_leaf_pin(self) -> None:
         fingerprint = "B" * 40

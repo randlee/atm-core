@@ -30,9 +30,10 @@ if str(DAEMON_SWITCH_SCRIPTS_DIRECTORY) not in sys.path:
 from macos_development_signing import (  # noqa: E402
     CLI_IDENTIFIER,
     DAEMON_IDENTIFIER,
+    SigningIdentity,
     SigningIdentityError,
     resolve_apple_development_identity,
-    verify_apple_signature,
+    verify_signing_identity,
 )
 from temporary_launch import (  # noqa: E402
     CapturedLaunchSpec,
@@ -201,22 +202,11 @@ def macos_development_signing_identity_available() -> bool:
 def macos_binary_has_development_signature(
     binary: Path,
     identifier: str,
-    team_identifier: str,
-    *,
-    leaf_fingerprint: str | None = None,
-    common_name: str | None = None,
+    identity: SigningIdentity,
 ) -> bool:
     """Prove one managed binary carries its selected stable signing identity."""
     try:
-        if leaf_fingerprint is None:
-            return verify_apple_signature(str(binary), identifier, team_identifier)
-        return verify_apple_signature(
-            str(binary),
-            identifier,
-            team_identifier,
-            expected_leaf_fingerprint=leaf_fingerprint,
-            expected_common_name=common_name,
-        )
+        return verify_signing_identity(str(binary), identifier, identity)
     except (OSError, subprocess.SubprocessError):
         return False
 
@@ -237,17 +227,7 @@ def require_macos_development_signatures(cli: Path, daemon: Path) -> None:
         ("CLI", cli, CLI_IDENTIFIER),
         ("daemon", daemon, DAEMON_IDENTIFIER),
     ):
-        if identity.team_identifier:
-            signed = macos_binary_has_development_signature(binary, identifier, identity.team_identifier)
-        else:
-            signed = macos_binary_has_development_signature(
-                binary,
-                identifier,
-                identity.team_identifier,
-                leaf_fingerprint=identity.fingerprint,
-                common_name=identity.common_name,
-            )
-        if not signed:
+        if not macos_binary_has_development_signature(binary, identifier, identity):
             raise SwitchError(
                 f"{label} target is not strictly signed by the required signing identity: "
                 f"{binary}. "
