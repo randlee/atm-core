@@ -84,6 +84,13 @@ Consequences atm-core adopts:
   `:161-171`). Default is `~/.config/herdr/herdr.sock`. A named session is a
   *separate server process*, not a workspace.
 
+**Operator path note.** When the ATM roster selects `--backend herdr
+--session <name>`, each daemon probe invokes Herdr with `HERDR_SESSION=<name>`
+on that child process, so Herdr probes `sessions/<name>/herdr.sock` under its
+configuration directory. Omit `--session` for the default Herdr server, which
+listens on `~/.config/herdr/herdr.sock`; the session selector is per member and
+per invocation, not a daemon-wide environment setting.
+
 **Resolution of I16 (workspace/team selection):** atm-core emits the member
 `AgentName` (= `ATM_IDENTITY`) as the bare `<TARGET>` and emits **no**
 workspace/team argument because Herdr has none. `ATM_TEAM` is **not**

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- document that release archives nest their binaries under a top-level
+  `atm_<version>_<target-triple>/` directory (for example,
+  `atm_1.4.6_aarch64-unknown-linux-gnu/bin/atm`) rather than a flat archive
+  root (Phase AS, #1105)
 - enforce the request-budget ordering between SQLite storage, the replacement
   daemon, and same-host clients; rebuild local TCP and Unix transports after a
   daemon generation change, classify pre-send reconnects separately from
