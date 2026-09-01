@@ -1108,9 +1108,15 @@ mod tests {
                 stage: "executing active query"
             }
         );
-        wait_for_metrics(&pool, |metrics| metrics.current_quarantined_workers == 1)
-            .await
-            .expect("nonresponsive worker enters quarantine after the interrupt grace");
+        // The condition remains the metric transition; five seconds is only
+        // a CI backstop for scheduling the detached quarantine watchdog.
+        wait_for_metrics_with_timeout(
+            &pool,
+            |metrics| metrics.current_quarantined_workers == 1,
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("nonresponsive worker enters quarantine after the interrupt grace");
         let quarantined = pool.metrics();
         assert_eq!(quarantined.current_quarantined_workers, 1);
         assert_eq!(quarantined.pool_size, 1, "no early replacement is allowed");
@@ -1126,11 +1132,15 @@ mod tests {
                 reason: "reader quarantine budget exhausted"
             }
         ));
-        wait_for_metrics(&pool, |metrics| {
-            metrics.current_quarantined_workers == 0
-                && metrics.retired_replaced_workers == 1
-                && metrics.pool_size == 1
-        })
+        wait_for_metrics_with_timeout(
+            &pool,
+            |metrics| {
+                metrics.current_quarantined_workers == 0
+                    && metrics.retired_replaced_workers == 1
+                    && metrics.pool_size == 1
+            },
+            Duration::from_secs(5),
+        )
         .await
         .expect("returned worker must retire and be replaced after its connection drops");
         assert_eq!(
@@ -1233,6 +1243,23 @@ mod tests {
         predicate: impl Fn(&super::ReaderLaneMetricsSnapshot) -> bool,
     ) -> Result<(), tokio::time::error::Elapsed> {
         tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let metrics = pool.metrics();
+                if predicate(&metrics) {
+                    return;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+    }
+
+    async fn wait_for_metrics_with_timeout(
+        pool: &ReaderPool,
+        predicate: impl Fn(&super::ReaderLaneMetricsSnapshot) -> bool,
+        timeout: Duration,
+    ) -> Result<(), tokio::time::error::Elapsed> {
+        tokio::time::timeout(timeout, async {
             loop {
                 let metrics = pool.metrics();
                 if predicate(&metrics) {
