@@ -662,14 +662,22 @@ def engage_ratchet(
     results: Sequence[Mapping[str, Any]], baselines: BaselineSet, previous: BaselineSet,
     host_label: str,
 ) -> dict[str, Any]:
-    """Record the ratchet proposal for a clean official campaign.
+    """Record a ratchet proposal, or an explicit no-op for a dirty campaign.
 
     This is deliberately an in-memory proposal: changing reviewed floors is a
     separate, reviewable commit.  The campaign records the exact candidate and
     source state, while never lowering an existing floor.
     """
     if any(result.get("status") != "PASS" for result in results):
-        raise ReadBenchmarkError("ratchet engages only after a clean official campaign")
+        return {
+            "engaged": False,
+            "reason": "campaign was not clean; ratchet proposal was not applied",
+            "convention": "AO2 observed p50 minus tolerance",
+            "tolerance_pct": RATCHET_TOLERANCE_PCT,
+            "previous_revision": previous.revision,
+            "current_revision": baselines.revision,
+            "entries": [],
+        }
     entries: list[dict[str, Any]] = []
     for result in results:
         target = result.get("family")

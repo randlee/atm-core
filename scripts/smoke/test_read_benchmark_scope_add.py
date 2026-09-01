@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -8,6 +9,7 @@ import unittest
 from unittest import mock
 
 from scripts.smoke import read_benchmark as benchmark
+from scripts.smoke import benchmark_account
 from scripts.smoke.benchmark_schema import BaselineEntry, BaselineSet
 
 
@@ -90,6 +92,69 @@ class ReadBenchmarkScopeAddTests(unittest.TestCase):
         self.assertEqual(record["tolerance_pct"], benchmark.RATCHET_TOLERANCE_PCT)
         self.assertEqual(record["entries"][0]["candidate_floor"], 114.0)
         self.assertEqual(record["entries"][0]["proposed_floor"], 114.0)
+
+    def test_floor_breach_still_emits_failed_campaign_and_envelope(self) -> None:
+        baseline = _baselines()
+        identity = benchmark.ExecutionIdentity("runner", 501, "/tmp/runner", "test-host")
+        failed_results = [
+            {
+                "family": family.family_id,
+                "status": "FAIL",
+                "fanout": benchmark.FANOUT,
+                "pool_size": family.pool_size,
+                "queue_depth": family.queue_depth,
+                "throughput_per_second": {
+                    "min": 50.0, "p50": 50.0, "p95": 50.0, "p99": 50.0, "max": 50.0,
+                },
+                "latency_ms": {
+                    "min": 1.0, "p50": 1.0, "p95": 1.0, "p99": 1.0, "max": 1.0,
+                },
+                "requests": {"total": 1, "successful": 0, "success_rate": 0.0},
+                "throughput_requests_per_second": 0.0,
+                "diagnostics": {},
+            }
+            for family in benchmark.FAMILIES
+        ]
+        lane_settings = {
+            "mailbox": {"pool_size": 4, "queue_depth": 16},
+            "search": {"pool_size": 2, "queue_depth": 8},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            report_dir = Path(directory) / "read-query-benchmark"
+            reports_root = Path(directory) / "reports"
+            reports_root.mkdir()
+            envelope_path = reports_root / "read-query-benchmark.json"
+            def compose_report(_template: Path, _variables: dict[str, object], output: Path) -> None:
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text("<html></html>", encoding="utf-8")
+
+            with mock.patch.dict(os.environ, {"ATM_CAPACITY_HOST_LABEL": "test-host"}), mock.patch.object(
+                benchmark, "REPORT_DIR", report_dir
+            ), mock.patch.object(
+                benchmark, "REPORTS_ROOT", reports_root
+            ), mock.patch.object(benchmark, "REPORT_ENVELOPE", envelope_path), mock.patch.object(
+                benchmark, "capture_execution_identity", return_value=identity
+            ), mock.patch.object(benchmark, "load_baselines", return_value=baseline), mock.patch.object(
+                benchmark, "load_previous_baselines", return_value=baseline
+            ), mock.patch.object(benchmark, "_check_baseline_revision"), mock.patch.object(
+                benchmark_account, "require_benchmark_account", return_value=object()
+            ), mock.patch.object(benchmark, "_atm_binary", return_value="atm"), mock.patch.object(
+                benchmark, "load_effective_lane_settings", return_value=lane_settings
+            ), mock.patch.object(benchmark, "validate_effective_lane_settings"), mock.patch.object(
+                benchmark, "deterministic_corpus", return_value=benchmark.deterministic_corpus()
+            ), mock.patch.object(benchmark, "prepare_corpus"), mock.patch.object(
+                benchmark, "run_family", side_effect=failed_results
+            ), mock.patch.object(benchmark, "_source_revision", return_value="a" * 40), mock.patch.object(
+                benchmark, "compose", side_effect=compose_report
+            ), mock.patch.object(benchmark, "regenerate_index"), mock.patch.object(
+                benchmark.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "", "")
+            ):
+                self.assertEqual(benchmark.execute(list(benchmark.FAMILY_BY_ID)), 1)
+            payloads = [json.loads(path.read_text(encoding="utf-8")) for path in report_dir.glob("*.json")]
+            campaign = next(payload for payload in payloads if len(payload["families"]) == 3)
+            self.assertEqual(campaign["status"], "FAIL")
+            self.assertFalse(campaign["ratchet"]["engaged"])
+            self.assertTrue(envelope_path.is_file())
 
 
 if __name__ == "__main__":
