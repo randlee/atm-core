@@ -357,6 +357,15 @@ struct PoolInner {
     next_worker_id: AtomicUsize,
     next_request: AtomicUsize,
     metrics: Arc<ReaderLaneMetrics>,
+    #[cfg(test)]
+    lifecycle_events: Mutex<Option<tokio::sync::mpsc::UnboundedSender<WorkerLifecycleEvent>>>,
+}
+
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorkerLifecycleEvent {
+    Quarantined,
+    RetiredReplaced,
 }
 
 struct Worker {
@@ -425,6 +434,8 @@ impl ReaderPool {
             next_worker_id: AtomicUsize::new(config.pool_size.get()),
             next_request: AtomicUsize::new(0),
             metrics: Arc::new(ReaderLaneMetrics::new(lane, config.pool_size.get())),
+            #[cfg(test)]
+            lifecycle_events: Mutex::new(None),
         });
         for worker_id in 0..config.pool_size.get() {
             inner.spawn_worker(worker_id)?;
@@ -765,6 +776,8 @@ impl PoolInner {
             self.metrics
                 .current_quarantined_workers
                 .fetch_add(1, Ordering::Relaxed);
+            #[cfg(test)]
+            self.emit_lifecycle_event(WorkerLifecycleEvent::Quarantined);
         }
     }
 
@@ -792,6 +805,20 @@ impl PoolInner {
             return;
         }
         self.metrics.pool_size.fetch_add(1, Ordering::Relaxed);
+        #[cfg(test)]
+        self.emit_lifecycle_event(WorkerLifecycleEvent::RetiredReplaced);
+    }
+
+    #[cfg(test)]
+    fn emit_lifecycle_event(&self, event: WorkerLifecycleEvent) {
+        if let Some(sender) = self
+            .lifecycle_events
+            .lock()
+            .expect("reader lifecycle event lock")
+            .as_ref()
+        {
+            let _ = sender.send(event);
+        }
     }
 }
 
@@ -857,7 +884,8 @@ fn run_worker(
 mod tests {
     use super::{
         DEFAULT_DOCTOR_READER_CONFIG, DEFAULT_MAX_READER_CONNECTIONS, ReaderLaneMetrics,
-        ReaderPool, ReaderPoolConfig, deadline_at, validate_connection_budget,
+        ReaderPool, ReaderPoolConfig, WorkerLifecycleEvent, deadline_at,
+        validate_connection_budget,
     };
     use crate::shared_db::SharedDbTarget;
     use std::num::NonZeroUsize;
@@ -1084,6 +1112,14 @@ mod tests {
     #[tokio::test]
     async fn nonresponsive_worker_is_quarantined_then_replaced_only_after_returning() {
         let pool = Arc::new(test_pool(test_config(1, 1, Duration::from_millis(20), 1)));
+        let (lifecycle_tx, mut lifecycle_rx) =
+            tokio::sync::mpsc::unbounded_channel::<WorkerLifecycleEvent>();
+        *pool
+            .inner
+            .lifecycle_events
+            .lock()
+            .expect("reader lifecycle event lock") = Some(lifecycle_tx);
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let active_pool = Arc::clone(&pool);
         let active_task = tokio::spawn(async move {
@@ -1092,7 +1128,9 @@ mod tests {
                     let _ = started_tx.send(());
                     // Deliberately ignores SQLite's interrupt handle: this is
                     // the adversarial worker required by A3c.
-                    std::thread::park_timeout(Duration::from_millis(100));
+                    // The test controls its return explicitly so worker
+                    // retirement is not ordered by a sleep or wall clock.
+                    release_rx.recv().expect("test releases the active worker");
                     Ok::<_, atm_storage::ReadLaneError>(())
                 })
                 .await
@@ -1108,15 +1146,13 @@ mod tests {
                 stage: "executing active query"
             }
         );
-        // The condition remains the metric transition; five seconds is only
-        // a CI backstop for scheduling the detached quarantine watchdog.
-        wait_for_metrics_with_timeout(
-            &pool,
-            |metrics| metrics.current_quarantined_workers == 1,
-            Duration::from_secs(5),
-        )
-        .await
-        .expect("nonresponsive worker enters quarantine after the interrupt grace");
+        // Lifecycle notifications are the completion signal. The timeout is
+        // only a generous hang detector and cannot determine normal ordering.
+        let quarantine_event = tokio::time::timeout(Duration::from_secs(30), lifecycle_rx.recv())
+            .await
+            .expect("nonresponsive worker enters quarantine after the interrupt grace")
+            .expect("reader lifecycle event channel remains open");
+        assert_eq!(quarantine_event, WorkerLifecycleEvent::Quarantined);
         let quarantined = pool.metrics();
         assert_eq!(quarantined.current_quarantined_workers, 1);
         assert_eq!(quarantined.pool_size, 1, "no early replacement is allowed");
@@ -1132,17 +1168,18 @@ mod tests {
                 reason: "reader quarantine budget exhausted"
             }
         ));
-        wait_for_metrics_with_timeout(
-            &pool,
-            |metrics| {
-                metrics.current_quarantined_workers == 0
-                    && metrics.retired_replaced_workers == 1
-                    && metrics.pool_size == 1
-            },
-            Duration::from_secs(5),
-        )
-        .await
-        .expect("returned worker must retire and be replaced after its connection drops");
+        release_tx
+            .send(())
+            .expect("active worker is waiting for the release signal");
+        let replacement_event = tokio::time::timeout(Duration::from_secs(30), lifecycle_rx.recv())
+            .await
+            .expect("returned worker must retire and be replaced after its connection drops")
+            .expect("reader lifecycle event channel remains open");
+        assert_eq!(replacement_event, WorkerLifecycleEvent::RetiredReplaced);
+        let replaced = pool.metrics();
+        assert_eq!(replaced.current_quarantined_workers, 0);
+        assert_eq!(replaced.retired_replaced_workers, 1);
+        assert_eq!(replaced.pool_size, 1);
         assert_eq!(
             pool.submit(Duration::from_millis(100), |_, _| {
                 Ok::<_, atm_storage::ReadLaneError>("reclaimed")
@@ -1243,23 +1280,6 @@ mod tests {
         predicate: impl Fn(&super::ReaderLaneMetricsSnapshot) -> bool,
     ) -> Result<(), tokio::time::error::Elapsed> {
         tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                let metrics = pool.metrics();
-                if predicate(&metrics) {
-                    return;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-    }
-
-    async fn wait_for_metrics_with_timeout(
-        pool: &ReaderPool,
-        predicate: impl Fn(&super::ReaderLaneMetricsSnapshot) -> bool,
-        timeout: Duration,
-    ) -> Result<(), tokio::time::error::Elapsed> {
-        tokio::time::timeout(timeout, async {
             loop {
                 let metrics = pool.metrics();
                 if predicate(&metrics) {
