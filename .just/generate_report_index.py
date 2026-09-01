@@ -29,6 +29,9 @@ REPORT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 REQUIRED_FIELDS = frozenset(
     {"schema_version", "report_type", "generated_at", "host_label", "report_html"}
 )
+# New benchmark producers may include in-band execution provenance.  Historical
+# envelopes do not carry it, so discovery must accept both shapes.
+OPTIONAL_FIELDS = frozenset({"execution_identity"})
 SMOKE_STATUS_VALUES = frozenset({"PASS", "FAIL"})
 
 
@@ -145,7 +148,7 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
         raise ReportIndexError(
             f"{source}: report_type must be one of {', '.join(REPORT_TYPES)}"
         )
-    allowed_fields = REQUIRED_FIELDS | ({"status"} if report_type == "smoke" else set())
+    allowed_fields = REQUIRED_FIELDS | OPTIONAL_FIELDS | ({"status"} if report_type == "smoke" else set())
     unexpected_fields = set(payload) - allowed_fields
     if unexpected_fields:
         raise ReportIndexError(

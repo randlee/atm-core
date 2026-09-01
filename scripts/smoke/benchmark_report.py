@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from typing import Any, Iterable, Literal, Sequence
+from typing import Any, Iterable, Literal, Mapping, Sequence
 from zoneinfo import ZoneInfo
 
 
@@ -397,6 +397,7 @@ def render_envelope(
     report_html: str | None = None,
     generated_at: str | None = None,
     host_label: str | None = None,
+    execution_identity: Mapping[str, Any] | None = None,
 ) -> None:
     """Write the shared reports-index envelope for benchmark-family reports.
 
@@ -416,6 +417,8 @@ def render_envelope(
         "generated_at": generated_at, "host_label": host_label,
         "report_html": report_html,
     }
+    if execution_identity is not None:
+        payload["execution_identity"] = dict(execution_identity)
     (report_root / f"{report_name}.json").write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )

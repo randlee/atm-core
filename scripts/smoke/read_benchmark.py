@@ -19,11 +19,17 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import sys
 import threading
 import time
 from typing import Any, Mapping, Sequence
+
+try:
+    import pwd
+except ImportError:  # pragma: no cover - Windows has no POSIX passwd database
+    pwd = None  # type: ignore[assignment]
 
 from scripts.smoke.benchmark_baselines import BenchmarkBaselineError, load_baselines
 from scripts.smoke.benchmark_report import BenchmarkReportError, compose, regenerate_index, render_envelope
@@ -75,6 +81,54 @@ AV1B_CUTOVER_LANDED = True
 
 class ReadBenchmarkError(RuntimeError):
     """A read benchmark cannot produce valid evidence."""
+
+
+@dataclass(frozen=True)
+class ExecutionIdentity:
+    """POSIX execution identity captured by the benchmark process itself."""
+
+    execution_account: str
+    uid: int
+    home: str
+    hostname: str
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "execution_account": self.execution_account,
+            "uid": self.uid,
+            "home": self.home,
+            "hostname": self.hostname,
+        }
+
+
+def capture_execution_identity() -> ExecutionIdentity:
+    """Capture identity from the running process or fail before publishing.
+
+    The benchmark's host label is an operator-selected machine label and is
+    not evidence of the account that executed the workload.  Resolve the
+    effective POSIX UID through the local password database so environment
+    variables cannot spoof the recorded account or home directory.
+    """
+    if pwd is None:
+        raise ReadBenchmarkError(
+            "execution identity capture unavailable: POSIX passwd database is unavailable"
+        )
+    try:
+        uid = os.geteuid() if hasattr(os, "geteuid") else os.getuid()
+        account = pwd.getpwuid(uid)
+        hostname = socket.gethostname()
+    except (AttributeError, OSError, KeyError) as error:
+        raise ReadBenchmarkError(
+            f"execution identity capture unavailable: {error}"
+        ) from error
+    if uid < 0 or not account.pw_name or not account.pw_dir or not hostname:
+        raise ReadBenchmarkError("execution identity capture returned incomplete data")
+    return ExecutionIdentity(
+        execution_account=account.pw_name,
+        uid=uid,
+        home=account.pw_dir,
+        hostname=hostname,
+    )
 
 
 @dataclass(frozen=True)
@@ -556,7 +610,10 @@ def _report_variables(
     }
 
 
-def build_payload(results: Sequence[dict[str, Any]], corpus: Corpus, host_label: str) -> dict[str, Any]:
+def build_payload(
+    results: Sequence[dict[str, Any]], corpus: Corpus, host_label: str,
+    execution_identity: ExecutionIdentity,
+) -> dict[str, Any]:
     started = datetime.now(timezone.utc)
     campaign_id = f"{started.strftime('%Y%m%dT%H%M%SZ')}-{host_label}-read"
     status = "PASS" if all(item["status"] == "PASS" for item in results) else "FAIL"
@@ -570,6 +627,7 @@ def build_payload(results: Sequence[dict[str, Any]], corpus: Corpus, host_label:
         "campaign_ids": [f"{campaign_id}-{item['family']}" for item in results],
         "generated_at": started.isoformat().replace("+00:00", "Z"),
         "host_label": host_label,
+        "execution_identity": execution_identity.as_dict(),
         "status": status,
         "harness_version": HARNESS_VERSION,
         "source_revision": _source_revision(),
@@ -619,6 +677,9 @@ def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
         raise ReadBenchmarkError("only just benchmark-read may publish official evidence")
     if not diagnostic_only:
         require_av1b_cutover()
+    # Capture before account setup or workload execution so official evidence
+    # cannot be emitted without an in-band identity proving who ran it.
+    execution_identity = capture_execution_identity()
     host_label = os.environ.get("ATM_CAPACITY_HOST_LABEL", "local")
     try:
         baselines = load_baselines(BASELINES_PATH)
@@ -657,7 +718,7 @@ def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
     if not diagnostic_only:
         for result in results:
             apply_floor(result, baselines.entry_for(host_label, result["family"]))
-    payload = build_payload(results, corpus, host_label)
+    payload = build_payload(results, corpus, host_label, execution_identity)
     if not diagnostic_only:
         payload["baseline_revision"] = baselines.revision
     if diagnostic_only:
@@ -706,6 +767,7 @@ def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
             generated_at=payload["generated_at"],
             host_label=payload["host_label"],
             report_html="read-query-benchmark/index.html",
+            execution_identity=execution_identity.as_dict(),
         )
         regenerate_index()
         check = subprocess.run(

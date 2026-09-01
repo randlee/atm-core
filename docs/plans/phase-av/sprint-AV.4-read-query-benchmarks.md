@@ -3,6 +3,7 @@ phase: AV
 sprint: AV.4
 title: Massively parallel read and query benchmarks
 branch: feature/av4-read-query-benchmarks
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-av
 integration_branch: integrate/phase-av
 stack_parent: feature/av3-read-concurrency-gates (dependency is on AV.1b below it) — planned; stack provisioned by task AV.0 (phase plan §4)
 status: complete
@@ -144,7 +145,13 @@ sprint.
       - *Provenance:* the committed baseline entry records the 3 source
         campaign IDs (report paths under `site/reports/`), host label,
         harness version, corpus seed; every campaign report is committed
-        and pushed — discarded/unpublished attempts cannot seed floors.
+        and pushed — discarded/unpublished attempts cannot seed floors. Every
+        emitted campaign/report JSON also carries an in-band
+        `execution_identity` object with `execution_account`, `uid`, `home`,
+        and runtime `hostname`; official runs fail closed when any identity
+        field cannot be captured. `host_label` remains the operator-selected
+        machine label and is not an execution-account assertion. Historical
+        artifacts without this additive object remain valid and immutable.
 
 ## Contract samples
 
