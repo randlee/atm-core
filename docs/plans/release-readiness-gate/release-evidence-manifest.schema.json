@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "atm-core/release-evidence-manifest/v1",
+  "title": "Release evidence manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_kind",
+    "candidate",
+    "suites",
+    "floors",
+    "ci_runs",
+    "verdict",
+    "generated_at",
+    "self_verification"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Manifest schema revision the emitting harness validated against. Review pins to this generation-time revision."
+    },
+    "run_kind": {
+      "enum": ["release", "rehearsal"],
+      "description": "rehearsal manifests are never release evidence and must live under the rehearsal output root."
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tag_candidate", "commit_sha", "branch"],
+      "properties": {
+        "tag_candidate": { "type": "string", "minLength": 1 },
+        "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "branch": { "type": "string", "minLength": 1 }
+      }
+    },
+    "testbed_definitions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo", "commit_sha"],
+      "description": "Pinned atm-hermes-testbed tier-definition revision the integration suite executed 1:1.",
+      "properties": {
+        "repo": { "type": "string" },
+        "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "suites": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "suite_id",
+          "entrypoint",
+          "terminal_state",
+          "evidence",
+          "started_at",
+          "ended_at",
+          "host",
+          "execution_identity"
+        ],
+        "properties": {
+          "suite_id": { "type": "string", "minLength": 1 },
+          "entrypoint": { "type": "string", "minLength": 1 },
+          "terminal_state": { "enum": ["pass", "fail", "declared-skip"] },
+          "fail_reason": {
+            "type": "string",
+            "description": "Required when terminal_state=fail. Machine-set reasons include provenance-missing, tier-detail-missing, tier-definitions-mismatch, sentinel-mismatch, floor-breach, test-failure."
+          },
+          "skip_reason": {
+            "type": "string",
+            "description": "Required when terminal_state=declared-skip; must cite the Rand-approved standing reason."
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "sha256"],
+              "properties": {
+                "path": { "type": "string", "minLength": 1 },
+                "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+              }
+            }
+          },
+          "started_at": { "type": "string", "format": "date-time" },
+          "ended_at": { "type": "string", "format": "date-time" },
+          "host": { "type": "string", "minLength": 1 },
+          "execution_identity": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["execution_account", "uid", "home", "hostname"],
+            "properties": {
+              "execution_account": { "type": "string", "minLength": 1 },
+              "uid": { "type": "integer", "minimum": 0 },
+              "home": { "type": "string", "minLength": 1 },
+              "hostname": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "terminal_state": { "const": "fail" } } },
+            "then": { "required": ["fail_reason"] }
+          },
+          {
+            "if": { "properties": { "terminal_state": { "const": "declared-skip" } } },
+            "then": { "required": ["skip_reason"] }
+          }
+        ]
+      }
+    },
+    "floors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["family", "metric", "floor", "observed_p50", "met"],
+        "properties": {
+          "family": { "type": "string", "minLength": 1 },
+          "metric": { "type": "string", "minLength": 1 },
+          "floor": { "type": "number" },
+          "observed_p50": { "type": "number" },
+          "met": { "type": "boolean" },
+          "ratchet_proposal": { "type": "number" }
+        }
+      }
+    },
+    "ci_runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["suite_id", "run_id", "conclusion", "commit_sha"],
+        "properties": {
+          "suite_id": { "type": "string", "minLength": 1 },
+          "run_id": { "type": "integer", "minimum": 1 },
+          "conclusion": { "type": "string", "minLength": 1 },
+          "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+        }
+      }
+    },
+    "verdict": { "enum": ["READY", "NOT-READY", "INCOMPLETE"] },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "self_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["validated", "validator_version"],
+      "properties": {
+        "validated": { "const": true },
+        "validator_version": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

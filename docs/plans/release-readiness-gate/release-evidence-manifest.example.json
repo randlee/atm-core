@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "run_kind": "release",
+  "candidate": {
+    "tag_candidate": "v1.5.0-rc1",
+    "commit_sha": "0000000000000000000000000000000000000000",
+    "branch": "develop"
+  },
+  "testbed_definitions": {
+    "repo": "randlee/atm-hermes-testbed",
+    "commit_sha": "1111111111111111111111111111111111111111"
+  },
+  "suites": [
+    {
+      "suite_id": "smoke-full",
+      "entrypoint": "just smoke thorough",
+      "terminal_state": "pass",
+      "evidence": [
+        {
+          "path": "site/reports/smoke/macos/m5-atmbench/2026-09-15-run.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "started_at": "2026-09-15T18:00:00Z",
+      "ended_at": "2026-09-15T18:42:11Z",
+      "host": "rand-m5.local",
+      "execution_identity": {
+        "execution_account": "m5-atmbench",
+        "uid": 503,
+        "home": "/Users/m5-atmbench",
+        "hostname": "rand-m5.local"
+      }
+    },
+    {
+      "suite_id": "benchmark-read-query",
+      "entrypoint": "just benchmark-read",
+      "terminal_state": "pass",
+      "evidence": [
+        {
+          "path": "site/reports/read-query-benchmark/2026-09-15-campaign.json",
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "started_at": "2026-09-15T19:00:00Z",
+      "ended_at": "2026-09-15T20:15:47Z",
+      "host": "rand-m5.local",
+      "execution_identity": {
+        "execution_account": "m5-atmbench",
+        "uid": 503,
+        "home": "/Users/m5-atmbench",
+        "hostname": "rand-m5.local"
+      }
+    },
+    {
+      "suite_id": "testbed-integration",
+      "entrypoint": "testbed runner, full tier set AT0-AT8",
+      "terminal_state": "declared-skip",
+      "skip_reason": "EXAMPLE ONLY — real runs require pass or a Rand-approved standing skip reason",
+      "evidence": [],
+      "started_at": "2026-09-15T19:00:00Z",
+      "ended_at": "2026-09-15T19:00:00Z",
+      "host": "colima-host",
+      "execution_identity": {
+        "execution_account": "randlee",
+        "uid": 501,
+        "home": "/Users/randlee",
+        "hostname": "rand-m4.local"
+      }
+    }
+  ],
+  "floors": [
+    {
+      "family": "read-query",
+      "metric": "read_fanout_p50_msgs_per_sec",
+      "floor": 12000.0,
+      "observed_p50": 13100.0,
+      "met": true,
+      "ratchet_proposal": 12445.0
+    }
+  ],
+  "ci_runs": [
+    {
+      "suite_id": "just-ci",
+      "run_id": 123456789,
+      "conclusion": "success",
+      "commit_sha": "0000000000000000000000000000000000000000"
+    }
+  ],
+  "verdict": "NOT-READY",
+  "generated_at": "2026-09-15T21:00:00Z",
+  "self_verification": {
+    "validated": true,
+    "validator_version": "example-0"
+  }
+}
