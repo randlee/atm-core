@@ -120,10 +120,10 @@ def test_python_binding_renders_canonical_template() -> None:
         pytest.fail(
             "sc-compose Python bindings not installed. Run: "
             "python3 -m pip install --user --break-system-packages "
-            "'sc-compose>=1.2.0' before running binding tests: "
+            "'sc-compose==1.6.1' before running binding tests: "
             f"{exc}"
         )
-    assert tuple(int(part) for part in importlib.metadata.version("sc-compose").split(".")[:3]) >= (1, 2, 0)
+    assert tuple(int(part) for part in importlib.metadata.version("sc-compose").split(".")[:3]) >= (1, 6, 1)
     rendered = sc_compose.render_template(
         (REPO_ROOT / TEMPLATE).read_text(encoding="utf-8"), _vars()
     )

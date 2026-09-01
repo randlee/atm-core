@@ -29,9 +29,13 @@ class BootstrapTests(unittest.TestCase):
     def test_sc_compose_uses_the_exact_prebuilt_release_asset(self) -> None:
         manifest = bootstrap.load_manifest()
         asset, url = bootstrap.sc_compose_install_command(manifest.sc_compose, "aarch64-apple-darwin")
-        self.assertEqual(asset, "sc-compose_1.5.0_aarch64-apple-darwin.tar.gz")
-        self.assertEqual(url, "https://github.com/randlee/sc-compose/releases/download/v1.5.0/" + asset)
-        self.assertEqual(dict(manifest.sc_compose_checksums)["aarch64-apple-darwin"], "7751631cd86e6644e88cfcf3dd80f352779350f9f24f891f52983c8da0ed4620")
+        self.assertEqual(asset, "sc-compose_1.6.1_aarch64-apple-darwin.tar.gz")
+        self.assertEqual(url, "https://github.com/randlee/sc-compose/releases/download/v1.6.1/" + asset)
+        self.assertEqual(dict(manifest.sc_compose_checksums)["aarch64-apple-darwin"], "23db29325d95c0f4bb94dead48d02883e00311e82dc66820fe51b1dd855b7168")
+        self.assertEqual(
+            dict(manifest.sc_compose_checksums)["x86_64-pc-windows-msvc"],
+            "35671244d7cf42faf5fa2f88e78a6944beeb3fdcce28cb795ef63e97a8c6ce32",
+        )
 
     def test_sc_compose_install_never_uses_cargo(self) -> None:
         source = (SCRIPT.parents[1] / "tools" / "bootstrap.py").read_text(encoding="utf-8")
@@ -144,9 +148,12 @@ class BootstrapTests(unittest.TestCase):
             "cargo-shear": (),
             "cargo-modules": ("quick-install",),
         })
-        self.assertEqual(manifest.sc_compose, "1.5.0")
+        self.assertEqual(manifest.sc_compose, "1.6.1")
         self.assertEqual(manifest.wyvern, "0.5.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
+        self.assertNotIn("sc-compose", dict(manifest.python_packages))
+        requirements = (SCRIPT.parents[1] / "tools" / "bootstrap-requirements.txt").read_text(encoding="utf-8")
+        self.assertNotIn("sc-compose==", requirements)
 
     def test_macos_homebrew_seed_formula_is_derived_from_the_exact_python_pin(self) -> None:
         manifest = bootstrap.load_manifest()

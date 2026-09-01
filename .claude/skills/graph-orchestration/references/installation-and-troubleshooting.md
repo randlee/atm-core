@@ -27,8 +27,8 @@ The required runtime dependencies are:
 
 | Dependency | Minimum | Used for |
 |---|---:|---|
-| `sc-compose` CLI | **released v1.5.0 prebuilt release binary** | Rendering fenced Jinja templates and agent prompts |
-| `sc_compose` Python binding | **1.2.0** | Python/maturin rendering integrations and wrappers |
+| `sc-compose` CLI | **released v1.6.1 prebuilt release binary** | Rendering fenced Jinja templates and agent prompts |
+| `sc_compose` Python binding | **1.6.1** | Python/maturin rendering integrations and wrappers |
 | Python + `rdflib` | **3.11+** | RDF/Turtle parsing and SPARQL queries |
 | `jq` | any current release | Reading the JSON cursor contract |
 | `pytest` | any current release | Unit tests (only required with `--for-tests`) |
@@ -74,7 +74,7 @@ Install both and keep them at the same minimum version.
 For the CLI, use the pinned prebuilt release asset required by the report templates:
 
 ```bash
-Download the platform-matching v1.5.0 archive from `randlee/sc-compose`,
+Download the platform-matching v1.6.1 archive from `randlee/sc-compose`,
 verify its SHA256 against `checksums.txt`, and unpack `sc-compose` into the
 bootstrap tools directory. `just bootstrap` performs this hard-fail check;
 never compile the CLI from source.
@@ -84,7 +84,7 @@ For the Python/maturin binding (a one-time per-machine setup; no activation
 step):
 
 ```bash
-python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'
+python3 -m pip install --user --break-system-packages 'sc-compose==1.6.1'
 brew install jq
 ```
 
@@ -98,7 +98,7 @@ callers only perform a guarded `import sc_compose` on each invocation.
 ### Linux
 
 ```bash
-python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'
+python3 -m pip install --user --break-system-packages 'sc-compose==1.6.1'
 sudo apt-get install jq                 # Debian/Ubuntu; use the native package manager otherwise
 ```
 
@@ -114,8 +114,8 @@ one-time install command and in the preflight.
 ### Windows (PowerShell)
 
 ```powershell
-py -m pip install --user --break-system-packages "sc-compose>=1.2.0"
-Download and verify the platform-matching v1.5.0 release archive as described
+py -m pip install --user --break-system-packages "sc-compose==1.6.1"
+Download and verify the platform-matching v1.6.1 release archive as described
 above; do not compile the CLI from source.
 winget install jqlang.jq
 ```
@@ -132,20 +132,20 @@ python3 -m pytest .claude/skills/graph-orchestration/scripts/test_validate_findi
 ```
 
 The first command must return `"success": true` and report
-the pinned released v1.5.0 `sc-compose` build. A test pass does not override a failed
+the pinned released v1.6.1 `sc-compose` build. A test pass does not override a failed
 preflight: dependency errors are distinct from expected validation failures.
 
 ## Known issues
 
 - **The v1.3.0 CLI is rejected for current templates.** Install the pinned
-  v1.5.0 prebuilt release above; the Python binding remains a separate `>=1.2.0`
+  v1.6.1 prebuilt release above; the Python binding remains a separate `>=1.6.1`
   artifact.
 - **`rdflib` import fails although it was installed.** `pip` and `python3`
   often point at different interpreters.  Compare `command -v python3` with
   `python3 -m pip --version`, then use the same interpreter for installation or
   set `GRAPH_ORCH_PYTHON`.
 - **PEP 668 blocks `pip install`.** Run the sanctioned one-time user install:
-  `python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'`.
+  `python3 -m pip install --user --break-system-packages 'sc-compose==1.6.1'`.
   No venv or activation step is required.  If that interpreter is not the one
   used by the skill, repeat the command with the exact invoking interpreter.
 - **The CLI works in Terminal but not in Claude Code.** Add the discovered
