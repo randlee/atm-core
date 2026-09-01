@@ -219,6 +219,12 @@ no test executions beyond each sprint's own new unit tests.
    observability limitation until the gauges ship.
 6. **Windows**: no isolated Windows benchmark account exists; Windows
    evidence remains a declared-skip per standing policy.
+7. **Execution-account admission control** (arch-ctm, post-AV-PROD-001R
+   review): the provenance fix *records* the executing account in-band
+   (getpwuid(geteuid()), not env-spoofable) but does not *enforce* an
+   approved-account allowlist for official runs. If Rand wants official
+   evidence rejected — not just flagged — when produced by a non-approved
+   account, that is a small scoped harness change; candidate for RRG.2.
 
 ## 8. Open questions for Rand (at plan review)
 
