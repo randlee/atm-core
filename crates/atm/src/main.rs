@@ -321,10 +321,10 @@ pub(crate) fn build_logger(
 }
 
 fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(), AtmError> {
-    fs::create_dir_all(log_dir).map_err(|_source| {
+    fs::create_dir_all(log_dir).map_err(|source| {
         AtmError::observability_bootstrap(format!(
-            "failed to create retained log directory {}",
-            log_dir.display()
+            "failed to create retained log directory {}: {source}",
+            log_dir.display(),
         ))
     })?;
     OpenOptions::new()
@@ -332,10 +332,10 @@ fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(
         .append(true)
         .open(active_log_path)
         .map(|_| ())
-        .map_err(|_source| {
+        .map_err(|source| {
             AtmError::observability_bootstrap(format!(
-                "failed to open retained log file {} during startup",
-                active_log_path.display()
+                "failed to open retained log file {} during startup: {source}",
+                active_log_path.display(),
             ))
         })
 }
@@ -1018,8 +1018,8 @@ mod adapter_tests {
     use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
     use super::{
-        ATM_LOG_LEVEL_ENV, exit_code_for_atm_error, exit_code_for_error, init_observability,
-        level_for_outcome, logger_level_override, tracing_level_filter,
+        ATM_LOG_LEVEL_ENV, ensure_retained_log_ready, exit_code_for_atm_error, exit_code_for_error,
+        init_observability, level_for_outcome, logger_level_override, tracing_level_filter,
     };
 
     fn with_env_var<R>(key: &'static str, value: Option<&str>, f: impl FnOnce() -> R) -> R {
@@ -1118,6 +1118,50 @@ mod adapter_tests {
         let error = init_observability(false).expect_err("invalid ATM_LOG_DIR should fail closed");
         assert!(error.is_config());
         assert!(error.message().contains("absolute path"));
+    }
+
+    #[test]
+    fn retained_log_open_failure_preserves_the_os_error() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let log_dir = tempdir.path().join("logs");
+        std::fs::create_dir_all(&log_dir).expect("log dir");
+        let active_log_path = log_dir.join("atm.log.jsonl");
+        std::fs::create_dir(&active_log_path).expect("non-appendable log path");
+        let expected = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&active_log_path)
+            .expect_err("directory must not be appendable")
+            .to_string();
+
+        let error = ensure_retained_log_ready(&log_dir, &active_log_path)
+            .expect_err("retained log open must fail closed");
+
+        assert!(error.is_observability_bootstrap());
+        assert!(
+            error
+                .message()
+                .contains(&active_log_path.display().to_string())
+        );
+        assert!(error.message().contains(&expected), "{error}");
+    }
+
+    #[test]
+    fn retained_log_directory_failure_preserves_the_os_error() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let blocked_parent = tempdir.path().join("blocked-parent");
+        std::fs::write(&blocked_parent, "not a directory").expect("blocked parent");
+        let log_dir = blocked_parent.join("logs");
+        let expected = std::fs::create_dir_all(&log_dir)
+            .expect_err("child of a regular file must not be a directory")
+            .to_string();
+
+        let error = ensure_retained_log_ready(&log_dir, &log_dir.join("atm.log.jsonl"))
+            .expect_err("retained log directory creation must fail closed");
+
+        assert!(error.is_observability_bootstrap());
+        assert!(error.message().contains(&log_dir.display().to_string()));
+        assert!(error.message().contains(&expected), "{error}");
     }
 
     #[test]
