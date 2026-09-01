@@ -32,6 +32,10 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(asset, "sc-compose_1.6.1_aarch64-apple-darwin.tar.gz")
         self.assertEqual(url, "https://github.com/randlee/sc-compose/releases/download/v1.6.1/" + asset)
         self.assertEqual(dict(manifest.sc_compose_checksums)["aarch64-apple-darwin"], "23db29325d95c0f4bb94dead48d02883e00311e82dc66820fe51b1dd855b7168")
+        self.assertEqual(
+            dict(manifest.sc_compose_checksums)["x86_64-pc-windows-msvc"],
+            "35671244d7cf42faf5fa2f88e78a6944beeb3fdcce28cb795ef63e97a8c6ce32",
+        )
 
     def test_sc_compose_install_never_uses_cargo(self) -> None:
         source = (SCRIPT.parents[1] / "tools" / "bootstrap.py").read_text(encoding="utf-8")

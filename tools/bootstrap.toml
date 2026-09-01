@@ -26,7 +26,7 @@ version = "1.6.1"
 [sc-compose.checksums]
 aarch64-apple-darwin = "23db29325d95c0f4bb94dead48d02883e00311e82dc66820fe51b1dd855b7168"
 x86_64-apple-darwin = "476147e831bc70f3142787241853d94d290029c0c8e66cfe83211a6d60aaa002"
-x86_64-pc-windows-msvc = "35671244d7cf42faf5a2f88e78a6944beeb3fdcce28cb795ef63e97a8c6ce32"
+x86_64-pc-windows-msvc = "35671244d7cf42faf5fa2f88e78a6944beeb3fdcce28cb795ef63e97a8c6ce32"
 x86_64-unknown-linux-gnu = "2e09706e0814f30adaacc88310db4ad629dcd9314d1182ecf12767686f828204"
 
 [wyvern]
