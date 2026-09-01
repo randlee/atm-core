@@ -2,9 +2,10 @@
   "schema_version": 1,
   "run_kind": "release",
   "candidate": {
-    "tag_candidate": "v1.5.0-rc1",
+    "tag_candidate": "v1.6.0",
     "commit_sha": "0000000000000000000000000000000000000000",
-    "branch": "develop"
+    "branch": "develop",
+    "workspace_version": "1.5.7"
   },
   "testbed_definitions": {
     "repo": "randlee/atm-hermes-testbed",
@@ -55,7 +56,7 @@
       "suite_id": "benchmark-read-query",
       "entrypoint": "just benchmark-read",
       "terminal_state": "declared-skip",
-      "skip_reason": "EXAMPLE ONLY — illustrates a Rand-approved standing skip of a benchmark FAMILY (§2.1/AC-3): no floors row exists for read-query because no measurement ran — the family-level floors requirement is conditional on the suite executing (schema root allOf); real skips must cite the Rand-approved standing reason",
+      "skip_reason": "EXAMPLE ONLY \u2014 illustrates a Rand-approved standing skip of a benchmark FAMILY (\u00a72.1/AC-3): no floors row exists for read-query because no measurement ran \u2014 the family-level floors requirement is conditional on the suite executing (schema root allOf); real skips must cite the Rand-approved standing reason",
       "evidence": [],
       "started_at": "2026-09-17T19:20:00Z",
       "ended_at": "2026-09-17T19:20:00Z"

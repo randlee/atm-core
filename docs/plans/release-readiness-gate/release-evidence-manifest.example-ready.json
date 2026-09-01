@@ -2,9 +2,10 @@
   "schema_version": 1,
   "run_kind": "release",
   "candidate": {
-    "tag_candidate": "v1.5.0-rc1",
+    "tag_candidate": "v1.6.0",
     "commit_sha": "0000000000000000000000000000000000000000",
-    "branch": "develop"
+    "branch": "develop",
+    "workspace_version": "1.5.7"
   },
   "testbed_definitions": {
     "repo": "randlee/atm-hermes-testbed",

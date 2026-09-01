@@ -29,11 +29,20 @@
     "candidate": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tag_candidate", "commit_sha", "branch"],
+      "required": ["tag_candidate", "commit_sha", "branch", "workspace_version"],
       "properties": {
-        "tag_candidate": { "type": "string", "minLength": 1 },
+        "tag_candidate": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+\\.0$",
+          "description": "Proposed release version label (§5.1): always the clean vX.Y.0 the post-READY minor bump will produce. BINDING at the readiness preflight (AC-12 iii): the release-candidate tag's version must equal this value."
+        },
         "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-        "branch": { "type": "string", "minLength": 1 }
+        "branch": { "type": "string", "minLength": 1 },
+        "workspace_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "The gated commit's Cargo.toml [workspace.package] version — the §5.1 mandatory per-attempt patch++ version (AC-13). Recorded by the orchestrator's first act from the checked-out gated tree; the self-verifier cross-checks it against Cargo.toml and refuses emission if any previously committed run_kind:release manifest under the evidence root records the same value — attempt distinctness is checkable, never asserted."
+        }
       }
     },
     "testbed_definitions": {
@@ -179,8 +188,8 @@
           {
             "if": { "properties": { "suite_id": { "const": "testbed-integration" }, "terminal_state": { "const": "fail" } }, "required": ["suite_id", "terminal_state"] },
             "then": {
-              "properties": { "fail_reason": { "enum": ["tier-detail-missing", "tier-definitions-mismatch", "sentinel-mismatch", "test-failure", "provenance-missing", "suite-error"] } },
-              "description": "suite_id-scoped fail_reason subset: testbed rows never carry benchmark-only reasons (floor-breach, measurement-anomaly)."
+              "properties": { "fail_reason": { "enum": ["tier-detail-missing", "tier-definitions-mismatch", "sentinel-mismatch", "test-failure", "provenance-missing", "measurement-anomaly", "suite-error"] } },
+              "description": "suite_id-scoped fail_reason subset: testbed rows never carry floor-breach (the only benchmark-exclusive reason — floors exist only for benchmark families). measurement-anomaly IS admitted: §3.3's one-continuous-session guarantee is validated by a testbed-scoped duration-bounds anomaly check (built in RRG.3a, wired in RRG.4) that emits fail/measurement-anomaly. The root-level floors conditionals are unaffected — they key on benchmark suite_ids only, so a testbed measurement-anomaly row never forces a floors row."
             }
           }
         ]

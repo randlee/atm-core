@@ -312,7 +312,9 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   exactly-once), the floors cross-check (every §3.2 tracked metric of a
   pass-terminal benchmark suite has a `floors[]` row, and no `floors[]`
   row exists for a family whose suite did not execute), the §2.3.5
-  anomaly-check set (checks built in RRG.2, wired in RRG.4), tier-row
+  anomaly-check set (benchmark/smoke checks built in RRG.2, the
+  testbed-scoped duration-bounds check built in RRG.3a — all wired in
+  RRG.4), the AC-13 `workspace_version` cross-checks, tier-row
   `detail` populated and conformant to the RRG.3a tier-row schema (§3.3),
   version sentinels consistent, tiers 1:1 vs pinned definitions (§2.3.3),
   and the suite_id↔`fail_reason` compatibility re-check (each suite's
@@ -357,6 +359,19 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   check failing ⇒ readiness preflight fails; a non-metadata diff requires
   a fresh gate run (§5.1). The final preflight on the exact `main` commit
   is unchanged and never re-runs the gate.
+- AC-13: **per-attempt version distinctness is mechanized (§5.1
+  patch++).** The manifest's `candidate` block carries a required
+  `workspace_version` (schema-patterned `X.Y.Z`): the orchestrator's
+  first act records it from the checked-out gated tree's `Cargo.toml`
+  `[workspace.package] version`, and the §2.3.3 self-verifier
+  (i) cross-checks the manifest value against that `Cargo.toml` value
+  and (ii) refuses emission if any previously committed
+  `run_kind: "release"` manifest under the evidence root records the
+  same `workspace_version` — a repeated/unbumped version is detected
+  mechanically, never asserted in prose. `tag_candidate` is
+  schema-patterned to the clean `vX.Y.0` release shape (§5.1; binding
+  per AC-12 iii). RRG.1 owns the recording, RRG.4 wires both
+  self-verifier checks.
 
 ## 3. Suite inventory (definition — existing tests only)
 
@@ -397,8 +412,12 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
 - Fixture: https://github.com/randlee/atm-hermes-testbed (Colima test
   fixture; tier definitions in testbed PR #2, tiers AT0–AT8).
 - Entry: testbed runner, full tier set (prompt tiers + infra tiers),
-  executed in one continuous session (validated by the §2.3.5 wall-clock
-  duration-bounds anomaly check). The build under test is decided by
+  executed in one continuous session (validated by a **testbed-scoped
+  wall-clock duration-bounds anomaly check** — built in RRG.3a with the
+  other tier checks, wired into §2.3.3 whole-set self-verification in
+  RRG.4, emitting `fail`/`measurement-anomaly` per the §2.3.5 emission
+  convention; the testbed `fail_reason` subset admits it for exactly this
+  check). The build under test is decided by
   Rand at plan review (§8 Q2: tagged candidate build only, or also
   integrate builds); this plan does not preempt that decision.
 - Evidence: committed under an `evidence/…` branch/dir in atm-core exactly
@@ -493,7 +512,16 @@ Summary of the committed schema (normative source is the schema file):
   smoke never carries benchmark/testbed-only reasons, benchmark rows
   never carry tier/sentinel reasons (so a mislabeled benchmark `fail`
   cannot dodge the AC-3 floors-row requirement), testbed rows never carry
-  `floor-breach`/`measurement-anomaly`;
+  `floor-breach` (the only benchmark-exclusive reason — floors exist only
+  for benchmark families). Testbed rows DO admit `measurement-anomaly`:
+  §3.3's one-continuous-session guarantee is validated by a
+  **testbed-scoped duration-bounds anomaly check** (built in RRG.3a
+  alongside the other §2.3.3 tier checks, wired into whole-set
+  self-verification in RRG.4) whose failure emission is
+  `fail`/`measurement-anomaly` — the §2.3.5 emission convention, applied
+  to the testbed suite. The root-level floors conditionals are
+  unaffected: they key on benchmark suite_ids only, so a testbed
+  `measurement-anomaly` row never forces a floors row;
   `declared-skip` **requires** `skip_reason` and **forbids**
   `host`/`execution_identity` (nothing executed — identity must not be
   fabricated);
@@ -578,9 +606,18 @@ direction.
     `Cargo.lock` — mechanical commit). Each attempt therefore executes
     at a unique patch version (e.g. 1.5.1, 1.5.2, … across attempts),
     so every attempt's manifest and evidence set are
-    version-distinguishable and no two runs ever share a version. The
+    version-distinguishable and no two runs ever share a version —
+    mechanized, not asserted: the manifest records the gated commit's
+    workspace version and the self-verifier enforces both the
+    `Cargo.toml` match and cross-attempt uniqueness (**AC-13**). The
     patch++ commit must itself be CI-green before launch (§2.2.6
-    applies to the gated commit as always).
+    applies to the gated commit as always). **Launch sequencing
+    (normative):** the launching operator waits until all seven §3.4
+    repo-suite runs have reached a conclusion on the just-pushed
+    patch++ commit before invoking the gate — the operator owns this
+    wait (manual launch, §5.1); an early invocation is safe but wasted:
+    the §2.2.6 pre-launch check refuses fail-closed ("candidate not
+    CI-eligible", missing-state rows), spending no evidence.
   - **The release version is a minor bump applied only after `READY`**:
     a passing run at e.g. 1.5.7 is followed by the mechanical minor
     bump commit to 1.6.0 (version metadata + changelog, nothing else) —
@@ -627,11 +664,11 @@ direction.
 
 | # | Deliverable | must_follow | Assignee (proposed) |
 |---|---|---|---|
-| RRG.1 | Manifest schema (lifted from this plan's committed baseline, **including the suite_id-scoped `fail_reason` subsets** — per-suite schema conditionals) + `just release-readiness` orchestrator skeleton (suite registry, terminal-state tracking, fail-closed manifest render, **§2.2.6 CI-eligibility precondition check with the "candidate not CI-eligible" refusal state and the refusal-record writer implementing the committed [release-refusal-record.schema.json](release-refusal-record.schema.json) (path convention `release/refusals/<tag_candidate>/`; built once here, reused by RRG.4) — both explicit acceptance items, AC-11**) + short ADR recording the terminal-state taxonomy, adapter composition model, concurrency model (§5), **and the §2.2.6 CI-eligibility/refusal-state semantics (snapshot-vs-emission verification, refusal observability, INCOMPLETE-vs-refusal boundary)** | — | Cipher |
+| RRG.1 | Manifest schema (lifted from this plan's committed baseline, **including the suite_id-scoped `fail_reason` subsets** — per-suite schema conditionals) + `just release-readiness` orchestrator skeleton (suite registry, terminal-state tracking, fail-closed manifest render, **§2.2.6 CI-eligibility precondition check with the "candidate not CI-eligible" refusal state and the refusal-record writer implementing the committed [release-refusal-record.schema.json](release-refusal-record.schema.json) (path convention `release/refusals/<tag_candidate>/`; built once here, reused by RRG.4) — both explicit acceptance items, AC-11**; **explicit acceptance item (AC-13): the orchestrator's first act records the gated tree's `Cargo.toml` workspace version into `candidate.workspace_version`** (self-verifier cross-checks wired in RRG.4)) + short ADR recording the terminal-state taxonomy, adapter composition model, concurrency model (§5), **and the §2.2.6 CI-eligibility/refusal-state semantics (snapshot-vs-emission verification, refusal observability, INCOMPLETE-vs-refusal boundary)** | — | Cipher |
 | RRG.2 | Suite adapters: smoke + benchmark families (reuse existing runners; no new harness framework — additive composition only); includes closing §7.8 (send-family execution-identity provenance) so both benchmark families meet AC-4; **builds the §2.3.5 anomaly-check set** (D7 clean-run criteria, sanity band, duration bounds, evidence-row counts) emitting `fail`/`measurement-anomaly` | RRG.1 | Cipher |
-| RRG.3a | atm-core testbed adapter (manifest `testbed_definitions` pinning, AC-5 guard, §2.3.3 tier checks); **owns the tier-row evidence schema + example (§3.3)** and **owns the AC-10/§7.4 AT2/AT3 disposition logic** (fail-closed default, standing-skip encoding) | RRG.1 | Cipher |
+| RRG.3a | atm-core testbed adapter (manifest `testbed_definitions` pinning, AC-5 guard, §2.3.3 tier checks); **owns the tier-row evidence schema + example (§3.3)**, **owns the testbed-scoped wall-clock duration-bounds anomaly check** (validates §3.3's one-continuous-session guarantee, emits `fail`/`measurement-anomaly`; wired into whole-set self-verification by RRG.4), and **owns the AC-10/§7.4 AT2/AT3 disposition logic** (fail-closed default, standing-skip encoding) | RRG.1 | Cipher |
 | RRG.3b | Testbed-repo tier definitions: merge testbed PR #2 and add Phase-AV coverage definitions (§7.1). Acceptance: §7.1–§7.3 items resolved (definitions exist for every executed row, AT8 reconciled, detail-population expectations encoded). Fallback if PR #2 stalls (external repo): the gate pins to a Rand-approved testbed commit SHA carrying the reviewed definitions — RRG.3a is not blocked, only the pin value changes | RRG.1; parallel-safe with RRG.3a (see note below) | Cipher (atm-hermes-testbed PR) |
-| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs; **wires the RRG.2 anomaly-check set, duplicate-`suite_id` rejection across both `suites[]` and `ci_runs[]`, the floors cross-check (both directions), the suite_id↔`fail_reason` compatibility re-check, and the §2.2.6 emission-time CI re-verification into §2.3.3 whole-set self-verification** (AC-7, AC-11). **Explicit acceptance item: an emission-time refusal invokes the RRG.1 refusal-record writer with `refusal_point: "emission"` — reused, never re-implemented — so the AC-11 emission path cannot silently skip the record.** **Explicit acceptance item (AC-12): the publisher readiness preflight invokes an RRG.4-delivered mechanized check — READY-manifest schema validation, bump-only diff (gated commit ↔ candidate tag commit), and binding `tag_candidate` ↔ tag-version equality — as code, not checklist prose; the release gate is not deliverable without it.** Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8, using the §2.2 rule 6 rehearsal carve-out — no live GH API dependency) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
+| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs; **wires the RRG.2 anomaly-check set, duplicate-`suite_id` rejection across both `suites[]` and `ci_runs[]`, the floors cross-check (both directions), the suite_id↔`fail_reason` compatibility re-check, the RRG.3a testbed duration-bounds check, the AC-13 `workspace_version` cross-checks (Cargo.toml match + cross-attempt uniqueness), and the §2.2.6 emission-time CI re-verification into §2.3.3 whole-set self-verification** (AC-7, AC-11, AC-13). **Explicit acceptance item: an emission-time refusal invokes the RRG.1 refusal-record writer with `refusal_point: "emission"` — reused, never re-implemented — so the AC-11 emission path cannot silently skip the record.** **Explicit acceptance item (AC-12): the publisher readiness preflight invokes an RRG.4-delivered mechanized check — READY-manifest schema validation, bump-only diff (gated commit ↔ candidate tag commit), and binding `tag_candidate` ↔ tag-version equality — as code, not checklist prose; the release gate is not deliverable without it.** Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8, using the §2.2 rule 6 rehearsal carve-out — no live GH API dependency) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
 
 RRG.3a/RRG.3b parallel-safety rationale: disjoint repos (RRG.3b edits only
 atm-hermes-testbed; RRG.3a edits only atm-core). Their sole coupling is the
@@ -946,3 +983,41 @@ owns; no sprint-local reinterpretation.
     with floor-breach REJECTED; smoke fail with measurement-anomaly
     REJECTED; testbed fail with tier-definitions-mismatch still VALID;
     examples all VALID.
+- **r9 (2026-08-31, fix round for quality-mgr r8 FAIL @ cee04a817 —
+  2B/2I/1M, all introduced by r8's own additions)**:
+  - B1r8 (testbed subset forbade the reason §3.3's own guarantee emits)
+    → **arm (a)** chosen: `measurement-anomaly` added to the testbed
+    subset; a **testbed-scoped wall-clock duration-bounds anomaly
+    check** is explicitly owned — built in RRG.3a (with the other tier
+    checks), wired into whole-set self-verification in RRG.4 — and §3.3
+    now cites that check instead of the (RRG.2-scoped) §2.3.5 set.
+    Noted per the fix guidance: the root floors conditionals need no
+    carve-out — they key on benchmark suite_ids only, so a testbed
+    measurement-anomaly row never forces a floors row (probe-verified).
+    Testbed subset now excludes only `floor-breach`.
+  - B2r8 (patch++ mandate had no acceptance home, "no two runs share a
+    version" unmechanized) → new **AC-13**: required
+    `candidate.workspace_version` field (schema-patterned `X.Y.Z`)
+    recorded by the orchestrator's first act from the gated tree's
+    `Cargo.toml`; self-verifier cross-checks (i) manifest value ==
+    Cargo.toml value and (ii) no previously committed release manifest
+    records the same value (cross-attempt uniqueness). Explicit RRG.1
+    acceptance item (recording) + RRG.4 wiring (both checks); §5.1
+    cross-references AC-13.
+  - I1r8 (patch++ CI-greenness launch sequencing unstated) → normative
+    §5.1 sentence: the launching operator owns waiting for all seven
+    §3.4 runs to reach a conclusion on the patch++ commit before
+    invoking the gate; an early invocation refuses fail-closed
+    pre-launch, spending no evidence.
+  - I2r8 (examples taught stale `v1.5.0-rc1`) → all four examples now
+    carry `tag_candidate: "v1.6.0"`; the three manifest examples add
+    `workspace_version: "1.5.7"` (gated attempt-patch version, teaching
+    the §5.1 model: measured at 1.5.7, proposing v1.6.0).
+  - M1r8 (tag_candidate free text) → schema-patterned `^v\d+\.\d+\.0$`
+    (clean release shape, consistent with binding AC-12 iii).
+  - Schema + examples revalidated: full probe battery green; new
+    probes — testbed fail/measurement-anomaly VALID (and forces no
+    floors row), testbed fail/floor-breach still REJECTED, benchmark
+    fail/tier-sentinel reasons still REJECTED, missing
+    `workspace_version` REJECTED, malformed `workspace_version`/
+    `tag_candidate` (e.g. `v1.6.1`, `1.6.0`) REJECTED.
