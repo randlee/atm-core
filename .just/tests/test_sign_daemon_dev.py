@@ -79,16 +79,17 @@ class SignDaemonDevTests(unittest.TestCase):
 
     def test_self_signed_identity_uses_leaf_pin_verification(self) -> None:
         identity = sign_daemon_dev.SigningIdentity("A" * 40, "atm-daemon-dev")
+        candidate = Path("/candidate/atm-daemon")
         completed = subprocess.CompletedProcess(["codesign"], 0, stdout="", stderr="")
         with (
             mock.patch.object(sign_daemon_dev.subprocess, "run", return_value=completed),
             mock.patch.object(sign_daemon_dev, "verify_signing_identity", return_value=True) as verify,
         ):
             sign_daemon_dev.sign_and_verify_binary(
-                Path("/candidate/atm-daemon"), sign_daemon_dev.DAEMON_IDENTIFIER, identity
+                candidate, sign_daemon_dev.DAEMON_IDENTIFIER, identity
             )
         verify.assert_called_once_with(
-            "/candidate/atm-daemon",
+            str(candidate),
             sign_daemon_dev.DAEMON_IDENTIFIER,
             identity,
         )

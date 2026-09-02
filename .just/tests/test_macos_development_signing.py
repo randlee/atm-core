@@ -47,6 +47,7 @@ class AppleDevelopmentSigningTests(unittest.TestCase):
                 "_certificate_team_identifier",
                 side_effect=[signing.DEFAULT_TEAM_IDENTIFIER, "OTHERTEAM"],
             ),
+            mock.patch.object(signing, "_load_configured_identity", return_value=None),
             mock.patch.dict(signing.os.environ, {}, clear=True),
         ):
             self.assertEqual(signing.resolve_apple_development_identity(), selected)
@@ -59,6 +60,7 @@ class AppleDevelopmentSigningTests(unittest.TestCase):
         with (
             mock.patch.object(signing, "_valid_identities", return_value=identities),
             mock.patch.object(signing, "_certificate_team_identifier", return_value=signing.DEFAULT_TEAM_IDENTIFIER),
+            mock.patch.object(signing, "_load_configured_identity", return_value=None),
             mock.patch.dict(signing.os.environ, {}, clear=True),
         ):
             with self.assertRaisesRegex(signing.SigningIdentityError, "exactly one"):
@@ -73,6 +75,7 @@ class AppleDevelopmentSigningTests(unittest.TestCase):
                 "_certificate_team_identifier",
                 return_value=signing.DEFAULT_TEAM_IDENTIFIER,
             ),
+            mock.patch.object(signing, "_load_configured_identity", return_value=None),
             mock.patch.dict(signing.os.environ, {}, clear=True),
         ):
             self.assertEqual(
@@ -121,6 +124,7 @@ class AppleDevelopmentSigningTests(unittest.TestCase):
         with (
             mock.patch.object(signing, "_valid_identities", return_value=()),
             mock.patch.object(signing, "_identity_exists_but_is_not_valid", return_value=True),
+            mock.patch.object(signing, "_load_configured_identity", return_value=None),
             mock.patch.dict(signing.os.environ, {}, clear=True),
         ):
             with self.assertRaisesRegex(signing.SigningIdentityError, "WWDR G3"):
