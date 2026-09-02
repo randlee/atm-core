@@ -30,9 +30,10 @@ if str(DAEMON_SWITCH_SCRIPTS_DIRECTORY) not in sys.path:
 from macos_development_signing import (  # noqa: E402
     CLI_IDENTIFIER,
     DAEMON_IDENTIFIER,
+    SigningIdentity,
     SigningIdentityError,
     resolve_apple_development_identity,
-    verify_apple_signature,
+    verify_signing_identity,
 )
 from temporary_launch import (  # noqa: E402
     CapturedLaunchSpec,
@@ -199,11 +200,13 @@ def macos_development_signing_identity_available() -> bool:
 
 
 def macos_binary_has_development_signature(
-    binary: Path, identifier: str, team_identifier: str
+    binary: Path,
+    identifier: str,
+    identity: SigningIdentity,
 ) -> bool:
-    """Prove one managed binary carries its stable Apple Development signature."""
+    """Prove one managed binary carries its selected stable signing identity."""
     try:
-        return verify_apple_signature(str(binary), identifier, team_identifier)
+        return verify_signing_identity(str(binary), identifier, identity)
     except (OSError, subprocess.SubprocessError):
         return False
 
@@ -224,9 +227,9 @@ def require_macos_development_signatures(cli: Path, daemon: Path) -> None:
         ("CLI", cli, CLI_IDENTIFIER),
         ("daemon", daemon, DAEMON_IDENTIFIER),
     ):
-        if not macos_binary_has_development_signature(binary, identifier, identity.team_identifier):
+        if not macos_binary_has_development_signature(binary, identifier, identity):
             raise SwitchError(
-                f"{label} target is not strictly signed by the required Apple Development identity: "
+                f"{label} target is not strictly signed by the required signing identity: "
                 f"{binary}. "
                 "Build with `just build` or run `python3 .just/sign_daemon_dev.py` before daemon-switch."
             )
