@@ -1560,7 +1560,7 @@ The authoritative plan is
 critical review round 1 folded in); phase-au sprint docs are being cut from
 it under `docs/plans/phase-au/` on branch `plan/boundary-regression`.
 
-## 54. Phase AV — Async Mailbox-Read Cutover Completion [PLANNED — HARDENING]
+## 54. Phase AV — Async Mailbox-Read Cutover Completion [COMPLETE — INTEGRATION PR #1120]
 
 Phase AV fixes the mailbox-read serialization regression: every core job —
 including all reads — funnels through one single-permit `BlockingCoreBridge`
