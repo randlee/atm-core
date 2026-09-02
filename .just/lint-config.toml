@@ -148,12 +148,7 @@ allowed_dependencies = ["serde", "serde_json"]
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-bootstrap/Cargo.toml"
 boundary_record_path = "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"
-allowed_dependencies = ["atm-core", "atm-herdr", "atm-http-runtime", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "fs4", "peer-tls", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
-
-[[boundaries.manifest_dependency_allowlists]]
-owner_manifest_path = "crates/atm-daemon/Cargo.toml"
-boundary_record_path = "boundaries/atm-daemon/daemon-observability.toml"
-allowed_dependencies = ["atm-core", "atm-daemon-bootstrap", "atm-observability", "chrono", "sc-observability", "sc-observability-types", "serde_json", "serial_test", "tempfile", "tokio", "tracing"]
+allowed_dependencies = ["atm-core", "atm-observability", "atm-herdr", "atm-http-runtime", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "chrono", "fs4", "peer-tls", "sc-observability", "sc-observability-types", "serial_test", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-client/Cargo.toml"

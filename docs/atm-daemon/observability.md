@@ -33,126 +33,29 @@ Forbidden:
 
 ## Injected Trait Shape
 
-The injected daemon observability trait remains object-safe and sealed.
-
-Final shape:
-
-```rust
-pub trait DaemonRuntimeObservability:
-    atm_core::boundary::sealed::Sealed + ObservabilityPort + Send + Sync
-{
-    fn emit_daemon_event(&self, event: DaemonEvent) -> Result<(), AtmError>;
-
-    fn best_effort_flush_blocking(&self) -> Result<(), AtmError>;
-}
-```
-
-Consumption shape:
+The active replacement daemon injects the existing object-safe, sealed core
+port directly:
 
 ```rust
-Arc<dyn DaemonRuntimeObservability>
+Arc<dyn ObservabilityPort + Send + Sync>
 ```
 
-Object-safety rationale:
-- no generic methods
-- no `Self` return position
-- no by-value `self` receiver requirements
-- the trait remains suitable for one injected trait object shared across daemon
-  runtime partitions
+There is no `DaemonRuntimeObservability` extension trait and no ATM-owned
+flush-at-shutdown contract. `atm-daemon-bootstrap` owns construction of the
+concrete retained-log adapter at the Tokio/Axum composition boundary; the
+adapter's bounded writer teardown remains an implementation detail of
+`sc-observability`.
 
-Sealing decision:
-- sealed by default
-- rationale:
-  - the daemon does not currently need third-party implementers
-  - Phase V is closing an internal architecture seam, not creating a public
-    plugin surface
-  - sealing allows the daemon observability contract to evolve through `V.2`
-    and `V.3` without external implementation commitments
+This keeps the only injected surface to the four core operations
+(`emit`, `query`, `follow`, and `health`) and avoids a second daemon-specific
+emission API alongside `ObservabilityPort`.
 
 ## Event Model
 
-The daemon event model is subsystem-oriented, not central-mapper-oriented.
-
-Final shape:
-
-```rust
-pub struct DaemonEvent {
-    pub subsystem: DaemonSubsystem,
-    pub action: &'static str,
-    pub outcome: &'static str,
-    pub team: TeamScope,
-    pub agent: Option<AgentName>,
-    pub sender: Option<AgentName>,
-    pub recipient: Option<AgentName>,
-    pub message_id: Option<AtmMessageId>,
-    pub task_id: Option<TaskId>,
-    pub detail: Cow<'static, str>,
-}
-```
-
-Typed identifier decisions:
-- `subsystem`: `DaemonSubsystem` enum
-  - rationale:
-    - the daemon subsystem set is finite and reviewable
-    - enum closure prevents string drift and ad hoc subsystem naming
-- `message_id`: `AtmMessageId`
-  - rationale:
-    - ATM already owns a validated message-id newtype
-    - the daemon must not fall back to raw string message identifiers
-- `task_id`: `TaskId`
-  - rationale:
-    - ATM already owns a validated task-id domain type
-    - retaining the newtype keeps task identifiers consistent across CLI,
-      daemon, and schema boundaries
-
-Recommended live daemon subsystem enum members:
-- `Bootstrap`
-- `Composition`
-- `LocalIpcTransport`
-- `RuntimeHealth`
-- `HostOwnership`
-- `LifecycleControl`
-- `RuntimeStatusCache`
-- `ObservabilitySink`
-
-Historical-only subsystem names retained in this record:
-- `AdvisoryRuntime`
-- `NotificationRuntime`
-- `WatchRuntime`
-- `ReconcileRuntime`
-
-Historical-runtime note:
-- the subsystem names above are retained in this Phase V.1 observability
-  record only for historical migration bookkeeping from the earlier
-  compatibility line
-- they are not accepted live runtime lanes after `ADR-019`
-
-## Per-Event Context Fields
-
-`team`, `agent`, `sender`, `recipient`, `message_id`, and `task_id` are
-per-event payload fields, not injected logger state.
-
-Chosen representation for team scope:
-
-```rust
-pub enum TeamScope {
-    Team(TeamName),
-    None,
-}
-```
-
-Rationale:
-- most daemon events are team-scoped
-- infrastructure events such as daemon startup and shutdown are not
-- explicit `TeamScope::None` is clearer than inferring absence from logger
-  construction or from unrelated sender/recipient state
-
-Field rules:
-- `team` is required on each event as `TeamScope`
-- `agent`, `sender`, and `recipient` are optional and event-specific
-- `message_id` and `task_id` are optional and event-specific
-- no daemon subsystem may rely on hidden ambient logger state to fill these
-  values later
+The historical `DaemonEvent` / `TeamScope` model is retired. The active
+replacement daemon emits only the core `CommandEvent` model through
+`ObservabilityPort`; its identifier fields are already validated by the core
+contract. No daemon-specific event model or mapper remains in live code.
 
 ## Lifecycle Typestate Decision
 
@@ -186,7 +89,7 @@ The shared daemon observability layer may own only:
 - query
 - follow
 - health
-- best-effort synchronous flush during shutdown
+- bounded retained-writer teardown through the sink policy
 
 It must not own:
 - subsystem-specific event reconstruction
@@ -216,21 +119,9 @@ Historical migration note:
 Shared wiring and test/support surfaces that must follow the final boundary are
 all `V.2` refactor targets, with `V.3` shim cleanup where compatibility-only
 paths remain:
-- `crates/atm-daemon/src/daemon_runtime_observability.rs`
-  - `V.2` required action: refactor this file to the final injected trait and
-    daemon event surface used by subsystem-owned emission
-  - `V.3` follow-through: delete any compatibility shims that exist only to
-    preserve the old central mapper path
-- `crates/atm-daemon/src/daemon_observability.rs` (the source-visible implementation recorded by [`../../boundaries/atm-daemon/daemon-observability.toml`](../../boundaries/atm-daemon/daemon-observability.toml))
-- `crates/atm-daemon/src/composition.rs` (retired by AM.3)
-- `crates/atm-daemon/src/main.rs`
-- `crates/atm-daemon/src/lib.rs`
-- `crates/atm-daemon/src/test_observability.rs`
-- `crates/atm-daemon/src/runtime_health.rs`
-- `crates/atm-daemon/src/test_support.rs`
-- `crates/atm-daemon/src/tests.rs`
-- `crates/atm-daemon/src/tests_post_send_graft_warning.rs`
-- `crates/atm-daemon/src/tests_lifecycle.rs`
+- `crates/atm-daemon-bootstrap/src/daemon_observability.rs` (the source-visible
+  implementation recorded by [`../../boundaries/atm-daemon-bootstrap/daemon-observability.toml`](../../boundaries/atm-daemon-bootstrap/daemon-observability.toml))
+- `crates/atm-daemon-bootstrap/src/lib.rs`
 
 First CI-checkable enforcement target for `V.2`:
 - the shared observability layer must not import daemon subsystem types
@@ -238,7 +129,7 @@ First CI-checkable enforcement target for `V.2`:
 ## V.3 Deletion Targets
 
 `V.3` must delete or collapse the old central mapping path in:
-- `crates/atm-daemon/src/daemon_observability.rs`
+- `crates/atm-daemon-bootstrap/src/daemon_observability.rs`
   - `emit_runtime_event(...)`
   - `map_command_event(...)`
   - `map_runtime_event(...)`

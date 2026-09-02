@@ -43,6 +43,7 @@ use tokio::net::TcpStream;
 mod atm_temp_config;
 mod atm_temp_sweeper_runtime;
 mod bare_cli_runtime;
+mod daemon_observability;
 mod owner_gate;
 mod peer_launch_config;
 mod queue_drain;
@@ -75,6 +76,22 @@ pub const REPLACEMENT_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 /// remaining a bounded admission limit. The wire request's `max_message_bytes`
 /// can only lower the body policy; it cannot raise this server ceiling.
 const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
+
+/// Build the retained-log adapter at the active Tokio/Axum composition
+/// boundary. Filesystem readiness is synchronous, so it is explicitly kept
+/// off a runtime worker and joined before the replacement daemon starts.
+pub async fn bootstrap_replacement_observability()
+-> Result<Arc<dyn ObservabilityPort + Send + Sync>, AtmError> {
+    let observability =
+        tokio::task::spawn_blocking(daemon_observability::DaemonObservability::bootstrap)
+            .await
+            .map_err(|source| {
+                AtmError::observability_bootstrap(format!(
+                    "daemon observability bootstrap worker did not complete: {source}"
+                ))
+            })??;
+    Ok(Arc::new(observability))
+}
 
 /// Identity values captured once at the daemon bootstrap boundary.
 ///

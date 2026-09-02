@@ -509,7 +509,7 @@ impl ObservabilityPort for ScObservabilityAdapter {
             active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state,
-            maintenance: report.maintenance.map(map_maintenance_report),
+            maintenance: report.maintenance.map(map_maintenance_report).transpose()?,
             diagnostic,
             detail,
         })
@@ -585,8 +585,8 @@ fn maintenance_state_label(state: sc_observability_types::MaintenanceWorkerState
 
 fn map_maintenance_report(
     report: sc_observability_types::MaintenanceHealthReport,
-) -> AtmMaintenanceHealthReport {
-    AtmMaintenanceHealthReport {
+) -> Result<AtmMaintenanceHealthReport, AtmError> {
+    Ok(AtmMaintenanceHealthReport {
         state: match report.state {
             sc_observability_types::MaintenanceWorkerState::Running => {
                 AtmMaintenanceWorkerState::Running
@@ -604,8 +604,12 @@ fn map_maintenance_report(
             .last_pass_at
             .map(map_timestamp_back)
             .transpose()
-            .expect("shared maintenance timestamps must project into ATM timestamps"),
-    }
+            .map_err(|_source| {
+                AtmError::observability_health(
+                    "failed to project shared maintenance timestamp into ATM health",
+                )
+            })?,
+    })
 }
 
 fn build_command_event_fields(event: &CommandEvent) -> Map<String, serde_json::Value> {

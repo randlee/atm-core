@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-ObservabilityPort-ReplacementDaemon"
+owner_package = "atm-daemon-bootstrap"
+owner_crate_path = "atm_daemon_bootstrap"
+name = "DaemonObservability"
+
+[public]
+trait = "ObservabilityPort"
+notes = "DaemonObservability is the permit-listed retained-log implementation of the sealed ATM observability port for the active Tokio/Axum replacement-daemon composition boundary."
+
+[implementation]
+type = "DaemonObservability"
+module = "atm_daemon_bootstrap::daemon_observability"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_daemon_bootstrap::bootstrap_replacement_observability", "atm_daemon_bootstrap::run_replacement_daemon"]
+
+[ownership]
+io_owns = ["retained_log_bootstrap", "retained_log_emit", "retained_log_health_projection"]
+io_forbidden = ["daemon_request_dispatch", "daemon_transport", "direct_sqlite_io"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core", "atm-observability", "atm-herdr", "atm-http-runtime", "atm-runtime", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "chrono", "fs4", "peer-tls", "sc-observability", "sc-observability-types", "serial_test", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
+forbidden_edges = ["atm-daemon-bootstrap -> atm-graft"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["legacy_daemon_server", "legacy_dispatcher", "DaemonRuntimeObservability"]
+
+[contracts]
+request_types = ["CommandEvent", "AtmLogQuery"]
+response_types = ["AtmLogSnapshot", "LogTailSession", "AtmObservabilityHealth"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["legacy_daemon_server", "legacy_dispatcher", "daemon_only_flush_trait"]
+
+[enforcement]
+lint_rules = ["SCB-OBSERVABILITY-001", "LINT-BOUNDARY-REPLACEMENT-OBSERVABILITY-DEPENDENCIES"]
+review_gates = ["sealed_impl_allowlisted", "tokio_axum_entrypoint_only", "no_legacy_daemon_composition", "core_port_only"]
+
+[status]
+state = "active"
+notes = ["The concrete adapter is source-visible to lint_boundaries.py; no include shim may hide its sealed implementation.", "The binary reaches the adapter only through atm-daemon-bootstrap and the Tokio/Axum atm-http-runtime path.", "The active injection surface is Arc<dyn ObservabilityPort + Send + Sync>; no daemon-specific flush trait exists."]
