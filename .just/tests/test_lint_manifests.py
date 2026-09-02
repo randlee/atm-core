@@ -137,6 +137,42 @@ homepage.workspace = true
                 rendered,
             )
 
+    def test_collect_manifest_violations_flags_all_dependency_table_variants(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            (repo_root / "Cargo.toml").write_text(
+                ROOT_MANIFEST
+                + "\n[workspace.dependencies]\n"
+                + 'serde = "1"\nserde_json = "1"\ntracing = "0.1"\n',
+                encoding="utf-8",
+            )
+            manifest_path = repo_root / "crates/atm-core/Cargo.toml"
+            manifest_path.write_text(
+                GOOD_MEMBER.replace('[dependencies]\nserde = "1"\n', "")
+                + '\n[dev-dependencies]\nserde = "1"\n'
+                + '\n[build-dependencies]\nserde_json = "1"\n'
+                + "\n[target.'cfg(unix)'.dependencies]\ntracing = \"0.1\"\n",
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_manifest_violations(repo_root)]
+            self.assertIn(
+                "crates/atm-core/Cargo.toml [dev-dependencies].serde: "
+                "must use workspace = true for centralized dependency policy",
+                rendered,
+            )
+            self.assertIn(
+                "crates/atm-core/Cargo.toml [build-dependencies].serde_json: "
+                "must use workspace = true for centralized dependency policy",
+                rendered,
+            )
+            self.assertIn(
+                "crates/atm-core/Cargo.toml [target.cfg(unix).dependencies].tracing: "
+                "must use workspace = true for centralized dependency policy",
+                rendered,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
