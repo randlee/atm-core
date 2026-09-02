@@ -17,6 +17,7 @@ test-support = []
 [dependencies]
 atm-core.workspace = true
 atm-herdr.workspace = true
+atm-runtime.workspace = true
 base64.workspace = true
 axum.workspace = true
 hyper.workspace = true

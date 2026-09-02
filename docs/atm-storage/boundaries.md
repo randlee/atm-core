@@ -47,6 +47,18 @@ this contract for writes and must not introduce `spawn_blocking` for admission.
 `MessageStore` remains the temporary synchronous compatibility surface for
 non-Tokio callers until the migration is performance-proven.
 
+## AsyncMailboxReader
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/async-mailbox-reader.toml](../../boundaries/atm-storage/async-mailbox-reader.toml)
+
+`AsyncMailboxReader` is the Tokio daemon's separate bounded, read-only
+mailbox capability.  It accepts a storage-owned `ReadDeadline` and an
+explicit `MailboxScope`, which the backend checks before scheduling work.
+It does not share the writer lane, expose SQLite, or accept a core-owned
+deadline type.  The SQLite adapter owns a finite pool of defensive,
+read-only connections; runtime callers await this capability directly.
+
 ## MessageSearchStore and AsyncMessageSearchStore
 
 Canonical machine-readable boundary sources:

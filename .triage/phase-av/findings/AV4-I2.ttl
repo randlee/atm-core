@@ -1,0 +1,72 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV4-I2>
+  a triage:Finding ;
+  triage:findingId "AV4-I2" ;
+  triage:title "No AV.1b landing gate before official floor seeding" ;
+  triage:description "Nothing in scripts/smoke/read_benchmark.py execute()/seeding path prevents official floor seeding before the AV.1b read-handler cutover has merged; campaigns would measure the pre-AV serialized path while recording pool metadata as if the new reader lanes were live. Fix: explicit precondition (capability/version check against the cutover, or a documented manual gate that must pass before any official/seeding campaign." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AV4" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T03:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T02:36:37Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-08-31T02:31:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV4-I2/AV4-I2-W5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV4-I2/AV4-I2-W5-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 663 ;
+  triage:snippet "def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/64a32e6f9> .
+
+<urn:atm:triage:worktree/W1/8938ed6ab>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "8938ed6ab" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/W2/db08f4591>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "db08f4591" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/W3/f37063fdd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs-av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "f37063fdd" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/W4/2c6040b28>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/W5/64a32e6f9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "64a32e6f9" ;
+  triage:orderIndex 5 .

@@ -36,6 +36,7 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["mailbox::store::observe_source_files"]
 
 [enforcement]
+no_in_repo_implementation = true
 lint_rules = ["LINT-BOUNDARY-RECONCILE-COORDINATOR-REFERENCES"]
 review_gates = ["no_store_or_transport_bypass_in_reconcile"]
 

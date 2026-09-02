@@ -1,0 +1,234 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-PROD-002>
+  a triage:Finding ;
+  triage:findingId "AV-PROD-002" ;
+  triage:title "Reader runtime diagnostics absent from official campaign artifacts: all runtime gauges cli-not-exposed/unimplemented" ;
+  triage:description "arch-ctm production-readiness review (msg 01M1D6WRFXDMWFPJ3NHZ02V9ZF, task phase-av-prod-readiness-review, reviewed integrate/phase-av@c330637c2): sprint-AV.4 D5/A6 requires per-campaign queue/wait/execution/deadline/saturation and WAL-health observability. Current official artifacts mark all runtime gauges cli-not-exposed/unimplemented; only CLI-side timing/errors are captured. Diagnostics are transparently absent, not fabricated — does not falsify the PASS, but prevents diagnosing a future floor breach; the 1000ms mixed p95 interim ceiling is the only health signal. arch-ctm's disposition: treat metric export as a named post-merge condition/follow-up, not an invented value. Record as open/important with intended disposition = named follow-up condition on PR #1120, pending Rand's decision." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "observability" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-31T00:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-01T00:46:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-16> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-PROD-002/AV-17> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-1>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T210351Z-rand-m5.local-read.json" ;
+  triage:line 27 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-2>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T210351Z-rand-m5.local-read-query-fts.json" ;
+  triage:line 146 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-3>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T210351Z-rand-m5.local-read-read-fanout.json" ;
+  triage:line 26 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-4>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T210351Z-rand-m5.local-read-read-under-write-load.json" ;
+  triage:line 266 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-5>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T210445Z-rand-m5.local-read.json" ;
+  triage:line 27 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-6>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T210445Z-rand-m5.local-read-query-fts.json" ;
+  triage:line 146 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-7>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T210445Z-rand-m5.local-read-read-fanout.json" ;
+  triage:line 26 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-8>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T210445Z-rand-m5.local-read-read-under-write-load.json" ;
+  triage:line 266 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-9>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T210540Z-rand-m5.local-read.json" ;
+  triage:line 27 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-10>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T210540Z-rand-m5.local-read-query-fts.json" ;
+  triage:line 146 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-11>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T210540Z-rand-m5.local-read-read-fanout.json" ;
+  triage:line 26 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-12>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T210540Z-rand-m5.local-read-read-under-write-load.json" ;
+  triage:line 266 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-13>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T212118Z-rand-m5.local-read.json" ;
+  triage:line 27 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-14>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T212118Z-rand-m5.local-read-query-fts.json" ;
+  triage:line 146 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-15>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T212118Z-rand-m5.local-read-read-fanout.json" ;
+  triage:line 26 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-16>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/20260831T212118Z-rand-m5.local-read-read-under-write-load.json" ;
+  triage:line 266 ;
+  triage:snippet "reason: CLI does not expose AV.1a D5 gauge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:occurrence/AV-PROD-002/AV-17>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 366 ;
+  triage:snippet "status unimplemented" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:occursIn <urn:atm:triage:worktree/AV-av/c330637c2> .
+
+<urn:atm:triage:worktree/AV-av/c330637c2>
+  a triage:WorktreeSnapshot ;
+  triage:path "." ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "c330637c2" ;
+  triage:orderIndex 1 .

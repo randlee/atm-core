@@ -1,8 +1,10 @@
+pub mod async_projection;
 pub(crate) mod filters;
 pub(crate) mod metadata_selection;
 pub(crate) mod render;
 mod request;
 pub(crate) mod seen_state;
+pub mod selection;
 pub(crate) mod state;
 pub(crate) mod wait;
 
@@ -742,6 +744,7 @@ mod tests {
     use crate::mailbox::source::SourcedMessage;
     use crate::mailbox::surface::dedupe_message_id_surface;
     use crate::observability::NullObservability;
+    use crate::read::selection;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
     use crate::service_runtime::RetainedServiceRuntime;
@@ -776,12 +779,12 @@ mod tests {
                 })
                 .cloned()
                 .collect();
-            let logical_current = metadata_selection::logical_current_messages(classified_all);
-            let bucket_counts = metadata_selection::bucket_counts_for(&logical_current);
+            let logical_current = selection::logical_current_messages(classified_all);
+            let bucket_counts = selection::bucket_counts_for(&logical_current);
             return (bucket_counts, selected);
         }
-        let logical_current = metadata_selection::logical_current_messages(classified_all);
-        let bucket_counts = metadata_selection::bucket_counts_for(&logical_current);
+        let logical_current = selection::logical_current_messages(classified_all);
+        let bucket_counts = selection::bucket_counts_for(&logical_current);
         let filtered = crate::read::filters::apply_contains_filter(
             metadata_selection::apply_metadata_only_filters(
                 logical_current,
@@ -792,7 +795,7 @@ mod tests {
             ),
             query.mailbox.contains_filter.as_deref(),
         );
-        let selected = metadata_selection::select_messages(
+        let selected = selection::select_classified_messages(
             &filtered,
             query.mailbox.selection_mode,
             seen_watermark,
@@ -820,7 +823,7 @@ mod tests {
         }
         let filtered = crate::read::filters::apply_contains_filter(
             metadata_selection::apply_metadata_only_filters(
-                metadata_selection::logical_current_messages(classified),
+                selection::logical_current_messages(classified),
                 query.mailbox.sender_filter.as_ref(),
                 query.mailbox.participant_filter.as_ref(),
                 query.mailbox.timestamp_filter,
@@ -828,7 +831,11 @@ mod tests {
             ),
             query.mailbox.contains_filter.as_deref(),
         );
-        metadata_selection::select_messages(&filtered, query.mailbox.selection_mode, seen_watermark)
+        selection::select_classified_messages(
+            &filtered,
+            query.mailbox.selection_mode,
+            seen_watermark,
+        )
     }
 
     fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
@@ -960,8 +967,7 @@ mod tests {
             .into_iter()
             .zip(projected.iter().cloned())
             .map(|(message, projected)| {
-                let effective =
-                    metadata_selection::effective_display_envelope(&projected, &thread_index);
+                let effective = selection::effective_display_envelope(&projected, &thread_index);
                 let class = state::classify_message(&effective);
                 let bucket = state::display_bucket_for_class(class);
 
@@ -1514,6 +1520,77 @@ mod tests {
             selected[0].envelope.text,
             "root context\n\nfollow-up detail"
         );
+    }
+
+    #[test]
+    fn list_read_and_peek_share_hidden_envelope_and_bucket_selection_rules() {
+        let root_id = AtmMessageId::new();
+        let detail_id = AtmMessageId::new();
+        let ephemeral_id = AtmMessageId::new();
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![
+                message("root context", root_id, None, None, false),
+                message(
+                    "follow-up detail",
+                    detail_id,
+                    Some(root_id),
+                    Some(ThreadMode::AddDetails),
+                    false,
+                ),
+                InboxMessage {
+                    expires_at: Some(IsoTimestamp::from_datetime(
+                        chrono::Utc::now() + chrono::Duration::minutes(30),
+                    )),
+                    ..message("ephemeral", ephemeral_id, None, None, true)
+                },
+            ],
+        }];
+        let mut query = base_read_query();
+        query.mailbox.selection_mode = ReadSelection::Actionable;
+
+        let (read_counts, read_selected) =
+            selection_state_for_source_files(&source_files, &query, None);
+
+        let (mut root_row, _) = metadata_row("root context", None, TEST_SENDER);
+        root_row.message_id = Some(root_id);
+        let (mut detail_row, _) = metadata_row("follow-up detail", None, TEST_SENDER);
+        detail_row.message_id = Some(detail_id);
+        detail_row.parent_message_id = Some(root_id);
+        detail_row.thread_mode = Some(ThreadMode::AddDetails);
+        let (mut ephemeral_row, _) = metadata_row("ephemeral", None, TEST_SENDER);
+        ephemeral_row.message_id = Some(ephemeral_id);
+        ephemeral_row.read = true;
+        ephemeral_row.expires_at = Some(IsoTimestamp::from_datetime(
+            chrono::Utc::now() + chrono::Duration::minutes(30),
+        ));
+        let rows = vec![root_row, detail_row, ephemeral_row];
+
+        // `peek` takes the metadata projection through the same retained
+        // read-selection seam. `list` consumes the canonical selection module
+        // directly; compare all three forms on one hidden/threaded fixture.
+        let (peek_counts, peek_selected) =
+            metadata_selection::selection_state_for_mailbox_metadata_rows(&rows, &query, None);
+        let list_classified = metadata_selection::classify_mailbox_metadata_rows(&rows);
+        let list_current = selection::logical_current_messages(list_classified);
+        let list_counts = selection::bucket_counts_for(&list_current);
+        let list_selected = selection::select_classified_messages(
+            &list_current,
+            query.mailbox.selection_mode,
+            None,
+        );
+
+        for selected in [&read_selected, &peek_selected, &list_selected] {
+            assert_eq!(selected.len(), 1);
+            assert_eq!(selected[0].envelope.message_id, Some(detail_id));
+            assert_eq!(selected[0].bucket, DisplayBucket::Unread);
+        }
+        assert_eq!(read_counts.unread, 1);
+        assert_eq!(peek_counts.unread, 1);
+        assert_eq!(list_counts.unread, 1);
+        assert_eq!(read_counts.history, 0);
+        assert_eq!(peek_counts.history, 0);
+        assert_eq!(list_counts.history, 0);
     }
 
     #[test]

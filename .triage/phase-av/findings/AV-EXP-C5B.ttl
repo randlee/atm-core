@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-EXP-C5B>
+  a triage:Finding ;
+  triage:findingId "AV-EXP-C5B" ;
+  triage:title "Per-worker queue head-of-line blocking + quarantine wedge" ;
+  triage:description "Reader pool per-worker reservation binds a request to one worker for its whole deadline with no re-reservation, allowing up to queue_per_worker (4) requests to wait behind one slow query while other workers idle. Quarantine wedge: when all workers are quarantined, every reservation rejects Saturated until a stuck job returns. Tempered per adjudication." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AV-EXP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C5B/C5B-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C5B/C5B-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-EXP-C5B/C5B-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 256 ;
+  triage:snippet "queue_depth: NonZeroUsize::new(16)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-av/846c58b> .
+
+<urn:atm:triage:occurrence/AV-EXP-C5B/C5B-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 702 ;
+  triage:snippet "if quarantined >= self.config.max_quarantined.get()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-av/846c58b> .
+
+<urn:atm:triage:worktree/integrate-av/846c58b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b" ;
+  triage:orderIndex 0 .

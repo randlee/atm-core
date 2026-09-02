@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-EXP-C10>
+  a triage:Finding ;
+  triage:findingId "AV-EXP-C10" ;
+  triage:title "read_mail vs read_command semantic divergence" ;
+  triage:description "read_mail discards the handoff-accepted flag while read_command limits to one and propagates it. Latent API divergence: router routes only read_command; read_mail/peek_mail/list_mail are currently unrouted trait surface, so this is latent divergence, not live behavior. Confirmed per adjudication." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AV-EXP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C10/C10-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C10/C10-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-EXP-C10/C10-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 505 ;
+  triage:snippet "async fn read_command(...) { ... self.try_handoff_selected(...).await?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-av/846c58b> .
+
+<urn:atm:triage:occurrence/AV-EXP-C10/C10-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 555 ;
+  triage:snippet "async fn read_mail(...) { ... self.try_handoff_selected(scope, &selection, true)?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-av/846c58b> .
+
+<urn:atm:triage:worktree/integrate-av/846c58b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b" ;
+  triage:orderIndex 0 .

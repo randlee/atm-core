@@ -258,6 +258,24 @@ benchmark-official *args:
     just bootstrap
     {{python_cmd}} scripts/smoke/benchmark_official.py {{args}}
 
+# AV.4 read/query family registration.  Only benchmark-read is an official
+# campaign; subordinate targets are diagnostic and cannot seed a floor.  The
+# dependency list is normative D7 composition; the private runner aggregates
+# the three completed lanes into one reviewed envelope.
+benchmark-read: benchmark-read-fanout benchmark-query-fts benchmark-read-under-write-load _benchmark-read-official
+
+_benchmark-read-official:
+    {{python_cmd}} -m scripts.smoke.read_benchmark --families read-fanout query-fts read-under-write-load
+
+benchmark-read-fanout:
+    {{python_cmd}} -m scripts.smoke.read_benchmark --family read-fanout --diagnostic-only
+
+benchmark-query-fts:
+    {{python_cmd}} -m scripts.smoke.read_benchmark --family query-fts --diagnostic-only
+
+benchmark-read-under-write-load:
+    {{python_cmd}} -m scripts.smoke.read_benchmark --family read-under-write-load --diagnostic-only
+
 # Generate architecture visualization artifacts.
 view target='all':
     {{python_cmd}} .just/run_view.py {{target}}

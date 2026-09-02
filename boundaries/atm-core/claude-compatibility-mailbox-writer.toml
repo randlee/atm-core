@@ -37,6 +37,7 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["execute_claude_delivery"]
 
 [enforcement]
+no_in_repo_implementation = true
 lint_rules = ["LINT-BOUNDARY-CLAUDE-COMPATIBILITY-MAILBOX-WRITER-REFERENCES"]
 review_gates = ["no_direct_claude_compat_delivery_executor"]
 

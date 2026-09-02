@@ -26,6 +26,7 @@ REQUIRED_WORKSPACE_FIELDS = (
     "repository",
     "homepage",
 )
+DEPENDENCY_TABLES = frozenset(("dependencies", "dev-dependencies", "build-dependencies"))
 
 
 @dataclass(frozen=True)
@@ -51,12 +52,54 @@ def relative_manifest_display(manifest_path: Path, repo_root: Path) -> str:
     return manifest_path.relative_to(repo_root).as_posix()
 
 
+def iter_dependency_tables(table: dict, prefix: tuple[str, ...] = ()):
+    """Yield every Cargo dependency table, including target-specific tables."""
+    for key, value in table.items():
+        if not isinstance(value, dict):
+            continue
+        path = (*prefix, key)
+        if key in DEPENDENCY_TABLES:
+            yield ".".join(path), value
+        else:
+            yield from iter_dependency_tables(value, path)
+
+
+def dependency_centralization_violations(
+    manifest: dict,
+    rel_manifest: str,
+    workspace_dependencies: dict,
+) -> list[ManifestViolation]:
+    """Require members to inherit dependencies declared in the workspace."""
+    violations: list[ManifestViolation] = []
+    for table_name, dependencies in iter_dependency_tables(manifest):
+        for dependency_name, declaration in dependencies.items():
+            if dependency_name not in workspace_dependencies:
+                continue
+            if isinstance(declaration, dict) and declaration.get("workspace") is True:
+                continue
+            violations.append(
+                ManifestViolation(
+                    f"{rel_manifest} [{table_name}].{dependency_name}",
+                    "must use workspace = true for centralized dependency policy",
+                )
+            )
+    return violations
+
+
 def collect_manifest_violations(repo_root: Path) -> list[ManifestViolation]:
     violations: list[ManifestViolation] = []
     try:
         version = validate_workspace_version(repo_root)
     except SystemExit as error:
         return [ManifestViolation("version sync", str(error))]
+
+    root_manifest = tomllib_load(repo_root / "Cargo.toml")
+    workspace = root_manifest.get("workspace", {})
+    workspace_dependencies = (
+        workspace.get("dependencies", {}) if isinstance(workspace, dict) else {}
+    )
+    if not isinstance(workspace_dependencies, dict):
+        workspace_dependencies = {}
 
     manifests = member_manifests(repo_root)
     for manifest_path in manifests:
@@ -89,6 +132,14 @@ def collect_manifest_violations(repo_root: Path) -> list[ManifestViolation]:
                 violations.append(
                     ManifestViolation(rel_manifest, f"set [package].{field}.workspace = true")
                 )
+
+        violations.extend(
+            dependency_centralization_violations(
+                manifest,
+                rel_manifest,
+                workspace_dependencies,
+            )
+        )
 
     return violations
 

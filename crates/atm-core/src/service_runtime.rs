@@ -154,6 +154,7 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
 pub struct LocalServiceRuntime {
     pub(crate) message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
     async_message_store: Option<std::sync::Arc<dyn SharedAsyncMessageStore + Send + Sync>>,
+    async_mailbox_reader: Option<std::sync::Arc<dyn atm_storage::AsyncMailboxReader + Send + Sync>>,
     async_message_search_store: Option<std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>>,
     pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
     pub(crate) nudge_template_override_store:
@@ -195,6 +196,7 @@ impl LocalServiceRuntime {
         Self {
             message_store,
             async_message_store: None,
+            async_mailbox_reader: None,
             async_message_search_store: None,
             roster_store,
             nudge_template_override_store,
@@ -232,6 +234,27 @@ impl LocalServiceRuntime {
     ) -> Self {
         self.async_message_store = Some(async_message_store);
         self
+    }
+
+    /// Attaches the bounded read-only mailbox capability selected by the
+    /// storage composition root.  It is deliberately separate from the
+    /// ordered durable writer lane.
+    #[must_use]
+    pub fn with_async_mailbox_reader(
+        mut self,
+        async_mailbox_reader: std::sync::Arc<dyn atm_storage::AsyncMailboxReader + Send + Sync>,
+    ) -> Self {
+        self.async_mailbox_reader = Some(async_mailbox_reader);
+        self
+    }
+
+    /// Returns the Tokio-safe bounded mailbox reader selected by composition.
+    pub fn async_mailbox_reader(
+        &self,
+    ) -> Result<std::sync::Arc<dyn atm_storage::AsyncMailboxReader + Send + Sync>, AtmError> {
+        self.async_mailbox_reader.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable("Tokio mailbox reader was not installed in this runtime")
+        })
     }
 
     /// Attaches the Tokio-safe typed search capability selected by the one
@@ -368,19 +391,18 @@ impl LocalServiceRuntime {
         store.admit_template_message_async(admission).await
     }
 
-    /// Loads a threaded-message validation projection through the Tokio-safe
-    /// storage lane. Unlike the retained compatibility runtime, this never
-    /// opens a synchronous SQLite reader on an HTTP request worker.
+    /// Loads a threaded-message validation projection through the bounded
+    /// Tokio reader lane. It never enters the ordered writer queue.
     pub async fn list_messages_async(
         &self,
         query: atm_storage::MessageQuery,
     ) -> Result<Vec<crate::boundary::Message>, AtmError> {
-        let store = self.async_message_store.as_ref().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "Tokio async mailbox projection was not installed in this runtime",
-            )
-        })?;
-        store.list_messages_async(query).await
+        let scope = atm_storage::MailboxScope::new(query.team.clone(), query.agent.clone());
+        let deadline = atm_storage::ReadDeadline::new(std::time::Duration::from_secs(5))?;
+        self.async_mailbox_reader()?
+            .list_messages(scope, query, deadline)
+            .await
+            .map_err(|error| AtmError::daemon_unavailable(error.to_string()))
     }
 
     /// Performs the acknowledgement source transition and reply insertion on

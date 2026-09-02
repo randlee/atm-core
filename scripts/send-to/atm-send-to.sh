@@ -20,7 +20,7 @@ picker_override=${ATM_SEND_TO_PICKER:-}
 # set this; the real OS-detected picker below remains the default.
 native_picker_override=${ATM_SEND_TO_NATIVE_PICKER:-}
 # AQ6 updates this exact-version constant during release preflight.
-WYVERN_PIN="0.5.0"
+WYVERN_PIN="0.6.0"
 wyvern_asset=${ATM_SEND_TO_WYVERN_ASSET:-"$send_to_dir/pick-member.html"}
 
 input=$("$atm_bin" teams --json --members)

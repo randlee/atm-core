@@ -19,7 +19,7 @@ if ($env:ATM_SEND_TO_PICKER) {
     $pickerOutput = $inputJson | & $env:ATM_SEND_TO_PICKER | Out-String
 } else {
     # AQ6 updates this exact-version constant during release preflight.
-    $wyvernPin = "0.5.0"
+    $wyvernPin = "0.6.0"
     $asset = if ($env:ATM_SEND_TO_WYVERN_ASSET) { $env:ATM_SEND_TO_WYVERN_ASSET } else { Join-Path $pickerDir "pick-member.html" }
     $probe = & python (Join-Path $pickerDir "probe_wyvern.py") --pin $wyvernPin --asset $asset 2>$null
     if ($LASTEXITCODE -eq 0) {

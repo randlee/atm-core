@@ -16,7 +16,7 @@ atm-storage.workspace = true
 fs4 = "0.13"
 interprocess = "2.4"
 serde_json.workspace = true
-tracing = "0.1"
+tracing.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]

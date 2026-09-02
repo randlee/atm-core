@@ -203,6 +203,32 @@ class GenerateReportIndexTests(unittest.TestCase):
             self.assertIn('href="campaign.html"', index)
             self.assertNotIn("metrics", index)
 
+    def test_ignores_nested_report_type_artifact_without_envelope_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            reports = root / "site/reports"
+            evidence = reports / "read-query-benchmark"
+            evidence.mkdir(parents=True)
+            (reports / "read-query-benchmark.html").write_text(
+                "<html>benchmark</html>\n", encoding="utf-8"
+            )
+            (reports / "read-query-benchmark.json").write_text(
+                json.dumps({
+                    "schema_version": 1,
+                    "report_type": "benchmark",
+                    "generated_at": "2026-07-01T00:00:00Z",
+                    "host_label": "mac-arm64",
+                    "report_html": "read-query-benchmark.html",
+                }),
+                encoding="utf-8",
+            )
+            (evidence / "family.json").write_text(
+                json.dumps({"schema_version": 1, "report_type": "read-query-benchmark", "families": []}),
+                encoding="utf-8",
+            )
+            index = build_index(reports)
+            self.assertIn('href="read-query-benchmark.html"', index)
+
     def test_discovers_every_nested_smoke_run_as_a_browsable_master_link(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
