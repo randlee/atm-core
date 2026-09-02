@@ -201,7 +201,7 @@ class SendToSurfaceTests(unittest.TestCase):
                             # loaded CI runner racing the deadline closed.
                             body = None
                         else:
-                            body = "wyvern 0.5.0"
+                            body = "wyvern 0.6.0"
                         # A real Wyvern wizard's terminal stdout is the full
                         # WizardResult envelope (`{"button":"finish","data":
                         # <PickerOutput>,"stack":[...]}`), not a bare

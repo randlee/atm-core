@@ -44,14 +44,14 @@ class BootstrapTests(unittest.TestCase):
     def test_wyvern_uses_the_pinned_release_asset(self) -> None:
         manifest = bootstrap.load_manifest()
         asset, url = bootstrap.wyvern_install_command(manifest.wyvern, "aarch64-apple-darwin")
-        self.assertEqual(asset, "wyvern-macos-aarch64.tar.gz")
+        self.assertEqual(asset, "wyvern_0.6.0_aarch64-apple-darwin.tar.gz")
         self.assertEqual(
             url,
-            "https://github.com/randlee/wyvern/releases/download/v0.5.0/wyvern-macos-aarch64.tar.gz",
+            "https://github.com/randlee/wyvern/releases/download/v0.6.0/wyvern_0.6.0_aarch64-apple-darwin.tar.gz",
         )
         self.assertEqual(
             dict(manifest.wyvern_checksums)[asset],
-            "740739df29448076b77dcc533feac1cfd3b4185191585d5df290f4d75e3aa4a3",
+            "b5f5b986868d65b37d39966d7e9fa0c2bb6fd35fd0675397cbe3b4f77dc6b9dc",
         )
 
     def test_wyvern_checksum_mismatch_is_a_hard_failure(self) -> None:
@@ -80,7 +80,7 @@ class BootstrapTests(unittest.TestCase):
             with redirect_stderr(stderr):
                 bootstrap.install_wyvern_release(manifest, dry_run=False)
         self.assertIn("upstream checksums.txt missing; verified against pinned SHA256 only", stderr.getvalue())
-        extract.assert_called_once_with(archive, "wyvern-macos-aarch64.tar.gz", bootstrap.cargo_bin_path("wyvern"))
+        extract.assert_called_once_with(archive, "wyvern_0.6.0_aarch64-apple-darwin.tar.gz", bootstrap.cargo_bin_path("wyvern"))
 
     def test_wyvern_present_checksums_file_disagreement_is_a_hard_failure(self) -> None:
         manifest = bootstrap.load_manifest()
@@ -88,7 +88,7 @@ class BootstrapTests(unittest.TestCase):
         with (
             mock.patch.object(bootstrap, "sc_compose_target", return_value="aarch64-apple-darwin"),
             mock.patch.object(bootstrap, "_wyvern_release_checksum", return_value=hashlib.sha256(archive).hexdigest()),
-            mock.patch.object(bootstrap, "_download_release", side_effect=[archive, b"bad-hash  wyvern-macos-aarch64.tar.gz\n"]),
+                mock.patch.object(bootstrap, "_download_release", side_effect=[archive, b"bad-hash  wyvern_0.6.0_aarch64-apple-darwin.tar.gz\n"]),
         ):
             with self.assertRaisesRegex(bootstrap.BootstrapError, "checksums.txt does not confirm"):
                 bootstrap.install_wyvern_release(manifest, dry_run=False)
@@ -149,7 +149,7 @@ class BootstrapTests(unittest.TestCase):
             "cargo-modules": ("quick-install",),
         })
         self.assertEqual(manifest.sc_compose, "1.6.1")
-        self.assertEqual(manifest.wyvern, "0.5.0")
+        self.assertEqual(manifest.wyvern, "0.6.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
         self.assertNotIn("sc-compose", dict(manifest.python_packages))
         requirements = (SCRIPT.parents[1] / "tools" / "bootstrap-requirements.txt").read_text(encoding="utf-8")

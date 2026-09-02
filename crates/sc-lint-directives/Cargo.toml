@@ -15,7 +15,7 @@ name = "sc_lint_directives"
 path = "src/lib.rs"
 
 [dependencies]
-syn = { version = "2", features = ["full", "parsing"] }
+syn.workspace = true
 
 [dev-dependencies]
 quote = "1"
