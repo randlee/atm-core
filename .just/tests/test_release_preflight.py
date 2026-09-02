@@ -43,7 +43,7 @@ class ReleasePreflightWorkflowTests(unittest.TestCase):
         self.assertIn("run: just bootstrap", workflow)
         self.assertIn("sc-compose --version", workflow)
         self.assertIn("wyvern --version", workflow)
-        self.assertIn('[sc-compose]\nversion = "1.5.0"', bootstrap_manifest)
+        self.assertIn('[sc-compose]\nversion = "1.6.1"', bootstrap_manifest)
         self.assertIn('[wyvern]\nversion = "0.5.0"', bootstrap_manifest)
 
 

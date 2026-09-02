@@ -675,10 +675,10 @@ fn build_logger(
 }
 
 fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(), AtmError> {
-    fs::create_dir_all(log_dir).map_err(|_source| {
+    fs::create_dir_all(log_dir).map_err(|source| {
         AtmError::observability_bootstrap(format!(
-            "failed to create retained log directory {}",
-            log_dir.display()
+            "failed to create retained log directory {}: {source}",
+            log_dir.display(),
         ))
 
     })?;
@@ -687,10 +687,10 @@ fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(
         .append(true)
         .open(active_log_path)
         .map(|_| ())
-        .map_err(|_source| {
+        .map_err(|source| {
             AtmError::observability_bootstrap(format!(
-                "failed to open retained log file {} during startup",
-                active_log_path.display()
+                "failed to open retained log file {} during startup: {source}",
+                active_log_path.display(),
             ))
 
         })
@@ -1190,6 +1190,9 @@ mod tests {
         let blocked_parent = tempdir.path().join("blocked-parent");
         std::fs::write(&blocked_parent, "not a directory").expect("blocked parent");
         let blocked_log_dir = blocked_parent.join("logs");
+        let expected = std::fs::create_dir_all(&blocked_log_dir)
+            .expect_err("child of a regular file must not be a directory")
+            .to_string();
         let _env = EnvGuard::set_many([
             (
                 "ATM_LOG_DIR",
@@ -1208,6 +1211,7 @@ mod tests {
                 .message()
                 .contains(&blocked_log_dir.display().to_string())
         );
+        assert!(error.message().contains(&expected), "{error}");
     }
 
     #[test]
@@ -1218,6 +1222,13 @@ mod tests {
         std::fs::create_dir_all(&blocked_log_dir).expect("blocked log dir");
         std::fs::create_dir(blocked_log_dir.join("atm.log.jsonl"))
             .expect("non-appendable log path");
+        let active_log_path = blocked_log_dir.join("atm.log.jsonl");
+        let expected = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&active_log_path)
+            .expect_err("directory must not be appendable")
+            .to_string();
         let _env = EnvGuard::set_many([
             (
                 "ATM_LOG_DIR",
@@ -1235,8 +1246,9 @@ mod tests {
         assert!(
             error
                 .message()
-                .contains(&blocked_log_dir.join("atm.log.jsonl").display().to_string())
+                .contains(&active_log_path.display().to_string())
         );
+        assert!(error.message().contains(&expected), "{error}");
     }
 
     #[test]

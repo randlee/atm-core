@@ -6,14 +6,14 @@ repo: atm-core
 requires:
   cli:
     - name: sc-compose
-      minimum_version: 1.5.0
+      minimum_version: 1.6.1
     - name: jq
   python:
     - package: rdflib
       purpose: RDF/Turtle parsing and SPARQL queries
     - package: sc-compose
       import_name: sc_compose
-      minimum_version: 1.2.0
+      minimum_version: 1.6.1
       purpose: Python/maturin rendering integrations
   test:
     - package: pytest
@@ -45,7 +45,7 @@ the phase, invoking an agent, reading the cursor, or appending a TTL event:
 .claude/skills/graph-orchestration/scripts/preflight
 ```
 
-It checks the pinned released v1.5.0 `sc-compose` CLI, the matching `sc_compose >= 1.2.0`
+It checks the pinned released v1.6.1 `sc-compose` CLI, the matching `sc_compose >= 1.6.1`
 Python/maturin binding, `jq`, and a `python3` interpreter that can import
 `rdflib`. The command always emits a structured JSON result and exits `0`
 only when all runtime checks pass; exit `2` is an operational dependency error
@@ -445,7 +445,7 @@ All scripts live in `.claude/skills/graph-orchestration/scripts/`:
 | Script | Purpose |
 |---|---|
 | `next-dev-task` | Entry point: cursor resolution, returns JSON |
-| `preflight` | First-step dependency gate; requires the pinned CLI + Python binding `sc_compose >= 1.2.0`, `jq`, and `python3` + `rdflib` |
+| `preflight` | First-step dependency gate; requires the pinned CLI + Python binding `sc_compose >= 1.6.1`, `jq`, and `python3` + `rdflib` |
 | `validate-findings.py` | Mandatory raw findings/provenance gate invoked before query resolution |
 | `query_runner.py` | Python SPARQL runner (rdflib) |
 | `cursor.sparql` | Returns cursor sprint (lowest-ordered sprint without a truly in-flight Assignment or valid Completion); parameter: `$PHASE` |

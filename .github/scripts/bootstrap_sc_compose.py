@@ -12,7 +12,7 @@ from pathlib import Path
 # The one exact renderer version used by every Python invocation in this
 # package. The published wheel provides bindings only; publisher agents use
 # their consumer's CLI and do not import these bindings directly.
-SC_COMPOSE_VERSION = "1.5.0"
+SC_COMPOSE_VERSION = "1.6.1"
 
 
 def python_path(venv: Path) -> Path:

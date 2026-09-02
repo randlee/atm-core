@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strictly sign managed local ATM binaries with Apple Development on macOS."""
+"""Strictly sign managed local ATM binaries with the configured identity."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from macos_development_signing import (  # noqa: E402
     SigningIdentity,
     SigningIdentityError,
     resolve_apple_development_identity,
-    verify_apple_signature,
+    verify_signing_identity,
 )
 
 
@@ -95,10 +95,10 @@ def sign_and_verify_binary(binary: Path, identifier: str, identity: SigningIdent
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    if not verify_apple_signature(str(binary), identifier, identity.team_identifier):
+    if not verify_signing_identity(str(binary), identifier, identity):
         raise SigningIdentityError(
             f"post-sign verification failed for {binary}; expected {identifier} "
-            "and the configured Apple Development team."
+            "and the configured signing identity."
         )
 
 
@@ -113,7 +113,7 @@ def main() -> int:
         unlock_login_keychain()
         identity = resolve_apple_development_identity()
     except (OSError, subprocess.SubprocessError, SigningIdentityError) as error:
-        print(f"error: unable to resolve Apple Development signing identity: {error}", file=sys.stderr)
+        print(f"error: unable to resolve configured signing identity: {error}", file=sys.stderr)
         return 1
     for binary, identifier in MANAGED_TARGETS:
         try:
