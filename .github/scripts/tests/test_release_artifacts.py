@@ -2784,6 +2784,7 @@ def test_publishing_task_templates_render_recipient_contract(tmp_path: Path) -> 
                 "worktree_path": "/tmp/eval",
                 "branch": "develop",
                 "manifest_path": "release/publish-artifacts.toml",
+                "release_readiness_manifest_path": "site/reports/release-readiness/v1.4.2-1.4.1/manifest.json",
                 "already_published_channels": "crates_io",
             },
         ),
@@ -2811,6 +2812,8 @@ def test_publishing_task_templates_render_recipient_contract(tmp_path: Path) -> 
         assert f"Send {context['recipient']}" in rendered
         if template_path.endswith("preflight.xml.j2"):
             assert root.findtext("release/already-published-channels") == "crates_io"
+            assert root.findtext("release/publish-manifest") == context["manifest_path"]
+            assert root.findtext("release/release-readiness-manifest") == context["release_readiness_manifest_path"]
 
 
 def test_release_preflight_collects_independent_failures_before_denial() -> None:

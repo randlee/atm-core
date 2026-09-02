@@ -1,0 +1,359 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "atm-core/release-evidence-manifest/v1",
+  "title": "Release evidence manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_kind",
+    "candidate",
+    "testbed_definitions",
+    "suites",
+    "floors",
+    "ci_runs",
+    "verdict",
+    "generated_at",
+    "self_verification"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Manifest schema revision the emitting harness validated against. Review pins to this generation-time revision."
+    },
+    "run_kind": {
+      "enum": ["release", "rehearsal"],
+      "description": "rehearsal manifests are never release evidence and must live under the rehearsal output root."
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tag_candidate", "commit_sha", "branch", "workspace_version"],
+      "properties": {
+        "tag_candidate": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+\\.0$",
+          "description": "Proposed release version label (§5.1): always the clean vX.Y.0 the post-READY minor bump will produce. BINDING at the readiness preflight (AC-12 iii): the release-candidate tag's version must equal this value."
+        },
+        "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "branch": { "type": "string", "minLength": 1 },
+        "workspace_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "The gated commit's Cargo.toml [workspace.package] version — the §5.1 mandatory per-attempt patch++ version (AC-13). Recorded from the checked-out gated tree as the first of the gate's two ordered opening acts (§5.1: record version, then the §2.2.6 precondition); the self-verifier cross-checks it against Cargo.toml and refuses emission if any previously committed run_kind:release manifest under the §4 release-manifest path convention (site/reports/release-readiness/<tag_candidate>-<workspace_version>/manifest.json; rehearsal/ excluded) records the same value — attempt distinctness is checkable, never asserted."
+        }
+      }
+    },
+    "testbed_definitions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo", "commit_sha"],
+      "description": "Pinned atm-hermes-testbed tier-definition revision the integration suite executed 1:1. Required unconditionally: the testbed suite is always in the catalog.",
+      "properties": {
+        "repo": { "type": "string" },
+        "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "suites": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "Every catalog suite must be present EXACTLY once, schema-mechanized: the four contains-clauses enforce at-least-once and maxItems 4 forbids any duplicate. The self-verifier re-checks duplicate suite_id rejection as defense-in-depth. A manifest missing any catalog suite is schema-invalid — completeness is verifiable from the manifest alone.",
+      "allOf": [
+        { "contains": { "properties": { "suite_id": { "const": "smoke-full" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "benchmark-send" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "benchmark-read-query" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "testbed-integration" } } } }
+      ],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "suite_id",
+          "entrypoint",
+          "terminal_state",
+          "evidence",
+          "started_at",
+          "ended_at"
+        ],
+        "properties": {
+          "suite_id": {
+            "enum": [
+              "smoke-full",
+              "benchmark-send",
+              "benchmark-read-query",
+              "testbed-integration"
+            ],
+            "description": "Closed suite catalog (§3). Repo test suites are recorded in ci_runs, not here. Windows enters the catalog only when an isolated Windows evidence account exists (§7.6)."
+          },
+          "entrypoint": { "type": "string", "minLength": 1 },
+          "terminal_state": { "enum": ["pass", "fail", "declared-skip"] },
+          "fail_reason": {
+            "enum": [
+              "provenance-missing",
+              "tier-detail-missing",
+              "tier-definitions-mismatch",
+              "sentinel-mismatch",
+              "floor-breach",
+              "test-failure",
+              "measurement-anomaly",
+              "suite-error"
+            ],
+            "description": "Required when terminal_state=fail. Closed taxonomy: any new failure class is a schema revision, never free text. Each suite_id admits only its own subset (per-suite allOf conditionals below): a suite-inappropriate reason is a mislabel, rejected at the schema (§2.3.3 re-checks compatibility as defense-in-depth)."
+          },
+          "skip_reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Required when terminal_state=declared-skip; must cite the Rand-approved standing reason."
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "sha256"],
+              "properties": {
+                "path": { "type": "string", "minLength": 1 },
+                "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+              }
+            }
+          },
+          "started_at": { "type": "string", "format": "date-time" },
+          "ended_at": { "type": "string", "format": "date-time" },
+          "host": { "type": "string", "minLength": 1 },
+          "execution_identity": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["execution_account", "uid", "home", "hostname"],
+            "properties": {
+              "execution_account": { "type": "string", "minLength": 1 },
+              "uid": { "type": "integer", "minimum": 0 },
+              "home": { "type": "string", "minLength": 1 },
+              "hostname": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "terminal_state": { "enum": ["pass", "fail"] } }, "required": ["terminal_state"] },
+            "then": {
+              "required": ["host", "execution_identity"],
+              "description": "A suite that executed must carry host + execution-identity provenance (AC-4)."
+            }
+          },
+          {
+            "if": { "properties": { "terminal_state": { "const": "pass" } }, "required": ["terminal_state"] },
+            "then": {
+              "properties": {
+                "fail_reason": false,
+                "skip_reason": false
+              },
+              "description": "A pass carries no failure or skip narrative — stray template values are the clerical class §2.3 bans."
+            }
+          },
+          {
+            "if": { "properties": { "terminal_state": { "const": "fail" } }, "required": ["terminal_state"] },
+            "then": {
+              "required": ["fail_reason"],
+              "properties": { "skip_reason": false }
+            }
+          },
+          {
+            "if": { "properties": { "terminal_state": { "const": "declared-skip" } }, "required": ["terminal_state"] },
+            "then": {
+              "required": ["skip_reason"],
+              "properties": {
+                "fail_reason": false,
+                "host": false,
+                "execution_identity": false
+              },
+              "description": "A declared-skip executed nothing: it must not fabricate execution identity or carry a fail_reason."
+            }
+          },
+          {
+            "if": { "properties": { "suite_id": { "const": "smoke-full" }, "terminal_state": { "const": "fail" } }, "required": ["suite_id", "terminal_state"] },
+            "then": {
+              "properties": { "fail_reason": { "enum": ["test-failure", "provenance-missing", "suite-error"] } },
+              "description": "suite_id-scoped fail_reason subset: smoke has no floors, no measurement, and no tier/sentinel concepts — a benchmark- or testbed-only reason on a smoke row is a mislabel, rejected at the schema."
+            }
+          },
+          {
+            "if": { "properties": { "suite_id": { "enum": ["benchmark-send", "benchmark-read-query"] }, "terminal_state": { "const": "fail" } }, "required": ["suite_id", "terminal_state"] },
+            "then": {
+              "properties": { "fail_reason": { "enum": ["floor-breach", "test-failure", "measurement-anomaly", "provenance-missing", "suite-error"] } },
+              "description": "suite_id-scoped fail_reason subset: benchmark rows never carry testbed-only reasons (tier-detail-missing, tier-definitions-mismatch, sentinel-mismatch) — a mislabeled benchmark fail cannot dodge the floors-row requirement by borrowing a non-measurement-bearing reason."
+            }
+          },
+          {
+            "if": { "properties": { "suite_id": { "const": "testbed-integration" }, "terminal_state": { "const": "fail" } }, "required": ["suite_id", "terminal_state"] },
+            "then": {
+              "properties": { "fail_reason": { "enum": ["tier-detail-missing", "tier-definitions-mismatch", "sentinel-mismatch", "test-failure", "provenance-missing", "measurement-anomaly", "suite-error"] } },
+              "description": "suite_id-scoped fail_reason subset: testbed rows never carry floor-breach (the only benchmark-exclusive reason — floors exist only for benchmark families). measurement-anomaly IS admitted: §3.3's one-continuous-session guarantee is validated by a testbed-scoped duration-bounds anomaly check (built in RRG.3a, wired in RRG.4) that emits fail/measurement-anomaly. The root-level floors conditionals are unaffected — they key on benchmark suite_ids only, so a testbed measurement-anomaly row never forces a floors row."
+            }
+          }
+        ]
+      }
+    },
+    "floors": {
+      "type": "array",
+      "description": "Family-level completeness is CONDITIONAL on execution (root-level allOf): a benchmark family's floors row is required exactly when that family's suite reached pass/fail; a Rand-approved declared-skip of a benchmark family (§2.1/AC-3) requires no floors row for it — a measurement that never ran is never fabricated. Metric-level completeness per §3.2 (every tracked metric for a pass-terminal benchmark suite has a floors row) and the forbid direction (no floors row for a family whose suite did not execute) are §2.3.3 self-verifier cross-checks.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["family", "metric", "floor", "observed_p50", "met"],
+        "properties": {
+          "family": { "enum": ["send", "read-query"] },
+          "metric": { "type": "string", "minLength": 1 },
+          "floor": { "type": "number" },
+          "observed_p50": { "type": "number" },
+          "met": { "type": "boolean" },
+          "ratchet_proposal": { "type": "number" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "met": { "const": false } }, "required": ["met"] },
+            "then": {
+              "properties": { "ratchet_proposal": false },
+              "description": "A ratchet proposal exists only for a met floor (§4): the harness never proposes ratcheting from a breached measurement."
+            }
+          }
+        ]
+      }
+    },
+    "ci_runs": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "description": "Closed repo-suite catalog (§3.4), each entry present EXACTLY once (seven contains-clauses + maxItems 7; self-verifier re-checks duplicates as defense-in-depth). conclusion is const 'success' because CI-greenness of all seven runs on the candidate commit is a §2.2.6 PRE-launch eligibility check, RE-VERIFIED at manifest-emission time (a conclusion that went red or disappeared in the window refuses the manifest with a refusal record — no snapshot-stale READY): a red or missing run refuses with the point-specific named state — 'candidate not CI-eligible' at pre-launch, 'candidate no longer CI-eligible at emission' at emission — the manifest records verified-green runs, it is never the reporting channel for a red CI run (that failure surfaces in CI itself).",
+      "allOf": [
+        { "contains": { "properties": { "suite_id": { "const": "just-ci" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "test-graft-python" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "test-hermes-graft-bridge" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "test-hermes-graft-smoke" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "test-admission-capacity" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "test-queue-hooks-python" } } } },
+        { "contains": { "properties": { "suite_id": { "const": "test-queue-hooks-codex" } } } }
+      ],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["suite_id", "run_id", "conclusion", "commit_sha"],
+        "properties": {
+          "suite_id": {
+            "enum": [
+              "just-ci",
+              "test-graft-python",
+              "test-hermes-graft-bridge",
+              "test-hermes-graft-smoke",
+              "test-admission-capacity",
+              "test-queue-hooks-python",
+              "test-queue-hooks-codex"
+            ],
+            "description": "Closed catalog of §3.4 repo suites. The queue-hooks python and codex variants are separate entries — each must independently be green; there is no combined entry and no combination rule to get wrong."
+          },
+          "run_id": { "type": "integer", "minimum": 1 },
+          "conclusion": {
+            "const": "success",
+            "description": "Only green runs are recordable (§2.2.6 CI-eligibility precondition; §3.4)."
+          },
+          "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+        }
+      }
+    },
+    "verdict": {
+      "enum": ["READY", "NOT-READY"],
+      "description": "INCOMPLETE is deliberately not representable: a manifest exists only after every suite reached a terminal state (§2.2.2). An incomplete run is signaled by the ABSENCE of a validated manifest (INCOMPLETE-by-absence, §2.2.1)."
+    },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "self_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["validated", "validator_version"],
+      "properties": {
+        "validated": { "const": true },
+        "validator_version": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "suites": {
+            "contains": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "suite_id": { "const": "benchmark-send" },
+                    "terminal_state": { "const": "pass" }
+                  },
+                  "required": ["suite_id", "terminal_state"]
+                },
+                {
+                  "properties": {
+                    "suite_id": { "const": "benchmark-send" },
+                    "terminal_state": { "const": "fail" },
+                    "fail_reason": { "enum": ["floor-breach", "test-failure", "measurement-anomaly", "provenance-missing"] }
+                  },
+                  "required": ["suite_id", "terminal_state", "fail_reason"]
+                }
+              ]
+            }
+          }
+        },
+        "required": ["suites"]
+      },
+      "then": {
+        "properties": {
+          "floors": {
+            "contains": {
+              "properties": { "family": { "const": "send" } },
+              "required": ["family"]
+            }
+          }
+        },
+        "description": "A benchmark-send suite that produced a measurement (pass, or fail with a measurement-bearing fail_reason: floor-breach/test-failure/measurement-anomaly/provenance-missing) requires at least one send floors row. A declared-skip requires none, and neither does fail/suite-error — the suite could not execute at all (§2.2.5/AC-5), so requiring a floors row would force fabricating observed_p50 for a measurement that never ran (§2.1/AC-3). The measurement-bearing set is a closed whitelist: a future fail_reason defaults to NOT forcing a floors row; the §2.3.3 self-verifier's metric-level cross-check remains the completeness backstop."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "suites": {
+            "contains": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "suite_id": { "const": "benchmark-read-query" },
+                    "terminal_state": { "const": "pass" }
+                  },
+                  "required": ["suite_id", "terminal_state"]
+                },
+                {
+                  "properties": {
+                    "suite_id": { "const": "benchmark-read-query" },
+                    "terminal_state": { "const": "fail" },
+                    "fail_reason": { "enum": ["floor-breach", "test-failure", "measurement-anomaly", "provenance-missing"] }
+                  },
+                  "required": ["suite_id", "terminal_state", "fail_reason"]
+                }
+              ]
+            }
+          }
+        },
+        "required": ["suites"]
+      },
+      "then": {
+        "properties": {
+          "floors": {
+            "contains": {
+              "properties": { "family": { "const": "read-query" } },
+              "required": ["family"]
+            }
+          }
+        },
+        "description": "A benchmark-read-query suite that produced a measurement (pass, or fail with a measurement-bearing fail_reason) requires at least one read-query floors row; declared-skip and fail/suite-error require none (§2.1/AC-3/AC-5 — same rule as the send-family conditional above)."
+      }
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "candidate": {
+    "tag_candidate": "v1.6.0",
+    "commit_sha": "0000000000000000000000000000000000000000",
+    "branch": "develop",
+    "workspace_version": "1.5.7"
+  },
+  "refusal_point": "emission",
+  "refused_at": "2026-09-17T21:55:00Z",
+  "ci_runs_not_green": [
+    {
+      "suite_id": "test-queue-hooks-codex",
+      "state": "red",
+      "run_id": 123456806
+    },
+    {
+      "suite_id": "test-admission-capacity",
+      "state": "missing"
+    }
+  ],
+  "suite_evidence_paths": [
+    "site/reports/smoke/macos/m5-atmbench/2026-09-17-run.json",
+    "site/reports/send-message-benchmark/2026-09-17-campaign.json"
+  ]
+}

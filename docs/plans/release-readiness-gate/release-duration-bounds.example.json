@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "revision": 1,
+  "approved_by": "Rand",
+  "effective_from": "2026-09-16T00:00:00Z",
+  "bounds": {
+    "smoke-full": { "min_seconds": 900, "max_seconds": 3600 },
+    "benchmark-send": { "min_seconds": 1200, "max_seconds": 3600 },
+    "benchmark-read-query": { "min_seconds": 1200, "max_seconds": 3600 },
+    "testbed-integration": { "min_seconds": 5400, "max_seconds": 14400 }
+  }
+}

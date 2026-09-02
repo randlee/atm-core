@@ -17,8 +17,11 @@ sanitized channel result set without creating a release side effect.
 3. Launch it with `rmux` using either supported runtime and the current
    `<team-name>`. Confirm its ATM team, identity, hooks, and pane registration
    before assignment.
-4. Render `../preflight.xml.j2` with the derived `manifest_path`, the separate
-   named evaluator/coordinator identity as `recipient`, not the evaluated publisher
+4. Render `../preflight.xml.j2` with the derived `manifest_path` for the
+   publish-channel manifest and the distinct
+   `release_readiness_manifest_path` for the release-readiness evidence
+   manifest, plus the separate named evaluator/coordinator identity as
+   `recipient`, not the evaluated publisher
    teammate; use a deliberately invalid candidate tag and `preflight_stage=readiness`.
    The assignment must say preflight-only and must not authorize tag creation or workflow
    dispatch.
