@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-FMS-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-FMS-001" ;
+  triage:title "Phase AV plan-doc status frontmatter stale after all sprint PRs merged (sprint-AV.3 'in-review', phase plan 'hardening-in-progress')" ;
+  triage:description "At the phase-av post-mortem gate (integrate/phase-av 781f08742, PR #1120), docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md:8 still read 'status: in-review' although PR #1113 was merged, and docs/plans/phase-av/phase-av-plan.md:12 still read 'status: hardening-in-progress' although all five Phase AV sprint PRs (#1112, #1115, #1117, #1113, #1114) were merged. AV.1b 'complete' and AV.4 'planned' were checked and ruled correct (AV.4 pending the separate live campaign). Found by req-qa phase review; verified firsthand by quality-mgr at 781f08742. Reported in PR #1120 comment 5484228353." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-31T20:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:resolutionNote "Fixed @ 07b9460ba on integrate/phase-av by fenix under docs-staleness standing auth (verified firsthand by quality-mgr): delta is exactly the two frontmatter flips — phase-av-plan.md:12 'hardening-in-progress' -> 'complete' and sprint-AV.3-mechanical-hard-gates.md:8 'in-review' -> 'complete'. 07b9460ba confirmed an ancestor of integrate/phase-av HEAD. No re-review round required for the 2-line docs flip per fenix routing." ;
+  triage:triagedAt "2026-08-31T20:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-08-31T20:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-FMS-001/INT-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-FMS-001/INT-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-FMS-001/INT-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/phase-av-plan.md" ;
+  triage:line 12 ;
+  triage:snippet "status: hardening-in-progress" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "781f08742" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/781f08742> .
+
+<urn:atm:triage:occurrence/ATM-QA-FMS-001/INT-2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md" ;
+  triage:line 8 ;
+  triage:snippet "status: in-review" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "781f08742" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/781f08742> .
+
+<urn:atm:triage:worktree/INTEGRATE/781f08742>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate/phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "781f08742" ;
+  triage:orderIndex 1 .

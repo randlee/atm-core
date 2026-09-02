@@ -29,6 +29,11 @@ REPORT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 REQUIRED_FIELDS = frozenset(
     {"schema_version", "report_type", "generated_at", "host_label", "report_html"}
 )
+# New benchmark producers may include in-band execution provenance.  Historical
+# envelopes do not carry it, so discovery must accept both shapes.
+OPTIONAL_FIELDS = frozenset({
+    "execution_identity", "measurement_note", "effective_lane_settings", "ratchet",
+})
 SMOKE_STATUS_VALUES = frozenset({"PASS", "FAIL"})
 
 
@@ -145,7 +150,7 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
         raise ReportIndexError(
             f"{source}: report_type must be one of {', '.join(REPORT_TYPES)}"
         )
-    allowed_fields = REQUIRED_FIELDS | ({"status"} if report_type == "smoke" else set())
+    allowed_fields = REQUIRED_FIELDS | OPTIONAL_FIELDS | ({"status"} if report_type == "smoke" else set())
     unexpected_fields = set(payload) - allowed_fields
     if unexpected_fields:
         raise ReportIndexError(
@@ -249,7 +254,11 @@ def discover_envelopes(reports_root: Path) -> list[Envelope]:
             if is_root_envelope or is_explicit_envelope:
                 envelopes.append(parse_envelope(source, reports_root))
             continue
-        if is_root_envelope or is_explicit_envelope or {"report_type", "report_html"} & payload.keys():
+        # A nested benchmark artifact may carry ``report_type`` as data while
+        # intentionally lacking the public envelope's ``report_html`` field.
+        # Treat only the complete pair as an envelope; using set intersection
+        # here incorrectly rejected valid family artifacts during indexing.
+        if is_root_envelope or is_explicit_envelope or {"report_type", "report_html"} <= payload.keys():
             envelopes.append(parse_envelope(source, reports_root))
         elif (
             source.parent.parent.parent.parent.name == "smoke"

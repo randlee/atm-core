@@ -20,7 +20,7 @@ io_owns = ["receiver_hook_emission"]
 io_forbidden = ["sqlite", "message_delivery", "delivery_plan_construction"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon", "atm-daemon-bootstrap", "atm-graft", "atm-graft-python", "atm-herdr", "atm-http-runtime", "atm-runtime"]
+allowed_dependents = ["atm-daemon", "atm-daemon-bootstrap", "atm-graft", "atm-graft-python", "atm-herdr", "atm-http-runtime", "atm-observability", "atm-runtime"]
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 

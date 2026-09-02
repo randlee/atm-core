@@ -20,8 +20,8 @@ name = "atm_core"
 test-utils = []
 
 [dependencies]
-atm-error = { path = "../atm-error", version = "1.4.6" }
-atm-storage = { path = "../atm-storage", version = "1.4.6" }
+atm-error.workspace = true
+atm-storage.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
@@ -38,8 +38,8 @@ async-trait.workspace = true
 sc-lint-attributes = "0.5"
 
 [dev-dependencies]
-atm-runtime-test-support = { path = "../atm-runtime-test-support" }
-atm-storage = { path = "../atm-storage", version = "1.4.6", features = ["test-utils"] }
+atm-runtime-test-support.workspace = true
+atm-storage = { workspace = true, features = ["test-utils"] }
 serial_test = "3"
 tempfile = "3"
 tracing-subscriber.workspace = true

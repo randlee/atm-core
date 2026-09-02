@@ -685,6 +685,49 @@ def semantic_version(value: str) -> tuple[int, int, int] | None:
     return tuple(int(part) for part in match.groups())
 
 
+def pinned_sc_compose_version(root: Path) -> str | None:
+    """Read the canonical standalone CLI pin from the bootstrap manifest."""
+
+    try:
+        manifest = tomllib.loads((root / "tools" / "bootstrap.toml").read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    version = manifest.get("sc-compose", {}).get("version")
+    if not isinstance(version, str) or re.fullmatch(r"\d+\.\d+\.\d+", version) is None:
+        return None
+    return version
+
+
+def validate_pinned_sc_compose_binary(
+    root: Path,
+    findings: list[Finding],
+    compose_binary: str,
+) -> bool:
+    """Reject a usable renderer when it is not the manifest's exact release."""
+
+    expected = pinned_sc_compose_version(root)
+    if expected is None:
+        append_ecosystem_finding(
+            findings,
+            "sc-compose bootstrap pin is missing or invalid",
+            "tools/bootstrap.toml must declare an exact sc-compose semantic version.",
+        )
+        return False
+    command = [compose_binary, "--version"]
+    completed = run_capture(command, cwd=root)
+    observed = semantic_version(f"{completed.stdout}\n{completed.stderr}")
+    if completed.returncode != 0 or observed != semantic_version(expected):
+        detail = (completed.stderr or completed.stdout).strip() or "no version output"
+        append_ecosystem_finding(
+            findings,
+            "sc-compose binary does not match the pinned bootstrap release",
+            f"expected exactly {expected}; observed {detail}",
+            command,
+        )
+        return False
+    return True
+
+
 def latest_wyvern_version(root: Path) -> str | None:
     """Read the newest non-draft Wyvern release through the GitHub CLI."""
     completed = run_capture(
@@ -1061,7 +1104,7 @@ def validate_ecosystem_currency(
             "sc-compose is required for ecosystem preflight",
             "install the pinned sc-compose release before running preflight.",
         )
-    else:
+    elif validate_pinned_sc_compose_binary(root, findings, compose_binary):
         compose_tests_passed = run_ecosystem_command(
             root,
             findings,

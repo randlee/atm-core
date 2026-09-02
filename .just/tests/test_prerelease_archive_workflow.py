@@ -18,6 +18,7 @@ if str(JUST_DIR) not in sys.path:
 
 from lint_common import discover_repo_root
 from lint_common import resolve_posix_shell
+from lint_common import workspace_manifest_paths
 import prerelease_tag
 from prerelease_tag import patch_bump
 from prerelease_tag import workspace_version
@@ -385,11 +386,6 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             root / "Cargo.toml",
             *(
                 path
-                for path in prerelease_tag.workspace_manifest_paths(root)
-                if f'version = "{old_version}"' in path.read_text(encoding="utf-8")
-            ),
-            *(
-                path
                 for path in prerelease_tag.python_project_paths(root)
                 if "version =" in path.read_text(encoding="utf-8")
             ),
@@ -410,6 +406,40 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             f"releases/download/v{new_version}/atm_{new_version}_x86_64-pc-windows-msvc.zip",
             winget,
         )
+
+    def test_workspace_versions_and_internal_dependencies_are_centralized(self) -> None:
+        root = discover_repo_root()
+        root_manifest = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+        workspace_dependencies = root_manifest["workspace"]["dependencies"]
+        member_paths = workspace_manifest_paths(root)
+        member_dirs = {path.parent.resolve() for path in member_paths}
+        internal_dependency_names = {
+            name
+            for name, dependency in workspace_dependencies.items()
+            if isinstance(dependency, dict)
+            and isinstance(dependency.get("path"), str)
+            and (root / dependency["path"]).resolve() in member_dirs
+        }
+
+        for manifest_path in member_paths:
+            manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                manifest["package"]["version"],
+                {"workspace": True},
+                manifest_path.relative_to(root),
+            )
+            for section_name in ("dependencies", "dev-dependencies", "build-dependencies"):
+                for dependency_name, dependency in manifest.get(section_name, {}).items():
+                    if dependency_name not in internal_dependency_names:
+                        continue
+                    self.assertIsInstance(dependency, dict)
+                    self.assertTrue(
+                        dependency.get("workspace") is True,
+                        f"{manifest_path.relative_to(root)} [{section_name}.{dependency_name}] "
+                        "must inherit its workspace dependency",
+                    )
+                    self.assertNotIn("version", dependency)
+                    self.assertNotIn("path", dependency)
 
     def test_write_and_commit_restores_files_when_commit_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -458,7 +488,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             repo = Path(directory) / "atm-core"
 
             prerelease_tag.copy_tracked_files(root, repo)
-            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            subprocess.run(["git", "init", "-q", "-b", "fixture"], cwd=repo, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
             subprocess.run(["git", "config", "user.name", "AS1.1 test"], cwd=repo, check=True)
             subprocess.run(["git", "add", "."], cwd=repo, check=True)

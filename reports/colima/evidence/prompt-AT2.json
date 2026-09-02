@@ -1,0 +1,45 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT2-queue-vs-steer",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "steer-send",
+      "status": "pass",
+      "detail": "ATM_IDENTITY=fx-at2-alpha ATM_TEAM=fx-at2 atm send fx-at2-beta 'AT2-STEER-1' --team fx-at2 executed successfully. Message ID: 01M1CR0E2E2KH1CYCDCSX7VC0P. Exit code: 0."
+    },
+    {
+      "name": "steer-log-evidence",
+      "status": "pass",
+      "detail": "Log entry found at 2026-08-31T20:26:10.387904480+00:00 showing 'atm.command send' with message_id=01M1CR0E2E2KH1CYCDCSX7VC0P, command=send, outcome=sent. Steer dispatch event confirmed."
+    },
+    {
+      "name": "queue-send",
+      "status": "pass",
+      "detail": "ATM_IDENTITY=fx-at2-alpha ATM_TEAM=fx-at2 atm queue fx-at2-beta 'AT2-QUEUE-1' --team fx-at2 executed successfully. Message ID: 01M1CR0SEXKB6P3CENS20K7D32. Exit code: 0."
+    },
+    {
+      "name": "queue-immediate-readability",
+      "status": "pass",
+      "detail": "ATM_IDENTITY=fx-at2-beta atm read --team fx-at2 --json immediately returned AT2-QUEUE-1 (message_id=01M1CR0SEXKB6P3CENS20K7D32) as readable. Queued message is durably readable immediately, per AQ1 contract."
+    },
+    {
+      "name": "no-immediate-steer-for-queue",
+      "status": "skip",
+      "detail": "Log filter shows both steer and queue messages with identical 'command=send' and 'outcome=sent' fields. No documented log field distinguishes queue suppression/marker from steer dispatch. Cannot assert queue-specific dispatch behavior from logs. Filed as randlee/atm-core#1121 (delivery_mode log field proposal)."
+    },
+    {
+      "name": "no-double-delivery",
+      "status": "pass",
+      "detail": "atm read --team fx-at2 --json (first call) returned AT2-STEER-1 with match_count=1, bucket_counts.history=2. Second read returned count=0 with bucket_counts.history=2. Both messages appear exactly once: AT2-STEER-1 (01M1CR0E2E2KH1CYCDCSX7VC0P) and AT2-QUEUE-1 (01M1CR0SEXKB6P3CENS20K7D32). No duplicates."
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {
+    "atm": "1.4.6",
+    "hermes_atm": "unavailable",
+    "atm_graft": "unavailable"
+  },
+  "started_at": "2026-08-31T20:26:02Z",
+  "finished_at": "2026-08-31T20:27:03Z"
+}

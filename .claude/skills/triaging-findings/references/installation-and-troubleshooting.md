@@ -5,8 +5,8 @@ requires:
 
 | Dependency | Minimum | Purpose |
 |---|---:|---|
-| `sc-compose` CLI | **released v1.5.0 prebuilt release binary** | Render canonical Turtle records |
-| Python `sc_compose` binding | **1.2.0** | Native Python rendering/API tests |
+| `sc-compose` CLI | **released v1.6.1 prebuilt release binary** | Render canonical Turtle records |
+| Python `sc_compose` binding | **1.6.1** | Native Python rendering/API tests |
 | `oxigraph` | supported installed release | Parse/validate rendered Turtle |
 | `rg` | installed | Sweep source worktrees |
 | Python `rdflib` | **3.11+**, installed in the invoking Python | Graph/query support |
@@ -27,9 +27,9 @@ locations. If it reports success, do not reinstall anything.
 macOS (one-time per-machine setup):
 
 ```bash
-python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'
+python3 -m pip install --user --break-system-packages 'sc-compose==1.6.1'
 # The CLI pin below is required for the current report/template contract.
-Download the platform-matching `sc-compose` v1.5.0 release archive from
+Download the platform-matching `sc-compose` v1.6.1 release archive from
 `randlee/sc-compose`, verify its SHA256 against the release `checksums.txt`,
 and unpack the executable into the bootstrap tools directory. `just bootstrap`
 performs this verification automatically; do not compile it with Cargo.
@@ -47,9 +47,9 @@ shown above.
 Linux:
 
 ```bash
-python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'
+python3 -m pip install --user --break-system-packages 'sc-compose==1.6.1'
 # Install the pinned released standalone CLI:
-Download and verify the platform-matching v1.5.0 release archive as described
+Download and verify the platform-matching v1.6.1 release archive as described
 above; do not compile the CLI with Cargo.
 cargo install oxigraph-cli
 ```
@@ -64,7 +64,7 @@ sudo apt-get install ripgrep         # Debian/Ubuntu
 Windows PowerShell:
 
 ```powershell
-py -m pip install --user --break-system-packages "sc-compose>=1.2.0"
+py -m pip install --user --break-system-packages "sc-compose==1.6.1"
 cargo install oxigraph-cli
 winget install BurntSushi.ripgrep.MSVC
 ```
@@ -98,7 +98,7 @@ host-specific absolute checkout path in a canonical Turtle record.
 ## Validate after setup
 
 ```bash
-sc-compose --version       # CLI must be the pinned released v1.5.0 build
+sc-compose --version       # CLI must be the pinned released v1.6.1 build
 oxigraph --version
 rg --version
 python3 -c 'import rdflib; print(rdflib.__version__)'
@@ -109,7 +109,7 @@ python3 .claude/skills/triaging-findings/scripts/check_dependencies.py
 ## Known issues
 
 - The v1.3.0 CLI is insufficient for the current templates. Install the pinned
-  v1.5.0 prebuilt release above; do not lower the requirement or substitute an older release
+  v1.6.1 prebuilt release above; do not lower the requirement or substitute an older release
   binary.
 - Installing with one Python and invoking the skill with another leaves
   `rdflib` unavailable. Compare `python3 -c 'import sys; print(sys.executable)'`
@@ -117,7 +117,7 @@ python3 .claude/skills/triaging-findings/scripts/check_dependencies.py
 - Homebrew/system Python may reject plain `pip install` with an
   `externally-managed-environment` (PEP 668) error. Use the sanctioned,
   one-time user install `python3 -m pip install --user
-  --break-system-packages 'sc-compose>=1.2.0'`; no venv or activation step is
+  --break-system-packages 'sc-compose==1.6.1'`; no venv or activation step is
   required.
 - `cargo install` puts `oxigraph` under `~/.cargo/bin`; ensure that directory is
   visible to the Claude Code shell.

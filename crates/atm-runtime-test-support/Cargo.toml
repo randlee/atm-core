@@ -14,6 +14,8 @@ publish = false
 name = "atm_runtime_test_support"
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.6", features = ["test-utils"] }
-atm-runtime = { path = "../atm-runtime", version = "1.4.6" }
-atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.6", features = ["test-support"] }
+atm-core = { workspace = true, features = ["test-utils"] }
+atm-runtime.workspace = true
+atm-storage.workspace = true
+atm-storage-rusqlite = { workspace = true, features = ["test-support"] }
+async-trait.workspace = true

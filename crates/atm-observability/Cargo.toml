@@ -1,0 +1,18 @@
+[package]
+name = "atm-observability"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Shared retained-log bootstrap helpers for ATM process adapters."
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+atm-core.workspace = true
+sc-observability-types.workspace = true
+
+[dev-dependencies]
+atm-core = { workspace = true, features = ["test-utils"] }
+tempfile = "3"

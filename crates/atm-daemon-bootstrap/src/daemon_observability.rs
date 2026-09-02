@@ -1,15 +1,20 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use std::{fs, fs::OpenOptions};
 
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
 use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmMaintenanceHealthReport, AtmMaintenanceWorkerState,
-    AtmObservabilityDiagnostic, AtmObservabilityHealth, AtmObservabilityHealthState,
-    CommandEvent, LogTailSession, ObservabilityPort, RetainedSinkFaultMode, diagnostic_code,
+    AtmObservabilityDiagnostic, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
+    LogTailSession, ObservabilityPort, RetainedSinkFaultMode, diagnostic_code,
+};
+#[cfg(test)]
+use atm_observability::retained_sink_fault_mode as shared_retained_sink_fault_mode;
+use atm_observability::{
+    logger_level_override as shared_logger_level_override,
+    logger_root_for_log_dir as shared_logger_root_for_log_dir, prepare_retained_log,
 };
 use serde_json::Map;
 
@@ -31,43 +36,8 @@ type ServiceName = sc_observability_types::ServiceName;
 type TargetCategory = sc_observability_types::TargetCategory;
 type Timestamp = sc_observability_types::Timestamp;
 
-#[derive(Clone, Copy)]
-enum DaemonSubsystem {
-    Composition,
-}
-
-impl DaemonSubsystem {
-    const fn as_str(self) -> &'static str {
-        match self {
-            Self::Composition => "composition",
-        }
-    }
-}
-
-enum TeamScope {
-    Team(atm_core::types::TeamName),
-    None,
-}
-
-struct DaemonEvent {
-    subsystem: DaemonSubsystem,
-    action: ActionName,
-    outcome: OutcomeLabel,
-    team: TeamScope,
-    agent: Option<String>,
-    sender: Option<String>,
-    recipient: Option<String>,
-    message_id: Option<String>,
-    task_id: Option<String>,
-    detail: std::borrow::Cow<'static, str>,
-    connection_failure: Option<serde_json::Value>,
-    transport_context: Option<String>,
-    extra_fields: atm_core::observability::LogFieldMap,
-}
-
 const ATM_SERVICE_NAME: &str = "atm";
 const ATM_DAEMON_TARGET: &str = "atm.daemon";
-const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
 const RETAINED_LOG_ROTATION_MAX_BYTES: u64 = 10 * 1024 * 1024;
 const RETAINED_LOG_ROTATION_MAX_FILES: usize = 5;
 const RETAINED_LOG_RETENTION_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
@@ -77,27 +47,19 @@ const RETAINED_LOG_MAINTENANCE_CADENCE: Duration = Duration::from_secs(60);
 // graceful drain budget so retained-log shutdown cannot consume the entire
 // daemon stop window by itself.
 const RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
-#[cfg(test)]
-const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 
-enum LoggerLifecycle {
-    Running(sc_observability::Logger),
-    Stopped(sc_observability::Logger<sc_observability::Stopped>),
-}
+struct LoggerLifecycle(sc_observability::Logger);
 
 impl LoggerLifecycle {
     fn health(&self) -> sc_observability_types::LoggingHealthReport {
-        match self {
-            Self::Running(logger) => logger.health(),
-            Self::Stopped(logger) => logger.health(),
-        }
+        self.0.health()
     }
 }
 
-pub struct DaemonObservability {
+pub(crate) struct DaemonObservability {
     // Keep one shared logger lifecycle behind a mutex so emit/health paths and
     // shutdown can coordinate a single transition into the stopped state.
-    logger: Arc<Mutex<Option<LoggerLifecycle>>>,
+    logger: Arc<Mutex<LoggerLifecycle>>,
     active_log_path: PathBuf,
     service_name: ServiceName,
     target_category: TargetCategory,
@@ -139,11 +101,9 @@ impl DaemonObservability {
     ) -> Result<Self, AtmError> {
         let service_name = ServiceName::new(ATM_SERVICE_NAME).map_err(|_source| {
             AtmError::observability_bootstrap("failed to validate ATM daemon service name")
-
         })?;
         let target_category = TargetCategory::new(ATM_DAEMON_TARGET).map_err(|_source| {
             AtmError::observability_bootstrap("failed to validate ATM daemon observability target")
-
         })?;
         let retained_sink_fault = retained_sink_fault_mode()?;
         let (logger, active_log_path) = build_logger(
@@ -153,22 +113,11 @@ impl DaemonObservability {
             retained_log_policy(rotation_max_bytes),
         )?;
         Ok(Self {
-            logger: Arc::new(Mutex::new(Some(LoggerLifecycle::Running(logger)))),
+            logger: Arc::new(Mutex::new(LoggerLifecycle(logger))),
             active_log_path,
             service_name,
             target_category,
         })
-    }
-
-    #[cfg(test)]
-    fn bootstrap_at_log_dir_with_rotation_for_test(
-        log_dir: PathBuf,
-        rotation_max_bytes: u64,
-    ) -> Result<Self, AtmError> {
-        Self::bootstrap_at_log_dir_with_policy_for_test(
-            log_dir,
-            retained_log_policy(rotation_max_bytes),
-        )
     }
 
     #[cfg(test)]
@@ -178,189 +127,18 @@ impl DaemonObservability {
     ) -> Result<Self, AtmError> {
         let service_name = ServiceName::new(ATM_SERVICE_NAME).map_err(|_source| {
             AtmError::observability_bootstrap("failed to validate ATM daemon service name")
-
         })?;
         let target_category = TargetCategory::new(ATM_DAEMON_TARGET).map_err(|_source| {
             AtmError::observability_bootstrap("failed to validate ATM daemon observability target")
-
         })?;
-        let (logger, active_log_path) = build_logger(&log_dir, None, &service_name, retained_log_policy)?;
+        let (logger, active_log_path) =
+            build_logger(&log_dir, None, &service_name, retained_log_policy)?;
         Ok(Self {
-            logger: Arc::new(Mutex::new(Some(LoggerLifecycle::Running(logger)))),
+            logger: Arc::new(Mutex::new(LoggerLifecycle(logger))),
             active_log_path,
             service_name,
             target_category,
         })
-    }
-
-    pub(crate) fn emit_daemon_event(&self, event: DaemonEvent) -> Result<(), AtmError> {
-        let fields = daemon_event_fields(&event);
-        self.emit_log_event(EmitLogEvent {
-            scope: "lifecycle",
-            action: event.action,
-            outcome: event.outcome,
-            message: Some(event.detail.into_owned()),
-            request_id: validated_correlation_id(
-                event.message_id.as_ref().map(ToString::to_string),
-                "ATM daemon lifecycle request id",
-            )?,
-            correlation_id: validated_correlation_id(
-                event.task_id.as_ref().map(|value| value.as_str().to_string()),
-                "ATM daemon lifecycle correlation id",
-            )?,
-            fields,
-        })
-    }
-
-    pub(crate) fn emit_subsystem_event(
-        &self,
-        subsystem: DaemonSubsystem,
-        action: &ActionName,
-        outcome: &OutcomeLabel,
-        message: &str,
-        error_code: Option<AtmErrorCode>,
-    ) -> Result<(), AtmError> {
-        let event = map_subsystem_event(
-            &self.service_name,
-            &self.target_category,
-            subsystem,
-            action,
-            outcome,
-            message,
-            error_code,
-        )?;
-        let logger = self.logger.lock().map_err(|_| {
-            AtmError::observability_emit(
-                "shared daemon observability emit failed because the logger lock was poisoned",
-            )
-        })?;
-        let Some(lifecycle) = logger.as_ref() else {
-            return Err(AtmError::observability_emit(
-                "shared daemon observability emit attempted after the retained logger shut down",
-            ));
-        };
-        match lifecycle {
-            LoggerLifecycle::Running(logger_runtime) => match logger_runtime.try_log(event) {
-                Ok(()) => Ok(()),
-                // A committed ATM admission must not wait behind retained-log
-                // disk I/O. `try_log` records this drop in logger health, which
-                // keeps the loss observable without allowing an overloaded
-                // sink to become a synchronous write-path dependency.
-                Err(sc_observability::TryLogError::QueueFull(_)) => Ok(()),
-                Err(source) => {
-                    let code = try_log_error_code(&source);
-                    Err(AtmError::observability_emit(format!(
-                        "shared daemon observability log admission failed ({code})"
-                    )))
-                }
-            },
-            LoggerLifecycle::Stopped(_) => Err(AtmError::observability_emit(
-                "shared daemon observability emit attempted after the retained logger shut down",
-            )),
-        }
-    }
-
-    pub(crate) fn best_effort_flush_blocking(&self) -> Result<(), AtmError> {
-        let lifecycle = {
-            let mut logger = self.logger.lock().map_err(|_| {
-                AtmError::observability_health(
-                    "failed to finalize daemon observability because the logger lock was poisoned",
-                )
-            })?;
-            logger.take()
-        };
-        let Some(lifecycle) = lifecycle else {
-            return Ok(());
-        };
-        match lifecycle {
-            LoggerLifecycle::Running(logger_runtime) => {
-                // Remove the shared logger slot before the blocking
-                // flush/shutdown sequence so concurrent emitters fail closed
-                // instead of waiting on the same mutex during shutdown.
-                let flush_result = logger_runtime.flush().map_err(|_source| {
-                    AtmError::observability_health(
-                        "failed to flush retained observability sink during daemon shutdown",
-                    )
-
-                });
-                match flush_result {
-                    Ok(()) => {
-                        let stopped = logger_runtime.shutdown();
-                        let mut logger = self.logger.lock().map_err(|_| {
-                            AtmError::observability_health(
-                                "failed to record daemon observability shutdown state because the logger lock was poisoned",
-                            )
-                        })?;
-                        *logger = Some(LoggerLifecycle::Stopped(stopped));
-                        Ok(())
-                    }
-                    Err(error) => {
-                        let mut logger = self.logger.lock().map_err(|_| {
-                            AtmError::observability_health(
-                                "failed to restore daemon observability state after a flush error because the logger lock was poisoned",
-                            )
-                        })?;
-                        *logger = Some(LoggerLifecycle::Running(logger_runtime));
-                        Err(error)
-                    }
-                }
-            }
-            LoggerLifecycle::Stopped(logger_runtime) => {
-                let mut logger = self.logger.lock().map_err(|_| {
-                    AtmError::observability_health(
-                        "failed to record daemon observability shutdown state because the logger lock was poisoned",
-                    )
-                })?;
-                *logger = Some(LoggerLifecycle::Stopped(logger_runtime));
-                Ok(())
-            }
-        }
-    }
-
-    pub(crate) fn best_effort_preflush_blocking(&self) -> Result<(), AtmError> {
-        let lifecycle = {
-            let mut logger = self.logger.lock().map_err(|_| {
-                AtmError::observability_health(
-                    "failed to preflush daemon observability because the logger lock was poisoned",
-                )
-            })?;
-            logger.take()
-        };
-        let Some(lifecycle) = lifecycle else {
-            return Ok(());
-        };
-        match lifecycle {
-            LoggerLifecycle::Running(logger_runtime) => {
-                // Concurrent emitters fail closed while this preflush runs so
-                // the final shutdown event cannot be reordered behind older
-                // retained-log queue entries during teardown.
-                // Drain queued work before the final shutdown event is emitted,
-                // but release the mutex first so the blocking flush path cannot
-                // deadlock with a concurrent logger admission attempt.
-                let flush_result = logger_runtime.flush().map_err(|_source| {
-                    AtmError::observability_health(
-                        "failed to preflush retained observability sink before daemon shutdown completion",
-                    )
-
-                });
-                let mut logger = self.logger.lock().map_err(|_| {
-                    AtmError::observability_health(
-                        "failed to restore daemon observability state after preflush because the logger lock was poisoned",
-                    )
-                })?;
-                *logger = Some(LoggerLifecycle::Running(logger_runtime));
-                flush_result
-            }
-            LoggerLifecycle::Stopped(logger_runtime) => {
-                let mut logger = self.logger.lock().map_err(|_| {
-                    AtmError::observability_health(
-                        "failed to restore daemon observability state after preflush because the logger lock was poisoned",
-                    )
-                })?;
-                *logger = Some(LoggerLifecycle::Stopped(logger_runtime));
-                Ok(())
-            }
-        }
     }
 }
 
@@ -368,65 +146,15 @@ impl atm_core::boundary::sealed::Sealed for DaemonObservability {}
 
 impl ObservabilityPort for DaemonObservability {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
-        let mut fields = Map::new();
-        fields.insert(
-            "command".to_string(),
-            serde_json::Value::String(event.command.to_string()),
-        );
-        fields.insert(
-            "team".to_string(),
-            serde_json::Value::String(event.team.to_string()),
-        );
-        fields.insert(
-            "agent".to_string(),
-            serde_json::Value::String(event.agent.to_string()),
-        );
-        fields.insert(
-            "sender".to_string(),
-            serde_json::Value::String(event.sender.to_string()),
-        );
-        fields.insert(
-            "requires_ack".to_string(),
-            serde_json::Value::Bool(event.requires_ack),
-        );
-        fields.insert(
-            "dry_run".to_string(),
-            serde_json::Value::Bool(event.dry_run),
-        );
-        if let Some(message_id) = event.message_id {
-            fields.insert(
-                "message_id".to_string(),
-                serde_json::Value::String(message_id.to_string()),
-            );
-        }
-        if let Some(task_id) = &event.task_id {
-            fields.insert(
-                "task_id".to_string(),
-                serde_json::Value::String(task_id.to_string()),
-            );
-        }
-        if let Some(error_code) = event.error_code {
-            fields.insert(
-                "error_code".to_string(),
-                serde_json::Value::String(error_code.to_string()),
-            );
-        }
-        if let Some(error_message) = &event.error_message {
-            fields.insert(
-                "error_message".to_string(),
-                serde_json::Value::String(error_message.clone()),
-            );
-        }
+        let fields = command_event_fields(&event);
 
         self.emit_log_event(EmitLogEvent {
             scope: "observability",
             action: ActionName::new(event.action.as_str()).map_err(|_source| {
                 AtmError::observability_emit("failed to validate ATM daemon command action")
-
             })?,
             outcome: OutcomeLabel::new(event.outcome.as_str()).map_err(|_source| {
                 AtmError::observability_emit("failed to validate ATM daemon command outcome")
-
             })?,
             message: Some(format!(
                 "ATM daemon handled {} with outcome {}",
@@ -438,7 +166,6 @@ impl ObservabilityPort for DaemonObservability {
                 .transpose()
                 .map_err(|_source| {
                     AtmError::observability_emit("failed to validate ATM daemon request id")
-
                 })?,
             correlation_id: event
                 .task_id
@@ -447,28 +174,21 @@ impl ObservabilityPort for DaemonObservability {
                 .transpose()
                 .map_err(|_source| {
                     AtmError::observability_emit("failed to validate ATM daemon correlation id")
-
                 })?,
             fields,
         })
     }
 
     fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
-        Err(
-            AtmError::observability_query(
-                "daemon retained-log query is unavailable from the exact-path daemon logger adapter",
-            )
-            ,
-        )
+        Err(AtmError::observability_query(
+            "daemon retained-log query is unavailable from the exact-path daemon logger adapter",
+        ))
     }
 
     fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
-        Err(
-            AtmError::observability_follow(
-                "daemon retained-log follow is unavailable from the exact-path daemon logger adapter",
-            )
-            ,
-        )
+        Err(AtmError::observability_follow(
+            "daemon retained-log follow is unavailable from the exact-path daemon logger adapter",
+        ))
     }
 
     fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
@@ -477,34 +197,76 @@ impl ObservabilityPort for DaemonObservability {
                 "failed to read daemon observability health because the logger lock was poisoned",
             )
         })?;
-        let Some(lifecycle) = logger.as_ref() else {
-            return Ok(AtmObservabilityHealth {
-                active_log_path: Some(self.active_log_path.clone()),
-                logging_state: AtmObservabilityHealthState::Unavailable,
-                query_state: None,
-                maintenance: None,
-                diagnostic: Some(AtmObservabilityDiagnostic {
-                    code: None,
-                    message: "daemon observability logger has already shut down".to_string(),
-                }),
-                detail: Some(
-                    "daemon observability logger has already shut down; health is unavailable"
-                        .to_string(),
-                ),
-            });
-        };
-        let report = lifecycle.health();
+        let report = logger.health();
         let diagnostic = report.last_error.clone().map(map_diagnostic_summary);
         let detail = build_observability_detail(&report, diagnostic.as_ref());
         Ok(AtmObservabilityHealth {
             active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state: None,
-            maintenance: report.maintenance.clone().map(map_maintenance_report),
+            maintenance: report
+                .maintenance
+                .clone()
+                .map(map_maintenance_report)
+                .transpose()?,
             diagnostic,
             detail,
         })
     }
+}
+
+fn command_event_fields(event: &CommandEvent) -> Map<String, serde_json::Value> {
+    let mut fields = Map::from_iter([
+        (
+            "command".to_string(),
+            serde_json::Value::String(event.command.to_string()),
+        ),
+        (
+            "team".to_string(),
+            serde_json::Value::String(event.team.to_string()),
+        ),
+        (
+            "agent".to_string(),
+            serde_json::Value::String(event.agent.to_string()),
+        ),
+        (
+            "sender".to_string(),
+            serde_json::Value::String(event.sender.to_string()),
+        ),
+        (
+            "requires_ack".to_string(),
+            serde_json::Value::Bool(event.requires_ack),
+        ),
+        (
+            "dry_run".to_string(),
+            serde_json::Value::Bool(event.dry_run),
+        ),
+    ]);
+    if let Some(message_id) = event.message_id {
+        fields.insert(
+            "message_id".to_string(),
+            serde_json::Value::String(message_id.to_string()),
+        );
+    }
+    if let Some(task_id) = &event.task_id {
+        fields.insert(
+            "task_id".to_string(),
+            serde_json::Value::String(task_id.to_string()),
+        );
+    }
+    if let Some(error_code) = event.error_code {
+        fields.insert(
+            "error_code".to_string(),
+            serde_json::Value::String(error_code.to_string()),
+        );
+    }
+    if let Some(error_message) = &event.error_message {
+        fields.insert(
+            "error_message".to_string(),
+            serde_json::Value::String(error_message.clone()),
+        );
+    }
+    fields
 }
 
 // Keep validated correlation identifiers typed at this internal boundary so
@@ -530,7 +292,6 @@ impl DaemonObservability {
                     "failed to validate ATM daemon {} schema version",
                     event.scope
                 ))
-
             })?,
             timestamp: Timestamp::now_utc(),
             level: level_for_outcome(event.scope, &event.action, event.outcome.as_str()),
@@ -552,24 +313,14 @@ impl DaemonObservability {
                 "shared daemon observability emit failed because the logger lock was poisoned",
             )
         })?;
-        let Some(lifecycle) = logger.as_ref() else {
-            return Err(AtmError::observability_emit(
-                "shared daemon observability emit attempted after the retained logger shut down",
-            ));
-        };
-        match lifecycle {
-            LoggerLifecycle::Running(logger_runtime) => match logger_runtime.try_log(event) {
-                Ok(()) | Err(sc_observability::TryLogError::QueueFull(_)) => Ok(()),
-                Err(source) => {
-                    let code = try_log_error_code(&source);
-                    Err(AtmError::observability_emit(format!(
-                        "shared daemon observability log admission failed ({code})"
-                    )))
-                }
-            },
-            LoggerLifecycle::Stopped(_) => Err(AtmError::observability_emit(
-                "shared daemon observability emit attempted after the retained logger shut down",
-            )),
+        match logger.0.try_log(event) {
+            Ok(()) | Err(sc_observability::TryLogError::QueueFull(_)) => Ok(()),
+            Err(source) => {
+                let code = try_log_error_code(&source);
+                Err(AtmError::observability_emit(format!(
+                    "shared daemon observability log admission failed ({code})"
+                )))
+            }
         }
     }
 }
@@ -585,73 +336,13 @@ fn try_log_error_code(source: &sc_observability::TryLogError) -> &str {
     }
 }
 
-fn validated_correlation_id(
-    value: Option<String>,
-    label: &str,
-) -> Result<Option<CorrelationId>, AtmError> {
-    value.map(CorrelationId::new).transpose().map_err(|_source| {
-        AtmError::observability_emit(format!("failed to validate {label}"))
-    })
-}
-
-fn daemon_event_fields(event: &DaemonEvent) -> Map<String, serde_json::Value> {
-    let mut fields = Map::from_iter([(
-        "subsystem".to_string(),
-        serde_json::Value::String(event.subsystem.as_str().to_string()),
-    )]);
-    match &event.team {
-        TeamScope::Team(team) => {
-            fields.insert("team".to_string(), serde_json::Value::String(team.to_string()));
-        }
-        TeamScope::None => {
-            fields.insert(
-                "team_scope".to_string(),
-                serde_json::Value::String("none".to_string()),
-            );
-        }
-    }
-    for (key, value) in [
-        ("agent", event.agent.as_ref().map(ToString::to_string)),
-        ("sender", event.sender.as_ref().map(ToString::to_string)),
-        ("recipient", event.recipient.as_ref().map(ToString::to_string)),
-        ("message_id", event.message_id.as_ref().map(ToString::to_string)),
-        ("task_id", event.task_id.as_ref().map(ToString::to_string)),
-    ] {
-        if let Some(value) = value {
-            fields.insert(key.to_string(), serde_json::Value::String(value));
-        }
-    }
-    if let Some(connection_failure) = &event.connection_failure {
-        fields.insert(
-            "connection_failure".to_string(),
-            serde_json::to_value(connection_failure)
-                .expect("daemon connection failure fields must serialize"),
-        );
-    }
-    if let Some(context) = &event.transport_context {
-        fields.insert(
-            "transport_context".to_string(),
-            serde_json::Value::String(context.to_string()),
-        );
-    }
-    if let Ok(extra) = serde_json::to_value(&event.extra_fields)
-        && let Some(extra_fields) = extra.as_object()
-    {
-        for (key, value) in extra_fields {
-            fields.insert(key.clone(), value.clone());
-        }
-    }
-    fields
-}
-
 fn build_logger(
     log_dir: &Path,
     retained_sink_fault: Option<RetainedSinkFaultMode>,
     service_name: &ServiceName,
     retained_log_policy: sc_observability::RetainedLogPolicy,
 ) -> Result<(sc_observability::Logger, PathBuf), AtmError> {
-    let active_log_path = log_dir.join("atm.log.jsonl");
-    ensure_retained_log_ready(log_dir, &active_log_path)?;
+    let active_log_path = prepare_retained_log(log_dir)?;
     let mut config = sc_observability::LoggerConfig::default_for(
         service_name.clone(),
         logger_root_for_log_dir(log_dir)?,
@@ -661,7 +352,6 @@ fn build_logger(
     config.enable_console_sink = false;
     let builder = sc_observability::Logger::builder(config).map_err(|_source| {
         AtmError::observability_bootstrap("failed to initialize shared daemon observability logger")
-
     })?;
     #[cfg(test)]
     let builder = if let Some(mode) = retained_sink_fault {
@@ -674,35 +364,8 @@ fn build_logger(
     Ok((builder.build(), active_log_path))
 }
 
-fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(), AtmError> {
-    fs::create_dir_all(log_dir).map_err(|_source| {
-        AtmError::observability_bootstrap(format!(
-            "failed to create retained log directory {}",
-            log_dir.display()
-        ))
-
-    })?;
-    OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(active_log_path)
-        .map(|_| ())
-        .map_err(|_source| {
-            AtmError::observability_bootstrap(format!(
-                "failed to open retained log file {} during startup",
-                active_log_path.display()
-            ))
-
-        })
-}
-
 fn logger_root_for_log_dir(log_dir: &Path) -> Result<PathBuf, AtmError> {
-    log_dir.parent().map(Path::to_path_buf).ok_or_else(|| {
-        AtmError::observability_bootstrap(format!(
-            "failed to determine the retained-log root parent for {}",
-            log_dir.display()
-        ))
-    })
+    shared_logger_root_for_log_dir(log_dir)
 }
 
 fn retained_log_policy(rotation_max_bytes: u64) -> sc_observability::RetainedLogPolicy {
@@ -797,54 +460,10 @@ fn maintenance_state_label(state: sc_observability_types::MaintenanceWorkerState
     }
 }
 
-#[cfg(test)]
-fn observability_test_event(
-    action: &'static str,
-    outcome: &'static str,
-    detail: impl Into<std::borrow::Cow<'static, str>>,
-) -> DaemonEvent {
-    DaemonEvent {
-        subsystem: DaemonSubsystem::Composition,
-        action: ActionName::new(action)
-            .expect("daemon observability test actions must be valid ActionName literals"),
-        outcome: OutcomeLabel::new(outcome)
-            .expect("daemon observability test outcomes must be valid OutcomeLabel literals"),
-        team: TeamScope::None,
-        agent: None,
-        sender: None,
-        recipient: None,
-        message_id: None,
-        task_id: None,
-        detail: detail.into(),
-        connection_failure: None,
-        transport_context: None,
-        extra_fields: atm_core::observability::LogFieldMap::default(),
-    }
-}
-
 fn logger_level_override() -> Result<Option<SharedLevelFilter>, AtmError> {
     // The daemon latches ATM_LOG during bootstrap; changing the environment
     // later does not reconfigure the live retained logger.
-    let Some(raw_value) = std::env::var(ATM_LOG_LEVEL_ENV)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-    else {
-        return Ok(None);
-    };
-    let normalized = raw_value.to_ascii_lowercase();
-
-    match normalized.as_str() {
-        "trace" => Ok(Some(SharedLevelFilter::Trace)),
-        "debug" => Ok(Some(SharedLevelFilter::Debug)),
-        "info" => Ok(Some(SharedLevelFilter::Info)),
-        "warn" => Ok(Some(SharedLevelFilter::Warn)),
-        "error" => Ok(Some(SharedLevelFilter::Error)),
-        "off" => Ok(Some(SharedLevelFilter::Off)),
-        _ => Err(AtmError::observability_bootstrap(format!(
-            "invalid {ATM_LOG_LEVEL_ENV} value `{raw_value}`; use `trace`, `debug`, `info`, `warn`, `error`, or `off`"
-        ))),
-    }
+    shared_logger_level_override()
 }
 
 fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {
@@ -854,70 +473,10 @@ fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError>
     }
     #[cfg(test)]
     {
-        let Some(value) = std::env::var(ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV)
-            .ok()
-            .map(|value| value.trim().to_ascii_lowercase())
-            .filter(|value| !value.is_empty())
-        else {
-            return Ok(None);
-        };
-
-        match value.as_str() {
-            "degraded" => Ok(Some(RetainedSinkFaultMode::Degraded)),
-            "unavailable" => Ok(Some(RetainedSinkFaultMode::Unavailable)),
-            _ => Err(AtmError::observability_bootstrap(format!(
-                "invalid {ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV} value `{value}`; use `degraded` or `unavailable`"
-            ))),
-        }
+        shared_retained_sink_fault_mode()
     }
 }
 
-fn map_subsystem_event(
-    service_name: &ServiceName,
-    target_category: &TargetCategory,
-    subsystem: DaemonSubsystem,
-    action: &ActionName,
-    outcome: &OutcomeLabel,
-    message: &str,
-    error_code: Option<AtmErrorCode>,
-) -> Result<LogEvent, AtmError> {
-    let schema_version =
-        SchemaVersion::new(sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION)
-            .map_err(|_source| {
-                AtmError::observability_emit(
-                    "failed to validate ATM daemon subsystem-event schema version",
-                )
-
-            })?;
-    let mut fields = Map::from_iter([(
-        "component".to_string(),
-        serde_json::Value::String(subsystem.as_str().to_string()),
-    )]);
-    if let Some(error_code) = error_code {
-        fields.insert(
-            "error_code".to_string(),
-            serde_json::Value::String(error_code.to_string()),
-        );
-    }
-
-    Ok(LogEvent {
-        version: schema_version,
-        timestamp: Timestamp::now_utc(),
-        level: level_for_outcome(subsystem.as_str(), action, outcome.as_str()),
-        service: service_name.clone(),
-        target: target_category.clone(),
-        action: action.clone(),
-        message: Some(message.to_string()),
-        identity: ProcessIdentity::default(),
-        trace: None,
-        request_id: None,
-        correlation_id: None,
-        outcome: Some(outcome.clone()),
-        diagnostic: None,
-        state_transition: None,
-        fields,
-    })
-}
 fn map_logging_state(
     state: sc_observability_types::LoggingHealthState,
 ) -> AtmObservabilityHealthState {
@@ -934,8 +493,8 @@ fn map_logging_state(
 
 fn map_maintenance_report(
     report: sc_observability_types::MaintenanceHealthReport,
-) -> AtmMaintenanceHealthReport {
-    AtmMaintenanceHealthReport {
+) -> Result<AtmMaintenanceHealthReport, AtmError> {
+    Ok(AtmMaintenanceHealthReport {
         state: match report.state {
             sc_observability_types::MaintenanceWorkerState::Running => {
                 AtmMaintenanceWorkerState::Running
@@ -958,12 +517,10 @@ fn map_maintenance_report(
                         AtmError::observability_query(
                             "shared maintenance timestamp could not be converted to chrono",
                         )
-
                     })
             })
-            .transpose()
-            .expect("shared maintenance timestamps must project into ATM timestamps"),
-    }
+            .transpose()?,
+    })
 }
 
 fn map_diagnostic_summary(
@@ -1066,14 +623,12 @@ impl sc_observability::LogSink for RetainedSinkHealthOverride {
 mod tests {
     use std::time::{Duration, Instant};
 
-    use atm_core::observability::{
-        AtmMaintenanceWorkerState, AtmObservabilityHealthState, ObservabilityPort,
-    };
+    use atm_core::observability::ObservabilityPort;
     use atm_core::test_support::EnvGuard;
     use serial_test::serial;
     use tempfile::TempDir;
 
-    use super::{ActionName, DaemonObservability, observability_test_event};
+    use super::{ActionName, DaemonObservability};
 
     #[test]
     fn delivery_policy_outcomes_map_to_debug() {
@@ -1120,55 +675,6 @@ mod tests {
 
     #[test]
     #[serial]
-    fn bootstrap_writes_lifecycle_events_to_host_scoped_retained_log() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let _env = EnvGuard::set_many([
-            ("ATM_LOG", Some("info")),
-            ("ATM_LOG_DIR", None),
-            ("HOME", Some(tempdir.path().to_str().expect("utf8 path"))),
-            ("USERPROFILE", None),
-            ("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", None),
-        ]);
-
-        let observability = DaemonObservability::bootstrap().expect("bootstrap");
-        observability
-            .emit_daemon_event(observability_test_event(
-                "start_requested",
-                "ok",
-                "daemon start requested",
-            ))
-            .expect("emit start");
-        observability
-            .emit_daemon_event(observability_test_event(
-                "shutdown_completed",
-                "ok",
-                "daemon shutdown completed",
-            ))
-            .expect("emit shutdown");
-        observability
-            .best_effort_flush_blocking()
-            .expect("best effort flush");
-
-        let active_log_path = tempdir
-            .path()
-            .join(".atm")
-            .join("logs")
-            .join("atm.log.jsonl");
-        let output = std::fs::read_to_string(&active_log_path).expect("retained log");
-        assert!(output.contains("daemon start requested"));
-        assert!(output.contains("daemon shutdown completed"));
-
-        let health = observability.health().expect("health");
-        assert_eq!(health.active_log_path, Some(active_log_path));
-        assert_eq!(health.logging_state, AtmObservabilityHealthState::Unavailable);
-        assert_eq!(
-            health.maintenance.as_ref().map(|report| report.state),
-            Some(AtmMaintenanceWorkerState::Stopped)
-        );
-    }
-
-    #[test]
-    #[serial]
     fn bootstrap_fails_closed_when_atm_log_dir_is_invalid() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = EnvGuard::set_many([
@@ -1190,6 +696,9 @@ mod tests {
         let blocked_parent = tempdir.path().join("blocked-parent");
         std::fs::write(&blocked_parent, "not a directory").expect("blocked parent");
         let blocked_log_dir = blocked_parent.join("logs");
+        let expected = std::fs::create_dir_all(&blocked_log_dir)
+            .expect_err("child of a regular file must not be a directory")
+            .to_string();
         let _env = EnvGuard::set_many([
             (
                 "ATM_LOG_DIR",
@@ -1208,6 +717,7 @@ mod tests {
                 .message()
                 .contains(&blocked_log_dir.display().to_string())
         );
+        assert!(error.message().contains(&expected), "{error}");
     }
 
     #[test]
@@ -1218,6 +728,13 @@ mod tests {
         std::fs::create_dir_all(&blocked_log_dir).expect("blocked log dir");
         std::fs::create_dir(blocked_log_dir.join("atm.log.jsonl"))
             .expect("non-appendable log path");
+        let active_log_path = blocked_log_dir.join("atm.log.jsonl");
+        let expected = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&active_log_path)
+            .expect_err("directory must not be appendable")
+            .to_string();
         let _env = EnvGuard::set_many([
             (
                 "ATM_LOG_DIR",
@@ -1235,37 +752,9 @@ mod tests {
         assert!(
             error
                 .message()
-                .contains(&blocked_log_dir.join("atm.log.jsonl").display().to_string())
+                .contains(&active_log_path.display().to_string())
         );
-    }
-
-    #[test]
-    fn best_effort_flush_syncs_the_last_written_handle_without_reopening_the_active_path() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let log_dir = tempdir.path().join("logs");
-        std::fs::create_dir_all(&log_dir).expect("log dir");
-        let observability =
-            super::DaemonObservability::bootstrap_at_log_dir_with_rotation_for_test(
-                log_dir.clone(),
-                512,
-            )
-            .expect("bootstrap");
-        observability
-            .emit_daemon_event(observability_test_event(
-                "start_requested",
-                "ok",
-                "daemon start requested",
-            ))
-            .expect("emit");
-
-        let active_log_path = log_dir.join("atm.log.jsonl");
-        let rotated_log_path = log_dir.join("atm.log.jsonl.1");
-        std::fs::rename(&active_log_path, &rotated_log_path).expect("rotate active log path");
-        std::fs::create_dir(&active_log_path).expect("replace active path with directory");
-
-        observability
-            .best_effort_flush_blocking()
-            .expect("best effort flush");
+        assert!(error.message().contains(&expected), "{error}");
     }
 
     #[test]
@@ -1281,9 +770,15 @@ mod tests {
         let policy = sc_observability::RetainedLogPolicy {
             rotation_max_bytes: sc_observability::ByteCount::from_bytes(1024),
             rotation_max_files: sc_observability_types::FileCount::from_usize(5),
-            retention_max_age: sc_observability::RetentionMaxAge::from_duration(Duration::from_millis(1)),
-            maintenance_cadence: sc_observability::MaintenanceCadence::new(Duration::from_millis(10)),
-            writer_shutdown_timeout: sc_observability::WriterShutdownTimeout::new(Duration::from_secs(1)),
+            retention_max_age: sc_observability::RetentionMaxAge::from_duration(
+                Duration::from_millis(1),
+            ),
+            maintenance_cadence: sc_observability::MaintenanceCadence::new(Duration::from_millis(
+                10,
+            )),
+            writer_shutdown_timeout: sc_observability::WriterShutdownTimeout::new(
+                Duration::from_secs(1),
+            ),
             maintenance_max_work_per_pass: Some(5),
         };
         let observability =

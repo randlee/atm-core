@@ -64,10 +64,13 @@ impl AtmError {
             .map_or(self.message(), |(detail, _)| detail)
     }
 
-    /// Returns only the catalog-owned recovery guidance for doctor findings.
+    /// Returns recovery guidance for doctor findings.
     #[must_use]
-    pub fn remediation(&self) -> &'static str {
-        crate::error_catalog::guidance(self.code)
+    pub fn remediation(&self) -> &str {
+        self.message.split_once("\n  Recovery: ").map_or_else(
+            || crate::error_catalog::guidance(self.code),
+            |(_, guidance)| guidance,
+        )
     }
 
     #[must_use]
@@ -493,7 +496,21 @@ impl AtmError {
     }
 
     pub fn observability_bootstrap(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorCode::ObservabilityBootstrapFailed, message)
+        let detail = message.into();
+        let guidance = if detail.starts_with("failed to create retained log directory") {
+            "Create the retained-log directory or repair its ownership and permissions, then retry."
+        } else if detail.starts_with("failed to open retained log file") {
+            "Make the retained log path a writable regular file, then retry."
+        } else if detail.starts_with("invalid ATM_LOG value") {
+            "Set ATM_LOG to trace, debug, info, warn, error, or off, then retry."
+        } else {
+            crate::error_catalog::guidance(AtmErrorCode::ObservabilityBootstrapFailed)
+        };
+        Self {
+            code: AtmErrorCode::ObservabilityBootstrapFailed,
+            message: format!("{detail}\n  Recovery: {guidance}"),
+            cause: None,
+        }
     }
 
     pub fn observability_query(message: impl Into<String>) -> Self {
@@ -621,6 +638,23 @@ mod tests {
 
         assert_eq!(outer.message().matches("Recovery:").count(), 1);
         assert!(outer.message().contains("invalid caller identity"));
+    }
+
+    #[test]
+    fn observability_bootstrap_guidance_matches_the_failing_os_operation() {
+        let directory = AtmError::observability_bootstrap(
+            "failed to create retained log directory /tmp/atm/logs: permission denied",
+        );
+        let file = AtmError::observability_bootstrap(
+            "failed to open retained log file /tmp/atm/logs/atm.log.jsonl during startup: is a directory",
+        );
+
+        assert!(
+            directory
+                .remediation()
+                .contains("ownership and permissions")
+        );
+        assert!(file.remediation().contains("writable regular file"));
     }
 
     #[test]

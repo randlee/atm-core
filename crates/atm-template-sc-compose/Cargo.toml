@@ -13,10 +13,10 @@ homepage.workspace = true
 name = "atm_template_sc_compose"
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.6" }
-atm-storage = { path = "../atm-storage", version = "1.4.6" }
-sc-composer = "=1.5.0"
-sc-sha = "=1.5.0"
+atm-core.workspace = true
+atm-storage.workspace = true
+sc-composer = "=1.6.1"
+sc-sha = "=1.6.1"
 serde_json.workspace = true
 
 [dev-dependencies]

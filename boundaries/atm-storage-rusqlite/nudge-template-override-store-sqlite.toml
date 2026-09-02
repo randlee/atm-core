@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-NudgeTemplateOverrideStore-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteNudgeTemplateOverrideStore"
+
+[public]
+trait = "NudgeTemplateOverrideStore"
+
+[implementation]
+type = "SqliteNudgeTemplateOverrideStore"
+module = "atm_storage_rusqlite::nudge_template_override_store"
+visibility = "private"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["sqlite", "nudge_template_override_persistence"]
+io_forbidden = ["socket_io", "process_spawn", "template_rendering"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SqliteNudgeTemplateOverrideStore", "rusqlite::Connection"]
+
+[contracts]
+request_types = ["TeamName", "BuiltInNudgeTemplateKind"]
+response_types = ["TeamNudgeTemplateOverrideRow"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-NUDGE-TEMPLATE-OVERRIDE-STORE-SQLITE"]
+review_gates = ["private_sqlite_impl", "no_cli_sqlite_lookup"]
+
+[status]
+state = "concrete_landed"

@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-B6>
+  a triage:Finding ;
+  triage:findingId "AV3-B6" ;
+  triage:title "AV.3 read-handler gate parser defect: av3_handler_region joins multiple handler fns and av3_assert_allowlisted_types wraps the joined text as `fn gate() {region}`, which cannot parse for >1 handler" ;
+  triage:description "quality-mgr ruling msg 01M1BG9Z99RSCN9A322GVQSSZW (re-verified firsthand at c9b71d720): test av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies (crates/atm-architecture/tests/boundary_enforcement.rs ~:3491) fails against AV.1b — a pure parser defect that never reaches allowlist logic. av3_handler_region (~:3977) concatenates several handler function bodies and av3_assert_allowlisted_types (~:3991-3992) wraps the joined text in `fn gate() {region}` then syn::parse_file — unparseable for more than one handler. The gate could never parse the plural handler set its own read_handler_names() (~:4110) requires; it only ever passed because the AsyncMailboxRuntime activation marker kept it dormant. Latent AV.3 defect exposed by AV.1b activation, not an AV.1b regression." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "tooling" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T09:36:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-31T08:58:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T08:52:19Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B6/AV3-B6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B6/AV3-B6-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-B6/AV3-B6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3992 ;
+  triage:snippet "let syntax = syn::parse_file(&format!(\"fn gate() {region}\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "c9b71d720" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3/c9b71d720> .
+
+<urn:atm:triage:occurrence/AV3-B6/AV3-B6-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3992 ;
+  triage:snippet "let syntax = syn::parse_file(&format!(\"fn gate() {region}\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "f103e4a61" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/f103e4a61> .
+
+<urn:atm:triage:worktree/AV3/c9b71d720>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "c9b71d720" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV4/f103e4a61>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "f103e4a61" ;
+  triage:orderIndex 5 .

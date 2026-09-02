@@ -181,8 +181,8 @@ class MacosDevelopmentSigningTests(unittest.TestCase):
         self.assertEqual(
             signed.call_args_list,
             [
-                mock.call(cli, DAEMON_SWITCH.CLI_IDENTIFIER, identity.team_identifier),
-                mock.call(daemon, DAEMON_SWITCH.DAEMON_IDENTIFIER, identity.team_identifier),
+                mock.call(cli, DAEMON_SWITCH.CLI_IDENTIFIER, identity),
+                mock.call(daemon, DAEMON_SWITCH.DAEMON_IDENTIFIER, identity),
             ],
         )
 
@@ -199,8 +199,30 @@ class MacosDevelopmentSigningTests(unittest.TestCase):
         self.assertEqual(
             signed.call_args_list,
             [
-                mock.call(cli, DAEMON_SWITCH.CLI_IDENTIFIER, identity.team_identifier),
-                mock.call(daemon, DAEMON_SWITCH.DAEMON_IDENTIFIER, identity.team_identifier),
+                mock.call(cli, DAEMON_SWITCH.CLI_IDENTIFIER, identity),
+                mock.call(daemon, DAEMON_SWITCH.DAEMON_IDENTIFIER, identity),
+            ],
+        )
+
+    def test_self_signed_identity_uses_leaf_and_common_name_pins(self) -> None:
+        cli = Path("/candidate/atm")
+        daemon = Path("/candidate/atm-daemon")
+        identity = mock.Mock(team_identifier="", fingerprint="A" * 40, common_name="atm-daemon-dev")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "resolve_apple_development_identity", return_value=identity),
+            mock.patch.object(
+                DAEMON_SWITCH,
+                "macos_binary_has_development_signature",
+                return_value=True,
+            ) as signed,
+        ):
+            DAEMON_SWITCH.require_macos_development_signatures(cli, daemon)
+        self.assertEqual(
+            signed.call_args_list,
+            [
+                mock.call(cli, DAEMON_SWITCH.CLI_IDENTIFIER, identity),
+                mock.call(daemon, DAEMON_SWITCH.DAEMON_IDENTIFIER, identity),
             ],
         )
 
@@ -390,14 +412,15 @@ class MacosDevelopmentSigningTests(unittest.TestCase):
     def test_signature_check_uses_shared_stable_identifier_verifier(self) -> None:
         daemon = Path("/candidate/atm-daemon")
         with (
-            mock.patch.object(DAEMON_SWITCH, "verify_apple_signature", return_value=True) as verify,
+            mock.patch.object(DAEMON_SWITCH, "verify_signing_identity", return_value=True) as verify,
         ):
+            identity = DAEMON_SWITCH.SigningIdentity("A" * 40, "Apple Development: test", "4869P2ZYC6")
             self.assertTrue(
                 DAEMON_SWITCH.macos_binary_has_development_signature(
-                    daemon, DAEMON_SWITCH.DAEMON_IDENTIFIER, "4869P2ZYC6"
+                    daemon, DAEMON_SWITCH.DAEMON_IDENTIFIER, identity
                 )
             )
-        verify.assert_called_once_with(str(daemon), DAEMON_SWITCH.DAEMON_IDENTIFIER, "4869P2ZYC6")
+        verify.assert_called_once_with(str(daemon), DAEMON_SWITCH.DAEMON_IDENTIFIER, identity)
 
     def test_windows_warns_and_skips_the_unimplemented_signature_gate(self) -> None:
         stderr = io.StringIO()

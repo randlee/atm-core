@@ -1,0 +1,121 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AV1A-R5-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-AV1A-R5-F001" ;
+  triage:title "sqlite_owner_roots carve-out exempts direct_sqlite_io by directory membership without a declared concrete boundary record" ;
+  triage:description "Fix-r4's concrete-owner delegation carve-out in .just/lint_boundaries.py (concrete_trait_implementation_delegates :2040-2068 and concrete_owner_delegates_trait_implementation :2071-2087 at f31a35484) exempts the direct_sqlite_io tag for ANY file under an io_owns=[sqlite] owner's src/ by directory membership alone. Three production implementers have NO declared concrete boundary record yet are silently exempted: crates/atm-storage-rusqlite/src/nudge_template_override_store.rs (rusqlite use :9, impl :20), crates/atm-storage-rusqlite/src/pending_nudge_store.rs (:8, :19), crates/atm-storage-rusqlite/src/graft_receiver_endpoint_store.rs (:10, :37). Their trait records boundaries/atm-storage/{nudge-template-override-store,pending-nudge-store,graft-receiver-endpoint-store}.toml are trait_only and forbid direct_sqlite_io; boundaries/atm-storage-rusqlite/ holds no sibling concrete record for any of the three. Scope is narrow: only direct_sqlite_io is exempted; process_spawn/socket_io/message_delivery/template_rendering are still scanned on those files. Functionally safe today; governance gap in the new carve-out code." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "tooling" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "Enumerate every io_owns=[sqlite] (and other io_owns values) owner root the carve-out honors, and every production file under those roots that is exempted for the owned tag while lacking a declared concrete boundary record in boundaries/" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-31T18:25:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:resolutionNote "Fixed @ 170d17748 on feature/av3-read-concurrency-gates (verified firsthand by quality-mgr): sqlite_owner_roots directory-membership carve-out removed from .just/lint_boundaries.py — concrete_trait_implementation_delegates now returns only modules with declared concrete boundary records; concrete records added for the three formerly-exempt adapters (boundaries/atm-storage-rusqlite/{nudge-template-override-store,pending-nudge-store,graft-receiver-endpoint-store}-sqlite.toml); lint self-tests extended (+43 lines)." ;
+  triage:triagedAt "2026-08-31T17:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1A ;
+  triage:foundAt "2026-08-31T16:02:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AV1A-R5-F001/R1-carveout-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AV1A-R5-F001/R1-carveout-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AV1A-R5-F001/R1-nudge-impl> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AV1A-R5-F001/R1-pending-impl> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AV1A-R5-F001/R1-graft-impl> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AV1A-R5-F001/R1-carveout-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 2040 ;
+  triage:snippet "def concrete_trait_implementation_delegates(...): ...sqlite_owner_roots..." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "222e26c34" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3/222e26c34> .
+
+<urn:atm:triage:occurrence/RBQA-AV1A-R5-F001/R1-carveout-2>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 2071 ;
+  triage:snippet "def concrete_owner_delegates_trait_implementation(...): return tag == direct_sqlite_io and any(...)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "222e26c34" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3/222e26c34> .
+
+<urn:atm:triage:occurrence/RBQA-AV1A-R5-F001/R1-nudge-impl>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/nudge_template_override_store.rs" ;
+  triage:line 20 ;
+  triage:snippet "impl SqliteNudgeTemplateOverrideStore (use rusqlite :9)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "222e26c34" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3/222e26c34> .
+
+<urn:atm:triage:occurrence/RBQA-AV1A-R5-F001/R1-pending-impl>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/pending_nudge_store.rs" ;
+  triage:line 19 ;
+  triage:snippet "impl SqlitePendingNudgeStore (use rusqlite :8)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "222e26c34" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3/222e26c34> .
+
+<urn:atm:triage:occurrence/RBQA-AV1A-R5-F001/R1-graft-impl>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/graft_receiver_endpoint_store.rs" ;
+  triage:line 37 ;
+  triage:snippet "impl SqliteGraftReceiverEndpointStore (use rusqlite :10)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "222e26c34" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3/222e26c34> .
+
+<urn:atm:triage:worktree/AV1A/f31a35484>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "f31a35484" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV1B/60585aaa9>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "60585aaa9" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV2/a9fc11c8c>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/av2-read-concurrency-requirements" ;
+  triage:branch "feature/av2-read-concurrency-requirements" ;
+  triage:headSha "a9fc11c8c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV3/222e26c34>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "222e26c34" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV4/3a09e2a6f>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "3a09e2a6f" ;
+  triage:orderIndex 5 .

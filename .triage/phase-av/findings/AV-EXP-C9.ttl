@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-EXP-C9>
+  a triage:Finding ;
+  triage:findingId "AV-EXP-C9" ;
+  triage:title "Silent key-parse drops in filter_map .ok()" ;
+  triage:description "filter_map(|m| m.message_key.parse().ok()) drops unparseable keys with no counter or log; all-drop yields Ok(false) indistinguishable from empty selection. Fail-safe direction (keys from DB should parse; dropped messages stay unread), but invisibly. Confirmed per adjudication." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AV-EXP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C9/C9-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-EXP-C9/C9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 686 ;
+  triage:snippet ".filter_map(|message| message.message_key.parse::<MessageKey>().ok())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-av/846c58b> .
+
+<urn:atm:triage:worktree/integrate-av/846c58b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b" ;
+  triage:orderIndex 0 .

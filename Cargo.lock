@@ -13,6 +13,7 @@ dependencies = [
  "atm-daemon-client",
  "atm-graft",
  "atm-http-runtime",
+ "atm-observability",
  "atm-runtime-test-support",
  "atm-storage",
  "chrono",
@@ -184,6 +185,7 @@ name = "atm-architecture"
 version = "1.4.6"
 dependencies = [
  "cargo_metadata",
+ "quote",
  "serde",
  "syn 2.0.119",
  "toml",
@@ -195,14 +197,7 @@ version = "1.4.6"
 dependencies = [
  "agent-team-mail-core",
  "atm-daemon-bootstrap",
- "chrono",
- "sc-observability",
- "sc-observability-types",
- "serde_json",
- "serial_test",
- "tempfile",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -212,14 +207,19 @@ dependencies = [
  "agent-team-mail-core",
  "atm-herdr",
  "atm-http-runtime",
+ "atm-observability",
  "atm-runtime",
  "atm-runtime-test-support",
  "atm-storage",
  "atm-storage-rusqlite",
  "atm-template-sc-compose",
+ "chrono",
  "fs4",
  "peer-tls",
+ "sc-observability",
+ "sc-observability-types",
  "serde_json",
+ "serial_test",
  "tempfile",
  "tokio",
  "tracing",
@@ -291,6 +291,7 @@ dependencies = [
  "agent-team-mail-core",
  "async-trait",
  "atm-herdr",
+ "atm-runtime",
  "atm-runtime-test-support",
  "atm-storage",
  "axum",
@@ -309,6 +310,15 @@ dependencies = [
  "tracing",
  "ulid",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "atm-observability"
+version = "1.4.6"
+dependencies = [
+ "agent-team-mail-core",
+ "sc-observability-types",
+ "tempfile",
 ]
 
 [[package]]
@@ -337,6 +347,8 @@ name = "atm-runtime"
 version = "1.4.6"
 dependencies = [
  "agent-team-mail-core",
+ "async-trait",
+ "atm-runtime-test-support",
  "atm-storage",
  "serde_json",
  "tokio",
@@ -348,7 +360,9 @@ name = "atm-runtime-test-support"
 version = "1.4.6"
 dependencies = [
  "agent-team-mail-core",
+ "async-trait",
  "atm-runtime",
+ "atm-storage",
  "atm-storage-rusqlite",
 ]
 
@@ -1906,9 +1920,9 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sc-composer"
-version = "1.5.0"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2694e0078b543a65f17100acb0ff2e74e9310f1de3df6fe38762b6e7b9a50ba0"
+checksum = "f883872baa922b17ef660ff4e56da0db0423a6c293167e7df1a4f237896d3394"
 dependencies = [
  "minijinja",
  "quick-xml",
@@ -1996,9 +2010,9 @@ dependencies = [
 
 [[package]]
 name = "sc-sha"
-version = "1.5.0"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddbe342a6f2a9f64e0a9f24b94cc1539aa423afd7bd960480fa1ebea964f4119"
+checksum = "495557feffa63a81d3de6c932bae61bf08a1882c8dfd28c561591561ddb84f4e"
 dependencies = [
  "sha2",
 ]
