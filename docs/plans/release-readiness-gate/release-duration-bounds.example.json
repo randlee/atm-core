@@ -2,7 +2,7 @@
   "schema_version": 1,
   "revision": 1,
   "approved_by": "Rand",
-  "approved_at": "2026-09-16T00:00:00Z",
+  "effective_from": "2026-09-16T00:00:00Z",
   "bounds": {
     "smoke-full": { "min_seconds": 900, "max_seconds": 3600 },
     "benchmark-send": { "min_seconds": 1200, "max_seconds": 3600 },

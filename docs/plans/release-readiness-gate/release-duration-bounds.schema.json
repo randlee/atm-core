@@ -5,7 +5,7 @@
   "description": "Committed single source of truth for the §2.3.5 wall-clock duration-bounds anomaly checks (AC-14): exactly one min/max entry per catalog suite. Seeded from the durations of historical committed evidence runs and Rand-approved before first use — the same revision convention as §3.2 baselines.json (never self-seeded by the harness; a bounds revision is a reviewed commit, never a run-time adjustment). Fail-closed consumption (AC-14): a missing file, failed schema validation, missing catalog-suite entry, or an entry with min_seconds >= max_seconds is a harness defect — the gate aborts with the named startup failure 'duration bounds unusable' (§2.2 rule 7), never a silent skip of the check.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "revision", "approved_by", "approved_at", "bounds"],
+  "required": ["schema_version", "revision", "approved_by", "effective_from", "bounds"],
   "properties": {
     "schema_version": {
       "type": "integer",
@@ -21,10 +21,10 @@
       "minLength": 1,
       "description": "Who approved this revision for gate use (Rand — §2.3.5: bounds are Rand-approved before first use). Mechanized approval marker: the self-verifier requires this field's presence via this schema; an unapproved (field-less) seed cannot validate."
     },
-    "approved_at": {
+    "effective_from": {
       "type": "string",
       "format": "date-time",
-      "description": "UTC timestamp of the approval for this revision."
+      "description": "UTC timestamp from which this approved revision is effective, matching the §3.2 baselines.json convention."
     },
     "bounds": {
       "type": "object",

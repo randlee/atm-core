@@ -154,7 +154,12 @@ just release-readiness <release-tag-candidate>
      name is what preserves refused-N-times, and the writer **refuses to
      overwrite an existing file** (fail-closed) rather than ever
      collapsing two refusal events into one record (RRG.1 writer
-     acceptance item, §6). An operator can always distinguish
+     acceptance item, §6). If the computed per-event path already exists
+     (including a same-second collision for the same refusal point), the
+     writer emits the named harness failure `refusal-record-collision`,
+     writes neither record nor manifest, and stops; it never drops,
+     overwrites, or silently suffixes the event. The operator must resolve
+     the collision before re-running the full gate. An operator can always distinguish
      never-launched from refused-N-times, and see why. This record is
      NOT evidence and is never referenced by a manifest; the writer is
      built once in RRG.1 (explicit acceptance item, §6) and **reused —
@@ -268,24 +273,9 @@ The mechanism that makes §1's first-time-pass requirement real:
    anomaly-check set the harness itself runs as part of §2.3.3 (per-family
    D7 clean-run criteria; observed p50 within the family's historical
    sanity band; wall-clock duration within the bounds declared in the
-   committed `release/duration-bounds.json` — the bounds' single source
-   of truth, one min/max entry per catalog suite, contracted by the
-   committed schema
-   [release-duration-bounds.schema.json](release-duration-bounds.schema.json)
-   (worked example:
-   [release-duration-bounds.example.json](release-duration-bounds.example.json))
-   and owned by **AC-14**: seeded from the durations of historical
-   committed evidence runs and Rand-approved before first use, exactly
-   the §3.2 `baselines.json` revision convention — mechanized via the
-   schema's required `revision`/`approved_by`/`approved_at` fields, so
-   an unapproved seed cannot validate (never self-seeded by the harness;
-   a bounds revision is a reviewed commit, never a run-time adjustment).
-   The **min** bound flags a short-circuited or truncated workload — a
-   suite finishing implausibly fast means work was skipped, not that a
-   genuine speedup is penalized; the **max** bound flags a stalled or
-   contaminated run. RRG.2 declares the smoke + benchmark
-   entries, RRG.3a the testbed entry (AC-14); evidence-row
-   counts matching the declared workload). Any anomaly-check hit is emitted
+   committed `release/duration-bounds.json`; its contract, approval and
+   seeding discipline, bound semantics, and ownership are defined once in
+   **AC-14** below. Any anomaly-check hit is emitted
    by the harness as suite `fail` with `fail_reason:
    "measurement-anomaly"`, which is treated as a harness/environment defect:
    fix the check or the environment and re-run — it is never a manual
@@ -398,7 +388,11 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   `ref/release-state-strategy.md` (readiness preflight before a `main`
   merge) — must, **mechanically** (RRG.4 delivers the check as code the
   preflight invokes, not checklist prose; §2.3 no-clerical mandate
-  applies), before authorizing the `main` merge: (i) locate the
+  applies), before authorizing the `main` merge. The template's
+  `release_readiness_manifest_path` is the release-evidence manifest
+  destination for this check; its existing `manifest_path` variable
+  remains the unrelated publish-channel manifest. The preflight must then,
+  mechanically: (i) locate the
   committed `run_kind: "release"` manifest via the **§4 lookup
   algorithm** — the preflight holds only `tag_candidate`, so it globs
   `site/reports/release-readiness/<tag_candidate>-*/manifest.json`
@@ -422,9 +416,11 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
 - AC-13: **per-attempt version distinctness is mechanized (§5.1
   patch++).** The manifest's `candidate` block carries a required
   `workspace_version` (schema-patterned `X.Y.Z`): the orchestrator
-  records it from the checked-out gated tree's `Cargo.toml`
-  `[workspace.package] version` as the first of the gate's two ordered
-  opening acts (§5.1: record version, then §2.2.6 precondition), and
+  records it by reusing the existing
+  `.just/run_version.py::workspace_version(repo_root)` reader (the same
+  reader used by `just version current`), against the checked-out gated
+  tree as the first of the gate's two ordered opening acts (§5.1: record
+  version, then §2.2.6 precondition), and
   the §2.3.3 self-verifier
   (i) cross-checks the manifest value against that `Cargo.toml` value
   and (ii) refuses emission if any previously committed
@@ -454,13 +450,16 @@ This checklist is the one place gate acceptance lives; §3 pass criteria and
   of the check), and the §2.3.3 self-verifier re-validates the artifact
   at emission time as defense-in-depth; and (iii) carry the mechanized
   approval marker — schema-required `revision`, `approved_by`,
-  `approved_at` fields per the §3.2 `baselines.json` revision
+  `effective_from` fields per the §3.2 `baselines.json` revision
   convention (e.g. revision 1, approved 2026-08-31) — so an unapproved
   or self-seeded bounds file cannot validate; a bounds revision is a
-  reviewed commit, never a run-time adjustment. Ownership: RRG.2
-  declares the smoke + benchmark entries, RRG.3a the testbed entry,
-  RRG.4 wires launch-time validation, the emission-time re-validation,
-  and the named startup failure.
+  reviewed commit, never a run-time adjustment. Ownership: RRG.1 owns the
+  launch-time validation and named startup failure; RRG.2 declares the
+  smoke + benchmark entries, RRG.3a the testbed entry, and RRG.4 wires the
+  emission-time re-validation. The **min** bound flags a short-circuited
+  or truncated workload — an implausibly fast suite means work was skipped,
+  not that a genuine speedup is penalized; the **max** bound flags a stalled
+  or contaminated run.
 
 ## 3. Suite inventory (definition — existing tests only)
 
@@ -712,7 +711,8 @@ direction.
   against the intended `develop` commit. Nothing triggers the gate
   automatically. The gate's **first two acts, in order** (neither is a
   separate manual step): (1) record the gated tree's `Cargo.toml`
-  workspace version into `candidate.workspace_version` (AC-13);
+  workspace version into `candidate.workspace_version` (AC-13) by reusing
+  the existing `.just/run_version.py::workspace_version(repo_root)` reader;
   (2) run the §2.2.6 CI-eligibility precondition.
 - **Version-number management (Rand, 2026-08-31): patch++ per gate run;
   the minor bump is gated BEHIND a passing run, never ahead of it.**
@@ -779,11 +779,11 @@ direction.
 
 | # | Deliverable | must_follow | Assignee (proposed) |
 |---|---|---|---|
-| RRG.1 | Gate foundation — five enumerated deliverables: **(1)** manifest schema, lifted from this plan's committed baseline **including the suite_id-scoped `fail_reason` subsets** (per-suite schema conditionals); **(2)** `just release-readiness` orchestrator skeleton — suite registry, terminal-state tracking, fail-closed manifest render written to the §4 release-manifest path convention, **the two ordered opening acts (§5.1/AC-13: record the gated tree's `Cargo.toml` workspace version into `candidate.workspace_version`, then the §2.2.6 precondition)**, and the **§2.2 rule 7 named startup failures** ("candidate version unreadable"; "duration bounds unusable" via the AC-14 launch-time bounds validation) — explicit acceptance items (self-verifier cross-checks wired in RRG.4); **(3)** the **§2.2.6 CI-eligibility precondition check** with the "candidate not CI-eligible" refusal state (AC-11) — explicit acceptance item; **(4)** the **refusal-record writer** implementing the committed [release-refusal-record.schema.json](release-refusal-record.schema.json) — per-event filenames `<refused_at compact UTC>-<refusal_point>.json` under `release/refusals/<tag_candidate>/`, refusing to overwrite an existing record (§2.2 rule 6); built once here, reused by RRG.4 — explicit acceptance item; **(5)** short ADR recording the terminal-state taxonomy, adapter composition model, concurrency model (§5), and the §2.2.6 CI-eligibility/refusal-state semantics (snapshot-vs-emission verification, refusal observability, INCOMPLETE-vs-refusal boundary) | — | Cipher |
+| RRG.1 | Gate foundation — five enumerated deliverables: **(1)** manifest schema, lifted from this plan's committed baseline **including the suite_id-scoped `fail_reason` subsets** (per-suite schema conditionals); **(2)** `just release-readiness` orchestrator skeleton — suite registry, terminal-state tracking, fail-closed manifest render written to the §4 release-manifest path convention, **the two ordered opening acts (§5.1/AC-13: reuse `.just/run_version.py::workspace_version(repo_root)` to record the gated tree's workspace version into `candidate.workspace_version`, then the §2.2.6 precondition)**, and the **§2.2 rule 7 named startup failures** ("candidate version unreadable"; "duration bounds unusable" via the AC-14 launch-time bounds validation) — explicit acceptance items (self-verifier cross-checks wired in RRG.4); **(3)** the **§2.2.6 CI-eligibility precondition check** with the "candidate not CI-eligible" refusal state (AC-11) — explicit acceptance item; **(4)** the **refusal-record writer** implementing the committed [release-refusal-record.schema.json](release-refusal-record.schema.json) — per-event filenames `<refused_at compact UTC>-<refusal_point>.json` under `release/refusals/<tag_candidate>/`, refusing to overwrite an existing record and failing as `refusal-record-collision` on a same-second same-point collision (§2.2 rule 6); built once here, reused by RRG.4 — explicit acceptance item; **(5)** short ADR recording the terminal-state taxonomy, adapter composition model, concurrency model (§5), and the §2.2.6 CI-eligibility/refusal-state semantics (snapshot-vs-emission verification, refusal observability, INCOMPLETE-vs-refusal boundary) | — | Cipher |
 | RRG.2 | Suite adapters: smoke + benchmark families (reuse existing runners; no new harness framework — additive composition only); includes closing §7.8 (send-family execution-identity provenance) so both benchmark families meet AC-4; **builds the benchmark/smoke instances of the §2.3.5 anomaly-check set** (D7 clean-run criteria, sanity band, smoke+benchmark duration bounds — declaring their `release/duration-bounds.json` entries per AC-14/§2.3.5, evidence-row counts) emitting `fail`/`measurement-anomaly`; the testbed-scoped duration-bounds instance is RRG.3a's (one row below) | RRG.1 | Cipher |
 | RRG.3a | atm-core testbed adapter (manifest `testbed_definitions` pinning, AC-5 guard, §2.3.3 tier checks); **owns the tier-row evidence schema + example (§3.3)**, **owns the testbed-scoped wall-clock duration-bounds anomaly check** (validates §3.3's one-continuous-session guarantee, emits `fail`/`measurement-anomaly`, declares the testbed entry of `release/duration-bounds.json` per AC-14/§2.3.5; wired into whole-set self-verification by RRG.4), and **owns the AC-10/§7.4 AT2/AT3 disposition logic** (fail-closed default, standing-skip encoding) | RRG.1 | Cipher |
 | RRG.3b | Testbed-repo tier definitions: merge testbed PR #2 and add Phase-AV coverage definitions (§7.1). Acceptance: §7.1–§7.3 items resolved (definitions exist for every executed row, AT8 reconciled, detail-population expectations encoded). Fallback if PR #2 stalls (external repo): the gate pins to a Rand-approved testbed commit SHA carrying the reviewed definitions — RRG.3a is not blocked, only the pin value changes | RRG.1; parallel-safe with RRG.3a (see note below) | Cipher (atm-hermes-testbed PR) |
-| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs; **wires the RRG.2 anomaly-check set, duplicate-`suite_id` rejection across both `suites[]` and `ci_runs[]`, the floors cross-check (both directions), the suite_id↔`fail_reason` compatibility re-check, the RRG.3a testbed duration-bounds check, **the AC-14 duration-bounds artifact validation (launch-time gate on the committed [release-duration-bounds.schema.json](release-duration-bounds.schema.json), the "duration bounds unusable" named startup failure, and the emission-time re-validation)**, the AC-13 `workspace_version` cross-checks (Cargo.toml match + cross-attempt uniqueness), and the §2.2.6 emission-time CI re-verification into §2.3.3 whole-set self-verification** (AC-7, AC-11, AC-13, AC-14). **Explicit acceptance item: an emission-time refusal invokes the RRG.1 refusal-record writer with `refusal_point: "emission"` — reused, never re-implemented — so the AC-11 emission path cannot silently skip the record.** **Explicit acceptance item (AC-12): the publisher readiness preflight invokes an RRG.4-delivered mechanized check — the §4 lookup algorithm with both fail-closed edges (zero READY matches / more than one READY match), READY-manifest schema validation, bump-only diff (gated commit ↔ candidate tag commit), and binding `tag_candidate` ↔ tag-version equality — as code, not checklist prose; the release gate is not deliverable without it.** Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8, using the §2.2 rule 6 rehearsal carve-out — no live GH API dependency) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
+| RRG.4 | reports-index manifest validation + rehearsal-root exclusion + docs; **wires the RRG.2 anomaly-check set, duplicate-`suite_id` rejection across both `suites[]` and `ci_runs[]`, the floors cross-check (both directions), the suite_id↔`fail_reason` compatibility re-check, the RRG.3a testbed duration-bounds check, **the AC-14 emission-time re-validation of the committed [release-duration-bounds.schema.json](release-duration-bounds.schema.json) artifact**, the AC-13 `workspace_version` cross-checks (Cargo.toml match + cross-attempt uniqueness), and the §2.2.6 emission-time CI re-verification into §2.3.3 whole-set self-verification** (AC-7, AC-11, AC-13, AC-14). **Explicit acceptance item: an emission-time refusal invokes the RRG.1 refusal-record writer with `refusal_point: "emission"` — reused, never re-implemented — so the AC-11 emission path cannot silently skip the record.** **Explicit acceptance item (AC-12): the publisher readiness preflight invokes an RRG.4-delivered mechanized check — the §4 lookup algorithm with both fail-closed edges (zero READY matches / more than one READY match), READY-manifest schema validation, bump-only diff (gated commit ↔ candidate tag commit), and binding `tag_candidate` ↔ tag-version equality — as code, not checklist prose; the release gate is not deliverable without it.** Acceptance: **green `--rehearse` run end-to-end** (§2.3.4/AC-8, using the §2.2 rule 6 rehearsal carve-out — no live GH API dependency) — the gate is not declared implemented without it | RRG.1–RRG.3a | Cipher |
 
 RRG.3a/RRG.3b parallel-safety rationale: disjoint repos (RRG.3b edits only
 atm-hermes-testbed; RRG.3a edits only atm-core). Their sole coupling is the
@@ -1188,7 +1188,7 @@ owns; no sprint-local reinterpretation.
     **`release-duration-bounds.schema.json`** + worked example
     (`release-duration-bounds.example.json`): closed catalog, exactly
     one `min_seconds`/`max_seconds` entry per §3 suite, required
-    `revision`/`approved_by`/`approved_at` approval marker per the §3.2
+    `revision`/`approved_by`/`effective_from` approval marker per the §3.2
     `baselines.json` revision convention (unapproved seed cannot
     validate). New **AC-14** owns shape, launch-time validation with
     the fail-closed named startup failure **"duration bounds unusable"**
@@ -1227,16 +1227,37 @@ owns; no sprint-local reinterpretation.
     record, self-describing operator-facing state.
   - M1r10 (RRG.1 cell consumability) → rewritten as five enumerated
     deliverables.
-  - M2r10 (seeding discipline repeated verbatim) → canonical statement
-    lives in §2.3.5 + AC-14; §2.3.3 and the §6 rows cross-reference
-    (`per AC-14/§2.3.5`).
-  - M3r10 (min-bound rationale unstated) → §2.3.5 (and the bounds
-    schema description): min flags a short-circuited/truncated
-    workload — work skipped, not speed penalized; max flags a
-    stalled/contaminated run.
+  - M2r10 (seeding discipline repeated verbatim) → r12 consolidated the
+    policy at AC-14; §2.3.5 and the §6 rows now cross-reference that one
+    canonical acceptance site.
+  - M3r10 (min-bound rationale unstated) → AC-14 (and the bounds schema
+    description): min flags a short-circuited/truncated workload — work
+    skipped, not speed penalized; max flags a stalled/contaminated run.
   - Schema + examples revalidated: full probe battery green; new
     probes — duration-bounds example VALID; missing suite entry,
     extra non-catalog entry, missing `approved_by`/`revision`, and
     malformed bound REJECTED; refusal record without
     `workspace_version` now REJECTED (required); all prior manifest and
     refusal probes unchanged.
+- **r12 (2026-09-02, fix round for quality-mgr r11 FAIL @ 49a4ff987 —
+  M2r10 plus 2I/3M)**:
+  - M2r10 / ATM-QA-001 → AC-14 is the single canonical duration-bounds
+    policy site; §2.3.5 now contains only the anomaly-check cross-reference.
+  - ATM-QA-002 → a same-second, same-refusal-point filename collision is
+    an explicit `refusal-record-collision` harness failure: neither record
+    nor manifest is written, and the event is never overwritten, dropped,
+    or silently suffixed.
+  - ARCH-001 → AC-14 assigns launch-time bounds validation and its named
+    startup failure to RRG.1, while RRG.4 owns only emission-time
+    re-validation, matching the §6 ownership row.
+  - RBQA-F011a → renamed the bounds approval timestamp to
+    `effective_from`, matching the §3.2 `baselines.json` convention in the
+    schema, example, and plan.
+  - RBQA-F011b → AC-13 and §5.1 explicitly reuse
+    `.just/run_version.py::workspace_version(repo_root)`; no parallel
+    `Cargo.toml` reader is authorized.
+  - RBQA-F011c → preflight now carries distinct
+    `release_readiness_manifest_path` and `manifest_path` destinations;
+    the former is the release-evidence manifest and the latter remains the
+    publish-channel manifest. The template fixture and evaluation guidance
+    cover both names.
