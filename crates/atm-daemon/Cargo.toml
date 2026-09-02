@@ -18,6 +18,7 @@ serde_json.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 tracing.workspace = true
 atm-core = { workspace = true, features = ["test-utils"] }
+atm-observability.workspace = true
 atm-daemon-bootstrap.workspace = true
 
 [dev-dependencies]

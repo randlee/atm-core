@@ -13,6 +13,7 @@ dependencies = [
  "atm-daemon-client",
  "atm-graft",
  "atm-http-runtime",
+ "atm-observability",
  "atm-runtime-test-support",
  "atm-storage",
  "chrono",
@@ -195,6 +196,7 @@ version = "1.4.6"
 dependencies = [
  "agent-team-mail-core",
  "atm-daemon-bootstrap",
+ "atm-observability",
  "chrono",
  "sc-observability",
  "sc-observability-types",
@@ -309,6 +311,15 @@ dependencies = [
  "tracing",
  "ulid",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "atm-observability"
+version = "1.4.6"
+dependencies = [
+ "agent-team-mail-core",
+ "sc-observability-types",
+ "tempfile",
 ]
 
 [[package]]

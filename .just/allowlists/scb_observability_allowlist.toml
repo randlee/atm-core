@@ -1,10 +1,10 @@
 # RULE-001 sanctioned library-internal adapter exception:
-# daemon_runtime_observability.rs is the one accepted non-main daemon source
+# daemon_observability.rs is the one accepted non-main daemon source
 # module allowed to import sc_observability_types ActionName/OutcomeLabel
 # directly. This mirrors ADR-020 and the AD.26 boundary closure.
 [[allow]]
 rule = "SCB-OBSERVABILITY-001"
-path = "crates/atm-daemon/src/daemon_runtime_observability.rs"
+path = "crates/atm-daemon/src/daemon_observability.rs"
 symbol = "__module__"
 why = "sanctioned library-internal daemon observability adapter module per ADR-020"
 sunset_sprint = "AD.26"

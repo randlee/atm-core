@@ -7,7 +7,7 @@ use daemon_observability::DaemonObservability;
 #[allow(
     dead_code,
     private_interfaces,
-    reason = "the retained logger adapter preserves its shutdown helpers while AL.9 consumes only its core ObservabilityPort boundary"
+    reason = "the adapter retains private lifecycle exercises for its in-module retained-log contract tests"
 )]
 mod daemon_observability;
 
@@ -23,7 +23,18 @@ async fn main() -> ExitCode {
 }
 
 async fn run() -> Result<(), AtmError> {
-    let observability = Arc::new(DaemonObservability::bootstrap()?);
+    // Retained-log preparation performs filesystem I/O. Keep it off the
+    // Tokio/Axum runtime worker while retaining the process-owned adapter at
+    // this active replacement-daemon composition boundary.
+    let observability = Arc::new(
+        tokio::task::spawn_blocking(DaemonObservability::bootstrap)
+            .await
+            .map_err(|source| {
+                AtmError::observability_bootstrap(format!(
+                    "daemon observability bootstrap worker did not complete: {source}"
+                ))
+            })??,
+    );
     atm_daemon_bootstrap::run_replacement_daemon_with_observability(observability).await
 }
 

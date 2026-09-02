@@ -221,7 +221,7 @@ paths remain:
     daemon event surface used by subsystem-owned emission
   - `V.3` follow-through: delete any compatibility shims that exist only to
     preserve the old central mapper path
-- `crates/atm-daemon/src/daemon_observability.rs`
+- `crates/atm-daemon/src/daemon_observability.rs` (the source-visible implementation recorded by [`../../boundaries/atm-daemon/daemon-observability.toml`](../../boundaries/atm-daemon/daemon-observability.toml))
 - `crates/atm-daemon/src/composition.rs` (retired by AM.3)
 - `crates/atm-daemon/src/main.rs`
 - `crates/atm-daemon/src/lib.rs`
