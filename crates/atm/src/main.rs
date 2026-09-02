@@ -9,7 +9,6 @@ mod output_contract;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::{fs, fs::OpenOptions};
 
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
@@ -26,6 +25,12 @@ use atm_core::observability::{
     AtmObservabilityHealthState, CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter,
     LogOrder, LogTailSession, ObservabilityPort, diagnostic_code, service_name,
     standard_level_for_outcome,
+};
+#[cfg(any(test, feature = "fault-injection"))]
+use atm_observability::retained_sink_fault_mode as shared_retained_sink_fault_mode;
+use atm_observability::{
+    logger_level_override as shared_logger_level_override,
+    logger_root_for_log_dir as shared_logger_root_for_log_dir, prepare_retained_log,
 };
 use chrono::{DateTime, Utc};
 #[cfg(any(test, feature = "cli-surface-dump"))]
@@ -51,9 +56,8 @@ use time::OffsetDateTime;
 use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
 const ATM_COMMAND_TARGET: &str = "atm.command";
+#[cfg(test)]
 const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
-#[cfg(any(test, feature = "fault-injection"))]
-const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 const MAX_RETAINED_QUERY_RECORD_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -297,8 +301,7 @@ pub(crate) fn build_logger(
     console_log_route: ConsoleLogRoute,
     service_name: &ServiceName,
 ) -> Result<(Logger, PathBuf), AtmError> {
-    let active_log_path = log_dir.join("atm.log.jsonl");
-    ensure_retained_log_ready(log_dir, &active_log_path)?;
+    let active_log_path = prepare_retained_log(log_dir)?;
     let mut config =
         LoggerConfig::default_for(service_name.clone(), logger_root_for_log_dir(log_dir)?);
     config.level = logger_level_override()?.unwrap_or(SharedLevelFilter::Info);
@@ -320,33 +323,15 @@ pub(crate) fn build_logger(
     Ok((builder.build(), active_log_path))
 }
 
+#[cfg(test)]
 fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(), AtmError> {
-    fs::create_dir_all(log_dir).map_err(|source| {
-        AtmError::observability_bootstrap(format!(
-            "failed to create retained log directory {}: {source}",
-            log_dir.display(),
-        ))
-    })?;
-    OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(active_log_path)
-        .map(|_| ())
-        .map_err(|source| {
-            AtmError::observability_bootstrap(format!(
-                "failed to open retained log file {} during startup: {source}",
-                active_log_path.display(),
-            ))
-        })
+    let prepared = prepare_retained_log(log_dir)?;
+    debug_assert_eq!(prepared, active_log_path);
+    Ok(())
 }
 
 fn logger_root_for_log_dir(log_dir: &Path) -> Result<PathBuf, AtmError> {
-    log_dir.parent().map(Path::to_path_buf).ok_or_else(|| {
-        AtmError::observability_bootstrap(format!(
-            "failed to determine the retained-log root parent for {}",
-            log_dir.display()
-        ))
-    })
+    shared_logger_root_for_log_dir(log_dir)
 }
 
 #[cfg(any(test, feature = "fault-injection"))]
@@ -374,25 +359,7 @@ fn init_tracing(stderr_logs: bool) -> Result<(), AtmError> {
 }
 
 fn logger_level_override() -> Result<Option<SharedLevelFilter>, AtmError> {
-    let Some(value) = std::env::var(ATM_LOG_LEVEL_ENV)
-        .ok()
-        .map(|value| value.trim().to_ascii_lowercase())
-        .filter(|value| !value.is_empty())
-    else {
-        return Ok(None);
-    };
-
-    match value.as_str() {
-        "trace" => Ok(Some(SharedLevelFilter::Trace)),
-        "debug" => Ok(Some(SharedLevelFilter::Debug)),
-        "info" => Ok(Some(SharedLevelFilter::Info)),
-        "warn" => Ok(Some(SharedLevelFilter::Warn)),
-        "error" => Ok(Some(SharedLevelFilter::Error)),
-        "off" => Ok(Some(SharedLevelFilter::Off)),
-        _ => Err(AtmError::observability_bootstrap(format!(
-            "invalid {ATM_LOG_LEVEL_ENV} value `{value}`; use `trace`, `debug`, `info`, `warn`, `error`, or `off`"
-        ))),
-    }
+    shared_logger_level_override()
 }
 
 fn tracing_level_filter(level: SharedLevelFilter) -> TracingLevelFilter {
@@ -408,21 +375,7 @@ fn tracing_level_filter(level: SharedLevelFilter) -> TracingLevelFilter {
 
 #[cfg(any(test, feature = "fault-injection"))]
 fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {
-    let Some(value) = std::env::var(ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV)
-        .ok()
-        .map(|value| value.trim().to_ascii_lowercase())
-        .filter(|value| !value.is_empty())
-    else {
-        return Ok(None);
-    };
-
-    match value.as_str() {
-        "degraded" => Ok(Some(RetainedSinkFaultMode::Degraded)),
-        "unavailable" => Ok(Some(RetainedSinkFaultMode::Unavailable)),
-        _ => Err(AtmError::observability_bootstrap(format!(
-            "invalid {ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV} value `{value}`; use `degraded` or `unavailable`"
-        ))),
-    }
+    shared_retained_sink_fault_mode()
 }
 
 #[cfg(any(test, feature = "fault-injection"))]
@@ -556,7 +509,7 @@ impl ObservabilityPort for ScObservabilityAdapter {
             active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state,
-            maintenance: report.maintenance.map(map_maintenance_report),
+            maintenance: report.maintenance.map(map_maintenance_report).transpose()?,
             diagnostic,
             detail,
         })
@@ -632,8 +585,8 @@ fn maintenance_state_label(state: sc_observability_types::MaintenanceWorkerState
 
 fn map_maintenance_report(
     report: sc_observability_types::MaintenanceHealthReport,
-) -> AtmMaintenanceHealthReport {
-    AtmMaintenanceHealthReport {
+) -> Result<AtmMaintenanceHealthReport, AtmError> {
+    Ok(AtmMaintenanceHealthReport {
         state: match report.state {
             sc_observability_types::MaintenanceWorkerState::Running => {
                 AtmMaintenanceWorkerState::Running
@@ -651,8 +604,12 @@ fn map_maintenance_report(
             .last_pass_at
             .map(map_timestamp_back)
             .transpose()
-            .expect("shared maintenance timestamps must project into ATM timestamps"),
-    }
+            .map_err(|_source| {
+                AtmError::observability_health(
+                    "failed to project shared maintenance timestamp into ATM health",
+                )
+            })?,
+    })
 }
 
 fn build_command_event_fields(event: &CommandEvent) -> Map<String, serde_json::Value> {

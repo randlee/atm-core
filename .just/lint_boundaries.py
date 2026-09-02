@@ -342,8 +342,7 @@ SCB_SINGLETON_ALLOWED_HOOK_CALLERS = {
     Path("crates/atm-daemon/src/composition.rs"),
 }
 SCB_OBSERVABILITY_ALLOWED_SRC_FILES = {
-    Path("crates/atm-daemon/src/daemon_runtime_observability.rs"),
-    Path("crates/atm-daemon/src/main.rs"),
+    Path("crates/atm-daemon-bootstrap/src/daemon_observability.rs"),
 }
 SCB_OBSERVABILITY_DIRECT_PATTERNS = (
     "sc_observability_types::ActionName",
@@ -3028,7 +3027,7 @@ def collect_scb_observability_rule_violations(
                 continue
             violations.append(
                 BoundaryViolation(
-                    f"SCB-OBSERVABILITY-001 {rel_source}:{line_number} direct sc_observability_types ActionName/OutcomeLabel imports are forbidden outside daemon_runtime_observability.rs and main.rs",
+                    f"SCB-OBSERVABILITY-001 {rel_source}:{line_number} direct sc_observability_types ActionName/OutcomeLabel imports are forbidden outside atm-daemon-bootstrap's daemon_observability.rs",
                     "",
                 )
             )
