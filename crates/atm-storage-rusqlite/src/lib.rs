@@ -10,6 +10,7 @@
 mod analyst_query;
 mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;
+mod mail_messages_schema;
 #[cfg(test)]
 mod mailbox_metadata;
 mod mailbox_reader;
@@ -19,12 +20,14 @@ mod peer_config_store;
 mod pending_nudge_store;
 mod reader_pool;
 mod roster_store;
+mod schema_support;
 mod search_reader;
 mod search_schema;
 mod search_store;
 mod shared_db;
 mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
+mod team_roster_schema;
 mod template_catalog_schema;
 mod template_catalog_store;
 mod writer;
