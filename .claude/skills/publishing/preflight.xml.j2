@@ -14,7 +14,6 @@ required_variables:
   - worktree_path
   - branch
   - manifest_path
-  - release_readiness_manifest_path
 ---
 <atm-task id="{{ task_id }}" assignee="publisher">
   <recipient>{{ recipient }}</recipient>
@@ -27,9 +26,7 @@ required_variables:
     <candidate-commit>{{ candidate_commit }}</candidate-commit>
     <starting-state>{{ starting_state }}</starting-state>
     <stage>{{ preflight_stage }}</stage>
-    <!-- manifest_path is the publish-channel manifest; the readiness gate has its own explicit destination. -->
-    <publish-manifest>{{ manifest_path }}</publish-manifest>
-    <release-readiness-manifest>{{ release_readiness_manifest_path }}</release-readiness-manifest>
+    <manifest>{{ manifest_path }}</manifest>
     <already-published-channels>{{ already_published_channels | default('') }}</already-published-channels>
   </release>
   <references>
