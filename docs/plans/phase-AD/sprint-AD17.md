@@ -12,7 +12,7 @@ target: integrate/phase-AD
 ## Goal
 
 - prove the graft boundary reset on the accepted line through `AD.16`,
-  and restore the Windows `atm-daemon` CI lane
+ while preserving the replacement-runtime CI lane
 
 ## Scope Note
 
