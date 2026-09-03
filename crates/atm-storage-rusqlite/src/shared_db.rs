@@ -958,9 +958,12 @@ pub(crate) fn sqlite_error(
     source: RusqliteError,
 ) -> AtmError {
     let message = message.into();
-    match &source {
-        RusqliteError::SqliteFailure(error, _) => {
-            match error.code {
+    // Every arm keeps the stable code/message contract; the raw SQLite
+    // failure rides along as the machine-preserved cause so a constraint
+    // violation or schema mismatch is diagnosable from the surfaced error.
+    let error =
+        match &source {
+            RusqliteError::SqliteFailure(error, _) => match error.code {
                 rusqlite::ffi::ErrorCode::ConstraintViolation => AtmError::validation(message),
                 rusqlite::ffi::ErrorCode::DatabaseBusy
                 | rusqlite::ffi::ErrorCode::DatabaseLocked => match target {
@@ -986,14 +989,14 @@ pub(crate) fn sqlite_error(
                     AtmError::mailbox_write(message)
                 }
                 _ => AtmError::mailbox_write(message),
-            }
-        }
-        _ => AtmError::mailbox_write(message),
-    }
+            },
+            _ => AtmError::mailbox_write(message),
+        };
+    error.with_cause(source)
 }
 
-fn json_error(message: impl Into<String>, _source: serde_json::Error) -> AtmError {
-    AtmError::validation(message)
+fn json_error(message: impl Into<String>, source: serde_json::Error) -> AtmError {
+    AtmError::validation(message).with_cause(source)
 }
 
 pub(crate) fn serialize_json<T: serde::Serialize>(
@@ -1026,6 +1029,36 @@ mod tests {
     use super::*;
     use crate::observability::NullSqliteObservability;
     use crate::shared_db_reader_lanes::open_read_connection_for_target;
+    use atm_storage::AtmErrorCode;
+
+    #[test]
+    fn sqlite_constraint_violations_keep_the_sqlite_cause() {
+        let database = tempfile::NamedTempFile::new().expect("temporary database");
+        let target = SharedDbTarget::Path(database.path().to_path_buf());
+        let writer = open_connection_for_target(&target).expect("writer connection");
+        writer
+            .execute_batch("CREATE TABLE probe (value TEXT NOT NULL);")
+            .expect("create fixture table");
+        let failure = writer
+            .execute("INSERT INTO probe (value) VALUES (NULL)", [])
+            .expect_err("NOT NULL constraint must fail");
+        let error = sqlite_error(&target, "failed to persist probe", failure);
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().starts_with("failed to persist probe"));
+        assert_eq!(
+            error.cause(),
+            Some("NOT NULL constraint failed: probe.value"),
+            "the raw SQLite failure must survive as the machine-preserved cause"
+        );
+    }
+
+    #[test]
+    fn json_errors_keep_the_serde_cause() {
+        let failure = serde_json::from_str::<serde_json::Value>("{").expect_err("invalid json");
+        let error = json_error("failed to decode probe", failure);
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.cause().is_some_and(|cause| cause.contains("EOF")));
+    }
 
     #[test]
     fn defensive_reader_connection_rejects_writes() {
