@@ -66,15 +66,31 @@ report.
 
 Steps 2 and 3 run concurrently; step 1 runs whenever atmbench is free.
 
-Host precondition for every step (Rand, 2026-09-03, primary blocker seen
-on the first cross-host ping): macOS shows a blocking Local Network
-permission prompt the first time the atm daemon or CLI reaches a `.local`
-peer, and the peer send fails (`RemoteDeliveryUnconfirmed`, "could not
-connect to direct peer") until it is answered. Before smoke, each runner
-grants Local Network access to the candidate's atm binaries on their host
-(System Settings → Privacy & Security → Local Network) and confirms one
+macOS host precondition for steps 1 and 2 (Rand, 2026-09-03, primary
+blocker seen on the first cross-host ping; step 3 is Windows and has no
+equivalent prompt): macOS shows a blocking Local Network permission prompt
+the first time a freshly built or re-signed atm daemon or CLI touches the
+local network. While the prompt is unanswered the daemon process is
+blocked, so the symptom is not limited to `.local` peer dials: local
+`atm doctor` calls time out and even a pure loopback `atm send` to
+`localhost:43101` fails with `RemoteDeliveryUnconfirmed` ("could not
+confirm acceptance by direct peer"), which is exactly the false-positive
+pattern in the rand-m5 localhost smoke of 2026-08-31
+(`site/reports/smoke/macos/rand-m5.local/20260831T203217630910Z-pid56376-localhost/localhost.json`:
+every `doctor` case failed and every localhost send returned that error).
+The prompt is the suspected cause of that run; #1140 owns confirming it
+(the committed evidence shows the symptom, not the dialog). Before smoke,
+each macOS runner grants Local Network access to the candidate's atm
+binaries on their host (System Settings → Privacy & Security → Local
+Network), confirms `atm doctor --json` returns promptly, and confirms one
 cross-host `atm send` round-trips. A rebuilt or re-signed binary can
-re-trigger the prompt; see §5 item 7 (#1140).
+re-trigger the prompt, so in step 2 the grant and the doctor check are
+re-confirmed after the `/daemon-switch` rebuild and again after the
+restore. A smoke or benchmark failure with these signatures on a host
+whose grant was not confirmed is a precondition miss, not product
+evidence: fix the grant and re-run. Operator-facing steps are in
+`docs/user-documents/troubleshooting.md` (Daemon Startup Or Connect
+Failure); see §5 item 7 (#1140).
 Repo suites (`just ci`, test-graft-python, test-hermes-graft-bridge,
 test-hermes-graft-smoke, test-admission-capacity, test-queue-hooks-python,
 test-queue-hooks-python-codex) are not re-run; their green CI runs on the
@@ -125,10 +141,13 @@ candidate commit are cited by run id.
 5. No isolated Windows benchmark account; cwin results are informational.
 6. Send-family benchmark reports do not capture the executing account
    in-band the way the read family does after AV-PROD-001R.
-7. macOS Local Network permission prompt blocks first cross-host peer
-   traffic per binary (see §2 precondition); tracked as atm-core #1140
-   (whether stable code signing or a launch-time probe can keep grants
-   across builds), not fixed here.
+7. macOS Local Network permission prompt blocks the daemon per freshly
+   built binary until answered, failing local doctor and loopback sends as
+   well as cross-host traffic (see §2 precondition; suspected, not yet
+   confirmed, cause of the 2026-08-31 rand-m5 localhost smoke failure);
+   tracked as atm-core #1140 (confirm the cause; whether stable code
+   signing or a launch-time probe can keep grants across builds), not
+   fixed here.
 
 ## 6. Open questions for Rand
 
@@ -573,6 +592,18 @@ candidate commit are cited by run id.
   → precondition in §2 step 1 and §5 item 7; step-3 sender of record
   unstated → §3 names Rand. Minor: `test-queue-hooks-codex` →
   `test-queue-hooks-python-codex`.
+- **PR #1141 r1 (2026-09-03, quality-mgr FAIL @ 00de73ee6, PR comment
+  5529605562)**: Important: "for every step" unsupported → narrowed to
+  the macOS runners (steps 1 and 2), step 3 excluded. Important: causal
+  attribution to the prompt not reconciled with the committed
+  2026-08-31 localhost.json (pure `localhost:43101` sends and doctor
+  cases failing) → precondition now cites that file, describes the
+  daemon-blocked symptom set, and marks the prompt as the suspected cause
+  for #1140 to confirm. Important: local doctor hang omitted → added as
+  a named symptom and a required check. Minor: no re-confirmation after
+  the step 2 `/daemon-switch` rebuild → added (after rebuild and after
+  restore). Minor: no troubleshooting cross-link → operator steps added
+  to `docs/user-documents/troubleshooting.md` and linked from §2.
 - **Rand review (2026-09-03)**: smoke and benchmarks are two separate
   tests on both atmbench and cwin, smoke first, benchmarks skipped on
   smoke failure; AT3 cross-host leg (rand-m5 host daemon ↔ Colima daemon)
