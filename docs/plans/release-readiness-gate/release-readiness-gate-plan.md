@@ -35,9 +35,11 @@ report.
    benchmark families on the isolated `m5-atmbench` account on
    rand-m5.local and generate the reports with the existing benchmark
    harness:
+   In this order (smoke first: cheapest failure stops the session before
+   any benchmark time is spent):
+   - `just smoke thorough` → `site/reports/smoke/<os>/<host>/`
    - `just benchmark-official` (send family) → `site/reports/send-message-benchmark/`
    - `just benchmark-read` (read/query family, Phase AV) → `site/reports/read-query-benchmark/`
-   - `just smoke thorough` in the same session → `site/reports/smoke/<os>/<host>/`
    - `just reports-index --check` green; reports committed and pushed.
    Precondition: `just benchmark-read` and
    `site/reports/read-query-benchmark/baselines.json` land with Phase AV
