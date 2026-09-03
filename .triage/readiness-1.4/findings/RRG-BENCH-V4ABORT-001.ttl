@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-BENCH-V4ABORT-001>
+  a triage:Finding ;
+  triage:findingId "RRG-BENCH-V4ABORT-001" ;
+  triage:title "Official benchmark aborts the whole suite when one lane violates the durable <= admitted <= requested invariant, hiding the counts and skipping the remaining lanes" ;
+  triage:description "Candidate 1.4.10 campaign 20260903T185218Z-m5-atmbench (PR #1147): after the sqlite lane passed, the UDS lane produced evidence with accepted_count=1 and observed_mailbox_count=95. scripts/smoke/run_admission_capacity.py write_v4_evidence (line 346) calls v4_result_from_evidence, whose BenchmarkRunResult model validator at scripts/smoke/benchmark_schema.py:275 raises ValueError with the text message counts must satisfy durable <= admitted <= requested; write_v4_evidence rewraps it as SmokeError could not emit direct v4 benchmark evidence and the runner exits, so tcp and tcp-tls never ran, no v4 artifact was published for the uds lane, and the operator had to open the raw trace by hand to learn the three counts. Classification: benchmark-harness, important. Required behaviour per Rand (surface every blocker in one run): a lane whose counts violate the invariant must be published as status FAIL (or INCOMPLETE with an incomplete_reason carrying the three counts) so the campaign continues to the remaining lanes and the report shows the numbers; the validator text itself should include the offending values. Product-side accounting is tracked separately as RRG-INGRESS-ADMIT-001; this record is only about the harness aborting and hiding evidence." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "benchmark-harness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-03T19:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-03T18:52:52Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-V4ABORT-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-V4ABORT-001/CAND-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RRG-BENCH-V4ABORT-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 350 ;
+  triage:snippet "raise SmokeError(f\"could not emit direct v4 benchmark evidence: {error}\") from error" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "eefa01418" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/eefa01418> .
+
+<urn:atm:triage:occurrence/RRG-BENCH-V4ABORT-001/CAND-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_schema.py" ;
+  triage:line 275 ;
+  triage:snippet "if self.messages_admitted > self.messages_requested or self.messages_durable > self.messages_admitted:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "eefa01418" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/eefa01418> .
+
+<urn:atm:triage:worktree/CAND/eefa01418>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "eefa01418" ;
+  triage:orderIndex 1 .

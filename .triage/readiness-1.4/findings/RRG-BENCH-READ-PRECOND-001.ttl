@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-BENCH-READ-PRECOND-001>
+  a triage:Finding ;
+  triage:findingId "RRG-BENCH-READ-PRECOND-001" ;
+  triage:title "just benchmark-read requires an account-local serving daemon on the benchmark account, which the atmbench account does not run, so the read/query family has been unavailable on every readiness attempt" ;
+  triage:description "Release-readiness plan section 3.2 lists just benchmark-read (read-fanout, query-fts, read-under-write-load) as a required family with evidence under site/reports/read-query-benchmark/. On every 1.4.x attempt on rand-m5/atmbench (1.4.7 through 1.4.10) arch-ctm reports the family unavailable: scripts/smoke/read_benchmark.py execute() resolves a release atm binary (_atm_binary, line 260) and drives it with ATM_IDENTITY=av4-driver against whatever daemon serves that account's Unix HTTP socket; unlike run_admission_capacity.py it never starts a fixture daemon, and the atmbench account only ever has the send benchmark's disposable fixture daemons, so the CLI reports no serving Unix HTTP socket and the family never runs. Classification: benchmark-harness / process precondition, blocking for the read family only (the send family is unaffected). The plan text does not state the precondition. Resolution options, smallest first: (a) document and provision an account-local 1.4.x daemon on atmbench for the duration of the read campaign (release-readiness process step, no harness code), or (b) make read_benchmark.py start and tear down its own fixture daemon the way the send runner does. arch-ctm picks (a) unless the runner's ambient-state refusal makes it impossible, in which case (b) with the minimal change; the plan section 3.2 must gain the precondition either way." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "benchmark-harness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-03T19:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-03T18:36:28Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-READ-PRECOND-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-READ-PRECOND-001/CAND-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RRG-BENCH-READ-PRECOND-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 260 ;
+  triage:snippet "def _atm_binary() -> str:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "eefa01418" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/eefa01418> .
+
+<urn:atm:triage:occurrence/RRG-BENCH-READ-PRECOND-001/CAND-2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/release-readiness-gate/release-readiness-gate-plan.md" ;
+  triage:line 488 ;
+  triage:snippet "`just benchmark-read` -> benchmark-read-fanout, benchmark-query-fts," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "eefa01418" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/eefa01418> .
+
+<urn:atm:triage:worktree/CAND/eefa01418>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "eefa01418" ;
+  triage:orderIndex 1 .
