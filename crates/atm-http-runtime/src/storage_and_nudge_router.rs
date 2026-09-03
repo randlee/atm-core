@@ -890,14 +890,16 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                     hook.emit_received_hook(committed.received_hook_dispatches, deadline)
                         .await
                 };
-                if ingress == AuthenticatedIngress::Local {
+                if !matches!(ingress, AuthenticatedIngress::Peer) {
                     let warnings = hook_task.await;
                     append_warnings(&mut committed.outcome, warnings);
                 } else {
                     // Peer writes acknowledge durable persistence immediately; a
                     // receiver hook (tmux nudge, etc.) must not hold the remote
                     // request open past its absolute budget.
-                    tokio::spawn(async move { let _ = hook_task.await; });
+                    tokio::spawn(async move {
+                        let _ = hook_task.await;
+                    });
                 }
             }
             Ok(ApiResponse::new(write_response(committed.outcome)))
