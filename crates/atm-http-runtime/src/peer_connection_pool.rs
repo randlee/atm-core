@@ -595,10 +595,11 @@ fn is_scope_less_link_local(address: std::net::SocketAddrV6) -> bool {
 }
 
 /// How long one resolved address set is reused before the peer name is looked
-/// up again. Short enough that a wired/Wi-Fi/VPN move is followed promptly;
-/// long enough that a burst of sends does not re-query the resolver per
-/// connection. A stale entry is also discarded the moment it fails to dial.
-const PEER_ADDRESS_CACHE_TTL: Duration = Duration::from_secs(30);
+/// up again. The TTL only bounds how long a *working* address is trusted
+/// without re-asking the resolver; a wired/Wi-Fi/VPN move is followed
+/// immediately regardless, because an entry that fails to dial is discarded
+/// and the name is resolved again inside the same request.
+const PEER_ADDRESS_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
 
 /// Short-term, in-memory memory of where a peer name last resolved.
 ///
