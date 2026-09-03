@@ -1,0 +1,108 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-B1>
+  a triage:Finding ;
+  triage:findingId "AV3-B1" ;
+  triage:title "D2 mandated primary positive-obligation allowlist gate absent; only deny-list scaffolds built" ;
+  triage:description "boundary_enforcement.rs:3467-3501 (handler region) and :3503-3531 (composition-layer sibling) are pure `!region.contains(banned)` loops over 9 and 6 literal strings. Sprint doc §D2 mandates positive-obligation-first: read handlers restricted to the AsyncMailboxRuntime port, doctor to DoctorProjection, composition layer to {AsyncMailboxReader, lane handles, read::selection, StateHandoffSupervisor}; anything unlisted fails. As built, a freshly named 1-permit gate (FreshSemaphoreGate) called from list_messages passes both tests. AV.1b A1 cites 'the AV.3 D2 allowlist' as its assertion mechanism, so the gap propagates forward. Reviewer ids ARCH-AV3-1/2, REQ-AV3-001, RBQA-AV3-001." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T05:59:41Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T19:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T05:33:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B1/AV3-B1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B1/AV3-B1-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B1/AV3-B1-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B1/AV3-B1-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-B1/AV3-B1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3467 ;
+  triage:snippet "fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
+
+<urn:atm:triage:occurrence/AV3-B1/AV3-B1-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3504 ;
+  triage:snippet "fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-4/2c6040b28> .
+
+<urn:atm:triage:occurrence/AV3-B1/AV3-B1-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3467 ;
+  triage:snippet "fn av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd1a" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-5/4a97f0dd1a> .
+
+<urn:atm:triage:occurrence/AV3-B1/AV3-B1-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3504 ;
+  triage:snippet "fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd1a" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-5/4a97f0dd1a> .
+
+<urn:atm:triage:worktree/AV3-1/8938ed6ab>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "8938ed6ab" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV3-2/db08f4591>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "db08f4591" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV3-3/f37063fdd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "f37063fdd" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV3-4/2c6040b28>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "2c6040b28" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV3-5/4a97f0dd1a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "4a97f0dd1a" ;
+  triage:orderIndex 5 .

@@ -38,6 +38,7 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["mailbox::store::with_locked_source_files"]
 
 [enforcement]
+no_in_repo_implementation = true
 lint_rules = ["LINT-BOUNDARY-INBOX-EXPORT-REFERENCES"]
 review_gates = ["no_direct_mailbox_helper_calls", "repair_rebuild_only_reexport"]
 

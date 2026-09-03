@@ -26,8 +26,10 @@ ADAPTER_FILES = (
     # loopback path rather than returning a daemon_unavailable stub.
     "crates/atm-daemon-bootstrap/src/lib.rs",
 )
+STORAGE_WRITER_SOURCE_ROOT = "crates/atm-storage-rusqlite/src"
 UNIX_GATING_RE = re.compile(r"#\[\s*cfg\s*\((?:all|any)?\s*\(?\s*unix\b")
 NON_UNIX_STUB_RE = re.compile(r"#\[\s*cfg\s*\(\s*not\s*\(\s*unix\s*\)\s*\)\s*\]")
+PLATFORM_GATING_RE = re.compile(r"#\[\s*cfg(?:_attr)?\s*\([^\]]*\b(?:windows|unix|target_os)\b")
 DAEMON_UNAVAILABLE_RE = re.compile(r"\bdaemon_unavailable\s*\(")
 LEGACY_PORTABILITY_TODO_RE = re.compile(r"TODO\(S\.2/ADR-007\)")
 
@@ -119,6 +121,31 @@ def collect_forbidden_todo_markers(repo_root: Path) -> list[Violation]:
     return violations
 
 
+def collect_storage_writer_platform_gating(repo_root: Path) -> list[Violation]:
+    """Keep SQLite transaction policy platform-neutral under ADR-007."""
+    violations: list[Violation] = []
+    source_root = repo_root / STORAGE_WRITER_SOURCE_ROOT
+    for path in sorted(source_root.rglob("*.rs")):
+        rel_path = path.relative_to(repo_root).as_posix()
+        lines = iter_lines(path)
+        test_scope = rust_file_test_scope(Path(rel_path), lines)
+        for line_number, line in enumerate(lines, start=1):
+            if test_scope[line_number - 1]:
+                continue
+            if PLATFORM_GATING_RE.search(line):
+                violations.append(
+                    Violation(
+                        path=rel_path,
+                        line_number=line_number,
+                        message=(
+                            "SQLite writer transaction policy must remain platform-neutral; "
+                            "an ADR-approved adapter seam is required before OS-specific gating"
+                        ),
+                    )
+                )
+    return violations
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -139,6 +166,7 @@ def main(argv: list[str]) -> int:
         *collect_shared_host_shell_gating(repo_root),
         *collect_non_unix_same_host_stubs(repo_root),
         *collect_forbidden_todo_markers(repo_root),
+        *collect_storage_writer_platform_gating(repo_root),
     ]
     duration_seconds = monotonic_now() - start_time
 
@@ -149,6 +177,9 @@ def main(argv: list[str]) -> int:
         "",
         "adapter_files:",
         *ADAPTER_FILES,
+        "",
+        "storage_writer_source_root:",
+        STORAGE_WRITER_SOURCE_ROOT,
         "",
         "findings:",
         *([violation.render() for violation in violations] or ["none"]),

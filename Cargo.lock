@@ -13,6 +13,7 @@ dependencies = [
  "atm-daemon-client",
  "atm-graft",
  "atm-http-runtime",
+ "atm-observability",
  "atm-runtime-test-support",
  "atm-storage",
  "chrono",
@@ -184,6 +185,7 @@ name = "atm-architecture"
 version = "1.4.6"
 dependencies = [
  "cargo_metadata",
+ "quote",
  "serde",
  "syn 2.0.119",
  "toml",
@@ -195,14 +197,7 @@ version = "1.4.6"
 dependencies = [
  "agent-team-mail-core",
  "atm-daemon-bootstrap",
- "chrono",
- "sc-observability",
- "sc-observability-types",
- "serde_json",
- "serial_test",
- "tempfile",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -212,14 +207,19 @@ dependencies = [
  "agent-team-mail-core",
  "atm-herdr",
  "atm-http-runtime",
+ "atm-observability",
  "atm-runtime",
  "atm-runtime-test-support",
  "atm-storage",
  "atm-storage-rusqlite",
  "atm-template-sc-compose",
+ "chrono",
  "fs4",
  "peer-tls",
+ "sc-observability",
+ "sc-observability-types",
  "serde_json",
+ "serial_test",
  "tempfile",
  "tokio",
  "tracing",
@@ -291,6 +291,7 @@ dependencies = [
  "agent-team-mail-core",
  "async-trait",
  "atm-herdr",
+ "atm-runtime",
  "atm-runtime-test-support",
  "atm-storage",
  "axum",
@@ -309,6 +310,15 @@ dependencies = [
  "tracing",
  "ulid",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "atm-observability"
+version = "1.4.6"
+dependencies = [
+ "agent-team-mail-core",
+ "sc-observability-types",
+ "tempfile",
 ]
 
 [[package]]
@@ -337,6 +347,8 @@ name = "atm-runtime"
 version = "1.4.6"
 dependencies = [
  "agent-team-mail-core",
+ "async-trait",
+ "atm-runtime-test-support",
  "atm-storage",
  "serde_json",
  "tokio",
@@ -348,7 +360,9 @@ name = "atm-runtime-test-support"
 version = "1.4.6"
 dependencies = [
  "agent-team-mail-core",
+ "async-trait",
  "atm-runtime",
+ "atm-storage",
  "atm-storage-rusqlite",
 ]
 
@@ -1465,6 +1479,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-rustls",
+ "tracing",
 ]
 
 [[package]]

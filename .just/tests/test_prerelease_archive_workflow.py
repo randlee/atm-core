@@ -488,7 +488,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             repo = Path(directory) / "atm-core"
 
             prerelease_tag.copy_tracked_files(root, repo)
-            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            subprocess.run(["git", "init", "-q", "-b", "fixture"], cwd=repo, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
             subprocess.run(["git", "config", "user.name", "AS1.1 test"], cwd=repo, check=True)
             subprocess.run(["git", "add", "."], cwd=repo, check=True)

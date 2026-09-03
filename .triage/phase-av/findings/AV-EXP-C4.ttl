@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-EXP-C4>
+  a triage:Finding ;
+  triage:findingId "AV-EXP-C4" ;
+  triage:title "Send path consumes reader lane with hardcoded 5s deadline" ;
+  triage:description "list_messages_async runs the threaded-message validation projection through the mailbox reader lane with a hardcoded 5s ReadDeadline ignoring the caller deadline, called from the send path. Send bursts share the mailbox lane with reads. Confirmed facts; design tension + deadline bug per adjudication." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AV-EXP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C4/C4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-EXP-C4/C4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 401 ;
+  triage:snippet "let deadline = atm_storage::ReadDeadline::new(std::time::Duration::from_secs(5))?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-av/846c58b> .
+
+<urn:atm:triage:worktree/integrate-av/846c58b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b" ;
+  triage:orderIndex 0 .

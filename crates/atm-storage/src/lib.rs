@@ -7,6 +7,7 @@ pub mod error;
 mod error_catalog;
 pub mod error_codes;
 pub mod factory;
+pub mod peer_catalog_audit;
 pub mod request_budget;
 pub mod schema;
 pub mod search;
@@ -31,19 +32,20 @@ pub mod roles {
 pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
-    AcknowledgementSource, AgentType, AsyncMessageStore, BuiltInNudgeTemplateKind,
-    CertificateFingerprint, GraftEndpointStoreError, GraftReceiverEndpointStore,
-    GraftReceiverLease, GraftReceiverRegistration, HttpsInterface, LocalCertificate,
-    MAX_NUDGE_ATTEMPTS, MailMessageState, MailboxBucketCounts, Message, MessageFingerprint,
-    MessageKey, MessageQuery, MessageReceivedEvent, MessageStore, NudgeClaim,
-    NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, PrivateKeyRef,
-    RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
-    StorageNotifier, TaskState, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
-    TrustedPeer, derive_ack_requirement,
+    AcknowledgementSource, AgentType, AsyncMailboxReader, AsyncMessageStore,
+    BuiltInNudgeTemplateKind, CertificateFingerprint, GraftEndpointStoreError,
+    GraftReceiverEndpointStore, GraftReceiverLease, GraftReceiverRegistration, HttpsInterface,
+    LocalCertificate, MAX_NUDGE_ATTEMPTS, MailMessageState, MailboxBucketCounts, MailboxScope,
+    Message, MessageFingerprint, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore,
+    NudgeClaim, NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, PrivateKeyRef,
+    ReadDeadline, ReadLaneError, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
+    RosterSnapshot, RosterStore, StorageNotifier, TaskState, TeamNudgeTemplateOverrideMode,
+    TeamNudgeTemplateOverrideRow, TrustedPeer, derive_ack_requirement,
 };
 pub use error::AtmError;
 pub use error_codes::AtmErrorCode;
 pub use factory::{StorageFactory, StorageHandleParts, StorageHandles};
+pub use peer_catalog_audit::TrustedPeerCatalogAudit;
 pub use roles::ROLE_WORKER;
 pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
 pub use search::{

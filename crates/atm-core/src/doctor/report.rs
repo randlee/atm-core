@@ -147,6 +147,14 @@ pub struct PeerConfigDoctorReport {
     pub enabled_trusted_peer_count: usize,
     #[serde(default)]
     pub trusted_peers: Vec<PeerAuthorityDoctorReport>,
+    /// Legacy literal-IP trusted-peer rows (enabled or disabled) with their
+    /// exact safe migration/retirement remediation. See issue #972: a
+    /// disabled row never blocks startup and an enabled row fails startup
+    /// closed unless the operator opts into the testing/benchmarking-only
+    /// skip; both cases are surfaced here so `atm doctor` reports them
+    /// before/at upgrade rather than only at daemon launch.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub legacy_literal_ip_peers: Vec<LegacyLiteralIpPeerDoctorReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_failure: Option<DoctorFinding>,
 }
@@ -157,6 +165,19 @@ pub struct PeerAuthorityDoctorReport {
     pub host: String,
     pub https_port: u16,
     pub enabled: bool,
+}
+
+/// Safe projection of one legacy literal-IP trusted-peer row, carrying the
+/// exact commands that migrate or retire it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LegacyLiteralIpPeerDoctorReport {
+    pub host: String,
+    pub enabled: bool,
+    /// Converts this row to a durable hostname, keeping its fingerprint and
+    /// port. `<hostname>` is a placeholder for the operator's chosen name.
+    pub migrate_command: String,
+    /// Retires this row from the trusted-peer catalog.
+    pub revoke_command: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

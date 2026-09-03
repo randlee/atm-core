@@ -1,24 +1,22 @@
-#[cfg(test)]
-use crate::observability::NullSqliteObservability;
-use crate::observability::{
-    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
-};
-use crate::search_reader::SearchReader;
-use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
+use crate::mail_messages_schema::{mail_messages_index_ddl, mail_messages_table_ddl};
+pub(crate) use crate::shared_db_reader_lanes::SharedDb;
+use crate::writer::{WriteOp, WriteOpResult, validate_upsert_message_request};
+use atm_storage::AsyncMailboxReader;
 use atm_storage::TemplateMessageAdmission;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
-    MessageQuery,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
 #[cfg(test)]
 use rusqlite::OpenFlags;
 use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(test)]
+use std::sync::{LazyLock, Mutex};
 
 // Search projection writes touch several B-trees and FTS segments inside the
 // sole durable writer transaction.  The SQLite default is only 2 MiB, which
@@ -26,33 +24,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 // only to the one writer connection and bounds its page cache at 32 MiB.
 const WRITER_CACHE_KIB: i64 = 32 * 1024;
 #[cfg(test)]
-static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
+pub(crate) static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
+#[cfg(test)]
+static OPENED_CONNECTIONS: LazyLock<Mutex<std::collections::HashMap<String, usize>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
 
-pub(crate) const DB_MIGRATIONS: &str = r#"
-CREATE TABLE IF NOT EXISTS mail_messages (
-    team TEXT NOT NULL,
-    agent TEXT NOT NULL,
-    message_key TEXT NOT NULL,
-    envelope_json TEXT NOT NULL,
-    from_agent TEXT NOT NULL,
-    source_chat_id TEXT NULL,
-    destination_chat_id TEXT NULL,
-    message_text TEXT NULL,
-    template_sha TEXT NULL,
-    vars_json TEXT NULL,
-    category TEXT NULL,
-    content_format TEXT NULL,
-    tags_json TEXT NOT NULL DEFAULT '[]',
-    summary TEXT NULL,
-    message_at TEXT NOT NULL,
-    message_id TEXT NULL,
-    parent_message_id TEXT NULL,
-    thread_mode TEXT NULL CHECK(thread_mode IS NULL OR thread_mode IN ('add-details', 'supersede')),
-    recorded_at TEXT,
-    CHECK(message_key GLOB 'atm:*' OR message_key GLOB 'ext:*'),
-    PRIMARY KEY (team, agent, message_key)
-);
-
+pub(crate) const DB_MIGRATIONS: &str = concat!(
+    mail_messages_table_ddl!("CREATE TABLE IF NOT EXISTS mail_messages"),
+    r#"
 CREATE TABLE IF NOT EXISTS mail_message_states (
     team TEXT NOT NULL,
     agent TEXT NOT NULL,
@@ -69,6 +48,13 @@ CREATE TABLE IF NOT EXISTS mail_message_states (
     FOREIGN KEY (team, agent, message_key)
         REFERENCES mail_messages(team, agent, message_key)
         ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS mail_seen_watermarks (
+    team TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    watermark TEXT NOT NULL,
+    PRIMARY KEY (team, agent)
 );
 
 CREATE TABLE IF NOT EXISTS team_roster (
@@ -122,23 +108,6 @@ CREATE TABLE IF NOT EXISTS peer_trusted_peers (
     https_port INTEGER NOT NULL DEFAULT 43101 CHECK(https_port BETWEEN 1 AND 65535)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
-    ON mail_messages(team, agent, parent_message_id)
-    WHERE parent_message_id IS NOT NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_message_id
-    ON mail_messages(team, agent, message_id)
-    WHERE message_id IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox
-    ON mail_messages(team, agent);
-
--- Post-commit received-hook dispatch reloads an admitted record by its
--- immutable message key.  The mailbox primary key begins with team and agent,
--- so it cannot serve that global-key lookup without scanning a growing table.
-CREATE INDEX IF NOT EXISTS idx_mail_messages_message_key
-    ON mail_messages(message_key);
-
 CREATE INDEX IF NOT EXISTS idx_mail_message_states_mailbox
     ON mail_message_states(team, agent);
 
@@ -157,7 +126,9 @@ CREATE INDEX IF NOT EXISTS idx_peer_trusted_peers_enabled
 -- AK.2 retires the worker-only reconciliation policy.  `IF EXISTS` makes the
 -- migration safe for both historical databases and fresh installs.
 DROP TABLE IF EXISTS peer_sync_policies;
-"#;
+"#,
+    mail_messages_index_ddl!(),
+);
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.
 
@@ -182,82 +153,38 @@ impl SharedDbTarget {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct SharedDb {
-    target: Arc<SharedDbTarget>,
-    writer: Arc<SqliteWriter>,
-    search_reader: Arc<SearchReader>,
-    observability: Arc<dyn SqliteObservability>,
+/// Test-only instrumentation at the concrete SQLite open sites. Entries are
+/// keyed by the target so parallel tests cannot contaminate each other's
+/// connection-budget evidence.
+#[cfg(test)]
+pub(crate) fn reset_opened_connection_count(target: &SharedDbTarget) {
+    OPENED_CONNECTIONS
+        .lock()
+        .expect("opened connection counter lock")
+        .insert(target.display(), 0);
+}
+
+#[cfg(test)]
+pub(crate) fn record_opened_connection(target: &SharedDbTarget) {
+    let mut counters = OPENED_CONNECTIONS
+        .lock()
+        .expect("opened connection counter lock");
+    if let Some(count) = counters.get_mut(&target.display()) {
+        *count += 1;
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn opened_connection_count(target: &SharedDbTarget) -> usize {
+    OPENED_CONNECTIONS
+        .lock()
+        .expect("opened connection counter lock")
+        .get(&target.display())
+        .copied()
+        .unwrap_or_default()
 }
 
 impl SharedDb {
-    pub(crate) fn target(&self) -> &SharedDbTarget {
-        self.target.as_ref()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn open_in_memory_for_test() -> Result<Self, AtmError> {
-        Self::open_in_memory_with_observability(Arc::new(NullSqliteObservability))
-    }
-
-    #[cfg(test)]
-    pub(crate) fn open_in_memory_with_observability(
-        observability: Arc<dyn SqliteObservability>,
-    ) -> Result<Self, AtmError> {
-        let target = Arc::new(SharedDbTarget::InMemory {
-            uri: format!(
-                "file:atm-storage-rusqlite-{}?mode=memory&cache=shared",
-                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
-            ),
-        });
-        let writer = Arc::new(SqliteWriter::start(
-            Arc::clone(&target),
-            Arc::clone(&observability),
-        )?);
-        let search_reader = Arc::new(SearchReader::start(Arc::clone(&target))?);
-        Ok(Self {
-            target,
-            writer,
-            search_reader,
-            observability,
-        })
-    }
-
-    pub(crate) fn open_with_observability(
-        path: impl AsRef<Path>,
-        observability: Arc<dyn SqliteObservability>,
-    ) -> Result<Self, AtmError> {
-        let path = path.as_ref().to_path_buf();
-        if let Some(parent) = path.parent() {
-            // Accepted risk: durable-state root creation happens during boundary
-            // assembly and is allowed to block on the host filesystem once.
-            std::fs::create_dir_all(parent).map_err(|error| {
-                AtmError::mailbox_write(format!(
-                    "failed to create sqlite parent directory {}: {error}",
-                    parent.display()
-                ))
-            })?;
-        }
-
-        let target = Arc::new(SharedDbTarget::Path(path));
-        let writer = Arc::new(SqliteWriter::start(
-            Arc::clone(&target),
-            Arc::clone(&observability),
-        )?);
-        let search_reader = Arc::new(SearchReader::start(Arc::clone(&target))?);
-        tracing::debug!(
-            writer_handles = 1,
-            path = %target.display(),
-            "sqlite boundary assembly opened"
-        );
-        Ok(Self {
-            target,
-            writer,
-            search_reader,
-            observability,
-        })
-    }
-
     /// Call only from backend-owned blocking code paths.
     ///
     /// Accepted risk: this is enforced as a crate-internal contract rather
@@ -314,7 +241,7 @@ impl SharedDb {
             .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
             WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -375,7 +302,7 @@ impl SharedDb {
             } => Err(AtmError::daemon_unavailable(
                 "sqlite writer reported a duplicate without its retained record",
             )),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -383,6 +310,28 @@ impl SharedDb {
             | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async message upsert",
             )),
+        }
+    }
+
+    pub(crate) async fn submit_read_display_state_async(
+        &self,
+        mailbox: atm_storage::MailboxScope,
+        message_ids: Vec<atm_storage::MessageKey>,
+        seen_watermark: Option<atm_storage::IsoTimestamp>,
+    ) -> Result<(), AtmError> {
+        match self
+            .writer
+            .submit_async(WriteOp::ApplyReadDisplayState {
+                mailbox,
+                message_ids,
+                seen_watermark,
+            })
+            .await?
+        {
+            WriteOpResult::ReadDisplayStateApplied => Ok(()),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for async read display state: {other:?}"
+            ))),
         }
     }
 
@@ -426,7 +375,7 @@ impl SharedDb {
         let result = self.writer.submit(WriteOp::UpsertMessages(records))?;
         match result {
             WriteOpResult::UpsertMessages => Ok(()),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -447,7 +396,7 @@ impl SharedDb {
             .submit(WriteOp::Acknowledge { source, builder })?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
@@ -469,7 +418,7 @@ impl SharedDb {
             .await?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
@@ -480,25 +429,8 @@ impl SharedDb {
         }
     }
 
-    pub(crate) async fn submit_list_messages_async(
-        &self,
-        query: MessageQuery,
-    ) -> Result<Vec<Message>, AtmError> {
-        match self
-            .writer
-            .submit_async(WriteOp::ListMessages(query))
-            .await?
-        {
-            WriteOpResult::Messages(messages) => Ok(messages),
-            WriteOpResult::UpsertMessage { .. }
-            | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_)
-            | WriteOpResult::TemplateRegistration(_)
-            | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
-                "sqlite writer returned the wrong result for async mailbox projection",
-            )),
-        }
+    pub(crate) fn mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
+        Arc::clone(&self.mailbox_reader)
     }
 
     pub(crate) fn error(&self, message: impl Into<String>, source: RusqliteError) -> AtmError {
@@ -511,37 +443,6 @@ impl SharedDb {
             #[cfg(test)]
             SharedDbTarget::InMemory { .. } => None,
         }
-    }
-
-    pub(crate) fn checkpoint_wal(&self) -> Result<(), AtmError> {
-        #[cfg(test)]
-        if matches!(self.target.as_ref(), SharedDbTarget::InMemory { .. }) {
-            return Ok(());
-        }
-
-        let result = self.with_connection(|connection| {
-            connection
-                .query_row("PRAGMA wal_checkpoint(PASSIVE);", [], |_row| Ok(()))
-                .map_err(|error| {
-                    sqlite_error(
-                        self.target.as_ref(),
-                        "failed to checkpoint sqlite wal during daemon shutdown",
-                        error,
-                    )
-                })
-        });
-        match &result {
-            Ok(()) => {}
-            Err(error) => self
-                .observability
-                .emit_or_warn(SqliteObservabilityEvent::new(
-                    "wal_checkpoint",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message().to_owned(),
-                    Some(error.code()),
-                )),
-        }
-        result
     }
 
     fn open_connection(&self) -> Result<Connection, AtmError> {
@@ -639,9 +540,13 @@ pub(crate) fn open_connection_for_target(target: &SharedDbTarget) -> Result<Conn
         .map_err(|error| sqlite_open_error(target, error))?,
     };
     configure_connection(&mut connection, target)?;
+    #[cfg(test)]
+    record_opened_connection(target);
     Ok(connection)
 }
 
+/// Opens a connection which is physically read-only for durable databases and
+/// configured defensively for the bounded reader lanes.
 pub(crate) fn open_writer_connection_for_target(
     target: &SharedDbTarget,
 ) -> Result<Connection, AtmError> {
@@ -663,9 +568,13 @@ pub(crate) fn ensure_schema(
         .map_err(|error| sqlite_error(target, "failed to initialize sqlite schema", error))?;
     ensure_mail_message_columns(connection, target)?;
     crate::template_catalog_schema::ensure_schema(connection, target)?;
+    // Runs after every additive column migration so the rebuilt table can be
+    // populated from a legacy table that already carries the current column
+    // set, and before the search projections, which read `mail_messages`.
+    crate::mail_messages_schema::ensure_mail_messages_message_text_nullable(connection, target)?;
     crate::search_schema::ensure_schema(connection, target)?;
     ensure_team_roster_columns(connection, target)?;
-    ensure_team_roster_harness_values(connection, target)?;
+    crate::team_roster_schema::ensure_team_roster_harness_values(connection, target)?;
     ensure_team_nudge_template_override_columns(connection, target)?;
     ensure_mail_message_states_nudge_columns(connection, target)?;
     crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
@@ -773,80 +682,6 @@ fn ensure_team_roster_columns(
         "metadata_json",
         "ALTER TABLE team_roster ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';",
     )
-}
-
-fn ensure_team_roster_harness_values(
-    connection: &mut Connection,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let table_sql = connection
-        .query_row(
-            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'team_roster';",
-            [],
-            |row| row.get::<_, String>(0),
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to inspect team_roster harness constraint",
-                error,
-            )
-        })?;
-    if table_sql.contains("'hermes'") && table_sql.contains("'python-graft'") {
-        return Ok(());
-    }
-
-    let transaction = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to start team_roster harness migration",
-                error,
-            )
-        })?;
-    transaction
-        .execute_batch(
-            "DROP INDEX IF EXISTS idx_team_roster_team_name;
-             ALTER TABLE team_roster RENAME TO team_roster_legacy_harness;
-             CREATE TABLE team_roster (
-                 team_name TEXT NOT NULL,
-                 agent_name TEXT NOT NULL,
-                 member_kind TEXT NOT NULL CHECK(member_kind IN ('permanent', 'ephemeral')),
-                 harness TEXT NOT NULL CHECK(harness IN ('claude-code', 'codex-cli', 'gemini-cli', 'opencode', 'hermes', 'python-graft')),
-                 agent_type TEXT NOT NULL DEFAULT '',
-                 model TEXT NOT NULL DEFAULT '',
-                 metadata_json TEXT NOT NULL DEFAULT '{}',
-                 source TEXT,
-                 recipient_pane_id TEXT NULL,
-                 updated_at TEXT NOT NULL,
-                 PRIMARY KEY (team_name, agent_name)
-             );
-             INSERT INTO team_roster(
-                 team_name, agent_name, member_kind, harness, agent_type, model,
-                 metadata_json, source, recipient_pane_id, updated_at
-             )
-             SELECT
-                 team_name, agent_name, member_kind, harness, agent_type, model,
-                 metadata_json, source, recipient_pane_id, updated_at
-             FROM team_roster_legacy_harness;
-             DROP TABLE team_roster_legacy_harness;
-             CREATE INDEX idx_team_roster_team_name ON team_roster(team_name);",
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to migrate team_roster harness constraint",
-                error,
-            )
-        })?;
-    transaction.commit().map_err(|error| {
-        sqlite_error(
-            target,
-            "failed to commit team_roster harness migration",
-            error,
-        )
-    })
 }
 
 fn ensure_team_nudge_template_override_columns(
@@ -1003,7 +838,7 @@ fn table_exists(
         })
 }
 
-fn sqlite_open_error(target: &SharedDbTarget, source: RusqliteError) -> AtmError {
+pub(crate) fn sqlite_open_error(target: &SharedDbTarget, source: RusqliteError) -> AtmError {
     sqlite_error(
         target,
         format!("failed to open sqlite database {}", target.display()),
@@ -1017,9 +852,12 @@ pub(crate) fn sqlite_error(
     source: RusqliteError,
 ) -> AtmError {
     let message = message.into();
-    match &source {
-        RusqliteError::SqliteFailure(error, _) => {
-            match error.code {
+    // Every arm keeps the stable code/message contract; the raw SQLite
+    // failure rides along as the machine-preserved cause so a constraint
+    // violation or schema mismatch is diagnosable from the surfaced error.
+    let error =
+        match &source {
+            RusqliteError::SqliteFailure(error, _) => match error.code {
                 rusqlite::ffi::ErrorCode::ConstraintViolation => AtmError::validation(message),
                 rusqlite::ffi::ErrorCode::DatabaseBusy
                 | rusqlite::ffi::ErrorCode::DatabaseLocked => match target {
@@ -1045,14 +883,14 @@ pub(crate) fn sqlite_error(
                     AtmError::mailbox_write(message)
                 }
                 _ => AtmError::mailbox_write(message),
-            }
-        }
-        _ => AtmError::mailbox_write(message),
-    }
+            },
+            _ => AtmError::mailbox_write(message),
+        };
+    error.with_cause(source)
 }
 
-fn json_error(message: impl Into<String>, _source: serde_json::Error) -> AtmError {
-    AtmError::validation(message)
+fn json_error(message: impl Into<String>, source: serde_json::Error) -> AtmError {
+    AtmError::validation(message).with_cause(source)
 }
 
 pub(crate) fn serialize_json<T: serde::Serialize>(
@@ -1083,6 +921,55 @@ pub(crate) fn sqlite_thread_mode(mode: Option<ThreadMode>) -> Option<&'static st
 mod tests {
 
     use super::*;
+    use crate::observability::NullSqliteObservability;
+    use crate::shared_db_reader_lanes::open_read_connection_for_target;
+    use atm_storage::AtmErrorCode;
+
+    #[test]
+    fn sqlite_constraint_violations_keep_the_sqlite_cause() {
+        let database = tempfile::NamedTempFile::new().expect("temporary database");
+        let target = SharedDbTarget::Path(database.path().to_path_buf());
+        let writer = open_connection_for_target(&target).expect("writer connection");
+        writer
+            .execute_batch("CREATE TABLE probe (value TEXT NOT NULL);")
+            .expect("create fixture table");
+        let failure = writer
+            .execute("INSERT INTO probe (value) VALUES (NULL)", [])
+            .expect_err("NOT NULL constraint must fail");
+        let error = sqlite_error(&target, "failed to persist probe", failure);
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().starts_with("failed to persist probe"));
+        assert_eq!(
+            error.cause(),
+            Some("NOT NULL constraint failed: probe.value"),
+            "the raw SQLite failure must survive as the machine-preserved cause"
+        );
+    }
+
+    #[test]
+    fn json_errors_keep_the_serde_cause() {
+        let failure = serde_json::from_str::<serde_json::Value>("{").expect_err("invalid json");
+        let error = json_error("failed to decode probe", failure);
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.cause().is_some_and(|cause| cause.contains("EOF")));
+    }
+
+    #[test]
+    fn defensive_reader_connection_rejects_writes() {
+        let database = tempfile::NamedTempFile::new().expect("temporary database");
+        let target = SharedDbTarget::Path(database.path().to_path_buf());
+        let writer = open_connection_for_target(&target).expect("writer connection");
+        writer
+            .execute_batch("CREATE TABLE read_only_probe (value INTEGER);")
+            .expect("create fixture table");
+        let reader = open_read_connection_for_target(&target).expect("defensive reader");
+        assert!(
+            reader
+                .execute("INSERT INTO read_only_probe (value) VALUES (1)", [])
+                .is_err(),
+            "reader lanes must reject writes through query_only/READ_ONLY"
+        );
+    }
 
     #[test]
     fn ensure_schema_drops_the_retired_peer_sync_policy_table() {
@@ -1315,59 +1202,6 @@ mod tests {
                     .expect("reader should succeed");
             }
         });
-    }
-
-    #[test]
-    fn ensure_team_roster_harness_values_migrates_legacy_check_constraint() {
-        let target = SharedDbTarget::InMemory {
-            uri: format!(
-                "file:atm-storage-rusqlite-roster-harness-test-{}?mode=memory&cache=shared",
-                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
-            ),
-        };
-        let mut connection = open_connection_for_target(&target).expect("open connection");
-        connection
-            .execute_batch(
-                "CREATE TABLE team_roster (
-                    team_name TEXT NOT NULL,
-                    agent_name TEXT NOT NULL,
-                    member_kind TEXT NOT NULL CHECK(member_kind IN ('permanent', 'ephemeral')),
-                    harness TEXT NOT NULL CHECK(harness IN ('claude-code', 'codex-cli', 'gemini-cli', 'opencode')),
-                    agent_type TEXT NOT NULL DEFAULT '',
-                    model TEXT NOT NULL DEFAULT '',
-                    metadata_json TEXT NOT NULL DEFAULT '{}',
-                    source TEXT,
-                    recipient_pane_id TEXT NULL,
-                    updated_at TEXT NOT NULL,
-                    PRIMARY KEY (team_name, agent_name)
-                );
-                CREATE INDEX idx_team_roster_team_name ON team_roster(team_name);
-                INSERT INTO team_roster(
-                    team_name, agent_name, member_kind, harness, updated_at
-                ) VALUES ('hermes', 'skillrx', 'permanent', 'claude-code', 'now');",
-            )
-            .expect("create legacy roster table");
-
-        ensure_team_roster_harness_values(&mut connection, &target).expect("migrate roster");
-        connection
-            .execute(
-                "INSERT INTO team_roster(
-                    team_name, agent_name, member_kind, harness, updated_at
-                ) VALUES ('hermes', 'python-worker', 'permanent', 'python-graft', 'now');",
-                [],
-            )
-            .expect("new harness should satisfy migrated check constraint");
-        let harnesses: Vec<String> = connection
-            .prepare(
-                "SELECT harness FROM team_roster
-                 WHERE team_name = 'hermes' ORDER BY agent_name;",
-            )
-            .expect("prepare harness query")
-            .query_map([], |row| row.get(0))
-            .expect("query harnesses")
-            .collect::<Result<_, _>>()
-            .expect("decode harnesses");
-        assert_eq!(harnesses, vec!["python-graft", "claude-code"]);
     }
 
     #[test]

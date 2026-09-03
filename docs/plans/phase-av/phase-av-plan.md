@@ -9,7 +9,7 @@ sprint_branches: per-sprint, declared in each sprint doc's frontmatter;
   held clean off develop, to be adopted as the bottom of the stack).
   Current state: only fix/mailbox-read-blocking-serialization exists;
   integrate/phase-av and the four successor branches are not yet created.
-status: hardening-in-progress
+status: complete
 owner: fenix (plan author); arch-ctm (investigations I-1..I-5, implementation on approval)
 base_revision: 938767c72 (develop)
 integration_branch: integrate/phase-av
@@ -152,6 +152,13 @@ Additional phase mandates (Rand, 2026-08-30/31):
    queries execute in a massively parallel manner, with ratcheted floors
    (§ AV.4).
 
+9. **Phase-level live verification order (Rand, 2026-08-31):** complete
+   all sprint work first; then run the smoke + benchmark campaigns on
+   the isolated `m5-atmbench` account against the integrated tree. This
+   supersedes the AV.1b sprint-level live-daemon proof (an intermediate
+   sprint branch must not drive a live daemon). A daemon swap on the
+   development host is discussed only after the atmbench results are in.
+
 ## 3. Sprints
 
 Sprint docs are the authoritative source for deliverables, acceptance
@@ -223,6 +230,18 @@ which replaces manual merge-forward.
   `gh stack submit --auto` once a branch receives its first commit
   (GitHub refuses a zero-diff PR). AV.1a (arch-ctm) and AV.2
   (Cipher-311d) dispatched 2026-08-31 after Rand merged the plan.
+
+  AV.0 completion proof (`gh stack view --json`, captured 2026-08-31):
+
+  ```json
+  {"trunk":"integrate/phase-av","branches":[
+    {"name":"fix/mailbox-read-blocking-serialization","pr":1112},
+    {"name":"feature/av1b-read-handler-cutover","pr":1115},
+    {"name":"docs/av2-read-concurrency-requirements","pr":1110},
+    {"name":"feature/av3-read-concurrency-gates","pr":1113},
+    {"name":"feature/av4-read-query-benchmarks","pr":1114}
+  ]}
+  ```
 - Adjacent-work sequencing: the #1030 WPERF plan touches the same writer
   path — coordinate worktrees/merge order with team-lead.
 - Benchmark-infra freeze: a standing directive freezes new
@@ -235,7 +254,7 @@ which replaces manual merge-forward.
   `BlockingCoreBridge`) remains with exactly **eight** non-read call
   sites in `crates/atm-http-runtime/src/storage_and_nudge_router.rs`
   (12 at HEAD, 4 migrated by AV.1b): the deferred-queue marker inside
-  `send` (`retry_deferred_marker`, intentionally synchronous by
+  `commit_write` (`retry_deferred_marker`, intentionally synchronous by
   contract), `clear_messages` (mutation via synchronous
   `clear_mail_with_runtime`; no writer-ingress op exists yet),
   `heartbeat`, `queue_get_next` (synchronous roster check

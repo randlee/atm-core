@@ -160,7 +160,7 @@ def make_wyvern_stub(directory: Path, case: str) -> Path:
         # subprocess's own timeout kills this before completion.
         version_body = None
     else:
-        version_body = "wyvern 0.5.0"
+        version_body = "wyvern 0.6.0"
     # A real Wyvern wizard's terminal stdout is the full WizardResult
     # envelope (`{"button":"finish","data":<PickerOutput>,"stack":[...]}`),
     # not a bare PickerOutput object -- this stub mirrors that exact shape

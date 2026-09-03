@@ -1,0 +1,85 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-I3>
+  a triage:Finding ;
+  triage:findingId "AV3-I3" ;
+  triage:title "D2b behavior-gate scaffold is a textual substring scan evadable by a decoy StateHandoffSupervisor string" ;
+  triage:description "req-qa N1 (QA-r3): the D2b scaffold test in crates/atm-architecture/tests/boundary_enforcement.rs (region ~3677-3717 at 5c9ed27b6) remains a textual substring scan; a decoy `StateHandoffSupervisor` string in receive_messages plus a renamed writer-ingress alias would pass the gate. Acceptable for the pre-AV.1b scaffold bar per quality-mgr; must be resolved before A2b is declared satisfied in AV.3 round 2 (must_follow AV.1b). Deferred to AV.3 round 2 / A2b — record as open with dispatch_ready=false so it is counted, not hidden." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-31T18:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:resolutionNote "QA-r6 @ ddc723a01: D2b textual-substring evasion eliminated — AST-based syn::Ident scanners with allowlist derived from trait signatures (boundary_enforcement.rs:3433-3720), decoy-immunity test present, plus behavioral test read_family_uses_only_the_supervised_recording_writer_handoff; rust-qa MP2 mutation probe confirmed the behavior gate fails on a supervised-handoff bypass." ;
+  triage:triagedAt "2026-08-31T07:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T06:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-I3/B4-3688> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-I3/B5-3688> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-I3/B4-3688>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3688 ;
+  triage:snippet "let path = if handler == 'receive_messages' && body.contains('StateHandoffSupervisor')" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-B4> .
+
+<urn:atm:triage:occurrence/AV3-I3/B5-3688>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3688 ;
+  triage:snippet "let path = if handler == 'receive_messages' && body.contains('StateHandoffSupervisor')" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3-B5> .
+
+<urn:atm:triage:worktree/AV3-B1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV3-B2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV3-B3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV3-B4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV3-B5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:orderIndex 5 .

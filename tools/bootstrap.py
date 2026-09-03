@@ -462,8 +462,13 @@ def sc_compose_matches(manifest: BootstrapManifest) -> bool:
 WYVERN_RELEASE_REPOSITORY = "randlee/wyvern"
 
 
-def wyvern_asset_name(target: str) -> str:
-    """Return the pinned Wyvern release asset for one supported target."""
+def wyvern_asset_name(target: str, version: str) -> str:
+    """Return the exact prebuilt Wyvern asset for one pinned target/version."""
+    # v0.5.0 used platform aliases; v0.6.0 and later publish target-triple
+    # names, which must be selected explicitly so a pin never downloads a
+    # guessed or source-build fallback.
+    if version != "0.5.0":
+        return f"wyvern_{version}_{target}{'.zip' if 'windows' in target else '.tar.gz'}"
     if target == "aarch64-apple-darwin":
         return "wyvern-macos-aarch64.tar.gz"
     if target == "x86_64-apple-darwin":
@@ -482,13 +487,13 @@ def wyvern_release_url(version: str, asset: str) -> str:
 
 def wyvern_install_command(version: str, target: str) -> tuple[str, str]:
     """Describe the pinned Wyvern release install for dry-run/tests."""
-    asset = wyvern_asset_name(target)
+    asset = wyvern_asset_name(target, version)
     return asset, wyvern_release_url(version, asset)
 
 
 def _wyvern_release_checksum(manifest: BootstrapManifest, target: str) -> str:
     """Return the manifest checksum for one pinned Wyvern release asset."""
-    asset = wyvern_asset_name(target)
+    asset = wyvern_asset_name(target, manifest.wyvern)
     checksums = dict(manifest.wyvern_checksums)
     try:
         return checksums[asset]

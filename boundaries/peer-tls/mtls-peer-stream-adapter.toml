@@ -22,7 +22,7 @@ io_forbidden = ["http_runtime", "message_delivery", "message_persistence", "rece
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap"]
-allowed_dependencies = ["atm-storage", "rcgen", "rustls", "tempfile", "tokio", "tokio-rustls"]
+allowed_dependencies = ["atm-storage", "rcgen", "rustls", "tempfile", "tokio", "tokio-rustls", "tracing"]
 forbidden_edges = ["atm-http-runtime -> peer-tls", "atm -> peer-tls", "atm-graft -> peer-tls", "atm-daemon -> peer-tls"]
 
 [references]

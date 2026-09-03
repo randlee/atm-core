@@ -1,0 +1,72 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-B4>
+  a triage:Finding ;
+  triage:findingId "AV3-B4" ;
+  triage:title "Composition-gate allowlist narrower than AV.3 doc contract and sweeps cfg(test) code; fails at merge HEAD 8905f1046" ;
+  triage:description "Test av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives in crates/atm-architecture/tests/boundary_enforcement.rs activates on the AV.1a merge (8905f1046) and FAILS (85/86). Its literal allowlist [AsyncMailboxReader, StateHandoffSupervisor, ReadDeadline, AtmError] is narrower than AV.3's own sprint-doc composition contract (D2 sibling, doc lines 99-108: allowlists the pure atm-core::read::selection module and the search/doctor lane handles) and narrower than the AV.1a D6 contract (RequestDeadline->ReadDeadline translation must live at this port). It rejects selection types (MailboxSelectionRequest/Result/Candidate), RequestDeadline, ordinary domain data types (MailboxScope, Message, MessageKey, MessageQuery), and the impl's own type name StorageAsyncMailboxRuntime. It also string-splits on the impl-block and scans everything after it including #[cfg(test)] code (that is how AsyncMessageStore/MessageStore test fakes get swept in), unlike the file's other syn-based AST gates. quality-mgr ruled (msg 01M1B7HY8XC682A54X1APF9E8X): AV.1a's implementation is on-contract; the gate is wrong; AV.3-owned. Required fix: extend the allowlist to the doc contract (selection module types, domain data types, RequestDeadline, self type) or better derive the impl region via the existing syn machinery excluding cfg(test); keep the deny list as-is. Carry-note for AV.1b QA (not this finding): retained writer handle Arc<dyn AsyncMessageStore> should narrow to StateHandoffSupervisor when it lands." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T06:35:48Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T23:59:59Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T06:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-B4/AV3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-B4/AV3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3552 ;
+  triage:snippet "fn av3_async_mailbox_runtime_composition_rejects_read_serialization_primitives()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3/8905f1046> .
+
+<urn:atm:triage:worktree/FIX1/16421b24d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV1B/043aba984>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV2/51de5f554>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV3/8905f1046>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV4/a36bff376>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:orderIndex 5 .

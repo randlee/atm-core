@@ -8,7 +8,8 @@ use std::{fmt, sync::Arc, time::Duration};
 
 use atm_storage::{
     AtmError, HostName, PeerConfigStore, PinnedClientVerifier, TlsIdentity, TrustedPeer,
-    certificate_fingerprint, certificate_valid_now, install_tls_provider, normalize_fingerprint,
+    TrustedPeerCatalogAudit, certificate_fingerprint, certificate_valid_now, install_tls_provider,
+    normalize_fingerprint,
 };
 use rustls::{
     CertificateError, ClientConfig, DigitallySignedStruct, Error, ServerConfig, SignatureScheme,
@@ -23,6 +24,32 @@ use tokio::{
 use tokio_rustls::{TlsAcceptor, TlsConnector, TlsStream};
 
 const DEFAULT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Name of the explicit, testing/benchmarking-only opt-out that downgrades a
+/// legacy literal-IP enabled trusted-peer row from a fail-closed startup
+/// error to a skipped-with-warning row. Exact value `"1"` selects
+/// [`LegacyLiteralIpPolicy::SkipWithWarning`]; any other value, or the
+/// variable being unset, keeps the default
+/// [`LegacyLiteralIpPolicy::FailClosed`]. This must never be treated as a
+/// wire-mode selector: it narrows only which trusted-peer rows are admitted
+/// into an already-selected mTLS configuration.
+pub const LEGACY_LITERAL_IP_SKIP_ENV_VAR: &str = "ATM_PEER_TRUST_SKIP_LEGACY_LITERAL_IP";
+
+/// Startup policy for legacy literal-IP trusted-peer rows discovered while
+/// composing an mTLS adapter. The default is fail-closed: a live literal-IP
+/// authority blocks daemon startup with exact migration guidance rather than
+/// silently trusting or silently dropping it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LegacyLiteralIpPolicy {
+    /// Refuse to start when any enabled trusted peer uses a literal-IP
+    /// authority. This is the safe default for every normal daemon launch.
+    #[default]
+    FailClosed,
+    /// Skip enabled literal-IP rows (emitting a `tracing::warn!` naming each
+    /// host and this opt-out) instead of failing startup. Scoped to
+    /// testing/benchmarking; never enabled implicitly.
+    SkipWithWarning,
+}
 
 /// Concrete mTLS facade assembled only after the daemon has selected mTLS.
 ///
@@ -49,8 +76,28 @@ impl fmt::Debug for MtlsPeerStreamAdapter {
 }
 
 impl MtlsPeerStreamAdapter {
-    /// Snapshot valid mTLS configuration from the storage-neutral control plane.
+    /// Snapshot valid mTLS configuration from the storage-neutral control
+    /// plane, failing closed on any legacy literal-IP enabled trusted peer.
+    /// This is the convenience default used by every normal daemon launch;
+    /// see [`Self::from_peer_config_with_policy`] for the explicit,
+    /// testing/benchmarking-only skip opt-out.
     pub fn from_peer_config(store: &(dyn PeerConfigStore + Send + Sync)) -> Result<Self, AtmError> {
+        Self::from_peer_config_with_policy(store, LegacyLiteralIpPolicy::FailClosed)
+    }
+
+    /// Snapshot valid mTLS configuration from the storage-neutral control
+    /// plane under an explicit legacy literal-IP admission `policy`.
+    ///
+    /// # Errors
+    /// Returns [`AtmError`] when the daemon has no enabled peer interface, no
+    /// valid local identity, or (under [`LegacyLiteralIpPolicy::FailClosed`])
+    /// any enabled trusted peer uses a literal-IP authority. The error names
+    /// every offending host and carries the exact `atm peer trust migrate`
+    /// or `atm peer trust revoke` remediation commands.
+    pub fn from_peer_config_with_policy(
+        store: &(dyn PeerConfigStore + Send + Sync),
+        policy: LegacyLiteralIpPolicy,
+    ) -> Result<Self, AtmError> {
         let has_enabled_interface = store
             .list_interfaces()?
             .into_iter()
@@ -67,7 +114,7 @@ impl MtlsPeerStreamAdapter {
             AtmError::certificate_operation("configured mTLS identity is invalid")
                 .with_cause(error.detail())
         })?;
-        let trusted_peers = store.list_trusted_peers()?;
+        let trusted_peers = Self::admit_trusted_peers(store.list_trusted_peers()?, policy)?;
         install_tls_provider();
         let client_configs = trusted_peers
             .iter()
@@ -90,6 +137,32 @@ impl MtlsPeerStreamAdapter {
             server_config,
             handshake_timeout: DEFAULT_HANDSHAKE_TIMEOUT,
         })
+    }
+
+    /// Applies the legacy literal-IP admission `policy` to `trusted_peers`,
+    /// warning about (but never blocking on) disabled legacy rows and either
+    /// failing closed on, or skipping with a warning, enabled legacy rows.
+    /// [`PinnedServerVerifier::new`] retains its own durable-hostname check
+    /// as a defence-in-depth backstop after this admission step.
+    fn admit_trusted_peers(
+        trusted_peers: Vec<TrustedPeer>,
+        policy: LegacyLiteralIpPolicy,
+    ) -> Result<Vec<TrustedPeer>, AtmError> {
+        let audit = TrustedPeerCatalogAudit::from_peers(&trusted_peers);
+        warn_disabled_legacy_literal_ip_rows(&audit);
+        if audit.legacy_literal_enabled_hosts().is_empty() {
+            return Ok(trusted_peers);
+        }
+        match policy {
+            LegacyLiteralIpPolicy::FailClosed => Err(legacy_literal_ip_fail_closed_error(&audit)),
+            LegacyLiteralIpPolicy::SkipWithWarning => {
+                warn_skipped_legacy_literal_ip_rows(&audit);
+                Ok(trusted_peers
+                    .into_iter()
+                    .filter(|peer| peer.host.is_durable_hostname() || !peer.enabled)
+                    .collect())
+            }
+        }
     }
 
     /// Narrow test/operations hook for a bounded handshake deadline.
@@ -198,6 +271,63 @@ impl MtlsPeerStreamAdapter {
                 .with_cause(source)
             })
     }
+}
+
+/// Builds the fail-closed startup error for one or more enabled legacy
+/// literal-IP trusted-peer rows. The message names every offending host and
+/// the cause carries the exact migrate/revoke remediation commands, so an
+/// operator never needs a manual SQLite edit to recover.
+fn legacy_literal_ip_fail_closed_error(audit: &TrustedPeerCatalogAudit) -> AtmError {
+    let hosts = audit
+        .legacy_literal_enabled_hosts()
+        .iter()
+        .map(HostName::to_string)
+        .collect::<Vec<_>>()
+        .join(", ");
+    AtmError::peer_config_validation(format!(
+        "mTLS peer authority must use a durable hostname rather than a literal IP; \
+         enabled legacy literal-IP trusted peer(s) block startup: {hosts}. Migrate or \
+         revoke each row (see cause), or set {LEGACY_LITERAL_IP_SKIP_ENV_VAR}=1 to skip \
+         them for testing/benchmarking only."
+    ))
+    .with_cause(audit.remediation_text())
+}
+
+/// Emits one `tracing::warn!` naming every disabled legacy literal-IP row.
+/// Disabled rows are historical only and must never block startup, but an
+/// operator should still be told they exist and how to prune them.
+fn warn_disabled_legacy_literal_ip_rows(audit: &TrustedPeerCatalogAudit) {
+    if audit.legacy_literal_disabled_hosts().is_empty() {
+        return;
+    }
+    let hosts = audit
+        .legacy_literal_disabled_hosts()
+        .iter()
+        .map(HostName::to_string)
+        .collect::<Vec<_>>();
+    tracing::warn!(
+        hosts = ?hosts,
+        remediation = %audit.remediation_text(),
+        "disabled legacy literal-IP trusted peer row(s) present; they do not block mTLS \
+         startup but should be pruned"
+    );
+}
+
+/// Emits one `tracing::warn!` naming every enabled legacy literal-IP row
+/// skipped under the explicit testing/benchmarking opt-out.
+fn warn_skipped_legacy_literal_ip_rows(audit: &TrustedPeerCatalogAudit) {
+    let hosts = audit
+        .legacy_literal_enabled_hosts()
+        .iter()
+        .map(HostName::to_string)
+        .collect::<Vec<_>>();
+    tracing::warn!(
+        hosts = ?hosts,
+        env_var = LEGACY_LITERAL_IP_SKIP_ENV_VAR,
+        remediation = %audit.remediation_text(),
+        "skipping enabled legacy literal-IP trusted peer row(s) for outbound/inbound mTLS \
+         due to explicit testing/benchmarking opt-out; these rows are not authenticated"
+    );
 }
 
 fn outbound_handshake_error(source: std::io::Error) -> AtmError {
@@ -398,8 +528,12 @@ mod tests {
     }
 
     fn peer(certificate: &LocalCertificate, enabled: bool) -> TrustedPeer {
+        peer_with_host(certificate, "localhost", enabled)
+    }
+
+    fn peer_with_host(certificate: &LocalCertificate, host: &str, enabled: bool) -> TrustedPeer {
         TrustedPeer {
-            host: "localhost".parse().expect("host"),
+            host: host.parse().expect("host"),
             fingerprint: certificate.fingerprint.clone(),
             enabled,
             https_port: NonZeroU16::new(443).expect("port"),
@@ -729,5 +863,77 @@ mod tests {
         };
         assert_eq!(error.code().as_str(), "ATM_TRANSPORT_PROTOCOL_FAILED");
         raw_client.await.expect("raw client");
+    }
+
+    #[test]
+    fn mixed_catalog_enabled_literal_ip_fails_closed_and_names_the_host() {
+        let directory = tempfile::tempdir().expect("directory");
+        let local = identity(&directory, "local");
+        let durable = identity(&directory, "durable-peer");
+        let legacy = identity(&directory, "legacy-peer");
+        let error = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
+            interfaces: vec![interface()],
+            certificate: Some(local),
+            peers: vec![
+                peer_with_host(&durable, "rand-m5.local", true),
+                peer_with_host(&legacy, "192.168.128.29", true),
+            ],
+        })
+        .expect_err("enabled legacy literal-IP peer must fail closed");
+        assert_eq!(error.code().as_str(), "ATM_PEER_CONFIG_VALIDATION_FAILED");
+        assert!(error.message().contains("192.168.128.29"));
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("192.168.128.29"))
+        );
+    }
+
+    #[test]
+    fn mixed_catalog_disabled_literal_ip_never_blocks_a_valid_hostname_configuration() {
+        let directory = tempfile::tempdir().expect("directory");
+        let local = identity(&directory, "local");
+        let durable = identity(&directory, "durable-peer");
+        let legacy = identity(&directory, "legacy-peer");
+        let adapter = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
+            interfaces: vec![interface()],
+            certificate: Some(local),
+            peers: vec![
+                peer_with_host(&durable, "rand-m5.local", true),
+                peer_with_host(&legacy, "192.168.128.29", false),
+            ],
+        })
+        .expect("disabled legacy literal-IP row must not block startup");
+        assert_eq!(adapter.client_configs.len(), 1);
+        let hostname: HostName = "rand-m5.local".parse().expect("host");
+        assert!(adapter.client_config_for(&hostname).is_ok());
+    }
+
+    #[test]
+    fn skip_with_warning_policy_admits_the_hostname_peer_without_trusting_the_ip() {
+        let directory = tempfile::tempdir().expect("directory");
+        let local = identity(&directory, "local");
+        let durable = identity(&directory, "durable-peer");
+        let legacy = identity(&directory, "legacy-peer");
+        let adapter = MtlsPeerStreamAdapter::from_peer_config_with_policy(
+            &TestStore {
+                interfaces: vec![interface()],
+                certificate: Some(local),
+                peers: vec![
+                    peer_with_host(&durable, "rand-m5.local", true),
+                    peer_with_host(&legacy, "192.168.128.29", true),
+                ],
+            },
+            LegacyLiteralIpPolicy::SkipWithWarning,
+        )
+        .expect("skip policy must not fail closed");
+        assert_eq!(adapter.client_configs.len(), 1);
+        let hostname: HostName = "rand-m5.local".parse().expect("host");
+        assert!(adapter.client_config_for(&hostname).is_ok());
+        let literal_ip: HostName = "192.168.128.29".parse().expect("host");
+        let error = adapter
+            .client_config_for(&literal_ip)
+            .expect_err("skipped literal-IP row must not be an authority");
+        assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
     }
 }

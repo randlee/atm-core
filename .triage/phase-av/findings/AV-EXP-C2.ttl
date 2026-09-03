@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-EXP-C2>
+  a triage:Finding ;
+  triage:findingId "AV-EXP-C2" ;
+  triage:title "Fail-open after supervisor death, contra ADR-059 D2 fail-closed" ;
+  triage:description "After handoff supervisor death, reads keep returning Ok accepted=false indefinitely; RuntimeHealth has no handoff field; only surface is a doctor Warning; rejected_buffer_full never surfaced while Ready. ADR-059 D2 requires fail-closed on restart exhaustion or permanent writer failure; implementation is fail-open with inadequate observability." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AV-EXP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C2/C2-try-push> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C2/C2-handoff-returns-false> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C2/C2-no-health-field> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-EXP-C2/C2-try-push>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 146 ;
+  triage:snippet "try_push rejects with Err after STATE_UNAVAILABLE" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40f18affb8243abe7c6ae0824451ce963" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40f> .
+
+<urn:atm:triage:occurrence/AV-EXP-C2/C2-handoff-returns-false>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 711 ;
+  triage:snippet "try_handoff_selected logs warn and returns Ok(false) indefinitely" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40f18affb8243abe7c6ae0824451ce963" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40f> .
+
+<urn:atm:triage:occurrence/AV-EXP-C2/C2-no-health-field>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "RuntimeHealth struct lacks mailbox-handoff supervision field" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40f18affb8243abe7c6ae0824451ce963" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40f> .
+
+<urn:atm:triage:worktree/integrate-phase-av/846c58b40f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40f18affb8243abe7c6ae0824451ce963" ;
+  triage:orderIndex 0 .

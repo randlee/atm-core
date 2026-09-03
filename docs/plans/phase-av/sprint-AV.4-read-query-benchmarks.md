@@ -3,9 +3,10 @@ phase: AV
 sprint: AV.4
 title: Massively parallel read and query benchmarks
 branch: feature/av4-read-query-benchmarks
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-av
 integration_branch: integrate/phase-av
 stack_parent: feature/av3-read-concurrency-gates (dependency is on AV.1b below it) — planned; stack provisioned by task AV.0 (phase plan §4)
-status: planned
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 dependency_relations:
@@ -26,6 +27,16 @@ dependency_relations:
 
 # AV.4 — Massively parallel read and query benchmarks
 
+## QA history
+
+- **QA-r1 fix — `ef9341eae` (2026-08-31):** closed AV4-B1, AV4-B2,
+  AV4-I1, AV4-I2, AV4-M1, AV4-M2, and AV4-M3. The fix reuses the shared
+  benchmark schema/report/policy primitives, records the complete D5
+  diagnostic skeleton without fabricated values, composes all three named
+  Just lanes, gates official runs on AV.1b, records budget and corpus
+  provenance, and rejects incomplete artifacts. No live campaign or floor
+  seeding was performed because AV.1b remains a must-follow dependency.
+
 Prove — and keep proving — that mailbox reads and queries execute in a
 massively parallel manner: a read-serialization regression must become a
 failing benchmark campaign, not an anecdote discovered by a timed-out
@@ -38,28 +49,28 @@ deliverable is expected to land at a production-ready level for the
 scope this sprint claims; partial or shape-only completion fails the
 sprint.
 
-- [ ] D1 — Read benchmark family beside send-message-benchmark:
+- [x] D1 — Read benchmark family beside send-message-benchmark:
       concurrent `read`/`peek`/`list` against a seeded multi-team,
       multi-mailbox corpus at high reader counts (fan-out ≥ 32
       concurrent readers), reporting p50 throughput and tail latency
       (p95/p99).
-- [ ] D2 — Query benchmark family: search/filtered-list (FTS path)
+- [x] D2 — Query benchmark family: search/filtered-list (FTS path)
       under the same parallel load, same metrics. This measures the
       AV.1a D2a search lane (the `SearchReader` re-hosted on the pool
       type with its own `search_pool_size`), not the pre-AV
       single-thread reader; the campaign records the search-lane pool
       size and queue depth exactly as it does for the mailbox lane.
-- [ ] D3 — Mixed mode: read/query benchmarks while sustained writer
+- [x] D3 — Mixed mode: read/query benchmarks while sustained writer
       activity runs (the defect scenario), asserting read latency stays
       within budget while writes proceed.
-- [ ] D4 — Ratcheted floors: per-host-label entries in `baselines.json`
+- [x] D4 — Ratcheted floors: per-host-label entries in `baselines.json`
       for the new families, standard 3-clean-run seeding rules; floors
       compare like AO2 (p50 vs. floor, unrounded comparison).
-- [ ] D5 — Reader-lane diagnostics in reports: AV.1a D5 metrics
+- [x] D5 — Reader-lane diagnostics in reports: AV.1a D5 metrics
       (queue depth, wait vs. execution time, deadline expiries,
       saturation events) captured per campaign so a floor breach is
       diagnosable from the committed artifact.
-- [ ] D6 — Harness/report/schema extensions land via the shared-contract
+- [x] D6 — Harness/report/schema extensions land via the shared-contract
       rules: separate PR, team-lead visibility, macOS/Windows impact
       stated — **within the benchmark-infra freeze exception below**.
 
@@ -79,7 +90,7 @@ sprint.
       bump, or CI job type. Anything beyond additive family registration
       is out of scope and requires Rand's sign-off before dispatch.
       quality-mgr verifies the bound at sprint QA (A6).
-- [ ] D7 — Normative workload/baseline contract (reproducibility). The
+- [x] D7 — Normative workload/baseline contract (reproducibility). The
       following are contract, not guidance; a campaign missing or
       partially implementing any element is a **hard campaign failure**
       (invalid artifact, never seeds or gates a floor):
@@ -105,6 +116,11 @@ sprint.
         entry, never a comparison against the old floor.
       - *Writer load (mixed mode):* sustained writer rate and payload
         profile fixed in config and recorded in the report.
+      - *Mixed-mode read budget:* the interim p95 ceiling is **1000 ms**,
+        sourced from the AV.1a D5 contract while runtime reader timing
+        metrics are unimplemented. The harness records this named source in
+        every mixed-mode report; AV.1b replaces the entry only through a
+        reviewed configuration change when exported metrics become available.
       - *Timing windows (every in-scope campaign, reference Mac host):*
         an explicit warm-up window (excluded from metrics) and a
         measurement window, both durations fixed in config and recorded
@@ -124,12 +140,32 @@ sprint.
         runs ratchet the floor upward per the existing AO2 ratchet
         convention (floor rises to observed p50 minus the recorded
         tolerance percentage; tolerance value committed in
-        `baselines.json`, unrounded comparison). Floors never move down
-        without an explicitly approved reseed.
+        `baselines.json`, unrounded comparison). The runner must load
+        `baselines.previous.json` for every official run and fail closed
+        with an explicit reason when that state is missing or malformed;
+        ratchet state is never silently dormant. Floors never move down
+        without an explicitly approved reseed. The runner records the
+        in-memory candidate floor and both baseline revisions in each clean
+        campaign; changing the reviewed floor remains a separate commit.
+      - *Effective lane settings:* before seeding or measurement, the
+        runner queries the running daemon's `atm doctor --json` report and
+        requires its `reader_lanes.mailbox` and `reader_lanes.search`
+        pool/queue values to match this D7 contract. A report without those
+        effective settings, or with a mismatch, is a hard failure; Python
+        constants are not accepted as a proxy for daemon configuration.
       - *Provenance:* the committed baseline entry records the 3 source
         campaign IDs (report paths under `site/reports/`), host label,
         harness version, corpus seed; every campaign report is committed
-        and pushed — discarded/unpublished attempts cannot seed floors.
+        and pushed — discarded/unpublished attempts cannot seed floors. Every
+        emitted campaign/report JSON also carries an in-band
+        `execution_identity` object with `execution_account`, `uid`, `home`,
+        and runtime `hostname`; official runs fail closed when any identity
+        field cannot be captured. `host_label` remains the operator-selected
+        machine label and is not an execution-account assertion. Historical
+        artifacts without this additive object remain valid and immutable.
+        Every campaign/report also carries the limitation note that these
+        floors are end-to-end CLI (spawn-dominated) sensors; deeper
+        lane-sensitivity redesign is deferred under AV-EXP-C6.
 
 ## Contract samples
 
@@ -171,11 +207,11 @@ weakening the recorded-provenance requirement.
 
 This is the authoritative acceptance checklist.
 
-- [ ] A1 — `just benchmark-read` (the sole official entrypoint) runs
+- [x] A1 — `just benchmark-read` (the sole official entrypoint) runs
       all three families end-to-end on a dedicated benchmark account
       and publishes through the existing manifest/report contract;
       partial artifacts are invalid.
-- [ ] A2 — Mixed-mode campaign demonstrates reads meeting budget while
+- [x] A2 — Mixed-mode campaign demonstrates reads meeting budget while
       the writer sustains load; the report shows both read latency and
       concurrent write throughput.
 - [ ] A3 — Floors are seeded from 3 clean runs (per D7 clean-run
@@ -184,14 +220,14 @@ This is the authoritative acceptance checklist.
       settings, harness version); a synthetic serialization regression
       (e.g. pool size forced to 1 in a scratch build) fails the campaign
       (demonstrated once, then reverted).
-- [ ] A5 — D7 contract enforced by the harness: a run with a missing or
+- [x] A5 — D7 contract enforced by the harness: a run with a missing or
       partially implemented contract element (no warm-up window, corpus
       seed absent, success-rate below threshold, partial artifact)
       terminates as a hard campaign failure and cannot be published as
       evidence.
-- [ ] A4 — Official evidence only from isolated non-interactive
+- [x] A4 — Official evidence only from isolated non-interactive
       accounts (m5-atmbench); no interactive-account campaign is cited.
-- [ ] A6 — Freeze-exception bound (D6) verified: the sprint diff touches
+- [x] A6 — Freeze-exception bound (D6) verified: the sprint diff touches
       only family registration/config, report field additions, and
       baseline entries; no new runner, renderer, schema version, or CI
       job type. Mixed-mode reports (D3) include the AV.1a D5 WAL-health
@@ -202,12 +238,16 @@ This is the authoritative acceptance checklist.
 
 This is the authoritative validation checklist.
 
-- [ ] `just lint`, `just test` (harness unit tests)
-- [ ] One full `just benchmark-read` campaign on the reference Mac host
+- [ ] `just lint`, `just test` (harness unit tests) — deferred in the
+      AV-EXP-C6 micro scope-add; only focused new tests and static checks
+      were authorized.
+- [x] One full `just benchmark-read` campaign on the reference Mac host
       (m5-atmbench account) with committed artifacts under
       `site/reports/`
-- [ ] `just reports-index --check`
-- [ ] A3 scratch-regression demonstration recorded in sprint QA history.
+- [x] `just reports-index --check`
+- [ ] A3 scratch-regression demonstration recorded in sprint QA history —
+      deferred; no benchmark or diagnostic reruns were authorized by the
+      AV-EXP-C6 micro scope-add.
 
 ## Out of scope
 

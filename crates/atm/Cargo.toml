@@ -34,6 +34,7 @@ required-features = ["cli-surface-dump"]
 
 [dependencies]
 atm-core.workspace = true
+atm-observability.workspace = true
 atm-daemon-bootstrap.workspace = true
 atm-daemon-client.workspace = true
 atm-http-runtime.workspace = true

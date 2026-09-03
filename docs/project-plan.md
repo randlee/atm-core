@@ -1560,7 +1560,7 @@ The authoritative plan is
 critical review round 1 folded in); phase-au sprint docs are being cut from
 it under `docs/plans/phase-au/` on branch `plan/boundary-regression`.
 
-## 54. Phase AV — Async Mailbox-Read Cutover Completion [PLANNED — HARDENING]
+## 54. Phase AV — Async Mailbox-Read Cutover Completion [COMPLETE — INTEGRATION PR #1120]
 
 Phase AV fixes the mailbox-read serialization regression: every core job —
 including all reads — funnels through one single-permit `BlockingCoreBridge`
@@ -1580,6 +1580,16 @@ AV.1a→AV.1b→{AV.3, AV.4}; AV.2 parallel-safe with all.
 The authoritative plan is
 [phase-av-plan](./plans/phase-av/phase-av-plan.md) with per-sprint docs
 under `docs/plans/phase-av/`, authored on branch `plan/phase-av` (PR #1108).
+
+Phase AV sprint status:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AV.1a` | `merged` (PR #1112) | `fix/mailbox-read-blocking-serialization` | `docs/plans/phase-av/sprint-AV.1a-reader-lane-foundation.md` |
+| `AV.1b` | `merged` (PR #1115) | `feature/av1b-read-handler-cutover` | `docs/plans/phase-av/sprint-AV.1b-read-handler-cutover.md` |
+| `AV.2` | `complete` | `feature/av2-read-concurrency-requirements` | `docs/requirements.md`, `docs/adr/ADR-059-async-mailbox-read-concurrency.md`, `docs/plans/phase-av/av-closeout-record.md` |
+| `AV.3` | `complete` (PR #1113 merged) | `feature/av3-read-concurrency-gates` | `docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md` |
+| `AV.4` | `complete` (PR #1114 merged) | `feature/av4-read-query-benchmarks` | `docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md` |
 
 ## Publishing Improvements
 

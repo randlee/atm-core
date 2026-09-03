@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-EXP-C3>
+  a triage:Finding ;
+  triage:findingId "AV-EXP-C3" ;
+  triage:title "Unbounded query scan + N+1 per-row state loads + 25ms --wait rescans" ;
+  triage:description "Query scan lacks bounds enforcement; per-row state loads exhibit N+1 pattern (load_state() called inside rows.map() loop in decode_list_messages). CLI layer uses 25ms GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL for polling rescans, blocking reader pipeline." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1A ;
+  triage:foundAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C3/AV-C3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C3/AV-C3-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-EXP-C3/AV-C3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/mailbox_reader.rs" ;
+  triage:line 242 ;
+  triage:snippet "let state = load_state(transaction, target, &query.team, &query.agent, &key)?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40> .
+
+<urn:atm:triage:occurrence/AV-EXP-C3/AV-C3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 38 ;
+  triage:snippet "pub const GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40> .
+
+<urn:atm:triage:worktree/integrate-phase-av/846c58b40>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:orderIndex 0 .
