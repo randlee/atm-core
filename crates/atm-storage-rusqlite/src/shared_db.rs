@@ -1,3 +1,4 @@
+use crate::mail_messages_schema::{mail_messages_index_ddl, mail_messages_table_ddl};
 pub(crate) use crate::shared_db_reader_lanes::SharedDb;
 use crate::writer::{WriteOp, WriteOpResult, validate_upsert_message_request};
 use atm_storage::AsyncMailboxReader;
@@ -23,36 +24,14 @@ use std::sync::{LazyLock, Mutex};
 // only to the one writer connection and bounds its page cache at 32 MiB.
 const WRITER_CACHE_KIB: i64 = 32 * 1024;
 #[cfg(test)]
-static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
+pub(crate) static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
 #[cfg(test)]
 static OPENED_CONNECTIONS: LazyLock<Mutex<std::collections::HashMap<String, usize>>> =
     LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
 
-pub(crate) const DB_MIGRATIONS: &str = r#"
-CREATE TABLE IF NOT EXISTS mail_messages (
-    team TEXT NOT NULL,
-    agent TEXT NOT NULL,
-    message_key TEXT NOT NULL,
-    envelope_json TEXT NOT NULL,
-    from_agent TEXT NOT NULL,
-    source_chat_id TEXT NULL,
-    destination_chat_id TEXT NULL,
-    message_text TEXT NULL,
-    template_sha TEXT NULL,
-    vars_json TEXT NULL,
-    category TEXT NULL,
-    content_format TEXT NULL,
-    tags_json TEXT NOT NULL DEFAULT '[]',
-    summary TEXT NULL,
-    message_at TEXT NOT NULL,
-    message_id TEXT NULL,
-    parent_message_id TEXT NULL,
-    thread_mode TEXT NULL CHECK(thread_mode IS NULL OR thread_mode IN ('add-details', 'supersede')),
-    recorded_at TEXT,
-    CHECK(message_key GLOB 'atm:*' OR message_key GLOB 'ext:*'),
-    PRIMARY KEY (team, agent, message_key)
-);
-
+pub(crate) const DB_MIGRATIONS: &str = concat!(
+    mail_messages_table_ddl!("CREATE TABLE IF NOT EXISTS mail_messages"),
+    r#"
 CREATE TABLE IF NOT EXISTS mail_message_states (
     team TEXT NOT NULL,
     agent TEXT NOT NULL,
@@ -129,23 +108,6 @@ CREATE TABLE IF NOT EXISTS peer_trusted_peers (
     https_port INTEGER NOT NULL DEFAULT 43101 CHECK(https_port BETWEEN 1 AND 65535)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
-    ON mail_messages(team, agent, parent_message_id)
-    WHERE parent_message_id IS NOT NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_message_id
-    ON mail_messages(team, agent, message_id)
-    WHERE message_id IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox
-    ON mail_messages(team, agent);
-
--- Post-commit received-hook dispatch reloads an admitted record by its
--- immutable message key.  The mailbox primary key begins with team and agent,
--- so it cannot serve that global-key lookup without scanning a growing table.
-CREATE INDEX IF NOT EXISTS idx_mail_messages_message_key
-    ON mail_messages(message_key);
-
 CREATE INDEX IF NOT EXISTS idx_mail_message_states_mailbox
     ON mail_message_states(team, agent);
 
@@ -164,7 +126,9 @@ CREATE INDEX IF NOT EXISTS idx_peer_trusted_peers_enabled
 -- AK.2 retires the worker-only reconciliation policy.  `IF EXISTS` makes the
 -- migration safe for both historical databases and fresh installs.
 DROP TABLE IF EXISTS peer_sync_policies;
-"#;
+"#,
+    mail_messages_index_ddl!(),
+);
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.
 
@@ -604,9 +568,13 @@ pub(crate) fn ensure_schema(
         .map_err(|error| sqlite_error(target, "failed to initialize sqlite schema", error))?;
     ensure_mail_message_columns(connection, target)?;
     crate::template_catalog_schema::ensure_schema(connection, target)?;
+    // Runs after every additive column migration so the rebuilt table can be
+    // populated from a legacy table that already carries the current column
+    // set, and before the search projections, which read `mail_messages`.
+    crate::mail_messages_schema::ensure_mail_messages_message_text_nullable(connection, target)?;
     crate::search_schema::ensure_schema(connection, target)?;
     ensure_team_roster_columns(connection, target)?;
-    ensure_team_roster_harness_values(connection, target)?;
+    crate::team_roster_schema::ensure_team_roster_harness_values(connection, target)?;
     ensure_team_nudge_template_override_columns(connection, target)?;
     ensure_mail_message_states_nudge_columns(connection, target)?;
     crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
@@ -714,80 +682,6 @@ fn ensure_team_roster_columns(
         "metadata_json",
         "ALTER TABLE team_roster ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';",
     )
-}
-
-fn ensure_team_roster_harness_values(
-    connection: &mut Connection,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let table_sql = connection
-        .query_row(
-            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'team_roster';",
-            [],
-            |row| row.get::<_, String>(0),
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to inspect team_roster harness constraint",
-                error,
-            )
-        })?;
-    if table_sql.contains("'hermes'") && table_sql.contains("'python-graft'") {
-        return Ok(());
-    }
-
-    let transaction = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to start team_roster harness migration",
-                error,
-            )
-        })?;
-    transaction
-        .execute_batch(
-            "DROP INDEX IF EXISTS idx_team_roster_team_name;
-             ALTER TABLE team_roster RENAME TO team_roster_legacy_harness;
-             CREATE TABLE team_roster (
-                 team_name TEXT NOT NULL,
-                 agent_name TEXT NOT NULL,
-                 member_kind TEXT NOT NULL CHECK(member_kind IN ('permanent', 'ephemeral')),
-                 harness TEXT NOT NULL CHECK(harness IN ('claude-code', 'codex-cli', 'gemini-cli', 'opencode', 'hermes', 'python-graft')),
-                 agent_type TEXT NOT NULL DEFAULT '',
-                 model TEXT NOT NULL DEFAULT '',
-                 metadata_json TEXT NOT NULL DEFAULT '{}',
-                 source TEXT,
-                 recipient_pane_id TEXT NULL,
-                 updated_at TEXT NOT NULL,
-                 PRIMARY KEY (team_name, agent_name)
-             );
-             INSERT INTO team_roster(
-                 team_name, agent_name, member_kind, harness, agent_type, model,
-                 metadata_json, source, recipient_pane_id, updated_at
-             )
-             SELECT
-                 team_name, agent_name, member_kind, harness, agent_type, model,
-                 metadata_json, source, recipient_pane_id, updated_at
-             FROM team_roster_legacy_harness;
-             DROP TABLE team_roster_legacy_harness;
-             CREATE INDEX idx_team_roster_team_name ON team_roster(team_name);",
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to migrate team_roster harness constraint",
-                error,
-            )
-        })?;
-    transaction.commit().map_err(|error| {
-        sqlite_error(
-            target,
-            "failed to commit team_roster harness migration",
-            error,
-        )
-    })
 }
 
 fn ensure_team_nudge_template_override_columns(
@@ -1308,59 +1202,6 @@ mod tests {
                     .expect("reader should succeed");
             }
         });
-    }
-
-    #[test]
-    fn ensure_team_roster_harness_values_migrates_legacy_check_constraint() {
-        let target = SharedDbTarget::InMemory {
-            uri: format!(
-                "file:atm-storage-rusqlite-roster-harness-test-{}?mode=memory&cache=shared",
-                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
-            ),
-        };
-        let mut connection = open_connection_for_target(&target).expect("open connection");
-        connection
-            .execute_batch(
-                "CREATE TABLE team_roster (
-                    team_name TEXT NOT NULL,
-                    agent_name TEXT NOT NULL,
-                    member_kind TEXT NOT NULL CHECK(member_kind IN ('permanent', 'ephemeral')),
-                    harness TEXT NOT NULL CHECK(harness IN ('claude-code', 'codex-cli', 'gemini-cli', 'opencode')),
-                    agent_type TEXT NOT NULL DEFAULT '',
-                    model TEXT NOT NULL DEFAULT '',
-                    metadata_json TEXT NOT NULL DEFAULT '{}',
-                    source TEXT,
-                    recipient_pane_id TEXT NULL,
-                    updated_at TEXT NOT NULL,
-                    PRIMARY KEY (team_name, agent_name)
-                );
-                CREATE INDEX idx_team_roster_team_name ON team_roster(team_name);
-                INSERT INTO team_roster(
-                    team_name, agent_name, member_kind, harness, updated_at
-                ) VALUES ('hermes', 'skillrx', 'permanent', 'claude-code', 'now');",
-            )
-            .expect("create legacy roster table");
-
-        ensure_team_roster_harness_values(&mut connection, &target).expect("migrate roster");
-        connection
-            .execute(
-                "INSERT INTO team_roster(
-                    team_name, agent_name, member_kind, harness, updated_at
-                ) VALUES ('hermes', 'python-worker', 'permanent', 'python-graft', 'now');",
-                [],
-            )
-            .expect("new harness should satisfy migrated check constraint");
-        let harnesses: Vec<String> = connection
-            .prepare(
-                "SELECT harness FROM team_roster
-                 WHERE team_name = 'hermes' ORDER BY agent_name;",
-            )
-            .expect("prepare harness query")
-            .query_map([], |row| row.get(0))
-            .expect("query harnesses")
-            .collect::<Result<_, _>>()
-            .expect("decode harnesses");
-        assert_eq!(harnesses, vec!["python-graft", "claude-code"]);
     }
 
     #[test]
