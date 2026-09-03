@@ -35,9 +35,14 @@ parallel_safe: []
      the layer is emitting (including any `tracing` call inside
      sc-observability itself) is counted and discarded, not recursed;
    - exposes `fn set_diagnostic_sink(&self, sink: Arc<dyn DiagnosticSink>)`
-     (trait defined here, implemented in AW.2) called after JSONL emission
-     with the same allowlisted fields, skipped when
-     `origin ∈ {"sqlite", "timeline"}`.
+     using the `DiagnosticSink` / `RetainedEvent` / `SinkOffer` contract
+     defined verbatim in the phase plan §2 "Cross-sprint contracts"
+     (implemented in AW.2); called after JSONL emission, skipped when
+     `origin ∈ {"sqlite", "timeline"}`; `Dropped` counted in
+     `TracingBridgeStats::sink_dropped_total`;
+   - implements `atm_core::observability_counters::DiagnosticCountersSource`
+     (struct and trait added by this sprint to `atm-core`, phase plan §2)
+     for `TracingBridgeStats` so health output (AW.3) needs no new crate edge.
 2. **Installation in the daemon** (`crates/atm-daemon-bootstrap`): after
    `DaemonObservability` is constructed, install the layer as the process
    global subscriber (`tracing_subscriber::registry().with(layer)`), exactly
@@ -62,17 +67,41 @@ parallel_safe: []
 5. **Doc alignment**: `docs/atm-daemon/logging.md` "default retained event
    set" section rewritten to describe what is actually bridged (levels,
    `RETAINED_INFO_TARGETS`, `RETAINED_FIELD_ALLOWLIST`, loss semantics
-   under `QueueFull`, the stderr allowlist).
-6. **Boundary record (definite).** New
-   `boundaries/atm-observability/tracing-bridge.toml`
-   (`owner_package = "atm-observability"`, facade `TracingBridgeLayer`,
-   `allowed_dependents = ["atm-daemon-bootstrap", "atm-graft-python"]`,
-   `allowed_dependencies = ["sc-observability", "sc-observability-types",
-   "tracing", "tracing-subscriber", …existing]`, `forbidden_edges =
-   ["atm-daemon -> atm-observability::tracing_bridge"]`), and a new
-   `[[boundaries.manifest_dependency_allowlists]]` entry in
-   `.just/lint-config.toml` for `crates/atm-observability/Cargo.toml`
-   listing its full dependency set. boundary-guard reviews both.
+   under `QueueFull`, the stderr allowlist). The stale version text at
+   `logging.md:118` ("`sc-observability 1.0.0`") and
+   `docs/requirements.md:907` (`sc-observability = "1.0.0"`) is corrected to
+   the pinned `=1.2.0`.
+6. **Boundary record (definite, enforceable).** New
+   `boundaries/atm-observability/tracing-bridge.toml` with:
+   - `owner_package = "atm-observability"`, facade `TracingBridgeLayer`;
+   - `allowed_dependents = ["atm-daemon-bootstrap", "atm"]` — the two
+     crates that depend on `atm-observability` today (`atm` for path
+     helpers). No grant to `atm-graft-python` here; AW.4 amends this record
+     in the sprint that adds that Cargo edge;
+   - `[dependencies].allowed_dependencies` = the exact dependency set of
+     `crates/atm-observability/Cargo.toml` after this sprint: today
+     `atm-core`, `sc-observability-types` plus the additions
+     `sc-observability`, `tracing`, `tracing-subscriber` (the PR must show
+     the TOML and the manifest agree; `lint_boundaries.py` fails otherwise);
+   - `forbidden_edges = ["atm-daemon -> atm-observability",
+     "atm-observability -> atm-daemon-bootstrap",
+     "atm-observability -> atm-http-runtime",
+     "atm-observability -> atm-storage-rusqlite"]` — all crate-level, the
+     only form `collect_forbidden_edge_violations` enforces. The first entry
+     is true today (`crates/atm-daemon/Cargo.toml` depends only on
+     `atm-daemon-bootstrap`) and keeps the frozen daemon from ever linking
+     the bridge directly;
+   - the module-level rule "only `atm-daemon-bootstrap` installs the layer"
+     is enforced by a new source-scan test in
+     `crates/atm-architecture/tests/boundary_enforcement.rs`
+     (`tracing_bridge_is_installed_only_by_daemon_bootstrap`) asserting
+     `TracingBridgeLayer::install` appears in
+     `crates/atm-daemon-bootstrap/src/` and in no other crate's `src/`.
+   Plus the new `[[boundaries.manifest_dependency_allowlists]]` entry in
+   `.just/lint-config.toml` with `owner_manifest_path =
+   "crates/atm-observability/Cargo.toml"`, `boundary_record_path =
+   "boundaries/atm-observability/tracing-bridge.toml"`, and the same
+   `allowed_dependencies` list. boundary-guard reviews both.
 
 ## Contract samples
 
@@ -109,16 +138,22 @@ allowlist is absent from the record even if present on the event.
 - AC6 (905-2, 905-9): no non-test `eprintln!`/`println!` remains in the
   three runtime crates outside the documented allowlist; the gate fails on
   a synthetic violation (test in `scripts/tests/`); `logging.md` lists the
-  allowlist.
+  allowlist; `grep -n '1\.0\.0' docs/atm-daemon/logging.md
+  docs/requirements.md` returns nothing.
 - AC7: layer installation is idempotent (`BridgeError::AlreadyInstalled`).
-- AC8: `boundaries/atm-observability/tracing-bridge.toml` exists,
-  `python3 .just/lint_boundaries.py` passes, and the manifest allowlist
-  entry matches `crates/atm-observability/Cargo.toml` exactly.
+- AC8: `boundaries/atm-observability/tracing-bridge.toml` exists with the
+  D6 contents, `python3 .just/lint_boundaries.py` passes, the manifest
+  allowlist entry matches `crates/atm-observability/Cargo.toml` exactly,
+  and the `boundary_enforcement.rs` source-scan test passes (and fails on a
+  synthetic `TracingBridgeLayer::install` call placed in another crate).
+- AC10: `DiagnosticSink`, `RetainedEvent`, `SinkOffer`, `DropReason` and
+  `DiagnosticCounters`/`DiagnosticCountersSource` exist with the signatures
+  in the phase plan §2 (doc-test compiles them).
 - AC9: no file under `crates/atm-daemon/` is modified.
 
 ## Required validation
 
-- `cargo test -p atm-observability -p atm-daemon-bootstrap`
+- `cargo test -p atm-observability -p atm-daemon-bootstrap -p atm-core -p atm-architecture`
 - `just lint` (boundaries, function-length, new runtime-stderr gate).
 - `grep -n 'sc-observability' Cargo.toml` shows both `=1.2.0` lines
   unchanged; PR diff contains no change to them.

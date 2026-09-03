@@ -16,13 +16,22 @@ parallel_safe: [AW.5]
    gain `observability: { jsonl: { forwarded_total, dropped_queue_full_total,
    dropped_reentrant_total }, timeline: { written_total,
    dropped_queue_full_total, dropped_persist_error_total }, degraded:
-   ["jsonl"|"timeline"...] }` sourced from AW.1 `TracingBridgeStats` and
-   AW.2 `DiagnosticTimelineStats`. Doctor prints a WARN line when
-   `degraded` is non-empty.
+   ["jsonl"|"timeline"...] }` sourced from the
+   `Arc<dyn DiagnosticCountersSource>` (phase plan §2) that
+   `atm-daemon-bootstrap` injects into `RuntimeHealth` via
+   `HttpRuntimeBuilder::with_diagnostic_counters(...)`; `atm-http-runtime`
+   depends only on the `atm-core` snapshot type it already reaches — no new
+   crate edge, no `.just/lint-config.toml` change. Doctor prints a WARN line
+   when `degraded` is non-empty.
 2. **`atm log --source jsonl|timeline|merged`** (default `jsonl`, preserving
    current behaviour). `timeline` queries `DiagnosticTimelineStore` through
    the daemon (`GET /v1/diagnostics?since&until&level&component&limit`, new
-   read-only route). `merged` reads canonical JSONL, the graft fallback
+   read-only route in `crates/atm-http-runtime/src/diagnostics_route.rs`)
+   whose handler takes the `Arc<dyn DiagnosticTimelineStore>` from the
+   `atm-runtime` router state (bootstrap registers it next to the existing
+   store handles); `atm-http-runtime` never imports `atm-storage-rusqlite`
+   (existing `forbidden_edges` in `boundaries/atm-http-runtime/http-runtime.toml`).
+   `merged` reads canonical JSONL, the graft fallback
    satellite (`graft_fallback_log_path`, AW.1/AW.4), and the timeline, then
    sorts by `ts` ascending with a stable tiebreak `(source_rank, seq)`
    (`jsonl=0, graft=1, timeline=2`); each merged record carries
@@ -55,7 +64,9 @@ parallel_safe: [AW.5]
 - AC6 (905-9): `logging.md` contains the guarantees/exceptions/loss sections
   with the constant values matching the code (doc test greps constants).
 - AC7: no file under `crates/atm-daemon/` is modified; boundary lint passes
-  (`atm` CLI → `atm-storage` diagnostics types is an existing edge).
+  with no allowlist change (`atm` CLI → `atm-storage`, `atm-http-runtime` →
+  `atm-core`/`atm-runtime` are existing edges); the PR diff touches none of
+  the AW.5-reserved paths in the phase plan §4 table.
 
 ## Required validation
 

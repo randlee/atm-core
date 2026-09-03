@@ -8,7 +8,7 @@ sprint_branches:
   - feature/aw3-health-and-log-query
   - feature/aw4-graft-fallback-observability
   - feature/aw5-native-tool-parity
-status: draft — plan review round 2 pending (round 1 FAIL, see §6)
+status: draft — plan review round 3 pending (rounds 1–2 FAIL, see §6)
 owner: fenix (plan author, coordinator); dev agents per sprint
 base_revision: ba4c91bb3 (develop)
 integration_branch: integrate/phase-aw
@@ -91,7 +91,7 @@ path at all:
    shutdown-signal and unexpected-server-stop notices).
 3. **SQLite diagnostics discarded.** `SqliteObservability`
    (`crates/atm-storage-rusqlite/src/observability.rs`) has exactly one
-   implementor, `NullSqliteObservability`, and every production construction
+   implementer, `NullSqliteObservability`, and every production construction
    site passes it (`lib.rs:741,750`, `shared_db_reader_lanes.rs:43`).
    Writer/WAL timeouts and failures vanish; `emit_or_warn`'s fallback
    `tracing::warn!` is itself lost per item 1.
@@ -164,9 +164,57 @@ Phase-wide invariants (apply to every sprint):
   unchanged, and the PR diff contains no `Cargo.toml` change to either line.
   A concrete API gap is recorded as a finding, never worked around by fork
   or vendoring.
-- **Boundary records are definite.** Every new or changed crate edge is
-  named in the sprint doc with the exact boundary file and the exact
-  `.just/lint-config.toml` `manifest_dependency_allowlists` entry to change.
+- **Boundary records are definite and enforceable.** Every new or changed
+  crate edge is named in the sprint doc with the exact boundary file and the
+  exact `.just/lint-config.toml` `manifest_dependency_allowlists` entry to
+  change. `forbidden_edges` entries are crate-level only (`<crate> ->
+  <crate>`, the form `FORBIDDEN_EDGE_RE` in `.just/lint_boundaries.py`
+  matches and `collect_forbidden_edge_violations` enforces); module-level
+  restrictions are expressed as source-scan assertions added to
+  `crates/atm-architecture/tests/boundary_enforcement.rs`, never as
+  unenforced TOML text. A sprint grants an `allowed_dependents` /
+  `allowed_dependencies` entry only in the sprint that actually adds the
+  Cargo edge.
+
+### Cross-sprint contracts (defined once, cited by sprint docs)
+
+- **`DiagnosticSink`** (defined in AW.1, `crates/atm-observability/src/tracing_bridge.rs`;
+  implemented in AW.2):
+
+  ```rust
+  /// One allowlisted, already-redacted event as the bridge saw it.
+  pub struct RetainedEvent<'a> {
+      pub ts_unix_ms: i64,
+      pub level: sc_observability_types::Level,
+      pub component: &'a str,          // tracing target
+      pub code: Option<&'a str>,
+      pub correlation_id: Option<&'a str>,
+      pub origin: &'a str,             // "tracing" | "sqlite" | "timeline" | "graft"
+      pub message: &'a str,
+      pub fields: &'a [(&'static str, FieldValue)], // RETAINED_FIELD_ALLOWLIST members only
+  }
+  pub enum SinkOffer { Accepted, Dropped(DropReason) }
+  pub enum DropReason { QueueFull, Disabled, PersistFailed }
+  pub trait DiagnosticSink: Send + Sync {
+      /// Must not block, allocate unboundedly, or emit tracing events.
+      fn offer(&self, event: &RetainedEvent<'_>) -> SinkOffer;
+  }
+  ```
+
+  The bridge calls `offer` after JSONL emission for every retained event
+  whose `origin` is not `"sqlite"` or `"timeline"`; `Dropped` is counted in
+  `TracingBridgeStats::sink_dropped_total` and never retried.
+- **`DiagnosticCounters`** (defined in AW.1, `crates/atm-core/src/observability_counters.rs`,
+  plain `Copy` snapshot struct with the JSONL and timeline counters named in
+  AW.3 D1) plus `trait DiagnosticCountersSource: Send + Sync { fn snapshot(&self)
+  -> DiagnosticCounters; }`. AW.1 implements it for `TracingBridgeStats`,
+  AW.2 for the combined bridge+timeline stats, and the bootstrap injects one
+  `Arc<dyn DiagnosticCountersSource>` into `RuntimeHealth` (AW.3) — so
+  `atm-http-runtime` gains no crate edge.
+- **`DiagnosticTimelineStore`** (defined in AW.2, `crates/atm-storage/src/diagnostics.rs`)
+  is reached by AW.3 through `atm-runtime` router state exactly like the
+  existing `MessageStore`/`RosterStore` handles; `atm-http-runtime` never
+  imports `atm-storage-rusqlite`.
 
 ## 3. Sprints
 
@@ -202,7 +250,17 @@ AW.1 ──merged──▶ { AW.2 ∥ AW.4 } ──both merged──▶ AW.3
 - Storage architecture rule: AW.2 must not add a second SQLite writer
   connection; diagnostic writes flow through the existing single writer
   lane (`crates/atm-storage-rusqlite/src/writer/`) via a second, lower
-  priority channel (mechanism specified in AW.2 deliverable 3).
+  priority channel (mechanism specified in AW.2 deliverable 3) and AW.2
+  records that policy as an amendment to `ADR-ATM-RUSQLITE-002`.
+- **File reservations for parallel sprints** (a sprint must not edit a
+  path reserved by its parallel partner; reviewers check the PR diff):
+
+  | Sprint | Owns (exclusive while in flight) | Must not touch |
+  |---|---|---|
+  | AW.2 | `crates/atm-storage/src/diagnostics.rs`, `crates/atm-storage-rusqlite/**`, `crates/atm-daemon-bootstrap/src/{diagnostic_timeline.rs,daemon_sqlite_observability.rs}`, `docs/adr/ADR-ATM-RUSQLITE-002.md` | `crates/atm-graft-python/**`, `crates/hermes-atm/**`, `boundaries/atm-graft-python/**` |
+  | AW.4 | `crates/atm-graft-python/**`, `crates/hermes-atm/**`, `boundaries/atm-graft-python/**`, `docs/graft-observability.md` | everything AW.2 owns |
+  | AW.3 | `crates/atm/src/commands/log.rs`, `crates/atm/src/output.rs` (log/doctor rendering only), `crates/atm/tests/cli_surface_baseline.json`, `crates/atm-http-runtime/src/{runtime_health.rs,diagnostics_route.rs}`, `crates/atm-core/src/doctor/**`, `docs/atm-daemon/logging.md`, `docs/graft-observability.md` (cross-links only) | `crates/atm-graft-python/**`, `crates/hermes-atm/**`, `crates/atm-core/src/commands/**` |
+  | AW.5 | `crates/atm-graft-python/**`, `crates/hermes-atm/**`, `boundaries/atm-graft-python/hermes-graft-binding.toml` | `crates/atm/**`, `crates/atm-http-runtime/**`, `docs/atm-daemon/**` (the parity test invokes the built `atm` binary; it does not edit CLI code) |
 
 ## 5. Out of scope (phase non-goals, from the issues)
 
@@ -241,6 +299,33 @@ AW.5 supplement). Findings and dispositions (all addressed in round 2 text):
 | m2 | Minor — AW.5 D1 claimed `output.rs` builds JSON inline | Fixed: D1 rewritten around the existing `atm-core` outcome structs |
 | m3 | Minor — AW.5 AC2 "out of scope" undefined | Fixed: defined as "not visible to the caller under the read selection rules" |
 | m4 | Minor — stale requirements.md version reference | Not found in the plan text on re-read; if the reviewer meant `docs/requirements.md` itself, it is outside this PR — flagged for round 2 to confirm |
+
+### Round 2 — qa-pr1137-plan-r2 (2026-09-03, plan @ e75e88a96) — FAIL
+
+5 reviewers on AW.1–AW.4 (report
+https://github.com/randlee/atm-core/pull/1137#issuecomment-5519048194) plus
+an AW.5 supplemental leg; consolidated report
+https://github.com/randlee/atm-core/pull/1137#issuecomment-5519109942.
+Round-1 fixes independently confirmed. New findings and dispositions (all
+addressed in round 3 text):
+
+| # | Finding | Disposition |
+|---|---|---|
+| B1 | Blocking — AW.4 added an `atm_ack` native tool with no happy-path AC or hermes exposure plan | Fixed: AW.4 D3a defines `atm_ack` as a thin tool over the existing acknowledgement path (`send_tool` with `acknowledges_message_id`), with request model, hermes registration, and happy-path/error-parity ACs (AC10–AC12). It stays in scope because #904-2 names `atm_ack` explicitly |
+| B2 | Blocking — `failure_class: daemon_starting` had no classifier | Fixed: class removed. `failure_class ∈ {stale_client, endpoint_unavailable}` derived from the existing `with_daemon_recovery` outcomes (AW.4 D3), which is exactly the distinction #904-3 asks for; `refresh_error_code` carries the detail |
+| B3 | Blocking — module-qualified `forbidden_edges` entry unenforced | Fixed: phase invariant now requires crate-level entries only; AW.1 D6 uses `atm-daemon -> atm-observability` (enforced by `collect_forbidden_edge_violations`) plus a source-scan test in `boundary_enforcement.rs` |
+| I4 | AW.2 D3/D4 capacity/batching contradiction | Fixed: the channel carries batches; `DIAGNOSTIC_QUEUE_BATCHES = 8` × `DIAGNOSTIC_BATCH_MAX = 128` = 1024 events in flight; AC7/AC9 restated on those constants |
+| I5 | Writer-lane policy amends ADR-ATM-RUSQLITE-002 without a record | Fixed: AW.2 D9 appends a "Phase AW amendment" section to the ADR |
+| I6 | `docs/atm-daemon/logging.md:118` says sc-observability 1.0.0 | Fixed: AW.1 D5 rewrites that line; AC6 asserts no `1.0.0` remains in `logging.md` or `docs/requirements.md:907` (closes round-1 m4 / round-2 #11 too) |
+| I7 | `DiagnosticSink` never specified | Fixed: signature in §2 "Cross-sprint contracts" |
+| I8 | AW.3/AW.5 file overlap not reserved | Fixed: §4 file-reservation table |
+| I9 | AW.1 D6 hedge; AW.3 health block crossed an unrecorded crate edge | Fixed: D6 lists exact contents; AW.3 uses `DiagnosticCountersSource` injected by bootstrap and reaches the timeline via `atm-runtime` state — no new edge |
+| I10 | `atm-graft-python` grant in tracing-bridge.toml broader than needed | Fixed: AW.1 grants `allowed_dependents = ["atm-daemon-bootstrap", "atm"]` only; AW.4 amends the record when it adds the edge |
+| I11 | ATM-QA-006 — AW.5 D2 claimed `atm_ack` parity without a test or AC | Fixed: AW.5 D3 parity test adds the ack case; AC6 asserts `atm_ack` equals `atm ack --json` |
+| I12 | RBQA-AW5-F002 — ack result type unnamed, no `response_types` entry | Fixed: `AtmAckResult` (= `AtmSendResult`) named in AW.4 D3a and committed in AW.4 D5; AW.5 D4 re-asserts the full list |
+| M13 | Minor — `docs/requirements.md:907` stale version | Fixed in AW.1 D5 (see I6) |
+| M14 | RBQA-AW5-F001 — AW.5 D4 `response_types` commitment not mechanically checkable | Fixed: AW.5 D4 states the exact target list and that existing wrapper names are retained |
+| CI | `just lint` spell failure on the plan branch (two misspelled words, now corrected) | Fixed in this round's commit |
 
 ## Appendix A — Issue checklist ids (verbatim)
 

@@ -30,10 +30,12 @@ parallel_safe: [AW.4]
    connection. `crates/atm-storage-rusqlite/src/writer/ops.rs` gains
    `WriteOp::RecordDiagnostics(Vec<DiagnosticEvent>)`. The writer
    (`writer/mod.rs`) gains a second bounded `tokio::sync::mpsc` channel
-   `diagnostic_tx/diagnostic_rx` (capacity
-   `DIAGNOSTIC_QUEUE_CAPACITY = 1024` events, batched into one
-   `RecordDiagnostics` op of at most `DIAGNOSTIC_BATCH_MAX = 128` events).
-   The writer loop becomes:
+   `diagnostic_tx/diagnostic_rx` whose items are **batches**
+   (`Vec<DiagnosticEvent>` of 1..=`DIAGNOSTIC_BATCH_MAX = 128` events);
+   channel capacity `DIAGNOSTIC_QUEUE_BATCHES = 8`, so at most
+   `8 × 128 = 1024` events are in flight toward the writer (the only
+   in-flight bound; D4's buffer is upstream of this channel and holds at
+   most one batch). The writer loop becomes:
 
    ```rust
    loop {
@@ -49,14 +51,19 @@ parallel_safe: [AW.4]
    i.e. a diagnostic batch is drained only when the primary channel has no
    pending op, at most one batch per idle tick, and a diagnostic batch that
    fails to persist is counted and dropped (never retried, never surfaced as
-   a primary-lane error). Producers use `try_send` only; `Full` increments
-   `timeline_dropped_queue_full_total`.
-4. **`DiagnosticTimelineWriter`** (bootstrap side): implements AW.1's
-   `DiagnosticSink`; buffers events, flushes on `DIAGNOSTIC_BATCH_MAX` or
+   a primary-lane error). Producers use `try_send` only; `Full` drops the
+   whole batch and adds its length to `timeline_dropped_queue_full_total`.
+4. **`DiagnosticTimelineWriter`** (bootstrap side): implements the
+   `DiagnosticSink` contract from the phase plan §2 (`offer` copies the
+   `RetainedEvent` into an owned `DiagnosticEvent`, never blocks); buffers
+   at most one batch (`DIAGNOSTIC_BATCH_MAX` events; `offer` returns
+   `Dropped(QueueFull)` when the buffer is full and the channel refuses),
+   flushes the batch on `DIAGNOSTIC_BATCH_MAX` or
    `DIAGNOSTIC_FLUSH_INTERVAL_MS = 250`, whichever first; records
    `timeline_written_total`, `timeline_dropped_queue_full_total`,
    `timeline_dropped_persist_error_total` in a shared
-   `DiagnosticTimelineStats`.
+   `DiagnosticTimelineStats`, and implements
+   `DiagnosticCountersSource` (phase plan §2) over bridge + timeline stats.
 5. **Production `SqliteObservability` adapter**
    (`DaemonSqliteObservability` in `atm-daemon-bootstrap`) replaces
    `NullSqliteObservability` at `lib.rs:741,750` and
@@ -79,6 +86,12 @@ parallel_safe: [AW.4]
    `ATM_LOG_SINK_RECOVERED`; rate-limited to one transition pair per
    `DEGRADATION_RATE_LIMIT_SECS = 60` per sink. Stats are exposed for AW.3
    health output.
+9. **ADR amendment**: append a "Phase AW amendment (2026-09)" section to
+   `docs/adr/ADR-ATM-RUSQLITE-002.md` recording the second, lower-priority
+   diagnostic lane on the same single write worker/connection, the biased
+   drain rule, the batch bound, and that diagnostic persistence failures
+   are counted and dropped rather than surfaced as store errors. The
+   `adr-index` lint must pass.
 8. **Retention/prune**: `DIAGNOSTIC_MAX_ROWS = 20_000`,
    `DIAGNOSTIC_MAX_AGE_DAYS = 7`, `DIAGNOSTIC_PRUNE_BATCH = 1000`; prune
    runs as a `RecordDiagnostics`-lane op (same priority) after every flush
@@ -103,14 +116,20 @@ parallel_safe: [AW.4]
 - AC6 (905-5): a writer timeout, a WAL checkpoint failure and a write
   failure each produce a JSONL record with the deliverable-5 `code` and
   `origin = "sqlite"`, and no timeline row (recursion rule).
-- AC7 (905-6, 905-8 saturation): saturating the diagnostic channel emits
-  exactly one `ATM_LOG_SINK_DEGRADED` within the rate-limit window and one
-  `ATM_LOG_SINK_RECOVERED` after the recovery window.
+- AC7 (905-6, 905-8 saturation): with the writer paused, offering more
+  than `DIAGNOSTIC_QUEUE_BATCHES × DIAGNOSTIC_BATCH_MAX + DIAGNOSTIC_BATCH_MAX`
+  events drops the excess (`timeline_dropped_queue_full_total` equals the
+  excess) and emits exactly one `ATM_LOG_SINK_DEGRADED` within the
+  rate-limit window and one `ATM_LOG_SINK_RECOVERED` after the recovery
+  window.
 - AC8 (905-5): `NullSqliteObservability` has no production construction
   site (test greps the three former sites).
 - AC9 (905-4): writer-lane priority test: with 10_000 queued primary ops and
-  a full diagnostic channel, all primary ops complete before any diagnostic
-  batch is written (assert via a recording writer hook).
+  all `DIAGNOSTIC_QUEUE_BATCHES` batch slots full, all primary ops complete
+  before any diagnostic batch is written (assert via a recording writer
+  hook).
+- AC11: `ADR-ATM-RUSQLITE-002.md` contains the amendment section and the
+  `adr-index` lint passes.
 - AC10: no file under `crates/atm-daemon/` is modified; boundary lint
   passes (`atm-storage` gains no new dependency; `atm-daemon-bootstrap` →
   `atm-observability` edge already allowlisted by AW.1).

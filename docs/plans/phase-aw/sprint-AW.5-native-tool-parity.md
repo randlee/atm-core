@@ -16,7 +16,7 @@ The CLI `--json` output is the serialisation of the canonical `atm-core`
 outcome structs (`ListOutcome` at `crates/atm-core/src/commands/list.rs:113`,
 `ReadOutcome` at `commands/read/mod.rs:60`, `SendOutcome` at
 `commands/send/outcome.rs:15`), written by `crates/atm/src/output.rs`.
-The binding (`crates/atm-graft-python/src/tool_types.rs`) re-declares
+The binding (`crates/atm-graft-python/src/tool_types.rs`) redeclares
 reduced result types and hermes-atm `native_tools.py` projects them again.
 The message body **is** already returned by `atm_read` when a message is
 selected (`PyMessage::from_read` → `_message_result`). The real gaps are:
@@ -41,12 +41,21 @@ selected (`PyMessage::from_read` → `_message_result`). The real gaps are:
    deprecated alias emitting `DeprecationWarning` once per process.
 2. **hermes-atm pass-through**: `_send_result/_read_result/_list_result`
    become `json.loads(result.to_json())`; the `kind/success` wrapper is
-   unchanged. `atm_ack` (from AW.4) uses the same path. README documents
+   unchanged. `atm_ack` (from AW.4 D3a) returns `AtmAckResult`, an alias of
+   `AtmSendResult`, so it takes the same `to_json()` path and is covered by
+   the parity test (D3, AC6) — the claim is verified here, not inherited.
+   This sprint
+   edits only the paths reserved to it in the phase plan §4 table; the
+   parity test drives the built `atm` binary and never edits `crates/atm/`. README documents
    the `from_agent` deprecation and the parity guarantee.
 3. **Parity test**: for a fixture mailbox, run the CLI (`atm list --json`,
-   `atm read --json`, `atm send --json`) and the native tools against the
-   same daemon; assert key-for-key equality of the result objects (ignoring
-   the hermes `kind` wrapper and the AW.4 `observability` field). The test
+   `atm read --json`, `atm send --json`, `atm ack <id> "<reply>" --json`)
+   and the native tools (`atm_list`, `atm_read`, `atm_send`, `atm_ack`)
+   against the same daemon; assert key-for-key equality of the result
+   objects (ignoring the hermes `kind` wrapper and the AW.4 `observability`
+   field). The ack case sends a `requires_ack` message from a second
+   fixture identity, acks it natively, and compares against the CLI ack of
+   a twin message. The test
    lives in `crates/atm-graft-python/tests/test_cli_parity.py` and is in the
    3.11–3.14 matrix.
 4. **Boundary (definite)**: no new crate edge. `atm-graft-python` already
@@ -54,8 +63,16 @@ selected (`PyMessage::from_read` → `_message_result`). The real gaps are:
    `allowed_dependencies = ["atm-core", "atm-graft", "pydantic"]`; manifest
    allowlist at `.just/lint-config.toml` for
    `crates/atm-graft-python/Cargo.toml` already lists it). The record's
-   `[contracts].response_types` is updated to name the wrapped outcome
-   types; nothing else changes.
+   `[contracts].response_types` becomes exactly
+   `["PyMessage", "PyMailboxWorkCounts", "PyNudge", "AtmSendResult",
+   "AtmAckResult", "AtmReadResult", "AtmListRow", "AtmListResult",
+   "PyObservabilityPaths"]` — the existing wrapper names are retained (they
+   now wrap `SendOutcome`/`ReadOutcome`/`ListOutcome` rather than
+   redeclaring fields), `AtmAckResult` and `PyObservabilityPaths` are the
+   AW.4 additions (AW.4 D3a/D5 commit them first; this sprint re-asserts
+   the final list). `request_types` is unchanged from AW.4's
+   `[..., "AtmSendRequest", "AtmAckRequest", "AtmReadRequest",
+   "AtmListRequest"]`. Nothing else in the record changes.
 
 ## Acceptance criteria
 
@@ -71,9 +88,14 @@ selected (`PyMessage::from_read` → `_message_result`). The real gaps are:
 - AC3 (item 3): timestamps in every native result end with `Z`.
 - AC4 (item 1): `row.from_agent` still works and emits one
   `DeprecationWarning`; `row.from` is the documented field.
-- AC5: no change to list/read/send scoping rules or CLI output (cli_surface
-  and existing CLI JSON snapshot tests unchanged); boundary lint passes;
-  no `crates/atm-daemon/` change.
+- AC5: no change to list/read/send/ack scoping rules or CLI output
+  (cli_surface and existing CLI JSON snapshot tests unchanged); boundary
+  lint passes with the D4 `response_types` list verbatim; no
+  `crates/atm-daemon/` change.
+- AC6 (952-E1; atm_ack parity): the parity test's ack case passes —
+  `atm_ack(...).to_json()` equals `atm ack <id> "<reply>" --json`
+  key-for-key after canonical JSON normalisation, and both leave the
+  message absent from `pending_ack` listings.
 
 ## Required validation
 
