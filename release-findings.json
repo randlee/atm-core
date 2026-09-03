@@ -1,35 +1,7 @@
 {
-  "generatedAt": "2026-08-27T23:52:44.266827Z",
-  "branch": "chore/changelog-1.4.4",
-  "version": "1.4.4",
+  "generatedAt": "2026-09-03T18:35:39.995074Z",
+  "branch": "evidence/readiness-1.4.9-atmbench",
+  "version": "1.4.9",
   "status": "pass",
-  "findings": [
-    {
-      "check": "publish-version-unpublished",
-      "severity": "warning",
-      "summary": "release version publication check skipped outside explicit release-candidate mode",
-      "detail": "",
-      "command": null,
-      "exit_code": null,
-      "blocks": false
-    },
-    {
-      "check": "cargo-lock-drift",
-      "severity": "warning",
-      "summary": "Cargo.lock drift check skipped outside explicit release-candidate mode",
-      "detail": "",
-      "command": null,
-      "exit_code": null,
-      "blocks": false
-    },
-    {
-      "check": "dependency-currency",
-      "severity": "warning",
-      "summary": "dependency currency check skipped; set ATMD_CHECK_DEP_CURRENCY=1 to enable it",
-      "detail": "",
-      "command": null,
-      "exit_code": null,
-      "blocks": false
-    }
-  ]
+  "findings": []
 }
