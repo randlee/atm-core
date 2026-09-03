@@ -552,7 +552,7 @@ THOROUGH_ROWS = [
                 "cargo",
                 "test",
                 "-p",
-                "atm-daemon",
+                "agent-team-mail",
                 "tests_post_send_graft_warning::dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable",
                 "--",
                 "--exact",
