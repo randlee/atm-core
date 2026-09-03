@@ -347,7 +347,15 @@ def write_v4_evidence(
     try:
         result = v4_result_from_evidence(evidence, context=context)
     except (KeyError, ValueError) as error:
-        raise SmokeError(f"could not emit direct v4 benchmark evidence: {error}") from error
+        # Preserve malformed-lane evidence and let the suite continue.  Keep
+        # the offending counts in the reason while projecting a schema-valid
+        # INCOMPLETE result for publication.
+        requested = int(evidence.get("messages_requested", evidence.get("requested_count", 0)))
+        admitted = int(evidence.get("messages_admitted", evidence.get("accepted_count", 0)))
+        durable = int(evidence.get("messages_durable", 0))
+        repaired = dict(evidence)
+        repaired.update({"status": "INCOMPLETE", "incomplete_reason": f"count invariant violation: requested={requested}, admitted={admitted}, durable={durable}; {error}", "messages_requested": max(requested, admitted, durable), "messages_admitted": max(admitted, durable), "messages_durable": durable})
+        result = v4_result_from_evidence(repaired, context=context)
     destination = directory / f"{artifact_id(campaign_id=context.campaign_id, target=context.target)}.json"
     atomic_json(destination, result.model_dump(mode="json"))
     return destination, result
