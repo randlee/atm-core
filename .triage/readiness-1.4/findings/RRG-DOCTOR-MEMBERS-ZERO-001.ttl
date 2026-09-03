@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-DOCTOR-MEMBERS-ZERO-001>
+  a triage:Finding ;
+  triage:findingId "RRG-DOCTOR-MEMBERS-ZERO-001" ;
+  triage:title "atm doctor on rand-m5 reports Members: active=0 idle=0 offline=0 unknown=0 while the roster lists 13 members, so the member status summary is silently empty instead of classifying every roster member" ;
+  triage:description "Reported by skillrx@hermes on rand-m5 at ~20:55Z on 2026-09-03 during the localhost self-send investigation and split out as its own record per quality-mgr verdict 01M1MHGXV9KT656R81YSPZE8PK. Sanitized facts: the rand-m5 host daemon 1.4.10 answers doctor with all four member buckets at zero while atm members lists 13 roster members across the hermes and atm-dev teams; the loki and skillrx gateways were running at the time. The count is produced from the runtime member list in runtime_health.rs, so either the runtime member observation set is empty on that host (no liveness records because no hermes agent has a registered graft receiver, see RRG-HERMES-FLEET-NUDGE-001) or the projection drops roster members that have no observation instead of counting them as unknown. Either way a 13-member roster summarized as all-zero is a diagnostic gap: an operator reading doctor cannot tell an unobserved fleet from an empty one. Investigation first: reproduce with atm doctor --json against a daemon whose roster has members with no runtime observation; decide whether roster members without observations must be counted as unknown (expected) and add a test for that projection. Not a gate blocker on its own; severity important because the readiness plan step 2 precondition relies on doctor to prove the Colima host fleet is live." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "diagnostics" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-03T21:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S2 ;
+  triage:foundAt "2026-09-03T20:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-DOCTOR-MEMBERS-ZERO-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-DOCTOR-MEMBERS-ZERO-001/CAND-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RRG-DOCTOR-MEMBERS-ZERO-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/runtime_health.rs" ;
+  triage:line 347 ;
+  triage:snippet "RuntimeMemberState::Active => counts.active_members += 1," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "500d13a35" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/500d13a35> .
+
+<urn:atm:triage:occurrence/RRG-DOCTOR-MEMBERS-ZERO-001/CAND-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/output.rs" ;
+  triage:line 813 ;
+  triage:snippet "  Members: active={} idle={} offline={} unknown={}," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "500d13a35" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/500d13a35> .
+
+<urn:atm:triage:worktree/CAND/500d13a35>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "500d13a35" ;
+  triage:orderIndex 1 .
