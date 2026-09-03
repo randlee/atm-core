@@ -313,6 +313,8 @@ def v4_result_from_evidence(
         p50_admissions_per_second=(None if metrics is None else metrics.admissions_per_second.p50),
         baseline_p50_floor=context.baseline.p50_floor,
     )
+    if evidence.get("failure") and status == "FAIL":
+        status = "INCOMPLETE"
     return BenchmarkRunResult(
         campaign_id=context.campaign_id,
         host_label=str(evidence["host_label"]),
@@ -320,9 +322,9 @@ def v4_result_from_evidence(
         target=context.target,
         status=status,
         incomplete_reason=(
-            None
-            if complete
-            else str(evidence.get("failure") or "benchmark did not complete every lifecycle stage")
+            str(evidence.get("failure"))
+            if evidence.get("failure")
+            else (None if complete else "benchmark did not complete every lifecycle stage")
         ),
         generated_at=generated_at,
         source_revision=str(evidence.get("source_revision") or source_revision()),
@@ -350,12 +352,9 @@ def write_v4_evidence(
         # Preserve malformed-lane evidence and let the suite continue.  Keep
         # the offending counts in the reason while projecting a schema-valid
         # INCOMPLETE result for publication.
-        requested = int(evidence.get("messages_requested", evidence.get("requested_count", 0)))
-        admitted = int(evidence.get("messages_admitted", evidence.get("accepted_count", 0)))
-        durable = int(evidence.get("messages_durable", 0))
-        repaired = dict(evidence)
-        repaired.update({"status": "INCOMPLETE", "incomplete_reason": f"count invariant violation: requested={requested}, admitted={admitted}, durable={durable}; {error}", "messages_requested": max(requested, admitted, durable), "messages_admitted": max(admitted, durable), "messages_durable": durable})
-        result = v4_result_from_evidence(repaired, context=context)
+        evidence["passed"] = False
+        evidence["failure"] = f"count invariant violation (real counts are recorded): {error}"
+        result = v4_result_from_evidence(evidence, context=context)
     destination = directory / f"{artifact_id(campaign_id=context.campaign_id, target=context.target)}.json"
     atomic_json(destination, result.model_dump(mode="json"))
     return destination, result

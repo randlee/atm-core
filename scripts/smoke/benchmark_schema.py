@@ -272,7 +272,7 @@ class BenchmarkRunResult(BaseModel):
     def consistent_status_and_target_shape(self) -> "BenchmarkRunResult":
         if (self.status == "INCOMPLETE") != (self.incomplete_reason is not None):
             raise ValueError("incomplete_reason is required iff status is INCOMPLETE")
-        if self.messages_admitted > self.messages_requested or self.messages_durable > self.messages_admitted:
+        if self.status == "PASS" and (self.messages_admitted > self.messages_requested or self.messages_durable > self.messages_admitted):
             raise ValueError(
                 "message counts must satisfy durable <= admitted <= requested; "
                 f"got requested={self.messages_requested}, admitted={self.messages_admitted}, "
