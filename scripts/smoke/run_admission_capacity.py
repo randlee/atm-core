@@ -355,6 +355,14 @@ def write_v4_evidence(
         evidence["passed"] = False
         evidence["failure"] = f"count invariant violation (real counts are recorded): {error}"
         result = v4_result_from_evidence(evidence, context=context)
+    if result.status == "FAIL" and result.messages_durable > result.messages_admitted:
+        result = result.model_copy(update={
+            "status": "INCOMPLETE",
+            "incomplete_reason": (
+                f"count invariant violation: requested={result.messages_requested}, "
+                f"admitted={result.messages_admitted}, durable={result.messages_durable}"
+            ),
+        })
     destination = directory / f"{artifact_id(campaign_id=context.campaign_id, target=context.target)}.json"
     atomic_json(destination, result.model_dump(mode="json"))
     return destination, result
