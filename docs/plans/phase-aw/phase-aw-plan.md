@@ -1,5 +1,5 @@
 ---
-title: "Phase AW — Unified retained runtime logging and graft observability"
+title: "Phase AW — Unified retained runtime logging, graft observability, and native tool parity"
 phase: AW
 branch: plan/phase-aw
 sprint_branches: per-sprint, declared in each sprint doc's frontmatter; all
@@ -9,7 +9,7 @@ status: draft — awaiting quality-mgr plan review
 owner: fenix (plan author, coordinator); dev agents per sprint
 base_revision: ba4c91bb3 (develop)
 integration_branch: integrate/phase-aw
-issues: "#905 (unify retained runtime logging), #904 (graft observability bindings)"
+issues: "#905 (unify retained runtime logging), #904 (graft observability bindings), #952 (hermes-atm native tool parity with atm CLI)"
 dependency_relations:
   - prerequisite: AW.1
     dependent: AW.2
@@ -25,13 +25,23 @@ dependency_relations:
     dependent: AW.3
     relation: must_follow
     scope: AW.3's merged `atm log` view must read the AW.4 satellite file
+  - prerequisite: AW.4
+    dependent: AW.5
+    relation: must_follow
+    scope: same projection surface (atm-graft-python result types,
+      hermes-atm native_tools.py); AW.4 lands the envelope shape first
+  - related: AW.5
+    relation: parallel_safe
+    scope: parallel_safe with AW.3 (disjoint files)
 ---
 
 # Phase AW — Unified retained runtime logging and graft observability
 
 > Evidence base: read-only code map of develop @ ba4c91bb3 (2026-09-02),
-> GitHub issues #905 and #904 (Rand, 2026-08-16). Both issues are
-> delivered together in this phase per #905's own requirement.
+> GitHub issues #905 and #904 (Rand, 2026-08-16) and #952 (Rand,
+> 2026-08-19). #905 and #904 are delivered together per #905's own
+> requirement; #952 was added 2026-09-03 (team-lead) because it edits the
+> same hermes-atm / atm-graft-python projection surface as AW.4.
 
 ## 1. Problem
 
@@ -71,13 +81,21 @@ path at all:
    (`crates/atm-graft-python/src/lib.rs:433-644`) but imports no
    observability crate; nothing is retained for native Hermes calls.
    `atm log` (`crates/atm/src/commands/log.rs`) reads one JSONL file only.
+7. **Native tool parity gap (#952).** `crates/hermes-atm/src/hermes_atm/native_tools.py`
+   projects `atm_list/atm_read/atm_send` results by hand
+   (`_list_result/_read_result/_send_result`) and the binding's result
+   types (`crates/atm-graft-python/src/tool_types.rs`) carry no envelope:
+   `from_agent` vs CLI `from`, no `bucket_counts`/`selection_mode`/
+   `history_collapsed`/`action`/`team`/`agent`/`sender`/`summary`,
+   `+00:00` vs `Z` timestamps, and `atm_read` never returns the body the
+   store holds.
 
 ## 2. Acceptance contract (binding for the phase)
 
 The two issue checklists are the literal deliverable list. Each sprint doc
 maps its acceptance criteria back to the checklist items it closes; the phase
-is complete only when every checkbox in #905 and #904 is claimed by exactly
-one sprint and verified by quality-mgr.
+is complete only when every checkbox in #905, #904, and #952 is claimed by
+exactly one sprint and verified by quality-mgr.
 
 Phase-wide invariants (apply to every sprint):
 
@@ -110,18 +128,21 @@ Phase-wide invariants (apply to every sprint):
 | AW.2 | [sprint-AW.2-sqlite-diagnostic-timeline.md](./sprint-AW.2-sqlite-diagnostic-timeline.md) | `diagnostic_events` table, bounded async timeline writer with retention/pruning, `DiagnosticTimelineStore` contract, production `SqliteObservability` adapter replacing `NullSqliteObservability`, saturation/transition diagnostics, drop counters. |
 | AW.3 | [sprint-AW.3-health-and-log-query.md](./sprint-AW.3-health-and-log-query.md) | Drop/degradation counters in health and doctor output, `atm log --source jsonl|timeline|merged` with timestamp-ordered merge over canonical JSONL + graft fallback satellite + SQLite timeline, retained-log contract documentation rewrite. |
 | AW.4 | [sprint-AW.4-graft-fallback-observability.md](./sprint-AW.4-graft-fallback-observability.md) | Rust-owned observability API on the `atm-graft-python` Maturin binding: path diagnostics, fallback satellite emitter, the four-event contract on daemon-unavailable/recovery paths, envelope diagnostic on fallback write failure, Python 3.11–3.14 tests. |
+| AW.5 | [sprint-AW.5-native-tool-parity.md](./sprint-AW.5-native-tool-parity.md) | #952: typed list/read/send envelopes in `atm-core` shared by CLI `--json` and the binding; `atm_read` returns the full message; hermes-atm projections become pass-throughs; key-for-key parity test against the CLI. |
 
 Dependency rationale: AW.2's production adapter emits through AW.1's bridge
 (must_follow). AW.3 queries what AW.2 persists and merges what AW.4 writes
 (must_follow both). AW.4 depends on AW.1 only for the shared path constant
 in `atm-observability`, which AW.1 lands first as a one-line deliverable;
-AW.4 is otherwise parallel_safe with AW.1 and AW.2.
+AW.4 is otherwise parallel_safe with AW.1 and AW.2. AW.5 must follow AW.4
+(same projection files) and is parallel_safe with AW.3.
 
 ## 4. Execution notes
 
 - Branch strategy: `gh stack` rooted at `integrate/phase-aw`, order
-  AW.1 → AW.2 → AW.4 → AW.3. Provisioning is task **AW.0** (team-lead):
-  create `integrate/phase-aw` from `develop`, create the four sprint
+  AW.1 → AW.2 → AW.4 → AW.3 → AW.5 (AW.5 may branch from AW.4 directly
+  and run alongside AW.3). Provisioning is task **AW.0** (team-lead):
+  create `integrate/phase-aw` from `develop`, create the five sprint
   branches, run `gh stack init`, record `gh stack view --json` here.
 - Each sprint: dev agent implements on its branch, PR opened on first push
   targeting the parent branch in the stack, `qa-pr<N>-r1` dispatched to
