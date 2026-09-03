@@ -65,6 +65,16 @@ report.
    gated on parity.
 
 Steps 2 and 3 run concurrently; step 1 runs whenever atmbench is free.
+
+Host precondition for every step (Rand, 2026-09-03, primary blocker seen
+on the first cross-host ping): macOS shows a blocking Local Network
+permission prompt the first time the atm daemon or CLI reaches a `.local`
+peer, and the peer send fails (`RemoteDeliveryUnconfirmed`, "could not
+connect to direct peer") until it is answered. Before smoke, each runner
+grants Local Network access to the candidate's atm binaries on their host
+(System Settings → Privacy & Security → Local Network) and confirms one
+cross-host `atm send` round-trips. A rebuilt or re-signed binary can
+re-trigger the prompt; see §5 item 7 (#1140).
 Repo suites (`just ci`, test-graft-python, test-hermes-graft-bridge,
 test-hermes-graft-smoke, test-admission-capacity, test-queue-hooks-python,
 test-queue-hooks-python-codex) are not re-run; their green CI runs on the
@@ -115,6 +125,10 @@ candidate commit are cited by run id.
 5. No isolated Windows benchmark account; cwin results are informational.
 6. Send-family benchmark reports do not capture the executing account
    in-band the way the read family does after AV-PROD-001R.
+7. macOS Local Network permission prompt blocks first cross-host peer
+   traffic per binary (see §2 precondition); tracked as atm-core #1140
+   (whether stable code signing or a launch-time probe can keep grants
+   across builds), not fixed here.
 
 ## 6. Open questions for Rand
 
