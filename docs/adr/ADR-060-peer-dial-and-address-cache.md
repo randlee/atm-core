@@ -78,9 +78,12 @@ record; they are not to be relaxed, reordered, or duplicated elsewhere.
    authority and the per-address cause. The public error message names the
    remote authority and the per-address causes (the HTTP boundary redacts the
    separate `cause` field, so the diagnosis must live in the message). The
-   outer connect guard allows `DIAL_REPORT_GRACE` (250 ms) beyond the request
-   deadline so the loop's per-address diagnosis, not a bare timeout, is what
-   the caller sees. Message bodies, tokens, and raw configuration are never
+   dial loop is bounded `DIAL_REPORT_GRACE` (250 ms) *inside* the request
+   deadline, reserved out of the budget rather than added to it, because the
+   caller's own request timeout fires at the full deadline; the loop therefore
+   finishes first and its per-address diagnosis, not a bare timeout, is what
+   the caller sees. When the remaining budget is at or below the grace the
+   loop uses what remains. Message bodies, tokens, and raw configuration are never
    logged (#904).
 
 ## Consequences
@@ -91,7 +94,9 @@ record; they are not to be relaxed, reordered, or duplicated elsewhere.
 - A peer that changes address is reached inside one request after at most
   one wasted half-budget dial against the old address; no error escapes.
 - Steady-state throughput is unaffected: the module runs only on connection
-  establishment. Pooled connections and `reqwest`'s own pool bypass it
+  establishment (independently confirmed by a hot-path review on PR #1142:
+  pooled reuse, `reqwest` pooled reuse, UDS, and loopback paths are
+  unchanged; a cache hit is one mutex-guarded map lookup, no I/O). Pooled connections and `reqwest`'s own pool bypass it
   entirely for requests on an existing connection. Same-host UDS and loopback
   paths do not use it.
 - Any future change to ordering, cap, budget split, TTL floor, cache key

@@ -278,15 +278,22 @@ impl PeerConnectionPool {
         let target = format!("direct peer `{authority}`");
         let connect_timeout = || peer_connect_deadline_failure(authority, &target);
         let remaining = deadline.remaining().ok_or_else(connect_timeout)?;
-        // The dial loop is itself bounded by `deadline`; the outer guard only
-        // exists as a backstop and is given a short grace so the loop's
-        // per-address diagnosis, not a bare timeout, is what gets reported.
+        // The caller's own request timeout fires exactly at `deadline`, so the
+        // dial loop is bounded slightly *inside* the budget: it finishes, and
+        // reports its per-address diagnosis, before any bare timeout can win
+        // the race. The outer guard here is only a backstop at the budget.
+        let dial_deadline = RequestDeadline::after(
+            remaining
+                .checked_sub(DIAL_REPORT_GRACE)
+                .filter(|reserved| !reserved.is_zero())
+                .unwrap_or(remaining),
+        );
         let stream = tokio::time::timeout(
-            remaining + DIAL_REPORT_GRACE,
+            remaining,
             self.shared.addresses.connect(
                 peer,
                 port,
-                deadline,
+                dial_deadline,
                 resolve_peer_addresses,
                 TcpStream::connect,
             ),

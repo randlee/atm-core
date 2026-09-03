@@ -25,9 +25,11 @@ use tokio::time::Instant;
 /// for any single address to connect, defeating the per-attempt bound.
 pub(crate) const MAX_DIAL_CANDIDATES: usize = 4;
 
-/// Extra time the outer connect guard allows past the request deadline so the
-/// dial loop, which is bounded by the same deadline, reports its per-address
-/// diagnosis instead of losing the race to a bare timeout.
+/// Slice of the request budget reserved *out of* the dial loop's deadline so
+/// the loop finishes, and reports its per-address diagnosis, before the
+/// caller's request timeout fires at the full deadline. The total stays
+/// bounded by the request budget; when the budget is at or below the grace
+/// the loop simply uses what remains.
 pub(crate) const DIAL_REPORT_GRACE: Duration = Duration::from_millis(250);
 
 /// Resolved dial order for one direct peer authority.
