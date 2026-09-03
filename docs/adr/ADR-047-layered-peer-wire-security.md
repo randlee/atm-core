@@ -60,6 +60,12 @@ Doctor, retained diagnostics, smoke JSON/XHTML, and benchmark evidence must
 record the active peer-wire mode. Plaintext-test evidence cannot satisfy any
 mTLS or peer-allowlist acceptance criterion.
 
+Legacy literal-IP trusted-peer rows are a fail-closed admission concern
+layered on top of the selected mTLS mode, not a peer-wire mode of their own;
+see [Legacy literal-IP trusted-peer admission (issue
+#972)](#legacy-literal-ip-trusted-peer-admission-issue-972) below for the
+`LegacyLiteralIpPolicy` default and its narrowly-scoped opt-out.
+
 ## AO.3 implementation evidence
 
 AO.3 implements the launch seam in `atm-daemon-bootstrap`. It parses
@@ -80,3 +86,44 @@ host only after the client certificate/pin verification completes before HTTP
 decode. Startup writes the selected public mode to the retained observability
 port and daemon doctor context; neither includes key material, certificate
 contents, pins, or raw trust records.
+
+## Legacy literal-IP trusted-peer admission (issue #972)
+
+Once mTLS is selected, `peer-tls` classifies every trusted-peer row with
+`atm_storage::TrustedPeerCatalogAudit::from_peers` (durable-hostname vs.
+legacy literal-IP, each split by enabled/disabled) and admits the catalog
+under a typed `peer_tls::LegacyLiteralIpPolicy`:
+
+- `LegacyLiteralIpPolicy::FailClosed` — the default. Any *enabled*
+  trusted-peer row that predates durable-hostname enforcement and still uses
+  a literal IP authority (`HostName::is_durable_hostname() == false`) fails
+  startup closed with `ATM_PEER_CONFIG_VALIDATION_FAILED`. The error names
+  every offending host and carries the exact `atm peer trust migrate --map
+  <ip>=<hostname> --yes` / `atm peer trust revoke --host <ip> --yes`
+  remediation (rendered by `TrustedPeerCatalogAudit::migrate_command` /
+  `::revoke_command`, the single source of truth for that command text), so
+  recovery never requires a manual SQLite edit. A *disabled* legacy
+  literal-IP row is historical only under either policy: it is reported
+  with a `tracing::warn!` but never blocks startup.
+- `LegacyLiteralIpPolicy::SkipWithWarning` — selected only via
+  `ATM_PEER_TRUST_SKIP_LEGACY_LITERAL_IP` (exact value `"1"`; see below).
+  Enabled legacy literal-IP rows are dropped from the trust catalog (never
+  authenticated, in either direction) and a `tracing::warn!` names each
+  skipped host.
+
+Operators can also preempt the fail-closed path entirely, at any time, with
+`atm peer trust migrate` (issue #972): `--map IP=HOSTNAME` converts a legacy
+literal-IP row to the durable hostname while preserving its fingerprint and
+port, and a bare `--yes` (no `--map`) revokes every remaining legacy
+literal-IP row. `atm doctor` (both `--json` and human-readable text) reports
+every legacy literal-IP row up front, before daemon launch, using the same
+`TrustedPeerCatalogAudit` projection so its remediation text can never drift
+from what `peer-tls` actually enforces.
+
+`ATM_PEER_TRUST_SKIP_LEGACY_LITERAL_IP` is an explicit, narrowly-scoped
+testing/benchmarking opt-out for a mixed old-IP/new-hostname catalog during
+migration; it does not exist outside that scope and must never be treated
+as a general trust bypass. It is a trust-catalog admission knob only — it
+cannot select, or fall back to, a different peer-wire mode, so it does not
+conflict with this ADR's environment-selection prohibition for
+`--peer-wire-security`.

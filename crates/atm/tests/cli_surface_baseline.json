@@ -1503,6 +1503,45 @@
               "args": [
                 {
                   "has_default": false,
+                  "id": "map",
+                  "long": "map",
+                  "num_args": {
+                    "max": 1,
+                    "min": 1
+                  },
+                  "required": false,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "stderr_logs",
+                  "long": "stderr-logs",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "yes",
+                  "long": "yes",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                }
+              ],
+              "name": "migrate",
+              "subcommands": []
+            },
+            {
+              "args": [
+                {
+                  "has_default": false,
                   "id": "fingerprint",
                   "long": "fingerprint",
                   "num_args": {
