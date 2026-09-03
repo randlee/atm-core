@@ -66,8 +66,9 @@ parallel_safe: [AW.4]
    `DiagnosticCountersSource` (phase plan §2) over bridge + timeline stats.
 5. **Production `SqliteObservability` adapter**
    (`DaemonSqliteObservability` in `atm-daemon-bootstrap`) replaces
-   `NullSqliteObservability` at `lib.rs:741,750` and
-   `shared_db_reader_lanes.rs:43`. Every `SqliteObservability` method emits
+   `NullSqliteObservability` at its two production construction sites
+   (`lib.rs:741,750`); the `#[cfg(test)]` helper in
+   `shared_db_reader_lanes.rs` keeps the null adapter. Every `SqliteObservability` method emits
    `tracing::warn!`/`error!` with `origin = "sqlite"` and a `code`
    (`ATM_SQLITE_WRITER_TIMEOUT`, `ATM_SQLITE_WAL_CHECKPOINT_FAILED`,
    `ATM_SQLITE_WRITE_FAILED`, `ATM_SQLITE_QUEUE_SATURATED`). Per the phase
@@ -86,16 +87,16 @@ parallel_safe: [AW.4]
    `ATM_LOG_SINK_RECOVERED`; rate-limited to one transition pair per
    `DEGRADATION_RATE_LIMIT_SECS = 60` per sink. Stats are exposed for AW.3
    health output.
+8. **Retention/prune**: `DIAGNOSTIC_MAX_ROWS = 20_000`,
+   `DIAGNOSTIC_MAX_AGE_DAYS = 7`, `DIAGNOSTIC_PRUNE_BATCH = 1000`; prune
+   runs as a `RecordDiagnostics`-lane op (same priority) after every flush
+   that crosses a `DIAGNOSTIC_PRUNE_CHECK_EVERY = 500` written-row boundary.
 9. **ADR amendment**: append a "Phase AW amendment (2026-09)" section to
    `docs/adr/ADR-ATM-RUSQLITE-002.md` recording the second, lower-priority
    diagnostic lane on the same single write worker/connection, the biased
    drain rule, the batch bound, and that diagnostic persistence failures
    are counted and dropped rather than surfaced as store errors. The
    `adr-index` lint must pass.
-8. **Retention/prune**: `DIAGNOSTIC_MAX_ROWS = 20_000`,
-   `DIAGNOSTIC_MAX_AGE_DAYS = 7`, `DIAGNOSTIC_PRUNE_BATCH = 1000`; prune
-   runs as a `RecordDiagnostics`-lane op (same priority) after every flush
-   that crosses a `DIAGNOSTIC_PRUNE_CHECK_EVERY = 500` written-row boundary.
 
 ## Acceptance criteria
 
@@ -123,16 +124,18 @@ parallel_safe: [AW.4]
   rate-limit window and one `ATM_LOG_SINK_RECOVERED` after the recovery
   window.
 - AC8 (905-5): `NullSqliteObservability` has no production construction
-  site (test greps the three former sites).
+  site: a source-scan test asserts every non-`#[cfg(test)]` reference in
+  `crates/atm-storage-rusqlite/src/` is the type definition itself or a
+  test-only helper.
 - AC9 (905-4): writer-lane priority test: with 10_000 queued primary ops and
   all `DIAGNOSTIC_QUEUE_BATCHES` batch slots full, all primary ops complete
   before any diagnostic batch is written (assert via a recording writer
   hook).
-- AC11: `ADR-ATM-RUSQLITE-002.md` contains the amendment section and the
-  `adr-index` lint passes.
 - AC10: no file under `crates/atm-daemon/` is modified; boundary lint
   passes (`atm-storage` gains no new dependency; `atm-daemon-bootstrap` →
   `atm-observability` edge already allowlisted by AW.1).
+- AC11: `ADR-ATM-RUSQLITE-002.md` contains the amendment section and the
+  `adr-index` lint passes.
 
 ## Required validation
 

@@ -146,10 +146,10 @@ allowlist is absent from the record even if present on the event.
   allowlist entry matches `crates/atm-observability/Cargo.toml` exactly,
   and the `boundary_enforcement.rs` source-scan test passes (and fails on a
   synthetic `TracingBridgeLayer::install` call placed in another crate).
-- AC10: `DiagnosticSink`, `RetainedEvent`, `SinkOffer`, `DropReason` and
+- AC9: `DiagnosticSink`, `RetainedEvent`, `SinkOffer`, `DropReason` and
   `DiagnosticCounters`/`DiagnosticCountersSource` exist with the signatures
   in the phase plan §2 (doc-test compiles them).
-- AC9: no file under `crates/atm-daemon/` is modified.
+- AC10: no file under `crates/atm-daemon/` is modified.
 
 ## Required validation
 

@@ -58,11 +58,13 @@ selected (`PyMessage::from_read` → `_message_result`). The real gaps are:
    a twin message. The test
    lives in `crates/atm-graft-python/tests/test_cli_parity.py` and is in the
    3.11–3.14 matrix.
-4. **Boundary (definite)**: no new crate edge. `atm-graft-python` already
-   depends on `atm-core` (`boundaries/atm-graft-python/hermes-graft-binding.toml`
-   `allowed_dependencies = ["atm-core", "atm-graft", "pydantic"]`; manifest
-   allowlist at `.just/lint-config.toml` for
-   `crates/atm-graft-python/Cargo.toml` already lists it). The record's
+4. **Boundary (definite)**: no new crate edge. The baseline this sprint
+   diffs against is the post-AW.4 record (`must_follow: [AW.4]`):
+   `boundaries/atm-graft-python/hermes-graft-binding.toml`
+   `allowed_dependencies = ["atm-core", "atm-graft", "atm-observability",
+   "pydantic"]`, unchanged here; `atm-core` is already listed there and in
+   the `.just/lint-config.toml` manifest allowlist for
+   `crates/atm-graft-python/Cargo.toml`. The record's
    `[contracts].response_types` becomes exactly
    `["PyMessage", "PyMailboxWorkCounts", "PyNudge", "AtmSendResult",
    "AtmAckResult", "AtmReadResult", "AtmListRow", "AtmListResult",
@@ -70,9 +72,10 @@ selected (`PyMessage::from_read` → `_message_result`). The real gaps are:
    now wrap `SendOutcome`/`ReadOutcome`/`ListOutcome` rather than
    redeclaring fields), `AtmAckResult` and `PyObservabilityPaths` are the
    AW.4 additions (AW.4 D3a/D5 commit them first; this sprint re-asserts
-   the final list). `request_types` is unchanged from AW.4's
-   `[..., "AtmSendRequest", "AtmAckRequest", "AtmReadRequest",
-   "AtmListRequest"]`. Nothing else in the record changes.
+   the final list). `request_types` is unchanged from AW.4's final list and
+   is exactly `["PyAgentAddress", "PyGraftSessionOptions",
+   "AtmSendRequest", "AtmAckRequest", "AtmReadRequest", "AtmListRequest"]`.
+   Nothing else in the record changes.
 
 ## Acceptance criteria
 
@@ -90,8 +93,8 @@ selected (`PyMessage::from_read` → `_message_result`). The real gaps are:
   `DeprecationWarning`; `row.from` is the documented field.
 - AC5: no change to list/read/send/ack scoping rules or CLI output
   (cli_surface and existing CLI JSON snapshot tests unchanged); boundary
-  lint passes with the D4 `response_types` list verbatim; no
-  `crates/atm-daemon/` change.
+  lint passes with the D4 `allowed_dependencies`, `request_types` and
+  `response_types` lists verbatim; no `crates/atm-daemon/` change.
 - AC6 (952-E1; atm_ack parity): the parity test's ack case passes —
   `atm_ack(...).to_json()` equals `atm ack <id> "<reply>" --json`
   key-for-key after canonical JSON normalisation, and both leave the

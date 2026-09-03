@@ -32,7 +32,7 @@ parallel_safe: [AW.2]
    requires_ack=false, acknowledges_message_id=Some(id))`
    (`lib.rs:522-537`). Additions: `PyGraftSession::ack_tool(message_id,
    reply)` delegating to that path; pydantic `AtmAckRequest { message_id,
-   reply }` in `python/atm_graft/models.py`; `AtmAckResult` = the same
+   reply }` in `crates/atm-graft-python/python/atm_graft/models.py`; `AtmAckResult` = the same
    `AtmSendResult` type; hermes-atm `native_tools.py` `atm_ack` handler,
    schema entry and `register_tools` registration ("Acknowledge one ATM
    message that requires an ack"); `boundaries/atm-graft-python/hermes-graft-binding.toml`
@@ -76,8 +76,9 @@ parallel_safe: [AW.2]
    `atm-graft-python -> atm-observability`. Changes:
    `boundaries/atm-graft-python/hermes-graft-binding.toml`
    `allowed_dependencies` becomes `["atm-core", "atm-graft",
-   "atm-observability", "pydantic"]`, `response_types` gains
-   `PyObservabilityPaths` and the ack types from D3a;
+   "atm-observability", "pydantic"]`; `response_types` gains
+   `AtmAckResult` and `PyObservabilityPaths`; `request_types` gains
+   `AtmAckRequest` (final lists are stated verbatim in AW.5 D4);
    `.just/lint-config.toml` line 156 allowlist for
    `crates/atm-graft-python/Cargo.toml` gains `"atm-observability"`;
    `boundaries/atm-observability/tracing-bridge.toml` `allowed_dependents`
