@@ -717,6 +717,16 @@ THOROUGH_ROWS = [
         pass_note="raw CLI bootstrap, socket ownership, and daemon lock state all stay rooted under the accepted ATM_HOME runtime subtree",
     ),
     SuiteRowSpec(
+        id="AD18-RUNTIME-ROOT-002",
+        flow="sibling worktrees with one ATM_HOME keep one canonical runtime root while preserving invocation-directory reporting",
+        commands=[
+            ["cargo", "test", "-p", "agent-team-mail", "composition::tests::resolve_command_runtime_context_reuses_atm_home_across_sibling_worktrees", "--", "--exact"],
+            ["cargo", "test", "-p", "agent-team-mail", "commands::members::tests::build_query_uses_command_invocation_dir_for_live_cwd", "--", "--exact"],
+            ["cargo", "test", "-p", "agent-team-mail", "commands::teams::tests::add_member_defaults_member_home_dir_to_command_invocation_dir", "--", "--exact"],
+        ],
+        pass_note="sibling-worktree regression coverage proves one ATM_HOME stays canonical while command-local invocation directories remain distinct and explicit",
+    ),
+    SuiteRowSpec(
         id="AD19-READ-OUTPUT-001",
         flow="read mutation returns the message it actually mutated together with post-mutation bucket counts",
         commands=[
