@@ -915,7 +915,8 @@ fn map_message_insert_error(target: &SharedDbTarget, error: rusqlite::Error) -> 
     ) {
         return AtmError::validation(
             "mail-store message violates a durable message-id or successor uniqueness invariant",
-        );
+        )
+        .with_cause(error);
     }
     crate::shared_db::sqlite_error(target, "failed to upsert mail-store message", error)
 }
