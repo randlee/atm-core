@@ -39,6 +39,10 @@ report.
    - `just benchmark-read` (read/query family, Phase AV) → `site/reports/read-query-benchmark/`
    - `just smoke thorough` in the same session → `site/reports/smoke/<os>/<host>/`
    - `just reports-index --check` green; reports committed and pushed.
+   Precondition: `just benchmark-read` and
+   `site/reports/read-query-benchmark/baselines.json` land with Phase AV
+   (PR #1120); until that merges, step 1 covers the send family only and
+   READY is not reachable (§5 item 7).
    Floors: committed `baselines.json` per family (AO2 ratchet convention;
    read/query revision 1, unrounded p50). A missed floor is a product
    failure, never re-run to pass.
@@ -57,12 +61,14 @@ report.
 Steps 2 and 3 run concurrently; step 1 runs whenever atmbench is free.
 Repo suites (`just ci`, test-graft-python, test-hermes-graft-bridge,
 test-hermes-graft-smoke, test-admission-capacity, test-queue-hooks-python,
-test-queue-hooks-codex) are not re-run; their green CI runs on the
+test-queue-hooks-python-codex) are not re-run; their green CI runs on the
 candidate commit are cited by run id.
 
 ## 3. Evidence hand-in and verdict
 
-- Each runner replies by ATM with: candidate commit, host/account, the
+- Each runner replies by ATM with (sender of record: fenix for step 1,
+  fenix@atm-dev on rand-m5 for step 2, Rand for step 3, relaying cwin's
+  report paths): candidate commit, host/account, the
   report paths or evidence PR, and pass/fail per family or tier.
 - fenix collects the three replies plus the CI run ids into one QA
   dispatch to quality-mgr (reviewers: rust-qa-agent and req-qa over the
@@ -84,6 +90,9 @@ candidate commit are cited by run id.
   Rand's approval, `release-candidate-vX.Y.0` cut from the bump commit,
   publisher preflights as today. The publisher preflight cites the READY
   verdict message and the evidence commits; no manifest file is required.
+  The `preflight.xml.j2` publishing template therefore takes only the
+  publish-channel `manifest_path`; the readiness-manifest variable added
+  by round 12 is reverted in this PR.
 
 ## 5. Known gaps (recorded, not fixed here)
 
@@ -99,6 +108,9 @@ candidate commit are cited by run id.
 5. No isolated Windows benchmark account; cwin results are informational.
 6. Send-family benchmark reports do not capture the executing account
    in-band the way the read family does after AV-PROD-001R.
+7. The read/query benchmark family (`just benchmark-read`, its
+   `baselines.json`) does not exist on develop until Phase AV PR #1120
+   merges; step 1 is incomplete before that.
 
 ## 6. Open questions for Rand
 
@@ -535,3 +547,11 @@ candidate commit are cited by run id.
   anyhow." Document rewritten to the three-step message-coordinated
   process above; the committed manifest/duration/refusal schemas and
   examples are removed with it. Earlier rounds remain as history only.
+- **r1 (2026-09-03, quality-mgr FAIL @ 6ba171c2a, PR #1139 comment
+  5519822940)**: Blocking: `preflight.xml.j2` still hard-required
+  `release_readiness_manifest_path` (round-12 addition) → template, eval
+  and test reverted to their pre-round-12 form; §4 states it. Important:
+  `just benchmark-read` / read-query `baselines.json` absent until PR #1120
+  → precondition in §2 step 1 and §5 item 7; step-3 sender of record
+  unstated → §3 names Rand. Minor: `test-queue-hooks-codex` →
+  `test-queue-hooks-python-codex`.
