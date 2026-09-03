@@ -8,11 +8,11 @@
 //! self-detecting table rebuild that migrates those databases.
 
 use crate::schema_support::{
-    ensure_columns_match_canonical, merge_restore_failure, table_column_names,
+    TableRebuildPlan, TableRebuildView, rebuild_table, run_within_foreign_keys_toggle,
 };
-use crate::shared_db::{SharedDbTarget, sqlite_error};
+use crate::shared_db::{SharedDbTarget, SqliteConnection, sqlite_error};
 use atm_storage::error::AtmError;
-use rusqlite::{Connection, Transaction, TransactionBehavior};
+use rusqlite::{Transaction, TransactionBehavior};
 use std::time::Instant;
 
 /// Canonical `mail_messages` table DDL, parameterized by its `CREATE` clause.
@@ -123,7 +123,7 @@ const MAIL_MESSAGES_INDEX_DDL: &str = mail_messages_index_ddl!();
 /// rolls the rebuild transaction back, so the legacy table is left untouched
 /// and a later startup retries.
 pub(crate) fn ensure_mail_messages_message_text_nullable(
-    connection: &mut Connection,
+    connection: &mut SqliteConnection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     use rusqlite::OptionalExtension;
@@ -146,45 +146,20 @@ pub(crate) fn ensure_mail_messages_message_text_nullable(
         return Ok(());
     }
 
-    // `PRAGMA foreign_keys` is a no-op inside a transaction, so it must be
-    // toggled here: `mail_message_states` has a foreign key onto
-    // `mail_messages`, and the drop/rename below would otherwise cascade the
-    // state rows away. This follows SQLite's documented ALTER TABLE procedure.
-    connection
-        .pragma_update(None, "foreign_keys", "OFF")
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to disable foreign keys for the mail_messages rebuild",
-                error,
-            )
-        })?;
-    let rebuild = rebuild_mail_messages_with_nullable_message_text(connection, target);
-    let restored = connection
-        .pragma_update(None, "foreign_keys", "ON")
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to restore foreign keys after the mail_messages rebuild",
-                error,
-            )
-        });
-    match (rebuild, restored) {
-        (Ok(()), outcome) => outcome,
-        (Err(failure), Ok(())) => Err(failure),
-        // The connection is left with foreign keys disabled; surface that
-        // alongside the rebuild failure instead of dropping it.
-        (Err(failure), Err(restore)) => Err(merge_restore_failure(failure, &restore)),
-    }
+    // `mail_message_states` has a foreign key onto `mail_messages`, and the
+    // rebuild's drop/rename would otherwise cascade the state rows away; see
+    // `run_within_foreign_keys_toggle`.
+    run_within_foreign_keys_toggle(connection, target, "mail_messages", |connection| {
+        rebuild_mail_messages_with_nullable_message_text(connection, target)
+    })
 }
 
 /// Performs the SQLite table rebuild that relaxes `message_text` to nullable.
 ///
-/// The stages below are SQLite's documented ALTER TABLE procedure. Callers
-/// must have disabled `PRAGMA foreign_keys` and must restore it afterwards;
-/// see [`ensure_mail_messages_message_text_nullable`].
+/// Callers must have disabled `PRAGMA foreign_keys` and must restore it
+/// afterwards; see [`ensure_mail_messages_message_text_nullable`].
 fn rebuild_mail_messages_with_nullable_message_text(
-    connection: &mut Connection,
+    connection: &mut SqliteConnection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     let started = Instant::now();
@@ -198,12 +173,21 @@ fn rebuild_mail_messages_with_nullable_message_text(
             )
         })?;
 
-    drop_catalog_view(&transaction, target)?;
-    let columns = create_staging_table(&transaction, target)?;
-    let copied = copy_rows_into_staging_table(&transaction, target, &columns)?;
-    swap_in_staging_table(&transaction, target)?;
-    restore_indexes_and_catalog_view(&transaction, target)?;
-    reject_foreign_key_violations(&transaction, target)?;
+    let copied = rebuild_table(
+        &transaction,
+        target,
+        &TableRebuildPlan {
+            table: "mail_messages",
+            staging_table: MAIL_MESSAGES_REBUILD_TABLE,
+            staging_table_ddl: MAIL_MESSAGES_REBUILD_TABLE_DDL,
+            index_ddl: MAIL_MESSAGES_INDEX_DDL,
+            view: Some(TableRebuildView {
+                name: "decomposed_messages",
+                restore: restore_decomposed_messages_view,
+            }),
+            check_foreign_keys: true,
+        },
+    )?;
 
     transaction.commit().map_err(|error| {
         sqlite_error(
@@ -222,150 +206,23 @@ fn rebuild_mail_messages_with_nullable_message_text(
     Ok(())
 }
 
-/// Drops the catalog view so the later rename cannot fail schema validation.
+/// Recreates the `decomposed_messages` catalog view, along with whatever
+/// template-catalog migrations it depends on, after the rebuild swap.
 ///
-/// SQLite validates view bodies during `ALTER TABLE ... RENAME`, and
-/// `decomposed_messages` selects from `mail_messages`. The view is recreated
-/// verbatim from its owning module by [`restore_indexes_and_catalog_view`].
-fn drop_catalog_view(
+/// `decomposed_messages` selects from `mail_messages`, so it must have been
+/// dropped before the swap's `ALTER TABLE ... RENAME`; this restores it
+/// verbatim from its owning module.
+fn restore_decomposed_messages_view(
     transaction: &Transaction<'_>,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
-    transaction
-        .execute_batch("DROP VIEW IF EXISTS decomposed_messages;")
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to drop the decomposed_messages view for the mail_messages rebuild",
-                error,
-            )
-        })
-}
-
-/// Creates the staging table and returns its canonical column list.
-///
-/// The staging table has the canonical shape by construction, so its columns
-/// are the authority the legacy table is checked against; a legacy table with
-/// an unknown or missing column is rejected rather than silently truncated.
-fn create_staging_table(
-    transaction: &Transaction<'_>,
-    target: &SharedDbTarget,
-) -> Result<Vec<String>, AtmError> {
-    transaction
-        .execute_batch(MAIL_MESSAGES_REBUILD_TABLE_DDL)
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to create the rebuilt mail_messages table",
-                error,
-            )
-        })?;
-    let columns = table_column_names(transaction, target, MAIL_MESSAGES_REBUILD_TABLE)?;
-    ensure_columns_match_canonical(
-        transaction,
-        target,
-        "mail_messages",
-        &columns.iter().map(String::as_str).collect::<Vec<_>>(),
-    )?;
-    Ok(columns)
-}
-
-/// Copies every legacy row into the staging table, returning the row count.
-fn copy_rows_into_staging_table(
-    transaction: &Transaction<'_>,
-    target: &SharedDbTarget,
-    columns: &[String],
-) -> Result<usize, AtmError> {
-    let column_list = columns
-        .iter()
-        .map(|column| format!("\"{column}\""))
-        .collect::<Vec<_>>()
-        .join(", ");
-    transaction
-        .execute(
-            &format!(
-                "INSERT INTO {MAIL_MESSAGES_REBUILD_TABLE} ({column_list}) SELECT {column_list} FROM mail_messages;"
-            ),
-            [],
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to copy rows into the rebuilt mail_messages table",
-                error,
-            )
-        })
-}
-
-/// Drops the legacy table and renames the staging table into its place.
-fn swap_in_staging_table(
-    transaction: &Transaction<'_>,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    transaction
-        .execute_batch(&format!(
-            "DROP TABLE mail_messages;
-             ALTER TABLE {MAIL_MESSAGES_REBUILD_TABLE} RENAME TO mail_messages;"
-        ))
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to swap in the rebuilt mail_messages table",
-                error,
-            )
-        })
-}
-
-/// Replays the mailbox indexes and recreates the catalog view after the swap.
-///
-/// Dropping the legacy table also dropped its indexes, so both are rebuilt
-/// from the definitions a fresh database uses.
-fn restore_indexes_and_catalog_view(
-    transaction: &Transaction<'_>,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    transaction
-        .execute_batch(MAIL_MESSAGES_INDEX_DDL)
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to recreate mail_messages indexes after the rebuild",
-                error,
-            )
-        })?;
     crate::template_catalog_schema::ensure_schema(transaction, target)
-}
-
-/// Fails the transaction when the rebuild left a dangling foreign key.
-fn reject_foreign_key_violations(
-    transaction: &Transaction<'_>,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let violations = transaction
-        .query_row(
-            "SELECT COUNT(1) FROM pragma_foreign_key_check;",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to run the foreign-key check after the mail_messages rebuild",
-                error,
-            )
-        })?;
-    if violations > 0 {
-        return Err(AtmError::mailbox_write(format!(
-            "mail_messages rebuild on {} left {violations} foreign key violation(s); rolling back",
-            target.display()
-        )));
-    }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schema_support::table_column_names;
     use crate::shared_db::{NEXT_IN_MEMORY_DB_ID, ensure_schema, open_connection_for_target};
     use std::sync::atomic::Ordering;
 
@@ -451,7 +308,7 @@ INSERT INTO mail_message_states(
         }
     }
 
-    fn legacy_mail_messages_connection(label: &str) -> (SharedDbTarget, Connection) {
+    fn legacy_mail_messages_connection(label: &str) -> (SharedDbTarget, SqliteConnection) {
         let target = in_memory_target(label);
         let connection = open_connection_for_target(&target).expect("open connection");
         connection
@@ -460,14 +317,14 @@ INSERT INTO mail_message_states(
         (target, connection)
     }
 
-    fn fresh_schema_connection(label: &str) -> (SharedDbTarget, Connection) {
+    fn fresh_schema_connection(label: &str) -> (SharedDbTarget, SqliteConnection) {
         let target = in_memory_target(label);
         let mut connection = open_connection_for_target(&target).expect("open connection");
         ensure_schema(&mut connection, &target).expect("fresh schema");
         (target, connection)
     }
 
-    fn message_text_notnull(connection: &Connection) -> i64 {
+    fn message_text_notnull(connection: &SqliteConnection) -> i64 {
         connection
             .query_row(
                 r#"SELECT "notnull" FROM pragma_table_info('mail_messages') WHERE name = 'message_text';"#,
@@ -477,13 +334,13 @@ INSERT INTO mail_message_states(
             .expect("probe message_text nullability")
     }
 
-    fn foreign_keys_enabled(connection: &Connection) -> i64 {
+    fn foreign_keys_enabled(connection: &SqliteConnection) -> i64 {
         connection
             .query_row("PRAGMA foreign_keys;", [], |row| row.get(0))
             .expect("read foreign_keys pragma")
     }
 
-    fn foreign_key_violations(connection: &Connection) -> i64 {
+    fn foreign_key_violations(connection: &SqliteConnection) -> i64 {
         connection
             .query_row(
                 "SELECT COUNT(1) FROM pragma_foreign_key_check;",
@@ -493,7 +350,7 @@ INSERT INTO mail_message_states(
             .expect("run foreign key check")
     }
 
-    fn schema_objects(connection: &Connection, object_type: &str) -> Vec<(String, String)> {
+    fn schema_objects(connection: &SqliteConnection, object_type: &str) -> Vec<(String, String)> {
         connection
             .prepare(
                 "SELECT name, sql FROM sqlite_master
@@ -509,7 +366,7 @@ INSERT INTO mail_message_states(
             .expect("decode sqlite_master rows")
     }
 
-    fn decomposed_view_sql(connection: &Connection) -> String {
+    fn decomposed_view_sql(connection: &SqliteConnection) -> String {
         connection
             .query_row(
                 "SELECT sql FROM sqlite_master WHERE type = 'view' AND name = 'decomposed_messages';",
@@ -519,7 +376,7 @@ INSERT INTO mail_message_states(
             .expect("read decomposed_messages view sql")
     }
 
-    fn mail_messages_rootpage(connection: &Connection) -> i64 {
+    fn mail_messages_rootpage(connection: &SqliteConnection) -> i64 {
         connection
             .query_row(
                 "SELECT rootpage FROM sqlite_master WHERE type = 'table' AND name = 'mail_messages';",
@@ -529,7 +386,7 @@ INSERT INTO mail_message_states(
             .expect("read mail_messages rootpage")
     }
 
-    fn legacy_rows(connection: &Connection) -> Vec<LegacyRow> {
+    fn legacy_rows(connection: &SqliteConnection) -> Vec<LegacyRow> {
         connection
             .prepare(
                 "SELECT team, agent, message_key, envelope_json, from_agent,

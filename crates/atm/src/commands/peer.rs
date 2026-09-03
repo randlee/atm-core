@@ -132,7 +132,7 @@ enum TrustSubcommand {
 
 /// One legacy literal-IP row and the migration action it will receive.
 struct MigrationPlanEntry {
-    legacy: TrustedPeer,
+    literal_ip_row: TrustedPeer,
     action: MigrationAction,
 }
 
@@ -351,14 +351,17 @@ fn build_migration_plan(
     }
     Ok(legacy_peers
         .into_iter()
-        .map(|legacy| {
+        .map(|literal_ip_row| {
             let action = map
                 .iter()
-                .find(|(source, _)| *source == legacy.host)
+                .find(|(source, _)| *source == literal_ip_row.host)
                 .map_or(MigrationAction::Revoke, |(_, target)| {
                     MigrationAction::Convert(target.clone())
                 });
-            MigrationPlanEntry { legacy, action }
+            MigrationPlanEntry {
+                literal_ip_row,
+                action,
+            }
         })
         .collect())
 }
@@ -370,7 +373,7 @@ fn print_migration_plan(plan: &[MigrationPlanEntry]) {
         return;
     }
     for entry in plan {
-        let status = if entry.legacy.enabled {
+        let status = if entry.literal_ip_row.enabled {
             "enabled"
         } else {
             "disabled"
@@ -383,7 +386,9 @@ fn print_migration_plan(plan: &[MigrationPlanEntry]) {
         };
         println!(
             "[{status}] {} (fingerprint {}, port {}): {action}",
-            entry.legacy.host, entry.legacy.fingerprint, entry.legacy.https_port
+            entry.literal_ip_row.host,
+            entry.literal_ip_row.fingerprint,
+            entry.literal_ip_row.https_port
         );
     }
 }
@@ -398,14 +403,14 @@ fn apply_migration_plan(
     for entry in plan {
         match entry.action {
             MigrationAction::Convert(target) => {
-                apply_migration_convert(store, &entry.legacy, &target)?;
+                apply_migration_convert(store, &entry.literal_ip_row, &target)?;
                 changed = true;
             }
             MigrationAction::Revoke => {
-                store.remove_trusted_peer(&entry.legacy.host)?;
+                store.remove_trusted_peer(&entry.literal_ip_row.host)?;
                 println!(
                     "revoked legacy literal-IP trusted peer {}",
-                    entry.legacy.host
+                    entry.literal_ip_row.host
                 );
                 changed = true;
             }
@@ -416,27 +421,27 @@ fn apply_migration_plan(
 
 fn apply_migration_convert(
     store: &(dyn PeerConfigStore + Send + Sync),
-    legacy: &TrustedPeer,
+    literal_ip_peer: &TrustedPeer,
     target: &HostName,
 ) -> std::result::Result<(), AtmError> {
     if let Some(existing) = store.trusted_peer(target)? {
-        if existing.fingerprint != legacy.fingerprint {
+        if existing.fingerprint != literal_ip_peer.fingerprint {
             return Err(AtmError::peer_config_validation(format!(
                 "trusted peer '{target}' already exists with a different fingerprint; \
                  resolve manually before migrating '{}'",
-                legacy.host
+                literal_ip_peer.host
             )));
         }
     } else {
         store.save_trusted_peer(&TrustedPeer {
             host: target.clone(),
-            fingerprint: legacy.fingerprint.clone(),
-            enabled: legacy.enabled,
-            https_port: legacy.https_port,
+            fingerprint: literal_ip_peer.fingerprint.clone(),
+            enabled: literal_ip_peer.enabled,
+            https_port: literal_ip_peer.https_port,
         })?;
     }
-    store.remove_trusted_peer(&legacy.host)?;
-    println!("migrated trusted peer {} to {target}", legacy.host);
+    store.remove_trusted_peer(&literal_ip_peer.host)?;
+    println!("migrated trusted peer {} to {target}", literal_ip_peer.host);
     Ok(())
 }
 
@@ -515,11 +520,16 @@ fn render_output<T: Serialize>(value: &T, json: bool) -> Result<String, AtmError
 
 #[cfg(test)]
 mod tests {
-    use super::{certificate, render_output, require_confirmation};
+    use super::{
+        PeerSubcommand, TrustCommand, TrustSubcommand, certificate, render_output,
+        require_confirmation,
+    };
+    use crate::commands::{Cli, Command};
     use std::sync::Mutex;
 
     use atm_storage::{
         AtmErrorCode, HostName, HttpsInterface, LocalCertificate, PeerConfigStore, TrustedPeer,
+        TrustedPeerCatalogAudit,
     };
     use clap::Parser;
 
@@ -1018,5 +1028,48 @@ mod tests {
                 .is_none()
         );
         assert!(store.list_trusted_peers().expect("list peers").is_empty());
+    }
+
+    /// RBQA-F002 drift guard: the migrate/revoke remediation strings rendered
+    /// by `TrustedPeerCatalogAudit` are the single source of truth for the
+    /// exact command text; this test parses them through the real top-level
+    /// `atm` clap `Cli` and asserts they resolve to the expected subcommand
+    /// and arguments, so a clap definition change that breaks the rendered
+    /// text is caught here instead of drifting silently.
+    #[test]
+    fn remediation_commands_parse_through_the_real_cli() {
+        let host: HostName = "192.168.128.29".parse().expect("host");
+
+        let migrate_command = TrustedPeerCatalogAudit::migrate_command(&host, "rand-m5.local");
+        let arguments: Vec<&str> = migrate_command.split_whitespace().collect();
+        let cli = Cli::try_parse_from(arguments).expect("migrate remediation command parses");
+        match cli.command {
+            Command::Peer(super::PeerCommand {
+                command:
+                    PeerSubcommand::Trust(TrustCommand {
+                        command: TrustSubcommand::Migrate { map, yes },
+                    }),
+            }) => {
+                assert_eq!(map, vec!["192.168.128.29=rand-m5.local".to_string()]);
+                assert!(yes);
+            }
+            other => panic!("expected `atm peer trust migrate`, got {other:?}"),
+        }
+
+        let revoke_command = TrustedPeerCatalogAudit::revoke_command(&host);
+        let arguments: Vec<&str> = revoke_command.split_whitespace().collect();
+        let cli = Cli::try_parse_from(arguments).expect("revoke remediation command parses");
+        match cli.command {
+            Command::Peer(super::PeerCommand {
+                command:
+                    PeerSubcommand::Trust(TrustCommand {
+                        command: TrustSubcommand::Revoke { host, yes },
+                    }),
+            }) => {
+                assert_eq!(host, "192.168.128.29");
+                assert!(yes);
+            }
+            other => panic!("expected `atm peer trust revoke`, got {other:?}"),
+        }
     }
 }

@@ -1883,6 +1883,9 @@ mod tests {
         let reports = legacy_literal_ip_peer_reports(&peers);
         assert_eq!(reports.len(), 2, "the durable hostname row is excluded");
 
+        let enabled_host: HostName = "192.168.128.29".parse().expect("host");
+        let disabled_host: HostName = "10.0.0.5".parse().expect("host");
+
         let enabled = reports
             .iter()
             .find(|report| report.host == "192.168.128.29")
@@ -1890,11 +1893,11 @@ mod tests {
         assert!(enabled.enabled);
         assert_eq!(
             enabled.migrate_command,
-            "atm peer trust migrate --map 192.168.128.29=<hostname> --yes"
+            atm_storage::TrustedPeerCatalogAudit::migrate_command(&enabled_host, "<hostname>")
         );
         assert_eq!(
             enabled.revoke_command,
-            "atm peer trust revoke --host 192.168.128.29 --yes"
+            atm_storage::TrustedPeerCatalogAudit::revoke_command(&enabled_host)
         );
 
         let disabled = reports
@@ -1904,7 +1907,7 @@ mod tests {
         assert!(!disabled.enabled);
         assert_eq!(
             disabled.revoke_command,
-            "atm peer trust revoke --host 10.0.0.5 --yes"
+            atm_storage::TrustedPeerCatalogAudit::revoke_command(&disabled_host)
         );
     }
 
