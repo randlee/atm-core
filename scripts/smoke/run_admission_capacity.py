@@ -1210,18 +1210,27 @@ def disposable_peer_host(roster: CapacityRoster) -> str:
     server-side pin map.  An operator may supply a host only through the
     explicit benchmark variable; no machine name is embedded in the runner.
     """
-    host = os.environ.get("ATM_CAPACITY_PEER_HOST", socket.getfqdn()).strip().rstrip(".")
+    configured = os.environ.get("ATM_CAPACITY_PEER_HOST")
+    host = (configured if configured is not None else socket.getfqdn()).strip().rstrip(".")
+    # Reverse-DNS on some hosts yields an ephemeral, oversized .arpa artifact.
+    # Prefer the durable local hostname before asking the operator to configure one.
+    invalid = host.endswith(".arpa") or len(host) > 64 or "." not in host or host.startswith(".")
+    if invalid and configured is None:
+        fallback = socket.gethostname().strip().rstrip(".")
+        if fallback and not fallback.endswith(".arpa") and len(fallback) <= 64 and "." in fallback:
+            host = fallback
     try:
         socket.inet_pton(socket.AF_INET, host)
         raise SmokeError("benchmark mTLS authority must be a durable hostname, not an IPv4 address")
     except OSError:
         pass
-    if "." not in host or host.startswith(".") or host.endswith("."):
+    authority = f"capacity-{roster.run_id}.{host}"
+    if "." not in host or host.startswith(".") or host.endswith(".") or host.endswith(".arpa") or len(host) > 64 or len(authority) > 64:
         raise SmokeError(
             "benchmark mTLS authority must be a durable DNS or mDNS hostname; "
             "set ATM_CAPACITY_PEER_HOST explicitly when local DNS is incomplete"
         )
-    return f"capacity-{roster.run_id}.{host}"
+    return authority
 
 
 def _required_command(command: list[str], env: dict[str, str], description: str) -> None:

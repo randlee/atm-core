@@ -1854,6 +1854,17 @@ class AdmissionCapacityTests(unittest.TestCase):
             self.assertEqual(RUNNER.disposable_peer_host(first), "capacity-first.m5.local")
             self.assertEqual(RUNNER.disposable_peer_host(second), "capacity-second.m5.local")
 
+    def test_disposable_peer_authority_falls_back_from_reverse_dns_artifact(self):
+        roster = RUNNER.CapacityRoster("run", "team", "agent", "recipient")
+        with mock.patch.object(RUNNER.socket, "getfqdn", return_value="1.0.0.0." + "x" * 70 + ".ip6.arpa"), mock.patch.object(RUNNER.socket, "gethostname", return_value="rand-m5.local"):
+            self.assertEqual(RUNNER.disposable_peer_host(roster), "capacity-run.rand-m5.local")
+
+    def test_disposable_peer_authority_rejects_oversized_configured_host(self):
+        roster = RUNNER.CapacityRoster("run", "team", "agent", "recipient")
+        with mock.patch.dict(os.environ, {"ATM_CAPACITY_PEER_HOST": "x" * 65}, clear=False):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "ATM_CAPACITY_PEER_HOST"):
+                RUNNER.disposable_peer_host(roster)
+
     def test_public_tcp_targets_select_only_the_ordinary_daemon_mode(self):
         self.assertEqual(
             RUNNER.resolve_benchmark_target("tcp", None),
