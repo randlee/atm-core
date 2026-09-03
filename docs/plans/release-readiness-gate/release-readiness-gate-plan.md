@@ -70,25 +70,31 @@ macOS host precondition for steps 1 and 2 (Rand, 2026-09-03, primary
 blocker seen on the first cross-host ping; step 3 is Windows and has no
 equivalent prompt): macOS shows a blocking Local Network permission prompt
 the first time a freshly built or re-signed atm daemon or CLI touches the
-local network. While the prompt is unanswered the daemon process is
-blocked, so the symptom is not limited to `.local` peer dials: local
-`atm doctor` calls time out and even a pure loopback `atm send` to
-`localhost:43101` fails with `RemoteDeliveryUnconfirmed` ("could not
-confirm acceptance by direct peer"), which is exactly the false-positive
-pattern in the rand-m5 localhost smoke of 2026-08-31
+local network. While the prompt is unanswered the daemon's network path
+is blocked, so the symptom is not limited to `.local` peer dials: a pure
+loopback `atm send` to `localhost:43101` fails with
+`RemoteDeliveryUnconfirmed` ("could not confirm acceptance by direct
+peer") even though the daemon is running and answers `atm doctor`. That
+is exactly the pattern in the rand-m5 localhost smoke of 2026-08-31
 (`site/reports/smoke/macos/rand-m5.local/20260831T203217630910Z-pid56376-localhost/localhost.json`:
-every `doctor` case failed and every localhost send returned that error).
-The prompt is the suspected cause of that run; #1140 owns confirming it
-(the committed evidence shows the symptom, not the dialog). Before smoke,
-each macOS runner grants Local Network access to the candidate's atm
-binaries on their host (System Settings → Privacy & Security → Local
-Network), confirms `atm doctor --json` returns promptly, and confirms one
-cross-host `atm send` round-trips. A rebuilt or re-signed binary can
-re-trigger the prompt, so in step 2 the grant and the doctor check are
-re-confirmed after the `/daemon-switch` rebuild and again after the
-restore. A smoke or benchmark failure with these signatures on a host
-whose grant was not confirmed is a precondition miss, not product
-evidence: fix the grant and re-run. Operator-facing steps are in
+all 10 `doctor` cases PASS, all 20 send and ack-send cases FAIL with that
+error). The prompt is the suspected cause of that run; #1140 owns
+confirming it (the committed evidence shows the symptom, not the dialog).
+Because doctor passed in that run, a passing doctor does not prove the
+grant is in place; the discriminating check is a loopback send.
+Separately observed hardware-smoke `atm doctor` timeouts are also
+attributed to permission dialogs blocking the daemon, but that file is
+not evidence of them. Before smoke, each macOS runner grants Local Network
+access to the candidate's atm binaries on their host (System Settings →
+Privacy & Security → Local Network), confirms `atm doctor --json` returns
+promptly, confirms one loopback `atm send` to `localhost:43101` is
+accepted, and confirms one cross-host `atm send` round-trips. A rebuilt
+or re-signed binary can re-trigger the prompt, so in step 2 the grant,
+the doctor check, and the loopback send are re-confirmed after the
+`/daemon-switch` rebuild and again after the restore. A smoke or
+benchmark failure with these signatures on a host whose grant was not
+confirmed is a precondition miss, not product evidence: fix the grant
+and re-run. Operator-facing steps are in
 `docs/user-documents/troubleshooting.md` (Daemon Startup Or Connect
 Failure); see §5 item 7 (#1140).
 Repo suites (`just ci`, test-graft-python, test-hermes-graft-bridge,
@@ -142,9 +148,10 @@ candidate commit are cited by run id.
 6. Send-family benchmark reports do not capture the executing account
    in-band the way the read family does after AV-PROD-001R.
 7. macOS Local Network permission prompt blocks the daemon per freshly
-   built binary until answered, failing local doctor and loopback sends as
-   well as cross-host traffic (see §2 precondition; suspected, not yet
-   confirmed, cause of the 2026-08-31 rand-m5 localhost smoke failure);
+   built binary until answered, failing loopback and cross-host sends
+   while `atm doctor` can still pass (see §2 precondition; suspected, not
+   yet confirmed, cause of the 2026-08-31 rand-m5 localhost smoke run:
+   10/10 doctor PASS, 20/20 sends FAIL);
    tracked as atm-core #1140 (confirm the cause; whether stable code
    signing or a launch-time probe can keep grants across builds), not
    fixed here.
@@ -604,6 +611,18 @@ candidate commit are cited by run id.
   the step 2 `/daemon-switch` rebuild → added (after rebuild and after
   restore). Minor: no troubleshooting cross-link → operator steps added
   to `docs/user-documents/troubleshooting.md` and linked from §2.
+- **PR #1141 r2 (2026-09-03, quality-mgr FAIL @ 2cf5ad2f1, PR comment
+  5529669549)**: Blocking (ATM-QA-002 regressed): r1 text claimed the
+  2026-08-31 localhost.json showed every `doctor` case failing; the file
+  shows all 10 doctor cases PASS and only the 20 send/ack-send cases
+  failing → §2 and §5 item 7 corrected to the file's actual data, the
+  doctor check demoted from discriminating signal to health check, and a
+  loopback-send check added as the discriminating precondition.
+  Important (ATM-QA-003): troubleshooting.md symptom line implied the
+  evidence showed a doctor failure → reworded so doctor timeouts are a
+  separately reported symptom and a passing doctor does not prove the
+  grant. #1140's description reviewed: it attributes doctor timeouts to
+  earlier hardware smoke, not to this file, so it needs no correction.
 - **Rand review (2026-09-03)**: smoke and benchmarks are two separate
   tests on both atmbench and cwin, smoke first, benchmarks skipped on
   smoke failure; AT3 cross-host leg (rand-m5 host daemon ↔ Colima daemon)
