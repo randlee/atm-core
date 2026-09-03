@@ -9,7 +9,7 @@
 use crate::schema_support::ensure_columns_match_canonical;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use atm_storage::error::AtmError;
-use rusqlite::{Connection, TransactionBehavior};
+use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 /// Every column the rebuilt `team_roster` table defines, in declaration order.
 ///
@@ -64,8 +64,29 @@ pub(crate) fn ensure_team_roster_harness_values(
                 error,
             )
         })?;
+    rebuild_team_roster_with_current_harness_values(&transaction, target)?;
+    transaction.commit().map_err(|error| {
+        sqlite_error(
+            target,
+            "failed to commit team_roster harness migration",
+            error,
+        )
+    })
+}
+
+/// Recreates `team_roster` with the current harness `CHECK` constraint.
+///
+/// The copied column list is derived from [`TEAM_ROSTER_CANONICAL_COLUMNS`]
+/// rather than spelled out again, and the recreated table is checked back
+/// against that same list so the `CREATE TABLE` body below cannot drift away
+/// from what the copy assumes.
+fn rebuild_team_roster_with_current_harness_values(
+    transaction: &Transaction<'_>,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    let column_list = TEAM_ROSTER_CANONICAL_COLUMNS.join(", ");
     transaction
-        .execute_batch(
+        .execute_batch(&format!(
             "DROP INDEX IF EXISTS idx_team_roster_team_name;
              ALTER TABLE team_roster RENAME TO team_roster_legacy_harness;
              CREATE TABLE team_roster (
@@ -75,23 +96,17 @@ pub(crate) fn ensure_team_roster_harness_values(
                  harness TEXT NOT NULL CHECK(harness IN ('claude-code', 'codex-cli', 'gemini-cli', 'opencode', 'hermes', 'python-graft')),
                  agent_type TEXT NOT NULL DEFAULT '',
                  model TEXT NOT NULL DEFAULT '',
-                 metadata_json TEXT NOT NULL DEFAULT '{}',
+                 metadata_json TEXT NOT NULL DEFAULT '{{}}',
                  source TEXT,
                  recipient_pane_id TEXT NULL,
                  updated_at TEXT NOT NULL,
                  PRIMARY KEY (team_name, agent_name)
              );
-             INSERT INTO team_roster(
-                 team_name, agent_name, member_kind, harness, agent_type, model,
-                 metadata_json, source, recipient_pane_id, updated_at
-             )
-             SELECT
-                 team_name, agent_name, member_kind, harness, agent_type, model,
-                 metadata_json, source, recipient_pane_id, updated_at
-             FROM team_roster_legacy_harness;
+             INSERT INTO team_roster({column_list})
+             SELECT {column_list} FROM team_roster_legacy_harness;
              DROP TABLE team_roster_legacy_harness;
-             CREATE INDEX idx_team_roster_team_name ON team_roster(team_name);",
-        )
+             CREATE INDEX idx_team_roster_team_name ON team_roster(team_name);"
+        ))
         .map_err(|error| {
             sqlite_error(
                 target,
@@ -99,13 +114,12 @@ pub(crate) fn ensure_team_roster_harness_values(
                 error,
             )
         })?;
-    transaction.commit().map_err(|error| {
-        sqlite_error(
-            target,
-            "failed to commit team_roster harness migration",
-            error,
-        )
-    })
+    ensure_columns_match_canonical(
+        transaction,
+        target,
+        "team_roster",
+        TEAM_ROSTER_CANONICAL_COLUMNS,
+    )
 }
 
 #[cfg(test)]

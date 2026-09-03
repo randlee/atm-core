@@ -12,7 +12,7 @@ use crate::schema_support::{
 };
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use atm_storage::error::AtmError;
-use rusqlite::{Connection, TransactionBehavior};
+use rusqlite::{Connection, Transaction, TransactionBehavior};
 use std::time::Instant;
 
 /// Canonical `mail_messages` table DDL, parameterized by its `CREATE` clause.
@@ -180,8 +180,9 @@ pub(crate) fn ensure_mail_messages_message_text_nullable(
 
 /// Performs the SQLite table rebuild that relaxes `message_text` to nullable.
 ///
-/// Callers must have disabled `PRAGMA foreign_keys` and must restore it
-/// afterwards; see [`ensure_mail_messages_message_text_nullable`].
+/// The stages below are SQLite's documented ALTER TABLE procedure. Callers
+/// must have disabled `PRAGMA foreign_keys` and must restore it afterwards;
+/// see [`ensure_mail_messages_message_text_nullable`].
 fn rebuild_mail_messages_with_nullable_message_text(
     connection: &mut Connection,
     target: &SharedDbTarget,
@@ -197,9 +198,39 @@ fn rebuild_mail_messages_with_nullable_message_text(
             )
         })?;
 
-    // The catalog view selects from `mail_messages`; SQLite validates view
-    // bodies during `ALTER TABLE ... RENAME`, so it is dropped up front and
-    // recreated verbatim from its owning module once the swap is done.
+    drop_catalog_view(&transaction, target)?;
+    let columns = create_staging_table(&transaction, target)?;
+    let copied = copy_rows_into_staging_table(&transaction, target, &columns)?;
+    swap_in_staging_table(&transaction, target)?;
+    restore_indexes_and_catalog_view(&transaction, target)?;
+    reject_foreign_key_violations(&transaction, target)?;
+
+    transaction.commit().map_err(|error| {
+        sqlite_error(
+            target,
+            "failed to commit the mail_messages message_text rebuild",
+            error,
+        )
+    })?;
+    tracing::info!(
+        event = "sqlite.mail_messages.message_text_rebuild",
+        db.namespace = %target.display(),
+        db.rows_copied = copied,
+        db.elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        "rebuilt mail_messages so message_text is nullable",
+    );
+    Ok(())
+}
+
+/// Drops the catalog view so the later rename cannot fail schema validation.
+///
+/// SQLite validates view bodies during `ALTER TABLE ... RENAME`, and
+/// `decomposed_messages` selects from `mail_messages`. The view is recreated
+/// verbatim from its owning module by [`restore_indexes_and_catalog_view`].
+fn drop_catalog_view(
+    transaction: &Transaction<'_>,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
     transaction
         .execute_batch("DROP VIEW IF EXISTS decomposed_messages;")
         .map_err(|error| {
@@ -208,8 +239,18 @@ fn rebuild_mail_messages_with_nullable_message_text(
                 "failed to drop the decomposed_messages view for the mail_messages rebuild",
                 error,
             )
-        })?;
+        })
+}
 
+/// Creates the staging table and returns its canonical column list.
+///
+/// The staging table has the canonical shape by construction, so its columns
+/// are the authority the legacy table is checked against; a legacy table with
+/// an unknown or missing column is rejected rather than silently truncated.
+fn create_staging_table(
+    transaction: &Transaction<'_>,
+    target: &SharedDbTarget,
+) -> Result<Vec<String>, AtmError> {
     transaction
         .execute_batch(MAIL_MESSAGES_REBUILD_TABLE_DDL)
         .map_err(|error| {
@@ -219,25 +260,28 @@ fn rebuild_mail_messages_with_nullable_message_text(
                 error,
             )
         })?;
-    // The staging table is the canonical shape by construction, so its column
-    // list is the authority the legacy table is checked against.
-    let rebuilt_columns = table_column_names(&transaction, target, MAIL_MESSAGES_REBUILD_TABLE)?;
+    let columns = table_column_names(transaction, target, MAIL_MESSAGES_REBUILD_TABLE)?;
     ensure_columns_match_canonical(
-        &transaction,
+        transaction,
         target,
         "mail_messages",
-        &rebuilt_columns
-            .iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>(),
+        &columns.iter().map(String::as_str).collect::<Vec<_>>(),
     )?;
+    Ok(columns)
+}
 
-    let column_list = rebuilt_columns
+/// Copies every legacy row into the staging table, returning the row count.
+fn copy_rows_into_staging_table(
+    transaction: &Transaction<'_>,
+    target: &SharedDbTarget,
+    columns: &[String],
+) -> Result<usize, AtmError> {
+    let column_list = columns
         .iter()
         .map(|column| format!("\"{column}\""))
         .collect::<Vec<_>>()
         .join(", ");
-    let copied = transaction
+    transaction
         .execute(
             &format!(
                 "INSERT INTO {MAIL_MESSAGES_REBUILD_TABLE} ({column_list}) SELECT {column_list} FROM mail_messages;"
@@ -250,8 +294,14 @@ fn rebuild_mail_messages_with_nullable_message_text(
                 "failed to copy rows into the rebuilt mail_messages table",
                 error,
             )
-        })?;
+        })
+}
 
+/// Drops the legacy table and renames the staging table into its place.
+fn swap_in_staging_table(
+    transaction: &Transaction<'_>,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
     transaction
         .execute_batch(&format!(
             "DROP TABLE mail_messages;
@@ -263,8 +313,17 @@ fn rebuild_mail_messages_with_nullable_message_text(
                 "failed to swap in the rebuilt mail_messages table",
                 error,
             )
-        })?;
+        })
+}
 
+/// Replays the mailbox indexes and recreates the catalog view after the swap.
+///
+/// Dropping the legacy table also dropped its indexes, so both are rebuilt
+/// from the definitions a fresh database uses.
+fn restore_indexes_and_catalog_view(
+    transaction: &Transaction<'_>,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
     transaction
         .execute_batch(MAIL_MESSAGES_INDEX_DDL)
         .map_err(|error| {
@@ -274,8 +333,14 @@ fn rebuild_mail_messages_with_nullable_message_text(
                 error,
             )
         })?;
-    crate::template_catalog_schema::ensure_schema(&transaction, target)?;
+    crate::template_catalog_schema::ensure_schema(transaction, target)
+}
 
+/// Fails the transaction when the rebuild left a dangling foreign key.
+fn reject_foreign_key_violations(
+    transaction: &Transaction<'_>,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
     let violations = transaction
         .query_row(
             "SELECT COUNT(1) FROM pragma_foreign_key_check;",
@@ -295,21 +360,6 @@ fn rebuild_mail_messages_with_nullable_message_text(
             target.display()
         )));
     }
-
-    transaction.commit().map_err(|error| {
-        sqlite_error(
-            target,
-            "failed to commit the mail_messages message_text rebuild",
-            error,
-        )
-    })?;
-    tracing::info!(
-        event = "sqlite.mail_messages.message_text_rebuild",
-        db.namespace = %target.display(),
-        db.rows_copied = copied,
-        db.elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
-        "rebuilt mail_messages so message_text is nullable",
-    );
     Ok(())
 }
 
