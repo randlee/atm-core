@@ -1026,6 +1026,7 @@ mod tests {
                 enabled: true,
             }],
             validation_failure: None,
+            legacy_literal_ip_peers: Vec::new(),
         });
 
         assert!(rendered.contains("sha256:public-fingerprint"));

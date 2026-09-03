@@ -113,6 +113,32 @@ enum TrustSubcommand {
         #[arg(long)]
         yes: bool,
     },
+    /// Migrate or retire legacy literal-IP trusted-peer entries.
+    ///
+    /// Without `--yes`, prints the migration plan (one line per legacy
+    /// literal-IP row: enabled/disabled, fingerprint, port, and the action)
+    /// and makes no changes. With `--yes`, applies the plan: rows named by
+    /// `--map IP=HOSTNAME` convert to the durable hostname, preserving their
+    /// fingerprint and port; every other legacy literal-IP row is revoked.
+    Migrate {
+        /// Convert the legacy literal-IP entry `IP` to durable hostname
+        /// `HOSTNAME`, keeping its fingerprint and port. May be repeated.
+        #[arg(long = "map", value_name = "IP=HOSTNAME")]
+        map: Vec<String>,
+        #[arg(long)]
+        yes: bool,
+    },
+}
+
+/// One legacy literal-IP row and the migration action it will receive.
+struct MigrationPlanEntry {
+    legacy: TrustedPeer,
+    action: MigrationAction,
+}
+
+enum MigrationAction {
+    Convert(HostName),
+    Revoke,
 }
 
 impl PeerCommand {
@@ -275,8 +301,143 @@ impl TrustCommand {
                 );
                 Ok(removed)
             }
+            TrustSubcommand::Migrate { map, yes } => {
+                let map = parse_migration_map(&map)?;
+                let plan = build_migration_plan(store, &map)?;
+                if !yes {
+                    print_migration_plan(&plan);
+                    return Ok(false);
+                }
+                apply_migration_plan(store, plan)
+            }
         }
     }
+}
+
+/// Parses repeated `--map IP=HOSTNAME` arguments. `HOSTNAME` must pass the
+/// same durable-hostname validation as `atm peer trust add`.
+fn parse_migration_map(map: &[String]) -> std::result::Result<Vec<(HostName, HostName)>, AtmError> {
+    map.iter()
+        .map(|entry| {
+            let (source, target) = entry.split_once('=').ok_or_else(|| {
+                AtmError::peer_config_validation("--map must be formatted as IP=HOSTNAME")
+            })?;
+            let source: HostName = source
+                .parse()
+                .map_err(|_source| AtmError::peer_config_validation("invalid --map source IP"))?;
+            Ok((source, trusted_peer_host(target)?))
+        })
+        .collect()
+}
+
+/// Builds the full migration plan: every legacy literal-IP row in the
+/// catalog, paired with its `--map` conversion target or a revoke action.
+/// Fails when a `--map` source does not name an actual legacy row.
+fn build_migration_plan(
+    store: &(dyn PeerConfigStore + Send + Sync),
+    map: &[(HostName, HostName)],
+) -> std::result::Result<Vec<MigrationPlanEntry>, AtmError> {
+    let legacy_peers: Vec<TrustedPeer> = store
+        .list_trusted_peers()?
+        .into_iter()
+        .filter(|peer| !peer.host.is_durable_hostname())
+        .collect();
+    for (source, _) in map {
+        if !legacy_peers.iter().any(|peer| &peer.host == source) {
+            return Err(AtmError::peer_config_validation(format!(
+                "--map source '{source}' is not a legacy literal-IP trusted peer entry"
+            )));
+        }
+    }
+    Ok(legacy_peers
+        .into_iter()
+        .map(|legacy| {
+            let action = map
+                .iter()
+                .find(|(source, _)| *source == legacy.host)
+                .map_or(MigrationAction::Revoke, |(_, target)| {
+                    MigrationAction::Convert(target.clone())
+                });
+            MigrationPlanEntry { legacy, action }
+        })
+        .collect())
+}
+
+/// Renders the migration plan without applying any change.
+fn print_migration_plan(plan: &[MigrationPlanEntry]) {
+    if plan.is_empty() {
+        println!("no legacy literal-IP trusted peer entries found; nothing to migrate");
+        return;
+    }
+    for entry in plan {
+        let status = if entry.legacy.enabled {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        let action = match &entry.action {
+            MigrationAction::Convert(target) => {
+                format!("convert to {target} (keep fingerprint/port)")
+            }
+            MigrationAction::Revoke => "revoke (no --map target)".to_string(),
+        };
+        println!(
+            "[{status}] {} (fingerprint {}, port {}): {action}",
+            entry.legacy.host, entry.legacy.fingerprint, entry.legacy.https_port
+        );
+    }
+}
+
+/// Applies the migration plan. Converting to an existing target hostname
+/// with a mismatched fingerprint is refused rather than clobbering it.
+fn apply_migration_plan(
+    store: &(dyn PeerConfigStore + Send + Sync),
+    plan: Vec<MigrationPlanEntry>,
+) -> std::result::Result<bool, AtmError> {
+    let mut changed = false;
+    for entry in plan {
+        match entry.action {
+            MigrationAction::Convert(target) => {
+                apply_migration_convert(store, &entry.legacy, &target)?;
+                changed = true;
+            }
+            MigrationAction::Revoke => {
+                store.remove_trusted_peer(&entry.legacy.host)?;
+                println!(
+                    "revoked legacy literal-IP trusted peer {}",
+                    entry.legacy.host
+                );
+                changed = true;
+            }
+        }
+    }
+    Ok(changed)
+}
+
+fn apply_migration_convert(
+    store: &(dyn PeerConfigStore + Send + Sync),
+    legacy: &TrustedPeer,
+    target: &HostName,
+) -> std::result::Result<(), AtmError> {
+    if let Some(existing) = store.trusted_peer(target)? {
+        if existing.fingerprint != legacy.fingerprint {
+            return Err(AtmError::peer_config_validation(format!(
+                "trusted peer '{target}' already exists with a different fingerprint; \
+                 resolve manually before migrating '{}'",
+                legacy.host
+            )));
+        }
+    } else {
+        store.save_trusted_peer(&TrustedPeer {
+            host: target.clone(),
+            fingerprint: legacy.fingerprint.clone(),
+            enabled: legacy.enabled,
+            https_port: legacy.https_port,
+        })?;
+    }
+    store.remove_trusted_peer(&legacy.host)?;
+    println!("migrated trusted peer {} to {target}", legacy.host);
+    Ok(())
 }
 
 fn peer(
@@ -522,6 +683,14 @@ mod tests {
                 "--yes",
             ],
             vec!["atm", "trust", "revoke", "--host", "peer.example", "--yes"],
+            vec![
+                "atm",
+                "trust",
+                "migrate",
+                "--map",
+                "192.168.128.29=peer.example",
+                "--yes",
+            ],
         ];
 
         for command in commands {
@@ -687,6 +856,117 @@ mod tests {
         )
         .expect("legacy peer should remain revocable");
         assert!(store.list_trusted_peers().expect("list peers").is_empty());
+    }
+
+    fn seed_legacy_peer(
+        store: &InMemoryPeerConfigStore,
+        host: &str,
+        fingerprint: &str,
+        enabled: bool,
+    ) {
+        store
+            .save_trusted_peer(&TrustedPeer {
+                host: host.parse().expect("legacy host syntax"),
+                fingerprint: fingerprint.parse().expect("fingerprint"),
+                enabled,
+                https_port: std::num::NonZeroU16::new(443).expect("non-zero port"),
+            })
+            .expect("seed legacy peer");
+    }
+
+    #[test]
+    fn migrate_dry_run_reports_plan_without_mutating_the_store() {
+        let store = InMemoryPeerConfigStore::default();
+        seed_legacy_peer(&store, "192.168.128.29", "sha256:legacy-a", true);
+        seed_legacy_peer(&store, "10.0.0.5", "sha256:legacy-b", false);
+
+        run_peer(&store, &["atm", "trust", "migrate"]).expect("dry run succeeds");
+        let peers = store.list_trusted_peers().expect("list peers");
+        assert_eq!(peers.len(), 2, "dry run must not change the catalog");
+    }
+
+    #[test]
+    fn migrate_with_map_converts_and_preserves_fingerprint_and_port() {
+        let store = InMemoryPeerConfigStore::default();
+        seed_legacy_peer(&store, "192.168.128.29", "sha256:legacy-a", true);
+
+        run_peer(
+            &store,
+            &[
+                "atm",
+                "trust",
+                "migrate",
+                "--map",
+                "192.168.128.29=rand-m5.local",
+                "--yes",
+            ],
+        )
+        .expect("migrate converts the legacy row");
+
+        let peers = store.list_trusted_peers().expect("list peers");
+        assert_eq!(peers.len(), 1);
+        let migrated = &peers[0];
+        assert_eq!(migrated.host, "rand-m5.local".parse().expect("host"));
+        assert_eq!(migrated.fingerprint.as_str(), "sha256:legacy-a");
+        assert!(migrated.enabled);
+        assert_eq!(migrated.https_port.get(), 443);
+    }
+
+    #[test]
+    fn migrate_without_map_revokes_remaining_legacy_rows() {
+        let store = InMemoryPeerConfigStore::default();
+        seed_legacy_peer(&store, "192.168.128.29", "sha256:legacy-a", true);
+        seed_legacy_peer(&store, "10.0.0.5", "sha256:legacy-b", false);
+
+        run_peer(&store, &["atm", "trust", "migrate", "--yes"]).expect("migrate revokes rows");
+        assert!(store.list_trusted_peers().expect("list peers").is_empty());
+    }
+
+    #[test]
+    fn migrate_rejects_a_map_source_absent_from_the_catalog() {
+        let store = InMemoryPeerConfigStore::default();
+        let error = run_peer(
+            &store,
+            &[
+                "atm",
+                "trust",
+                "migrate",
+                "--map",
+                "192.168.128.29=rand-m5.local",
+                "--yes",
+            ],
+        )
+        .expect_err("unknown --map source must fail");
+        assert!(error.message().contains("192.168.128.29"));
+    }
+
+    #[test]
+    fn migrate_refuses_to_clobber_an_existing_target_with_a_different_fingerprint() {
+        let store = InMemoryPeerConfigStore::default();
+        seed_legacy_peer(&store, "192.168.128.29", "sha256:legacy-a", true);
+        store
+            .save_trusted_peer(&TrustedPeer {
+                host: "rand-m5.local".parse().expect("host"),
+                fingerprint: "sha256:existing".parse().expect("fingerprint"),
+                enabled: true,
+                https_port: std::num::NonZeroU16::new(443).expect("port"),
+            })
+            .expect("seed existing durable peer");
+
+        let error = run_peer(
+            &store,
+            &[
+                "atm",
+                "trust",
+                "migrate",
+                "--map",
+                "192.168.128.29=rand-m5.local",
+                "--yes",
+            ],
+        )
+        .expect_err("mismatched fingerprint must not be clobbered");
+        assert!(error.message().contains("different fingerprint"));
+        assert_eq!(store.list_trusted_peers().expect("list peers").len(), 2);
     }
 
     #[test]

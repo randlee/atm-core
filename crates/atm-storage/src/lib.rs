@@ -7,6 +7,7 @@ pub mod error;
 mod error_catalog;
 pub mod error_codes;
 pub mod factory;
+pub mod peer_catalog_audit;
 pub mod request_budget;
 pub mod schema;
 pub mod search;
@@ -44,6 +45,7 @@ pub use contract::{
 pub use error::AtmError;
 pub use error_codes::AtmErrorCode;
 pub use factory::{StorageFactory, StorageHandleParts, StorageHandles};
+pub use peer_catalog_audit::TrustedPeerCatalogAudit;
 pub use roles::ROLE_WORKER;
 pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
 pub use search::{

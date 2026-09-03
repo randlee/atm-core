@@ -37,7 +37,7 @@ use atm_http_runtime::{
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage::request_budget::SERVER_REQUEST_BUDGET;
 use atm_storage_rusqlite::SqliteStorageFactory;
-use peer_tls::MtlsPeerStreamAdapter;
+use peer_tls::{LEGACY_LITERAL_IP_SKIP_ENV_VAR, LegacyLiteralIpPolicy, MtlsPeerStreamAdapter};
 use tokio::net::TcpStream;
 
 mod atm_temp_config;
@@ -583,13 +583,33 @@ fn bootstrap_peer_stream_adapter(
     assembly: &RuntimeAssembly,
     peer_wire_mode: PeerWireMode,
 ) -> Result<Option<Arc<dyn PeerStreamAdapter>>, AtmError> {
+    let policy = legacy_literal_ip_policy_from_env();
     peer_stream_adapter_for_mode(peer_wire_mode, || {
         Ok(Arc::new(BootstrapMtlsStreamAdapter {
-            adapter: Arc::new(MtlsPeerStreamAdapter::from_peer_config(
+            adapter: Arc::new(MtlsPeerStreamAdapter::from_peer_config_with_policy(
                 assembly.peer_config_store.as_ref(),
+                policy,
             )?),
         }) as Arc<dyn PeerStreamAdapter>)
     })
+}
+
+/// Resolves the legacy literal-IP trusted-peer admission policy from
+/// `ATM_PEER_TRUST_SKIP_LEGACY_LITERAL_IP`. This is a narrow trust-catalog
+/// admission knob, never a peer-wire-mode selector: ADR-047's
+/// environment-selection prohibition governs `--peer-wire-security` only.
+fn legacy_literal_ip_policy_from_env() -> LegacyLiteralIpPolicy {
+    legacy_literal_ip_policy_from_value(std::env::var(LEGACY_LITERAL_IP_SKIP_ENV_VAR).ok())
+}
+
+/// Only the exact value `"1"` selects the testing/benchmarking-only
+/// skip-with-warning behavior; every other value, and the variable being
+/// unset (`None`), keeps the safe fail-closed default.
+fn legacy_literal_ip_policy_from_value(value: Option<String>) -> LegacyLiteralIpPolicy {
+    match value.as_deref() {
+        Some("1") => LegacyLiteralIpPolicy::SkipWithWarning,
+        _ => LegacyLiteralIpPolicy::FailClosed,
+    }
 }
 
 /// Drain the Axum runtime before releasing outbound peer drivers and the
@@ -818,10 +838,12 @@ mod replacement_runtime_tests {
     use super::{
         DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ReplacementHandlerConfig,
         SelectedPeerAdapterSelection, ShutdownSignal, assemble_host_runtime_with_template_composer,
-        build_replacement_handler, parse_direct_peer_port, parse_peer_wire_mode,
-        peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
-        start_replacement_runtime, write_ready_signal_if_requested,
+        build_replacement_handler, legacy_literal_ip_policy_from_value, parse_direct_peer_port,
+        parse_peer_wire_mode, peer_stream_adapter_for_mode,
+        replacement_runtime_config_with_direct_peer, start_replacement_runtime,
+        write_ready_signal_if_requested,
     };
+    use peer_tls::LegacyLiteralIpPolicy;
 
     /// Test-owned receiver selection prevents an external tmux/graft action
     /// from obscuring the bootstrap's direct-peer persistence proof.
@@ -843,6 +865,29 @@ mod replacement_runtime_tests {
         let mut output = Vec::new();
         write_ready_signal_if_requested(&mut output, false).expect("disabled marker");
         assert!(output.is_empty());
+    }
+
+    #[test]
+    fn legacy_literal_ip_policy_defaults_to_fail_closed() {
+        assert_eq!(
+            legacy_literal_ip_policy_from_value(None),
+            LegacyLiteralIpPolicy::FailClosed
+        );
+        for other in ["0", "true", "yes", "SkipWithWarning", ""] {
+            assert_eq!(
+                legacy_literal_ip_policy_from_value(Some(other.to_string())),
+                LegacyLiteralIpPolicy::FailClosed,
+                "non-exact value {other:?} must not select the skip policy"
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_literal_ip_policy_skips_with_warning_only_on_exact_value_one() {
+        assert_eq!(
+            legacy_literal_ip_policy_from_value(Some("1".to_string())),
+            LegacyLiteralIpPolicy::SkipWithWarning
+        );
     }
 
     #[test]

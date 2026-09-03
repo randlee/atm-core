@@ -80,3 +80,26 @@ host only after the client certificate/pin verification completes before HTTP
 decode. Startup writes the selected public mode to the retained observability
 port and daemon doctor context; neither includes key material, certificate
 contents, pins, or raw trust records.
+
+## Legacy literal-IP trusted-peer admission (issue #972)
+
+Once mTLS is selected, `peer-tls` fails closed at startup when any *enabled*
+trusted-peer row predates durable-hostname enforcement and still uses a
+literal IP authority (`HostName::is_durable_hostname() == false`). The
+resulting `ATM_PEER_CONFIG_VALIDATION_FAILED` error names every offending
+host and carries the exact `atm peer trust migrate --map <ip>=<hostname>
+--yes` / `atm peer trust revoke --host <ip> --yes` remediation, so recovery
+never requires a manual SQLite edit. A *disabled* legacy literal-IP row is
+historical only: it is reported with a `tracing::warn!` but never blocks
+startup.
+
+`ATM_PEER_TRUST_SKIP_LEGACY_LITERAL_IP` (exact value `"1"`) downgrades
+enabled legacy literal-IP rows from fail-closed to skip-with-warning: they
+are dropped from the trust catalog (never authenticated, in either
+direction) and a `tracing::warn!` names each skipped host. This variable is
+an explicit, narrowly-scoped testing/benchmarking opt-out for a mixed
+old-IP/new-hostname catalog during migration; it does not exist outside that
+scope and must never be treated as a general trust bypass. It is a
+trust-catalog admission knob only — it cannot select, or fall back to, a
+different peer-wire mode, so it does not conflict with this ADR's
+environment-selection prohibition for `--peer-wire-security`.
