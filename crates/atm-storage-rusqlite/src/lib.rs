@@ -2728,6 +2728,67 @@ mod tests {
     }
 
     #[test]
+    fn legacy_not_null_message_text_databases_admit_decomposed_templates() {
+        // Databases created before the nullable `message_text` change failed
+        // every decomposed admission because the writer nulls the column out.
+        let root = tempfile::tempdir().expect("legacy root");
+        let path = root.path().join("legacy.db");
+        Connection::open(&path)
+            .expect("open legacy fixture")
+            .execute_batch(
+                "CREATE TABLE mail_messages (
+                    team TEXT NOT NULL, agent TEXT NOT NULL, message_key TEXT NOT NULL,
+                    envelope_json TEXT NOT NULL, from_agent TEXT NOT NULL,
+                    source_chat_id TEXT NULL, destination_chat_id TEXT NULL,
+                    message_text TEXT NOT NULL, summary TEXT NULL, message_at TEXT NOT NULL,
+                    message_id TEXT NULL, parent_message_id TEXT NULL,
+                    thread_mode TEXT NULL CHECK(thread_mode IS NULL OR thread_mode IN ('add-details', 'supersede')),
+                    recorded_at TEXT,
+                    CHECK(message_key GLOB 'atm:*' OR message_key GLOB 'ext:*'),
+                    PRIMARY KEY (team, agent, message_key)
+                 );",
+            )
+            .expect("legacy not-null message_text fixture");
+
+        let backend = SqliteStorageBackend::new(&path).expect("migrate legacy fixture");
+        let record = message("atm:legacy-decomposed", "inline before decomposition");
+        backend
+            .message_store()
+            .save_message(&record)
+            .expect("seed canonical message");
+        let catalog = backend.template_catalog_store();
+        let template = template_registration('b');
+        catalog
+            .register(template.clone())
+            .expect("register template");
+
+        let outcome = catalog
+            .admit_decomposed_message(DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: record.message_key.clone(),
+                    template_sha: template.sha.clone(),
+                    vars: MergedVarsJson::from_merged_object(
+                        [("name".to_string(), serde_json::json!("Rand"))]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    category: Some("assignment".to_string()),
+                    tags: instance_tags(&["phase-av"]),
+                    content_format: Some("markdown".to_string()),
+                    workflow: None,
+                },
+            })
+            .expect("decomposed admission must succeed on a migrated legacy database");
+        assert_eq!(
+            outcome,
+            DecomposedMessageAdmissionOutcome::Inserted {
+                template: TemplateRegistrationOutcome::AlreadyRegistered
+            }
+        );
+    }
+
+    #[test]
     fn fresh_and_historical_databases_expose_the_same_decomposed_query_surface() {
         let fresh_root = tempfile::tempdir().expect("fresh root");
         let fresh_path = fresh_root.path().join("fresh.db");
