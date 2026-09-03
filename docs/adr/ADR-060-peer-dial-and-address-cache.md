@@ -114,7 +114,11 @@ the CLI's literal-IP-to-trusted-host check owned by ADR-040. The
 `peer-dial-seam` lint (`.just/lint_peer_dial_seam.py`, wired into `just lint`
 and CI) fails when resolution or dialing appears elsewhere, when
 `shared_direct_peer_client()` stops installing `OrderedPeerResolver`, or when
-any locked constant or the cache-key normalization drifts from this ADR. The
+any locked constant, the arithmetic that applies it (the `min` with
+`STALE_ADDRESS_DIAL_CAP`, the `DIAL_REPORT_GRACE` subtraction), or the
+cache-key normalization drifts from this ADR. Dialing is matched as
+`TcpStream::connect`, `TcpStream::connect_timeout`, and `TcpSocket::connect`.
+The lint has its own unit tests under `.just/tests/`. The
 `BOUNDARY-HttpRuntime` record names the seam under `io_owns`, forbids peer
 resolution outside it, and lists the lint under enforcement. Changing the
 locked design means: supersede this ADR, update `REQ-CORE-TRANSPORT-002E`,

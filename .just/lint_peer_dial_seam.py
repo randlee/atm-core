@@ -6,12 +6,14 @@ Three checks, all on non-test Rust code:
 1. Peer name resolution primitives (``lookup_host``, ``ToSocketAddrs``,
    ``dns_resolver``) appear only in the ADR-060 seam ``peer_dial.rs`` and the
    one ADR-040 CLI site (literal-IP-to-trusted-host check).
-2. ``TcpStream::connect`` inside ``atm-http-runtime`` appears only in
+2. TCP dials (``TcpStream::connect``, ``TcpStream::connect_timeout``,
+   ``TcpSocket::connect``) inside ``atm-http-runtime`` appear only in
    ``peer_dial.rs``; every peer dial goes through the seam.
-3. The locked design lines exist verbatim: the dial constants, the cache-key
-   normalization, the default TTL, and the plaintext-test client installing
-   ``OrderedPeerResolver``. Changing any of them requires a superseding ADR
-   and an update to the expected lines below in the same change.
+3. The locked design lines exist verbatim: the dial constants *and the
+   arithmetic that applies them*, the cache-key normalization, the default
+   TTL, and the plaintext-test client installing ``OrderedPeerResolver``.
+   Changing any of them requires a superseding ADR and an update to the
+   expected lines below in the same change.
 """
 from __future__ import annotations
 
@@ -39,13 +41,15 @@ RESOLUTION_ALLOWED = {
     # registered hostnames. It is an authorization check, not a dial.
     "crates/atm/src/commands/send.rs",
 }
-DIAL_RE = re.compile(r"\bTcpStream::connect\s*\(")
+DIAL_RE = re.compile(r"\b(?:TcpStream::connect(?:_timeout)?|TcpSocket::connect)\s*\(")
 DIAL_SCOPE_PREFIX = "crates/atm-http-runtime/"
 LOCKED_LINES: dict[str, tuple[str, ...]] = {
     SEAM: (
         "pub(crate) const MAX_DIAL_CANDIDATES: usize = 4;",
         "pub(crate) const DIAL_REPORT_GRACE: Duration = Duration::from_millis(250);",
         "pub(crate) const STALE_ADDRESS_DIAL_CAP: Duration = Duration::from_millis(500);",
+        # Rule 5: cached dial bounded by min(half remaining, cap).
+        "RequestDeadline::after((remaining / 2).min(STALE_ADDRESS_DIAL_CAP))",
         "let name = peer.as_str().to_ascii_lowercase();",
         '.strip_suffix(".local")',
         "address.ip().is_unicast_link_local() && address.scope_id() == 0",
@@ -53,6 +57,8 @@ LOCKED_LINES: dict[str, tuple[str, ...]] = {
     ),
     "crates/atm-http-runtime/src/peer_connection_pool.rs": (
         "address_cache_ttl: Duration::from_secs(5 * 60),",
+        # Rule 7: the dial loop ends DIAL_REPORT_GRACE inside the budget.
+        ".checked_sub(DIAL_REPORT_GRACE)",
         "self.shared.addresses.connect(",
     ),
     "crates/atm-http-runtime/src/client.rs": (
@@ -61,7 +67,8 @@ LOCKED_LINES: dict[str, tuple[str, ...]] = {
 }
 
 
-def collect_findings(repo_root: Path) -> list[str]:
+def collect_seam_findings(repo_root: Path) -> list[str]:
+    """Resolution or dialing in non-test code outside the seam."""
     findings: list[str] = []
     for abs_path in iter_workspace_rust_files(repo_root):
         rel = abs_path.relative_to(repo_root).as_posix()
@@ -80,6 +87,12 @@ def collect_findings(repo_root: Path) -> list[str]:
                 findings.append(
                     f"{rel}:{number}: peer TCP dial outside the ADR-060 seam ({SEAM}): {line.strip()}"
                 )
+    return findings
+
+
+def collect_lock_findings(repo_root: Path) -> list[str]:
+    """Locked ADR-060 lines missing from the files that must carry them."""
+    findings: list[str] = []
     for rel, expected_lines in LOCKED_LINES.items():
         path = repo_root / rel
         if not path.is_file():
@@ -92,6 +105,10 @@ def collect_findings(repo_root: Path) -> list[str]:
                     f"{rel}: locked ADR-060 line not found (supersede ADR-060 and update this lint together): {expected}"
                 )
     return findings
+
+
+def collect_findings(repo_root: Path) -> list[str]:
+    return [*collect_seam_findings(repo_root), *collect_lock_findings(repo_root)]
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
