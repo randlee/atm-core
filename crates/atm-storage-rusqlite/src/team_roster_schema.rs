@@ -120,7 +120,7 @@ mod tests {
                 CREATE INDEX idx_team_roster_team_name ON team_roster(team_name);
                 INSERT INTO team_roster(
                     team_name, agent_name, member_kind, harness, updated_at
-                ) VALUES ('hermes', 'skillrx', 'permanent', 'claude-code', 'now');",
+                ) VALUES ('test-team', 'test-agent', 'permanent', 'claude-code', 'now');",
             )
             .expect("create legacy roster table");
 
@@ -129,14 +129,14 @@ mod tests {
             .execute(
                 "INSERT INTO team_roster(
                     team_name, agent_name, member_kind, harness, updated_at
-                ) VALUES ('hermes', 'python-worker', 'permanent', 'python-graft', 'now');",
+                ) VALUES ('test-team', 'python-worker', 'permanent', 'python-graft', 'now');",
                 [],
             )
             .expect("new harness should satisfy migrated check constraint");
         let harnesses: Vec<String> = connection
             .prepare(
                 "SELECT harness FROM team_roster
-                 WHERE team_name = 'hermes' ORDER BY agent_name;",
+                 WHERE team_name = 'test-team' ORDER BY agent_name;",
             )
             .expect("prepare harness query")
             .query_map([], |row| row.get(0))
@@ -173,7 +173,7 @@ mod tests {
                 );
                 INSERT INTO team_roster(
                     team_name, agent_name, member_kind, harness, operator_annotation, updated_at
-                ) VALUES ('hermes', 'skillrx', 'permanent', 'claude-code', 'keep me', 'now');",
+                ) VALUES ('test-team', 'test-agent', 'permanent', 'claude-code', 'keep me', 'now');",
             )
             .expect("create legacy roster table with an unknown column");
 
@@ -187,7 +187,7 @@ mod tests {
 
         let annotation: String = connection
             .query_row(
-                "SELECT operator_annotation FROM team_roster WHERE agent_name = 'skillrx';",
+                "SELECT operator_annotation FROM team_roster WHERE agent_name = 'test-agent';",
                 [],
                 |row| row.get(0),
             )
