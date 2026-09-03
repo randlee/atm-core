@@ -35,28 +35,32 @@ report.
    benchmark families on the isolated `m5-atmbench` account on
    rand-m5.local and generate the reports with the existing benchmark
    harness:
-   In this order (smoke first: cheapest failure stops the session before
-   any benchmark time is spent):
+   Two separate tests with separate results, in this order. Local smoke
+   runs first; if smoke fails, benchmarks are not run and the reply
+   reports the smoke failure alone (Rand, 2026-09-03: "if local smoke
+   fails, no point in doing benchmark tests").
    - `just smoke thorough` → `site/reports/smoke/<os>/<host>/`
    - `just benchmark-official` (send family) → `site/reports/send-message-benchmark/`
    - `just benchmark-read` (read/query family, Phase AV) → `site/reports/read-query-benchmark/`
    - `just reports-index --check` green; reports committed and pushed.
-   Precondition: `just benchmark-read` and
-   `site/reports/read-query-benchmark/baselines.json` land with Phase AV
-   (PR #1120); until that merges, step 1 covers the send family only and
-   READY is not reachable (§5 item 7).
    Floors: committed `baselines.json` per family (AO2 ratchet convention;
    read/query revision 1, unrounded p50). A missed floor is a product
    failure, never re-run to pass.
 2. **Colima integration (request to fenix@atm-dev on rand-m5).** Send an
    ATM task to the M5 team-lead asking them to run the atm-hermes-testbed
    full tier set (AT0–AT8) on their Colima host against the candidate
-   commit and commit the reports under an `evidence/…` branch exactly as
+   commit, **including the AT3 cross-host leg** (`run.sh --peer
+   rand-m5.local`: the rand-m5 host daemon and the containerized daemon
+   are the two peers, mirrored `fx-at3` rosters, both directions). The
+   host-side trust add and daemon restart it needs belong to
+   fenix@atm-dev via `/daemon-switch`, with restore afterwards. AT3 is not
+   optional for a release run. Commit the reports under an `evidence/…` branch exactly as
    PR #1123 did (sha256 of artifacts, provenance in-band, every tier row
    with populated `detail`, version sentinels consistent).
-3. **Windows benchmarks (cwin, in parallel with step 2).** Ask Rand to
-   relay the same benchmark request (step 1 commands) to cwin; cwin is
-   never dispatched directly (VPN / fastpc4). Windows throughput is
+3. **Windows smoke and benchmarks (cwin, in parallel with step 2).** Ask
+   Rand to relay the step 1 request to cwin unchanged: local smoke first
+   as its own test with its own result, benchmarks only if smoke passes;
+   cwin is never dispatched directly (VPN / fastpc4). Windows throughput is
    expected around 80% of Mac by design; the result is recorded, not
    gated on parity.
 
@@ -104,15 +108,13 @@ candidate commit are cited by run id.
    rows without a reviewed definition and AT8 diverged. Reconcile before
    the first run.
 3. AT2 skip is bug #1121, not policy: testbed tier fails while unresolved
-   unless Rand grants a declared-skip. AT3 skip is a standing declared-skip.
+   unless Rand grants a declared-skip. AT3 was skipped in the v1.4.6 run
+   (no `--peer` mode); it is mandatory here (§2 step 2).
 4. Runtime reader gauges (AV-PROD-002) not shipped; interim 1000 ms p95
    ceiling stands.
 5. No isolated Windows benchmark account; cwin results are informational.
 6. Send-family benchmark reports do not capture the executing account
    in-band the way the read family does after AV-PROD-001R.
-7. The read/query benchmark family (`just benchmark-read`, its
-   `baselines.json`) does not exist on develop until Phase AV PR #1120
-   merges; step 1 is incomplete before that.
 
 ## 6. Open questions for Rand
 
@@ -557,3 +559,8 @@ candidate commit are cited by run id.
   → precondition in §2 step 1 and §5 item 7; step-3 sender of record
   unstated → §3 names Rand. Minor: `test-queue-hooks-codex` →
   `test-queue-hooks-python-codex`.
+- **Rand review (2026-09-03)**: smoke and benchmarks are two separate
+  tests on both atmbench and cwin, smoke first, benchmarks skipped on
+  smoke failure; AT3 cross-host leg (rand-m5 host daemon ↔ Colima daemon)
+  made mandatory in step 2; PR #1120 precondition removed (merged
+  2026-09-02, develop merged into this branch).
