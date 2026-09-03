@@ -93,6 +93,11 @@ mod tests {
     use crate::shared_db::{NEXT_IN_MEMORY_DB_ID, open_connection_for_target};
     use std::sync::atomic::Ordering;
 
+    /// Neutral fixture identifiers: the subject under test is the harness
+    /// CHECK constraint, not any particular team or agent.
+    const TEST_TEAM: &str = "test-team";
+    const TEST_AGENT: &str = "test-agent";
+
     #[test]
     fn ensure_team_roster_harness_values_migrates_legacy_check_constraint() {
         let target = SharedDbTarget::InMemory {
@@ -104,14 +109,14 @@ mod tests {
         let mut connection = open_connection_for_target(&target).expect("open connection");
         connection
             .execute_batch(
-                "CREATE TABLE team_roster (
+                &format!("CREATE TABLE team_roster (
                     team_name TEXT NOT NULL,
                     agent_name TEXT NOT NULL,
                     member_kind TEXT NOT NULL CHECK(member_kind IN ('permanent', 'ephemeral')),
                     harness TEXT NOT NULL CHECK(harness IN ('claude-code', 'codex-cli', 'gemini-cli', 'opencode')),
                     agent_type TEXT NOT NULL DEFAULT '',
                     model TEXT NOT NULL DEFAULT '',
-                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    metadata_json TEXT NOT NULL DEFAULT '{{}}',
                     source TEXT,
                     recipient_pane_id TEXT NULL,
                     updated_at TEXT NOT NULL,
@@ -120,24 +125,28 @@ mod tests {
                 CREATE INDEX idx_team_roster_team_name ON team_roster(team_name);
                 INSERT INTO team_roster(
                     team_name, agent_name, member_kind, harness, updated_at
-                ) VALUES ('test-team', 'test-agent', 'permanent', 'claude-code', 'now');",
+                ) VALUES ('{team}', '{agent}', 'permanent', 'claude-code', 'now');", team = TEST_TEAM, agent = TEST_AGENT),
             )
             .expect("create legacy roster table");
 
         ensure_team_roster_harness_values(&mut connection, &target).expect("migrate roster");
         connection
             .execute(
-                "INSERT INTO team_roster(
+                &format!(
+                    "INSERT INTO team_roster(
                     team_name, agent_name, member_kind, harness, updated_at
-                ) VALUES ('test-team', 'python-worker', 'permanent', 'python-graft', 'now');",
+                ) VALUES ('{team}', 'python-worker', 'permanent', 'python-graft', 'now');",
+                    team = TEST_TEAM
+                ),
                 [],
             )
             .expect("new harness should satisfy migrated check constraint");
         let harnesses: Vec<String> = connection
-            .prepare(
+            .prepare(&format!(
                 "SELECT harness FROM team_roster
-                 WHERE team_name = 'test-team' ORDER BY agent_name;",
-            )
+                 WHERE team_name = '{team}' ORDER BY agent_name;",
+                team = TEST_TEAM
+            ))
             .expect("prepare harness query")
             .query_map([], |row| row.get(0))
             .expect("query harnesses")
@@ -157,14 +166,14 @@ mod tests {
         let mut connection = open_connection_for_target(&target).expect("open connection");
         connection
             .execute_batch(
-                "CREATE TABLE team_roster (
+                &format!("CREATE TABLE team_roster (
                     team_name TEXT NOT NULL,
                     agent_name TEXT NOT NULL,
                     member_kind TEXT NOT NULL CHECK(member_kind IN ('permanent', 'ephemeral')),
                     harness TEXT NOT NULL CHECK(harness IN ('claude-code', 'codex-cli', 'gemini-cli', 'opencode')),
                     agent_type TEXT NOT NULL DEFAULT '',
                     model TEXT NOT NULL DEFAULT '',
-                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    metadata_json TEXT NOT NULL DEFAULT '{{}}',
                     source TEXT,
                     recipient_pane_id TEXT NULL,
                     operator_annotation TEXT NULL,
@@ -173,7 +182,7 @@ mod tests {
                 );
                 INSERT INTO team_roster(
                     team_name, agent_name, member_kind, harness, operator_annotation, updated_at
-                ) VALUES ('test-team', 'test-agent', 'permanent', 'claude-code', 'keep me', 'now');",
+                ) VALUES ('{team}', '{agent}', 'permanent', 'claude-code', 'keep me', 'now');", team = TEST_TEAM, agent = TEST_AGENT),
             )
             .expect("create legacy roster table with an unknown column");
 
@@ -187,7 +196,10 @@ mod tests {
 
         let annotation: String = connection
             .query_row(
-                "SELECT operator_annotation FROM team_roster WHERE agent_name = 'test-agent';",
+                &format!(
+                    "SELECT operator_annotation FROM team_roster WHERE agent_name = '{agent}';",
+                    agent = TEST_AGENT
+                ),
                 [],
                 |row| row.get(0),
             )
