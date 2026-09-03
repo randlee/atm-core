@@ -713,6 +713,9 @@ pub fn graft_store_error(error: GraftEndpointStoreError) -> AtmError {
             AtmErrorCode::GraftReceiverNotOwner,
             "graft receiver lease is owned by another generation",
         ),
+        GraftEndpointStoreError::Absent => {
+            AtmError::daemon_unavailable("graft receiver lease is absent; re-announcement required")
+        }
         GraftEndpointStoreError::AlreadyActive => {
             AtmError::validation("graft receiver lease is already active")
         }

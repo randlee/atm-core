@@ -274,6 +274,10 @@ impl RegisteredGraftReceiver {
             && error.code() == AtmErrorCode::GraftReceiverNotOwner
         {
             self.displaced = true;
+        } else if let Err(error) = &result {
+            if error.code() == AtmErrorCode::DaemonUnavailable {
+                self.announced = false;
+            }
         }
         result
     }

@@ -786,6 +786,8 @@ pub enum GraftEndpointStoreError {
     AlreadyActive,
     /// The supplied owner generation does not own the stored lease.
     NotOwner,
+    /// No lease row exists for this receiver.
+    Absent,
     /// The backend could not complete the requested operation.
     ///
     /// Preserves the originating [`AtmError`]'s code and cause chain (RBP-F001)
@@ -821,6 +823,7 @@ impl fmt::Display for GraftEndpointStoreError {
             Self::NotOwner => {
                 formatter.write_str("graft receiver lease is owned by another generation")
             }
+            Self::Absent => formatter.write_str("graft receiver lease is absent"),
             Self::Storage {
                 code,
                 message,
