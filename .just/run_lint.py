@@ -53,6 +53,7 @@ PYTHON_LINT_ORDER = (
     "atm-graft-python-boundary",
     "daemon-singleton",
     "legacy-transport-removal",
+    "peer-dial-seam",
     "pytests",
 )
 EXTRA_LINTS = ("sc-boundary", "sc-portability")
@@ -183,6 +184,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "fixed-sleep": LintTask(
             "fixed-sleep", [*python_command, str(repo_root / ".just/check_fixed_sleep_hygiene.py")]
+        ),
+        "peer-dial-seam": LintTask(
+            "peer-dial-seam", [*python_command, str(repo_root / ".just/lint_peer_dial_seam.py")]
         ),
         "ttl-triage": LintTask(
             "ttl-triage", [*python_command, str(repo_root / ".just/lint_ttl_triage_consistency.py")]

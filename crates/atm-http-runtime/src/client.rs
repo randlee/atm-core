@@ -113,8 +113,12 @@ impl HttpRuntimeClientFailure {
                 "HTTP client could not connect to the configured daemon endpoint",
             )
             .with_cause(cause),
+            // The HTTP boundary redacts `cause`, so the connect diagnosis is
+            // carried in the public message: it is the only thing an
+            // operator can act on (which address failed and why), and it
+            // never contains message bodies, recipients, or credentials.
             Self::PeerConnect { target, cause } => AtmError::remote_delivery_unconfirmed(format!(
-                "HTTP client could not connect to direct peer `{target}`"
+                "HTTP client could not connect to direct peer `{target}`: {cause}"
             ))
             .with_cause(cause),
             Self::PeerRequestWrite { target, cause } => AtmError::remote_delivery_unconfirmed(
@@ -190,6 +194,9 @@ pub fn direct_peer_tcp_client(
 pub fn shared_direct_peer_client() -> Result<reqwest::Client, AtmError> {
     reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
+        // Same address ordering as the pooled connector: scope-less
+        // link-local IPv6 answers dropped, IPv4 dialled first.
+        .dns_resolver(Arc::new(crate::peer_dial::OrderedPeerResolver))
         .build()
         .map_err(|source| {
             AtmError::config("failed to build direct peer HTTP client").with_cause(source)
@@ -503,11 +510,7 @@ impl DirectPeerWriteClient {
 impl DirectPeerTcpConnector {
     fn new(client: reqwest::Client, host: HostName, port: NonZeroU16) -> Self {
         Self {
-            authority: if host.as_str().contains(':') {
-                format!("[{}]:{}", host.as_str(), port)
-            } else {
-                format!("{}:{}", host.as_str(), port)
-            },
+            authority: direct_peer_authority(&host, port),
             client,
         }
     }
@@ -1976,6 +1979,13 @@ mod tests {
             "the recovery action must not direct the caller to repair a healthy local daemon"
         );
         assert_eq!(error.cause(), Some("DNS lookup failed"));
+        assert!(
+            error
+                .message()
+                .contains("`rand-m5:43101`: DNS lookup failed"),
+            "the connect diagnosis survives HTTP cause redaction via the message: {}",
+            error.message()
+        );
     }
 
     #[test]

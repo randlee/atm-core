@@ -56,6 +56,7 @@ mod http1_server;
 mod loopback_tcp;
 mod message_handler;
 mod peer_connection_pool;
+mod peer_dial;
 mod peer_stream;
 mod private_staging;
 mod runtime_health;

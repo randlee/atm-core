@@ -198,6 +198,12 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
     "tls": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
     "tls_adapter": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
+    # ADR-060: peer addresses are never mapped back to names.
+    "reverse_dns": (
+        r"\blookup_addr\s*\(",
+        r"\bgetnameinfo\b",
+        r"\breverse_(?:dns|lookup)\b",
+    ),
     "peer_only_ingress": (
         r"\bPeerMessageArray\b",
         r"\bpeer_(?:delivery|http_listener)\b",
