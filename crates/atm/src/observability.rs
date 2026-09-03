@@ -60,7 +60,7 @@ impl CliObservability {
         error: &(dyn std::error::Error + 'static),
     ) {
         let (code, message) = if let Some(atm_error) = error.downcast_ref::<AtmError>() {
-            (atm_error.code(), atm_error.to_string())
+            (atm_error.code(), retained_error_message(atm_error))
         } else {
             (AtmErrorCode::InternalError, error.to_string())
         };
@@ -168,6 +168,20 @@ impl ObservabilityPort for CliObservability {
 //   future sprint unless a concrete testing or feature need appears.
 impl atm_core::boundary::sealed::Sealed for CliObservability {}
 
+/// Retained-log diagnostic for a fatal `AtmError`.
+///
+/// The public stderr line stays the stable `Display` message so
+/// machine-preserved causes (which may carry absolute paths or upstream
+/// tool output) never leak onto the public surface. The retained
+/// observability record is operator-owned, so it carries the cause too;
+/// `--stderr-logs` routes that record to the console for live diagnosis.
+fn retained_error_message(error: &AtmError) -> String {
+    match error.cause() {
+        Some(cause) if !cause.is_empty() => format!("{error}\n  Cause: {cause}"),
+        _ => error.to_string(),
+    }
+}
+
 fn fatal_emit_failure_message(stage: &str, emit_error: &AtmError) -> String {
     format!("ATM fatal diagnostic emission failed during {stage}: {emit_error}")
 }
@@ -178,6 +192,7 @@ fn command_emit_failure_message(command: &str, action: &str, emit_error: &AtmErr
 
 #[cfg(test)]
 mod tests {
+    use super::retained_error_message;
     use atm_core::error::AtmError;
     use atm_core::observability::{
         AtmLogQuery, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
@@ -380,6 +395,22 @@ mod tests {
             CliObservability::from_test_port(atm_core::observability::NullObservability);
         let debug = format!("{observability:?}");
         assert!(debug.contains("CliObservability"));
+    }
+
+    #[test]
+    fn retained_error_message_carries_the_cause_but_display_does_not() {
+        let cause = "NOT NULL constraint failed: mail_messages.message_text";
+        let error =
+            AtmError::validation("failed to persist decomposed message columns").with_cause(cause);
+        let retained = retained_error_message(&error);
+        assert!(retained.starts_with(&error.to_string()));
+        assert!(retained.ends_with(&format!("\n  Cause: {cause}")));
+        assert!(
+            !error.to_string().contains(cause),
+            "the public Display surface must stay cause-free"
+        );
+        let plain = AtmError::validation("plain failure");
+        assert_eq!(retained_error_message(&plain), plain.to_string());
     }
 
     #[test]
