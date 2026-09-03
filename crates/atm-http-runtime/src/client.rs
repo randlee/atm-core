@@ -194,6 +194,9 @@ pub fn direct_peer_tcp_client(
 pub fn shared_direct_peer_client() -> Result<reqwest::Client, AtmError> {
     reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
+        // Same address ordering as the pooled connector: scope-less
+        // link-local IPv6 answers dropped, IPv4 dialled first.
+        .dns_resolver(Arc::new(crate::peer_dial::OrderedPeerResolver))
         .build()
         .map_err(|source| {
             AtmError::config("failed to build direct peer HTTP client").with_cause(source)
@@ -507,11 +510,7 @@ impl DirectPeerWriteClient {
 impl DirectPeerTcpConnector {
     fn new(client: reqwest::Client, host: HostName, port: NonZeroU16) -> Self {
         Self {
-            authority: if host.as_str().contains(':') {
-                format!("[{}]:{}", host.as_str(), port)
-            } else {
-                format!("{}:{}", host.as_str(), port)
-            },
+            authority: direct_peer_authority(&host, port),
             client,
         }
     }
