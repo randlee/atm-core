@@ -8,7 +8,7 @@ sprint_branches:
   - feature/aw3-health-and-log-query
   - feature/aw4-graft-fallback-observability
   - feature/aw5-native-tool-parity
-status: draft — plan review round 4 pending (rounds 1–3 FAIL, see §6)
+status: plan review PASS (round 4, 2026-09-03, see §6) — execution held until after the next release per Rand
 owner: fenix (plan author, coordinator); dev agents per sprint
 base_revision: ba4c91bb3 (develop)
 integration_branch: integrate/phase-aw
@@ -352,6 +352,18 @@ addressed in round 4 text):
 | R4-7 | Minor — deliverable/AC numbering out of sequence in AW.1/AW.2 | Fixed: AW.1 AC9/AC10 and AW.2 D8/D9, AC10/AC11 reordered |
 | R4-8 | Minor — AW.4 D3a `models.py` path lacked the crate prefix (PLAN-CRIT-M2) | Fixed |
 | R4-9 | Minor — one further req-qa wording nit not quoted in the consolidated report | Open: round-4 dispatch asks req-qa to quote the exact text so it can be fixed |
+
+### Round 4 — qa-pr1137-plan-r4 (2026-09-03, plan @ 2067165f8) — PASS
+
+5 reviewers (req-qa, arch-qa, ruthless-boundary-qa, critical-plan-reviewer,
+boundary-guard); report
+https://github.com/randlee/atm-core/pull/1137#issuecomment-5519328683.
+R4-1..R4-8 reconfirmed fixed by two or more reviewers each. R4-9 closed as
+a phantom: req-qa's round-3 minors were exactly the three already handled
+as R4-6, R4-7 and the spell fix. CI `just lint` green at 2067165f8. No
+blocking, important or unresolved minor findings remain. The plan gate is
+passed; Phase AW provisioning, dev dispatch and the merge of this PR stay
+on hold until team-lead confirms the release has shipped.
 
 ## Appendix A — Issue checklist ids (verbatim)
 
