@@ -708,7 +708,7 @@ THOROUGH_ROWS = [
                 "cargo",
                 "test",
                 "-p",
-                "atm-daemon",
+                "agent-team-mail",
                 "composition::tests::host_runtime_lock_path_follows_the_explicit_home_root",
                 "--",
                 "--exact",
