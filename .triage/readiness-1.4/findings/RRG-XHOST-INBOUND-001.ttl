@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-XHOST-INBOUND-001>
+  a triage:Finding ;
+  triage:findingId "RRG-XHOST-INBOUND-001" ;
+  triage:title "Cross-host send rand-m4 -> rand-m5 times out (WaitTimeout, absolute request budget) since the rand-m5 host daemon moved to candidate 1.4.9; the reverse direction works" ;
+  triage:description "Cross-host prerequisite for release-readiness step 2 (Colima AT3). Both hosts run candidate 1.4.9 (rand-m4 daemon pid 4760 from the candidate worktree build; rand-m5 randlee-account daemon pid 90335 from /Users/randlee/.atm-builds/v1.4.9, launched by manual relink+kickstart of com.atm.daemon.crosshost-smoke after daemon-switch.py rolled back on its socket probe). Before the rand-m5 switch (rand-m5 on 1.4.6, rand-m4 on 1.4.8, ~18:30Z) the probe in both directions succeeded. Since ~18:36Z every `atm send fenix@atm-dev.rand-m5` and `atm send fenix --host rand-m5` from rand-m4 fails after ~3.0s with ATM_MESSAGE_VALIDATION_FAILED wrapping AtmError WaitTimeout 'HTTP client request exceeded its absolute request budget' (crates/atm-http-runtime/src/client.rs Timeout variant, i.e. TCP connect succeeded; PeerConnectTimeout is not the variant reported). During the attempt rand-m5 shows the peer connection ESTABLISHED (100.108.145.72:43101 <- 100.83.57.81) on the daemon's listening socket, but a 3s `sample` of the rand-m5 daemon shows every tokio worker parked and no TLS/HTTP/delivery frames, and the rand-m5 daemon log (~/.atm/logs/m5-crosshost-daemon.log) records no inbound send/error for those attempts. rand-m5 -> rand-m4 sends succeed (01M1M8XSK5YRDGY3VTFPGNBH56, 01M1M8ZABF3XWMST4AV1KPYZFS). Name resolution on rand-m5 is instant (rand-m4 -> 100.83.57.81, PTR of 100.83.57.81 -> rand-m4.tailb75e16.ts.net); rand-m5 getfqdn() is the bogus ip6.arpa name described in RRG-BENCH-FQDN-001. Trust rows on rand-m5 (localhost:43102, rand-m4) are intact. Candidate commits between 1.4.6 and 1.4.9 that touched the peer path: e40586aef, f0a23734b, 9ac3200ef, 03f751ee5, 3c7ff7eb4, e5e8a4e48 (peer dial design, stale-address bounds, address cache TTL, literal-IP trusted-peer fail-closed). UNCLASSIFIED: candidate regression in the client dial/handshake path or in the server accept path versus environment of the manually kickstarted rand-m5 daemon. Not a legacy synchronous-daemon issue; any fix belongs in atm-http-runtime." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cross-host-transport" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-03T18:58:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-03T18:41:35Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-XHOST-INBOUND-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-XHOST-INBOUND-001/CAND-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RRG-XHOST-INBOUND-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 133 ;
+  triage:snippet "Self::Timeout => AtmError::new(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "2e3c93a7c" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/2e3c93a7c> .
+
+<urn:atm:triage:occurrence/RRG-XHOST-INBOUND-001/CAND-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/peer_connection_pool.rs" ;
+  triage:line 127 ;
+  triage:snippet "pub fn new(config: PeerPoolConfig, adapter: Arc<dyn PeerStreamAdapter>) -> Self {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "2e3c93a7c" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/2e3c93a7c> .
+
+<urn:atm:triage:worktree/CAND/2e3c93a7c>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "2e3c93a7c" ;
+  triage:orderIndex 1 .
