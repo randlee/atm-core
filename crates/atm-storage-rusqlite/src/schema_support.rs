@@ -7,16 +7,15 @@
 //! column introspection, the guard that refuses to silently drop an unknown
 //! legacy column, and compound failure reporting when cleanup itself fails.
 
-use crate::shared_db::{SharedDbTarget, sqlite_error};
+use crate::shared_db::{SharedDbTarget, SqliteConnection, sqlite_error};
 use atm_storage::error::AtmError;
-use rusqlite::Connection;
 
 /// Reads the declared column names of `table` in their declaration order.
 ///
 /// # Errors
 /// Returns an error when the table cannot be introspected.
 pub(crate) fn table_column_names(
-    connection: &Connection,
+    connection: &SqliteConnection,
     target: &SharedDbTarget,
     table: &str,
 ) -> Result<Vec<String>, AtmError> {
@@ -63,7 +62,7 @@ pub(crate) fn table_column_names(
 /// Returns a validation-style write error naming the offending columns, and
 /// propagates introspection failures.
 pub(crate) fn ensure_columns_match_canonical(
-    connection: &Connection,
+    connection: &SqliteConnection,
     target: &SharedDbTarget,
     table: &str,
     canonical: &[&str],
@@ -118,7 +117,7 @@ mod tests {
     use crate::shared_db::{NEXT_IN_MEMORY_DB_ID, open_connection_for_target};
     use std::sync::atomic::Ordering;
 
-    fn probe_connection() -> (SharedDbTarget, Connection) {
+    fn probe_connection() -> (SharedDbTarget, SqliteConnection) {
         let target = SharedDbTarget::InMemory {
             uri: format!(
                 "file:atm-storage-rusqlite-schema-support-{}?mode=memory&cache=shared",
