@@ -111,7 +111,7 @@ under a typed `peer_tls::LegacyLiteralIpPolicy`:
   authenticated, in either direction) and a `tracing::warn!` names each
   skipped host.
 
-Operators can also pre-empt the fail-closed path entirely, at any time, with
+Operators can also preempt the fail-closed path entirely, at any time, with
 `atm peer trust migrate` (issue #972): `--map IP=HOSTNAME` converts a legacy
 literal-IP row to the durable hostname while preserving its fingerprint and
 port, and a bare `--yes` (no `--map`) revokes every remaining legacy
