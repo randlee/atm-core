@@ -113,8 +113,12 @@ impl HttpRuntimeClientFailure {
                 "HTTP client could not connect to the configured daemon endpoint",
             )
             .with_cause(cause),
+            // The HTTP boundary redacts `cause`, so the connect diagnosis is
+            // carried in the public message: it is the only thing an
+            // operator can act on (which address failed and why), and it
+            // never contains message bodies, recipients, or credentials.
             Self::PeerConnect { target, cause } => AtmError::remote_delivery_unconfirmed(format!(
-                "HTTP client could not connect to direct peer `{target}`"
+                "HTTP client could not connect to direct peer `{target}`: {cause}"
             ))
             .with_cause(cause),
             Self::PeerRequestWrite { target, cause } => AtmError::remote_delivery_unconfirmed(
@@ -1976,6 +1980,13 @@ mod tests {
             "the recovery action must not direct the caller to repair a healthy local daemon"
         );
         assert_eq!(error.cause(), Some("DNS lookup failed"));
+        assert!(
+            error
+                .message()
+                .contains("`rand-m5:43101`: DNS lookup failed"),
+            "the connect diagnosis survives HTTP cause redaction via the message: {}",
+            error.message()
+        );
     }
 
     #[test]
