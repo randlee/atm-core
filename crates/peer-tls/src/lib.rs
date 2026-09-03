@@ -242,6 +242,18 @@ impl MtlsPeerStreamAdapter {
         self.client_configs
             .iter()
             .find(|candidate| candidate.authority == *peer && candidate.https_port == port)
+            .or_else(|| {
+                let mut matches = self
+                    .client_configs
+                    .iter()
+                    .filter(|candidate| candidate.authority == *peer);
+                let first = matches.next()?;
+                if matches.next().is_none() {
+                    Some(first)
+                } else {
+                    None
+                }
+            })
             .map(|candidate| &candidate.config)
             .ok_or_else(|| {
                 AtmError::peer_authentication(
