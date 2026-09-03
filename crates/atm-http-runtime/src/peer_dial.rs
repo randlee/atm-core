@@ -32,6 +32,13 @@ pub(crate) const MAX_DIAL_CANDIDATES: usize = 4;
 /// the loop simply uses what remains.
 pub(crate) const DIAL_REPORT_GRACE: Duration = Duration::from_millis(250);
 
+/// Longest a dial against *cached* addresses may run before the name is
+/// resolved again. A live LAN or VPN address connects in a few milliseconds,
+/// so a healthy peer never feels this bound; a peer that moved gives up its
+/// old address early enough that the fresh mDNS lookup, which can take up to
+/// about two seconds with retransmits, still fits inside the request budget.
+pub(crate) const STALE_ADDRESS_DIAL_CAP: Duration = Duration::from_millis(500);
+
 /// Resolved dial order for one direct peer authority.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ConnectCandidates {
@@ -227,6 +234,19 @@ impl PeerAddressCache {
         );
     }
 
+    /// Test hook: makes an entry look `by` older than it is, so TTL expiry is
+    /// exercised without sleeping.
+    #[cfg(test)]
+    fn backdate(&self, peer: &HostName, port: NonZeroU16, by: Duration) {
+        let mut entries = self.entries.lock().expect("peer address cache");
+        if let Some(entry) = entries.get_mut(&cache_key(peer, port)) {
+            entry.resolved_at = entry
+                .resolved_at
+                .checked_sub(by)
+                .expect("backdated instant stays representable");
+        }
+    }
+
     fn forget(&self, peer: &HostName, port: NonZeroU16) {
         let mut entries = self.entries.lock().expect("peer address cache");
         entries.remove(&cache_key(peer, port));
@@ -250,12 +270,13 @@ impl PeerAddressCache {
         Dial: Future<Output = std::io::Result<TcpStream>>,
     {
         if let Some(cached) = self.fresh(peer, port) {
-            // Cached addresses may be stale, so they get at most half of the
-            // remaining budget; the other half is reserved for the fresh
-            // lookup and dial that follow when they no longer answer.
-            let cached_deadline = deadline
-                .remaining()
-                .map_or(deadline, |remaining| RequestDeadline::after(remaining / 2));
+            // Cached addresses may be stale, so they get the smaller of half
+            // the remaining budget and `STALE_ADDRESS_DIAL_CAP`; the rest is
+            // reserved for the fresh lookup and dial that follow when they no
+            // longer answer.
+            let cached_deadline = deadline.remaining().map_or(deadline, |remaining| {
+                RequestDeadline::after((remaining / 2).min(STALE_ADDRESS_DIAL_CAP))
+            });
             match dial_candidates(cached, cached_deadline, connect).await {
                 Ok(stream) => return Ok(stream),
                 Err(cause) => {
@@ -334,7 +355,7 @@ mod tests {
 
     use super::{
         ConnectCandidates, MAX_DIAL_CANDIDATES, OrderedPeerResolver, PeerAddressCache,
-        dial_candidates, order_connect_candidates,
+        STALE_ADDRESS_DIAL_CAP, dial_candidates, order_connect_candidates,
     };
 
     async fn start_listener() -> u16 {
@@ -349,7 +370,7 @@ mod tests {
                 };
                 tokio::spawn(async move {
                     let _keep_open = stream;
-                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    std::future::pending::<()>().await;
                 });
             }
         });
@@ -627,13 +648,15 @@ mod tests {
     #[tokio::test]
     async fn expired_cache_entries_are_resolved_again() {
         let listener_port = start_listener().await;
-        let cache = PeerAddressCache::new(Duration::from_millis(20));
+        let ttl = Duration::from_secs(300);
+        let cache = PeerAddressCache::new(ttl);
         let calls = Arc::new(AtomicUsize::new(0));
         let resolver = counting_resolver(vec![v4("127.0.0.1", listener_port)], calls.clone());
+        let peer = host("rand-m5.local");
         for _ in 0..2 {
             cache
                 .connect(
-                    &host("rand-m5.local"),
+                    &peer,
                     port(listener_port),
                     deadline(Duration::from_secs(5)),
                     &resolver,
@@ -641,13 +664,46 @@ mod tests {
                 )
                 .await
                 .expect("loopback connects");
-            tokio::time::sleep(Duration::from_millis(40)).await;
+            cache.backdate(&peer, port(listener_port), ttl + Duration::from_millis(1));
         }
         assert_eq!(
             calls.load(Ordering::SeqCst),
             2,
             "an expired entry is not reused"
         );
+    }
+
+    #[tokio::test]
+    async fn stale_cached_address_gives_up_within_the_dial_cap() {
+        let listener_port = start_listener().await;
+        let cache = PeerAddressCache::new(Duration::from_secs(300));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let resolver = counting_resolver(vec![v4("127.0.0.1", listener_port)], calls.clone());
+        let peer = host("rand-m5");
+        // Black-holed old address in the cache, generous 3 s request budget:
+        // half the budget would be 1.5 s, the cap makes it 500 ms.
+        cache.store(
+            &peer,
+            port(listener_port),
+            order_connect_candidates([v4("10.255.255.1", listener_port)]),
+        );
+        let started = std::time::Instant::now();
+        cache
+            .connect(
+                &peer,
+                port(listener_port),
+                deadline(Duration::from_secs(3)),
+                &resolver,
+                loopback_only_connector,
+            )
+            .await
+            .expect("the moved peer is reached");
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed >= STALE_ADDRESS_DIAL_CAP && elapsed < Duration::from_millis(1_000),
+            "stale dial is bounded by the cap, not half the budget: {elapsed:?}"
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]

@@ -60,12 +60,13 @@ record; they are not to be relaxed, reordered, or duplicated elsewhere.
    one entry. A hit is a mutex-guarded `HashMap` lookup and a small clone: no
    I/O, well under a millisecond.
 
-5. **Stale-entry recovery.** A fresh cache entry is dialed with at most half
-   of the remaining budget. If that fails, the entry is forgotten, the name is
-   resolved again (bounded by the remaining budget), the new answer is stored,
-   and it is dialed with what remains. The caller sees an error only when the
-   fresh answer also fails to connect, and that failure removes the entry so
-   the next request resolves afresh.
+5. **Stale-entry recovery.** A fresh cache entry is dialed with at most the
+   smaller of half the remaining budget and `STALE_ADDRESS_DIAL_CAP`
+   (500 ms). If that fails, the entry is forgotten, the name is resolved again
+   (bounded by the remaining budget), the new answer is stored, and it is
+   dialed with what remains. The caller sees an error only when the fresh
+   answer also fails to connect, and that failure removes the entry so the
+   next request resolves afresh.
 
 6. **Both wire-security modes dial alike.** The pooled mTLS connector uses
    `PeerAddressCache::connect`. The `plaintext-test` direct `reqwest` client
@@ -86,23 +87,58 @@ record; they are not to be relaxed, reordered, or duplicated elsewhere.
    loop uses what remains. Message bodies, tokens, and raw configuration are never
    logged (#904).
 
+## Timing contract
+
+These are the non-functional bounds the implementation must meet; they are
+derived from the 3 s `SERVER_REQUEST_BUDGET` (`atm-storage::request_budget`),
+of which roughly 2.9 s is normally left for the peer write.
+
+| Situation | Bound |
+| --- | --- |
+| Valid cache entry | under 1 ms to find; one mutex-guarded map lookup, no I/O |
+| Cold cache, OS resolver cache hit | sub-millisecond |
+| Cold cache, unicast DNS (LAN or VPN) | milliseconds to ~100 ms, acceptable |
+| Cold cache, mDNS with retransmits after a network change | up to ~2 s, covered by the budget |
+| Stale entry, old address black-holed | at most 500 ms spent, then at least ~2 s left for lookup + dial: covered |
+| Resolver never answers, or peer asleep / off network | named failure inside the budget; no cache entry left |
+
+No path exceeds the request budget; the dial loop finishes
+`DIAL_REPORT_GRACE` before it so the per-address diagnosis is what surfaces.
+
+## Boundary and enforcement
+
+`peer_dial.rs` is the only module in the workspace that performs peer name
+resolution (`lookup_host`, `ToSocketAddrs`, `reqwest` `dns_resolver`) or
+dials a peer TCP stream from `atm-http-runtime`; the one other resolver use is
+the CLI's literal-IP-to-trusted-host check owned by ADR-040. The
+`peer-dial-seam` lint (`.just/lint_peer_dial_seam.py`, wired into `just lint`
+and CI) fails when resolution or dialing appears elsewhere, when
+`shared_direct_peer_client()` stops installing `OrderedPeerResolver`, or when
+any locked constant or the cache-key normalization drifts from this ADR. The
+`BOUNDARY-HttpRuntime` record names the seam under `io_owns`, forbids peer
+resolution outside it, and lists the lint under enforcement. Changing the
+locked design means: supersede this ADR, update `REQ-CORE-TRANSPORT-002E`,
+then update the lint's expected lines in the same change.
+
 ## Consequences
 
 - A macOS-to-macOS `.local` peer connects on the first attempt in both
   wire-security modes; a link-local-only answer fails fast with the reason
   named.
 - A peer that changes address is reached inside one request after at most
-  one wasted half-budget dial against the old address; no error escapes.
+  one wasted dial of at most 500 ms against the old address; no error
+  escapes.
 - Steady-state throughput is unaffected: the module runs only on connection
   establishment (independently confirmed by a hot-path review on PR #1142:
   pooled reuse, `reqwest` pooled reuse, UDS, and loopback paths are
   unchanged; a cache hit is one mutex-guarded map lookup, no I/O). Pooled connections and `reqwest`'s own pool bypass it
   entirely for requests on an existing connection. Same-host UDS and loopback
   paths do not use it.
-- Any future change to ordering, cap, budget split, TTL floor, cache key
-  normalization, or the dual-mode guarantee requires a superseding ADR and an
-  update to `REQ-CORE-TRANSPORT-002E`; QA verifies implementations against
-  this document.
+- Any future change to ordering, cap, budget split, stale-dial cap, TTL
+  floor, cache key normalization, or the dual-mode guarantee requires a
+  superseding ADR and an update to `REQ-CORE-TRANSPORT-002E`; the
+  `peer-dial-seam` lint fails until its locked lines are updated in the same
+  change, and QA verifies implementations against this document.
 
 ## Verification
 
@@ -110,5 +146,8 @@ Unit coverage lives in `peer_dial.rs` tests: ordering and link-local
 filtering, candidate cap, mixed-family connect without stalling, bounded
 first attempt, link-local-only fast failure, per-attempt causes, cache reuse
 within TTL, shared entry for bare and `.local` names, re-resolution on a
-changed address without error, TTL expiry, no entry left behind on failure,
-and `OrderedPeerResolver` output shape.
+changed address without error, stale dial bounded by the cap, TTL expiry
+(without sleeping), no entry left behind on failure, and
+`OrderedPeerResolver` output shape. `peer_connection_pool.rs` proves the
+per-address diagnosis surfaces instead of a bare timeout and that a zero TTL
+is rejected.

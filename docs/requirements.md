@@ -4096,6 +4096,17 @@ mail correctness.
     while moving between wired, Wi-Fi, and VPN networks is reached without an
     error surfacing to the caller. A re-resolution taking milliseconds is
     acceptable; an unreachable peer leaves no cache entry behind
+  - timing contract (non-functional): a dial against cached addresses is
+    bounded by the smaller of half the remaining budget and 500 ms, so with
+    the 3 s server request budget at least about 2 s remains for the fresh
+    lookup and dial. That covers an mDNS answer delayed by retransmits after
+    a network change (about 2 s worst case); only a resolver that never
+    answers, or a peer that is asleep or off the network, produces a
+    caller-visible, named failure
+  - the dial rules, constants, and cache key normalization are locked by
+    ADR-060 and enforced by the `peer-dial-seam` lint: name resolution and
+    peer TCP dialing exist only in `peer_dial.rs`, and the locked constants
+    may change only together with a superseding ADR
   - the mTLS pooled connector and the `plaintext-test` direct connector
     (`REQ-CORE-TRANSPORT-002B1`) apply the same address ordering; there is no
     wire-security mode that dials an unfiltered answer

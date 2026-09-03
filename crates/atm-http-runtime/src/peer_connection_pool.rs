@@ -277,43 +277,9 @@ impl PeerConnectionPool {
     ) -> Result<(http1::SendRequest<Body>, JoinHandle<()>), HttpRuntimeClientFailure> {
         let target = format!("direct peer `{authority}`");
         let connect_timeout = || peer_connect_deadline_failure(authority, &target);
-        let remaining = deadline.remaining().ok_or_else(connect_timeout)?;
-        // The caller's own request timeout fires exactly at `deadline`, so the
-        // dial loop is bounded slightly *inside* the budget: it finishes, and
-        // reports its per-address diagnosis, before any bare timeout can win
-        // the race. The outer guard here is only a backstop at the budget.
-        let dial_deadline = RequestDeadline::after(
-            remaining
-                .checked_sub(DIAL_REPORT_GRACE)
-                .filter(|reserved| !reserved.is_zero())
-                .unwrap_or(remaining),
-        );
-        let stream = tokio::time::timeout(
-            remaining,
-            self.shared.addresses.connect(
-                peer,
-                port,
-                dial_deadline,
-                resolve_peer_addresses,
-                TcpStream::connect,
-            ),
-        )
-        .await
-        .map_err(|_| {
-            tracing::warn!(
-                %peer,
-                %authority,
-                "direct peer TCP connect exhausted the request budget"
-            );
-            connect_timeout()
-        })?
-        .map_err(|cause| {
-            tracing::warn!(%peer, %authority, %cause, "direct peer TCP connect failed");
-            HttpRuntimeClientFailure::PeerConnect {
-                target: authority.to_owned(),
-                cause,
-            }
-        })?;
+        let stream = self
+            .dial_transport(peer, port, deadline, authority, &connect_timeout)
+            .await?;
         let remaining = deadline.remaining().ok_or_else(connect_timeout)?;
         let stream = tokio::time::timeout(remaining, self.shared.adapter.connect(stream, peer))
             .await
@@ -353,6 +319,54 @@ impl PeerConnectionPool {
             completed_drivers.fetch_add(1, Ordering::SeqCst);
         });
         Ok((sender, driver))
+    }
+
+    /// Resolves and dials the peer through the ADR-060 seam (`peer_dial`).
+    async fn dial_transport(
+        &self,
+        peer: &HostName,
+        port: NonZeroU16,
+        deadline: RequestDeadline,
+        authority: &str,
+        connect_timeout: &(dyn Fn() -> HttpRuntimeClientFailure + Sync),
+    ) -> Result<TcpStream, HttpRuntimeClientFailure> {
+        let remaining = deadline.remaining().ok_or_else(connect_timeout)?;
+        // The caller's own request timeout fires exactly at `deadline`, so the
+        // dial loop is bounded slightly *inside* the budget: it finishes, and
+        // reports its per-address diagnosis, before any bare timeout can win
+        // the race. The outer guard here is only a backstop at the budget.
+        let dial_deadline = RequestDeadline::after(
+            remaining
+                .checked_sub(DIAL_REPORT_GRACE)
+                .filter(|reserved| !reserved.is_zero())
+                .unwrap_or(remaining),
+        );
+        tokio::time::timeout(
+            remaining,
+            self.shared.addresses.connect(
+                peer,
+                port,
+                dial_deadline,
+                resolve_peer_addresses,
+                TcpStream::connect,
+            ),
+        )
+        .await
+        .map_err(|_| {
+            tracing::warn!(
+                %peer,
+                %authority,
+                "direct peer TCP connect exhausted the request budget"
+            );
+            connect_timeout()
+        })?
+        .map_err(|cause| {
+            tracing::warn!(%peer, %authority, %cause, "direct peer TCP connect failed");
+            HttpRuntimeClientFailure::PeerConnect {
+                target: authority.to_owned(),
+                cause,
+            }
+        })
     }
 
     #[cfg(test)]
@@ -1184,11 +1198,10 @@ mod tests {
             Ok(_) => panic!("replacement dial fails after listener shutdown"),
             Err(error) => error,
         };
-        assert!(matches!(
-            failure,
-            super::HttpRuntimeClientFailure::PeerConnect { .. }
-                | super::HttpRuntimeClientFailure::PeerConnectTimeout { .. }
-        ));
+        assert!(
+            matches!(failure, super::HttpRuntimeClientFailure::PeerConnect { .. }),
+            "a refused redial is reported with its per-address cause: {failure:?}"
+        );
         assert_eq!(
             adapter.connects.load(Ordering::SeqCst),
             1,
@@ -1216,8 +1229,49 @@ mod tests {
                 idle_timeout: std::time::Duration::ZERO,
                 ..PeerPoolConfig::default()
             },
+            PeerPoolConfig {
+                address_cache_ttl: std::time::Duration::ZERO,
+                ..PeerPoolConfig::default()
+            },
         ] {
             assert!(config.validate().is_err());
         }
+    }
+
+    /// ADR-060 §7: the dial loop is bounded inside the request budget, so an
+    /// unresponsive peer is reported with its per-address diagnosis rather
+    /// than losing the race to a bare connect timeout.
+    #[tokio::test]
+    async fn unresponsive_peer_reports_per_address_diagnosis_not_a_bare_timeout() {
+        let adapter = Arc::new(CountingPassthroughAdapter::default());
+        let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
+        // A black-holed address: nothing answers, so the attempt runs to its
+        // budget share unless the OS rejects the route outright.
+        let peer = "10.255.255.1".parse().expect("peer authority");
+        let budget = Duration::from_millis(600);
+        let started = std::time::Instant::now();
+        let result = pool
+            .acquire(
+                &peer,
+                std::num::NonZeroU16::new(43_101).expect("non-zero test port"),
+                atm_core::api::RequestDeadline::after(budget),
+            )
+            .await;
+        let elapsed = started.elapsed();
+        let cause = match result {
+            Ok(_) => panic!("a black-holed peer must not connect"),
+            Err(super::HttpRuntimeClientFailure::PeerConnect { cause, .. }) => cause,
+            Err(other) => panic!("per-address diagnosis expected, got {other:?}"),
+        };
+        assert!(
+            cause.contains("10.255.255.1:43101: "),
+            "cause names the attempted address and reason: {cause}"
+        );
+        assert!(
+            elapsed < budget,
+            "the dial loop finishes inside the request budget: {elapsed:?}"
+        );
+        assert_eq!(adapter.connects.load(Ordering::SeqCst), 0);
+        assert_eq!(pool.pooled_count(), 0);
     }
 }
