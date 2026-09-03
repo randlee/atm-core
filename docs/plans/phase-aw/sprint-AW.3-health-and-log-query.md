@@ -1,95 +1,68 @@
 ---
 sprint: AW.3
-title: "Health exposure, merged atm log query, and retained-log contract docs"
+title: "Health counters, atm log query modes, retained-log contract docs"
 branch: feature/aw3-health-and-log-query
-base: feature/aw4-graft-fallback-observability
-issues: "#905 (items: health counters, atm log query over SQLite, loss semantics docs); #904 (item: atm log merges fallback stream)"
+base: integrate/phase-aw
+issues: "#905 ids 905-6 (health), 905-7, 905-8 (merge/order), 905-9; #904 ids 904-4, 904-7 (merge/order)"
 must_follow: [AW.2, AW.4]
-parallel_safe: []
+parallel_safe: [AW.5]
 ---
 
-# AW.3 — Health exposure and merged log query
+# AW.3 — Health counters and `atm log` query modes
 
 ## Deliverables
 
-1. **Health**: `RuntimeStatusSnapshot`
-   (`crates/atm-http-runtime/src/runtime_health.rs`) and
-   `AtmObservabilityHealth` in the doctor report
-   (`crates/atm-core/src/doctor/report.rs`) gain an `observability` block:
-   `jsonl_queue_full_drops_total`, `bridge_reentrant_drops_total`,
-   `timeline_queue_full_drops_total`, `timeline_persist_failures_total`,
-   `timeline_rows`, `timeline_oldest_ms`, `sink_state`,
-   `last_degraded_at`, `last_recovered_at`. `atm doctor` prints a single
-   `observability: ok|degraded (…)` line; `--json` carries the block
-   verbatim.
-2. **`atm log --source {jsonl,timeline,merged}`** (default `jsonl`, so
-   existing behaviour and scripts are unchanged):
-   - `timeline` queries `DiagnosticTimelineStore` through the daemon's
-     existing HTTP query surface (a new read-only route in
-     `atm-http-runtime`, `GET /v1/diagnostics?…`, same auth as other
-     local routes) — the CLI never opens the SQLite file;
-   - `merged` reads canonical JSONL + the graft fallback satellite
-     (`graft_fallback_log_path`, absent file is not an error) + the
-     timeline, and yields a single timestamp-ordered stream with a
-     `source` column (`jsonl|graft|timeline`). Records with identical
-     `(ts, code, correlation_id, message)` across JSONL and timeline are
-     collapsed to one line tagged `jsonl+timeline`; the collapse is
-     documented as best-effort.
-   - existing `--level/--match/--since/--limit/--json` filters apply to
-     every source; `--source timeline` also accepts `--code`.
-   - when the daemon is unreachable, `--source timeline|merged` degrades to
-     the file sources and prints one stderr notice naming the missing
-     source; exit code stays 0.
-3. **Docs**: rewrite `docs/atm-daemon/logging.md` retained-log contract and
-   update `docs/user-documents/doctor-and-log.md`,
-   `docs/atm-core/modules/{observability,log}.md`, and ADR-011 addendum:
-   which events are retained where, the three sources, honest loss
-   semantics (JSONL primary; timeline bounded, pruned, may drop under
-   overload; counters are the truth), and the pre-bootstrap stderr
-   allowlist from AW.1.
-
-## Contract samples
-
-```text
-$ atm log --source merged --since 10m --level warn
-2026-09-02T14:03:11.412Z  warn   jsonl+timeline  ATM_DELIVERY_RETRY      c-8f1a  delivery retry scheduled
-2026-09-02T14:03:12.001Z  error  graft           ATM_GRAFT_DAEMON_UNAVAILABLE  c-8f1b  daemon unavailable, recovery=retry_once
-2026-09-02T14:03:12.140Z  warn   timeline        ATM_SQLITE_WRITER_TIMEOUT  -       writer lane acquisition timed out
-```
-
-```json
-{"observability":{"sink_state":"ok","jsonl_queue_full_drops_total":0,"timeline_queue_full_drops_total":3,"timeline_persist_failures_total":0,"timeline_rows":1842,"timeline_oldest_ms":1756220000000,"last_degraded_at":null,"last_recovered_at":null}}
-```
+1. **Health block**: `GET /v1/health` (atm-http-runtime) and `atm doctor`
+   gain `observability: { jsonl: { forwarded_total, dropped_queue_full_total,
+   dropped_reentrant_total }, timeline: { written_total,
+   dropped_queue_full_total, dropped_persist_error_total }, degraded:
+   ["jsonl"|"timeline"...] }` sourced from AW.1 `TracingBridgeStats` and
+   AW.2 `DiagnosticTimelineStats`. Doctor prints a WARN line when
+   `degraded` is non-empty.
+2. **`atm log --source jsonl|timeline|merged`** (default `jsonl`, preserving
+   current behaviour). `timeline` queries `DiagnosticTimelineStore` through
+   the daemon (`GET /v1/diagnostics?since&until&level&component&limit`, new
+   read-only route). `merged` reads canonical JSONL, the graft fallback
+   satellite (`graft_fallback_log_path`, AW.1/AW.4), and the timeline, then
+   sorts by `ts` ascending with a stable tiebreak `(source_rank, seq)`
+   (`jsonl=0, graft=1, timeline=2`); each merged record carries
+   `source`. Existing `--level/--since/--component` filters apply to every
+   source. Output header (non-JSON mode) and a `"note"` field (JSON mode)
+   state: "sources are independently bounded; merged view is not lossless
+   under overload".
+3. **cli_surface baseline** regenerated for the new flag.
+4. **Docs**: `docs/atm-daemon/logging.md` retained-log contract rewritten
+   with the exact guarantees (levels, targets, allowlist), the exceptions
+   (pre-bootstrap stderr allowlist, `origin` rules), and loss/degradation
+   behaviour (queue sizes, drop counters, `ATM_LOG_SINK_*` codes, timeline
+   retention). `docs/graft-observability.md` (new, from AW.4 contract)
+   cross-linked.
 
 ## Acceptance criteria
 
-- AC1: Counters in `atm doctor --json` match the values reported by the
-  AW.1/AW.2 stats structs after an induced drop fixture. (Closes #905
-  "health exposes drop counts".)
-- AC2: `atm log --source timeline --code ATM_DELIVERY_RETRY --since 1h`
-  returns rows matching a direct `DiagnosticTimelineStore::query` in the
-  same order. (Closes #905 "atm log can query SQLite".)
-- AC3: `atm log --source merged` over a fixture with all three sources
-  produces strictly non-decreasing timestamps, correct `source` tags, and
-  collapses exact duplicates; each source alone is also correct. (Closes
-  #904 "atm log merges fallback stream".)
-- AC4: Missing fallback file and unreachable daemon both degrade as
-  specified with exit 0 and one notice.
-- AC5: `atm log` with no `--source` is byte-identical to the pre-AW output
-  for the same JSONL fixture.
-- AC6: Docs updated; `req-qa` confirms every #905/#904 checkbox is claimed
-  by AW.1–AW.4 acceptance criteria with no gaps or double claims.
-- AC7: No file under `crates/atm-daemon/` is modified.
+- AC1 (905-6 health): health JSON and doctor show the counters; an induced
+  drop flips `degraded` and the doctor WARN line.
+- AC2 (905-7): `atm log --source timeline --level warn` returns rows
+  written by AW.2; `--source jsonl` output is byte-identical to pre-sprint
+  output for the same file.
+- AC3 (905-7, 905-8, 904-4, 904-7): fixture with interleaved JSONL, graft
+  fallback and timeline records yields a single ascending-`ts` result with
+  correct `source` tags and deterministic tiebreak order.
+- AC4: `/v1/diagnostics` is read-only, bounded (`limit ≤ 5000`), and
+  rejects unknown query keys.
+- AC5 (905-7): no doc or CLI text claims lossless equivalence; the note
+  is present in both output modes (test asserts substring).
+- AC6 (905-9): `logging.md` contains the guarantees/exceptions/loss sections
+  with the constant values matching the code (doc test greps constants).
+- AC7: no file under `crates/atm-daemon/` is modified; boundary lint passes
+  (`atm` CLI → `atm-storage` diagnostics types is an existing edge).
 
 ## Required validation
 
-- `cargo test -p atm -p atm-core -p atm-http-runtime`
-- `just lint`, function-length gate (`log.rs` split into `log/` module if
-  it approaches 1 000 non-test lines).
-- Manual: run the AW.4 Python fixture against a stopped daemon, then
-  `atm log --source merged` shows the graft records interleaved.
+- `cargo test -p agent-team-mail -p atm-http-runtime -p atm-core`
+- `just lint`; cli_surface test green; `grep -n 'sc-observability'
+  Cargo.toml` shows `=1.2.0` unchanged.
 
 ## Out of scope
 
-- Any new retention policy (AW.2 owns it).
-- Hermes-side consumption of the merged output.
+- Any change to list/read/send outcome structs (AW.5 owns those).

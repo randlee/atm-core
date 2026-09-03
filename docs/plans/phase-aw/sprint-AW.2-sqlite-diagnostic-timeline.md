@@ -2,8 +2,8 @@
 sprint: AW.2
 title: "SQLite diagnostic timeline and production SqliteObservability adapter"
 branch: feature/aw2-sqlite-diagnostic-timeline
-base: feature/aw1-tracing-bridge
-issues: "#905 (items: persist warn/error diagnostics in SQLite, bounded/pruned, production SqliteObservability, saturation transition diagnostic, drop counters)"
+base: integrate/phase-aw
+issues: "#905 ids 905-3, 905-4, 905-5, 905-6 (diagnostic), 905-8 (non-interference/retention/saturation)"
 must_follow: [AW.1]
 parallel_safe: [AW.4]
 ---
@@ -12,120 +12,117 @@ parallel_safe: [AW.4]
 
 ## Deliverables
 
-1. **Schema**: new migration appended to `DB_MIGRATIONS`
-   (`crates/atm-storage-rusqlite/src/shared_db.rs`) creating
-   `diagnostic_events(id INTEGER PRIMARY KEY, recorded_at_ms INTEGER NOT
-   NULL, level TEXT NOT NULL CHECK(level IN ('warn','error','info')),
-   component TEXT NOT NULL, code TEXT, action TEXT, correlation_id TEXT,
-   outcome TEXT, origin TEXT NOT NULL, detail TEXT)` with an index on
-   `recorded_at_ms` and one on `(code, recorded_at_ms)`. `detail` is
-   bounded to `DIAGNOSTIC_DETAIL_MAX_BYTES = 2048` (truncated with a
-   `…[truncated]` marker; UTF-8-boundary safe). A schema note is added
-   next to the existing `shared_db.rs:843` guidance.
-2. **Contract**: `DiagnosticTimelineStore` trait in
-   `crates/atm-storage/src/contract.rs` (sealed like the neighbours):
-   `record_batch(&[DiagnosticEvent]) -> Result<RecordedCount>`,
-   `query(DiagnosticQuery) -> Result<Vec<DiagnosticEvent>>` (filter by
-   min level, code, component, since/until, limit ≤ 10 000, newest first),
-   `prune(DiagnosticRetention) -> Result<PrunedCount>`.
-   `DiagnosticEvent` is a plain struct with the allowlisted fields only —
-   there is no free-form map on the SQLite side.
-3. **Writer**: `DiagnosticTimelineWriter` (Tokio task, owned by
-   `atm-daemon-bootstrap`) with a bounded `mpsc` channel
-   (`DIAGNOSTIC_QUEUE_CAPACITY = 1024`, `try_send` only). It batches up
-   to `DIAGNOSTIC_BATCH_MAX = 128` events or `DIAGNOSTIC_FLUSH_INTERVAL =
-   250 ms`, and submits **one write op through the existing SharedDb single
-   writer lane** at low priority. It never opens a second connection and
-   never awaits channel capacity. Overflow increments
-   `diagnostic_queue_full_drops_total`; write-op failure increments
-   `diagnostic_persist_failures_total` and emits **one** JSONL-only
-   diagnostic (`origin = "timeline"`), rate-limited to once per
-   `DIAGNOSTIC_FAILURE_NOTICE_INTERVAL = 60 s`.
-4. **Retention**: every `DIAGNOSTIC_PRUNE_INTERVAL = 60 s` the writer
-   submits one bounded prune (`DELETE … LIMIT 1000` semantics via rowid
-   subquery) enforcing `DIAGNOSTIC_MAX_ROWS = 20 000` and
-   `DIAGNOSTIC_MAX_AGE = 7 days`. Defaults live in one `DiagnosticRetention`
-   struct with `ATM_DIAGNOSTIC_MAX_ROWS` / `ATM_DIAGNOSTIC_MAX_AGE_HOURS`
-   overrides parsed and validated at bootstrap (invalid → diagnostic +
-   default, never panic).
-5. **Fan-out**: AW.1's `TracingBridgeLayer` gains an optional secondary
-   `DiagnosticSink` hook; the daemon wires it to the timeline writer's
-   `try_send`. JSONL remains the primary path; a timeline drop never
-   affects JSONL emission and vice versa.
-6. **Production adapter**: `DaemonSqliteObservability` implementing
-   `SqliteObservability`, mapping every `SqliteObservabilityEvent` to a
-   `tracing::warn!/error!` with `origin = "sqlite"` and stable codes
-   (`ATM_SQLITE_WRITER_TIMEOUT`, `ATM_SQLITE_WAL_CHECKPOINT_FAILED`, …
-   enumerated in the sprint PR). Events with `origin = "sqlite"` are
-   **JSONL-only** (the bridge does not fan them out to the timeline) —
-   this is the recursion break. All three production construction sites
-   (`lib.rs:741,750`, `shared_db_reader_lanes.rs:43`) take the adapter;
-   `NullSqliteObservability` stays available for tests only (`#[cfg(test)]`
-   or a `testing` feature — dev decides, boundary-guard reviews).
-7. **Saturation transition diagnostic**: `DaemonObservability` tracks
-   sink health per `sc_observability` report; on transition into
-   `queue_full`/degraded and on recovery it emits one retained JSONL record
-   (`ATM_OBSERVABILITY_DEGRADED` / `ATM_OBSERVABILITY_RECOVERED`) with the
-   drop counter delta, rate-limited to once per 60 s per direction.
+1. **Schema**: migration appending `diagnostic_events` to `DB_MIGRATIONS`
+   (`crates/atm-storage-rusqlite/src/lib.rs`):
+   `id INTEGER PK, ts_unix_ms INTEGER NOT NULL, level TEXT NOT NULL,
+   component TEXT NOT NULL, code TEXT, correlation_id TEXT, origin TEXT NOT
+   NULL, message TEXT NOT NULL, detail TEXT` with index
+   `(ts_unix_ms)` and `(component, ts_unix_ms)`. `detail` holds the
+   allowlisted extra fields as a compact JSON object, capped at
+   `DIAGNOSTIC_DETAIL_MAX_BYTES = 1024` (truncated with `…` marker, never
+   split inside a UTF-8 sequence).
+2. **Store contract** in `crates/atm-storage`
+   (`diagnostics.rs`): `DiagnosticEvent`, `DiagnosticQuery { since, until,
+   level_at_least, component_prefix, limit }`, and trait
+   `DiagnosticTimelineStore { record_batch, query, prune }`. Implemented in
+   `atm-storage-rusqlite` as `SqliteDiagnosticTimeline`.
+3. **Writer-lane priority (concrete mechanism).** No second SQLite
+   connection. `crates/atm-storage-rusqlite/src/writer/ops.rs` gains
+   `WriteOp::RecordDiagnostics(Vec<DiagnosticEvent>)`. The writer
+   (`writer/mod.rs`) gains a second bounded `tokio::sync::mpsc` channel
+   `diagnostic_tx/diagnostic_rx` (capacity
+   `DIAGNOSTIC_QUEUE_CAPACITY = 1024` events, batched into one
+   `RecordDiagnostics` op of at most `DIAGNOSTIC_BATCH_MAX = 128` events).
+   The writer loop becomes:
 
-## Contract samples
+   ```rust
+   loop {
+       tokio::select! {
+           biased;
+           Some(op) = primary_rx.recv() => handle(op),
+           Some(batch) = diagnostic_rx.recv(), if primary_rx_is_empty() => handle_diagnostics(batch),
+           else => break,
+       }
+   }
+   ```
 
-```sql
-INSERT INTO diagnostic_events(recorded_at_ms, level, component, code, action, correlation_id, outcome, origin, detail)
-VALUES (1756822991412, 'warn', 'atm_http_runtime::delivery', 'ATM_DELIVERY_RETRY', 'deliver', 'c-8f1a', 'retry', 'tracing', 'attempt=3');
-```
-
-JSONL-only record from the storage adapter:
-
-```json
-{"ts":"…","level":"error","component":"atm_storage_rusqlite::writer","code":"ATM_SQLITE_WRITER_TIMEOUT","origin":"sqlite","elapsed_ms":5003,"message":"writer lane acquisition timed out"}
-```
+   i.e. a diagnostic batch is drained only when the primary channel has no
+   pending op, at most one batch per idle tick, and a diagnostic batch that
+   fails to persist is counted and dropped (never retried, never surfaced as
+   a primary-lane error). Producers use `try_send` only; `Full` increments
+   `timeline_dropped_queue_full_total`.
+4. **`DiagnosticTimelineWriter`** (bootstrap side): implements AW.1's
+   `DiagnosticSink`; buffers events, flushes on `DIAGNOSTIC_BATCH_MAX` or
+   `DIAGNOSTIC_FLUSH_INTERVAL_MS = 250`, whichever first; records
+   `timeline_written_total`, `timeline_dropped_queue_full_total`,
+   `timeline_dropped_persist_error_total` in a shared
+   `DiagnosticTimelineStats`.
+5. **Production `SqliteObservability` adapter**
+   (`DaemonSqliteObservability` in `atm-daemon-bootstrap`) replaces
+   `NullSqliteObservability` at `lib.rs:741,750` and
+   `shared_db_reader_lanes.rs:43`. Every `SqliteObservability` method emits
+   `tracing::warn!`/`error!` with `origin = "sqlite"` and a `code`
+   (`ATM_SQLITE_WRITER_TIMEOUT`, `ATM_SQLITE_WAL_CHECKPOINT_FAILED`,
+   `ATM_SQLITE_WRITE_FAILED`, `ATM_SQLITE_QUEUE_SATURATED`). Per the phase
+   plan §2 "No recursion" rule these go to JSONL only and are never fanned
+   out to the timeline (the bridge skips `DiagnosticSink` for
+   `origin ∈ {"sqlite", "timeline"}`).
+6. **Policy-selected minor events**: `DiagnosticPolicy` (bootstrap) lists
+   the INFO events (by `target`, reusing `RETAINED_INFO_TARGETS`) that are
+   also recorded to the timeline; default equals `RETAINED_INFO_TARGETS`.
+7. **Saturation/degradation transition diagnostic** (905-6 diagnostic
+   half): `DegradationMonitor` observes the bridge stats (AW.1) and timeline
+   stats; on the first drop after a zero-drop window it emits one retained
+   `warn!(code = "ATM_LOG_SINK_DEGRADED", origin = "timeline", sink =
+   "jsonl"|"timeline", dropped = n)`; recovery (no drops for
+   `DEGRADATION_RECOVERY_WINDOW_SECS = 60`) emits
+   `ATM_LOG_SINK_RECOVERED`; rate-limited to one transition pair per
+   `DEGRADATION_RATE_LIMIT_SECS = 60` per sink. Stats are exposed for AW.3
+   health output.
+8. **Retention/prune**: `DIAGNOSTIC_MAX_ROWS = 20_000`,
+   `DIAGNOSTIC_MAX_AGE_DAYS = 7`, `DIAGNOSTIC_PRUNE_BATCH = 1000`; prune
+   runs as a `RecordDiagnostics`-lane op (same priority) after every flush
+   that crosses a `DIAGNOSTIC_PRUNE_CHECK_EVERY = 500` written-row boundary.
 
 ## Acceptance criteria
 
-- AC1: A fresh DB and a pre-AW DB both migrate; `diagnostic_events` exists
-  with the declared columns (reuse `ensure_columns_match_canonical`).
-- AC2: An induced `warn!` on the runtime path appears in both
-  `atm.log.jsonl` and `diagnostic_events` with matching `code`,
-  `correlation_id`, `recorded_at_ms` within 1 s. (Closes #905 "persist in
-  SQLite".)
-- AC3: Non-interference: with the timeline channel full (capacity 1024
-  pre-filled) and with the writer lane faulted, 1 000 sends complete with
-  identical results and latencies within the existing benchmark tolerance
-  vs a run with the timeline disabled; drop counters account for every
-  undelivered diagnostic.
-- AC4: Retention: 25 000 inserted rows prune down to ≤ 20 000 within two
-  prune intervals; rows older than max-age are removed first; each prune op
-  deletes ≤ 1 000 rows.
-- AC5: `detail` longer than 2048 bytes is stored truncated at a UTF-8
-  boundary with the marker; a multibyte fixture does not corrupt.
-- AC6: A writer-lane failure emitted by `DaemonSqliteObservability` reaches
-  JSONL and does not produce a timeline write attempt (assert writer op
-  count unchanged) — recursion break proven.
-- AC7: Saturation: forcing `QueueFull` via `RetainedSinkFaultInjector`
-  yields exactly one `ATM_OBSERVABILITY_DEGRADED` record and one
-  `ATM_OBSERVABILITY_RECOVERED` record across a 3-minute cycling fixture.
-- AC8: No production code path constructs `NullSqliteObservability`
-  (grep gate in the sprint's test file).
-- AC9: Redaction: a `SqliteObservabilityEvent` carrying an SQL statement
-  or a path is retained with the statement replaced by its verb and the
-  path replaced by its file name only.
-- AC10: No file under `crates/atm-daemon/` is modified.
+- AC1: migration applies on a fresh DB and on a DB at the current head;
+  `sqlite3 .schema diagnostic_events` matches deliverable 1.
+- AC2 (905-3): an induced bridged `warn!` (origin tracing) and a
+  policy-selected INFO event both appear as timeline rows; an INFO event
+  outside the policy does not.
+- AC3 (905-4, 905-8 non-interference): with the diagnostic channel full and
+  with `RecordDiagnostics` forced to fail, a concurrent send/read/ack and a
+  mailbox write complete with unchanged results; diagnostic drops are
+  counted.
+- AC4 (905-4, 905-8 retention): 25_000 inserted rows prune to ≤ 20_000 in
+  batches of ≤ 1000; rows older than 7 days prune regardless of count.
+- AC5 (905-4 redaction): `detail` never contains a key outside
+  `RETAINED_FIELD_ALLOWLIST`; detail > 1024 bytes is truncated at a char
+  boundary.
+- AC6 (905-5): a writer timeout, a WAL checkpoint failure and a write
+  failure each produce a JSONL record with the deliverable-5 `code` and
+  `origin = "sqlite"`, and no timeline row (recursion rule).
+- AC7 (905-6, 905-8 saturation): saturating the diagnostic channel emits
+  exactly one `ATM_LOG_SINK_DEGRADED` within the rate-limit window and one
+  `ATM_LOG_SINK_RECOVERED` after the recovery window.
+- AC8 (905-5): `NullSqliteObservability` has no production construction
+  site (test greps the three former sites).
+- AC9 (905-4): writer-lane priority test: with 10_000 queued primary ops and
+  a full diagnostic channel, all primary ops complete before any diagnostic
+  batch is written (assert via a recording writer hook).
+- AC10: no file under `crates/atm-daemon/` is modified; boundary lint
+  passes (`atm-storage` gains no new dependency; `atm-daemon-bootstrap` →
+  `atm-observability` edge already allowlisted by AW.1).
 
 ## Required validation
 
 - `cargo test -p atm-storage -p atm-storage-rusqlite -p atm-daemon-bootstrap`
-- `just lint` including boundary TOML for the new trait (owner crate
-  `atm-storage`, impl `atm-storage-rusqlite`); `rusqlite::Connection`
-  literal must not appear outside the owner crate (use the
-  `crate::shared_db::SqliteConnection` alias).
-- Function-length and file-length gates (`shared_db.rs` is at 919 non-test
-  lines — the migration DDL goes in a new `diagnostic_events_schema.rs`
-  module, not inline).
-- Storage benchmark spot check on the dev host with timeline enabled vs
-  disabled (evidence only; official numbers stay on m5-atmbench).
+- `just lint`; `grep -n 'sc-observability' Cargo.toml` shows `=1.2.0`
+  unchanged, no diff to those lines.
+- Benchmark sanity: `just bench-smoke` (or the AO2 quick profile) shows no
+  regression beyond noise on the send path with the timeline enabled.
 
 ## Out of scope
 
-- Health/doctor surfacing and `atm log` query (AW.3).
-- Graft fallback events (AW.4).
+- Health/doctor exposure and `atm log` (AW.3).
