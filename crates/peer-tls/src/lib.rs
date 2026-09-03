@@ -4,7 +4,7 @@
 //! streams. It owns neither HTTP nor any ATM request, route, persistence,
 //! acknowledgement, retry, hook, daemon lifecycle, or plaintext fallback.
 
-use std::{fmt, sync::Arc, time::Duration};
+use std::{fmt, num::NonZeroU16, sync::Arc, time::Duration};
 
 use atm_storage::{
     AtmError, HostName, PeerConfigStore, PinnedClientVerifier, TlsIdentity, TrustedPeer,
@@ -64,6 +64,7 @@ pub struct MtlsPeerStreamAdapter {
 
 struct PeerClientConfig {
     authority: HostName,
+    https_port: NonZeroU16,
     config: Arc<ClientConfig>,
 }
 
@@ -122,6 +123,7 @@ impl MtlsPeerStreamAdapter {
             .map(|peer| {
                 Ok(PeerClientConfig {
                     authority: peer.host.clone(),
+                    https_port: peer.https_port,
                     config: Arc::new(Self::build_client_config(&identity, peer)?),
                 })
             })
@@ -178,7 +180,16 @@ impl MtlsPeerStreamAdapter {
         tcp: TcpStream,
         peer: &HostName,
     ) -> Result<impl AsyncRead + AsyncWrite + Send + Unpin + use<>, AtmError> {
-        let config = self.client_config_for(peer)?;
+        let port = tcp
+            .peer_addr()
+            .map_err(|error| {
+                AtmError::peer_authentication("peer stream address unavailable")
+                    .with_cause(error.to_string())
+            })?
+            .port();
+        let port = NonZeroU16::new(port)
+            .ok_or_else(|| AtmError::peer_authentication("peer stream has invalid port"))?;
+        let config = self.client_config_for(peer, port)?;
         let server_name = ServerName::try_from(peer.as_str().to_owned()).map_err(|_| {
             AtmError::peer_authentication("configured peer hostname is not valid for mTLS")
         })?;
@@ -223,10 +234,14 @@ impl MtlsPeerStreamAdapter {
         Ok((TlsStream::Server(stream), source_host))
     }
 
-    fn client_config_for(&self, peer: &HostName) -> Result<&Arc<ClientConfig>, AtmError> {
+    fn client_config_for(
+        &self,
+        peer: &HostName,
+        port: NonZeroU16,
+    ) -> Result<&Arc<ClientConfig>, AtmError> {
         self.client_configs
             .iter()
-            .find(|candidate| candidate.authority == *peer)
+            .find(|candidate| candidate.authority == *peer && candidate.https_port == port)
             .map(|candidate| &candidate.config)
             .ok_or_else(|| {
                 AtmError::peer_authentication(
@@ -620,7 +635,9 @@ mod tests {
         })
         .expect("adapter");
         let host: HostName = "localhost".parse().expect("host");
-        let error = adapter.client_config_for(&host).expect_err("disabled peer");
+        let error = adapter
+            .client_config_for(&host, NonZeroU16::new(443).unwrap())
+            .expect_err("disabled peer");
         assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
     }
 
@@ -636,7 +653,7 @@ mod tests {
         .expect("adapter");
         let mismatched_host: HostName = "other-peer.example".parse().expect("host");
         let error = adapter
-            .client_config_for(&mismatched_host)
+            .client_config_for(&mismatched_host, NonZeroU16::new(443).unwrap())
             .expect_err("mismatched hostname");
         assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
     }
@@ -653,8 +670,12 @@ mod tests {
         })
         .expect("adapter");
         let host: HostName = "localhost".parse().expect("host");
-        let first = adapter.client_config_for(&host).expect("cached config");
-        let second = adapter.client_config_for(&host).expect("cached config");
+        let first = adapter
+            .client_config_for(&host, NonZeroU16::new(443).unwrap())
+            .expect("cached config");
+        let second = adapter
+            .client_config_for(&host, NonZeroU16::new(443).unwrap())
+            .expect("cached config");
         assert!(Arc::ptr_eq(first, second));
         assert_eq!(adapter.client_configs.len(), 1);
     }
@@ -906,7 +927,11 @@ mod tests {
         .expect("disabled legacy literal-IP row must not block startup");
         assert_eq!(adapter.client_configs.len(), 1);
         let hostname: HostName = "rand-m5.local".parse().expect("host");
-        assert!(adapter.client_config_for(&hostname).is_ok());
+        assert!(
+            adapter
+                .client_config_for(&hostname, NonZeroU16::new(443).unwrap())
+                .is_ok()
+        );
     }
 
     #[test]
@@ -929,10 +954,14 @@ mod tests {
         .expect("skip policy must not fail closed");
         assert_eq!(adapter.client_configs.len(), 1);
         let hostname: HostName = "rand-m5.local".parse().expect("host");
-        assert!(adapter.client_config_for(&hostname).is_ok());
+        assert!(
+            adapter
+                .client_config_for(&hostname, NonZeroU16::new(443).unwrap())
+                .is_ok()
+        );
         let literal_ip: HostName = "192.168.128.29".parse().expect("host");
         let error = adapter
-            .client_config_for(&literal_ip)
+            .client_config_for(&literal_ip, NonZeroU16::new(443).unwrap())
             .expect_err("skipped literal-IP row must not be an authority");
         assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
     }
