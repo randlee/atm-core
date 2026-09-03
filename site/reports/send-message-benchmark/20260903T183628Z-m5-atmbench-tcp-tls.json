@@ -1,0 +1,26 @@
+{
+  "baseline": {
+    "p50_floor": 13500.0,
+    "revision": 1
+  },
+  "binary_hashes": {
+    "atm": "055e80a9213d8cff5a271258b5bb71d6784022d0e19618f901eeb2f8324a6f48",
+    "atm-daemon": "5ee4ec4a45f58290d3bea95b5a307b3415e8261cd075e852a970d6c1d426f9ab"
+  },
+  "campaign_id": "20260903T183628Z-m5-atmbench",
+  "direct_sqlite_message_write": null,
+  "durability_after_restart": null,
+  "frames_per_connection": 8,
+  "generated_at": "2026-09-03T18:36:42.318969Z",
+  "host_label": "m5-atmbench",
+  "incomplete_reason": "benchmark snapshot phase failed: could not generate disposable P-256 mTLS certificate: problems making Certificate Request\n8431459968:error:0DFFF097:asn1 encoding routines:CRYPTO_internal:string too long:/AppleInternal/Library/BuildRoots/4~CNqEugB7-7yoTeHDwKLZ0PRIsI79y9XP33qXeIo/Library/Caches/com.apple.xbs/TemporaryDirectory.MoIAiI/Sources/libressl/libressl-3.3/crypto/asn1/a_mbstr.c:156:maxsize=64; recovery: keep the benchmark daemon stopped and inspect retained snapshot staging material",
+  "messages_admitted": 0,
+  "messages_durable": 0,
+  "messages_requested": 0,
+  "metrics": null,
+  "os": "macos",
+  "schema_version": 4,
+  "source_revision": "863ee20139cf6ffaf0647601c4b9dfae4a37ab51",
+  "status": "INCOMPLETE",
+  "target": "tcp-tls"
+}
