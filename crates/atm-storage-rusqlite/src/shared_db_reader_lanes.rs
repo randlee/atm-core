@@ -11,7 +11,9 @@ use crate::reader_pool::ReaderLanesConfig;
 use crate::search_reader::SearchReader;
 #[cfg(test)]
 use crate::shared_db::record_opened_connection;
-use crate::shared_db::{SharedDbTarget, configure_connection, sqlite_error, sqlite_open_error};
+use crate::shared_db::{
+    ControlPathConnections, SharedDbTarget, configure_connection, sqlite_error, sqlite_open_error,
+};
 use crate::writer::SqliteWriter;
 use atm_storage::{AsyncMailboxReader, AtmError};
 use rusqlite::{Connection, OpenFlags};
@@ -27,6 +29,7 @@ static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
 pub(crate) struct SharedDb {
     pub(crate) target: Arc<SharedDbTarget>,
     pub(crate) writer: Arc<SqliteWriter>,
+    pub(crate) control_path: Arc<ControlPathConnections>,
     pub(crate) search_reader: Arc<SearchReader>,
     pub(crate) mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     pub(crate) mailbox_reader_metrics: MailboxReaderMetrics,
@@ -119,6 +122,7 @@ impl SharedDb {
             "sqlite boundary assembly opened"
         );
         Ok(Self {
+            control_path: Arc::new(ControlPathConnections::new(Arc::clone(&target))),
             target,
             writer,
             search_reader,
