@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>ATM benchmark campaign — 20260903T183628Z-m5-atmbench</title>
+  <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
+  <style type="text/css">
+    body { font-family: sans-serif; color: #1f2937; margin: 2rem auto; max-width: 75rem; padding: 0 1rem; }
+    table { border-collapse: collapse; margin: 1rem 0; width: 100%; } th, td { border: 1px solid #cbd5e1; padding: .55rem; text-align: left; }
+    th { background: #f1f5f9; } .PASS { color: #065f46; font-weight: bold; } .FAIL { color: #991b1b; font-weight: bold; } .INCOMPLETE { color: #92400e; font-weight: bold; }
+    .meta { color: #475569; } code { font-family: ui-monospace, monospace; } .incomplete { margin-top: 2rem; border: 2px solid #f59e0b; padding: 1rem; background: #fffbeb; }
+  </style>
+</head>
+<body>
+  <h1>ATM benchmark campaign — 20260903T183628Z-m5-atmbench</h1>
+  <p class="meta"><code>20260903T183628Z-m5-atmbench</code> · m5-atmbench · phase ao2 · source <code>863ee20139cf6ffaf0647601c4b9dfae4a37ab51</code></p>
+  <p>Status: <strong class="INCOMPLETE">INCOMPLETE</strong> · started <time datetime="2026-09-03T18:36:28.177152Z">Sep 3, 2026 · 11:36 PDT</time> · completed <time datetime="2026-09-03T18:36:42.444157Z">Sep 3, 2026 · 11:36 PDT</time></p>
+  <table>
+    <thead><tr><th>Test</th><th>p50 msg/sec</th><th>p95</th><th>p99</th><th>Durable write proof</th><th>Baseline floor</th><th>Margin</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr data-target="tcp"><td>TCP</td><td>422.18</td><td>422.18</td><td>422.18</td><td>600 / 600 after restart</td><td>17000.00</td><td>-16577.82</td><td class="FAIL">FAIL</td></tr>
+      <tr data-target="tcp-tls"><td>TCP + TLS</td><td>n/a</td><td>n/a</td><td>n/a</td><td>not captured</td><td>13500.00</td><td>n/a</td><td class="INCOMPLETE">INCOMPLETE</td></tr>
+      <tr data-target="uds"><td>UDS</td><td>n/a</td><td>n/a</td><td>n/a</td><td>not captured</td><td>18000.00</td><td>n/a</td><td class="INCOMPLETE">INCOMPLETE</td></tr>
+      <tr data-target="sqlite"><td>SQLite</td><td>n/a</td><td>n/a</td><td>n/a</td><td>not captured</td><td>35000.00</td><td>n/a</td><td class="INCOMPLETE">INCOMPLETE</td></tr>
+    </tbody>
+  </table>
+  <aside class="incomplete"><strong>Incomplete campaign:</strong> benchmark snapshot phase failed: could not generate disposable P-256 mTLS certificate: problems making Certificate Request
+8431459968:error:0DFFF097:asn1 encoding routines:CRYPTO_internal:string too long:/AppleInternal/Library/BuildRoots/4~CNqEugB7-7yoTeHDwKLZ0PRIsI79y9XP33qXeIo/Library/Caches/com.apple.xbs/TemporaryDirectory.MoIAiI/Sources/libressl/libressl-3.3/crypto/asn1/a_mbstr.c:156:maxsize=64; recovery: keep the benchmark daemon stopped and inspect retained snapshot staging material; benchmark snapshot phase failed: could not generate disposable P-256 mTLS certificate: problems making Certificate Request
+8431459968:error:0DFFF097:asn1 encoding routines:CRYPTO_internal:string too long:/AppleInternal/Library/BuildRoots/4~CNqEugB7-7yoTeHDwKLZ0PRIsI79y9XP33qXeIo/Library/Caches/com.apple.xbs/TemporaryDirectory.MoIAiI/Sources/libressl/libressl-3.3/crypto/asn1/a_mbstr.c:156:maxsize=64; recovery: keep the benchmark daemon stopped and inspect retained snapshot staging material; benchmark snapshot phase failed: could not generate disposable P-256 mTLS certificate: problems making Certificate Request
+8431459968:error:0DFFF097:asn1 encoding routines:CRYPTO_internal:string too long:/AppleInternal/Library/BuildRoots/4~CNqEugB7-7yoTeHDwKLZ0PRIsI79y9XP33qXeIo/Library/Caches/com.apple.xbs/TemporaryDirectory.MoIAiI/Sources/libressl/libressl-3.3/crypto/asn1/a_mbstr.c:156:maxsize=64; recovery: keep the benchmark daemon stopped and inspect retained snapshot staging material</aside>
+  <script type="application/ecmascript"><![CDATA[
+(() => { const f = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", hourCycle: "h23", timeZoneName: "short" }); document.querySelectorAll("time[datetime]").forEach((node) => { node.textContent = f.format(new Date(node.dateTime)); }); })();
+  ]]></script>
+</body>
+</html>
