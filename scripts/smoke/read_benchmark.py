@@ -32,6 +32,7 @@ except ImportError:  # pragma: no cover - Windows has no POSIX passwd database
     pwd = None  # type: ignore[assignment]
 
 from scripts.smoke.benchmark_baselines import BenchmarkBaselineError, load_baselines
+from scripts.smoke import benchmark_account
 from scripts.smoke.benchmark_report import BenchmarkReportError, compose, regenerate_index, render_envelope
 from scripts.smoke.benchmark_policy import classify_status
 from scripts.smoke.benchmark_schema import (
@@ -89,7 +90,7 @@ class ReadBenchmarkError(RuntimeError):
 
 @dataclass(frozen=True)
 class ExecutionIdentity:
-    """POSIX execution identity captured by the benchmark process itself."""
+    """OS execution identity captured by the benchmark process itself."""
 
     execution_account: str
     uid: int
@@ -105,6 +106,41 @@ class ExecutionIdentity:
         }
 
 
+def _windows_execution_identity(
+    account_id: str,
+    home: Path,
+    hostname: str,
+) -> ExecutionIdentity:
+    """Translate the benchmark-account SID into the stable legacy UID slot.
+
+    Reports retain their established four-field schema.  On Windows the SID
+    is the authoritative account identity; its final RID is the numeric
+    account component corresponding to the POSIX UID field used on Unix.
+    """
+    prefix = "sid:"
+    sid = account_id.removeprefix(prefix)
+    parts = sid.split("-")
+    if (
+        not account_id.startswith(prefix)
+        or len(parts) < 2
+        or parts[0] != "S"
+        or any(not part.isdigit() for part in parts[1:])
+    ):
+        raise ReadBenchmarkError("execution identity capture returned an invalid Windows SID")
+    try:
+        uid = int(parts[-1])
+    except ValueError as error:  # Defensive: the digit check above is intentional.
+        raise ReadBenchmarkError("execution identity capture returned an invalid Windows RID") from error
+    if uid < 0 or not home or not hostname:
+        raise ReadBenchmarkError("execution identity capture returned incomplete data")
+    return ExecutionIdentity(
+        execution_account=account_id,
+        uid=uid,
+        home=str(home),
+        hostname=hostname,
+    )
+
+
 def capture_execution_identity() -> ExecutionIdentity:
     """Capture identity from the running process or fail before publishing.
 
@@ -113,10 +149,17 @@ def capture_execution_identity() -> ExecutionIdentity:
     effective POSIX UID through the local password database so environment
     variables cannot spoof the recorded account or home directory.
     """
+    if os.name == "nt":
+        try:
+            return _windows_execution_identity(
+                benchmark_account.current_account_id(),
+                benchmark_account.account_home(),
+                socket.gethostname(),
+            )
+        except benchmark_account.BenchmarkAccountError as error:
+            raise ReadBenchmarkError(f"execution identity capture unavailable: {error}") from error
     if pwd is None:
-        raise ReadBenchmarkError(
-            "execution identity capture unavailable: POSIX passwd database is unavailable"
-        )
+        raise ReadBenchmarkError("execution identity capture unavailable: POSIX passwd database is unavailable")
     try:
         uid = os.geteuid() if hasattr(os, "geteuid") else os.getuid()
         account = pwd.getpwuid(uid)
@@ -962,14 +1005,41 @@ def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
     return 0 if payload["status"] == "PASS" else 1
 
 
+def execute_with_managed_daemon(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
+    """Run read diagnostics against one runner-owned local candidate daemon.
+
+    This is for isolated hosts without the optional service/selector setup.
+    It starts the same release daemon resolved by the benchmark, waits for its
+    explicit readiness record, and always reaps only that child process.
+    Plaintext peer mode is sufficient because all benchmark traffic uses the
+    daemon's authenticated local HTTP endpoint, not peer ingress.
+    """
+    from scripts.smoke.run_admission_capacity import reap_owned_daemon, start_capacity_daemon
+
+    daemon = ROOT / "target" / "release" / ("atm-daemon.exe" if os.name == "nt" else "atm-daemon")
+    if not daemon.is_file():
+        raise ReadBenchmarkError(f"release-built atm-daemon is required at {daemon}; run cargo build --release first")
+    home = benchmark_account.account_home() / ".atm"
+    environment = {**os.environ, "ATM_DAEMON_READY_STDOUT": "1"}
+    process, output = start_capacity_daemon(daemon, home, environment, "plaintext-test")
+    try:
+        return execute(family_ids, diagnostic_only=diagnostic_only)
+    finally:
+        reap_owned_daemon(process)
+        output.join()
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--family", choices=[*FAMILY_BY_ID])
     parser.add_argument("--families", nargs="+", choices=[*FAMILY_BY_ID])
     parser.add_argument("--diagnostic-only", action="store_true")
+    parser.add_argument("--managed-daemon", action="store_true")
     args = parser.parse_args(argv)
     selected = args.families or ([args.family] if args.family else list(FAMILY_BY_ID))
     try:
+        if args.managed_daemon:
+            return execute_with_managed_daemon(selected, diagnostic_only=args.diagnostic_only)
         return execute(selected, diagnostic_only=args.diagnostic_only)
     except (ReadBenchmarkError, BenchmarkReportError) as error:
         print(f"read benchmark: {error}", file=sys.stderr)

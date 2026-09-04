@@ -9,6 +9,41 @@ from scripts.smoke import benchmark_account
 
 
 class ReadBenchmarkProvenanceTests(unittest.TestCase):
+    def test_windows_identity_uses_sid_and_numeric_rid(self) -> None:
+        identity = benchmark._windows_execution_identity(
+            "sid:S-1-5-21-100-200-300-4000",
+            benchmark.Path("C:/Users/benchmark"),
+            "windows-x64-01",
+        )
+        self.assertEqual(identity.execution_account, "sid:S-1-5-21-100-200-300-4000")
+        self.assertEqual(identity.uid, 4000)
+        self.assertEqual(identity.home, "C:\\Users\\benchmark")
+        self.assertEqual(identity.hostname, "windows-x64-01")
+
+    def test_windows_identity_rejects_malformed_sid(self) -> None:
+        with self.assertRaisesRegex(benchmark.ReadBenchmarkError, "invalid Windows SID"):
+            benchmark._windows_execution_identity(
+                "benchmark", benchmark.Path("C:/Users/benchmark"), "windows-x64-01"
+            )
+
+    def test_managed_daemon_reaps_only_its_started_child(self) -> None:
+        process = object()
+        output = mock.Mock()
+        with mock.patch(
+            "scripts.smoke.run_admission_capacity.start_capacity_daemon",
+            return_value=(process, output),
+        ) as start, mock.patch(
+            "scripts.smoke.run_admission_capacity.reap_owned_daemon",
+        ) as reap, mock.patch.object(benchmark, "execute", return_value=0) as execute:
+            self.assertEqual(
+                benchmark.execute_with_managed_daemon(["read-fanout"], diagnostic_only=True), 0
+            )
+        self.assertEqual(start.call_args.args[3], "plaintext-test")
+        self.assertEqual(start.call_args.args[2]["ATM_DAEMON_READY_STDOUT"], "1")
+        execute.assert_called_once_with(["read-fanout"], diagnostic_only=True)
+        reap.assert_called_once_with(process)
+        output.join.assert_called_once_with()
+
     @unittest.skipUnless(benchmark.pwd is not None, "requires a POSIX passwd database")
     def test_capture_returns_process_identity_fields(self) -> None:
         identity = benchmark.capture_execution_identity()
