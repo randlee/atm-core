@@ -153,6 +153,8 @@ export ATM_SMOKE_REMOTE_IDENTITY=m5-test
 export ATM_SMOKE_REMOTE_TEAM=atm-dev
 export ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm
 export ATM_SMOKE_REPETITIONS=10
+# Optional for an account-local loopback fixture; defaults to 43101.
+# export ATM_SMOKE_DIRECT_PEER_PORT=43111
 ```
 
 Run, in this exact order, from the M5 AL.13 home worktree:
