@@ -7,9 +7,9 @@
 use std::{fmt, num::NonZeroU16, sync::Arc, time::Duration};
 
 use atm_storage::{
-    AtmError, HostName, PeerConfigStore, PinnedClientVerifier, TlsIdentity, TrustedPeer,
-    TrustedPeerCatalogAudit, certificate_fingerprint, certificate_valid_now, install_tls_provider,
-    normalize_fingerprint,
+    AtmError, HostName, HttpsInterface, PeerConfigStore, PinnedClientVerifier, TlsIdentity,
+    TrustedPeer, TrustedPeerCatalogAudit, certificate_fingerprint, certificate_valid_now,
+    install_tls_provider, normalize_fingerprint,
 };
 use rustls::{
     CertificateError, ClientConfig, DigitallySignedStruct, Error, ServerConfig, SignatureScheme,
@@ -66,6 +66,27 @@ struct PeerClientConfig {
     authority: HostName,
     https_port: NonZeroU16,
     config: Arc<ClientConfig>,
+}
+
+fn loopback_port_collisions(
+    peers: &[TrustedPeer],
+    interfaces: &[HttpsInterface],
+) -> Vec<(HostName, NonZeroU16)> {
+    let ports: std::collections::HashSet<_> = interfaces
+        .iter()
+        .filter(|i| i.enabled)
+        .map(|i| i.bind_addr.port())
+        .filter_map(NonZeroU16::new)
+        .collect();
+    peers
+        .iter()
+        .filter(|p| {
+            p.enabled
+                && matches!(p.host.as_str(), "localhost" | "127.0.0.1" | "::1")
+                && ports.contains(&p.https_port)
+        })
+        .map(|p| (p.host.clone(), p.https_port))
+        .collect()
 }
 
 impl fmt::Debug for MtlsPeerStreamAdapter {
