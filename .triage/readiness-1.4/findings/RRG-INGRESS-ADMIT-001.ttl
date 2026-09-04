@@ -15,8 +15,8 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-03T19:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:RRG-S1 ;
   triage:foundAt "2026-09-03T18:52:52Z"^^xsd:dateTime ;
@@ -24,7 +24,10 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-INGRESS-ADMIT-001/CAND-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-INGRESS-ADMIT-001/CAND-3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-INGRESS-ADMIT-001/CAND-4> ;
-  triage:triageRecordVersion "15" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-INGRESS-ADMIT-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-09-04T07:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "16" .
 
 <urn:atm:triage:occurrence/RRG-INGRESS-ADMIT-001/CAND-1>
   a triage:Occurrence ;
@@ -89,3 +92,21 @@
   triage:branch "chore/readiness-candidate-1.4.7" ;
   triage:headSha "f5de13551" ;
   triage:orderIndex 3 .
+
+<urn:atm:triage:occurrence/RRG-INGRESS-ADMIT-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "site/reports/smoke/macos/rand-m5.local/20260904T054723465480Z-pid52930-smoke-thorough/smoke-thorough.json" ;
+  triage:line 1 ;
+  triage:snippet "QA-8/9: ATM-QA-101 withdrawn as a false positive. quality-mgr's and req-qa's original checks ran against a stale evidence-branch ref (46d34a933) that predated the artifact's actual landing commit b983b19b1 (2026-09-04T06:03Z, evidence(smoke): retain focused m5 thorough report) on evidence/readiness-1.4.12-atmbench (PR #1150). Fresh independent re-verification: gh pr view 1150 headRefOid equals b983b19b1a31b69db31eab96b0291650893e55b7; gh pr diff 1150 --name-only contains smoke-thorough.json and smoke-thorough.md at the cited path; git ls-remote origin evidence/readiness-1.4.12-atmbench matches that SHA exactly; full JSON content fetched and parsed: level thorough, timestamp 2026-09-04T05:47:23.420452+00:00, binary_sha 4f1202bf236a79a96302940028bef53b5b90f6cf, status passed, 32/32 rows PASS, zero fails. Combined with the official step-1 send-lane campaign evidence (v15, all four lanes exact admission and above floor), RRG-INGRESS-ADMIT-001 has no remaining evidentiary gap and is closed. Read family (RRG-READ-DOCTOR-LANES-001) remains explicitly out of scope for this record." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "evidence/readiness-1.4.12-atmbench" ;
+  triage:headSha "b983b19b1" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/b983b19b1-ingress> .
+
+<urn:atm:triage:worktree/CAND/b983b19b1-ingress>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "evidence/readiness-1.4.12-atmbench" ;
+  triage:headSha "b983b19b1" ;
+  triage:orderIndex 4 .
