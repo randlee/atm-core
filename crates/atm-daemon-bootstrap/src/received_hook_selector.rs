@@ -658,7 +658,10 @@ mod tests {
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{GraftReceiverRegistration, OwnerGeneration};
     use atm_core::schema::{AgentType, AtmMessageId};
-    use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
+    use atm_core::send::{
+        NudgeMode, SendMessageSource, WriteRequest, prepare_write_with_runtime,
+        write_mail_with_runtime,
+    };
     use atm_core::types::{AgentName, IsoTimestamp, PaneId, TeamName};
     use atm_http_runtime::RuntimeHealth;
     use atm_runtime_test_support::{
@@ -988,6 +991,14 @@ mod tests {
         );
     }
 
+    /// ARCH-QA7-001: the dispatch handed to the emitter is the one
+    /// `PreparedWrite::build_received_hook_dispatches` produced, exactly as
+    /// `StorageAndNudgeRouter::commit_write` builds it, rather than a
+    /// hand-written `QueuePullTarget`. A hand-built dispatch would keep
+    /// asserting zero control-path work even if the write pipeline stopped
+    /// routing local Immediate bare-CLI writes down the queue-pull channel,
+    /// so the borrow count is only meaningful when the whole prepared write
+    /// to emitter path is exercised end to end.
     #[tokio::test]
     async fn local_immediate_bare_cli_write_avoids_control_path_marker_work() {
         let root = tempfile::tempdir().expect("temporary runtime root");
@@ -1014,25 +1025,44 @@ mod tests {
             false,
         )
         .expect("immediate write request");
-        let message_id = write_mail_with_runtime(request, &NullObservability, &runtime)
-            .expect("local immediate write")
-            .persisted_message_id();
 
-        let mut dispatch = tmux_dispatch();
-        dispatch.kind = NudgeKind::Steer;
-        dispatch.target = PostSendBuiltInTarget::QueuePull(QueuePullTarget {
-            team: team.clone(),
-            agent: recipient.clone(),
-            kind: NudgeKind::Steer,
-            msg_id: message_id,
-            body: "immediate bare CLI body".to_owned(),
-        });
+        // Mirrors `StorageAndNudgeRouter::commit_write`: prepare the durable
+        // write, build its receiver-hook dispatches from the retained
+        // planning data, then finish it. `NudgeMode::Immediate` is the
+        // default, so this is the ordinary local `atm send` route.
+        let mut prepared = prepare_write_with_runtime(request, &NullObservability, &runtime)
+            .expect("prepare local immediate write");
+        assert!(prepared.is_newly_persisted());
+        let mut dispatches = prepared
+            .build_received_hook_dispatches(&runtime)
+            .expect("receiver hook dispatches");
+        prepared
+            .finish(&runtime, &NullObservability)
+            .expect("finish local immediate write");
+        assert_eq!(
+            dispatches.len(),
+            1,
+            "a local bare-CLI write plans exactly one receiver handoff"
+        );
+        let dispatch = dispatches.remove(0);
+        assert_eq!(
+            dispatch.kind,
+            NudgeKind::Steer,
+            "an Immediate write keeps steer kind; only a Queue-kind handoff clears a marker"
+        );
+        let queue_pull = match &dispatch.target {
+            PostSendBuiltInTarget::QueuePull(target) => target.clone(),
+            other => panic!("a bare-CLI recipient must plan a queue-pull handoff, got {other:?}"),
+        };
+        assert_eq!(queue_pull.agent, recipient);
+        assert_eq!(queue_pull.team, team);
+
         let fifo: atm_http_runtime::BareCliFifo = Default::default();
         let selector = ReplacementReceivedHookSelector::with_herdr_process_and_fifo(
             runtime,
             Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
             RuntimeHealth::default(),
-            fifo,
+            fifo.clone(),
             Default::default(),
         );
 
@@ -1042,6 +1072,17 @@ mod tests {
             .emit_received_message(dispatch, RequestDeadline::after(Duration::from_secs(1)))
             .await
             .expect("bare-CLI immediate handoff");
+
+        let member = MemberKey::new(team, recipient);
+        let drained =
+            atm_http_runtime::drain_bare_cli_messages(&fifo, &member).expect("drain FIFO");
+        assert_eq!(
+            drained.len(),
+            1,
+            "the pipeline-built dispatch reached the FIFO, so the borrow counts below \
+             describe a delivery that actually happened"
+        );
+        assert_eq!(drained[0].msg_id, queue_pull.msg_id);
 
         assert_eq!(
             counting_store.control_path_borrows.load(Ordering::SeqCst),

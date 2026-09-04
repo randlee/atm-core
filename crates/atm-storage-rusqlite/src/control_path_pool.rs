@@ -202,6 +202,7 @@ mod tests {
     use crate::shared_db::{opened_connection_count, reset_opened_connection_count};
     use crate::shared_db_reader_lanes::SharedDb;
     use std::sync::Barrier;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
     /// Concurrency modelled well above the bound so an unbounded pool opens a
@@ -248,6 +249,75 @@ mod tests {
             "a control-path burst must never open more than {MAX_CONTROL_PATH_CONNECTIONS} \
              connections; opening one per in-flight borrow exhausts the process descriptor \
              limit and SQLite then reports CannotOpen at query time as a mailbox write failure"
+        );
+    }
+
+    /// ATM-QA-008: the bound is a runtime property of concurrent borrows, not
+    /// only of the connections ever opened. Counting opened connections
+    /// cannot distinguish "eight connections, reused" from "eight
+    /// connections, all sixteen borrows holding one at once"; this observes
+    /// the peak number of leases held simultaneously instead, which is what
+    /// the descriptor budget actually bounds.
+    #[test]
+    fn a_burst_never_has_more_than_the_bound_checked_out_concurrently() {
+        let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
+        let checked_out = Arc::new(AtomicUsize::new(0));
+        let peak_checked_out = Arc::new(AtomicUsize::new(0));
+        let release = Arc::new((Mutex::new(false), Condvar::new()));
+
+        std::thread::scope(|scope| {
+            for _ in 0..BURST_BORROWS {
+                let pool = Arc::clone(&db.control_path);
+                let checked_out = Arc::clone(&checked_out);
+                let peak_checked_out = Arc::clone(&peak_checked_out);
+                let release = Arc::clone(&release);
+                scope.spawn(move || {
+                    let lease = checkout(&pool).expect("bounded control-path borrow");
+                    let held = checked_out.fetch_add(1, Ordering::SeqCst) + 1;
+                    peak_checked_out.fetch_max(held, Ordering::SeqCst);
+                    // Holding the lease is what makes the peak observable: a
+                    // borrow that returned immediately would never overlap
+                    // with the rest of the burst.
+                    let (lock, signal) = release.as_ref();
+                    let mut released = lock.lock().expect("release lock");
+                    while !*released {
+                        released = signal.wait(released).expect("release signal");
+                    }
+                    drop(released);
+                    checked_out.fetch_sub(1, Ordering::SeqCst);
+                    lease.park();
+                });
+            }
+
+            // Either the burst settles at the bound with every surplus borrow
+            // queued (correct) or more than the bound is held at once (the
+            // regression). Both are observable state, so neither branch needs
+            // a delay.
+            spin_until("the burst reaches its concurrency ceiling", || {
+                peak_checked_out.load(Ordering::SeqCst) > MAX_CONTROL_PATH_CONNECTIONS
+                    || (checked_out.load(Ordering::SeqCst) == MAX_CONTROL_PATH_CONNECTIONS
+                        && db.control_path.waiting_borrows()
+                            == BURST_BORROWS - MAX_CONTROL_PATH_CONNECTIONS)
+            });
+
+            let (lock, signal) = release.as_ref();
+            *lock.lock().expect("release lock") = true;
+            signal.notify_all();
+            // Leaving the scope joins every thread, so the queued borrows
+            // must also complete: the bound may not deadlock the surplus.
+        });
+
+        assert_eq!(
+            checked_out.load(Ordering::SeqCst),
+            0,
+            "every borrow in the burst completed and returned its bound"
+        );
+        assert!(
+            peak_checked_out.load(Ordering::SeqCst) <= MAX_CONTROL_PATH_CONNECTIONS,
+            "a burst of {BURST_BORROWS} borrows must never hold more than \
+             {MAX_CONTROL_PATH_CONNECTIONS} control-path connections at once; live \
+             connections that scale with in-flight admissions exhaust the process \
+             descriptor limit and SQLite then reports CannotOpen at query time"
         );
     }
 
