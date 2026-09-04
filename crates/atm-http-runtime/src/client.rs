@@ -674,6 +674,11 @@ pub(crate) fn direct_peer_connection_failure(
                 cause,
             }
         }
+        HttpRuntimeClientFailure::Timeout => HttpRuntimeClientFailure::PeerRequestWrite {
+            target: authority.to_owned(),
+            cause: "direct peer request exceeded its absolute request budget after dispatch"
+                .to_owned(),
+        },
         other => other,
     }
 }
@@ -748,6 +753,10 @@ impl HttpRuntimeConnector for LoopbackTcpConnector {
             "loopback endpoint record `{}`",
             self.endpoint_record_path.display()
         )
+    }
+
+    fn deadline_elapsed(&self) -> HttpRuntimeClientFailure {
+        local_request_timeout_failure(&self.connection_target())
     }
 
     /// Exchanges one request. The shared client owns the one-retry policy;
@@ -1004,6 +1013,10 @@ impl HttpRuntimeConnector for UnixSocketConnector {
         format!("Unix socket `{}`", self.socket_path.display())
     }
 
+    fn deadline_elapsed(&self) -> HttpRuntimeClientFailure {
+        local_request_timeout_failure(&self.connection_target())
+    }
+
     async fn exchange(
         &self,
         request: HttpRequest,
@@ -1056,6 +1069,12 @@ async fn execute_reqwest_request(
         .await
         .map_err(classify_reqwest_execute_failure)?;
     decode_reqwest_response(response).await
+}
+
+fn local_request_timeout_failure(connection_target: &str) -> HttpRuntimeClientFailure {
+    HttpRuntimeClientFailure::RequestWrite(format!(
+        "{connection_target} request exceeded its absolute request budget after dispatch"
+    ))
 }
 
 /// Builds the outbound `reqwest::Request` from the shared, transport-agnostic
@@ -1292,8 +1311,8 @@ mod tests {
     use super::{
         DirectPeerTcpConnector, HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector,
         LoopbackTcpConnector, TransportGeneration, direct_peer_connection_failure,
-        direct_peer_tcp_client, execute_reqwest_request, selected_write_transport,
-        shared_direct_peer_client,
+        direct_peer_tcp_client, execute_reqwest_request, local_request_timeout_failure,
+        selected_write_transport, shared_direct_peer_client,
     };
 
     struct LocalOnlyClient;
@@ -1999,6 +2018,25 @@ mod tests {
         assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
         assert!(error.message().contains("confirm acceptance"));
         assert_eq!(error.cause(), Some("connection reset after write"));
+    }
+
+    #[test]
+    fn direct_peer_post_send_timeout_is_remote_uncertainty() {
+        let error =
+            direct_peer_connection_failure("rand-m5:43101", HttpRuntimeClientFailure::Timeout)
+                .into_atm_error();
+
+        assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+        assert!(error.message().contains("rand-m5:43101"));
+        assert!(error.message().contains("confirm acceptance"));
+    }
+
+    #[test]
+    fn local_post_send_timeout_is_daemon_uncertainty() {
+        let error = local_request_timeout_failure("loopback endpoint").into_atm_error();
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonMayHaveExecuted);
+        assert!(error.message().contains("could not confirm"));
     }
 
     #[tokio::test(start_paused = true)]

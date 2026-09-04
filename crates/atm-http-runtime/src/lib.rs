@@ -2374,7 +2374,7 @@ mod tests {
             .execute(ApiRequest::new(write_request()))
             .await
             .expect_err("a second connection must not reach the router while the first is active");
-        assert_eq!(error.code().as_str(), "ATM_WAIT_TIMEOUT");
+        assert_eq!(error.code().as_str(), "ATM_DAEMON_MAY_HAVE_EXECUTED");
         assert_eq!(handler.calls.load(Ordering::SeqCst), 1);
 
         handler.release.notify_waiters();
