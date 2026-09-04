@@ -3,6 +3,7 @@
 //! This is deliberately separate from `shared_db`: the durable writer surface
 //! must not grow with reader-lane composition details.
 
+use crate::control_path_pool::ControlPathConnections;
 use crate::mailbox_reader::{MailboxReaderMetrics, start_mailbox_reader};
 #[cfg(test)]
 use crate::observability::NullSqliteObservability;
@@ -11,9 +12,7 @@ use crate::reader_pool::ReaderLanesConfig;
 use crate::search_reader::SearchReader;
 #[cfg(test)]
 use crate::shared_db::record_opened_connection;
-use crate::shared_db::{
-    ControlPathConnections, SharedDbTarget, configure_connection, sqlite_error, sqlite_open_error,
-};
+use crate::shared_db::{SharedDbTarget, configure_connection, sqlite_error, sqlite_open_error};
 use crate::writer::SqliteWriter;
 use atm_storage::{AsyncMailboxReader, AtmError};
 use rusqlite::{Connection, OpenFlags};

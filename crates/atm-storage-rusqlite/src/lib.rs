@@ -8,6 +8,7 @@
 //! message and roster contracts.
 
 mod analyst_query;
+mod control_path_pool;
 mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;
 mod mail_messages_schema;

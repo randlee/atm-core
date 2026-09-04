@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::LazyLock;
+#[cfg(test)]
 use std::sync::Mutex;
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -25,18 +26,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 // only to the one writer connection and bounds its page cache at 32 MiB.
 const WRITER_CACHE_KIB: i64 = 32 * 1024;
 
-// Control-path reads and writes (roster, graft receiver leases, pending
-// nudges, template catalog, peer config, mailbox metadata) do not go through
-// the bounded reader lanes; they borrow a connection directly through
-// `SharedDb::with_connection`.  Opening a fresh SQLite connection for every
-// such call multiplies process descriptor demand by the number of concurrent
-// admissions, because each open costs the database file plus its `-wal` and
-// `-shm` sidecars.  Past the host descriptor limit SQLite starts failing at
-// *query* time -- the admission path then reports a mailbox write failure for
-// a row that already committed -- and the HTTP listeners' own `accept` calls
-// start failing alongside it.  Park a small number of configured connections
-// for reuse so a burst reuses descriptors instead of multiplying them.
-const MAX_IDLE_CONTROL_PATH_CONNECTIONS: usize = 8;
 #[cfg(test)]
 pub(crate) static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
 #[cfg(test)]
@@ -198,55 +187,6 @@ pub(crate) fn opened_connection_count(target: &SharedDbTarget) -> usize {
         .unwrap_or_default()
 }
 
-/// Bounded reuse of the direct control-path SQLite connections.
-///
-/// Connections are parked only after an operation completes normally: an
-/// operation that returned an error may have left connection state behind,
-/// and a panicking one unwinds without ever reaching the park point.
-pub(crate) struct ControlPathConnections {
-    target: Arc<SharedDbTarget>,
-    idle: Mutex<Vec<Connection>>,
-}
-
-impl ControlPathConnections {
-    pub(crate) fn new(target: Arc<SharedDbTarget>) -> Self {
-        Self {
-            target,
-            idle: Mutex::new(Vec::new()),
-        }
-    }
-
-    fn checkout(&self) -> Result<Connection, AtmError> {
-        let parked = self
-            .idle
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .pop();
-        match parked {
-            Some(connection) => Ok(connection),
-            None => open_connection_for_target(self.target.as_ref()),
-        }
-    }
-
-    fn park(&self, connection: Connection) {
-        let mut idle = self
-            .idle
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if idle.len() < MAX_IDLE_CONTROL_PATH_CONNECTIONS {
-            idle.push(connection);
-        }
-    }
-}
-
-impl std::fmt::Debug for ControlPathConnections {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ControlPathConnections")
-            .field("target", &self.target.display())
-            .finish()
-    }
-}
-
 impl SharedDb {
     /// Call only from backend-owned blocking code paths.
     ///
@@ -258,10 +198,10 @@ impl SharedDb {
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
     ) -> Result<T, AtmError> {
         debug_assert_blocking_only("SharedDb::with_connection");
-        let mut connection = self.control_path.checkout()?;
-        let outcome = operation(&mut connection);
+        let mut lease = crate::control_path_pool::checkout(&self.control_path)?;
+        let outcome = operation(lease.connection());
         if outcome.is_ok() {
-            self.control_path.park(connection);
+            lease.park();
         }
         outcome
     }
@@ -989,7 +929,7 @@ mod tests {
     use atm_storage::AtmErrorCode;
 
     /// Number of control-path borrows a single burst is modelled on. Any
-    /// value comfortably above the idle pool bound proves reuse rather than
+    /// value comfortably above the connection bound proves reuse rather than
     /// an accidentally oversized cache.
     const CONTROL_PATH_BORROWS: usize = 32;
 
@@ -1019,7 +959,7 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_control_path_borrows_stay_within_the_idle_pool_bound() {
+    fn concurrent_control_path_borrows_stay_within_the_connection_bound() {
         let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
         // Warm the pool so the burst below measures reuse, not first-touch.
         count_probe_rows(&db).expect("control-path read succeeds");
@@ -1038,8 +978,8 @@ mod tests {
         });
         let burst_opens = opened_connection_count(db.target());
         assert!(
-            burst_opens <= CONTROL_PATH_BORROWS,
-            "a control-path burst must never open more connections than concurrent borrows"
+            burst_opens <= crate::control_path_pool::MAX_CONTROL_PATH_CONNECTIONS,
+            "a control-path burst must never open more connections than the bound"
         );
 
         reset_opened_connection_count(db.target());
