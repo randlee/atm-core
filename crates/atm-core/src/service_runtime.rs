@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 
 use atm_storage::{
     AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore, GraftEndpointStoreError,
@@ -37,6 +38,93 @@ enum WorkspaceConfigAccess {
 #[derive(Default)]
 struct RosterSnapshotCache {
     snapshots: RwLock<BTreeMap<TeamName, Arc<[crate::boundary::RosterEntry]>>>,
+}
+
+/// Lease snapshots avoid a control-path SQLite lookup for every admitted
+/// local message. A graft receiver refreshes every second, so retaining a
+/// value for that same bounded interval preserves restart recovery: a missing
+/// refresh expires the snapshot and the next delivery re-reads durable state.
+const GRAFT_RECEIVER_LEASE_CACHE_TTL: Duration = Duration::from_secs(1);
+
+#[derive(Clone)]
+struct CachedGraftReceiverLease {
+    lease: Option<GraftReceiverLease>,
+    expires_at: Instant,
+}
+
+struct GraftReceiverLeaseCache {
+    leases: RwLock<BTreeMap<(TeamName, AgentName), CachedGraftReceiverLease>>,
+    ttl: Duration,
+}
+
+impl Default for GraftReceiverLeaseCache {
+    fn default() -> Self {
+        Self {
+            leases: RwLock::new(BTreeMap::new()),
+            ttl: GRAFT_RECEIVER_LEASE_CACHE_TTL,
+        }
+    }
+}
+
+impl GraftReceiverLeaseCache {
+    fn invalidate(&self, team: &TeamName, agent: &AgentName) {
+        let mut leases = self
+            .leases
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        leases.remove(&(team.clone(), agent.clone()));
+    }
+
+    fn load(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        load: impl FnOnce() -> Result<Option<GraftReceiverLease>, AtmError>,
+    ) -> Result<Option<GraftReceiverLease>, AtmError> {
+        let key = (team.clone(), agent.clone());
+        let now = Instant::now();
+        {
+            let leases = self
+                .leases
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if let Some(cached) = leases.get(&key)
+                && cached.expires_at > now
+            {
+                return Ok(cached.lease.clone());
+            }
+        }
+
+        // Serialize the one durable lookup after expiry so an admission burst
+        // never opens a control-path SQLite connection per concurrent write.
+        let mut leases = self
+            .leases
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let now = Instant::now();
+        if let Some(cached) = leases.get(&key)
+            && cached.expires_at > now
+        {
+            return Ok(cached.lease.clone());
+        }
+        let lease = load()?;
+        leases.insert(
+            key,
+            CachedGraftReceiverLease {
+                lease: lease.clone(),
+                expires_at: now + self.ttl,
+            },
+        );
+        Ok(lease)
+    }
+
+    #[cfg(test)]
+    fn with_ttl(ttl: Duration) -> Self {
+        Self {
+            leases: RwLock::new(BTreeMap::new()),
+            ttl,
+        }
+    }
 }
 
 impl RosterSnapshotCache {
@@ -181,6 +269,9 @@ pub struct LocalServiceRuntime {
     /// message admission from opening another SQLite reader connection merely
     /// to rediscover an unchanged recipient.
     roster_cache: Arc<RosterSnapshotCache>,
+    /// Short-lived receiver endpoint snapshots keep the graft registry's
+    /// control-path SQLite lookup out of the local write hot path.
+    graft_receiver_lease_cache: Arc<GraftReceiverLeaseCache>,
     workspace_config_access: WorkspaceConfigAccess,
 }
 
@@ -206,6 +297,7 @@ impl LocalServiceRuntime {
             template_composer: None,
             template_catalog_store: None,
             roster_cache: Arc::new(RosterSnapshotCache::default()),
+            graft_receiver_lease_cache: Arc::new(GraftReceiverLeaseCache::default()),
             workspace_config_access: WorkspaceConfigAccess::Client,
         }
     }
@@ -326,6 +418,13 @@ impl LocalServiceRuntime {
                 "the graft receiver endpoint store was not installed in this runtime",
             )
         })
+    }
+
+    /// Invalidates a receiver's admission snapshot after a durable lease
+    /// mutation. Registration, refresh, unregistration, and delivery failure
+    /// all call this so a stale endpoint cannot outlive a receiver restart.
+    pub fn invalidate_graft_receiver_lease(&self, team: &TeamName, agent: &AgentName) {
+        self.graft_receiver_lease_cache.invalidate(team, agent);
     }
 
     /// Attaches the approved template renderer port at the composition root.
@@ -614,7 +713,9 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         let Some(store) = &self.graft_receiver_endpoint_store else {
             return Ok(None);
         };
-        store.lookup(team, agent).map_err(graft_store_error)
+        self.graft_receiver_lease_cache.load(team, agent, || {
+            store.lookup(team, agent).map_err(graft_store_error)
+        })
     }
 
     fn mark_graft_receiver_unreachable(
@@ -629,7 +730,9 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         };
         store
             .mark_unreachable(team, agent, owner_generation, now)
-            .map_err(graft_store_error)
+            .map_err(graft_store_error)?;
+        self.invalidate_graft_receiver_lease(team, agent);
+        Ok(())
     }
 
     fn inbox_path(
@@ -764,8 +867,8 @@ mod workspace_config_tests {
 #[cfg(test)]
 mod tests {
     use super::{
-        LocalFileNonClaudeOutbound, MAX_NON_CLAUDE_PAYLOAD_BYTES, RosterSnapshotCache,
-        append_notification_log_at_path,
+        GraftReceiverLeaseCache, LocalFileNonClaudeOutbound, MAX_NON_CLAUDE_PAYLOAD_BYTES,
+        RosterSnapshotCache, append_notification_log_at_path,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::protocol::{NotificationEvent, NotificationKind};
@@ -774,6 +877,7 @@ mod tests {
     use chrono::Utc;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
     use tempfile::tempdir;
 
     fn message() -> InboxMessage {
@@ -881,6 +985,59 @@ mod tests {
             })
             .expect("reloaded roster lookup");
         assert_eq!(loads.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    fn graft_lease_cache_avoids_a_control_path_lookup_per_local_admission() {
+        let cache = GraftReceiverLeaseCache::default();
+        let team = TeamName::from_validated("test-team");
+        let agent = AgentName::from_validated("recipient");
+        let durable_lookups = AtomicUsize::new(0);
+
+        for _ in 0..64 {
+            assert_eq!(
+                cache
+                    .load(&team, &agent, || {
+                        durable_lookups.fetch_add(1, Ordering::Relaxed);
+                        Ok(None)
+                    })
+                    .expect("lease cache lookup"),
+                None
+            );
+        }
+        assert_eq!(
+            durable_lookups.load(Ordering::Relaxed),
+            1,
+            "a local admission burst must load an absent graft lease once, not borrow the control path per message"
+        );
+
+        cache.invalidate(&team, &agent);
+        cache
+            .load(&team, &agent, || {
+                durable_lookups.fetch_add(1, Ordering::Relaxed);
+                Ok(None)
+            })
+            .expect("lookup after receiver lifecycle invalidation");
+        assert_eq!(
+            durable_lookups.load(Ordering::Relaxed),
+            2,
+            "registration, refresh, unregistration, and unreachable updates must invalidate the lease snapshot"
+        );
+
+        let expiry_cache = GraftReceiverLeaseCache::with_ttl(Duration::ZERO);
+        for _ in 0..2 {
+            expiry_cache
+                .load(&team, &agent, || {
+                    durable_lookups.fetch_add(1, Ordering::Relaxed);
+                    Ok(None)
+                })
+                .expect("lookup after lease snapshot expiry");
+        }
+        assert_eq!(
+            durable_lookups.load(Ordering::Relaxed),
+            4,
+            "an expired receiver snapshot must re-read durable state instead of surviving a restart"
+        );
     }
 
     // RBP-F001/RBP-F003: `graft_store_error` is the single canonical

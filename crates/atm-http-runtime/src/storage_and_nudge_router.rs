@@ -799,6 +799,7 @@ impl StorageAndNudgeRouter {
                 store
                     .register(&request, atm_core::types::IsoTimestamp::now().into_inner())
                     .map_err(graft_store_error)?;
+                runtime.invalidate_graft_receiver_lease(&request.team, &request.agent);
                 Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverRegister))
             })
             .await
@@ -829,6 +830,7 @@ impl StorageAndNudgeRouter {
                         atm_core::types::IsoTimestamp::now().into_inner(),
                     )
                     .map_err(graft_store_error)?;
+                runtime.invalidate_graft_receiver_lease(&request.team, &request.agent);
                 Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverRefresh))
             })
             .await
@@ -849,6 +851,7 @@ impl StorageAndNudgeRouter {
                 store
                     .unregister(&request.team, &request.agent, &request.owner_generation)
                     .map_err(graft_store_error)?;
+                runtime.invalidate_graft_receiver_lease(&request.team, &request.agent);
                 Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverUnregister))
             })
             .await
