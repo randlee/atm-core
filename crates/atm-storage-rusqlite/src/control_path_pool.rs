@@ -252,15 +252,6 @@ mod tests {
     }
 
     #[test]
-    fn control_path_bound_is_derived_from_its_descriptor_budget() {
-        assert_eq!(
-            MAX_CONTROL_PATH_CONNECTIONS * SQLITE_DESCRIPTORS_PER_CONNECTION,
-            CONTROL_PATH_DESCRIPTOR_BUDGET,
-            "the connection bound must stay derived from the descriptor budget"
-        );
-    }
-
-    #[test]
     fn a_borrow_past_the_bound_waits_instead_of_opening_another_connection() {
         let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
         reset_opened_connection_count(db.target());

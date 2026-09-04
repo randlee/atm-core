@@ -52,27 +52,82 @@ struct CachedGraftReceiverLease {
     expires_at: Instant,
 }
 
+#[derive(Default)]
+struct GraftReceiverLeaseEntry {
+    state: std::sync::Mutex<GraftReceiverLeaseState>,
+    changed: std::sync::Condvar,
+}
+
+#[derive(Default)]
+enum GraftReceiverLeaseState {
+    #[default]
+    Empty,
+    Loading,
+    Cached(CachedGraftReceiverLease),
+}
+
 struct GraftReceiverLeaseCache {
-    leases: RwLock<BTreeMap<(TeamName, AgentName), CachedGraftReceiverLease>>,
+    entries: RwLock<BTreeMap<(TeamName, AgentName), Arc<GraftReceiverLeaseEntry>>>,
     ttl: Duration,
 }
 
 impl Default for GraftReceiverLeaseCache {
     fn default() -> Self {
         Self {
-            leases: RwLock::new(BTreeMap::new()),
+            entries: RwLock::new(BTreeMap::new()),
             ttl: GRAFT_RECEIVER_LEASE_CACHE_TTL,
         }
     }
 }
 
 impl GraftReceiverLeaseCache {
-    fn invalidate(&self, team: &TeamName, agent: &AgentName) {
-        let mut leases = self
-            .leases
+    fn entry(&self, key: &(TeamName, AgentName)) -> Arc<GraftReceiverLeaseEntry> {
+        {
+            let entries = self
+                .entries
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if let Some(entry) = entries.get(key) {
+                return Arc::clone(entry);
+            }
+        }
+
+        let mut entries = self
+            .entries
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        leases.remove(&(team.clone(), agent.clone()));
+        Arc::clone(
+            entries
+                .entry(key.clone())
+                .or_insert_with(|| Arc::new(GraftReceiverLeaseEntry::default())),
+        )
+    }
+
+    fn invalidate(&self, team: &TeamName, agent: &AgentName) {
+        let key = (team.clone(), agent.clone());
+        let Some(entry) = self
+            .entries
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(&key)
+            .cloned()
+        else {
+            return;
+        };
+        let mut state = entry
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // Waiting for an in-flight durable lookup is deliberate: once a
+        // receiver lifecycle mutation returns, it cannot be overwritten by
+        // an older lookup that began before the mutation.
+        while matches!(*state, GraftReceiverLeaseState::Loading) {
+            state = entry
+                .changed
+                .wait(state)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+        *state = GraftReceiverLeaseState::Empty;
     }
 
     fn load(
@@ -82,46 +137,61 @@ impl GraftReceiverLeaseCache {
         load: impl FnOnce() -> Result<Option<GraftReceiverLease>, AtmError>,
     ) -> Result<Option<GraftReceiverLease>, AtmError> {
         let key = (team.clone(), agent.clone());
-        let now = Instant::now();
-        {
-            let leases = self
-                .leases
-                .read()
+        let entry = self.entry(&key);
+        let mut load = Some(load);
+
+        loop {
+            let mut state = entry
+                .state
+                .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            if let Some(cached) = leases.get(&key)
-                && cached.expires_at > now
-            {
-                return Ok(cached.lease.clone());
+            match &*state {
+                GraftReceiverLeaseState::Cached(cached) if cached.expires_at > Instant::now() => {
+                    return Ok(cached.lease.clone());
+                }
+                GraftReceiverLeaseState::Loading => {
+                    while matches!(*state, GraftReceiverLeaseState::Loading) {
+                        state = entry
+                            .changed
+                            .wait(state)
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    }
+                }
+                GraftReceiverLeaseState::Cached(_) | GraftReceiverLeaseState::Empty => {
+                    // Only this key's entry lock is held while loading. Other
+                    // receivers remain free to perform their own durable
+                    // lookup instead of being serialized behind a process-wide
+                    // cache-map write guard.
+                    *state = GraftReceiverLeaseState::Loading;
+                    drop(state);
+                    let result = load
+                        .take()
+                        .expect("each cache caller owns one durable lookup")(
+                    );
+                    let mut state = entry
+                        .state
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    match &result {
+                        Ok(lease) => {
+                            *state = GraftReceiverLeaseState::Cached(CachedGraftReceiverLease {
+                                lease: lease.clone(),
+                                expires_at: Instant::now() + self.ttl,
+                            });
+                        }
+                        Err(_) => *state = GraftReceiverLeaseState::Empty,
+                    }
+                    entry.changed.notify_all();
+                    return result;
+                }
             }
         }
-
-        // Serialize the one durable lookup after expiry so an admission burst
-        // never opens a control-path SQLite connection per concurrent write.
-        let mut leases = self
-            .leases
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let now = Instant::now();
-        if let Some(cached) = leases.get(&key)
-            && cached.expires_at > now
-        {
-            return Ok(cached.lease.clone());
-        }
-        let lease = load()?;
-        leases.insert(
-            key,
-            CachedGraftReceiverLease {
-                lease: lease.clone(),
-                expires_at: now + self.ttl,
-            },
-        );
-        Ok(lease)
     }
 
     #[cfg(test)]
     fn with_ttl(ttl: Duration) -> Self {
         Self {
-            leases: RwLock::new(BTreeMap::new()),
+            entries: RwLock::new(BTreeMap::new()),
             ttl,
         }
     }
@@ -877,6 +947,7 @@ mod tests {
     use chrono::Utc;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::mpsc;
     use std::time::Duration;
     use tempfile::tempdir;
 
@@ -1038,6 +1109,47 @@ mod tests {
             4,
             "an expired receiver snapshot must re-read durable state instead of surviving a restart"
         );
+    }
+
+    #[test]
+    fn graft_lease_cache_does_not_serialize_unrelated_durable_misses() {
+        let cache = Arc::new(GraftReceiverLeaseCache::default());
+        let first_team = TeamName::from_validated("first-team");
+        let second_team = TeamName::from_validated("second-team");
+        let agent = AgentName::from_validated("recipient");
+        let (first_started_tx, first_started_rx) = mpsc::sync_channel(1);
+        let (release_first_tx, release_first_rx) = mpsc::sync_channel(0);
+        let (second_done_tx, second_done_rx) = mpsc::sync_channel(1);
+
+        std::thread::scope(|scope| {
+            let first_cache = Arc::clone(&cache);
+            let first_team = first_team.clone();
+            let first_agent = agent.clone();
+            let first = scope.spawn(move || {
+                first_cache
+                    .load(&first_team, &first_agent, || {
+                        first_started_tx.send(()).expect("announce first lookup");
+                        release_first_rx.recv().expect("release first lookup");
+                        Ok(None)
+                    })
+                    .expect("first cache lookup");
+            });
+            first_started_rx.recv().expect("first lookup started");
+
+            let second_cache = Arc::clone(&cache);
+            let second_agent = agent.clone();
+            scope.spawn(move || {
+                let result = second_cache.load(&second_team, &second_agent, || Ok(None));
+                second_done_tx.send(result).expect("report second lookup");
+            });
+
+            let second_result = second_done_rx.recv_timeout(Duration::from_secs(1));
+            release_first_tx.send(()).expect("release first lookup");
+            second_result
+                .expect("an unrelated cache miss must not wait behind the first durable lookup")
+                .expect("second cache lookup");
+            first.join().expect("first lookup thread");
+        });
     }
 
     // RBP-F001/RBP-F003: `graft_store_error` is the single canonical

@@ -613,14 +613,19 @@ impl AsyncMessageReceivedHookEmitter for PullPendingReceivedHook {
                     message,
                 )?;
                 // The append above IS the handoff (AQ2 handoff semantics).
-                // A marker-clear failure here is never allowed to fail an
-                // already-successful FIFO append; see the struct doc.
-                atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
-                    &service_runtime,
-                    &member,
-                    &target.msg_id,
-                    || runtime_health.record_graft_queue_marker_clear_failure(),
-                );
+                // Immediate writes never set a deferred marker, so clearing
+                // one here would add an unrelated control-path transaction to
+                // every bare-CLI local admission.
+                if target.kind == NudgeKind::Queue {
+                    // A marker-clear failure is never allowed to fail an
+                    // already-successful FIFO append; see the struct doc.
+                    atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+                        &service_runtime,
+                        &member,
+                        &target.msg_id,
+                        || runtime_health.record_graft_queue_marker_clear_failure(),
+                    );
+                }
                 Ok(PostSendEmissionPath::QueuePull)
             })
             .await
@@ -822,9 +827,21 @@ mod tests {
     struct FailingClearPendingStore {
         inner: Arc<dyn PendingNudgeStore + Send + Sync>,
         clear_calls: AtomicUsize,
+        control_path_borrows: AtomicUsize,
+        sqlite_transactions: AtomicUsize,
     }
 
     impl atm_storage::contract::sealed::Sealed for FailingClearPendingStore {}
+
+    impl FailingClearPendingStore {
+        /// Every pending-nudge operation crosses the synchronous control path
+        /// and opens a SQLite transaction. These counters make the Immediate
+        /// bare-CLI admission contract observable without relying on timing.
+        fn record_operation(&self) {
+            self.control_path_borrows.fetch_add(1, Ordering::SeqCst);
+            self.sqlite_transactions.fetch_add(1, Ordering::SeqCst);
+        }
+    }
 
     impl PendingNudgeStore for FailingClearPendingStore {
         fn mark_pending(
@@ -833,18 +850,22 @@ mod tests {
             msg: &AtmMessageId,
             at: IsoTimestamp,
         ) -> Result<bool, AtmError> {
+            self.record_operation();
             self.inner.mark_pending(member, msg, at)
         }
 
         fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
+            self.record_operation();
             self.inner.claim_next_pending(member)
         }
 
         fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+            self.record_operation();
             self.inner.requeue_pending(member, claim)
         }
 
         fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+            self.record_operation();
             self.inner.release_pending(member, claim)
         }
 
@@ -853,6 +874,7 @@ mod tests {
             member: &MemberKey,
             msg: &AtmMessageId,
         ) -> Result<(), AtmError> {
+            self.record_operation();
             self.inner.clear_pending_on_read(member, msg)
         }
 
@@ -861,11 +883,13 @@ mod tests {
             _member: &MemberKey,
             _msg: &AtmMessageId,
         ) -> Result<(), AtmError> {
+            self.record_operation();
             self.clear_calls.fetch_add(1, Ordering::SeqCst);
             Err(AtmError::mailbox_write("clear marker test failure"))
         }
 
         fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
+            self.record_operation();
             self.inner.list_pending_members()
         }
     }
@@ -965,6 +989,73 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn local_immediate_bare_cli_write_avoids_control_path_marker_work() {
+        let root = tempfile::tempdir().expect("temporary runtime root");
+        let (base_runtime, _endpoint_store, team, recipient) = queue_graft_runtime(root.path());
+        let counting_store = Arc::new(FailingClearPendingStore {
+            inner: base_runtime.pending_nudge_store().expect("pending store"),
+            clear_calls: AtomicUsize::new(0),
+            control_path_borrows: AtomicUsize::new(0),
+            sqlite_transactions: AtomicUsize::new(0),
+        });
+        let runtime = base_runtime.with_pending_nudge_store(counting_store.clone());
+        let home = root.path().join("home");
+        fs::create_dir_all(&home).expect("home");
+        let request = WriteRequest::new(
+            home.clone(),
+            home,
+            "sender".parse().expect("sender"),
+            "recipient@test-team",
+            team.clone(),
+            SendMessageSource::Inline("immediate bare CLI body".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("immediate write request");
+        let message_id = write_mail_with_runtime(request, &NullObservability, &runtime)
+            .expect("local immediate write")
+            .persisted_message_id();
+
+        let mut dispatch = tmux_dispatch();
+        dispatch.kind = NudgeKind::Steer;
+        dispatch.target = PostSendBuiltInTarget::QueuePull(QueuePullTarget {
+            team: team.clone(),
+            agent: recipient.clone(),
+            kind: NudgeKind::Steer,
+            msg_id: message_id,
+            body: "immediate bare CLI body".to_owned(),
+        });
+        let fifo: atm_http_runtime::BareCliFifo = Default::default();
+        let selector = ReplacementReceivedHookSelector::with_herdr_process_and_fifo(
+            runtime,
+            Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
+            RuntimeHealth::default(),
+            fifo,
+            Default::default(),
+        );
+
+        selector
+            .select_emitter(&dispatch)
+            .expect("bare-CLI immediate emitter")
+            .emit_received_message(dispatch, RequestDeadline::after(Duration::from_secs(1)))
+            .await
+            .expect("bare-CLI immediate handoff");
+
+        assert_eq!(
+            counting_store.control_path_borrows.load(Ordering::SeqCst),
+            0,
+            "an Immediate bare-CLI write never borrows the pending-marker control path"
+        );
+        assert_eq!(
+            counting_store.sqlite_transactions.load(Ordering::SeqCst),
+            0,
+            "an Immediate bare-CLI write never opens an extra marker SQLite transaction"
+        );
+    }
+
+    #[tokio::test]
     async fn aq25_crit_001_bare_cli_marker_clear_failure_does_not_fail_delivery() {
         let root = tempfile::tempdir().expect("temporary runtime root");
         let (base_runtime, _endpoint_store, team, recipient) = queue_graft_runtime(root.path());
@@ -972,6 +1063,8 @@ mod tests {
         let failing_store = Arc::new(FailingClearPendingStore {
             inner: base_pending_store,
             clear_calls: AtomicUsize::new(0),
+            control_path_borrows: AtomicUsize::new(0),
+            sqlite_transactions: AtomicUsize::new(0),
         });
         let runtime = base_runtime.with_pending_nudge_store(failing_store.clone());
         let message_id = queue_write(root.path(), &runtime, &team);
@@ -1116,6 +1209,8 @@ mod tests {
         let failing_store = Arc::new(FailingClearPendingStore {
             inner: base_pending_store,
             clear_calls: AtomicUsize::new(0),
+            control_path_borrows: AtomicUsize::new(0),
+            sqlite_transactions: AtomicUsize::new(0),
         });
         let runtime = base_runtime.with_pending_nudge_store(failing_store.clone());
         let listener = GraftReceiverListener::bind(root.path(), &team, &recipient, None)
