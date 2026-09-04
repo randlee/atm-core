@@ -15,14 +15,17 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-03T18:52:00Z"^^xsd:dateTime ;
   triage:foundIn triage:RRG-S1 ;
   triage:foundAt "2026-09-03T18:41:35Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-XHOST-INBOUND-001/CAND-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-XHOST-INBOUND-001/CAND-2> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-XHOST-INBOUND-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-09-04T03:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RRG-XHOST-INBOUND-001/CAND-1>
   a triage:Occurrence ;
@@ -52,3 +55,21 @@
   triage:branch "chore/readiness-candidate-1.4.7" ;
   triage:headSha "2e3c93a7c" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/RRG-XHOST-INBOUND-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 961 ;
+  triage:snippet "quality-mgr QA-4c independent re-verification confirmed fixed on both halves: server-side (8ed23246b) detaches the received hook from the Peer-ingress response path (detached_received_hooks.observe, drained at shutdown; test peer_write_responds_before_a_slow_received_hook_whose_warning_is_still_observed), and client-side (c7f0fe7ec) reclassifies post-dispatch Timeout via deadline_elapsed()/direct_peer_connection_failure into PeerRequestWrite/RemoteDeliveryUnconfirmed or RequestWrite/DaemonMayHaveExecuted, never bare WaitTimeout, for every production connector (tests direct_peer_post_send_timeout_is_remote_uncertainty, local_post_send_timeout_is_daemon_uncertainty). Verified independently by req-qa, arch-qa, and ruthless-boundary-qa (RBQA-F004 fixed) at QA-4c." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "758d484b9" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/758d484b9> .
+
+<urn:atm:triage:worktree/CAND/758d484b9>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "758d484b9" ;
+  triage:orderIndex 2 .

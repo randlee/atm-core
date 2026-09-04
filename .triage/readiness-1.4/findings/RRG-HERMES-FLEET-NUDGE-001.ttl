@@ -15,14 +15,17 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-03T21:42:00Z"^^xsd:dateTime ;
   triage:foundIn triage:RRG-S2 ;
   triage:foundAt "2026-09-03T20:13:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-HERMES-FLEET-NUDGE-001/CAND-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-HERMES-FLEET-NUDGE-001/CAND-2> ;
-  triage:triageRecordVersion "6" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-HERMES-FLEET-NUDGE-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-09-04T03:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "7" .
 
 <urn:atm:triage:occurrence/RRG-HERMES-FLEET-NUDGE-001/CAND-1>
   a triage:Occurrence ;
@@ -52,3 +55,21 @@
   triage:branch "chore/readiness-candidate-1.4.7" ;
   triage:headSha "6916b8379" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/RRG-HERMES-FLEET-NUDGE-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime/mod.rs" ;
+  triage:line 176 ;
+  triage:snippet "quality-mgr QA-4c independent re-verification confirmed fixed: ee9b60951 ReceiverReadyLatch sender moved into the receive-loop worker, worker joined, typed cause propagated via receive_loop_startup_error (regression tests receiver_ready_latch_reports_a_worker_exit_without_burning_the_deadline, minimal_workspace_activation_conflict_reports_a_cause_not_a_bare_timeout, both pass). Fleet-side proven: rand-m5 wheels rebuilt at 1.4.11 from candidate 2f5486d78, installed into skillrx and loki gateway venvs, doctor graft_receivers=2/endpoint rows=2, autonomous nudge reply in ~60s; fleet reset extended to 9/13 registrable m5 hermes profiles (skillrx, loki, alpha-prime, config-agent, contessa, grecon, llama, omega-prime, paternostrier), all reachable in doctor. Record's own text: 'Fleet readiness for Colima GO is therefore proven for every registrable profile.' Residual items are explicitly non-code/operator matters, not defects in this fix: leonardo's hook config was copied from another profile (operator config correction pending); two profiles (rust-code-explorer, rust-developer) share one Telegram bot token, pre-existing and an operator decision for Rand; hendrix is a separate install with no gateway profile on this host. Closing the code/deployment defect on that basis; the three residual profiles are a distinct, non-blocking operator follow-up, not part of this finding's fix scope." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "c2399c7ef" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/c2399c7ef> .
+
+<urn:atm:triage:worktree/CAND/c2399c7ef>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "c2399c7ef" ;
+  triage:orderIndex 2 .
