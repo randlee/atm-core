@@ -22,7 +22,8 @@
   triage:foundAt "2026-09-04T06:37:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-DIRECT-PEER-BIND-ADDR-001/DEV-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-DIRECT-PEER-BIND-ADDR-001/DEV-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:releaseDecision "Rand decision 2026-09-04 (team-lead ruling 01M1NX1PDN9W25WGCB6B2D4Y91): deferred to post-release. The 1.4.13 release ships without this fix; tracked as a known follow-up. Status and dispatchReady unchanged (already open, no pre-release dispatch); arch-ctm idle on this item. Companion records: RRG-DIRECT-PEER-BIND-ADDR-001, RRG-CLI-DIRECT-PEER-DIAL-PORT-001, RRG-TRUST-KEY-LOOPBACK-001." .
 
 <urn:atm:triage:occurrence/RRG-DIRECT-PEER-BIND-ADDR-001/DEV-1>
   a triage:Occurrence ;
