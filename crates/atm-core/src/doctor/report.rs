@@ -280,6 +280,21 @@ pub struct HerdrQueuePumpDoctorReport {
     pub breaker: HerdrBreakerDoctorReport,
 }
 
+/// Effective capacity selected by the running daemon for one reader lane.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReaderLaneDoctorReport {
+    pub pool_size: usize,
+    pub queue_depth: usize,
+}
+
+/// Effective mailbox and search reader-lane capacities supplied by the
+/// replacement runtime's live storage assembly.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReaderLanesDoctorReport {
+    pub mailbox: ReaderLaneDoctorReport,
+    pub search: ReaderLaneDoctorReport,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DoctorReport {
     pub summary: DoctorSummary,
@@ -290,6 +305,8 @@ pub struct DoctorReport {
     pub client_context: DoctorExecutionContext,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub daemon_context: Option<DoctorExecutionContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reader_lanes: Option<ReaderLanesDoctorReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_roster: Option<MembersList>,
     #[serde(default)]
