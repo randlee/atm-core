@@ -24,7 +24,12 @@ use std::time::Instant;
 
 /// Simultaneously live control-path connections. Bounds the control path's
 /// descriptor demand independently of the in-flight admission count.
-pub(crate) const MAX_CONTROL_PATH_CONNECTIONS: usize = 8;
+///
+/// The runtime raises the macOS launchd soft descriptor limit before opening
+/// SQLite or listeners. A budget of 64 still leaves substantial descriptor
+/// headroom while allowing a normal admission burst to avoid serialising at
+/// the control-path borrow gate.
+pub(crate) const MAX_CONTROL_PATH_CONNECTIONS: usize = 64;
 
 #[derive(Default)]
 struct PoolState {
@@ -187,6 +192,7 @@ mod tests {
     use crate::shared_db::{opened_connection_count, reset_opened_connection_count};
     use crate::shared_db_reader_lanes::SharedDb;
     use std::sync::Barrier;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
     /// Concurrency modelled well above the bound so an unbounded pool opens a
@@ -288,6 +294,49 @@ mod tests {
             "a borrow past the bound must wait for a returned connection; opening another \
              one makes control-path descriptor demand scale with in-flight admissions"
         );
+    }
+
+    #[test]
+    fn an_admission_sized_burst_does_not_queue_behind_an_eight_slot_gate() {
+        const ADMISSION_BURST: usize = 64;
+
+        let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
+        let acquired = Arc::new(AtomicUsize::new(0));
+        let release = Arc::new((Mutex::new(false), Condvar::new()));
+
+        std::thread::scope(|scope| {
+            for _ in 0..ADMISSION_BURST {
+                let pool = Arc::clone(&db.control_path);
+                let acquired = Arc::clone(&acquired);
+                let release = Arc::clone(&release);
+                scope.spawn(move || {
+                    let lease = checkout(&pool).expect("control-path borrow");
+                    acquired.fetch_add(1, Ordering::Release);
+                    let (lock, signal) = release.as_ref();
+                    let mut released = lock.lock().expect("release lock");
+                    while !*released {
+                        released = signal.wait(released).expect("release signal");
+                    }
+                    drop(released);
+                    lease.park();
+                });
+            }
+
+            spin_until("the admission burst acquires or queues at the pool", || {
+                acquired.load(Ordering::Acquire) == ADMISSION_BURST
+                    || db.control_path.waiting_borrows() > 0
+            });
+            let acquired_without_queue = acquired.load(Ordering::Acquire);
+
+            let (lock, signal) = release.as_ref();
+            *lock.lock().expect("release lock") = true;
+            signal.notify_all();
+
+            assert_eq!(
+                acquired_without_queue, ADMISSION_BURST,
+                "an admission-sized burst must not queue behind the r4 eight-slot control-path gate"
+            );
+        });
     }
 
     #[test]
