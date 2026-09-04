@@ -16,13 +16,14 @@
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
-  triage:dispatchReady false ;
+  triage:dispatchReady true ;
   triage:triagedAt "2026-09-04T06:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:RRG-S1 ;
   triage:foundAt "2026-09-04T06:38:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-READ-RATCHET-STATE-001/CAND-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-READ-RATCHET-STATE-001/CAND-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:qmgrRuling "quality-mgr ruling 2026-09-04: approved path (a) -- reviewed process commit, no harness code change: baselines.previous.json set equal to the current revision-1 baselines.json verbatim, baselines.json bumped to revision 2 with floors/provenance/source-campaigns unchanged plus a rationale line ('ratchet state seeded, floors unchanged'). Path (b) (harness special-case for revision-1) rejected: unnecessary code-path complexity for a one-time bootstrap that a data commit fully resolves, and it would leave the fail-closed rule with an exception to reason about on every future revision-1 scenario. Fail-closed semantics preserved for all future revisions; floor values not moved. Dispatch this as a dedicated process commit on chore/readiness-candidate-1.4.7 (or a follow-up branch merging there), then re-run just benchmark-read officially -- the pre-seed diagnostic numbers (query-fts ~802/s, read-under-write ~777/s, fanout PASS) are informative but do NOT themselves constitute official evidence, since they ran with diagnostic_only=true and bypassed the previous-baseline load entirely. RRG-READ-DOCTOR-LANES-001's finding-level closure and the release-readiness read stage both require the official post-seed campaign artifact, not just these diagnostics." .
 
 <urn:atm:triage:occurrence/RRG-READ-RATCHET-STATE-001/CAND-1>
   a triage:Occurrence ;

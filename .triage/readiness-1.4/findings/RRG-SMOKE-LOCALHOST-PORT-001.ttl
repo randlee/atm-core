@@ -16,13 +16,14 @@
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
-  triage:dispatchReady false ;
+  triage:dispatchReady true ;
   triage:triagedAt "2026-09-04T06:52:00Z"^^xsd:dateTime ;
   triage:foundIn triage:RRG-S1 ;
   triage:foundAt "2026-09-04T06:43:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-SMOKE-LOCALHOST-PORT-001/CAND-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-SMOKE-LOCALHOST-PORT-001/CAND-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:qmgrRuling "quality-mgr ruling 2026-09-04: approved path (a) -- a small explicit smoke-harness override (e.g. ATM_SMOKE_DIRECT_PEER_PORT), honoured at run_feature_smoke.py:270,280,376-377, paired with a loopback-only fixture per the standing rand-m5 bind rule. This is a harness-only change (no product/daemon code, no legacy-daemon touch). Dispatch as a dedicated follow-up branch AFTER PR #1143 merges, not folded into #1143 -- #1143's own scope (RRG-READ-DOCTOR-LANES-001) already reset CI twice this round and this finding blocks only the RRG-TRUST-KEY-LOOPBACK-001 loopback legs, not #1143 itself. RRG-TRUST-KEY-LOOPBACK-001 stays open past release with its live legs deferred to that follow-up, consistent with QA-9's standing disposition. The related product observation (direct-peer listener binding 0.0.0.0 regardless of persisted peer-interface bind IP, silent fallback on bind failure) is noted but not ruled on here -- if it warrants a fix, open it as its own triage record; do not fold it into this harness-port fix." .
 
 <urn:atm:triage:occurrence/RRG-SMOKE-LOCALHOST-PORT-001/CAND-1>
   a triage:Occurrence ;
