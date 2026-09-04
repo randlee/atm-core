@@ -23,7 +23,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-FLOOR-PROFILE-KEY-001/DEV-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-FLOOR-PROFILE-KEY-001/DEV-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-FLOOR-PROFILE-KEY-001/DEV-3> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:qmgrRuling "quality-mgr ruling 2026-09-04 (01M1PMGXXCKVZHM5W0Z1VD8VFE), independently verified against cwin report 7922e27c8: the windows-x64-01 tcp seed (2973fe2f9, 8793.91, 2026-08-01) is the only recorded PASS in the whole f16/64 history; fd8dd58e0 8636.26, 78ec6008c 6581.30 and the 1.4.13 candidate f39c22364 7928.89 are all below it, so the seed is a single-run outlier, not a representative floor. Windows tcp stays informational and non-blocking for 1.4.13. No pre-release profiling; post-release work. When this record is dispatched, the reseed must draw on multiple same-profile runs (the retained f16/64 set plus a fresh candidate run), never the outlier alone. Rand concurred 2026-09-04: Windows was never tested consistently and its floors were never maintained." .
 
 <urn:atm:triage:occurrence/RRG-BENCH-FLOOR-PROFILE-KEY-001/DEV-1>
   a triage:Occurrence ;
