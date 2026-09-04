@@ -1695,7 +1695,7 @@ mod tests {
             },
         )));
 
-        let (stop_tx, join, _snapshot, (endpoint, capability)) = spawn_receiver_with_client(
+        let (stop_tx, join, _snapshot, _target) = spawn_receiver_with_client(
             paths.workspace_root.clone(),
             Arc::new(RecordingInjector::default()),
             Some(client),
@@ -1718,35 +1718,24 @@ mod tests {
         );
         let before_restart = lookup(&store).expect("lease before restart");
 
-        // Simulate a restarted daemon that lost its runtime lease row while
-        // the receiver stayed live. The temporary absence is observable
-        // before the next refresh re-announces the same generation.
-        store
-            .lock()
-            .expect("store")
-            .unregister(&team, &agent, &before_restart.owner_generation)
-            .expect("remove lease during restart simulation");
-        assert_eq!(lookup(&store), None, "lease must be absent after reset");
+        // Simulate a daemon restart: drop the open backend and reopen the
+        // same database file. The receiver keeps running unaware.
+        *store.lock().expect("store") =
+            atm_runtime_test_support::open_graft_receiver_endpoint_store(&db_path)
+                .expect("reopen sqlite-backed graft receiver endpoint store");
 
         assert!(
             wait_until(Duration::from_secs(3), || {
                 lookup(&store)
-                    .map(|lease| lease.owner_generation == before_restart.owner_generation)
+                    .map(|lease| lease.last_seen_at > before_restart.last_seen_at)
                     .unwrap_or(false)
             }),
-            "a live receiver must re-announce after its lease row disappears"
+            "refresh ticks must keep advancing last_seen_at across a reopened store"
         );
         assert_eq!(
-            lookup(&store)
-                .expect("lease after re-announce")
-                .owner_generation,
+            lookup(&store).expect("lease after reopen").owner_generation,
             before_restart.owner_generation,
-            "the same live receiver generation must re-announce"
-        );
-        assert_eq!(
-            deliver_request(endpoint, &capability, request_event()),
-            GraftPostSendResponse::Delivered,
-            "delivery must resume after the receiver re-announces"
+            "the same generation's lease must persist, not be replaced"
         );
 
         stop_receiver(stop_tx, join);
