@@ -1,0 +1,140 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV1A-M10>
+  a triage:Finding ;
+  triage:findingId "AV1A-M10" ;
+  triage:title "storage-notifier boundary record relies on derived trait-declaration scan while its only implementer is cfg(test)-scoped — should declare no_in_repo_implementation = true (or an explicit mapping)" ;
+  triage:description "QA-r4 for AV.1a (req-qa ATM-QA-005; quality-mgr msg 01M1BKTNPEPP28VYKGFSQPGE9N, PR #1112 comment 5476685496) @ 1e81aade8: boundaries/atm-storage/storage-notifier.toml is trait_only with non-empty io_forbidden and neither an io_forbidden_source_modules mapping nor enforcement.no_in_repo_implementation = true; it passes the fail-closed lint only via the derived trait-contract-region default (trait_contract_source_regions in .just/lint_boundaries.py). Its only in-repo implementer is #[cfg(test)]-scoped, so the weak default is benign today but silence is accidental rather than declared." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "tooling" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "all boundaries/**/*.toml trait_only records with io_forbidden that have neither io_forbidden_source_modules nor enforcement.no_in_repo_implementation" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-31T16:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:resolutionNote "QA-r5 @ f31a35484 (fix-r4: eb9744b4b implementer scan + f68257608 M10 waiver + f31a35484 M11 recount). All occurrences verified fixed firsthand + req-qa/rust-qa/boundary-guard/ruthless. Battery: lint_boundaries PASS, pytest .just/tests 528/10, just lint 32/32, just test PASS, atm-architecture 81, workspace 1528." ;
+  triage:triagedAt "2026-08-31T10:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1A ;
+  triage:foundAt "2026-08-31T09:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M10/AV1A-M10-0> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M10/AV1A-M10-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M10/AV1A-M10-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M10/AV1A-M10-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M10/AV1A-M10-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV1A-M10/AV1A-M10-5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV1A-M10/AV1A-M10-0>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/storage-notifier.toml" ;
+  triage:line 19 ;
+  triage:snippet "io_forbidden = [task_changed_notifications, socket_io] — missing no_in_repo_implementation or io_forbidden_source_modules waiver" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "dc2f56002" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-av-dc2f56002> .
+
+<urn:atm:triage:occurrence/AV1A-M10/AV1A-M10-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/storage-notifier.toml" ;
+  triage:line 19 ;
+  triage:snippet "io_forbidden = [task_changed_notifications, socket_io] — missing no_in_repo_implementation or io_forbidden_source_modules waiver" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "1e81aade8" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-mailbox-1e81aade8> .
+
+<urn:atm:triage:occurrence/AV1A-M10/AV1A-M10-2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/storage-notifier.toml" ;
+  triage:line 19 ;
+  triage:snippet "io_forbidden = [task_changed_notifications, socket_io] — missing no_in_repo_implementation or io_forbidden_source_modules waiver" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "93c361a43" ;
+  triage:occursIn <urn:atm:triage:worktree/av1b-93c361a43> .
+
+<urn:atm:triage:occurrence/AV1A-M10/AV1A-M10-3>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/storage-notifier.toml" ;
+  triage:line 19 ;
+  triage:snippet "io_forbidden = [task_changed_notifications, socket_io] — missing no_in_repo_implementation or io_forbidden_source_modules waiver" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "21d578887" ;
+  triage:occursIn <urn:atm:triage:worktree/av2-21d578887> .
+
+<urn:atm:triage:occurrence/AV1A-M10/AV1A-M10-4>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/storage-notifier.toml" ;
+  triage:line 19 ;
+  triage:snippet "io_forbidden = [task_changed_notifications, socket_io] — missing no_in_repo_implementation or io_forbidden_source_modules waiver" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "c78288c4d" ;
+  triage:occursIn <urn:atm:triage:worktree/av3-c78288c4d> .
+
+<urn:atm:triage:occurrence/AV1A-M10/AV1A-M10-5>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/storage-notifier.toml" ;
+  triage:line 19 ;
+  triage:snippet "io_forbidden = [task_changed_notifications, socket_io] — missing no_in_repo_implementation or io_forbidden_source_modules waiver" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "3a09e2a6f" ;
+  triage:occursIn <urn:atm:triage:worktree/av4-3a09e2a6f> .
+
+<urn:atm:triage:worktree/phase-av-dc2f56002>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate/phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "dc2f56002" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/fix-mailbox-1e81aade8>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "1e81aade8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/av1b-93c361a43>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "93c361a43" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/av2-21d578887>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "21d578887" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/av3-c78288c4d>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "c78288c4d" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/av4-3a09e2a6f>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "3a09e2a6f" ;
+  triage:orderIndex 5 .

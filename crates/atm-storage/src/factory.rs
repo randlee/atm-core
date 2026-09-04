@@ -3,21 +3,42 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::{
-    AsyncMessageSearchStore, AsyncMessageStore, AtmError, MessageSearchStore, MessageStore,
-    NudgeTemplateOverrideStore, PeerConfigStore, RosterStore, TemplateCatalogStore,
+    AsyncMailboxReader, AsyncMessageSearchStore, AsyncMessageStore, AtmError,
+    GraftReceiverEndpointStore, MessageSearchStore, MessageStore, NudgeTemplateOverrideStore,
+    PeerConfigStore, PendingNudgeStore, RosterStore, TemplateCatalogStore,
 };
+
+/// Effective capacity settings for one reader lane, selected by the backend
+/// when it constructs the live pool.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EffectiveReaderLane {
+    pub pool_size: usize,
+    pub queue_depth: usize,
+}
+
+/// Backend-neutral effective capacity settings for the benchmarked reader
+/// lanes. This is runtime data, not a benchmark-side default.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EffectiveReaderLanes {
+    pub mailbox: EffectiveReaderLane,
+    pub search: EffectiveReaderLane,
+}
 
 /// Backend-neutral handles returned by the selected durable storage backend.
 #[derive(Clone)]
 pub struct StorageHandles {
     message_store: Arc<dyn MessageStore + Send + Sync>,
     async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
+    async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     roster_store: Arc<dyn RosterStore + Send + Sync>,
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
+    pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+    graft_receiver_endpoint_store: Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
     message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
     async_message_search_store: Arc<dyn AsyncMessageSearchStore + Send + Sync>,
+    effective_reader_lanes: Option<EffectiveReaderLanes>,
 }
 
 /// Typed assembly input for [`StorageHandles`].
@@ -29,12 +50,16 @@ pub struct StorageHandles {
 pub struct StorageHandleParts {
     pub message_store: Arc<dyn MessageStore + Send + Sync>,
     pub async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
+    pub async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     pub roster_store: Arc<dyn RosterStore + Send + Sync>,
     pub nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
+    pub pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+    pub graft_receiver_endpoint_store: Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     pub template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
     pub message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
     pub async_message_search_store: Arc<dyn AsyncMessageSearchStore + Send + Sync>,
+    pub effective_reader_lanes: Option<EffectiveReaderLanes>,
 }
 
 impl fmt::Debug for StorageHandles {
@@ -47,10 +72,16 @@ impl fmt::Debug for StorageHandles {
                 "nudge_template_override_store",
                 &"dyn NudgeTemplateOverrideStore",
             )
+            .field("pending_nudge_store", &"dyn PendingNudgeStore")
+            .field(
+                "graft_receiver_endpoint_store",
+                &"dyn GraftReceiverEndpointStore",
+            )
             .field("peer_config_store", &"dyn PeerConfigStore")
             .field("template_catalog_store", &"dyn TemplateCatalogStore")
             .field("message_search_store", &"dyn MessageSearchStore")
             .field("async_message_search_store", &"dyn AsyncMessageSearchStore")
+            .field("effective_reader_lanes", &self.effective_reader_lanes)
             .finish()
     }
 }
@@ -60,12 +91,16 @@ impl StorageHandles {
         Self {
             message_store: parts.message_store,
             async_message_store: parts.async_message_store,
+            async_mailbox_reader: parts.async_mailbox_reader,
             roster_store: parts.roster_store,
             nudge_template_override_store: parts.nudge_template_override_store,
+            pending_nudge_store: parts.pending_nudge_store,
+            graft_receiver_endpoint_store: parts.graft_receiver_endpoint_store,
             peer_config_store: parts.peer_config_store,
             template_catalog_store: parts.template_catalog_store,
             message_search_store: parts.message_search_store,
             async_message_search_store: parts.async_message_search_store,
+            effective_reader_lanes: parts.effective_reader_lanes,
         }
     }
 
@@ -78,6 +113,11 @@ impl StorageHandles {
         Arc::clone(&self.async_message_store)
     }
 
+    /// Returns the bounded read-only mailbox lane selected by composition.
+    pub fn async_mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
+        Arc::clone(&self.async_mailbox_reader)
+    }
+
     pub fn roster_store(&self) -> Arc<dyn RosterStore + Send + Sync> {
         Arc::clone(&self.roster_store)
     }
@@ -86,6 +126,18 @@ impl StorageHandles {
         &self,
     ) -> Arc<dyn NudgeTemplateOverrideStore + Send + Sync> {
         Arc::clone(&self.nudge_template_override_store)
+    }
+
+    /// Returns the durable at-most-once delivery capability for deferred
+    /// (`atm queue`) nudges.
+    pub fn pending_nudge_store(&self) -> Arc<dyn PendingNudgeStore + Send + Sync> {
+        Arc::clone(&self.pending_nudge_store)
+    }
+
+    pub fn graft_receiver_endpoint_store(
+        &self,
+    ) -> Arc<dyn GraftReceiverEndpointStore + Send + Sync> {
+        Arc::clone(&self.graft_receiver_endpoint_store)
     }
 
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
@@ -106,6 +158,13 @@ impl StorageHandles {
     /// Returns the Tokio-safe companion for the same search semantics.
     pub fn async_message_search_store(&self) -> Arc<dyn AsyncMessageSearchStore + Send + Sync> {
         Arc::clone(&self.async_message_search_store)
+    }
+
+    /// Returns the effective reader-pool capacities selected by the backend,
+    /// when that backend exposes the benchmarked mailbox and search lanes.
+    #[must_use]
+    pub fn effective_reader_lanes(&self) -> Option<EffectiveReaderLanes> {
+        self.effective_reader_lanes
     }
 }
 

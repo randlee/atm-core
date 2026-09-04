@@ -5,16 +5,25 @@ use serde::Serialize;
 use serde_json::json;
 
 use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind, RosterStore};
+use crate::delivery_channel::{HerdrSession, LocalMessageReceivedBackend};
 use crate::error::AtmError;
 use crate::home;
 use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY};
-use crate::types::{AgentName, ModelName, PaneId, TeamName};
+use crate::types::{AgentName, HostName, ModelName, PaneId, TeamName};
 
 use super::{filesystem, projection};
 
 /// Semantic target member for roster repair operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemberName(pub AgentName);
+
+/// Explicit local backend flags supplied by the CLI.
+#[derive(Debug, Clone, Copy)]
+pub struct BackendOptions<'a> {
+    pub backend: Option<&'a str>,
+    pub target: Option<&'a str>,
+    pub session: Option<&'a str>,
+}
 
 /// Parameters for adding one member to a team roster.
 #[derive(Debug, Clone)]
@@ -26,6 +35,11 @@ pub struct AddMemberRequest {
     pub model: ModelName,
     pub member_home_dir: HomeDirPath,
     pub tmux_pane_id: Option<PaneId>,
+    pub local_backend: Option<LocalMessageReceivedBackend>,
+    pub backend_warning: Option<String>,
+    /// This member's registered host (ADR-055 decision (e)), or `None` when
+    /// unset. Set via [`AddMemberRequest::with_host`].
+    pub host: Option<HostName>,
 }
 
 impl AddMemberRequest {
@@ -38,6 +52,7 @@ impl AddMemberRequest {
         member_home_dir: PathBuf,
         tmux_pane_id: Option<String>,
     ) -> Result<Self, AtmError> {
+        let tmux_pane_id = normalize_tmux_pane_id(tmux_pane_id.as_deref())?.map(|(pane, _)| pane);
         Ok(Self {
             atm_home_dir: atm_home_dir.into(),
             team: team.parse()?,
@@ -45,8 +60,59 @@ impl AddMemberRequest {
             agent_type: parse_agent_type(agent_type)?,
             model: ModelName::new(model)?,
             member_home_dir: member_home_dir.into(),
-            tmux_pane_id: normalize_tmux_pane_id(tmux_pane_id.as_deref())?,
+            tmux_pane_id: tmux_pane_id.clone(),
+            local_backend: tmux_pane_id
+                .map(|pane_id| LocalMessageReceivedBackend::Tmux { pane_id }),
+            backend_warning: None,
+            host: None,
         })
+    }
+
+    /// Constructs a request from the explicit CLI backend selection.
+    pub fn new_with_backend(
+        atm_home_dir: PathBuf,
+        team: &str,
+        member: &str,
+        agent_type: String,
+        model: String,
+        member_home_dir: PathBuf,
+        options: BackendOptions<'_>,
+    ) -> Result<Self, AtmError> {
+        let member_name: AgentName = member.parse()?;
+        let local_backend = parse_backend(
+            &member_name,
+            options.backend,
+            options.target,
+            options.session,
+        )?;
+        let backend_warning =
+            nonstandard_tmux_warning(&member_name, options.backend, options.target)?;
+        let tmux_pane_id = match &local_backend {
+            Some(LocalMessageReceivedBackend::Tmux { pane_id }) => Some(pane_id.clone()),
+            _ => None,
+        };
+        Ok(Self {
+            atm_home_dir: atm_home_dir.into(),
+            team: team.parse()?,
+            member: member_name,
+            agent_type: parse_agent_type(agent_type)?,
+            model: ModelName::new(model)?,
+            member_home_dir: member_home_dir.into(),
+            tmux_pane_id,
+            local_backend,
+            backend_warning,
+            host: None,
+        })
+    }
+
+    /// Sets this member's registered host (ADR-055 decision (e)).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when `host` is not a valid [`HostName`].
+    pub fn with_host(mut self, host: Option<&str>) -> Result<Self, AtmError> {
+        self.host = host.map(str::parse).transpose()?;
+        Ok(self)
     }
 }
 
@@ -57,6 +123,8 @@ pub struct AddMemberOutcome {
     pub team: TeamName,
     pub member: AgentName,
     pub created_inbox: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 /// Parameters for updating one existing team member metadata row.
@@ -72,6 +140,12 @@ pub struct UpdateMemberRequest {
     pub agent_type: Option<AgentType>,
     pub model: Option<ModelName>,
     pub tmux_pane_id: Option<PaneId>,
+    pub local_backend: Option<LocalMessageReceivedBackend>,
+    pub backend_warning: Option<String>,
+    /// This member's registered host (ADR-055 decision (e)); `None` means
+    /// "leave unchanged" (the same convention as `harness`/`agent_type`/
+    /// `model`), never "clear". Set via [`UpdateMemberRequest::with_host`].
+    pub host: Option<HostName>,
 }
 
 impl UpdateMemberRequest {
@@ -91,6 +165,7 @@ impl UpdateMemberRequest {
         model: Option<String>,
         tmux_pane_id: Option<String>,
     ) -> Result<Self, AtmError> {
+        let tmux_pane_id = normalize_tmux_pane_id(tmux_pane_id.as_deref())?.map(|(pane, _)| pane);
         Ok(Self {
             caller_identity,
             caller_team,
@@ -101,8 +176,71 @@ impl UpdateMemberRequest {
             harness: harness.map(parse_roster_harness).transpose()?,
             agent_type: agent_type.map(parse_agent_type).transpose()?,
             model: model.map(ModelName::new).transpose()?,
-            tmux_pane_id: normalize_tmux_pane_id(tmux_pane_id.as_deref())?,
+            local_backend: tmux_pane_id
+                .clone()
+                .map(|pane_id| LocalMessageReceivedBackend::Tmux { pane_id }),
+            tmux_pane_id,
+            backend_warning: None,
+            host: None,
         })
+    }
+
+    /// Constructs an update request from explicit backend flags.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "retained update fields are a compatibility surface; backend flags are grouped"
+    )]
+    pub fn new_with_backend(
+        caller_identity: AgentName,
+        caller_team: TeamName,
+        team: &str,
+        member: &str,
+        home_dir: Option<PathBuf>,
+        workspace_root: Option<PathBuf>,
+        harness: Option<String>,
+        agent_type: Option<String>,
+        model: Option<String>,
+        options: BackendOptions<'_>,
+    ) -> Result<Self, AtmError> {
+        let member_name: AgentName = member.parse()?;
+        let local_backend = parse_backend(
+            &member_name,
+            options.backend,
+            options.target,
+            options.session,
+        )?;
+        let backend_warning =
+            nonstandard_tmux_warning(&member_name, options.backend, options.target)?;
+        let tmux_pane_id = match &local_backend {
+            Some(LocalMessageReceivedBackend::Tmux { pane_id }) => Some(pane_id.clone()),
+            _ => None,
+        };
+        Ok(Self {
+            caller_identity,
+            caller_team,
+            team: team.parse()?,
+            member: MemberName(member_name),
+            home_dir: home_dir.map(Into::into),
+            workspace_root: workspace_root.map(Into::into),
+            harness: harness.map(parse_roster_harness).transpose()?,
+            agent_type: agent_type.map(parse_agent_type).transpose()?,
+            model: model.map(ModelName::new).transpose()?,
+            tmux_pane_id,
+            local_backend,
+            backend_warning,
+            host: None,
+        })
+    }
+
+    /// Sets this member's registered host (ADR-055 decision (e)); `None`
+    /// leaves it unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when `host` is not a valid [`HostName`].
+    pub fn with_host(mut self, host: Option<&str>) -> Result<Self, AtmError> {
+        self.host = host.map(str::parse).transpose()?;
+        Ok(self)
     }
 }
 
@@ -112,6 +250,8 @@ pub struct UpdateMemberOutcome {
     pub action: &'static str,
     pub team: TeamName,
     pub member: AgentName,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 /// Parameters for removing one member from a team roster.
@@ -182,6 +322,7 @@ pub fn add_member_with_roster_store(
         team: request.team,
         member: request.member,
         created_inbox,
+        warnings: request.backend_warning.into_iter().collect(),
     })
 }
 
@@ -210,6 +351,7 @@ pub fn update_member_with_roster_store(
         action: "update-member",
         team: request.team,
         member: member_name,
+        warnings: request.backend_warning.into_iter().collect(),
     })
 }
 
@@ -337,8 +479,28 @@ fn validate_member_mutation_caller(
 fn build_member_add_roster_record(request: &AddMemberRequest) -> RosterEntry {
     let normalized_tmux_pane_id = request.tmux_pane_id.clone();
     let mut extra = serde_json::Map::new();
-    if normalized_tmux_pane_id.is_some() {
-        extra.insert("backendType".to_string(), json!("tmux"));
+    match request.local_backend.as_ref() {
+        Some(LocalMessageReceivedBackend::Tmux { .. }) => {
+            extra.insert("backendType".to_string(), json!("tmux"));
+            extra.insert("isActive".to_string(), json!(true));
+        }
+        Some(LocalMessageReceivedBackend::Herdr { session }) => {
+            extra.insert("backendType".to_string(), json!("herdr"));
+            if let Some(session) = session {
+                extra.insert("herdrSession".to_string(), json!(session.as_str()));
+            }
+        }
+        None if normalized_tmux_pane_id.is_some() => {
+            extra.insert("backendType".to_string(), json!("tmux"));
+            extra.insert("isActive".to_string(), json!(true));
+        }
+        None => {}
+    }
+    if matches!(
+        request.local_backend,
+        Some(LocalMessageReceivedBackend::Tmux { .. })
+    ) || (request.local_backend.is_none() && normalized_tmux_pane_id.is_some())
+    {
         extra.insert("isActive".to_string(), json!(true));
     }
     extra.insert(
@@ -353,6 +515,12 @@ fn build_member_add_roster_record(request: &AddMemberRequest) -> RosterEntry {
         HOME_DIR_METADATA_KEY.to_string(),
         json!(request.member_home_dir.as_ref().display().to_string()),
     );
+    if let Some(host) = &request.host {
+        extra.insert(
+            crate::send_to::ROSTER_HOST_METADATA_KEY.to_string(),
+            json!(host.as_str()),
+        );
+    }
 
     RosterEntry {
         team_name: request.team.clone(),
@@ -396,14 +564,52 @@ fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMember
     if let Some(model) = &request.model {
         member.model = model.clone();
     }
-    if let Some(tmux_pane_id) = &request.tmux_pane_id {
-        member.recipient_pane_id = Some(tmux_pane_id.clone());
-        member
-            .metadata_json
-            .insert("backendType".to_string(), json!("tmux"));
-        member
-            .metadata_json
-            .insert("isActive".to_string(), json!(true));
+    if let Some(host) = &request.host {
+        member.metadata_json.insert(
+            crate::send_to::ROSTER_HOST_METADATA_KEY.to_string(),
+            json!(host.as_str()),
+        );
+    }
+    match request.local_backend.as_ref() {
+        Some(LocalMessageReceivedBackend::Tmux { pane_id }) => {
+            member.recipient_pane_id = Some(pane_id.clone());
+            member
+                .metadata_json
+                .insert("backendType".to_string(), json!("tmux"));
+            member
+                .metadata_json
+                .insert("isActive".to_string(), json!(true));
+            member.metadata_json.remove("herdrSession");
+        }
+        Some(LocalMessageReceivedBackend::Herdr { session }) => {
+            member.recipient_pane_id = None;
+            member
+                .metadata_json
+                .insert("backendType".to_string(), json!("herdr"));
+            member.metadata_json.remove("isActive");
+            match session {
+                Some(session) => {
+                    member
+                        .metadata_json
+                        .insert("herdrSession".to_string(), json!(session.as_str()));
+                }
+                None => {
+                    member.metadata_json.remove("herdrSession");
+                }
+            }
+        }
+        None if request.tmux_pane_id.is_some() => {
+            let pane_id = request.tmux_pane_id.as_ref().expect("checked above");
+            member.recipient_pane_id = Some(pane_id.clone());
+            member
+                .metadata_json
+                .insert("backendType".to_string(), json!("tmux"));
+            member
+                .metadata_json
+                .insert("isActive".to_string(), json!(true));
+            member.metadata_json.remove("herdrSession");
+        }
+        None => {}
     }
 }
 
@@ -436,20 +642,178 @@ fn parse_roster_harness(value: String) -> Result<RosterHarness, AtmError> {
     }
 }
 
-fn normalize_tmux_pane_id(pane_id: Option<&str>) -> Result<Option<PaneId>, AtmError> {
-    let Some(raw) = pane_id.map(str::trim).filter(|value| !value.is_empty()) else {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TmuxTargetShape {
+    Strict,
+    NonStandard,
+}
+
+fn normalize_tmux_pane_id(
+    pane_id: Option<&str>,
+) -> Result<Option<(PaneId, TmuxTargetShape)>, AtmError> {
+    let Some(raw) = pane_id.map(str::trim) else {
         return Ok(None);
     };
+    if raw.is_empty() {
+        return PaneId::from_cli(raw).map(|pane| Some((pane, TmuxTargetShape::Strict)));
+    }
 
     if (raw
         .strip_prefix('%')
         .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|ch| ch.is_ascii_digit())))
         || raw.chars().all(|ch| ch.is_ascii_digit())
     {
-        return PaneId::from_cli(raw).map(Some);
+        return PaneId::from_cli(raw).map(|pane| Some((pane, TmuxTargetShape::Strict)));
     }
 
-    Err(AtmError::validation(format!(
-        "tmux pane id '{raw}' must use the tmux pane format '%<number>' or a bare numeric pane id",
-    )))
+    PaneId::from_cli(raw).map(|pane| Some((pane, TmuxTargetShape::NonStandard)))
+}
+
+fn parse_backend(
+    member: &AgentName,
+    backend: Option<&str>,
+    target: Option<&str>,
+    session: Option<&str>,
+) -> Result<Option<LocalMessageReceivedBackend>, AtmError> {
+    match backend {
+        None => {
+            if session.is_some() || target.is_some() {
+                return Err(AtmError::validation(
+                    "--target and --session require an explicit --backend",
+                ));
+            }
+            Ok(None)
+        }
+        Some("tmux") => {
+            if session.is_some() {
+                return Err(AtmError::validation("--session requires --backend herdr"));
+            }
+            let normalized = normalize_tmux_pane_id(target)?
+                .ok_or_else(|| AtmError::validation("--backend tmux requires --target"))?;
+            if normalized.1 == TmuxTargetShape::NonStandard {
+                tracing::warn!(
+                    member = %member,
+                    backend = "tmux",
+                    target = normalized.0.as_str(),
+                    "non-standard tmux target accepted; verify backend ownership for every member"
+                );
+            }
+            let pane = normalized.0;
+            Ok(Some(LocalMessageReceivedBackend::Tmux { pane_id: pane }))
+        }
+        Some("herdr") => {
+            if target.is_some() {
+                return Err(AtmError::validation(
+                    "--backend herdr does not accept --target",
+                ));
+            }
+            if !is_herdr_agent_name(member.as_str()) {
+                return Err(AtmError::validation(format!(
+                    "Herdr agent name must match ^[a-z][a-z0-9_-]{{0,31}}$: {member}"
+                )));
+            }
+            let session = session
+                .map(|value| {
+                    crate::address::validate_path_segment(value, "herdr session")?;
+                    HerdrSession::new(value)
+                })
+                .transpose()?;
+            Ok(Some(LocalMessageReceivedBackend::Herdr { session }))
+        }
+        Some(other) => Err(AtmError::validation(format!(
+            "unsupported local backend '{other}'; expected tmux or herdr"
+        ))),
+    }
+}
+
+fn is_herdr_agent_name(value: &str) -> bool {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    value.len() <= 32
+        && first.is_ascii_lowercase()
+        && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_' || ch == '-')
+}
+
+fn nonstandard_tmux_warning(
+    member: &AgentName,
+    backend: Option<&str>,
+    target: Option<&str>,
+) -> Result<Option<String>, AtmError> {
+    if backend != Some("tmux") {
+        return Ok(None);
+    }
+    let Some((pane, shape)) = normalize_tmux_pane_id(target)? else {
+        return Ok(None);
+    };
+    if shape == TmuxTargetShape::NonStandard {
+        Ok(Some(format!(
+            "member {member} uses backend tmux with non-standard target '{}'; verify --backend (herdr|tmux) for every member in the team; mixed-backend rosters require an explicit correct backend",
+            pane.as_str()
+        )))
+    } else {
+        Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
+
+    fn roster_member(team: &str, agent: &str) -> RosterEntry {
+        RosterEntry {
+            team_name: team.parse().expect("team"),
+            agent_name: agent.parse().expect("agent"),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: AgentType::from("worker".to_string()),
+            model: ModelName::new("gpt-5").expect("model"),
+            recipient_pane_id: None,
+            metadata_json: serde_json::Map::new(),
+        }
+    }
+
+    /// Regression test: `apply_member_metadata_update` used to insert the
+    /// roster host twice -- once under a hardcoded `"host"` string literal,
+    /// once under `crate::send_to::ROSTER_HOST_METADATA_KEY` (the two
+    /// happened to share the same value, masking the duplication). Only the
+    /// constant-keyed insert remains, so a `--host` update must land exactly
+    /// one metadata entry under `ROSTER_HOST_METADATA_KEY`: the value is
+    /// correct, and the map does not silently grow past this single field.
+    #[test]
+    fn host_update_writes_roster_host_metadata_exactly_once() {
+        let mut member = roster_member(TEST_TEAM, "cipher");
+        let request = UpdateMemberRequest::new(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            TEST_TEAM.parse().expect("caller team"),
+            TEST_TEAM,
+            "cipher",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("request")
+        .with_host(Some("m5.local"))
+        .expect("valid host");
+
+        apply_member_metadata_update(&mut member, &request);
+
+        assert_eq!(
+            member.metadata_json.len(),
+            1,
+            "only the single host field should be written: {:?}",
+            member.metadata_json
+        );
+        assert_eq!(
+            member
+                .metadata_json
+                .get(crate::send_to::ROSTER_HOST_METADATA_KEY),
+            Some(&json!("m5.local"))
+        );
+    }
 }

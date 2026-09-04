@@ -134,10 +134,22 @@ pub enum AtmErrorCode {
     WarningStaleMailboxLock,
     WarningHookSkipped,
     WarningHookExecutionFailed,
+    /// A roster contains explicit local members using both supported backends.
+    RosterMixedLocalBackend,
+    /// A configured Herdr member could not be observed by the presence probe.
+    HerdrAgentNotVisible,
     PostSendPaneMissing,
     PostSendTmuxSendFailed,
+    PostSendHerdrPromptFailed,
+    HerdrPromptFailed,
+    HerdrUnavailable,
     PostSendGraftUnavailable,
     GraftReceiverAlreadyActive,
+    /// The stored graft receiver lease is owned by a different generation
+    /// than the one making the request (register/refresh/unregister).
+    GraftReceiverNotOwner,
+    /// A receiver refresh found no durable lease row and must re-announce.
+    GraftReceiverNotRegistered,
     PostSendAdvisoryDeliveryFailed,
     TestFakeTransportInjectionFailed,
     HelpTopicNotFound,
@@ -292,6 +304,8 @@ impl AtmErrorCode {
             Self::WarningStaleMailboxLock => "ATM_WARNING_STALE_MAILBOX_LOCK",
             Self::WarningHookSkipped => "ATM_WARNING_HOOK_SKIPPED",
             Self::WarningHookExecutionFailed => "ATM_WARNING_HOOK_EXECUTION_FAILED",
+            Self::RosterMixedLocalBackend => "ATM_ROSTER_MIXED_LOCAL_BACKEND",
+            Self::HerdrAgentNotVisible => "ATM_HERDR_AGENT_NOT_VISIBLE",
             _ => return None,
         })
     }
@@ -300,8 +314,13 @@ impl AtmErrorCode {
         match self {
             Self::PostSendPaneMissing => "ATM_POST_SEND_PANE_MISSING",
             Self::PostSendTmuxSendFailed => "ATM_POST_SEND_TMUX_SEND_FAILED",
+            Self::PostSendHerdrPromptFailed => "ATM_POST_SEND_HERDR_PROMPT_FAILED",
+            Self::HerdrPromptFailed => "ATM_HERDR_PROMPT_FAILED",
+            Self::HerdrUnavailable => "ATM_HERDR_UNAVAILABLE",
             Self::PostSendGraftUnavailable => "ATM_POST_SEND_GRAFT_UNAVAILABLE",
             Self::GraftReceiverAlreadyActive => "ATM_GRAFT_RECEIVER_ALREADY_ACTIVE",
+            Self::GraftReceiverNotOwner => "ATM_GRAFT_RECEIVER_NOT_OWNER",
+            Self::GraftReceiverNotRegistered => "ATM_GRAFT_RECEIVER_NOT_REGISTERED",
             Self::PostSendAdvisoryDeliveryFailed => "ATM_POST_SEND_ADVISORY_DELIVERY_FAILED",
             Self::TestFakeTransportInjectionFailed => "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED",
             Self::HelpTopicNotFound => "ATM_HELP_TOPIC_NOT_FOUND",
@@ -464,6 +483,8 @@ fn parse_observability_or_warning_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_WARNING_STALE_MAILBOX_LOCK" => AtmErrorCode::WarningStaleMailboxLock,
         "ATM_WARNING_HOOK_SKIPPED" => AtmErrorCode::WarningHookSkipped,
         "ATM_WARNING_HOOK_EXECUTION_FAILED" => AtmErrorCode::WarningHookExecutionFailed,
+        "ATM_ROSTER_MIXED_LOCAL_BACKEND" => AtmErrorCode::RosterMixedLocalBackend,
+        "ATM_HERDR_AGENT_NOT_VISIBLE" => AtmErrorCode::HerdrAgentNotVisible,
         _ => return None,
     })
 }
@@ -472,8 +493,13 @@ fn parse_post_send_or_misc_code(value: &str) -> Option<AtmErrorCode> {
     Some(match value {
         "ATM_POST_SEND_PANE_MISSING" => AtmErrorCode::PostSendPaneMissing,
         "ATM_POST_SEND_TMUX_SEND_FAILED" => AtmErrorCode::PostSendTmuxSendFailed,
+        "ATM_POST_SEND_HERDR_PROMPT_FAILED" => AtmErrorCode::PostSendHerdrPromptFailed,
+        "ATM_HERDR_PROMPT_FAILED" => AtmErrorCode::HerdrPromptFailed,
+        "ATM_HERDR_UNAVAILABLE" => AtmErrorCode::HerdrUnavailable,
         "ATM_POST_SEND_GRAFT_UNAVAILABLE" => AtmErrorCode::PostSendGraftUnavailable,
         "ATM_GRAFT_RECEIVER_ALREADY_ACTIVE" => AtmErrorCode::GraftReceiverAlreadyActive,
+        "ATM_GRAFT_RECEIVER_NOT_OWNER" => AtmErrorCode::GraftReceiverNotOwner,
+        "ATM_GRAFT_RECEIVER_NOT_REGISTERED" => AtmErrorCode::GraftReceiverNotRegistered,
         "ATM_POST_SEND_ADVISORY_DELIVERY_FAILED" => AtmErrorCode::PostSendAdvisoryDeliveryFailed,
         "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED" => {
             AtmErrorCode::TestFakeTransportInjectionFailed

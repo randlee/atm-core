@@ -14,7 +14,11 @@ pub(crate) fn render_code(code: AtmErrorCode) -> String {
     guidance(code).to_string()
 }
 
-const fn guidance(code: AtmErrorCode) -> &'static str {
+pub(crate) const fn guidance(code: AtmErrorCode) -> &'static str {
+    guidance_inner(code)
+}
+
+const fn guidance_inner(code: AtmErrorCode) -> &'static str {
     if let Some(message) = configuration_guidance(code) {
         return message;
     }
@@ -37,6 +41,9 @@ const fn guidance(code: AtmErrorCode) -> &'static str {
         return message;
     }
     if let Some(message) = warning_guidance(code) {
+        return message;
+    }
+    if let Some(message) = herdr_guidance(code) {
         return message;
     }
     if let Some(message) = post_send_guidance(code) {
@@ -94,11 +101,16 @@ const fn identity_guidance(code: AtmErrorCode) -> Option<&'static str> {
 
 const fn daemon_guidance(code: AtmErrorCode) -> Option<&'static str> {
     match code {
+        AtmErrorCode::DaemonMayHaveExecuted => {
+            Some("Inspect the mailbox or daemon-side effects before attempting this request again.")
+        }
+        AtmErrorCode::RemoteDeliveryUnconfirmed => {
+            Some("Inspect the peer's delivery status before attempting this request again.")
+        }
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::RuntimeRootInvalid
         | AtmErrorCode::RuntimeBootstrapRefused
         | AtmErrorCode::SocketOverrideForbidden
-        | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge
         | AtmErrorCode::DaemonLaunchGateRejected
         | AtmErrorCode::DaemonServingStateRejected
@@ -241,6 +253,27 @@ const fn warning_guidance(code: AtmErrorCode) -> Option<&'static str> {
     }
 }
 
+const fn herdr_guidance(code: AtmErrorCode) -> Option<&'static str> {
+    match code {
+        AtmErrorCode::RosterMixedLocalBackend => Some(
+            "Use `atm teams update-member` to select the intended local backend for each member.",
+        ),
+        AtmErrorCode::HerdrAgentNotVisible => Some(
+            "Start or rename the Herdr agent to the roster member name and verify its configured session.",
+        ),
+        AtmErrorCode::PostSendHerdrPromptFailed => {
+            Some("Verify the Herdr target is not blocked, then retry the post-send wake.")
+        }
+        AtmErrorCode::HerdrPromptFailed => Some(
+            "Inspect the Herdr command diagnostics and verify the Herdr server and session before retrying.",
+        ),
+        AtmErrorCode::HerdrUnavailable => Some(
+            "Start the Herdr server and verify its socket and session configuration before retrying.",
+        ),
+        _ => None,
+    }
+}
+
 const fn post_send_guidance(code: AtmErrorCode) -> Option<&'static str> {
     match code {
         AtmErrorCode::PostSendPaneMissing
@@ -250,6 +283,9 @@ const fn post_send_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::PostSendAdvisoryDeliveryFailed => {
             Some("Repair the configured post-send target and retry if delivery is required.")
         }
+        AtmErrorCode::GraftReceiverNotOwner => Some(
+            "Another generation now owns this graft receiver lease; rebind to obtain a fresh generation.",
+        ),
         _ => None,
     }
 }

@@ -92,6 +92,7 @@ impl MessageReceivedHookEmitter for GraftReceiveHook<'_> {
         );
         self.deliver(HostNudge {
             event: dispatch.event.clone(),
+            kind: dispatch.kind,
             body: format!("{rendered_nudge}\n\n{message_body}"),
             notice_text,
         })?;
@@ -104,7 +105,7 @@ mod tests {
     use std::sync::{Arc, Mutex, RwLock};
 
     use atm_core::boundary::{
-        BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter,
+        BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter, NudgeKind,
         PostSendBuiltInTarget, PostSendHookEvent,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
@@ -179,6 +180,7 @@ mod tests {
 
         let event = request_event();
         sink.deliver(HostNudge {
+            kind: atm_core::boundary::NudgeKind::Steer,
             notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
             body: event.description.clone(),
             event,
@@ -205,6 +207,7 @@ mod tests {
                 rendered_nudge: "<atm><action>read atm</action></atm>".to_string(),
                 message_body: "full immutable body".to_string(),
             }),
+            kind: NudgeKind::Steer,
         };
 
         sink.emit_received_message(
@@ -236,6 +239,7 @@ mod tests {
         let event = request_event();
         let error = sink
             .deliver(HostNudge {
+                kind: atm_core::boundary::NudgeKind::Steer,
                 notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
                 body: event.description.clone(),
                 event,

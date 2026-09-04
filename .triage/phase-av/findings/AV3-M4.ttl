@@ -1,0 +1,84 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV3-M4>
+  a triage:Finding ;
+  triage:findingId "AV3-M4" ;
+  triage:title "code_mask raw-string closing-delimiter find lacks exact-length boundary check for hash-count-ambiguous content" ;
+  triage:description "req-qa N2 (QA-r3): in .just/rust_source.py code_mask (raw-string masking added by fix-r2 5c9ed27b6, ~lines 22-56), the closing-delimiter find for raw strings lacks an exact-length boundary check, so hash-count-ambiguous content can be mis-terminated. Fix: add an exact-length boundary check on the closing delimiter and a pytest fixture in .just/tests/test_check_read_concurrency_gates.py (or the rust_source tests) pinning the ambiguous case." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-31T06:35:48Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-30T23:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV3 ;
+  triage:foundAt "2026-08-31T06:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M4/AV3-M4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV3-M4/AV3-M4-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV3-M4/AV3-M4-1>
+  a triage:Occurrence ;
+  triage:file ".just/rust_source.py" ;
+  triage:line 25 ;
+  triage:snippet "end = source.find(delimiter, index + len(raw_match.group(0)))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:occursIn <urn:atm:triage:worktree/AV3/8905f1046> .
+
+<urn:atm:triage:occurrence/AV3-M4/AV3-M4-2>
+  a triage:Occurrence ;
+  triage:file ".just/rust_source.py" ;
+  triage:line 25 ;
+  triage:snippet "end = source.find(delimiter, index + len(raw_match.group(0)))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:occursIn <urn:atm:triage:worktree/AV4/a36bff376> .
+
+<urn:atm:triage:worktree/AV3/8905f1046>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av3-read-concurrency-gates" ;
+  triage:branch "feature/av3-read-concurrency-gates" ;
+  triage:headSha "8905f1046" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AV1/16421b24d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/mailbox-read-blocking-serialization" ;
+  triage:branch "fix/mailbox-read-blocking-serialization" ;
+  triage:headSha "16421b24d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AV2/043aba984>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av1b-read-handler-cutover" ;
+  triage:branch "feature/av1b-read-handler-cutover" ;
+  triage:headSha "043aba984" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AV2b/51de5f554>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/av2-read-concurrency-requirements" ;
+  triage:branch "docs/av2-read-concurrency-requirements" ;
+  triage:headSha "51de5f554" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AV4/a36bff376>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/av4-read-query-benchmarks" ;
+  triage:branch "feature/av4-read-query-benchmarks" ;
+  triage:headSha "a36bff376" ;
+  triage:orderIndex 5 .

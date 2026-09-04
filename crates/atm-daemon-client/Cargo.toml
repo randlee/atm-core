@@ -10,15 +10,15 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.4" }
-atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.4" }
-atm-storage = { path = "../atm-storage", version = "1.4.4" }
+atm-core.workspace = true
+atm-http-runtime.workspace = true
+atm-storage.workspace = true
 fs4 = "0.13"
 interprocess = "2.4"
 serde_json.workspace = true
-tracing = "0.1"
+tracing.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.4" }
+atm-core.workspace = true
 tempfile = "3"

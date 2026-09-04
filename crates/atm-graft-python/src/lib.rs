@@ -11,7 +11,7 @@ use ::atm_graft::{
     HostNudgeInjector, MailboxWorkCounts, SessionSnapshot,
 };
 use atm_core::address::AgentAddress;
-use atm_core::boundary::PostSendHookEvent;
+use atm_core::boundary::{NudgeKind, PostSendHookEvent};
 use atm_core::caller_context::activity_observation_for_resolved_caller;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
@@ -274,6 +274,9 @@ pub struct PyNudge {
     body: String,
     #[pyo3(get)]
     notice_text: String,
+    /// ATM's additive nudge taxonomy projection: `steer` or `queue`.
+    #[pyo3(get)]
+    kind: String,
 }
 
 impl PyNudge {
@@ -284,6 +287,7 @@ impl PyNudge {
             source: PyAgentAddress::from_typed(event.source_address())?,
             notice_text: body.clone(),
             body,
+            kind: NudgeKind::Steer.as_str().to_owned(),
         })
     }
 
@@ -293,6 +297,7 @@ impl PyNudge {
             source: PyAgentAddress::from_typed(nudge.event.source_address())?,
             body: nudge.body.clone(),
             notice_text: nudge.notice_text.clone(),
+            kind: nudge.kind.as_str().to_owned(),
         })
     }
 }
@@ -300,7 +305,8 @@ impl PyNudge {
 #[pymethods]
 impl PyNudge {
     #[new]
-    fn new(message_id: String, source: PyAgentAddress, body: String) -> PyResult<Self> {
+    #[pyo3(signature = (message_id, source, body, kind="steer"))]
+    fn new(message_id: String, source: PyAgentAddress, body: String, kind: &str) -> PyResult<Self> {
         message_id
             .parse::<atm_core::schema::AtmMessageId>()
             .map_err(|error| {
@@ -311,11 +317,20 @@ impl PyNudge {
                 "nudge body must not be blank",
             )));
         }
+        let kind = match kind {
+            "steer" | "queue" => kind.to_owned(),
+            _ => {
+                return Err(atm_error(AtmError::validation(
+                    "nudge kind must be `steer` or `queue`",
+                )));
+            }
+        };
         Ok(Self {
             message_id,
             source,
             notice_text: body.clone(),
             body,
+            kind,
         })
     }
 
@@ -416,6 +431,17 @@ impl PyGraftSession {
     }
 
     fn reconnect_client(&self) -> PyResult<()> {
+        // These are intentionally two recovery layers with different
+        // questions and ownership. Request scope in atm-http-runtime asks
+        // whether this connection is stale for a still-configured endpoint:
+        // it may perform one generation-aware, pre-send reconnect after
+        // re-reading the endpoint record, decided solely by
+        // `is_safe_to_reconnect()`. Session scope here asks whether the
+        // daemon/endpoint itself is unavailable or caller identity/team
+        // context must be re-established: it rebuilds the client under
+        // `RefreshOnly` for the next call and never re-issues the failed
+        // request. The `DaemonUnavailable` gate deliberately excludes
+        // `WaitTimeout`; that boundary must not be widened.
         {
             let client = self
                 .client
@@ -879,7 +905,7 @@ mod tests {
         _atm_graft, AtmGraftError, AtmToolError, PyAgentAddress, PyGraftSession,
         PyGraftSessionOptions, PyMailboxWorkCounts, PyNudge, PythonNudgeInjector, atm_error,
     };
-    use atm_core::boundary::PostSendHookEvent;
+    use atm_core::boundary::{NudgeKind, PostSendHookEvent};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::list::ListOutcome;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
@@ -1022,6 +1048,7 @@ mod tests {
 
     fn host_nudge(event: PostSendHookEvent) -> HostNudge {
         HostNudge {
+            kind: NudgeKind::Steer,
             body: "<atm><action>read atm</action></atm>".to_string(),
             notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
             event,
@@ -1062,6 +1089,7 @@ mod tests {
 
         let nudge = PyNudge::from_post_send(&event).expect("python nudge");
         assert_eq!(nudge.source.chat_id.as_deref(), Some("1234"));
+        assert_eq!(nudge.kind, "steer");
     }
 
     #[test]
@@ -1167,11 +1195,20 @@ mod tests {
             "01KX1TEST00000000000000000".to_string(),
             source,
             "nudge".to_string(),
+            "steer",
         )
         .expect("valid nudge");
         assert_eq!(nudge.message_id, "01KX1TEST00000000000000000");
         assert_eq!(nudge.source.chat_id.as_deref(), Some("1234"));
-        assert!(PyNudge::new("not-a-ulid".to_string(), nudge.source, "nudge".to_string()).is_err());
+        assert!(
+            PyNudge::new(
+                "not-a-ulid".to_string(),
+                nudge.source,
+                "nudge".to_string(),
+                "steer",
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -1412,6 +1449,109 @@ mod tests {
         assert_eq!(initial_calls.load(Ordering::SeqCst), 1);
         assert_eq!(session.reconnect_attempts.load(Ordering::SeqCst), 1);
         assert_eq!(replacement_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn send_tool_does_not_refresh_or_advise_resend_after_an_uncertain_write() {
+        Python::initialize();
+        let initial_calls = Arc::new(AtomicUsize::new(0));
+        let replacement_calls = Arc::new(AtomicUsize::new(0));
+        let initial_calls_for_transport = Arc::clone(&initial_calls);
+        let replacement_calls_for_transport = Arc::clone(&replacement_calls);
+        let session = test_session(
+            Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                assert!(matches!(request, RequestEnvelope::Write(_)));
+                initial_calls_for_transport.fetch_add(1, Ordering::SeqCst);
+                Err(AtmError::daemon_may_have_executed(
+                    "request write was interrupted",
+                ))
+            }))),
+            Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                assert!(matches!(request, RequestEnvelope::Write(_)));
+                replacement_calls_for_transport.fetch_add(1, Ordering::SeqCst);
+                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
+                    send_outcome(),
+                )))
+            }))),
+        );
+
+        Python::attach(|py| {
+            let result = session
+                .send_tool(
+                    py,
+                    Some(format!("{TEST_RECIPIENT}@{TEST_TEAM}")),
+                    "do not resend an uncertain write".to_owned(),
+                    false,
+                    None,
+                )
+                .expect("typed uncertainty result");
+            let result = result.bind(py);
+            assert!(result.is_instance_of::<AtmToolError>());
+            assert_eq!(
+                result
+                    .getattr("code")
+                    .expect("code")
+                    .extract::<String>()
+                    .expect("string code"),
+                AtmErrorCode::DaemonMayHaveExecuted.as_str()
+            );
+            let recovery = result
+                .getattr("recovery")
+                .expect("recovery")
+                .extract::<String>()
+                .expect("string recovery");
+            assert!(recovery.contains("inspect mailbox"));
+            assert!(!recovery.contains("retry this send"));
+        });
+
+        assert_eq!(initial_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(session.reconnect_attempts.load(Ordering::SeqCst), 0);
+        assert_eq!(replacement_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn refresh_only_is_not_triggered_by_wait_timeout() {
+        Python::initialize();
+        let reconnect_attempts = Arc::new(AtomicUsize::new(0));
+        let reconnect_attempts_for_transport = Arc::clone(&reconnect_attempts);
+        let session = test_session(
+            Arc::new(FakeClientTransport::new(Box::new(|request| {
+                assert!(matches!(request, RequestEnvelope::Write(_)));
+                Err(AtmError::new(
+                    AtmErrorCode::WaitTimeout,
+                    "request budget elapsed",
+                ))
+            }))),
+            Arc::new(FakeClientTransport::new(Box::new(move |_| {
+                reconnect_attempts_for_transport.fetch_add(1, Ordering::SeqCst);
+                panic!("RefreshOnly must not reconnect after WaitTimeout")
+            }))),
+        );
+
+        Python::attach(|py| {
+            let result = session
+                .send_tool(
+                    py,
+                    Some(format!("{TEST_RECIPIENT}@{TEST_TEAM}")),
+                    "timeout is uncertain".to_owned(),
+                    false,
+                    None,
+                )
+                .expect("WaitTimeout is returned as a typed tool result");
+            let result = result.bind(py);
+            assert!(result.is_instance_of::<AtmToolError>());
+            assert_eq!(
+                result
+                    .getattr("code")
+                    .expect("code")
+                    .extract::<String>()
+                    .expect("string code"),
+                AtmErrorCode::WaitTimeout.as_str()
+            );
+        });
+
+        assert_eq!(session.reconnect_attempts.load(Ordering::SeqCst), 0);
+        assert_eq!(reconnect_attempts.load(Ordering::SeqCst), 0);
     }
 
     #[test]
@@ -1666,8 +1806,14 @@ mod tests {
         let session = PyGraftSession {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(Arc::new(
-                FakeClientTransport::new(Box::new(|_| {
-                    panic!("receiver activation must not call the daemon transport")
+                FakeClientTransport::new(Box::new(|request| match request {
+                    RequestEnvelope::GraftReceiverRegister(_) => {
+                        Ok(ResponseEnvelope::GraftReceiverRegister)
+                    }
+                    RequestEnvelope::GraftReceiverUnregister(_) => {
+                        Ok(ResponseEnvelope::GraftReceiverUnregister)
+                    }
+                    _ => panic!("receiver activation sent an unexpected daemon request"),
                 })),
             )))),
             receiver: Mutex::new(None),

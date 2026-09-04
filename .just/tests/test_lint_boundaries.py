@@ -1249,6 +1249,155 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
                 rendered,
             )
 
+    def test_collect_boundary_violations_scans_consumer_crate_tests_dir_for_trait_only_doubles(
+        self,
+    ) -> None:
+        """QM40v2-I3: a consumer crate's `tests/` double must not be invisible.
+
+        `allowed_test_double_paths` can name a test double that lives in a
+        *different* crate's integration-test directory (e.g. an `atm-core`
+        consumer implementing an `atm-storage` sealed trait for its own test
+        suite). The scan must find both an approved and an unapproved double
+        there, and must not mistake a string-literal assertion (a common
+        architecture-test pattern) for a real implementation.
+        """
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            trait_only_record = (
+                BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "TestEmitter"')
+                .replace('owner_package = "atm-storage-rusqlite"', 'owner_package = "atm-core"')
+                .replace('owner_crate_path = "atm_storage_rusqlite"', 'owner_crate_path = "atm_core"')
+                .replace(
+                    'allowed_dependents = ["atm-daemon"]',
+                    'allowed_dependents = ["agent-team-mail", "atm-daemon", "atm-storage-rusqlite"]',
+                )
+                .replace('type = "SqliteMailStore"\nmodule = "atm_storage_rusqlite::mail_store"\n', "")
+                .replace('visibility = "private"\nconstructor = "private"', 'visibility = "trait_only"\nconstructor = "none"')
+                .replace('state = "planned"', 'state = "active"')
+                .replace(
+                    'allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]',
+                    'allowed_test_double_paths = ["atm_daemon::tests::emitter_double::ApprovedEmitter"]',
+                )
+            )
+            self.write_toml_record(repo_root, "atm-core", text=trait_only_record)
+            tests_dir = repo_root / "crates/atm-daemon/tests"
+            tests_dir.mkdir(parents=True, exist_ok=True)
+            (tests_dir / "emitter_double.rs").write_text(
+                "impl TestEmitter for ApprovedEmitter {}\n"
+                "impl TestEmitter for UnapprovedEmitter {}\n"
+                '// impl TestEmitter for CommentedOutEmitter {}\n'
+                '    source.contains("impl TestEmitter for StringLiteralEmitter");\n',
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertFalse(
+                any("atm_daemon::tests::emitter_double::ApprovedEmitter" in item for item in rendered),
+                rendered,
+            )
+            self.assertFalse(any("CommentedOutEmitter" in item for item in rendered), rendered)
+            self.assertFalse(any("StringLiteralEmitter" in item for item in rendered), rendered)
+            self.assertTrue(
+                any(
+                    "trait-only implementation 'atm_daemon::tests::emitter_double::UnapprovedEmitter'" in item
+                    and "allowed_test_double_paths" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+
+    def test_collect_boundary_violations_scans_consumer_crate_cfg_test_src_module_for_trait_only_doubles(
+        self,
+    ) -> None:
+        """AQ1.5 QA-2: a `#[cfg(test)]` module inside a *consumer* crate's
+        `src/` must not be invisible either.
+
+        Covers both shapes the finding calls out: an inline
+        `#[cfg(test)] mod NAME { .. }` block and a `#[cfg(test)] mod NAME;`
+        file module -- the latter is the exact shape of the real
+        `atm_core::ack::admission_tests::EmptyGraftReceiverStore` double this
+        regression guards.
+        """
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            trait_only_record = (
+                BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "TestEmitter"')
+                .replace('owner_package = "atm-storage-rusqlite"', 'owner_package = "atm-core"')
+                .replace('owner_crate_path = "atm_storage_rusqlite"', 'owner_crate_path = "atm_core"')
+                .replace(
+                    'allowed_dependents = ["atm-daemon"]',
+                    'allowed_dependents = ["agent-team-mail", "atm-daemon", "atm-storage-rusqlite"]',
+                )
+                .replace('type = "SqliteMailStore"\nmodule = "atm_storage_rusqlite::mail_store"\n', "")
+                .replace('visibility = "private"\nconstructor = "private"', 'visibility = "trait_only"\nconstructor = "none"')
+                .replace('state = "planned"', 'state = "active"')
+                .replace(
+                    'allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]',
+                    'allowed_test_double_paths = ['
+                    '"atm_daemon::tests::ApprovedInlineEmitter", '
+                    '"atm_daemon::emitter_double::ApprovedFileEmitter"]',
+                )
+            )
+            self.write_toml_record(repo_root, "atm-core", text=trait_only_record)
+            (repo_root / "crates/atm-daemon/src/lib.rs").write_text(
+                "impl TestEmitter for ProductionOutsideCfgTestEmitter {}\n"
+                "\n"
+                "#[cfg(test)]\n"
+                "mod tests {\n"
+                "    impl TestEmitter for ApprovedInlineEmitter {}\n"
+                "    impl TestEmitter for UnapprovedInlineEmitter {}\n"
+                "}\n"
+                "\n"
+                "#[cfg(test)]\n"
+                "mod emitter_double;\n",
+                encoding="utf-8",
+            )
+            (repo_root / "crates/atm-daemon/src/emitter_double.rs").write_text(
+                "impl TestEmitter for ApprovedFileEmitter {}\n"
+                "impl TestEmitter for UnapprovedFileEmitter {}\n"
+                '// impl TestEmitter for CommentedOutFileEmitter {}\n'
+                '    source.contains("impl TestEmitter for StringLiteralFileEmitter");\n',
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+
+            self.assertFalse(
+                any("atm_daemon::tests::ApprovedInlineEmitter" in item for item in rendered), rendered
+            )
+            self.assertFalse(
+                any("atm_daemon::emitter_double::ApprovedFileEmitter" in item for item in rendered), rendered
+            )
+            self.assertFalse(any("CommentedOutFileEmitter" in item for item in rendered), rendered)
+            self.assertFalse(any("StringLiteralFileEmitter" in item for item in rendered), rendered)
+            # A production impl sitting outside any #[cfg(test)] scope in a
+            # consumer crate is out of this pass's remit (that is a different
+            # policy question than test-double allowlisting); confirm the new
+            # cfg(test)-module scan did not silently widen scope to it.
+            self.assertFalse(
+                any("ProductionOutsideCfgTestEmitter" in item for item in rendered), rendered
+            )
+            self.assertTrue(
+                any(
+                    "trait-only implementation 'atm_daemon::tests::UnapprovedInlineEmitter'" in item
+                    and "allowed_test_double_paths" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+            self.assertTrue(
+                any(
+                    "trait-only implementation 'atm_daemon::emitter_double::UnapprovedFileEmitter'" in item
+                    and "allowed_test_double_paths" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+
     def test_every_declared_io_forbidden_tag_has_source_pattern_mapping(self) -> None:
         declared: set[str] = set()
         for path in Path(__file__).resolve().parents[2].glob("boundaries/*/*.toml"):
@@ -1286,6 +1435,512 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
             self.assertTrue(
                 any(
                     "BOUNDARY-MailStore-Sqlite forbids io 'socket_io'" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+
+    def test_trait_only_io_policy_scans_declared_adapter_modules_and_distinguishes_ro_open(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            boundary = BASE_BOUNDARY_TOML.replace(
+                """[implementation]
+type = \"SqliteMailStore\"
+module = \"atm_storage_rusqlite::mail_store\"
+visibility = \"private\"
+constructor = \"private\"""",
+                """[implementation]
+visibility = \"trait_only\"
+constructor = \"none\"""",
+            )
+            boundary = boundary.replace(
+                'io_forbidden = ["socket_io"]',
+                'io_forbidden = ["write_capable_connection"]',
+            )
+            boundary = boundary.replace(
+                "[enforcement]\n",
+                "[enforcement]\n"
+                "io_forbidden_source_modules = { write_capable_connection = [\"atm_storage_rusqlite::reader_lane\"] }\n",
+            )
+            boundary = boundary.replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
+            source_path = repo_root / "crates/atm-storage-rusqlite/src/reader_lane.rs"
+            source_path.write_text(
+                """\
+pub fn read_only() {
+    let _ = Connection::open_with_flags(
+        \"reader.sqlite\",
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    );
+}
+""",
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            self.assertEqual(
+                collect_io_forbidden_source_violations(repo_root, records),
+                [],
+                "an explicitly read-only SQLite open must remain allowed",
+            )
+
+            source_path.write_text(
+                """\
+pub fn write_capable() {
+    let _ = Connection::open_with_flags(
+        \"reader.sqlite\",
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
+    );
+}
+""",
+                encoding="utf-8",
+            )
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertTrue(
+                any(
+                    "crates/atm-storage-rusqlite/src/reader_lane.rs" in item
+                    and "BOUNDARY-MailStore-Sqlite forbids io 'write_capable_connection'" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+
+    def test_trait_only_io_policy_fails_closed_without_any_scannable_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            boundary = BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "AbsentStore"')
+            boundary = boundary.replace(
+                """[implementation]
+type = \"SqliteMailStore\"
+module = \"atm_storage_rusqlite::mail_store\"
+visibility = \"private\"
+constructor = \"private\"""",
+                """[implementation]
+visibility = \"trait_only\"
+constructor = \"none\"""",
+            )
+            boundary = boundary.replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertTrue(
+                any(
+                    "BOUNDARY-MailStore-Sqlite declares io_forbidden 'socket_io'"
+                    in item
+                        and "no production implementation source modules" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+
+    def test_trait_only_io_policy_derives_contract_source_when_not_explicitly_mapped(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            boundary = BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "ContractStore"')
+            boundary = boundary.replace(
+                """[implementation]
+type = \"SqliteMailStore\"
+module = \"atm_storage_rusqlite::mail_store\"
+visibility = \"private\"
+constructor = \"private\"""",
+                """[implementation]
+visibility = \"trait_only\"
+constructor = \"none\"""",
+            )
+            boundary = boundary.replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
+            source_path = repo_root / "crates/atm-storage-rusqlite/src/lib.rs"
+            source_path.write_text(
+                "pub trait ContractStore {}\n"
+                "struct CleanStore;\n"
+                "impl ContractStore for CleanStore {}\n",
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            self.assertEqual(collect_io_forbidden_source_violations(repo_root, records), [])
+
+            source_path.write_text(
+                "pub trait ContractStore {\n"
+                "    fn accidental_socket(&self, stream: std::net::TcpStream);\n"
+                "}\n"
+                "struct CleanStore;\n"
+                "impl ContractStore for CleanStore {}\n",
+                encoding="utf-8",
+            )
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertTrue(
+                any(
+                    "crates/atm-storage-rusqlite/src/lib.rs" in item
+                    and "BOUNDARY-MailStore-Sqlite forbids io 'socket_io'" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+
+    def test_trait_only_io_policy_scans_production_implementer_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            boundary = BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "ContractStore"')
+            boundary = boundary.replace(
+                '''[implementation]
+type = "SqliteMailStore"
+module = "atm_storage_rusqlite::mail_store"
+visibility = "private"
+constructor = "private"''',
+                '''[implementation]
+visibility = "trait_only"
+constructor = "none"''',
+            )
+            boundary = boundary.replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
+            source_path = repo_root / "crates/atm-storage-rusqlite/src/lib.rs"
+            source_path.write_text(
+                "pub trait ContractStore {}\n"
+                "struct CleanStore;\n"
+                "impl ContractStore for CleanStore {}\n",
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            self.assertEqual(collect_io_forbidden_source_violations(repo_root, records), [])
+
+            source_path.write_text(
+                "pub trait ContractStore {}\n"
+                "struct UnsafeStore;\n"
+                "impl ContractStore for UnsafeStore {\n"
+                "    fn connect() {\n"
+                "        let _ = std::net::TcpStream::connect(\"127.0.0.1:1\");\n"
+                "    }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertTrue(
+                any(
+                    "crates/atm-storage-rusqlite/src/lib.rs" in item
+                    and "BOUNDARY-MailStore-Sqlite forbids io 'socket_io'" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+
+    def test_trait_only_io_policy_rejects_undeclared_sqlite_implementation(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            trait_boundary = BASE_BOUNDARY_TOML.replace(
+                'trait = "MailStore"', 'trait = "ContractStore"'
+            ).replace(
+                'io_forbidden = ["socket_io"]', 'io_forbidden = ["direct_sqlite_io"]'
+            )
+            trait_boundary = trait_boundary.replace(
+                '''[implementation]
+type = "SqliteMailStore"
+module = "atm_storage_rusqlite::mail_store"
+visibility = "private"
+constructor = "private"''',
+                '''[implementation]
+visibility = "trait_only"
+constructor = "none"''',
+            ).replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=trait_boundary)
+            (repo_root / "crates/atm-storage-rusqlite/src/lib.rs").write_text(
+                "pub trait ContractStore {}\n"
+                "struct SqliteContractStore;\n"
+                "impl ContractStore for SqliteContractStore {\n"
+                "    fn open() { let _ = rusqlite::Connection::open(\"adapter.db\"); }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertTrue(any("forbids io 'direct_sqlite_io'" in item for item in rendered), rendered)
+
+    def test_trait_only_io_policy_delegates_sqlite_adapter_to_concrete_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            trait_boundary = BASE_BOUNDARY_TOML.replace(
+                'trait = "MailStore"', 'trait = "ContractStore"'
+            ).replace(
+                'io_forbidden = ["socket_io"]', 'io_forbidden = ["direct_sqlite_io"]'
+            )
+            trait_boundary = trait_boundary.replace(
+                '''[implementation]
+type = "SqliteMailStore"
+module = "atm_storage_rusqlite::mail_store"
+visibility = "private"
+constructor = "private"''',
+                '''[implementation]
+visibility = "trait_only"
+constructor = "none"''',
+            ).replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=trait_boundary)
+            sqlite_boundary = BASE_BOUNDARY_TOML.replace(
+                'boundary_id = "BOUNDARY-MailStore-Sqlite"',
+                'boundary_id = "BOUNDARY-ContractStore-Sqlite"',
+            ).replace('trait = "MailStore"', 'trait = "ContractStore"').replace(
+                'module = "atm_storage_rusqlite::mail_store"',
+                'module = "atm_storage_rusqlite"',
+            )
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                file_name="contract-store-sqlite.toml",
+                text=sqlite_boundary.replace('state = "planned"', 'state = "active"'),
+            )
+            (repo_root / "crates/atm-storage-rusqlite/src/lib.rs").write_text(
+                "pub trait ContractStore {}\n"
+                "struct SqliteContractStore;\n"
+                "impl ContractStore for SqliteContractStore {\n"
+                "    fn open() { let _ = rusqlite::Connection::open(\"adapter.db\"); }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            self.assertEqual(
+                collect_io_forbidden_source_violations(repo_root, records),
+                [],
+                "the declared SQLite adapter owns direct SQLite I/O, not the abstract contract",
+            )
+
+    def test_trait_only_reader_mappings_scan_socket_and_process_constructs(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            boundary = BASE_BOUNDARY_TOML.replace(
+                'io_forbidden = ["socket_io"]',
+                'io_forbidden = ["socket_io", "process_spawn"]',
+            ).replace(
+                '''[implementation]
+type = "SqliteMailStore"
+module = "atm_storage_rusqlite::mail_store"
+visibility = "private"
+constructor = "private"''',
+                '''[implementation]
+visibility = "trait_only"
+constructor = "none"''',
+            )
+            boundary = boundary.replace(
+                "[enforcement]\n",
+                "[enforcement]\n"
+                "io_forbidden_source_modules = { socket_io = [\"atm_storage_rusqlite::reader_lane\"], process_spawn = [\"atm_storage_rusqlite::reader_lane\"] }\n",
+            ).replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
+            source_path = repo_root / "crates/atm-storage-rusqlite/src/reader_lane.rs"
+            source_path.write_text(
+                "fn forbidden_io() {\n"
+                "    let _ = std::net::TcpStream::connect(\"127.0.0.1:1\");\n"
+                "    let _ = std::process::Command::new(\"true\");\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertTrue(any("forbids io 'socket_io'" in item for item in rendered), rendered)
+            self.assertTrue(any("forbids io 'process_spawn'" in item for item in rendered), rendered)
+
+    def test_no_in_repo_implementation_declaration_is_checked_against_production_impls(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            boundary = BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "ExternalStore"')
+            boundary = boundary.replace(
+                """[implementation]
+type = \"SqliteMailStore\"
+module = \"atm_storage_rusqlite::mail_store\"
+visibility = \"private\"
+constructor = \"private\"""",
+                """[implementation]
+visibility = \"trait_only\"
+constructor = \"none\"""",
+            )
+            boundary = boundary.replace(
+                "[enforcement]\n",
+                "[enforcement]\nno_in_repo_implementation = true\n",
+            )
+            boundary = boundary.replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            self.assertEqual(collect_io_forbidden_source_violations(repo_root, records), [])
+
+            (repo_root / "crates/atm-storage-rusqlite/src/lib.rs").write_text(
+                "impl ExternalStore for ConcreteStore {}\n", encoding="utf-8"
+            )
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertTrue(
+                any(
+                    "BOUNDARY-MailStore-Sqlite declares no_in_repo_implementation"
+                    in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+
+    def test_no_in_repo_implementation_ignores_cfg_test_impl(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            boundary = BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "TestOnlyStore"')
+            boundary = boundary.replace(
+                '''[implementation]
+type = "SqliteMailStore"
+module = "atm_storage_rusqlite::mail_store"
+visibility = "private"
+constructor = "private"''',
+                '''[implementation]
+visibility = "trait_only"
+constructor = "none"''',
+            )
+            boundary = boundary.replace(
+                "[enforcement]\n", "[enforcement]\nno_in_repo_implementation = true\n"
+            ).replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
+            (repo_root / "crates/atm-storage-rusqlite/src/lib.rs").write_text(
+                "pub trait TestOnlyStore {}\n"
+                "#[cfg(test)]\n"
+                "mod tests {\n"
+                "    struct DummyStore;\n"
+                "    impl super::TestOnlyStore for DummyStore {}\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            self.assertEqual(collect_io_forbidden_source_violations(repo_root, records), [])
+
+    def test_http_runtime_io_policy_scans_split_client_module(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            root_manifest = (repo_root / "Cargo.toml").read_text(encoding="utf-8")
+            (repo_root / "Cargo.toml").write_text(
+                root_manifest.replace(
+                    '"crates/atm-daemon"]',
+                    '"crates/atm-daemon", "crates/atm-http-runtime"]',
+                ),
+                encoding="utf-8",
+            )
+            runtime_dir = repo_root / "crates/atm-http-runtime"
+            (runtime_dir / "src").mkdir(parents=True)
+            (runtime_dir / "Cargo.toml").write_text(
+                """\
+[package]
+name = "atm-http-runtime"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "atm_http_runtime"
+""",
+                encoding="utf-8",
+            )
+            (runtime_dir / "src/lib.rs").write_text(
+                "pub struct HttpRuntimeClient;\n", encoding="utf-8"
+            )
+            client_path = runtime_dir / "src/client.rs"
+            client_path.write_text(
+                "fn is_safe_to_reconnect() {}\n", encoding="utf-8"
+            )
+            boundary = BASE_BOUNDARY_TOML
+            boundary = boundary.replace(
+                'boundary_id = "BOUNDARY-MailStore-Sqlite"',
+                'boundary_id = "BOUNDARY-HttpRuntime"',
+            )
+            boundary = boundary.replace(
+                'owner_package = "atm-storage-rusqlite"',
+                'owner_package = "atm-http-runtime"',
+            )
+            boundary = boundary.replace(
+                'owner_crate_path = "atm_storage_rusqlite"',
+                'owner_crate_path = "atm_http_runtime"',
+            )
+            boundary = boundary.replace(
+                'module = "atm_storage_rusqlite::mail_store"',
+                'module = "atm_http_runtime"',
+            )
+            boundary = boundary.replace(
+                'io_forbidden = ["socket_io"]',
+                'io_forbidden = ["replay_or_resend"]',
+            )
+            boundary = boundary.replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-http-runtime", text=boundary)
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            self.assertEqual(
+                collect_io_forbidden_source_violations(repo_root, records),
+                [],
+                "the documented pre-send helper shape is not replay/resend",
+            )
+
+            client_path.write_text(
+                "struct PeerResendScheduler;\n", encoding="utf-8"
+            )
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertTrue(
+                any(
+                    "crates/atm-http-runtime/src/client.rs" in item
+                    and "BOUNDARY-HttpRuntime forbids io 'replay_or_resend'" in item
                     for item in rendered
                 ),
                 rendered,

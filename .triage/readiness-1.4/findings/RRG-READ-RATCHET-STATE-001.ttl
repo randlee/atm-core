@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-READ-RATCHET-STATE-001>
+  a triage:Finding ;
+  triage:findingId "RRG-READ-RATCHET-STATE-001" ;
+  triage:title "Official read/query campaigns fail closed on missing baselines.previous.json, which has never existed on any ref and cannot validly exist for a revision-1 baseline, so the read family has been unrunnable since AV.4 seeding" ;
+  triage:description "Release-readiness step 1 on prerelease/v1.4.13 (7e4302d98), atmbench@rand-m5.local, 2026-09-04T06:3xZ, arch-ctm under fenix@rand-m5 GO, after the RRG-READ-DOCTOR-LANES-001 fix: the doctor report now publishes reader_lanes (mailbox 4/16, search 2/8) and all three read diagnostics PASS above the revision-1 floors (query-fts about 802/s, read-under-write-load about 777/s, read-fanout PASS versus floors about 753 to 755/s). The official aggregation then fails closed with: official read campaign requires ratchet state at site/reports/read-query-benchmark/baselines.previous.json; missing baselines.previous.json is not a dormant ratchet. Facts: (1) scripts/smoke/read_benchmark.py line 848 derives previous_path next to BASELINES_PATH and line 849 calls load_previous_baselines for every non-diagnostic run, as mandated by docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md lines 144-149 (the runner must load baselines.previous.json for every official run and fail closed when missing). (2) The file has never existed on any ref (git log --all is empty for it); only baselines.json exists, ratified at revision 1 in c330637c2 (2026-08-31, three rand-m5.local seeding campaigns approved by quality-mgr). (3) Nothing ever writes it: engage_ratchet records an in-memory proposal only and the plan says changing the reviewed floor is a separate commit. (4) scripts/smoke/benchmark_schema.py require_non_decreasing_baselines line 190 demands previous.revision strictly less than current.revision, so for a revision-1 baselines.json no valid previous file can exist; a verbatim copy fails with baseline revision must increase. Consequence: every official read campaign since the seeding commit has been unrunnable on every host; the committed read evidence of 2026-08-31 predates the enforcing runner. The send family is unaffected (its runner has no previous-state requirement; official 1.4.12 send campaign 20260904T054952Z PASS). Classification: harness/process gap, blocking for official read evidence only; not a product defect and not fixable on the benchmark host. Candidate resolutions for quality-mgr ruling: (a) reviewed process commit on the candidate branch with no code change: baselines.previous.json equal to the current revision-1 file verbatim, baselines.json bumped to revision 2 with floors, provenance and source campaigns unchanged and a rationale line stating ratchet state seeded with floors unchanged; this preserves fail-closed semantics and never moves a floor. (b) harness change allowing a revision-1 baseline to run with an explicit recorded no-prior-revision seed state instead of failing closed. Ratchet state must never be synthesized from campaign output; floors never move down. Proof: just benchmark-read completes the official aggregation for all three families on atmbench with both baseline revisions recorded in the campaign artifact." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "benchmark-harness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-04T06:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-04T06:38:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-READ-RATCHET-STATE-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-READ-RATCHET-STATE-001/CAND-2> ;
+  triage:triageRecordVersion "3" ;
+  triage:qmgrRuling "quality-mgr ruling 2026-09-04: approved path (a) -- reviewed process commit, no harness code change: baselines.previous.json set equal to the current revision-1 baselines.json verbatim, baselines.json bumped to revision 2 with floors/provenance/source-campaigns unchanged plus a rationale line ('ratchet state seeded, floors unchanged'). Path (b) (harness special-case for revision-1) rejected: unnecessary code-path complexity for a one-time bootstrap that a data commit fully resolves, and it would leave the fail-closed rule with an exception to reason about on every future revision-1 scenario. Fail-closed semantics preserved for all future revisions; floor values not moved. Dispatch this as a dedicated process commit on chore/readiness-candidate-1.4.7 (or a follow-up branch merging there), then re-run just benchmark-read officially -- the pre-seed diagnostic numbers (query-fts ~802/s, read-under-write ~777/s, fanout PASS) are informative but do NOT themselves constitute official evidence, since they ran with diagnostic_only=true and bypassed the previous-baseline load entirely. RRG-READ-DOCTOR-LANES-001's finding-level closure and the release-readiness read stage both require the official post-seed campaign artifact, not just these diagnostics." ;
+  triage:closureNote "quality-mgr closure (2026-09-04, qa-readiness-read-evidence-r11): seed commit e1a6639f9 (baselines.json revision 2, baselines.previous.json = verbatim revision-1 copy, floors unchanged) landed on chore/readiness-candidate-1.4.7, merged to develop via PR #1143 (5ca0fedce), independently verified byte-for-byte at the time. The official post-seed campaign then ran clean: 20260904T065446Z-rand-m5.local-read (PR #1150, commit ceda87608a) reports ratchet.previous_revision 1, ratchet.current_revision 2, ratchet.engaged true, all three families PASS -- confirming the fail-closed requirement this finding described is resolved end to end (seed + successful official run), not just the seed alone. Finding-level status flipped to fixed/closed. Ruling on the campaign's floor-raise proposal (candidate_floor ~758.9/759.2/751.2, all above current revision-2 floors): NOT approved as a new committed floor from this round. The original AV.4 floors were seeded from three concordant campaigns (quorum); a single post-seed campaign is insufficient evidence to raise floors, and floors must never ratchet on a single run's variance. The proposal stays recorded in the campaign artifact only, no baselines.json edit. If a floor raise is wanted, it needs its own multi-campaign reviewed-floor-commit process, separate from this closure." .
+
+<urn:atm:triage:occurrence/RRG-READ-RATCHET-STATE-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 849 ;
+  triage:snippet "previous = None if diagnostic_only else load_previous_baselines(previous_path) -- fixed at e1a6639f9: baselines.previous.json now exists (verbatim revision-1 copy), so load_previous_baselines succeeds for official runs; confirmed by the official campaign ceda87608a which recorded ratchet.previous_revision 1 / current_revision 2." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "e1a6639f9" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/e1a6639f9-ratchet-seed> .
+
+<urn:atm:triage:occurrence/RRG-READ-RATCHET-STATE-001/CAND-2>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/baselines.json" ;
+  triage:line 3 ;
+  triage:snippet "\"revision\": 1, -- fixed at e1a6639f9: revision bumped to 2 (floors/provenance/source-campaigns unchanged, rationale line added); official campaign ceda87608a ran against this revision-2 baseline and PASSed all three families." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "e1a6639f9" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/e1a6639f9-ratchet-seed> .
+
+<urn:atm:triage:worktree/CAND/7517ab486>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "7517ab486" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/CAND/e1a6639f9-ratchet-seed>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "e1a6639f9" ;
+  triage:orderIndex 2 .

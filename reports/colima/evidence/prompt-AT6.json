@@ -1,0 +1,50 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT6-template-task-dispatch",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "template-authored",
+      "status": "pass",
+      "detail": "Created /opt/testbed/at6/at6-task.xml.j2 with YAML frontmatter and Jinja2 template body"
+    },
+    {
+      "name": "compose-preview-rendered",
+      "status": "pass",
+      "detail": "atm compose rendered variables correctly: AT6-TASK-1 and 'reply PASS or FAIL over ATM' substituted for {{ task_id }} and {{ description }}"
+    },
+    {
+      "name": "template-send-dispatched",
+      "status": "pass",
+      "detail": "atm send --template dispatched message 01M1CRFWBT1FW1V24JGW48K11F to fx-at6-beta with --task-id AT6-TASK-1"
+    },
+    {
+      "name": "receiver-rendering-verified",
+      "status": "pass",
+      "detail": "Receiver verified message body contains rendered variables AT6-TASK-1 and 'reply PASS or FAIL over ATM', requires_ack=true, taskId=AT6-TASK-1"
+    },
+    {
+      "name": "ack-sent",
+      "status": "pass",
+      "detail": "atm ack sent message 01M1CRG2E04WHWG60FPA987EHG with acknowledgesMessageId=01M1CRFWBT1FW1V24JGW48K11F"
+    },
+    {
+      "name": "pass-fail-report-sent",
+      "status": "pass",
+      "detail": "atm send sent completion message 01M1CRG4V3J32N2DEF4XAW7CG0 'task complete: AT6-TASK-1 PASS' from fx-at6-beta to fx-at6-alpha"
+    },
+    {
+      "name": "sender-history-confirmed",
+      "status": "pass",
+      "detail": "Sender-side atm read --all shows both ack (01M1CRG2E04WHWG60FPA987EHG) and completion (01M1CRG4V3J32N2DEF4XAW7CG0) in history bucket"
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {
+    "atm": "1.4.6",
+    "hermes_atm": "unknown",
+    "atm_graft": "unknown"
+  },
+  "started_at": "2026-08-31T20:34:31Z",
+  "finished_at": "2026-08-31T20:34:45Z"
+}

@@ -38,10 +38,12 @@ PYTHON_LINT_ORDER = (
     "silent-emit",
     "function-length",
     "legacy-mailbox-paths",
+    "nudge-taxonomy",
     "capability-degradation",
     "identities",
     "env-var-boundary",
     "runtime-observation-boundary",
+    "read-concurrency-gates",
     "fixed-sleep",
     "ttl-triage",
     "lines",
@@ -51,10 +53,11 @@ PYTHON_LINT_ORDER = (
     "atm-graft-python-boundary",
     "daemon-singleton",
     "legacy-transport-removal",
+    "peer-dial-seam",
     "pytests",
 )
 EXTRA_LINTS = ("sc-boundary", "sc-portability")
-CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear")
+CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear", "arch-gates")
 FAST_LINT_ORDER = (
     "fmt",
     "version",
@@ -65,13 +68,14 @@ FAST_LINT_ORDER = (
     "silent-emit",
     "function-length",
     "legacy-mailbox-paths",
+    "nudge-taxonomy",
     "capability-degradation",
     "spell",
     "hermes-adapter",
     "pytests",
 )
 HIGH_VOLUME_LINTS = {"identities", "lines"}
-CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "sc-boundary", "sc-portability", "manifests"}
+CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "sc-boundary", "sc-portability", "manifests", "arch-gates"}
 COUNT_PATTERNS = (
     ("total violations:", "violations"),
     ("errors:", "errors"),
@@ -79,6 +83,11 @@ COUNT_PATTERNS = (
 FILE_FINDING_RE = re.compile(r"^[A-Za-z0-9_.-]+/.*:\d+:")
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 ERROR_MARKER_RE = re.compile(r"(?<![A-Za-z0-9_])(error|failed|traceback|exception)(?![A-Za-z0-9_])")
+PYTEST_BLOCK_HEADER_RE = re.compile(r"^(ERROR|FAIL): ")
+PYTEST_BLOCK_SEPARATOR_RE = re.compile(r"^=+$")
+PYTEST_BLOCK_RULE_RE = re.compile(r"^-+$")
+PYTEST_PREVIEW_BLOCK_LINES = 15
+PYTEST_PREVIEW_MAX_LINES = 400
 
 
 @dataclass(frozen=True)
@@ -105,6 +114,7 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "modules": LintTask("modules", [*python_command, str(repo_root / ".just/lint_cargo_modules.py")]),
         "deny": LintTask("deny", [*python_command, str(repo_root / ".just/lint_cargo_deny.py")]),
         "shear": LintTask("shear", [*python_command, str(repo_root / ".just/lint_cargo_shear.py")]),
+        "arch-gates": LintTask("arch-gates", ["cargo", "test", "-p", "atm-architecture", "--quiet"]),
         "version": LintTask("version", [*python_command, str(repo_root / ".just/check_version_sync.py")]),
         "identities": LintTask(
             "identities", [*python_command, str(repo_root / ".just/check_test_identity_literals.py")]
@@ -115,6 +125,10 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "runtime-observation-boundary": LintTask(
             "runtime-observation-boundary",
             [*python_command, str(repo_root / ".just/check_runtime_observation_boundary.py")],
+        ),
+        "read-concurrency-gates": LintTask(
+            "read-concurrency-gates",
+            [*python_command, str(repo_root / ".just/check_read_concurrency_gates.py")],
         ),
         "lines": LintTask("lines", [*python_command, str(repo_root / ".just/check_line_counts.py")]),
         "boundaries": LintTask("boundaries", [*python_command, str(repo_root / ".just/lint_boundaries.py")]),
@@ -150,6 +164,10 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
             "legacy-mailbox-paths",
             [*python_command, str(repo_root / "scripts/check-legacy-mailbox-paths.py")],
         ),
+        "nudge-taxonomy": LintTask(
+            "nudge-taxonomy",
+            [*python_command, str(repo_root / "scripts/check-nudge-taxonomy.py")],
+        ),
         "capability-degradation": LintTask(
             "capability-degradation",
             [*python_command, str(repo_root / "scripts/check-capability-degradation.py")],
@@ -166,6 +184,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "fixed-sleep": LintTask(
             "fixed-sleep", [*python_command, str(repo_root / ".just/check_fixed_sleep_hygiene.py")]
+        ),
+        "peer-dial-seam": LintTask(
+            "peer-dial-seam", [*python_command, str(repo_root / ".just/lint_peer_dial_seam.py")]
         ),
         "ttl-triage": LintTask(
             "ttl-triage", [*python_command, str(repo_root / ".just/lint_ttl_triage_consistency.py")]
@@ -273,10 +294,75 @@ def preview_lines_for_task(task_name: str, lines: list[str]) -> list[str]:
     return filtered or lines
 
 
+def extract_error_fail_preview(
+    lines: list[str],
+    *,
+    block_lines: int = PYTEST_PREVIEW_BLOCK_LINES,
+    max_total_lines: int = PYTEST_PREVIEW_MAX_LINES,
+) -> list[str]:
+    """Return every ``unittest`` ``ERROR:``/``FAIL:`` test id with a bounded traceback head.
+
+    ``unittest.TextTestRunner`` prints one ``ERROR:``/``FAIL:`` header line
+    per failing test id, each followed by its traceback, with every
+    ``ERROR`` block printed before any ``FAIL`` block. A tail-only preview
+    (``lines[-40:]``) only ever shows whichever block happens to land at the
+    end of the run -- on a suite with more errors than fit in that window,
+    every ``ERROR:`` id (and some ``FAIL:`` ids) silently disappear from the
+    CI console. This walks every block instead, keeping each test id line
+    plus up to ``block_lines`` lines of its traceback, and caps the combined
+    preview at ``max_total_lines`` so a large failure count still prints a
+    bounded summary rather than a full traceback dump.
+    """
+    blocks: list[list[str]] = []
+    index = 0
+    total = len(lines)
+    while index < total:
+        line = lines[index]
+        if PYTEST_BLOCK_HEADER_RE.match(line):
+            block = [line]
+            cursor = index + 1
+            # The dash rule immediately under the id line belongs to this
+            # block (it's the header's own underline). A *second* dash rule
+            # is unittest's run-summary underline ("Ran N tests..."), which
+            # must end the block rather than being swept into it.
+            seen_header_rule = False
+            while cursor < total and len(block) < block_lines:
+                next_line = lines[cursor]
+                if PYTEST_BLOCK_HEADER_RE.match(next_line) or PYTEST_BLOCK_SEPARATOR_RE.match(next_line):
+                    break
+                if PYTEST_BLOCK_RULE_RE.match(next_line):
+                    if seen_header_rule:
+                        break
+                    seen_header_rule = True
+                block.append(next_line)
+                cursor += 1
+            blocks.append(block)
+            index = cursor
+        else:
+            index += 1
+
+    if not blocks:
+        # No parseable ERROR:/FAIL: blocks (e.g. the suite crashed before any
+        # test ran) -- fall back to the plain tail so the console still shows
+        # the most recent output rather than nothing at all.
+        return lines[-40:]
+
+    preview: list[str] = []
+    for block in blocks:
+        if len(preview) + len(block) > max_total_lines:
+            remaining = max_total_lines - len(preview)
+            if remaining > 0:
+                preview.extend(block[:remaining])
+            preview.append(f"... preview truncated at {max_total_lines} lines; see full log")
+            break
+        preview.extend(block)
+    return preview
+
+
 def failure_preview(task_name: str, lines: list[str]) -> list[str]:
     """Return actionable CI output without hiding a Python test traceback."""
     if task_name == "pytests":
-        return lines[-40:]
+        return extract_error_fail_preview(lines)
     return prioritize_error_lines(lines)[:4]
 
 

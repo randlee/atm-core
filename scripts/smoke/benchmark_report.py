@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from typing import Any, Iterable, Literal, Sequence
+from typing import Any, Iterable, Literal, Mapping, Sequence
 from zoneinfo import ZoneInfo
 
 
@@ -389,14 +389,49 @@ def render_index(
     return output
 
 
-def render_envelope(campaigns: Sequence[BenchmarkCampaign], report_root: Path = REPORTS_ROOT) -> None:
-    latest = max(campaigns, key=lambda campaign: campaign.started_at)
+def render_envelope(
+    campaigns: Sequence[BenchmarkCampaign],
+    report_root: Path = REPORTS_ROOT,
+    *,
+    report_name: str = REPORT_NAME,
+    report_html: str | None = None,
+    generated_at: str | None = None,
+    host_label: str | None = None,
+    execution_identity: Mapping[str, Any] | None = None,
+    measurement_note: str | None = None,
+    effective_lane_settings: Mapping[str, Any] | None = None,
+    ratchet: Mapping[str, Any] | None = None,
+) -> None:
+    """Write the shared reports-index envelope for benchmark-family reports.
+
+    The established campaign path remains the default.  Additive benchmark
+    families may supply their own validated HTML path and timestamp while
+    retaining this single envelope writer.
+    """
+    if campaigns:
+        latest = max(campaigns, key=lambda campaign: campaign.started_at)
+        generated_at = utc_text(latest.started_at)
+        host_label = latest.host_label
+        report_html = report_html or f"{report_name}/index.html"
+    elif not (generated_at and host_label and report_html):
+        raise BenchmarkReportError("an envelope requires a campaign or explicit metadata")
     payload = {
         "schema_version": 1, "report_type": "benchmark",
-        "generated_at": utc_text(latest.started_at), "host_label": latest.host_label,
-        "report_html": f"{REPORT_NAME}/index.html",
+        "generated_at": generated_at, "host_label": host_label,
+        "report_html": report_html,
     }
-    (report_root / f"{REPORT_NAME}.json").write_text(
+    if execution_identity is not None:
+        payload["execution_identity"] = dict(execution_identity)
+    if measurement_note is not None:
+        payload["measurement_note"] = measurement_note
+    if effective_lane_settings is not None:
+        payload["effective_lane_settings"] = {
+            lane: dict(values) if isinstance(values, Mapping) else values
+            for lane, values in effective_lane_settings.items()
+        }
+    if ratchet is not None:
+        payload["ratchet"] = dict(ratchet)
+    (report_root / f"{report_name}.json").write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
 

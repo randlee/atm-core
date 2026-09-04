@@ -17,8 +17,9 @@ use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{
-    CompatibilityPreflight, RequestId, ResponseEnvelope, SendResponseEnvelope,
-    TeamMemberHeartbeatRequest, next_request_id,
+    CompatibilityPreflight, GraftReceiverLookupRequest, GraftReceiverRefreshRequest,
+    GraftReceiverRegistration, GraftReceiverUnregistration, QueueGetNextRequest, RequestId,
+    ResponseEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest, next_request_id,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::search::SearchRequest;
@@ -432,6 +433,13 @@ async fn dispatch_request_with_request_id(
         .unwrap_or_else(error_response)
 }
 
+fn invalid_framework_body(kind: &str, source: serde_json::Error) -> AtmError {
+    AtmError::validation_with_recovery(
+        format!("invalid {kind} HTTP request body: {source}"),
+        "ensure the client sends the documented JSON request body and retry",
+    )
+}
+
 fn decode_framework_request(
     request: HttpRequest,
     max_body_bytes: usize,
@@ -443,52 +451,100 @@ fn decode_framework_request(
         ));
     }
     let body = request.body.as_slice();
-    let invalid = |kind: &str, source: serde_json::Error| {
-        AtmError::validation_with_recovery(
-            format!("invalid {kind} HTTP request body: {source}"),
-            "ensure the client sends the documented JSON request body and retry",
-        )
-    };
     let method = request.method.to_ascii_uppercase();
     match http_route_kind(&method, &request.path) {
         Some(HttpRouteKind::Write) => serde_json::from_slice::<WriteRequest>(body)
             .map(|value| ApiRequest::Write(Box::new(value)))
-            .map_err(|source| invalid("write", source)),
+            .map_err(|source| invalid_framework_body("write", source)),
         Some(HttpRouteKind::List) => serde_json::from_slice(body)
             .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
-            .map_err(|source| invalid("messages list", source)),
+            .map_err(|source| invalid_framework_body("messages list", source)),
         Some(HttpRouteKind::Inspect) => serde_json::from_slice::<PeekQuery>(body)
             .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Peek(value))))
-            .map_err(|source| invalid("message inspect", source)),
+            .map_err(|source| invalid_framework_body("message inspect", source)),
         Some(HttpRouteKind::Receive) => serde_json::from_slice::<ReadQuery>(body)
             .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(value))))
-            .map_err(|source| invalid("message read", source)),
+            .map_err(|source| invalid_framework_body("message read", source)),
         Some(HttpRouteKind::Clear) => serde_json::from_slice::<ClearQuery>(body)
             .map(ApiRequest::Clear)
-            .map_err(|source| invalid("messages clear", source)),
+            .map_err(|source| invalid_framework_body("messages clear", source)),
         Some(HttpRouteKind::Doctor) => serde_json::from_slice::<DoctorQuery>(body)
             .map(ApiRequest::Doctor)
-            .map_err(|source| invalid("doctor", source)),
+            .map_err(|source| invalid_framework_body("doctor", source)),
         Some(HttpRouteKind::Search) => decode_search_query(&request.path)
             .map(Box::new)
             .map(ApiRequest::Search),
         Some(HttpRouteKind::Compatibility) => {
             serde_json::from_slice::<CompatibilityPreflight>(body)
                 .map(ApiRequest::CompatibilityPreflight)
-                .map_err(|source| invalid("compatibility", source))
+                .map_err(|source| invalid_framework_body("compatibility", source))
         }
         Some(HttpRouteKind::Heartbeat) => {
             serde_json::from_slice::<TeamMemberHeartbeatRequest>(body)
                 .map(ApiRequest::Heartbeat)
-                .map_err(|source| invalid("heartbeat", source))
+                .map_err(|source| invalid_framework_body("heartbeat", source))
         }
+        Some(HttpRouteKind::QueueGetNext) => serde_json::from_slice::<QueueGetNextRequest>(body)
+            .map(ApiRequest::QueueGetNext)
+            .map_err(|source| invalid_framework_body("queue get next", source)),
+        Some(
+            kind @ (HttpRouteKind::GraftReceiverRegister
+            | HttpRouteKind::GraftReceiverRefresh
+            | HttpRouteKind::GraftReceiverUnregister
+            | HttpRouteKind::GraftReceiverLookup),
+        ) => decode_graft_receiver_request(kind, body)
+            .expect("graft receiver route kind must decode to a graft receiver request"),
         Some(HttpRouteKind::RuntimeReload) => serde_json::from_slice::<()>(body)
             .map(|()| ApiRequest::ReloadRuntimeView)
-            .map_err(|source| invalid("runtime reload", source)),
+            .map_err(|source| invalid_framework_body("runtime reload", source)),
         None => Err(AtmError::validation_with_recovery(
             format!("unsupported daemon HTTP route {method} {}", request.path),
             "use a method and path from the daemon HTTP route contract and retry",
         )),
+    }
+}
+
+/// Decodes one of the four local-ingress-only graft receiver routes.
+///
+/// Returns `None` for any other route kind so the caller's route dispatch
+/// stays exhaustive over `HttpRouteKind` without duplicating this match arm
+/// group inline (kept `decode_framework_request` under the repository's
+/// function-length gate).
+fn decode_graft_receiver_request(
+    kind: HttpRouteKind,
+    body: &[u8],
+) -> Option<Result<ApiRequest, AtmError>> {
+    let invalid = |request_kind: &str, source: serde_json::Error| {
+        AtmError::validation_with_recovery(
+            format!("invalid {request_kind} HTTP request body: {source}"),
+            "ensure the client sends the documented JSON request body and retry",
+        )
+    };
+    match kind {
+        HttpRouteKind::GraftReceiverRegister => Some(
+            serde_json::from_slice::<GraftReceiverRegistration>(body)
+                .map(ApiRequest::GraftReceiverRegister)
+                .map_err(|source| invalid("graft receiver register", source)),
+        ),
+        HttpRouteKind::GraftReceiverRefresh => Some(
+            serde_json::from_slice::<GraftReceiverRefreshRequest>(body)
+                .map(ApiRequest::GraftReceiverRefresh)
+                .map_err(|source| invalid("graft receiver refresh", source)),
+        ),
+        HttpRouteKind::GraftReceiverUnregister => Some(
+            serde_json::from_slice::<GraftReceiverUnregistration>(body)
+                .map(ApiRequest::GraftReceiverUnregister)
+                .map_err(|source| invalid("graft receiver unregister", source)),
+        ),
+        HttpRouteKind::GraftReceiverLookup => Some(
+            serde_json::from_slice::<GraftReceiverLookupRequest>(body)
+                .map(|value| ApiRequest::GraftReceiverLookup {
+                    team: value.team,
+                    agent: value.agent,
+                })
+                .map_err(|source| invalid("graft receiver lookup", source)),
+        ),
+        _ => None,
     }
 }
 
@@ -629,6 +685,11 @@ fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
             json_response(StatusCode::OK, &value, None)
         }
         ResponseEnvelope::Heartbeat(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::QueueGetNext(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::GraftReceiverRegister => json_response(StatusCode::OK, &(), None),
+        ResponseEnvelope::GraftReceiverRefresh => json_response(StatusCode::OK, &(), None),
+        ResponseEnvelope::GraftReceiverUnregister => json_response(StatusCode::OK, &(), None),
+        ResponseEnvelope::GraftReceiverLookup(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::List(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::Peek(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::Receive(value) => json_response(StatusCode::OK, &value, None),

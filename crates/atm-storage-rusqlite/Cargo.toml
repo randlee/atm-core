@@ -16,7 +16,7 @@ name = "atm_storage_rusqlite"
 test-support = []
 
 [dependencies]
-atm-storage = { path = "../atm-storage", version = "1.4.4" }
+atm-storage.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
@@ -31,6 +31,6 @@ rusqlite = { version = "0.33.0", features = ["bundled", "hooks"] }
 rusqlite = { version = "0.33.0", features = ["bundled-windows", "modern_sqlite", "hooks"] }
 
 [dev-dependencies]
-serde = { version = "1.0.140", features = ["derive"] }
-serde_json = "1.0.140"
+serde.workspace = true
+serde_json.workspace = true
 tempfile = "3"

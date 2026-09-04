@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::{Mutex, OnceLock};
 
 use atm_core::error::AtmError;
@@ -10,10 +11,185 @@ use atm_core::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime,
     home::{atm_home, current_host_runtime_scope},
 };
+use atm_runtime::HandoffConfig;
+use atm_runtime::mailbox_runtime::StorageAsyncMailboxRuntime;
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
+use atm_storage::{
+    AsyncMailboxReader, AsyncMessageStore, IsoTimestamp, MailboxScope, Message, MessageKey,
+    MessageQuery, MessageStore,
+};
 use atm_storage_rusqlite::SqliteStorageFactory;
 
 pub use atm_storage_rusqlite::{TemplateAdmissionMessage, TemplateAdmissionSnapshot};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RecordedWriterOutcome {
+    Applied,
+    Rejected,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecordedWriterSubmission {
+    pub message_ids: Vec<MessageKey>,
+    pub outcome: RecordedWriterOutcome,
+}
+
+#[derive(Default)]
+struct RecordingWriterInner {
+    reject: std::sync::atomic::AtomicBool,
+    failures_remaining: std::sync::atomic::AtomicUsize,
+    attempts: std::sync::atomic::AtomicUsize,
+    applied_transitions: Mutex<Vec<Vec<MessageKey>>>,
+    submissions: Mutex<Vec<RecordedWriterSubmission>>,
+}
+
+/// Shared writer-lane recorder for runtime and HTTP behavior tests.
+#[derive(Clone, Default)]
+pub struct RecordingWriter {
+    inner: Arc<RecordingWriterInner>,
+}
+
+#[derive(Clone, Default)]
+pub struct RecordingWriterIngress {
+    inner: Arc<RecordingWriterInner>,
+}
+
+impl RecordingWriter {
+    #[must_use]
+    pub fn with_failures(failures: usize) -> Self {
+        let writer = Self::default();
+        writer.set_failures(failures);
+        writer
+    }
+
+    #[must_use]
+    pub fn from_ingress(ingress: &RecordingWriterIngress) -> Self {
+        Self {
+            inner: Arc::clone(&ingress.inner),
+        }
+    }
+
+    #[must_use]
+    pub fn attempts(&self) -> usize {
+        self.inner
+            .attempts
+            .load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    pub fn set_failures(&self, failures: usize) {
+        self.inner
+            .failures_remaining
+            .store(failures, std::sync::atomic::Ordering::Release);
+    }
+
+    #[must_use]
+    pub fn applied(&self) -> Vec<Vec<MessageKey>> {
+        self.inner
+            .applied_transitions
+            .lock()
+            .expect("recording writer mutex")
+            .clone()
+    }
+}
+
+impl RecordingWriterIngress {
+    #[must_use]
+    pub fn submissions(&self) -> Vec<RecordedWriterSubmission> {
+        self.inner
+            .submissions
+            .lock()
+            .expect("recording writer ingress mutex")
+            .clone()
+    }
+
+    pub fn set_rejecting(&self, rejecting: bool) {
+        self.inner
+            .reject
+            .store(rejecting, std::sync::atomic::Ordering::Release);
+    }
+}
+
+pub fn mailbox_runtime_with_recording_ingress(
+    reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
+    config: HandoffConfig,
+) -> Result<(StorageAsyncMailboxRuntime, RecordingWriterIngress), AtmError> {
+    let ingress = RecordingWriterIngress::default();
+    let runtime =
+        StorageAsyncMailboxRuntime::new(reader, Arc::new(RecordingWriter::from_ingress(&ingress)))
+            .with_state_handoff(config)?;
+    Ok((runtime, ingress))
+}
+
+impl atm_storage::contract::sealed::Sealed for RecordingWriter {}
+
+impl MessageStore for RecordingWriter {
+    fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
+        unreachable!("recording writer receives only read-display transitions")
+    }
+
+    fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
+        unreachable!("recording writer receives only read-display transitions")
+    }
+
+    fn load_message(&self, _key: &MessageKey) -> Result<Option<Message>, AtmError> {
+        unreachable!("recording writer receives only read-display transitions")
+    }
+
+    fn list_messages(&self, _query: &MessageQuery) -> Result<Vec<Message>, AtmError> {
+        unreachable!("recording writer receives only read-display transitions")
+    }
+
+    fn delete_message(&self, _key: &MessageKey) -> Result<(), AtmError> {
+        unreachable!("recording writer receives only read-display transitions")
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncMessageStore for RecordingWriter {
+    async fn apply_read_display_state_async(
+        &self,
+        _scope: MailboxScope,
+        message_ids: Vec<MessageKey>,
+        _seen_watermark: Option<IsoTimestamp>,
+    ) -> Result<(), AtmError> {
+        self.inner
+            .attempts
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        let rejected = self.inner.reject.load(std::sync::atomic::Ordering::Acquire)
+            || self
+                .inner
+                .failures_remaining
+                .fetch_update(
+                    std::sync::atomic::Ordering::AcqRel,
+                    std::sync::atomic::Ordering::Acquire,
+                    |remaining| remaining.checked_sub(1),
+                )
+                .is_ok();
+        self.inner
+            .submissions
+            .lock()
+            .expect("recording writer ingress mutex")
+            .push(RecordedWriterSubmission {
+                message_ids: message_ids.clone(),
+                outcome: if rejected {
+                    RecordedWriterOutcome::Rejected
+                } else {
+                    RecordedWriterOutcome::Applied
+                },
+            });
+        if rejected {
+            return Err(AtmError::daemon_unavailable(
+                "test recording writer ingress rejected read-state handoff",
+            ));
+        }
+        self.inner
+            .applied_transitions
+            .lock()
+            .expect("recording writer mutex")
+            .push(message_ids);
+        Ok(())
+    }
+}
 
 // Mutex required because sqlite retained runtimes are cached across concurrent
 // tests; bulk clear() is safe because entries are deterministic per path and
@@ -74,6 +250,15 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, A
         template_composer: None,
         workflow_telemetry: None,
     })
+}
+
+/// Open the graft endpoint registry for replacement-router tests without
+/// exposing a concrete SQLite handle to the HTTP runtime.
+pub fn open_graft_receiver_endpoint_store(
+    path: impl AsRef<Path>,
+) -> Result<Arc<dyn atm_core::GraftReceiverEndpointStore + Send + Sync>, AtmError> {
+    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(path)?;
+    Ok(backend.graft_receiver_endpoint_store())
 }
 
 /// Build an isolated SQLite runtime from a test-owned directory.

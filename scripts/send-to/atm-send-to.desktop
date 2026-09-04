@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ATM Send-To
+Comment=Send selected files to an ATM agent
+Exec=/absolute/path/to/atm-send-to.sh %F
+Terminal=true
+MimeType=application/octet-stream;text/plain;inode/directory;
+NoDisplay=false

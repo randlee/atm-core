@@ -1,6 +1,12 @@
+---
+status: complete
+branch: feature/aq-1-6-graft-receiver-registration-client
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aq-1-6-graft-receiver-registration-client
+---
+
 # Sprint AQ1.6 — Graft Receiver Registration Client (Announce-at-Init)
 
-Status: draft · Branch: `feature/aq-1-6-graft-registration-client` off
+Status: complete · Branch: `feature/aq-1-6-graft-receiver-registration-client` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 

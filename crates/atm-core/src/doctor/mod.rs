@@ -3,10 +3,14 @@ pub mod report;
 
 #[cfg(test)]
 use std::collections::BTreeSet;
+use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 
+use crate::api::RequestDeadline;
 use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterStoreDoctor};
 use crate::config;
+use crate::delivery_channel::local_message_received_backend;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 #[cfg(test)]
@@ -22,12 +26,39 @@ use std::sync::Arc;
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
-    DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary, PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
-    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
-    RecipientDeliveryPathReport,
+    BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
+    DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
+    DoctorSeverity, DoctorStatus, DoctorSummary, GraftReceiverLeaseDoctorReport,
+    GraftReceiversDoctorReport, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
+    HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport, LegacyLiteralIpPeerDoctorReport,
+    PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
+    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, ReaderLaneDoctorReport,
+    ReaderLanesDoctorReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
+
+/// Async application port for the live Herdr visibility checks performed by
+/// the replacement daemon's doctor route. The core report owns finding shape;
+/// the composition root owns the concrete Herdr adapter.
+pub trait HerdrPresenceDoctor: Send + Sync {
+    fn probe<'a>(
+        &'a self,
+        roster: &'a MembersList,
+        caller_deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>>;
+}
+
+#[derive(Debug, Default)]
+pub struct ClosedHerdrPresenceDoctor;
+
+impl HerdrPresenceDoctor for ClosedHerdrPresenceDoctor {
+    fn probe<'a>(
+        &'a self,
+        _roster: &'a MembersList,
+        _caller_deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>> {
+        Box::pin(async { Vec::new() })
+    }
+}
 
 /// Inputs for a doctor run, including the caller's resolved identity.
 ///
@@ -67,6 +98,8 @@ pub struct RuntimeDoctorPorts {
     pub config_doctor: Arc<dyn ConfigDoctor + Send + Sync>,
     pub mail_store_doctor: Arc<dyn MailStoreDoctor + Send + Sync>,
     pub roster_store_doctor: Arc<dyn RosterStoreDoctor + Send + Sync>,
+    pub herdr_breaker: Arc<dyn HerdrBreakerDoctor>,
+    pub herdr_presence: Arc<dyn HerdrPresenceDoctor>,
 }
 
 impl std::fmt::Debug for RuntimeDoctorPorts {
@@ -75,6 +108,8 @@ impl std::fmt::Debug for RuntimeDoctorPorts {
             .field("config_doctor", &"dyn ConfigDoctor")
             .field("mail_store_doctor", &"dyn MailStoreDoctor")
             .field("roster_store_doctor", &"dyn RosterStoreDoctor")
+            .field("herdr_breaker", &"dyn HerdrBreakerDoctor")
+            .field("herdr_presence", &"dyn HerdrPresenceDoctor")
             .finish()
     }
 }
@@ -112,11 +147,17 @@ pub fn run_doctor_with_runtime(
             &mut findings,
         )
     });
+    let graft_receivers = doctor_context
+        .resolved_team
+        .as_ref()
+        .map(|team| graft_receivers_doctor_report(runtime, team, &mut findings))
+        .unwrap_or_default();
     findings.push(finding);
     Ok(build_doctor_report(
         findings,
         doctor_context.environment,
         member_roster,
+        graft_receivers,
         PostSendDoctorReport::default(),
         crate::boundary::ConfigDoctorReport::default(),
         crate::boundary::MailStoreDoctorReport::default(),
@@ -126,6 +167,7 @@ pub fn run_doctor_with_runtime(
         observability_health,
         None,
         None,
+        HerdrBreakerDoctorReport::default(),
     ))
 }
 
@@ -152,6 +194,11 @@ pub fn run_doctor_with_runtime_ports(
             &mut drift_findings,
         )
     });
+    let graft_receivers = doctor_context
+        .resolved_team
+        .as_ref()
+        .map(|team| graft_receivers_doctor_report(runtime, team, &mut general_findings))
+        .unwrap_or_default();
     let findings = collect_doctor_findings(
         &reports,
         &drift_findings,
@@ -170,6 +217,7 @@ pub fn run_doctor_with_runtime_ports(
         findings,
         doctor_context.environment,
         member_roster,
+        graft_receivers,
         post_send,
         reports.config,
         reports.mail_store,
@@ -179,7 +227,16 @@ pub fn run_doctor_with_runtime_ports(
         observability_health,
         None,
         None,
+        runtime_doctors.herdr_breaker.report(),
     ))
+}
+
+/// Add asynchronous, composition-owned presence findings and refresh the
+/// derived summary/recommendation projections.
+pub fn append_doctor_findings(report: &mut DoctorReport, findings: Vec<DoctorFinding>) {
+    report.findings.extend(findings);
+    report.summary = summarize_doctor_findings(&report.findings);
+    report.recommendations = collect_recommendations(&report.findings);
 }
 
 /// Project safe peer-control-plane state into doctor output. A storage or
@@ -233,8 +290,37 @@ fn peer_config_doctor_report_inner(
                 enabled: peer.enabled,
             })
             .collect(),
+        legacy_literal_ip_peers: legacy_literal_ip_peer_reports(&peers),
         validation_failure: None,
     })
+}
+
+/// Projects legacy literal-IP trusted-peer rows (enabled or disabled) with
+/// their exact safe migrate/revoke remediation for `atm doctor` output.
+fn legacy_literal_ip_peer_reports(
+    peers: &[atm_storage::TrustedPeer],
+) -> Vec<LegacyLiteralIpPeerDoctorReport> {
+    let audit = atm_storage::TrustedPeerCatalogAudit::from_peers(peers);
+    audit
+        .legacy_literal_enabled_hosts()
+        .iter()
+        .map(|host| (host, true))
+        .chain(
+            audit
+                .legacy_literal_disabled_hosts()
+                .iter()
+                .map(|host| (host, false)),
+        )
+        .map(|(host, enabled)| LegacyLiteralIpPeerDoctorReport {
+            host: host.to_string(),
+            enabled,
+            migrate_command: atm_storage::TrustedPeerCatalogAudit::migrate_command(
+                host,
+                "<hostname>",
+            ),
+            revoke_command: atm_storage::TrustedPeerCatalogAudit::revoke_command(host),
+        })
+        .collect()
 }
 
 struct DoctorRunContext {
@@ -262,6 +348,7 @@ fn build_doctor_report(
     findings: Vec<DoctorFinding>,
     environment: DoctorEnvironmentVisibility,
     member_roster: Option<MembersList>,
+    graft_receivers: GraftReceiversDoctorReport,
     post_send: PostSendDoctorReport,
     config: crate::boundary::ConfigDoctorReport,
     mail_store: crate::boundary::MailStoreDoctorReport,
@@ -271,6 +358,7 @@ fn build_doctor_report(
     observability_health: crate::observability::AtmObservabilityHealth,
     runtime_status: Option<crate::protocol::RuntimeStatusSnapshot>,
     bootstrap_trace: Option<BootstrapTraceReport>,
+    herdr_breaker: HerdrBreakerDoctorReport,
 ) -> DoctorReport {
     let summary = summarize_doctor_findings(&findings);
     let recommendations = collect_recommendations(&findings);
@@ -281,8 +369,15 @@ fn build_doctor_report(
         environment: environment.clone(),
         client_context: doctor_client_context(&environment),
         daemon_context: None,
+        reader_lanes: None,
         member_roster,
+        graft_receivers,
         observability: observability_health,
+        herdr_queue_pump: HerdrQueuePumpDoctorReport {
+            breaker: herdr_breaker.clone(),
+            ..HerdrQueuePumpDoctorReport::default()
+        },
+        herdr_breaker,
         post_send,
         config,
         mail_store,
@@ -292,6 +387,49 @@ fn build_doctor_report(
         runtime_status,
         bootstrap_trace,
     }
+}
+
+const ACTIVE_LEASE_WINDOW_SECONDS: i64 = 15;
+
+fn graft_receivers_doctor_report(
+    runtime: &impl RetainedServiceRuntime,
+    team: &TeamName,
+    findings: &mut Vec<DoctorFinding>,
+) -> GraftReceiversDoctorReport {
+    let roster = match runtime.load_team_roster(team) {
+        Ok(roster) => roster,
+        Err(error) => {
+            push_doctor_error(findings, DoctorSeverity::Error, error);
+            return GraftReceiversDoctorReport::default();
+        }
+    };
+    let now = chrono::Utc::now();
+    let receivers = roster
+        .into_iter()
+        .filter_map(|member| {
+            let lease = match runtime.graft_receiver_lease(team, &member.agent_name) {
+                Ok(lease) => lease?,
+                Err(error) => {
+                    push_doctor_error(findings, DoctorSeverity::Error, error);
+                    return None;
+                }
+            };
+            let age = now.signed_duration_since(lease.last_seen_at);
+            let last_seen_age_seconds = age.num_seconds().max(0);
+            Some(GraftReceiverLeaseDoctorReport {
+                team: team.clone(),
+                agent: member.agent_name,
+                endpoint: lease.endpoint.to_string(),
+                registered_at: lease.registered_at,
+                last_seen_at: lease.last_seen_at,
+                last_seen_age_seconds,
+                reachable_at_last_use: age.num_seconds() >= 0
+                    && age.num_seconds() <= ACTIVE_LEASE_WINDOW_SECONDS
+                    && lease.unreachable_since.is_none(),
+            })
+        })
+        .collect();
+    GraftReceiversDoctorReport { receivers }
 }
 
 fn doctor_client_context(environment: &DoctorEnvironmentVisibility) -> DoctorExecutionContext {
@@ -544,7 +682,10 @@ fn load_member_roster(
         return None;
     }
     let members = match runtime.load_team_roster(team) {
-        Ok(roster) => ordered_roster_member_summaries(&roster, caller_identity, live_cwd),
+        Ok(roster) => {
+            push_mixed_local_backend_warning(team, &roster, findings);
+            ordered_roster_member_summaries(&roster, caller_identity, live_cwd)
+        }
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);
             return None;
@@ -557,16 +698,51 @@ fn load_member_roster(
     })
 }
 
+fn push_mixed_local_backend_warning(
+    team: &TeamName,
+    roster: &[crate::boundary::RosterEntry],
+    findings: &mut Vec<DoctorFinding>,
+) {
+    let mut tmux = Vec::new();
+    let mut herdr = Vec::new();
+    for member in roster {
+        match local_message_received_backend(member) {
+            Some(crate::delivery_channel::LocalMessageReceivedBackend::Tmux { .. }) => {
+                tmux.push(member.agent_name.to_string())
+            }
+            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { .. }) => {
+                herdr.push(member.agent_name.to_string())
+            }
+            None => {}
+        }
+    }
+    if tmux.is_empty() || herdr.is_empty() {
+        return;
+    }
+    findings.push(DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: AtmErrorCode::RosterMixedLocalBackend,
+        message: format!(
+            "team {team} has mixed local backends; tmux members: [{}]; Herdr members: [{}]",
+            tmux.join(", "), herdr.join(", ")
+        ),
+        remediation: Some(format!(
+            "Use `atm teams update-member {team} <member> --backend herdr` or `atm teams update-member {team} <member> --backend tmux --target %N` to select the intended backend."
+        )),
+    });
+}
+
 fn push_doctor_error(
     findings: &mut Vec<DoctorFinding>,
     severity: DoctorSeverity,
     error: crate::error::AtmError,
 ) {
-    let remediation = Some(error.message().to_owned());
+    let remediation = Some(error.remediation().to_owned());
+    let message = error.detail().to_owned();
     findings.push(DoctorFinding {
         severity,
         code: error.code(),
-        message: error.into_message(),
+        message,
         remediation,
     });
 }
@@ -626,6 +802,9 @@ fn member_summary(
         model: member.model.clone(),
         joined_at: member.joined_at,
         tmux_pane_id: member.tmux_pane_id.clone(),
+        backend: None,
+        herdr_session: None,
+        local_backend: None,
         home_dir: member.home_dir.clone(),
         live_cwd: match (caller_identity, live_cwd) {
             (Some(identity), Some(path)) if member.name == identity.as_str() => {
@@ -633,6 +812,7 @@ fn member_summary(
             }
             _ => None,
         },
+        host: None,
         extra: member.extra.clone(),
     }
 }
@@ -642,7 +822,9 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
-    use super::{ordered_member_summaries, peer_config_doctor_report};
+    use super::{
+        legacy_literal_ip_peer_reports, ordered_member_summaries, peer_config_doctor_report,
+    };
     use crate::config::AtmConfig;
     use crate::config::types::{HookRecipient, PostSendHookRule};
     use crate::doctor::{
@@ -897,6 +1079,135 @@ mod tests {
     }
 
     #[test]
+    fn graft_receivers_doctor_report_renders_live_and_stale_lease_fixture() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let store_path = tempdir.path().join("graft-endpoints.sqlite3");
+        let store = atm_runtime_test_support::open_graft_receiver_endpoint_store(&store_path)
+            .expect("graft receiver endpoint store");
+
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        let live_agent = AgentName::from_validated("sender-a");
+        let stale_agent = AgentName::from_validated("sender-b");
+
+        let now = chrono::Utc::now();
+        let live_registered_at = now - chrono::Duration::seconds(5);
+        // Beyond `ACTIVE_LEASE_WINDOW_SECONDS`, but still dialed by delivery
+        // (I11); doctor's `reachable_at_last_use` flag is display-only.
+        let stale_registered_at = now - chrono::Duration::minutes(10);
+
+        store
+            .register(
+                &atm_storage::GraftReceiverRegistration {
+                    team: team.clone(),
+                    agent: live_agent.clone(),
+                    endpoint: "127.0.0.1:43101".parse().expect("endpoint"),
+                    capability: atm_storage::LocalCapability::generate().expect("capability"),
+                    owner_generation: atm_storage::OwnerGeneration::new(
+                        "01J00000000000000000000001",
+                    )
+                    .expect("owner generation"),
+                },
+                live_registered_at,
+            )
+            .expect("register live receiver");
+        store
+            .register(
+                &atm_storage::GraftReceiverRegistration {
+                    team: team.clone(),
+                    agent: stale_agent.clone(),
+                    endpoint: "127.0.0.1:43102".parse().expect("endpoint"),
+                    capability: atm_storage::LocalCapability::generate().expect("capability"),
+                    owner_generation: atm_storage::OwnerGeneration::new(
+                        "01J00000000000000000000002",
+                    )
+                    .expect("owner generation"),
+                },
+                stale_registered_at,
+            )
+            .expect("register stale receiver");
+
+        let runtime = test_runtime_with_roster(&["sender-a", "sender-b"])
+            .with_graft_receiver_endpoint_store(store);
+
+        let mut findings = Vec::new();
+        let report = super::graft_receivers_doctor_report(&runtime, &team, &mut findings);
+
+        assert!(findings.is_empty(), "{findings:#?}");
+        assert_eq!(report.receivers.len(), 2);
+
+        let live = report
+            .receivers
+            .iter()
+            .find(|receiver| receiver.agent == live_agent)
+            .expect("live receiver entry");
+        assert!(live.reachable_at_last_use, "{live:#?}");
+        assert_eq!(live.endpoint, "127.0.0.1:43101");
+
+        let stale = report
+            .receivers
+            .iter()
+            .find(|receiver| receiver.agent == stale_agent)
+            .expect("stale receiver entry");
+        assert!(!stale.reachable_at_last_use, "{stale:#?}");
+        assert_eq!(stale.endpoint, "127.0.0.1:43102");
+        assert!(
+            stale.last_seen_age_seconds > super::ACTIVE_LEASE_WINDOW_SECONDS,
+            "{stale:#?}"
+        );
+    }
+
+    #[test]
+    fn run_doctor_with_runtime_surfaces_graft_receiver_leases() {
+        let paths = TestPaths::new();
+        paths.write_team_layout(&[TEST_SENDER]);
+
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let store_path = tempdir.path().join("graft-endpoints.sqlite3");
+        let store = atm_runtime_test_support::open_graft_receiver_endpoint_store(&store_path)
+            .expect("graft receiver endpoint store");
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        store
+            .register(
+                &atm_storage::GraftReceiverRegistration {
+                    team: team.clone(),
+                    agent: AgentName::from_validated(TEST_SENDER),
+                    endpoint: "127.0.0.1:43101".parse().expect("endpoint"),
+                    capability: atm_storage::LocalCapability::generate().expect("capability"),
+                    owner_generation: atm_storage::OwnerGeneration::new(
+                        "01J00000000000000000000001",
+                    )
+                    .expect("owner generation"),
+                },
+                chrono::Utc::now(),
+            )
+            .expect("register live receiver");
+
+        let runtime = test_runtime(&paths).with_graft_receiver_endpoint_store(store);
+        let report = run_doctor_with_runtime(
+            query(&paths),
+            &StubObservability {
+                health: StubHealth::Ok(AtmObservabilityHealth {
+                    active_log_path: Some(paths.active_log_path.clone()),
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    maintenance: None,
+                    diagnostic: None,
+                    detail: None,
+                }),
+            },
+            &runtime,
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.graft_receivers.receivers.len(), 1);
+        assert_eq!(
+            report.graft_receivers.receivers[0].agent,
+            AgentName::from_validated(TEST_SENDER)
+        );
+        assert!(report.graft_receivers.receivers[0].reachable_at_last_use);
+    }
+
+    #[test]
     fn post_send_report_projects_external_override_without_message_content() {
         let config = AtmConfig {
             config_root: PathBuf::from("/workspace"),
@@ -916,8 +1227,12 @@ mod tests {
                 model: Default::default(),
                 joined_at: None,
                 tmux_pane_id: None,
+                backend: None,
+                herdr_session: None,
+                local_backend: None,
                 home_dir: PathBuf::from("/workspace").into(),
                 live_cwd: None,
+                host: None,
                 extra: serde_json::Map::new(),
             }],
         };
@@ -1545,6 +1860,59 @@ mod tests {
     }
 
     #[test]
+    fn legacy_literal_ip_peer_reports_names_hosts_with_exact_remediation() {
+        let peers = vec![
+            TrustedPeer {
+                host: "rand-m5.local".parse().expect("host"),
+                fingerprint: "sha256:durable".parse().expect("fingerprint"),
+                enabled: true,
+                https_port: std::num::NonZeroU16::new(443).expect("port"),
+            },
+            TrustedPeer {
+                host: "192.168.128.29".parse().expect("host"),
+                fingerprint: "sha256:legacy-enabled".parse().expect("fingerprint"),
+                enabled: true,
+                https_port: std::num::NonZeroU16::new(443).expect("port"),
+            },
+            TrustedPeer {
+                host: "10.0.0.5".parse().expect("host"),
+                fingerprint: "sha256:legacy-disabled".parse().expect("fingerprint"),
+                enabled: false,
+                https_port: std::num::NonZeroU16::new(443).expect("port"),
+            },
+        ];
+        let reports = legacy_literal_ip_peer_reports(&peers);
+        assert_eq!(reports.len(), 2, "the durable hostname row is excluded");
+
+        let enabled_host: HostName = "192.168.128.29".parse().expect("host");
+        let disabled_host: HostName = "10.0.0.5".parse().expect("host");
+
+        let enabled = reports
+            .iter()
+            .find(|report| report.host == "192.168.128.29")
+            .expect("enabled legacy row reported");
+        assert!(enabled.enabled);
+        assert_eq!(
+            enabled.migrate_command,
+            atm_storage::TrustedPeerCatalogAudit::migrate_command(&enabled_host, "<hostname>")
+        );
+        assert_eq!(
+            enabled.revoke_command,
+            atm_storage::TrustedPeerCatalogAudit::revoke_command(&enabled_host)
+        );
+
+        let disabled = reports
+            .iter()
+            .find(|report| report.host == "10.0.0.5")
+            .expect("disabled legacy row reported");
+        assert!(!disabled.enabled);
+        assert_eq!(
+            disabled.revoke_command,
+            atm_storage::TrustedPeerCatalogAudit::revoke_command(&disabled_host)
+        );
+    }
+
+    #[test]
     fn peer_config_doctor_projection_redacts_private_key_reference_from_store() {
         let (report, findings) = peer_config_doctor_report(&StubPeerConfigStore::healthy());
 
@@ -1558,6 +1926,7 @@ mod tests {
             Some("sha256:local")
         );
         assert!(report.validation_failure.is_none());
+        assert!(report.legacy_literal_ip_peers.is_empty());
 
         let serialized = serde_json::to_string(&report).expect("serialize doctor projection");
         assert!(!serialized.contains("keychain:secret"));

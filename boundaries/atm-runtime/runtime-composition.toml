@@ -21,8 +21,8 @@ io_owns = ["runtime_dependency_assembly", "config_doctor_assembly"]
 io_forbidden = ["daemon_transport", "daemon_lifecycle", "direct_socket_io"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
-allowed_dependencies = ["atm-core", "atm-storage", "tokio"]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-http-runtime", "atm-runtime-test-support"]
+allowed_dependencies = ["async-trait", "atm-core", "atm-runtime-test-support", "atm-storage", "tokio"]
 forbidden_edges = [
   "atm -> atm-storage-rusqlite",
   "atm-daemon -> atm-storage-rusqlite",

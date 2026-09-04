@@ -3,7 +3,7 @@ name: CI
 on:
   workflow_call:
   pull_request:
-    branches: [develop, main, "integrate/*", "fix/*", "feature/*", "sprint/*"]
+    branches: [develop, main, "integrate/*", "fix/*", "feature/*", "sprint/*", "docs/*", "plan/*", "evidence/*", "triage/*"]
   push:
     branches: [develop, main]
 
@@ -75,6 +75,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bootstrap-
 
+      # The prerelease-tag candidate check runs cargo update --offline. Keep
+      # the registry available on fresh just-lint runners so that check is not
+      # dependent on an incidental warm local Cargo cache.
+      - name: Cache Cargo registry for lint
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-just-lint-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-just-lint-cargo-registry-
+
       - name: Install just
         uses: taiki-e/install-action@v2
         with:
@@ -87,6 +98,15 @@ jobs:
 
       - name: Bootstrap exact repository tools
         run: just bootstrap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify pinned ecosystem tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sc-compose --version
+          wyvern --version
 
       - name: Run just lint
         run: just lint
@@ -98,6 +118,14 @@ jobs:
           clippy_log="$(ls -t .just/logs/*-clippy.log 2>/dev/null | head -n 1)"
           test -n "$clippy_log"
           cat "$clippy_log"
+
+      - name: Upload lint logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: just-lint-logs-${{ matrix.os }}
+          path: .just/logs/**
+          retention-days: 7
 
       - name: Run cargo audit
         run: cargo audit
@@ -245,6 +273,16 @@ jobs:
       - name: Bootstrap exact repository tools
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: just bootstrap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify pinned ecosystem tools
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sc-compose --version
+          wyvern --version
 
       - name: Build workspace
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
@@ -304,6 +342,17 @@ jobs:
       - name: Run Hermes graft steer boundary tests
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: python .just/run_hermes_graft_bridge_tests.py
+
+      - name: Run ATM queue lifecycle hook tests
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: just test-queue-hooks-python
+
+      # Codex/hermes are not used on Windows (ADR-054 AQ2.5 AC10); this leg
+      # is intentionally excluded from the windows-latest matrix entry so
+      # the Windows leg never runs Codex-specific hook tests at all.
+      - name: Run Codex ATM queue lifecycle hook tests
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' && matrix.os != 'windows-latest' }}
+        run: just test-queue-hooks-python-codex
 
       - name: Test admission-capacity benchmark runner
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}

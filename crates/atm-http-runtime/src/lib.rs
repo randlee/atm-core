@@ -49,14 +49,18 @@ use tokio::net::UnixListener;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
+mod bare_cli_fifo;
 mod client;
+mod herdr_queue_wake;
 mod http1_server;
 mod loopback_tcp;
 mod message_handler;
 mod peer_connection_pool;
+mod peer_dial;
 mod peer_stream;
 mod private_staging;
 mod runtime_health;
+mod runtime_maintenance;
 mod runtime_setup;
 mod storage_and_nudge_router;
 #[cfg(unix)]
@@ -71,23 +75,26 @@ use loopback_tcp::{
 };
 #[cfg(unix)]
 pub(crate) use runtime_setup::validate_unix_socket_path;
-use runtime_setup::{build_direct_peer_server, validate_config};
+use runtime_setup::{build_direct_peer_server, ensure_process_descriptor_limit, validate_config};
 #[cfg(unix)]
 use unix_socket::{
     UnixSocketPathGuard, UnixSocketStartupLock, bind_unix_listener, reclaim_stale_unix_socket,
 };
 
-/// An aborted Tokio task should stop at its next cancellation point. Keep this
-/// grace deliberately short and fixed so a pathological task cannot extend the
-/// configured shutdown deadline without bound.
-const ABORT_JOIN_GRACE: Duration = Duration::from_millis(100);
-
+pub use bare_cli_fifo::{
+    BARE_CLI_FIFO_CAPACITY, BareCliFifo, BareCliQueueFullDrops, append_bare_cli_message,
+    drain_bare_cli_messages,
+};
 #[cfg(unix)]
 pub use client::unix_socket_client;
 pub use client::{
     DIRECT_PEER_TCP_PORT, SAME_HOST_REQUEST_DEADLINE, direct_peer_port, direct_peer_tcp_client,
     loopback_tcp_client, preferred_local_client, selected_write_transport,
     shared_direct_peer_client,
+};
+pub use herdr_queue_wake::{
+    HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
+    HerdrQueueWakePump, HerdrQueueWakeStats,
 };
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
@@ -98,7 +105,9 @@ pub use peer_stream::{
     AcceptedPeerStream, AuthenticatedPeerStream, EstablishedPeerStream, PeerStreamAdapter,
     PeerStreamFuture,
 };
-pub use runtime_health::RuntimeHealth;
+pub use runtime_health::{MemberStateTransitionSink, RuntimeHealth};
+pub use runtime_maintenance::{Draining, Running, RuntimeMaintenance, Stopped};
+use runtime_maintenance::{abort_and_join, finish_maintenance};
 pub use storage_and_nudge_router::StorageAndNudgeRouter;
 
 /// Validated configuration for the maintained Tokio HTTP runtime.
@@ -396,6 +405,7 @@ pub struct HttpRuntimeBuilder {
     config: HttpRuntimeConfig,
     handler: Arc<dyn CanonicalWriteHandler>,
     health: RuntimeHealth,
+    maintenance: Option<Arc<dyn RuntimeMaintenance>>,
 }
 
 impl HttpRuntimeBuilder {
@@ -405,6 +415,7 @@ impl HttpRuntimeBuilder {
             config,
             handler,
             health: RuntimeHealth::default(),
+            maintenance: None,
         }
     }
 
@@ -413,6 +424,13 @@ impl HttpRuntimeBuilder {
     #[must_use]
     pub fn with_runtime_health(mut self, health: RuntimeHealth) -> Self {
         self.health = health;
+        self
+    }
+
+    /// Attaches one process-owned maintenance task to the runtime lifecycle.
+    #[must_use]
+    pub fn with_maintenance(mut self, maintenance: Arc<dyn RuntimeMaintenance>) -> Self {
+        self.maintenance = Some(maintenance);
         self
     }
 
@@ -430,6 +448,7 @@ impl HttpRuntimeBuilder {
             config: self.config,
             handler: self.handler,
             health: self.health,
+            maintenance: self.maintenance,
             state: Configured,
         })
     }
@@ -437,28 +456,12 @@ impl HttpRuntimeBuilder {
 
 /// Validated but not started runtime state.
 pub struct Configured;
-/// Runtime lifecycle state while its owned Axum server is accepting requests.
-pub struct Running {
-    local_address: SocketAddr,
-    direct_peer_address: Option<SocketAddr>,
-    shutdown_tx: watch::Sender<()>,
-    server_stopped_rx: watch::Receiver<bool>,
-    server_task: JoinHandle<std::io::Result<()>>,
-    endpoint_record: LoopbackEndpointRecordGuard,
-}
-/// Runtime lifecycle state after cancellation and while the Axum task drains.
-pub struct Draining {
-    server_task: JoinHandle<std::io::Result<()>>,
-    endpoint_record: LoopbackEndpointRecordGuard,
-}
-/// Terminal lifecycle state with no live runtime-owned handles.
-pub struct Stopped;
-
 /// Non-cloneable lifecycle owner. State transitions consume this value.
 pub struct HttpRuntime<State> {
     config: HttpRuntimeConfig,
     handler: Arc<dyn CanonicalWriteHandler>,
     health: RuntimeHealth,
+    maintenance: Option<Arc<dyn RuntimeMaintenance>>,
     state: State,
 }
 
@@ -476,6 +479,7 @@ impl HttpRuntime<Configured> {
     /// configured Unix socket is bound additively and uses the same router as
     /// the authenticated loopback listener.
     pub async fn start(self) -> Result<HttpRuntime<Running>, AtmError> {
+        ensure_process_descriptor_limit();
         let (listener, local_address) = bind_loopback_listener(&self.config, &self.health).await?;
         // Every enabled listener must be bound before publishing the loopback
         // endpoint record.  Otherwise a client could observe a Ready-looking
@@ -490,6 +494,7 @@ impl HttpRuntime<Configured> {
         let (capability, endpoint_record) =
             publish_loopback_endpoint(&self.config, local_address, &self.health).await?;
         let (shutdown_tx, shutdown_rx) = watch::channel(());
+        let maintenance_shutdown_rx = shutdown_rx.clone();
         let (server_stopped_tx, server_stopped_rx) = watch::channel(false);
         let canonical_router = canonical_api_router(
             Arc::clone(&self.handler),
@@ -528,16 +533,22 @@ impl HttpRuntime<Configured> {
             }
         };
         self.health.mark_ready();
+        let maintenance_task = self
+            .maintenance
+            .as_ref()
+            .map(|maintenance| maintenance.start(maintenance_shutdown_rx));
         Ok(HttpRuntime {
             config: self.config,
             handler: self.handler,
             health: self.health,
+            maintenance: self.maintenance,
             state: Running {
                 local_address,
                 direct_peer_address,
                 shutdown_tx,
                 server_stopped_rx,
                 server_task,
+                maintenance_task,
                 endpoint_record,
             },
         })
@@ -925,8 +936,10 @@ impl HttpRuntime<Running> {
             config: self.config,
             handler: self.handler,
             health: self.health,
+            maintenance: self.maintenance,
             state: Draining {
                 server_task: self.state.server_task,
+                maintenance_task: self.state.maintenance_task,
                 endpoint_record: self.state.endpoint_record,
             },
         }
@@ -947,6 +960,7 @@ impl HttpRuntime<Draining> {
     pub async fn finish(self) -> Result<HttpRuntime<Stopped>, AtmError> {
         let Draining {
             mut server_task,
+            mut maintenance_task,
             endpoint_record,
         } = self.state;
         let finished = tokio::time::timeout(self.config.timeouts.shutdown, &mut server_task).await;
@@ -961,21 +975,15 @@ impl HttpRuntime<Draining> {
             )
             .with_cause(source)),
             Err(_) => {
-                server_task.abort();
-                if tokio::time::timeout(ABORT_JOIN_GRACE, &mut server_task)
-                    .await
-                    .is_err()
-                {
-                    tracing::warn!(
-                        abort_join_grace_ms = ABORT_JOIN_GRACE.as_millis(),
-                        "replacement HTTP runtime task exceeded the bounded abort-join grace"
-                    );
-                }
+                abort_and_join(&mut server_task).await;
                 Err(AtmError::daemon_unavailable(
                     "replacement HTTP runtime exceeded its shutdown deadline",
                 ))
             }
         };
+        if let Some(task) = maintenance_task.take() {
+            finish_maintenance(task, self.config.timeouts.shutdown).await;
+        }
         let cleanup_result = cleanup_loopback_endpoint_record(endpoint_record).await;
         let result = server_result.and(cleanup_result);
         self.health.mark_stopped();
@@ -984,6 +992,7 @@ impl HttpRuntime<Draining> {
             config: self.config,
             handler: self.handler,
             health: self.health,
+            maintenance: self.maintenance,
             state: Stopped,
         })
     }
@@ -1081,6 +1090,42 @@ mod tests {
             while !self.entered.load(Ordering::SeqCst) {
                 self.entered_notify.notified().await;
             }
+        }
+    }
+
+    /// Counts writes without blocking, unlike [`CountingLoopbackRouter`],
+    /// which deliberately holds each call open for connection-admission
+    /// tests. Used by daemon-replacement tests that need an ordinary
+    /// request/response round trip per daemon generation.
+    struct ImmediateCountingLoopbackRouter {
+        calls: AtomicUsize,
+    }
+
+    impl ImmediateCountingLoopbackRouter {
+        fn new() -> Self {
+            Self {
+                calls: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    impl atm_core::boundary::sealed::Sealed for ImmediateCountingLoopbackRouter {}
+
+    impl CanonicalWriteHandler for ImmediateCountingLoopbackRouter {
+        fn write(
+            &self,
+            _request: atm_core::send::WriteRequest,
+            _ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
+        > {
+            Box::pin(async move {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                Ok(ApiResponse::new(ResponseEnvelope::Error(
+                    AtmError::validation("immediate counting loopback handler reached"),
+                )))
+            })
         }
     }
 
@@ -2330,7 +2375,7 @@ mod tests {
             .execute(ApiRequest::new(write_request()))
             .await
             .expect_err("a second connection must not reach the router while the first is active");
-        assert_eq!(error.code().as_str(), "ATM_WAIT_TIMEOUT");
+        assert_eq!(error.code().as_str(), "ATM_DAEMON_MAY_HAVE_EXECUTED");
         assert_eq!(handler.calls.load(Ordering::SeqCst), 1);
 
         handler.release.notify_waiters();
@@ -2384,6 +2429,106 @@ mod tests {
             !record_path.exists(),
             "the runtime removes only its own endpoint record after drain"
         );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn reused_loopback_client_follows_a_replaced_daemon_listener_without_duplicate_delivery()
+    {
+        // Reproduces the shape of a long-lived embedded host (for example
+        // the Python graft binding's `PyGraftSession`) that builds one
+        // `DaemonApiClient` and keeps it for the lifetime of the process,
+        // across a managed daemon restart it never explicitly reconnects
+        // for. The client must transparently follow the daemon to its new
+        // listener, and the retired daemon generation must never receive a
+        // duplicate of the request the reused client sends after the
+        // replacement.
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+
+        let first_instance_id = Ulid::new();
+        write_owner_record(&record_path, first_instance_id);
+        let first_handler = Arc::new(ImmediateCountingLoopbackRouter::new());
+        let first_runtime = HttpRuntimeBuilder::new(
+            loopback_runtime_config(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                record_path.clone(),
+                first_instance_id,
+                None,
+                1024,
+            ),
+            first_handler.clone(),
+        )
+        .build()
+        .expect("valid loopback runtime configuration")
+        .start()
+        .await
+        .expect("first loopback runtime starts");
+
+        // One client, built once and reused across the replacement below.
+        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("shared loopback client");
+
+        client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect("first request reaches the first daemon generation");
+        assert_eq!(first_handler.calls.load(Ordering::SeqCst), 1);
+
+        // Replace the daemon: drain and remove the first runtime's listener
+        // and endpoint record, then start a second runtime -- a different
+        // daemon generation -- at a fresh ephemeral port under the same
+        // record path, exactly as a managed `atm daemon restart` does.
+        first_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("first loopback runtime drains");
+
+        let second_instance_id = Ulid::new();
+        write_owner_record(&record_path, second_instance_id);
+        let second_handler = Arc::new(ImmediateCountingLoopbackRouter::new());
+        let second_runtime = HttpRuntimeBuilder::new(
+            loopback_runtime_config(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                record_path.clone(),
+                second_instance_id,
+                None,
+                1024,
+            ),
+            second_handler.clone(),
+        )
+        .build()
+        .expect("valid loopback runtime configuration")
+        .start()
+        .await
+        .expect("second loopback runtime starts");
+
+        // The same, never-rebuilt client must transparently follow the
+        // replacement: its next request must reach the new daemon
+        // generation exactly once, without an explicit reconnect and
+        // without a duplicate delivery to either generation.
+        client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect(
+                "second request reaches the second daemon generation without an explicit reconnect",
+            );
+        assert_eq!(
+            second_handler.calls.load(Ordering::SeqCst),
+            1,
+            "the replaced daemon must receive the reused client's next request exactly once"
+        );
+        assert_eq!(
+            first_handler.calls.load(Ordering::SeqCst),
+            1,
+            "the retired daemon generation must not receive a duplicate of the second request"
+        );
+
+        second_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("second loopback runtime drains");
     }
 
     #[tokio::test(flavor = "current_thread")]

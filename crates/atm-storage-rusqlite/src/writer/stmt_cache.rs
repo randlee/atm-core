@@ -33,7 +33,24 @@ impl WriterStatementCache {
                acknowledged_at = excluded.acknowledged_at,
                expires_at = excluded.expires_at,
                deleted_at = excluded.deleted_at,
-               updated_at = excluded.updated_at;",
+               updated_at = excluded.updated_at,
+               nudge_pending_at = CASE WHEN excluded.read = 1
+                                       THEN NULL
+                                       ELSE mail_message_states.nudge_pending_at END;",
+        )?;
+        statement.execute(params)
+    }
+
+    pub(crate) fn mark_message_read<P: Params>(
+        &mut self,
+        connection: &Connection,
+        params: P,
+    ) -> SqlResult<usize> {
+        let mut statement = cached(
+            connection,
+            "UPDATE mail_message_states
+             SET read = 1, updated_at = ?4, nudge_pending_at = NULL
+             WHERE team = ?1 AND agent = ?2 AND message_key = ?3 AND deleted_at IS NULL;",
         )?;
         statement.execute(params)
     }

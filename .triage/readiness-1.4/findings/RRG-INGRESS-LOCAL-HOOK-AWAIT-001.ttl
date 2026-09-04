@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-INGRESS-LOCAL-HOOK-AWAIT-001>
+  a triage:Finding ;
+  triage:findingId "RRG-INGRESS-LOCAL-HOOK-AWAIT-001" ;
+  triage:title "Local-ingress writes on the replacement runtime still await emit_received_hook before responding, so a slow or failing receiver hook holds the local client response open; re-scoped out of RRG-INGRESS-ADMIT-001 at QA-4c (arch-qa ARCH-002)" ;
+  triage:description "Re-scoped from RRG-INGRESS-ADMIT-001 occurrence CAND-1 at QA-4c on 2026-09-04 (arch-qa ARCH-002, important): that record bundled two mechanisms, and its fix rounds 3 and 4 (c1e521aa4, 9ed5b7dd1: bounded live control-path SQLite connections plus descriptor soft-limit raise) resolved only the descriptor-exhaustion mechanism behind the SQLITE_CANTOPEN failures. The other mechanism is untouched: in crates/atm-http-runtime/src/storage_and_nudge_router.rs the canonical write path, after commit_write, runs the received hook detached only for AuthenticatedIngress::Peer (8ed23246b, detached_received_hooks.observe) and for every other ingress awaits hook_task inline before Ok(write_response), so a Local write that persisted durably is not acknowledged until the tmux nudge or graft receiver endpoint lookup finishes or its warnings are collected. Under load or with a stalled hook the local client sees a late or lost response for a message that is already durable, the same accounting disagreement class first seen on 1.4.10 (accepted 1 of 1000 with 95 rows persisted), and the client-side timeout is then reported as DaemonMayHaveExecuted uncertainty (see RRG-XHOST-INBOUND-001 client half at c7f0fe7ec). Not demonstrated live after fix round 4: focused uds f8 and tcp f8 at 9ed5b7dd1 PASS with accepted equal to durable and no first failure, and full step 1 smoke PASS at 03:28Z, so this is classified important, not blocking, for the PR 1143 merge gate. Correct home is the replacement runtime (atm-http-runtime), never the frozen legacy synchronous daemon. Candidate fix shape, subject to triage: detach the hook for Local ingress the same way as Peer while still surfacing hook warnings on the request id, or bound the inline await by a hook budget strictly inside the request deadline so the write response is always sent. Closure bar: a regression test in storage_and_nudge_router proving a Local write responds before a slow received hook completes (or within the bounded hook budget) with the warning still observed, plus quality-mgr verdict. Closing RRG-INGRESS-ADMIT-001 does not close this record." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cross-host-transport" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-04T03:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-03T18:52:52Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-INGRESS-LOCAL-HOOK-AWAIT-001/CAND-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RRG-INGRESS-LOCAL-HOOK-AWAIT-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 978 ;
+  triage:snippet "} else { let warnings = hook_task.await; append_warnings(&mut committed.outcome, warnings); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "f5de13551" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/f5de13551> .
+
+<urn:atm:triage:worktree/CAND/f5de13551>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "f5de13551" ;
+  triage:orderIndex 1 .

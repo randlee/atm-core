@@ -148,7 +148,7 @@ Rust boundary rules:
 Architectural rules:
 - a valid caller-provided `ATM_IDENTITY` and `ATM_TEAM` envelope activates the
   receiver; a clean activation return means the receiver is listening and its
-  endpoint record is published
+  registry lease is published
 - `.atm.toml` is optional ATM-owned configuration. Its absence must not leave
   a graft receiver inert or silently suppress activation
 - runtime identity comes from `ATM_IDENTITY`; graft mode does not add a second

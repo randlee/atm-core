@@ -13,13 +13,20 @@ if str(JUST_DIR) not in sys.path:
 
 from lint_same_host_portability import collect_forbidden_todo_markers
 from lint_same_host_portability import collect_non_unix_same_host_stubs
+from lint_same_host_portability import collect_storage_writer_platform_gating
 
 
 class SameHostPortabilityLintTests(unittest.TestCase):
     BOOTSTRAP_PATH = "crates/atm-daemon-bootstrap/src/lib.rs"
+    WRITER_PATH = "crates/atm-storage-rusqlite/src/writer/mod.rs"
 
     def write_bootstrap(self, repo_root: Path, source: str) -> None:
         path = repo_root / self.BOOTSTRAP_PATH
+        path.parent.mkdir(parents=True)
+        path.write_text(source, encoding="utf-8")
+
+    def write_writer(self, repo_root: Path, source: str) -> None:
+        path = repo_root / self.WRITER_PATH
         path.parent.mkdir(parents=True)
         path.write_text(source, encoding="utf-8")
 
@@ -46,6 +53,20 @@ fn local_transport() -> Result<(), AtmError> {
             findings = collect_forbidden_todo_markers(repo_root)
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0].path, self.BOOTSTRAP_PATH)
+
+    def test_rejects_platform_specific_writer_policy_without_an_adr_seam(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repo_root = Path(temporary)
+            self.write_writer(
+                repo_root,
+                """
+#[cfg(windows)]
+const BATCH_TIME_BUDGET: Duration = Duration::from_millis(1);
+""",
+            )
+            findings = collect_storage_writer_platform_gating(repo_root)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].path, self.WRITER_PATH)
 
 
 if __name__ == "__main__":

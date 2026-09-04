@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-EXP-C8>
+  a triage:Finding ;
+  triage:findingId "AV-EXP-C8" ;
+  triage:title "mail_seen_watermarks: no migration/backfill + divergent file-backed store still live; rollout re-presentation risk, rollback strands watermarks" ;
+  triage:description "mail_seen_watermarks feature lacks migration/backfill logic for existing deployments; divergent file-backed watermark store implementation still active in codebase. Introduces rollout re-presentation risk (readers see messages they previously marked as seen) and rollback stranding conditions (watermarks committed to DB but not synced on rollback). Multiple schema definitions and access paths without coordinated migration strategy." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1B ;
+  triage:foundAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C8/AV-C8-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C8/AV-C8-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C8/AV-C8-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-EXP-C8/AV-C8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 74 ;
+  triage:snippet "CREATE TABLE IF NOT EXISTS mail_seen_watermarks" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40> .
+
+<urn:atm:triage:occurrence/AV-EXP-C8/AV-C8-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 213 ;
+  triage:snippet "INSERT INTO mail_seen_watermarks(team, agent, watermark)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40> .
+
+<urn:atm:triage:occurrence/AV-EXP-C8/AV-C8-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/mailbox_reader.rs" ;
+  triage:line 348 ;
+  triage:snippet "SELECT watermark FROM mail_seen_watermarks WHERE team" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40> .
+
+<urn:atm:triage:worktree/integrate-phase-av/846c58b40>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:orderIndex 0 .

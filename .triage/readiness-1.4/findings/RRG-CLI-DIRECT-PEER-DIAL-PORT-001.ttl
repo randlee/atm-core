@@ -1,0 +1,55 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-CLI-DIRECT-PEER-DIAL-PORT-001>
+  a triage:Finding ;
+  triage:findingId "RRG-CLI-DIRECT-PEER-DIAL-PORT-001" ;
+  triage:title "The CLI direct-peer dial port is a fixed constant (43101) with no override, so atm send --host localhost always reaches the host daemon and the readiness localhost smoke stage can never exercise an account-local fixture" ;
+  triage:description "Found during release-readiness 1.4.13 on rand-m5 (2026-09-04) while planning the RRG-TRUST-KEY-LOOPBACK-001 live legs after PR #1152 (ATM_SMOKE_DIRECT_PEER_PORT). Source on develop 5ca0fedce: the readiness localhost stage send_read_ack in scripts/smoke/run_feature_smoke.py runs atm send <target> <body> --host <host> (lines 587 and 597), and the CLI resolves that direct host through crates/atm-http-runtime/src/client.rs direct_peer_port (line 60), which returns the fixed constant DIRECT_PEER_TCP_PORT = 43101 (line 43) with no environment, flag or persisted-config override. PR #1152's ATM_SMOKE_DIRECT_PEER_PORT only feeds the harness's own getaddrinfo probe and curl doctor URLs, so with the override set the doctor checks reach a 43111 fixture while every send/read/ack check still dials the host daemon on 43101; this is exactly the split arch-ctm observed (10 doctor PASS, 10 send/read/ack FAIL) in 01M1NJGP2XCEACWYBYWA8G478H. Consequence: together with RRG-DIRECT-PEER-BIND-ADDR-001, the atmbench-local evidence path for the TRUST-KEY loopback legs needs two product changes; until both land the only daemon the localhost stage can exercise is the host daemon, the path Rand withdrew, so the legs stay deferred and no GO is issued. Classification: product, important, CLI/replacement-runtime client only; deferred past release. Proposed fix scope when dispatched: an explicit dial-port override for the direct host path (flag or environment variable consumed by the shared client, default 43101 unchanged, never implicit), surfaced to run_feature_smoke.py so ATM_SMOKE_DIRECT_PEER_PORT governs both the harness probes and the CLI dial; test that the default path is byte-identical. Do not touch the frozen legacy synchronous daemon. Ruling source: fenix@rand-m5 01M1NMZCXV5QM3PWZGYA9Y4Y9H." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "peer-transport" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-04T07:42:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-04T07:33:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-CLI-DIRECT-PEER-DIAL-PORT-001/DEV-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-CLI-DIRECT-PEER-DIAL-PORT-001/DEV-2> ;
+  triage:triageRecordVersion "2" ;
+  triage:releaseDecision "Rand decision 2026-09-04 (team-lead ruling 01M1NX1PDN9W25WGCB6B2D4Y91): deferred to post-release. The 1.4.13 release ships without this fix; tracked as a known follow-up. Status and dispatchReady unchanged (already open, no pre-release dispatch); arch-ctm idle on this item. Companion records: RRG-DIRECT-PEER-BIND-ADDR-001, RRG-CLI-DIRECT-PEER-DIAL-PORT-001, RRG-TRUST-KEY-LOOPBACK-001." .
+
+<urn:atm:triage:occurrence/RRG-CLI-DIRECT-PEER-DIAL-PORT-001/DEV-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 60 ;
+  triage:snippet "pub fn direct_peer_port() -> NonZeroU16 { NonZeroU16::new(DIRECT_PEER_TCP_PORT).expect(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "5ca0fedce" ;
+  triage:occursIn <urn:atm:triage:worktree/DEV/5ca0fedce> .
+
+<urn:atm:triage:occurrence/RRG-CLI-DIRECT-PEER-DIAL-PORT-001/DEV-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_feature_smoke.py" ;
+  triage:line 587 ;
+  triage:snippet "sent = command([atm, \"send\", target, body, \"--host\", host, \"--json\"])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "5ca0fedce" ;
+  triage:occursIn <urn:atm:triage:worktree/DEV/5ca0fedce> .
+
+<urn:atm:triage:worktree/DEV/5ca0fedce>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core" ;
+  triage:branch "develop" ;
+  triage:headSha "5ca0fedce" ;
+  triage:orderIndex 1 .

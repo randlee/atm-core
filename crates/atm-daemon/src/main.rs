@@ -1,15 +1,6 @@
 use std::process::ExitCode;
-use std::sync::Arc;
 
 use atm_core::error::AtmError;
-use daemon_observability::DaemonObservability;
-
-#[allow(
-    dead_code,
-    private_interfaces,
-    reason = "the retained logger adapter preserves its shutdown helpers while AL.9 consumes only its core ObservabilityPort boundary"
-)]
-mod daemon_observability;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -23,7 +14,7 @@ async fn main() -> ExitCode {
 }
 
 async fn run() -> Result<(), AtmError> {
-    let observability = Arc::new(DaemonObservability::bootstrap()?);
+    let observability = atm_daemon_bootstrap::bootstrap_replacement_observability().await?;
     atm_daemon_bootstrap::run_replacement_daemon_with_observability(observability).await
 }
 

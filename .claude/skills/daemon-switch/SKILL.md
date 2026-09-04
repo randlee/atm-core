@@ -21,12 +21,14 @@ worktree binary directly.
 6. When peer-interface or trust configuration changes, use `restart` to reload
    the one selected daemon; never launch an extra process.
 7. On macOS, `switch` and `restart` fail closed unless both selected `atm` and
-   `atm-daemon` strictly verify with the stable Apple Development identifiers
-   and the configured Apple team identifier. Build with `just build` (or
-   explicitly run `python3 .just/sign_daemon_dev.py`) before switching. This
-   enforces a matched, signed local build; it is separate from macOS Local
-   Network Privacy authorization. Windows currently warns and skips signing;
-   other platforms are no-ops.
+   `atm-daemon` strictly verify with the configured signing identity. Apple
+   Development identities continue to require their configured team
+   identifier. A configured self-signed identity instead pins the certificate
+   leaf fingerprint and common name. Build with `just build` (or explicitly
+   run `python3 .just/sign_daemon_dev.py`) before switching. This enforces a
+   matched, signed local build; it is separate from macOS Local Network
+   Privacy authorization. Windows currently warns and skips signing; other
+   platforms are no-ops.
 
 ## Commands
 
@@ -72,6 +74,22 @@ python3 .claude/skills/daemon-switch/scripts/daemon-switch.py quiesce --yes \
 On systems without Homebrew, provide `--default-cli` and `--default-daemon` to
 `restore`. Use `--dry-run` before the first switch on an unfamiliar host.
 
+## Self-signed development identity
+
+The signing resolver accepts the synced `atm-daemon-dev` self-signed identity
+when it is explicitly selected once with `ATM_SIGNING_IDENTITY=atm-daemon-dev`
+(or its 40-character SHA-1 fingerprint). The resolver records the selected
+certificate's `fingerprint` and `common_name` in
+`~/.config/atm/signing-identity.json` with user-only permissions. Later
+`just build`, `sign_daemon_dev.py`, and daemon-switch invocations load that
+file, so the identity remains selected across sessions and synced hosts.
+
+Self-signed binaries are verified with a strict `codesign` designated
+requirement pinning the certificate leaf fingerprint, as well as the expected
+binary identifier and certificate common name. A changed or mismatched leaf
+fails closed. Apple-issued `Apple Development` identities continue to use the
+team-identifier verification path.
+
 ## Windows selector provisioning
 
 The script never replaces ordinary `.exe` files. Provision two user-writable
@@ -88,3 +106,19 @@ python .claude/skills/daemon-switch/scripts/daemon-switch.py switch `
 Creating those symlinks may require Developer Mode or an elevated shell. If
 they are unavailable, the script fails closed; do not replace installed
 executables or introduce a second daemon.
+
+## Default scratch root (ADR-055)
+
+A session created by this skill never accepts a raw daemon argument,
+alternate endpoint/root, environment selector, service wrapper, or arbitrary
+configuration edit (see the ADR-053 Decision section). `ATM_TEMP` is exactly
+such an environment selector, so it was never a candidate for this skill's
+overlay surface, and this remains true after ADR-055: both the ordinary
+launch path and the `--peer-wire-security plaintext-test` overlay session
+inherit the same daemon-resolved default scratch root
+(`<std::env::temp_dir()>/atm-<uid>` on Unix, `<temp_dir()>\atm` on Windows) —
+no launch-overlay change was needed for this. An operator who wants a
+non-default scratch root sets `ATM_TEMP` in the managed service's own launch
+environment directly (outside this skill), the same way any other daemon
+environment variable would be set; this skill's typed overlay session
+continues to carry only the mTLS/plaintext-test mode selector.

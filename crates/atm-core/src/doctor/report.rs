@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::boundary::{ConfigDoctorReport, MailStoreDoctorReport, RosterStoreDoctorReport};
@@ -146,6 +147,14 @@ pub struct PeerConfigDoctorReport {
     pub enabled_trusted_peer_count: usize,
     #[serde(default)]
     pub trusted_peers: Vec<PeerAuthorityDoctorReport>,
+    /// Legacy literal-IP trusted-peer rows (enabled or disabled) with their
+    /// exact safe migration/retirement remediation. See issue #972: a
+    /// disabled row never blocks startup and an enabled row fails startup
+    /// closed unless the operator opts into the testing/benchmarking-only
+    /// skip; both cases are surfaced here so `atm doctor` reports them
+    /// before/at upgrade rather than only at daemon launch.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub legacy_literal_ip_peers: Vec<LegacyLiteralIpPeerDoctorReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_failure: Option<DoctorFinding>,
 }
@@ -156,6 +165,19 @@ pub struct PeerAuthorityDoctorReport {
     pub host: String,
     pub https_port: u16,
     pub enabled: bool,
+}
+
+/// Safe projection of one legacy literal-IP trusted-peer row, carrying the
+/// exact commands that migrate or retire it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LegacyLiteralIpPeerDoctorReport {
+    pub host: String,
+    pub enabled: bool,
+    /// Converts this row to a durable hostname, keeping its fingerprint and
+    /// port. `<hostname>` is a placeholder for the operator's chosen name.
+    pub migrate_command: String,
+    /// Retires this row from the trusted-peer catalog.
+    pub revoke_command: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -194,6 +216,85 @@ pub struct PostSendDoctorReport {
     pub recipient_paths: Vec<RecipientDeliveryPathReport>,
 }
 
+/// Safe projection of one registry-backed graft receiver lease.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverLeaseDoctorReport {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub endpoint: String,
+    pub registered_at: DateTime<Utc>,
+    pub last_seen_at: DateTime<Utc>,
+    pub last_seen_age_seconds: i64,
+    pub reachable_at_last_use: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct GraftReceiversDoctorReport {
+    pub receivers: Vec<GraftReceiverLeaseDoctorReport>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum HerdrBreakerDoctorState {
+    Closed,
+    Open,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HerdrBreakerDoctorReport {
+    pub state: HerdrBreakerDoctorState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry_after_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consecutive_failures: Option<u32>,
+}
+
+impl Default for HerdrBreakerDoctorReport {
+    fn default() -> Self {
+        Self {
+            state: HerdrBreakerDoctorState::Closed,
+            retry_after_ms: None,
+            consecutive_failures: None,
+        }
+    }
+}
+
+pub trait HerdrBreakerDoctor: Send + Sync {
+    fn report(&self) -> HerdrBreakerDoctorReport;
+}
+
+#[derive(Debug, Default)]
+pub struct ClosedHerdrBreakerDoctor;
+
+impl HerdrBreakerDoctor for ClosedHerdrBreakerDoctor {
+    fn report(&self) -> HerdrBreakerDoctorReport {
+        HerdrBreakerDoctorReport::default()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct HerdrQueuePumpDoctorReport {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_tick_at: Option<crate::types::IsoTimestamp>,
+    #[serde(default)]
+    pub breaker: HerdrBreakerDoctorReport,
+}
+
+/// Effective capacity selected by the running daemon for one reader lane.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReaderLaneDoctorReport {
+    pub pool_size: usize,
+    pub queue_depth: usize,
+}
+
+/// Effective mailbox and search reader-lane capacities supplied by the
+/// replacement runtime's live storage assembly.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReaderLanesDoctorReport {
+    pub mailbox: ReaderLaneDoctorReport,
+    pub search: ReaderLaneDoctorReport,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DoctorReport {
     pub summary: DoctorSummary,
@@ -204,9 +305,17 @@ pub struct DoctorReport {
     pub client_context: DoctorExecutionContext,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub daemon_context: Option<DoctorExecutionContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reader_lanes: Option<ReaderLanesDoctorReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_roster: Option<MembersList>,
+    #[serde(default)]
+    pub graft_receivers: GraftReceiversDoctorReport,
     pub observability: AtmObservabilityHealth,
+    #[serde(default)]
+    pub herdr_breaker: HerdrBreakerDoctorReport,
+    #[serde(default)]
+    pub herdr_queue_pump: HerdrQueuePumpDoctorReport,
     #[serde(default)]
     pub post_send: PostSendDoctorReport,
     pub config: ConfigDoctorReport,

@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-SMOKE-AD18-001>
+  a triage:Finding ;
+  triage:findingId "RRG-SMOKE-AD18-001" ;
+  triage:title "just smoke thorough gates on the AL.3-quarantined shared-host singleton smoke, which fails with no fixture daemon ever starting" ;
+  triage:description "Release-readiness step 1 on rand-m5/atmbench (candidates 1.4.7 @ 66af7870b and 1.4.8 @ 35594be3d, evidence PRs #1144 and #1145) fails only AD18-RUNTIME-ROOT-001: run_thorough.py runs scripts/smoke/run_thorough_shared_host.py, whose first fixture doctor (target/debug/atm doctor --json with ATM_DAEMON_BIN pointing at the debug atm-daemon) exits 4 ATM_DAEMON_UNAVAILABLE with cause ENOENT; no fixture socket is created (expected path 64 bytes), no spawned-daemon stderr/log exists. Reproduced standalone by arch-ctm with retained capture at /tmp/atmbench-ad18-1.4.8 on atmbench. CI already quarantined this same shared-host smoke as historical/reference-only with continue-on-error in d825202c3 (AL.3, AL3-RH-003-CR-008-CI), but the thorough suite still treats it as a gating row; the normal suite (run.py) instead lists three targeted cargo test paths for AD18-RUNTIME-ROOT-001, but quality-mgr QA-2 (PR #1143, ATM-QA-001) verified those paths match zero real test functions ('running 0 tests', exit 0), so that row is vacuous and is NOT valid alternate coverage; the real runtime-root tests are crates/agent-team-mail-core protocol.rs daemon_socket_path_* and crates/agent-team-mail composition.rs host_runtime_lock_path_follows_the_explicit_home_root, and run.py's AD18-RUNTIME-ROOT-002 is the working contract check absent from run_thorough.py (ATM-QA-002). Classification by arch-ctm: harness daemon-lifecycle failure, not macOS Local Network/UI precondition, not a product transport defect. Same drift class as AD17-CI-001 (fixed at 7fba8c56e)." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "smoke-harness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-03T18:58:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-03T18:19:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-SMOKE-AD18-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-SMOKE-AD18-001/CAND-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-SMOKE-AD18-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-09-03T22:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RRG-SMOKE-AD18-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough.py" ;
+  triage:line 686 ;
+  triage:snippet "id=\"AD18-RUNTIME-ROOT-001\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "35594be3d" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/35594be3d> .
+
+<urn:atm:triage:occurrence/RRG-SMOKE-AD18-001/CAND-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_shared_host.py" ;
+  triage:line 234 ;
+  triage:snippet "run_atm(root, shared_env_a, shared_a.workspace_dir, \"doctor\", \"--json\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "35594be3d" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/35594be3d> .
+
+<urn:atm:triage:worktree/CAND/35594be3d>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "35594be3d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/RRG-SMOKE-AD18-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough.py" ;
+  triage:line 686 ;
+  triage:snippet "quality-mgr QA-4b independent re-verification confirmed fixed: shared-host singleton smoke row quarantined/repaired in run_thorough.py consistent with the AL.3 CI quarantine" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "d1e148a6b" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/d1e148a6b> .
+
+<urn:atm:triage:worktree/CAND/d1e148a6b>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "d1e148a6b" ;
+  triage:orderIndex 2 .

@@ -150,6 +150,46 @@ class OfficialBenchmarkTests(unittest.TestCase):
         self.assertEqual(runner.execute(), 2)
         self.assertNotIn(["git", "fetch", "origin"], [command for command, _ in calls])
 
+    def clean_tree_error(self, dirty: str) -> str:
+        runner = self.runner(lambda command, **kwargs: completed(command, stdout=dirty))
+        with self.assertRaises(OFFICIAL.OfficialBenchmarkError) as raised:
+            runner.require_clean_tree("before sync")
+        return str(raised.exception)
+
+    def test_dirty_tree_refusal_names_the_offending_source_paths(self) -> None:
+        message = self.clean_tree_error(" M crates/atm-core/src/lib.rs\n?? scratch.tmp\n")
+        self.assertIn("before sync", message)
+        self.assertIn("crates/atm-core/src/lib.rs", message)
+        self.assertIn("scratch.tmp", message)
+        self.assertIn("Unexpected local changes", message)
+        self.assertNotIn("Retained evidence", message)
+
+    def test_untracked_report_paths_are_named_as_evidence_to_commit_never_delete(self) -> None:
+        message = self.clean_tree_error("?? site/reports/smoke/macos/run-a/\n")
+        self.assertIn("Retained evidence", message)
+        self.assertIn("site/reports/smoke/macos/run-a/", message)
+        self.assertIn("never delete", message)
+        self.assertIn("git add site/reports/smoke/macos/run-a/", message)
+        self.assertIn("git commit -m", message)
+        self.assertNotIn("remove local changes", message)
+        self.assertNotIn("Unexpected local changes", message)
+
+    def test_mixed_dirty_state_separates_evidence_from_real_source_edits(self) -> None:
+        message = self.clean_tree_error("?? site/reports/keep.json\n M crates/atm-core/src/lib.rs\n")
+        self.assertIn("Retained evidence", message)
+        self.assertIn("site/reports/keep.json", message)
+        self.assertIn("Unexpected local changes", message)
+        self.assertIn("crates/atm-core/src/lib.rs", message)
+
+    def test_tracked_modification_under_site_reports_is_not_treated_as_untracked_evidence(self) -> None:
+        message = self.clean_tree_error(" M site/reports/keep.json\n")
+        self.assertNotIn("Retained evidence", message)
+        self.assertIn("Unexpected local changes", message)
+
+    def test_clean_tree_raises_nothing(self) -> None:
+        runner = self.runner(lambda command, **kwargs: completed(command, stdout="\n"))
+        runner.require_clean_tree("before sync")
+
     def test_stranded_rejected_push_names_local_and_remote_commits_and_never_resets(self) -> None:
         calls: list[list[str]] = []
 

@@ -74,43 +74,15 @@ class LintManifestsTests(unittest.TestCase):
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             manifest_path = repo_root / "crates/atm-core/Cargo.toml"
-            manifest_path.write_text(GOOD_MEMBER.replace("homepage.workspace = true\n", ""), encoding="utf-8")
-
-            violations = collect_manifest_violations(repo_root)
-            rendered = [violation.render() for violation in violations]
-            self.assertIn("crates/atm-core/Cargo.toml: set [package].homepage.workspace = true", rendered)
-
-    def test_collect_manifest_violations_flags_mismatched_internal_path_version(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST.replace('"crates/atm"]', '"crates/atm", "crates/atm-core"]'), encoding="utf-8")
-            atm_core_dir = repo_root / "crates/atm-core"
-            atm_core_dir.mkdir(parents=True)
-            (atm_core_dir / "Cargo.toml").write_text(GOOD_MEMBER, encoding="utf-8")
-            atm_dir = repo_root / "crates/atm"
-            atm_dir.mkdir(parents=True)
-            (atm_dir / "Cargo.toml").write_text(
-                """\
-[package]
-name = "agent-team-mail"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-authors.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true
-
-[dependencies]
-atm-core = { path = "../atm-core", version = "9.9.9" }
-""",
+            manifest_path.write_text(
+                GOOD_MEMBER.replace("homepage.workspace = true\n", ""),
                 encoding="utf-8",
             )
 
             violations = collect_manifest_violations(repo_root)
             rendered = [violation.render() for violation in violations]
             self.assertIn(
-                'crates/atm/Cargo.toml [dependencies.atm-core]: path dependency version must match target crate version "1.1.2"',
+                "crates/atm-core/Cargo.toml: set [package].homepage.workspace = true",
                 rendered,
             )
 
@@ -119,7 +91,10 @@ atm-core = { path = "../atm-core", version = "9.9.9" }
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             (repo_root / "Cargo.toml").write_text(
-                ROOT_MANIFEST.replace('"crates/atm"]', '"crates/atm", "crates/sc-lint-attributes"]'),
+                ROOT_MANIFEST.replace(
+                    '"crates/atm"]',
+                    '"crates/atm", "crates/sc-lint-attributes"]',
+                ),
                 encoding="utf-8",
             )
             tool_dir = repo_root / "crates/sc-lint-attributes"
@@ -143,6 +118,58 @@ homepage.workspace = true
             self.assertIn(
                 "version sync: crates/sc-lint-attributes/Cargo.toml [package].version (0.1.0) "
                 "must equal expected workspace member version (1.1.2)",
+                rendered,
+            )
+
+    def test_collect_manifest_violations_flags_workspace_dependency_redeclaration(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            (repo_root / "Cargo.toml").write_text(
+                ROOT_MANIFEST + '\n[workspace.dependencies]\nserde = "1"\n',
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_manifest_violations(repo_root)]
+            self.assertIn(
+                "crates/atm-core/Cargo.toml [dependencies].serde: "
+                "must use workspace = true for centralized dependency policy",
+                rendered,
+            )
+
+    def test_collect_manifest_violations_flags_all_dependency_table_variants(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            (repo_root / "Cargo.toml").write_text(
+                ROOT_MANIFEST
+                + "\n[workspace.dependencies]\n"
+                + 'serde = "1"\nserde_json = "1"\ntracing = "0.1"\n',
+                encoding="utf-8",
+            )
+            manifest_path = repo_root / "crates/atm-core/Cargo.toml"
+            manifest_path.write_text(
+                GOOD_MEMBER.replace('[dependencies]\nserde = "1"\n', "")
+                + '\n[dev-dependencies]\nserde = "1"\n'
+                + '\n[build-dependencies]\nserde_json = "1"\n'
+                + "\n[target.'cfg(unix)'.dependencies]\ntracing = \"0.1\"\n",
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_manifest_violations(repo_root)]
+            self.assertIn(
+                "crates/atm-core/Cargo.toml [dev-dependencies].serde: "
+                "must use workspace = true for centralized dependency policy",
+                rendered,
+            )
+            self.assertIn(
+                "crates/atm-core/Cargo.toml [build-dependencies].serde_json: "
+                "must use workspace = true for centralized dependency policy",
+                rendered,
+            )
+            self.assertIn(
+                "crates/atm-core/Cargo.toml [target.cfg(unix).dependencies].tracing: "
+                "must use workspace = true for centralized dependency policy",
                 rendered,
             )
 

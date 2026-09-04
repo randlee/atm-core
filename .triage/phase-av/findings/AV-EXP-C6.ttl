@@ -1,0 +1,81 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-EXP-C6>
+  a triage:Finding ;
+  triage:findingId "AV-EXP-C6" ;
+  triage:title "Read benchmark floors are spawn-dominated end-to-end CLI floors; weak lane-regression sensitivity; lane guard checks Python constants not daemon config; ratchet dormant" ;
+  triage:description "Benchmark floors are spawn-dominated end-to-end CLI measurements; lane regression detection checks Python constants (MAILBOX_POOL_SIZE, SEARCH_QUEUE_DEPTH) not daemon config; ratchet mechanism dormant (baselines.previous.json check exists but never enforced). Floors STAND per quality-mgr floor-approver caveat; limitation recorded; no reseed/rerun. Script-level items (guard + ratchet) dispatched to Cipher pre-merge per Rand directive (phase-av-evidence-schema-fix scope-add). RATIFICATION (quality-mgr): lane guard now reads effective daemon reader_lanes from atm doctor --json (fail-closed), ratchet requires explicit prior state and records a non-mutating proposal, spawn-dominated limitation recorded in-band in campaign/report/envelope — fixed at 16704d9ac; follow-on regression (dirty campaign lost evidence emission) triaged as AV-PROD-003 and fixed at 0b8e24c2a." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-09-01T01:22:39Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C6/AV-C6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C6/AV-C6-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C6/AV-C6-3> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AV-EXP-C6/AV-C6-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 54 ;
+  triage:snippet "MAILBOX_POOL_SIZE = 4" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:fixedBy "16704d9ac" ;
+  triage:closedAt "2026-09-01T01:22:39Z"^^xsd:dateTime ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40> .
+
+<urn:atm:triage:occurrence/AV-EXP-C6/AV-C6-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 540 ;
+  triage:snippet "raise ReadBenchmarkError(read baseline lane settings do not match)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:fixedBy "16704d9ac" ;
+  triage:closedAt "2026-09-01T01:22:39Z"^^xsd:dateTime ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40> .
+
+<urn:atm:triage:occurrence/AV-EXP-C6/AV-C6-3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 688 ;
+  triage:snippet "previous_path = BASELINES_PATH.with_name(baselines.previous.json)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "16704d9ac" ;
+  triage:fixedBy "16704d9ac" ;
+  triage:closedAt "2026-09-01T01:11:45Z"^^xsd:dateTime ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/16704d9ac> .
+
+<urn:atm:triage:worktree/integrate-phase-av/846c58b40>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/integrate-phase-av/16704d9ac>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "16704d9ac" ;
+  triage:orderIndex 1 .

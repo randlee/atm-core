@@ -1,0 +1,79 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-WRITE-PATH-BARECLI-HOOK-AWAIT-001>
+  a triage:Finding ;
+  triage:findingId "RRG-WRITE-PATH-BARECLI-HOOK-AWAIT-001" ;
+  triage:title "Non-peer local write responses await a bare-CLI received hook that runs spawn_blocking and then takes a process-wide mutex FIFO, on every Immediate write to a BareCli recipient" ;
+  triage:description "Source: cwin write-pipeline review (three independent read-only code reviews) recorded as site/reports/send-message-benchmark/20260904-windows-tcp-write-pipeline-review.md on evidence/readiness-1.4.13-windows (dcec39416), comparing the last recorded Windows tcp f16/64 PASS 2973fe2f9 against the 1.4.13 candidate f39c22364. quality-mgr independently verified the cited sites (ruling 01M1PNM744KVESAD6GJREZ6TSX). Mechanism on develop f39c22364, replacement runtime only (atm-daemon-bootstrap depends on atm-http-runtime; this is NOT the frozen legacy synchronous daemon): capacity-benchmark recipients carry no pane, Herdr or Graft receiver lease, so the delivery classifier selects BareCli; the default Immediate nudge mode selects PullPendingReceivedHook (crates/atm-daemon-bootstrap/src/received_hook_selector.rs). That hook calls tokio::task::spawn_blocking (received_hook_selector.rs:513 and :608), awaits it, then appends to the process-wide mutex-protected bare-CLI FIFO (crates/atm-http-runtime/src/bare_cli_fifo.rs:17, BareCliFifo = Arc<Mutex<HashMap<MemberKey, VecDeque<QueuedNudgeMessage>>>>, capacity 32 per member, line 12) whose drop path engages under sustained traffic. In crates/atm-http-runtime/src/storage_and_nudge_router.rs only Peer ingress detaches the hook (line 970); every other ingress, including local plain-TCP benchmark ingress, awaits hook_task before the response is returned (line 981). Net effect: blocking-pool scheduling plus global mutex contention sits on the response path of every local write, introduced by 2517d84f6 (AQ2.5, 2026-08-26), after the seed run. Secondary suspects in the same report, not part of this record: search/FTS projection inside each unique-message writer transaction (1135ef7ce, 5929160a2); lease-cache synchronisation per write (residual after 39327974c); listener task retention and per-request payload parsing. Repairs that must not be reverted: 39327974c (lease cache off the write path) and 40b00b236 (marker clearing limited to NudgeKind::Queue). Gate impact: none for 1.4.13 (Mac step-1 official campaign passed floors on f39c22364; Windows results informational); this is a plausible root-cause lead for the post-seed Windows tcp drop, not evidence against the candidate. Disposition: product, important, post-release fix; no daemon change and no floor change from the code review alone. Proposed discriminator when dispatched: A/B on m5-atmbench at the same profile with the capacity recipient's received-hook dispatch detached or moved off the response path while keeping durable persistence and response semantics; if throughput recovers, profile the spawn_blocking FIFO handoff and its mutex, otherwise measure writer transaction time and FTS/WAL work next. Also a candidate for a per-write work-budget test (blocking tasks, control-path transactions, mutex acquisitions per Immediate write) so this class is caught in CI without a benchmark. Companion record: RRG-BENCH-FLOOR-PROFILE-KEY-001 (baseline key schema gap; distinct finding)." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "write-path-performance" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-04T18:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S3 ;
+  triage:foundAt "2026-09-04T18:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-WRITE-PATH-BARECLI-HOOK-AWAIT-001/DEV-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-WRITE-PATH-BARECLI-HOOK-AWAIT-001/DEV-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-WRITE-PATH-BARECLI-HOOK-AWAIT-001/DEV-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-WRITE-PATH-BARECLI-HOOK-AWAIT-001/DEV-4> ;
+  triage:triageRecordVersion "1" ;
+  triage:qmgrRuling "quality-mgr ruling 2026-09-04 (01M1PNM744KVESAD6GJREZ6TSX): sites verified on develop; replacement-runtime path, in scope for a real fix; no 1.4.13 gate impact; file as its own record, companion to RRG-BENCH-FLOOR-PROFILE-KEY-001; A/B measurement post-release, no pre-release measurement." .
+
+<urn:atm:triage:occurrence/RRG-WRITE-PATH-BARECLI-HOOK-AWAIT-001/DEV-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 981 ;
+  triage:snippet "let warnings = hook_task.await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "f39c22364" ;
+  triage:occursIn <urn:atm:triage:worktree/DEV/f39c22364> .
+
+<urn:atm:triage:occurrence/RRG-WRITE-PATH-BARECLI-HOOK-AWAIT-001/DEV-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
+  triage:line 513 ;
+  triage:snippet "let result = tokio::task::spawn_blocking(move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "f39c22364" ;
+  triage:occursIn <urn:atm:triage:worktree/DEV/f39c22364> .
+
+<urn:atm:triage:occurrence/RRG-WRITE-PATH-BARECLI-HOOK-AWAIT-001/DEV-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
+  triage:line 608 ;
+  triage:snippet "tokio::task::spawn_blocking(move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "f39c22364" ;
+  triage:occursIn <urn:atm:triage:worktree/DEV/f39c22364> .
+
+<urn:atm:triage:occurrence/RRG-WRITE-PATH-BARECLI-HOOK-AWAIT-001/DEV-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/bare_cli_fifo.rs" ;
+  triage:line 17 ;
+  triage:snippet "pub type BareCliFifo = Arc<Mutex<HashMap<MemberKey, VecDeque<QueuedNudgeMessage>>>>;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "f39c22364" ;
+  triage:occursIn <urn:atm:triage:worktree/DEV/f39c22364> .
+
+<urn:atm:triage:worktree/DEV/f39c22364>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core" ;
+  triage:branch "develop" ;
+  triage:headSha "f39c22364" ;
+  triage:orderIndex 1 .

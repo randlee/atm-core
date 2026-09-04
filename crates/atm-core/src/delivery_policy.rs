@@ -1,10 +1,14 @@
+use crate::HerdrSession;
 use crate::boundary::{RosterEntry, RosterHarness};
+use crate::delivery_channel::{
+    DeliveryChannel, GraftLeaseState, classify_delivery_channel, graft_lease_state,
+    local_message_received_backend,
+};
 use crate::error::AtmError;
 use crate::provenance::ValidatedWriteProvenance;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, PaneId, TeamName};
-use serde_json::Value;
 
 #[expect(
     dead_code,
@@ -57,7 +61,10 @@ pub(crate) struct DeliveryRecipientSnapshot {
     pub(crate) harness: DeliveryHarnessPath,
     pub(crate) recipient_pane_id: Option<PaneId>,
     pub(crate) local_tmux_post_send: bool,
+    pub(crate) local_herdr_post_send: bool,
+    pub(crate) herdr_session: Option<HerdrSession>,
     pub(crate) graft_post_send: bool,
+    pub(crate) bare_cli_post_send: bool,
     pub(crate) roster_backed: bool,
 }
 
@@ -69,33 +76,40 @@ impl DeliveryRecipientSnapshot {
             harness: DeliveryHarnessPath::NonClaude,
             recipient_pane_id: None,
             local_tmux_post_send: false,
+            local_herdr_post_send: false,
+            herdr_session: None,
             graft_post_send: false,
+            bare_cli_post_send: false,
             roster_backed: false,
         }
     }
 
-    fn from_roster(member: RosterEntry) -> Self {
-        let local_tmux_post_send = member.recipient_pane_id.is_some()
-            || member
-                .metadata_json
-                .get("backendType")
-                .and_then(Value::as_str)
-                == Some("tmux");
-        let graft_post_send = matches!(
-            member.harness,
-            RosterHarness::CodexCli
-                | RosterHarness::GeminiCli
-                | RosterHarness::Opencode
-                | RosterHarness::Hermes
-                | RosterHarness::PythonGraft
-        ) && !local_tmux_post_send;
+    /// Historical AQ0-era backend-selection flags kept for existing send/nudge
+    /// callers. They are projected from the canonical AQ1 delivery-channel
+    /// classifier so immediate and deferred routing cannot diverge.
+    fn from_roster(member: RosterEntry, graft_lease: GraftLeaseState) -> Self {
+        let local_backend = local_message_received_backend(&member);
+        let delivery_channel = classify_delivery_channel(local_backend.as_ref(), graft_lease);
+        let local_tmux_post_send = delivery_channel == DeliveryChannel::TmuxSteer;
+        let local_herdr_post_send = delivery_channel == DeliveryChannel::HerdrSteer;
+        let herdr_session = match local_backend.as_ref() {
+            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { session }) => {
+                session.clone()
+            }
+            _ => None,
+        };
+        let graft_post_send = delivery_channel == DeliveryChannel::Graft;
+        let bare_cli_post_send = delivery_channel == DeliveryChannel::BareCli;
         Self {
             agent: member.agent_name,
             team: member.team_name,
             harness: DeliveryHarnessPath::from_roster_harness(member.harness),
             recipient_pane_id: member.recipient_pane_id,
             local_tmux_post_send,
+            local_herdr_post_send,
+            herdr_session,
             graft_post_send,
+            bare_cli_post_send,
             roster_backed: true,
         }
     }
@@ -338,10 +352,14 @@ impl DeliveryPolicyCoordinator {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<DeliveryRecipientSnapshot, AtmError> {
-        runtime
+        let member = runtime
             .load_roster_member(team, agent)?
-            .map(DeliveryRecipientSnapshot::from_roster)
-            .ok_or_else(|| AtmError::agent_not_found(agent, team))
+            .ok_or_else(|| AtmError::agent_not_found(agent, team))?;
+        let lease = runtime.graft_receiver_lease(team, agent)?;
+        Ok(DeliveryRecipientSnapshot::from_roster(
+            member,
+            graft_lease_state(lease.as_ref()),
+        ))
     }
 
     /// Resolves the persistence-admission snapshot for the canonical writer.
@@ -590,9 +608,9 @@ pub(crate) fn restore_inbox_rebuild_transitions() -> &'static [RestoreInboxRebui
 mod tests {
     use super::{
         AckReplyStateMachine, DeliveryEventFamily, DeliveryHarnessPath, DeliveryPolicyCoordinator,
-        DeliveryRecipientSnapshot, InboxRepairStateMachine, NewMessageCoordinatorState,
-        RestoreInboxRebuildStateMachine, ack_reply_transitions, append_failure_transitions,
-        inbox_repair_transitions, new_message_success_transitions,
+        DeliveryRecipientSnapshot, GraftLeaseState, InboxRepairStateMachine,
+        NewMessageCoordinatorState, RestoreInboxRebuildStateMachine, ack_reply_transitions,
+        append_failure_transitions, inbox_repair_transitions, new_message_success_transitions,
         restore_inbox_rebuild_transitions, thread_update_transitions,
     };
     use crate::error::AtmError;
@@ -727,10 +745,33 @@ mod tests {
                 recipient_pane_id: None,
                 metadata_json: Map::new(),
             };
-            let snapshot = DeliveryRecipientSnapshot::from_roster(entry);
+            let snapshot = DeliveryRecipientSnapshot::from_roster(entry, GraftLeaseState::Active);
             assert_eq!(snapshot.harness, DeliveryHarnessPath::NonClaude);
             assert!(snapshot.graft_post_send);
         }
+    }
+
+    #[test]
+    fn herdr_backend_wins_over_non_claude_graft_fallback() {
+        let mut metadata = Map::new();
+        metadata.insert(
+            crate::delivery_channel::BACKEND_TYPE_METADATA_KEY.to_owned(),
+            serde_json::json!("herdr"),
+        );
+        let entry = RosterEntry {
+            team_name: "team-a".parse().expect("team"),
+            agent_name: crate::test_support::TEST_SENDER.parse().expect("agent"),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::CodexCli,
+            agent_type: AgentType::Worker,
+            model: crate::types::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json: metadata,
+        };
+        let snapshot = DeliveryRecipientSnapshot::from_roster(entry, GraftLeaseState::Active);
+        assert!(!snapshot.local_tmux_post_send);
+        assert!(snapshot.local_herdr_post_send);
+        assert!(!snapshot.graft_post_send);
     }
 
     #[test]

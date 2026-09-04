@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-001" ;
+  triage:title "Transfer-script tests mutate the real process environment via a shared EnvGuard" ;
+  triage:description "Phase AQ phase-end review (ATM-QA-002) found crates/atm/src/commands/send_to.rs's transfer-script tests used atm_core::test_support::EnvGuard::set_many, which mutates the real, process-global environment under an opt-in RwLock that other std::env::var readers elsewhere in the atm crate do not participate in. Under cargo test's parallel harness this risks cross-test interference and flakiness. Fixed by threading an &dyn EnvSource seam through invoke_transfer_script/resolve_and_invoke_transfer_script and injecting a deterministic atm_core::test_support::FakeEnvSource in tests instead, leaving the real environment untouched; the production call site (land_attachments) still passes &ProcessEnvSource." ;
+  triage:phaseId "phase-aq" ;
+  triage:triageMode "phase_end" ;
+  triage:category "flaky-test" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AQ ;
+  triage:foundAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/occ-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FTQ-001/occ-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/send_to.rs" ;
+  triage:line 399 ;
+  triage:snippet "let _env = atm_core::test_support::EnvGuard::set_many([" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aq-phase-review-flaky" ;
+  triage:headSha "a8eac8c48" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aq-phase-review-flaky/a8eac8c48> .
+
+<urn:atm:triage:worktree/fix-aq-phase-review-flaky/a8eac8c48>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aq-phase-review-flaky" ;
+  triage:branch "fix/aq-phase-review-flaky" ;
+  triage:headSha "a8eac8c48" ;
+  triage:orderIndex 1 .

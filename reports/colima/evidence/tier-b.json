@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "tier": "B",
+  "suite": "seam-envelope-fidelity",
+  "verdict": "pass",
+  "counts": {
+    "pass": 6,
+    "fail": 0,
+    "skip": 0
+  },
+  "tests": [
+    {
+      "name": "B1-seam-regression",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "B2a-delivery-envelope",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "B2b-requires-ack-envelope",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "B2c-task-envelope",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "B3-ack-envelope-two-receivers",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "B6-no-receiver-queueing",
+      "status": "pass",
+      "detail": null
+    }
+  ],
+  "versions": {
+    "atm": "1.4.6",
+    "hermes_atm": "1.4.6",
+    "atm_graft": "1.4.6",
+    "herdr": "herdr 0.8.2",
+    "hermes_fork": "unknown"
+  },
+  "provenance": {
+    "atm_core_sha": "",
+    "ci_run_id": "",
+    "artifacts": [
+      {
+        "name": "atm_1.4.6_aarch64-unknown-linux-gnu.tar.gz",
+        "sha256": "42eb708e5d0c94f218f34362b3d5369b02235acc796fcee6d17b3779a07cd389"
+      },
+      {
+        "name": "hermes_atm-1.4.6-py3-none-any.whl",
+        "sha256": "5559a8bbaaea8d2f8d9d4b54179ce6352a39bf1aca8f536f7c92a1ad1b9f798c"
+      },
+      {
+        "name": "atm_graft-1.4.6-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        "sha256": "09f45cdecbfc640afdd4e2848c9dba5074ab98ab20d7566258af5c051d81c1d9"
+      }
+    ]
+  },
+  "daemon": {
+    "client_version": "1.4.6",
+    "daemon_version": "1.4.6",
+    "doctor_status": "healthy"
+  },
+  "image": {
+    "tag": "loki/hermes-testbed:testbed",
+    "digest": "unknown"
+  },
+  "host": {
+    "platform": "aarch64",
+    "emulation": "native"
+  },
+  "started_at": "2026-08-31T22:43:58Z",
+  "finished_at": "2026-08-31T22:44:00Z",
+  "duration_ms": 2288
+}

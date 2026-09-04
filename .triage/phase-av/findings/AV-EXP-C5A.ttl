@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-EXP-C5A>
+  a triage:Finding ;
+  triage:findingId "AV-EXP-C5A" ;
+  triage:title "Silent reader-pool erosion: retire_and_replace spawn failure permanently loses capacity, unlogged" ;
+  triage:description "Reader pool spawn_worker failure in retire_and_replace is silently returned without logging; permanently reduces pool capacity. Refutes: submit_blocking-on-Tokio-thread claim (sole caller is legacy sync search store, not on router)." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1A ;
+  triage:foundAt "2026-09-01T01:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-EXP-C5A/AV-C5A-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-EXP-C5A/AV-C5A-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 791 ;
+  triage:snippet "if self.spawn_worker(replacement_id).is_err() { return; }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/846c58b40> .
+
+<urn:atm:triage:worktree/integrate-phase-av/846c58b40>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "846c58b40" ;
+  triage:orderIndex 0 .

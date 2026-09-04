@@ -1,59 +1,40 @@
-#[cfg(test)]
-use crate::observability::NullSqliteObservability;
-use crate::observability::{
-    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
-};
-use crate::search_reader::SearchReader;
-use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
+use crate::mail_messages_schema::{mail_messages_index_ddl, mail_messages_table_ddl};
+pub(crate) use crate::shared_db_reader_lanes::SharedDb;
+use crate::writer::{WriteOp, WriteOpResult, validate_upsert_message_request};
+use atm_storage::AsyncMailboxReader;
 use atm_storage::TemplateMessageAdmission;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
-    MessageQuery,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
 #[cfg(test)]
 use rusqlite::OpenFlags;
 use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
+#[cfg(test)]
+use std::sync::LazyLock;
+#[cfg(test)]
+use std::sync::Mutex;
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
 // Search projection writes touch several B-trees and FTS segments inside the
 // sole durable writer transaction.  The SQLite default is only 2 MiB, which
 // churns cache pages under a concurrent admission burst.  This setting applies
 // only to the one writer connection and bounds its page cache at 32 MiB.
 const WRITER_CACHE_KIB: i64 = 32 * 1024;
+
 #[cfg(test)]
-static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
+pub(crate) static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
+#[cfg(test)]
+static OPENED_CONNECTIONS: LazyLock<Mutex<std::collections::HashMap<String, usize>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
 
-pub(crate) const DB_MIGRATIONS: &str = r#"
-CREATE TABLE IF NOT EXISTS mail_messages (
-    team TEXT NOT NULL,
-    agent TEXT NOT NULL,
-    message_key TEXT NOT NULL,
-    envelope_json TEXT NOT NULL,
-    from_agent TEXT NOT NULL,
-    source_chat_id TEXT NULL,
-    destination_chat_id TEXT NULL,
-    message_text TEXT NULL,
-    template_sha TEXT NULL,
-    vars_json TEXT NULL,
-    category TEXT NULL,
-    content_format TEXT NULL,
-    tags_json TEXT NOT NULL DEFAULT '[]',
-    summary TEXT NULL,
-    message_at TEXT NOT NULL,
-    message_id TEXT NULL,
-    parent_message_id TEXT NULL,
-    thread_mode TEXT NULL CHECK(thread_mode IS NULL OR thread_mode IN ('add-details', 'supersede')),
-    recorded_at TEXT,
-    CHECK(message_key GLOB 'atm:*' OR message_key GLOB 'ext:*'),
-    PRIMARY KEY (team, agent, message_key)
-);
-
+pub(crate) const DB_MIGRATIONS: &str = concat!(
+    mail_messages_table_ddl!("CREATE TABLE IF NOT EXISTS mail_messages"),
+    r#"
 CREATE TABLE IF NOT EXISTS mail_message_states (
     team TEXT NOT NULL,
     agent TEXT NOT NULL,
@@ -64,10 +45,19 @@ CREATE TABLE IF NOT EXISTS mail_message_states (
     expires_at TEXT NULL,
     deleted_at TEXT NULL,
     updated_at TEXT NULL,
+    nudge_pending_at TEXT NULL,
+    nudge_attempts INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (team, agent, message_key),
     FOREIGN KEY (team, agent, message_key)
         REFERENCES mail_messages(team, agent, message_key)
         ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS mail_seen_watermarks (
+    team TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    watermark TEXT NOT NULL,
+    PRIMARY KEY (team, agent)
 );
 
 CREATE TABLE IF NOT EXISTS team_roster (
@@ -121,23 +111,6 @@ CREATE TABLE IF NOT EXISTS peer_trusted_peers (
     https_port INTEGER NOT NULL DEFAULT 43101 CHECK(https_port BETWEEN 1 AND 65535)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
-    ON mail_messages(team, agent, parent_message_id)
-    WHERE parent_message_id IS NOT NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_message_id
-    ON mail_messages(team, agent, message_id)
-    WHERE message_id IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox
-    ON mail_messages(team, agent);
-
--- Post-commit received-hook dispatch reloads an admitted record by its
--- immutable message key.  The mailbox primary key begins with team and agent,
--- so it cannot serve that global-key lookup without scanning a growing table.
-CREATE INDEX IF NOT EXISTS idx_mail_messages_message_key
-    ON mail_messages(message_key);
-
 CREATE INDEX IF NOT EXISTS idx_mail_message_states_mailbox
     ON mail_message_states(team, agent);
 
@@ -156,7 +129,9 @@ CREATE INDEX IF NOT EXISTS idx_peer_trusted_peers_enabled
 -- AK.2 retires the worker-only reconciliation policy.  `IF EXISTS` makes the
 -- migration safe for both historical databases and fresh installs.
 DROP TABLE IF EXISTS peer_sync_policies;
-"#;
+"#,
+    mail_messages_index_ddl!(),
+);
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.
 
@@ -181,82 +156,38 @@ impl SharedDbTarget {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct SharedDb {
-    target: Arc<SharedDbTarget>,
-    writer: Arc<SqliteWriter>,
-    search_reader: Arc<SearchReader>,
-    observability: Arc<dyn SqliteObservability>,
+/// Test-only instrumentation at the concrete SQLite open sites. Entries are
+/// keyed by the target so parallel tests cannot contaminate each other's
+/// connection-budget evidence.
+#[cfg(test)]
+pub(crate) fn reset_opened_connection_count(target: &SharedDbTarget) {
+    OPENED_CONNECTIONS
+        .lock()
+        .expect("opened connection counter lock")
+        .insert(target.display(), 0);
+}
+
+#[cfg(test)]
+pub(crate) fn record_opened_connection(target: &SharedDbTarget) {
+    let mut counters = OPENED_CONNECTIONS
+        .lock()
+        .expect("opened connection counter lock");
+    if let Some(count) = counters.get_mut(&target.display()) {
+        *count += 1;
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn opened_connection_count(target: &SharedDbTarget) -> usize {
+    OPENED_CONNECTIONS
+        .lock()
+        .expect("opened connection counter lock")
+        .get(&target.display())
+        .copied()
+        .unwrap_or_default()
 }
 
 impl SharedDb {
-    pub(crate) fn target(&self) -> &SharedDbTarget {
-        self.target.as_ref()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn open_in_memory_for_test() -> Result<Self, AtmError> {
-        Self::open_in_memory_with_observability(Arc::new(NullSqliteObservability))
-    }
-
-    #[cfg(test)]
-    pub(crate) fn open_in_memory_with_observability(
-        observability: Arc<dyn SqliteObservability>,
-    ) -> Result<Self, AtmError> {
-        let target = Arc::new(SharedDbTarget::InMemory {
-            uri: format!(
-                "file:atm-storage-rusqlite-{}?mode=memory&cache=shared",
-                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
-            ),
-        });
-        let writer = Arc::new(SqliteWriter::start(
-            Arc::clone(&target),
-            Arc::clone(&observability),
-        )?);
-        let search_reader = Arc::new(SearchReader::start(Arc::clone(&target))?);
-        Ok(Self {
-            target,
-            writer,
-            search_reader,
-            observability,
-        })
-    }
-
-    pub(crate) fn open_with_observability(
-        path: impl AsRef<Path>,
-        observability: Arc<dyn SqliteObservability>,
-    ) -> Result<Self, AtmError> {
-        let path = path.as_ref().to_path_buf();
-        if let Some(parent) = path.parent() {
-            // Accepted risk: durable-state root creation happens during boundary
-            // assembly and is allowed to block on the host filesystem once.
-            std::fs::create_dir_all(parent).map_err(|error| {
-                AtmError::mailbox_write(format!(
-                    "failed to create sqlite parent directory {}: {error}",
-                    parent.display()
-                ))
-            })?;
-        }
-
-        let target = Arc::new(SharedDbTarget::Path(path));
-        let writer = Arc::new(SqliteWriter::start(
-            Arc::clone(&target),
-            Arc::clone(&observability),
-        )?);
-        let search_reader = Arc::new(SearchReader::start(Arc::clone(&target))?);
-        tracing::debug!(
-            writer_handles = 1,
-            path = %target.display(),
-            "sqlite boundary assembly opened"
-        );
-        Ok(Self {
-            target,
-            writer,
-            search_reader,
-            observability,
-        })
-    }
-
     /// Call only from backend-owned blocking code paths.
     ///
     /// Accepted risk: this is enforced as a crate-internal contract rather
@@ -267,8 +198,12 @@ impl SharedDb {
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
     ) -> Result<T, AtmError> {
         debug_assert_blocking_only("SharedDb::with_connection");
-        let mut connection = self.open_connection()?;
-        operation(&mut connection)
+        let mut lease = crate::control_path_pool::checkout(&self.control_path)?;
+        let outcome = operation(lease.connection());
+        if outcome.is_ok() {
+            lease.park();
+        }
+        outcome
     }
 
     /// Call only from backend-owned blocking code paths.
@@ -313,7 +248,7 @@ impl SharedDb {
             .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
             WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -374,7 +309,7 @@ impl SharedDb {
             } => Err(AtmError::daemon_unavailable(
                 "sqlite writer reported a duplicate without its retained record",
             )),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -382,6 +317,28 @@ impl SharedDb {
             | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async message upsert",
             )),
+        }
+    }
+
+    pub(crate) async fn submit_read_display_state_async(
+        &self,
+        mailbox: atm_storage::MailboxScope,
+        message_ids: Vec<atm_storage::MessageKey>,
+        seen_watermark: Option<atm_storage::IsoTimestamp>,
+    ) -> Result<(), AtmError> {
+        match self
+            .writer
+            .submit_async(WriteOp::ApplyReadDisplayState {
+                mailbox,
+                message_ids,
+                seen_watermark,
+            })
+            .await?
+        {
+            WriteOpResult::ReadDisplayStateApplied => Ok(()),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for async read display state: {other:?}"
+            ))),
         }
     }
 
@@ -425,7 +382,7 @@ impl SharedDb {
         let result = self.writer.submit(WriteOp::UpsertMessages(records))?;
         match result {
             WriteOpResult::UpsertMessages => Ok(()),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -446,7 +403,7 @@ impl SharedDb {
             .submit(WriteOp::Acknowledge { source, builder })?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
@@ -468,7 +425,7 @@ impl SharedDb {
             .await?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::Messages(_)
+            WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
@@ -479,25 +436,8 @@ impl SharedDb {
         }
     }
 
-    pub(crate) async fn submit_list_messages_async(
-        &self,
-        query: MessageQuery,
-    ) -> Result<Vec<Message>, AtmError> {
-        match self
-            .writer
-            .submit_async(WriteOp::ListMessages(query))
-            .await?
-        {
-            WriteOpResult::Messages(messages) => Ok(messages),
-            WriteOpResult::UpsertMessage { .. }
-            | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_)
-            | WriteOpResult::TemplateRegistration(_)
-            | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
-                "sqlite writer returned the wrong result for async mailbox projection",
-            )),
-        }
+    pub(crate) fn mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
+        Arc::clone(&self.mailbox_reader)
     }
 
     pub(crate) fn error(&self, message: impl Into<String>, source: RusqliteError) -> AtmError {
@@ -510,41 +450,6 @@ impl SharedDb {
             #[cfg(test)]
             SharedDbTarget::InMemory { .. } => None,
         }
-    }
-
-    pub(crate) fn checkpoint_wal(&self) -> Result<(), AtmError> {
-        #[cfg(test)]
-        if matches!(self.target.as_ref(), SharedDbTarget::InMemory { .. }) {
-            return Ok(());
-        }
-
-        let result = self.with_connection(|connection| {
-            connection
-                .query_row("PRAGMA wal_checkpoint(PASSIVE);", [], |_row| Ok(()))
-                .map_err(|error| {
-                    sqlite_error(
-                        self.target.as_ref(),
-                        "failed to checkpoint sqlite wal during daemon shutdown",
-                        error,
-                    )
-                })
-        });
-        match &result {
-            Ok(()) => {}
-            Err(error) => self
-                .observability
-                .emit_or_warn(SqliteObservabilityEvent::new(
-                    "wal_checkpoint",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message().to_owned(),
-                    Some(error.code()),
-                )),
-        }
-        result
-    }
-
-    fn open_connection(&self) -> Result<Connection, AtmError> {
-        open_connection_for_target(self.target.as_ref())
     }
 }
 
@@ -575,9 +480,14 @@ pub(crate) fn configure_connection(
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     // Bound SQLite lock waits so contention returns an actionable ATM timeout
-    // instead of hanging an adapter thread indefinitely.
+    // instead of hanging an adapter thread indefinitely. This is derived
+    // from `atm_storage::request_budget::SERVER_REQUEST_BUDGET` so a
+    // writer-lock wait can never by itself consume the entire per-request
+    // budget the Tokio/Axum server enforces around this call; a busy
+    // timeout at or above that budget would mean a lock wait could never
+    // succeed inside it.
     connection
-        .busy_timeout(std::time::Duration::from_millis(SQLITE_BUSY_TIMEOUT_MS))
+        .busy_timeout(atm_storage::request_budget::SQLITE_BUSY_TIMEOUT)
         .map_err(|error| sqlite_error(target, "failed to configure sqlite busy timeout", error))?;
     connection
         .pragma_update(None, "foreign_keys", "ON")
@@ -633,9 +543,13 @@ pub(crate) fn open_connection_for_target(target: &SharedDbTarget) -> Result<Conn
         .map_err(|error| sqlite_open_error(target, error))?,
     };
     configure_connection(&mut connection, target)?;
+    #[cfg(test)]
+    record_opened_connection(target);
     Ok(connection)
 }
 
+/// Opens a connection which is physically read-only for durable databases and
+/// configured defensively for the bounded reader lanes.
 pub(crate) fn open_writer_connection_for_target(
     target: &SharedDbTarget,
 ) -> Result<Connection, AtmError> {
@@ -657,10 +571,16 @@ pub(crate) fn ensure_schema(
         .map_err(|error| sqlite_error(target, "failed to initialize sqlite schema", error))?;
     ensure_mail_message_columns(connection, target)?;
     crate::template_catalog_schema::ensure_schema(connection, target)?;
+    // Runs after every additive column migration so the rebuilt table can be
+    // populated from a legacy table that already carries the current column
+    // set, and before the search projections, which read `mail_messages`.
+    crate::mail_messages_schema::ensure_mail_messages_message_text_nullable(connection, target)?;
     crate::search_schema::ensure_schema(connection, target)?;
     ensure_team_roster_columns(connection, target)?;
-    ensure_team_roster_harness_values(connection, target)?;
+    crate::team_roster_schema::ensure_team_roster_harness_values(connection, target)?;
     ensure_team_nudge_template_override_columns(connection, target)?;
+    ensure_mail_message_states_nudge_columns(connection, target)?;
+    crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
     ensure_column(
         connection,
         target,
@@ -767,80 +687,6 @@ fn ensure_team_roster_columns(
     )
 }
 
-fn ensure_team_roster_harness_values(
-    connection: &mut Connection,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let table_sql = connection
-        .query_row(
-            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'team_roster';",
-            [],
-            |row| row.get::<_, String>(0),
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to inspect team_roster harness constraint",
-                error,
-            )
-        })?;
-    if table_sql.contains("'hermes'") && table_sql.contains("'python-graft'") {
-        return Ok(());
-    }
-
-    let transaction = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to start team_roster harness migration",
-                error,
-            )
-        })?;
-    transaction
-        .execute_batch(
-            "DROP INDEX IF EXISTS idx_team_roster_team_name;
-             ALTER TABLE team_roster RENAME TO team_roster_legacy_harness;
-             CREATE TABLE team_roster (
-                 team_name TEXT NOT NULL,
-                 agent_name TEXT NOT NULL,
-                 member_kind TEXT NOT NULL CHECK(member_kind IN ('permanent', 'ephemeral')),
-                 harness TEXT NOT NULL CHECK(harness IN ('claude-code', 'codex-cli', 'gemini-cli', 'opencode', 'hermes', 'python-graft')),
-                 agent_type TEXT NOT NULL DEFAULT '',
-                 model TEXT NOT NULL DEFAULT '',
-                 metadata_json TEXT NOT NULL DEFAULT '{}',
-                 source TEXT,
-                 recipient_pane_id TEXT NULL,
-                 updated_at TEXT NOT NULL,
-                 PRIMARY KEY (team_name, agent_name)
-             );
-             INSERT INTO team_roster(
-                 team_name, agent_name, member_kind, harness, agent_type, model,
-                 metadata_json, source, recipient_pane_id, updated_at
-             )
-             SELECT
-                 team_name, agent_name, member_kind, harness, agent_type, model,
-                 metadata_json, source, recipient_pane_id, updated_at
-             FROM team_roster_legacy_harness;
-             DROP TABLE team_roster_legacy_harness;
-             CREATE INDEX idx_team_roster_team_name ON team_roster(team_name);",
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to migrate team_roster harness constraint",
-                error,
-            )
-        })?;
-    transaction.commit().map_err(|error| {
-        sqlite_error(
-            target,
-            "failed to commit team_roster harness migration",
-            error,
-        )
-    })
-}
-
 fn ensure_team_nudge_template_override_columns(
     connection: &Connection,
     target: &SharedDbTarget,
@@ -867,6 +713,46 @@ fn ensure_team_nudge_template_override_columns(
             )
         })?;
     Ok(())
+}
+
+fn ensure_mail_message_states_nudge_columns(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    ensure_column(
+        connection,
+        target,
+        "mail_message_states",
+        "nudge_pending_at",
+        "ALTER TABLE mail_message_states ADD COLUMN nudge_pending_at TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_message_states",
+        "nudge_attempts",
+        "ALTER TABLE mail_message_states ADD COLUMN nudge_attempts INTEGER NOT NULL DEFAULT 0;",
+    )?;
+    // Partial index: only rows currently awaiting a deferred nudge are
+    // indexed, keeping claim_next_pending's ORDER BY message_key scan cheap
+    // without paying index-maintenance cost on the (much larger) steady
+    // state of already-delivered rows. Created here (post column-migration)
+    // rather than in DB_MIGRATIONS because ensure_schema runs DB_MIGRATIONS
+    // before the column-migration functions, and the index depends on the
+    // nudge_pending_at column existing.
+    connection
+        .execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_mail_message_states_pending
+                ON mail_message_states(team, agent, message_key)
+                WHERE nudge_pending_at IS NOT NULL;",
+        )
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to create pending-nudge partial index",
+                error,
+            )
+        })
 }
 
 fn ensure_mail_messages_message_id_compat(
@@ -955,7 +841,7 @@ fn table_exists(
         })
 }
 
-fn sqlite_open_error(target: &SharedDbTarget, source: RusqliteError) -> AtmError {
+pub(crate) fn sqlite_open_error(target: &SharedDbTarget, source: RusqliteError) -> AtmError {
     sqlite_error(
         target,
         format!("failed to open sqlite database {}", target.display()),
@@ -969,9 +855,12 @@ pub(crate) fn sqlite_error(
     source: RusqliteError,
 ) -> AtmError {
     let message = message.into();
-    match &source {
-        RusqliteError::SqliteFailure(error, _) => {
-            match error.code {
+    // Every arm keeps the stable code/message contract; the raw SQLite
+    // failure rides along as the machine-preserved cause so a constraint
+    // violation or schema mismatch is diagnosable from the surfaced error.
+    let error =
+        match &source {
+            RusqliteError::SqliteFailure(error, _) => match error.code {
                 rusqlite::ffi::ErrorCode::ConstraintViolation => AtmError::validation(message),
                 rusqlite::ffi::ErrorCode::DatabaseBusy
                 | rusqlite::ffi::ErrorCode::DatabaseLocked => match target {
@@ -997,14 +886,14 @@ pub(crate) fn sqlite_error(
                     AtmError::mailbox_write(message)
                 }
                 _ => AtmError::mailbox_write(message),
-            }
-        }
-        _ => AtmError::mailbox_write(message),
-    }
+            },
+            _ => AtmError::mailbox_write(message),
+        };
+    error.with_cause(source)
 }
 
-fn json_error(message: impl Into<String>, _source: serde_json::Error) -> AtmError {
-    AtmError::validation(message)
+fn json_error(message: impl Into<String>, source: serde_json::Error) -> AtmError {
+    AtmError::validation(message).with_cause(source)
 }
 
 pub(crate) fn serialize_json<T: serde::Serialize>(
@@ -1033,7 +922,140 @@ pub(crate) fn sqlite_thread_mode(mode: Option<ThreadMode>) -> Option<&'static st
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
+    use crate::observability::NullSqliteObservability;
+    use crate::shared_db_reader_lanes::open_read_connection_for_target;
+    use atm_storage::AtmErrorCode;
+
+    /// Number of control-path borrows a single burst is modelled on. Any
+    /// value comfortably above the connection bound proves reuse rather than
+    /// an accidentally oversized cache.
+    const CONTROL_PATH_BORROWS: usize = 32;
+
+    fn count_probe_rows(db: &SharedDb) -> Result<i64, AtmError> {
+        db.with_connection(|connection| {
+            connection
+                .query_row("SELECT COUNT(*) FROM mail_messages", [], |row| row.get(0))
+                .map_err(|error| sqlite_error(db.target(), "failed to count probe rows", error))
+        })
+    }
+
+    #[test]
+    fn control_path_borrows_reuse_one_connection_instead_of_reopening_per_call() {
+        let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
+        reset_opened_connection_count(db.target());
+
+        for _ in 0..CONTROL_PATH_BORROWS {
+            count_probe_rows(&db).expect("control-path read succeeds");
+        }
+
+        assert_eq!(
+            opened_connection_count(db.target()),
+            1,
+            "sequential control-path borrows must reuse one connection; opening per call \
+             multiplies descriptor demand by the in-flight admission count"
+        );
+    }
+
+    #[test]
+    fn concurrent_control_path_borrows_stay_within_the_connection_bound() {
+        let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
+        // Warm the pool so the burst below measures reuse, not first-touch.
+        count_probe_rows(&db).expect("control-path read succeeds");
+        reset_opened_connection_count(db.target());
+
+        let barrier = Arc::new(std::sync::Barrier::new(CONTROL_PATH_BORROWS));
+        std::thread::scope(|scope| {
+            for _ in 0..CONTROL_PATH_BORROWS {
+                let db = db.clone();
+                let barrier = Arc::clone(&barrier);
+                scope.spawn(move || {
+                    barrier.wait();
+                    count_probe_rows(&db).expect("control-path read succeeds");
+                });
+            }
+        });
+        let burst_opens = opened_connection_count(db.target());
+        assert!(
+            burst_opens <= crate::control_path_pool::MAX_CONTROL_PATH_CONNECTIONS,
+            "a control-path burst must never open more connections than the bound"
+        );
+
+        reset_opened_connection_count(db.target());
+        for _ in 0..CONTROL_PATH_BORROWS {
+            count_probe_rows(&db).expect("control-path read succeeds");
+        }
+        assert_eq!(
+            opened_connection_count(db.target()),
+            0,
+            "after a burst the parked connections must absorb the next round without reopening"
+        );
+    }
+
+    #[test]
+    fn failed_control_path_borrows_are_not_parked_for_reuse() {
+        let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
+        reset_opened_connection_count(db.target());
+
+        let failure = db
+            .with_connection(|_| Err::<(), _>(AtmError::mailbox_write("probe failure")))
+            .expect_err("the probe operation fails");
+        assert!(failure.message().starts_with("probe failure"));
+        count_probe_rows(&db).expect("control-path read succeeds");
+
+        assert_eq!(
+            opened_connection_count(db.target()),
+            2,
+            "a connection whose operation failed is dropped rather than parked"
+        );
+    }
+
+    #[test]
+    fn sqlite_constraint_violations_keep_the_sqlite_cause() {
+        let database = tempfile::NamedTempFile::new().expect("temporary database");
+        let target = SharedDbTarget::Path(database.path().to_path_buf());
+        let writer = open_connection_for_target(&target).expect("writer connection");
+        writer
+            .execute_batch("CREATE TABLE probe (value TEXT NOT NULL);")
+            .expect("create fixture table");
+        let failure = writer
+            .execute("INSERT INTO probe (value) VALUES (NULL)", [])
+            .expect_err("NOT NULL constraint must fail");
+        let error = sqlite_error(&target, "failed to persist probe", failure);
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().starts_with("failed to persist probe"));
+        assert_eq!(
+            error.cause(),
+            Some("NOT NULL constraint failed: probe.value"),
+            "the raw SQLite failure must survive as the machine-preserved cause"
+        );
+    }
+
+    #[test]
+    fn json_errors_keep_the_serde_cause() {
+        let failure = serde_json::from_str::<serde_json::Value>("{").expect_err("invalid json");
+        let error = json_error("failed to decode probe", failure);
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.cause().is_some_and(|cause| cause.contains("EOF")));
+    }
+
+    #[test]
+    fn defensive_reader_connection_rejects_writes() {
+        let database = tempfile::NamedTempFile::new().expect("temporary database");
+        let target = SharedDbTarget::Path(database.path().to_path_buf());
+        let writer = open_connection_for_target(&target).expect("writer connection");
+        writer
+            .execute_batch("CREATE TABLE read_only_probe (value INTEGER);")
+            .expect("create fixture table");
+        let reader = open_read_connection_for_target(&target).expect("defensive reader");
+        assert!(
+            reader
+                .execute("INSERT INTO read_only_probe (value) VALUES (1)", [])
+                .is_err(),
+            "reader lanes must reject writes through query_only/READ_ONLY"
+        );
+    }
 
     #[test]
     fn ensure_schema_drops_the_retired_peer_sync_policy_table() {
@@ -1095,8 +1117,124 @@ mod tests {
             "post-commit message lookup must remain indexed instead of scanning a growing mailbox: {plan}"
         );
     }
+    #[test]
+    fn configured_busy_timeout_never_reaches_the_server_request_budget() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-busy-timeout-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let connection = open_connection_for_target(&target).expect("open connection");
+
+        let configured_ms: i64 = connection
+            .query_row("PRAGMA busy_timeout;", [], |row| row.get(0))
+            .expect("read configured sqlite busy_timeout");
+
+        let expected_ms =
+            i64::try_from(atm_storage::request_budget::SQLITE_BUSY_TIMEOUT.as_millis())
+                .expect("busy timeout millis fit in i64");
+        assert_eq!(
+            configured_ms, expected_ms,
+            "sqlite busy_timeout must stay derived from the shared request budget"
+        );
+
+        let budget_ms =
+            i64::try_from(atm_storage::request_budget::SERVER_REQUEST_BUDGET.as_millis())
+                .expect("server budget millis fit in i64");
+        assert!(
+            configured_ms < budget_ms,
+            "sqlite busy_timeout ({configured_ms}ms) must stay below the server \
+             request budget ({budget_ms}ms), or a writer-lock wait could never \
+             succeed inside one request"
+        );
+    }
+
     use std::sync::Barrier;
+    use std::sync::mpsc;
     use std::thread;
+
+    #[test]
+    fn stalled_writer_lock_yields_a_typed_lock_error_after_the_busy_timeout() {
+        // Proves the SQLITE_BUSY_TIMEOUT < SERVER_REQUEST_BUDGET contract
+        // holds under real writer-lock contention, not only as the
+        // compile-time assertion in `atm_storage::request_budget`: a second
+        // writer that has to wait out the configured busy_timeout must fail
+        // with a typed lock error, so the daemon can return an actionable
+        // response instead of the request silently overrunning on the
+        // client. This deliberately waits on SQLite's own busy-lock retry
+        // loop instead of a fixed sleep primitive; the elapsed wall time is
+        // the product observable under test, not a synchronization device.
+        //
+        // This intentionally uses a file-backed target rather than the
+        // `cache=shared` in-memory target used by other tests in this
+        // module: SQLite's shared-cache mode reports same-process table
+        // lock conflicts as `SQLITE_LOCKED`, and `busy_timeout`'s retry
+        // handler only fires for `SQLITE_BUSY`, so a shared-cache
+        // in-memory target would fail the second writer immediately
+        // without ever exercising the busy-wait this test verifies.
+        // Production storage (`SharedDbTarget::Path`) always opens plain,
+        // non-shared-cache connections, so this matches production
+        // locking semantics.
+        let tempdir = tempfile::tempdir().expect("create temporary database directory");
+        let db_path = tempdir.path().join("busy-timeout-contract.db");
+        let db = Arc::new(
+            SharedDb::open_with_observability(&db_path, Arc::new(NullSqliteObservability))
+                .expect("open database"),
+        );
+
+        let (holder_ready_tx, holder_ready_rx) = mpsc::channel::<()>();
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let holder_db = Arc::clone(&db);
+        let holder = thread::spawn(move || {
+            holder_db
+                .with_connection(|connection| {
+                    let transaction = connection
+                        .transaction_with_behavior(TransactionBehavior::Immediate)
+                        .expect("first writer acquires the immediate transaction lock");
+                    holder_ready_tx
+                        .send(())
+                        .expect("signal that the writer lock is held");
+                    release_rx
+                        .recv()
+                        .expect("wait for the test to release the writer lock");
+                    transaction.commit().expect("release the writer lock");
+                    Ok(())
+                })
+                .expect("holder transaction succeeds");
+        });
+
+        holder_ready_rx
+            .recv()
+            .expect("first writer must confirm it holds the lock before the second write starts");
+
+        let started_at = std::time::Instant::now();
+        let result = db.with_transaction(|_connection| Ok(()));
+        let elapsed = started_at.elapsed();
+
+        release_tx
+            .send(())
+            .expect("release the held writer lock so the holder thread can finish");
+        holder.join().expect("holder thread panicked");
+
+        let error = result.expect_err(
+            "a second writer contending on an already-held immediate transaction must fail \
+             once the configured busy_timeout elapses",
+        );
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::MailboxLockTimeout,
+            "a busy writer lock must surface as a typed mailbox-lock error, not an \
+             opaque failure: {error:?}"
+        );
+        eprintln!("stalled writer lock typed-error elapsed: {elapsed:?}");
+        assert!(
+            elapsed >= atm_storage::request_budget::SQLITE_BUSY_TIMEOUT / 2,
+            "a stalled writer must actually wait out most of the configured \
+             busy_timeout ({:?}) before failing, not fail immediately: waited {elapsed:?}",
+            atm_storage::request_budget::SQLITE_BUSY_TIMEOUT,
+        );
+    }
 
     #[test]
     fn writer_initialization_persists_wal_for_later_reader_connections() {
@@ -1150,59 +1288,6 @@ mod tests {
                     .expect("reader should succeed");
             }
         });
-    }
-
-    #[test]
-    fn ensure_team_roster_harness_values_migrates_legacy_check_constraint() {
-        let target = SharedDbTarget::InMemory {
-            uri: format!(
-                "file:atm-storage-rusqlite-roster-harness-test-{}?mode=memory&cache=shared",
-                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
-            ),
-        };
-        let mut connection = open_connection_for_target(&target).expect("open connection");
-        connection
-            .execute_batch(
-                "CREATE TABLE team_roster (
-                    team_name TEXT NOT NULL,
-                    agent_name TEXT NOT NULL,
-                    member_kind TEXT NOT NULL CHECK(member_kind IN ('permanent', 'ephemeral')),
-                    harness TEXT NOT NULL CHECK(harness IN ('claude-code', 'codex-cli', 'gemini-cli', 'opencode')),
-                    agent_type TEXT NOT NULL DEFAULT '',
-                    model TEXT NOT NULL DEFAULT '',
-                    metadata_json TEXT NOT NULL DEFAULT '{}',
-                    source TEXT,
-                    recipient_pane_id TEXT NULL,
-                    updated_at TEXT NOT NULL,
-                    PRIMARY KEY (team_name, agent_name)
-                );
-                CREATE INDEX idx_team_roster_team_name ON team_roster(team_name);
-                INSERT INTO team_roster(
-                    team_name, agent_name, member_kind, harness, updated_at
-                ) VALUES ('hermes', 'skillrx', 'permanent', 'claude-code', 'now');",
-            )
-            .expect("create legacy roster table");
-
-        ensure_team_roster_harness_values(&mut connection, &target).expect("migrate roster");
-        connection
-            .execute(
-                "INSERT INTO team_roster(
-                    team_name, agent_name, member_kind, harness, updated_at
-                ) VALUES ('hermes', 'python-worker', 'permanent', 'python-graft', 'now');",
-                [],
-            )
-            .expect("new harness should satisfy migrated check constraint");
-        let harnesses: Vec<String> = connection
-            .prepare(
-                "SELECT harness FROM team_roster
-                 WHERE team_name = 'hermes' ORDER BY agent_name;",
-            )
-            .expect("prepare harness query")
-            .query_map([], |row| row.get(0))
-            .expect("query harnesses")
-            .collect::<Result<_, _>>()
-            .expect("decode harnesses");
-        assert_eq!(harnesses, vec!["python-graft", "claude-code"]);
     }
 
     #[test]
@@ -1260,5 +1345,98 @@ mod tests {
             )
             .expect("query migrated mode");
         assert_eq!(mode, "disabled");
+    }
+
+    #[test]
+    fn ensure_mail_message_states_nudge_columns_migrates_legacy_rows_and_creates_the_partial_index()
+    {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-shared-db-test-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let connection = open_connection_for_target(&target).expect("open connection");
+        connection
+            .execute_batch(
+                "CREATE TABLE mail_message_states (
+                    team TEXT NOT NULL,
+                    agent TEXT NOT NULL,
+                    message_key TEXT NOT NULL,
+                    read INTEGER NOT NULL DEFAULT 0 CHECK(read IN (0, 1)),
+                    pending_ack_at TEXT NULL,
+                    acknowledged_at TEXT NULL,
+                    expires_at TEXT NULL,
+                    deleted_at TEXT NULL,
+                    updated_at TEXT NULL,
+                    PRIMARY KEY (team, agent, message_key)
+                 );",
+            )
+            .expect("create pre-AQ1 mail_message_states table");
+        connection
+            .execute(
+                "INSERT INTO mail_message_states(team, agent, message_key, read, updated_at)
+                 VALUES (?1, ?2, ?3, 0, ?4);",
+                rusqlite::params![
+                    "test-team",
+                    "test-agent",
+                    "atm:01J00000000000000000000001",
+                    atm_storage::types::IsoTimestamp::now().to_string()
+                ],
+            )
+            .expect("insert legacy row");
+
+        ensure_mail_message_states_nudge_columns(&connection, &target)
+            .expect("migrate mail_message_states nudge columns");
+
+        let columns: Vec<String> = connection
+            .prepare("PRAGMA table_info(mail_message_states);")
+            .expect("prepare pragma")
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("query pragma")
+            .collect::<Result<_, _>>()
+            .expect("decode pragma");
+        assert!(
+            columns.iter().any(|column| column == "nudge_pending_at"),
+            "schema upgrade should add the nudge_pending_at column"
+        );
+        assert!(
+            columns.iter().any(|column| column == "nudge_attempts"),
+            "schema upgrade should add the nudge_attempts column"
+        );
+
+        let (read, nudge_pending_at, nudge_attempts): (i64, Option<String>, i64) = connection
+            .query_row(
+                "SELECT read, nudge_pending_at, nudge_attempts FROM mail_message_states
+                 WHERE team = 'test-team' AND agent = 'test-agent'
+                   AND message_key = 'atm:01J00000000000000000000001';",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("query migrated row");
+        assert_eq!(
+            read, 0,
+            "the migration must preserve pre-existing column data"
+        );
+        assert!(nudge_pending_at.is_none());
+        assert_eq!(nudge_attempts, 0);
+
+        let index_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type = 'index' AND name = 'idx_mail_message_states_pending';",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query sqlite_master");
+        assert_eq!(
+            index_count, 1,
+            "the migration must create the pending-nudge partial index"
+        );
+
+        // Idempotent: running the migration again on an already-migrated
+        // database must not error.
+        ensure_mail_message_states_nudge_columns(&connection, &target)
+            .expect("re-run migration idempotently");
     }
 }

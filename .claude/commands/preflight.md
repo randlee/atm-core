@@ -27,6 +27,21 @@ Default mode:
 just validate
 ```
 
+`just validate` includes the always-on, blocking sc-ecosystem preflight. It
+checks the exact pins for `sc-compose` (`sc-composer`),
+`sc-observability`/`sc-observability-types`, and Wyvern against their latest
+releases, then runs each named integration target. The generic
+`ATMD_CHECK_DEP_CURRENCY=1` registry sweep remains a separate warn-only check.
+For a release dry-run of only the lookup/pin portion, use:
+
+```bash
+python3 scripts/validate_release.py ecosystem-preflight --dry-run
+```
+
+The full preflight host must have `wyvern` on `PATH`; a missing binary is an
+actionable blocking failure. AQ5's runtime/test lanes continue to work without
+Wyvern because it remains an optional runtime picker.
+
 Then complete the non-script checks documented in:
 
 ```text

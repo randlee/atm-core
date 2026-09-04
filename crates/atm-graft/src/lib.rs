@@ -2,6 +2,7 @@
 //! Production embedded delivery uses a receiver-owned same-host listener that
 //! accepts one bounded nudge request per connection.
 use std::fmt;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, RwLock};
@@ -9,11 +10,15 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::api::{ApiRequest, DaemonApiClient};
-use atm_core::boundary::PostSendHookEvent;
+use atm_core::boundary::{NudgeKind, PostSendHookEvent};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::list::{ListOutcome, ListQuery};
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::local_http::LocalCapability;
+use atm_core::protocol::{
+    GraftReceiverRefreshRequest, GraftReceiverRegistration, GraftReceiverUnregistration,
+    OwnerGeneration, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+};
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest, WriteOutcome};
 use atm_core::types::{AgentName, ChatId, TeamName};
@@ -24,9 +29,9 @@ mod nudge_sink;
 mod runtime;
 
 use runtime::{
-    GraftReceiverLoopContext, RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch,
-    join_receive_loop_with_deadline, load_graft_config, read_snapshot, run_graft_receiver_loop,
-    set_session_state,
+    GraftReceiverLeaseClient, GraftReceiverLoopContext, RECEIVE_LOOP_READY_DEADLINE,
+    ReceiverReadyLatch, join_receive_loop_with_deadline, load_graft_config, read_snapshot,
+    run_graft_receiver_loop, set_session_state,
 };
 
 pub(crate) const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
@@ -74,6 +79,7 @@ pub mod prelude {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostNudge {
     pub event: PostSendHookEvent,
+    pub kind: NudgeKind,
     pub body: String,
     pub notice_text: String,
 }
@@ -226,10 +232,11 @@ impl GraftClient {
         options: GraftSessionOptions,
         injector: Arc<dyn HostNudgeInjector>,
     ) -> Result<GraftSession, AtmError> {
-        GraftSession::activate_with_observability(
+        GraftSession::activate_with_client(
             options,
             injector,
             Arc::new(NoopGraftObservability),
+            Some(Arc::new(self.clone()) as Arc<dyn GraftReceiverLeaseClient>),
         )
     }
 
@@ -245,6 +252,75 @@ impl GraftClient {
         {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
+        }
+    }
+
+    pub(crate) fn execute_request_sync(
+        &self,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        atm_daemon_client::execute_api_request(self.async_transport.clone(), request)
+    }
+
+    pub(crate) fn register_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        endpoint: SocketAddr,
+        capability: LocalCapability,
+        owner_generation: OwnerGeneration,
+    ) -> Result<(), AtmError> {
+        match self.execute_request_sync(RequestEnvelope::GraftReceiverRegister(
+            GraftReceiverRegistration {
+                team,
+                agent,
+                endpoint,
+                capability,
+                owner_generation,
+            },
+        ))? {
+            ResponseEnvelope::GraftReceiverRegister => Ok(()),
+            other => Err(unexpected_response("graft receiver register", other)),
+        }
+    }
+
+    /// Owner-checked liveness keepalive (ADR-056's `refresh`): fails with
+    /// `AtmErrorCode::GraftReceiverNotOwner` when another generation now owns
+    /// the stored lease, unlike [`Self::register_receiver_sync`]'s
+    /// unconditional upsert.
+    pub(crate) fn refresh_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        owner_generation: OwnerGeneration,
+    ) -> Result<(), AtmError> {
+        match self.execute_request_sync(RequestEnvelope::GraftReceiverRefresh(
+            GraftReceiverRefreshRequest {
+                team,
+                agent,
+                owner_generation,
+            },
+        ))? {
+            ResponseEnvelope::GraftReceiverRefresh => Ok(()),
+            other => Err(unexpected_response("graft receiver refresh", other)),
+        }
+    }
+
+    pub(crate) fn unregister_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        owner_generation: OwnerGeneration,
+    ) -> Result<(), AtmError> {
+        match self.execute_request_sync(RequestEnvelope::GraftReceiverUnregister(
+            GraftReceiverUnregistration {
+                team,
+                agent,
+                owner_generation,
+            },
+        ))? {
+            ResponseEnvelope::GraftReceiverUnregister => Ok(()),
+            other => Err(unexpected_response("graft receiver unregister", other)),
         }
     }
 
@@ -291,6 +367,51 @@ impl GraftClient {
             unread: outcome.bucket_counts.unread,
             pending_ack: outcome.bucket_counts.pending_ack,
         })
+    }
+}
+
+/// Exposes the narrow daemon-lease surface `runtime`'s receive loop needs
+/// (sc-boundary SCB-CYCLE-001): `GraftReceiverLoopContext`/
+/// `RegisteredGraftReceiver` depend on this trait, never on the concrete
+/// `GraftClient` type, so `GraftSession` (which the receive loop's context
+/// is built for) and `GraftClient` (which owns `activate_session`, a
+/// `GraftSession` constructor) do not reference each other's concrete types
+/// in a cycle.
+impl GraftReceiverLeaseClient for GraftClient {
+    fn register_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        endpoint: SocketAddr,
+        capability: LocalCapability,
+        owner_generation: OwnerGeneration,
+    ) -> Result<(), AtmError> {
+        GraftClient::register_receiver_sync(
+            self,
+            team,
+            agent,
+            endpoint,
+            capability,
+            owner_generation,
+        )
+    }
+
+    fn refresh_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        owner_generation: OwnerGeneration,
+    ) -> Result<(), AtmError> {
+        GraftClient::refresh_receiver_sync(self, team, agent, owner_generation)
+    }
+
+    fn unregister_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        owner_generation: OwnerGeneration,
+    ) -> Result<(), AtmError> {
+        GraftClient::unregister_receiver_sync(self, team, agent, owner_generation)
     }
 }
 
@@ -379,6 +500,15 @@ impl GraftSession {
         injector: Arc<dyn HostNudgeInjector>,
         observability: Arc<dyn GraftObservability>,
     ) -> Result<Self, AtmError> {
+        Self::activate_with_client(options, injector, observability, None)
+    }
+
+    fn activate_with_client(
+        options: GraftSessionOptions,
+        injector: Arc<dyn HostNudgeInjector>,
+        observability: Arc<dyn GraftObservability>,
+        client: Option<Arc<dyn GraftReceiverLeaseClient>>,
+    ) -> Result<Self, AtmError> {
         // Retain ATM-owned configuration parsing so malformed configuration is
         // surfaced, but a missing config (or legacy graft.enabled setting)
         // never changes the receiver activation contract. A clean return from
@@ -387,17 +517,13 @@ impl GraftSession {
         let initial_snapshot = options.activation_state();
         let snapshot = Arc::new(RwLock::new(initial_snapshot));
 
-        let endpoint_path = atm_core::graft::graft_receiver_record_path_from_root(
-            options.workspace_root(),
-            options.team(),
-            options.agent(),
-        );
         let (stop_tx, join_handle) = Self::start_graft_receive_loop(
-            endpoint_path,
+            options.workspace_root().to_path_buf(),
             options,
             Arc::clone(&snapshot),
             injector,
             Arc::clone(&observability),
+            client,
         )?;
 
         set_session_state(
@@ -414,22 +540,26 @@ impl GraftSession {
     }
 
     fn start_graft_receive_loop(
-        endpoint_path: PathBuf,
+        graft_root: PathBuf,
         options: GraftSessionOptions,
         worker_snapshot: Arc<RwLock<SessionSnapshot>>,
         injector: Arc<dyn HostNudgeInjector>,
         worker_observability: Arc<dyn GraftObservability>,
+        client: Option<Arc<dyn GraftReceiverLeaseClient>>,
     ) -> Result<GraftReceiveLoopWorker, AtmError> {
         let (stop_tx, stop_rx) = mpsc::channel();
-        let ready_latch = ReceiverReadyLatch::new();
+        let mut ready_latch = ReceiverReadyLatch::new();
         let join_handle = spawn_graft_receive_loop(
-            endpoint_path,
+            graft_root,
             options,
             worker_snapshot,
             injector,
             worker_observability,
-            ready_latch.notifier(),
-            stop_rx,
+            client,
+            ReceiveLoopChannels {
+                ready_tx: ready_latch.notifier(),
+                stop_rx,
+            },
         )?;
         match ready_latch.wait_until_listening(RECEIVE_LOOP_READY_DEADLINE) {
             Ok(()) => Ok((stop_tx, join_handle)),
@@ -439,10 +569,10 @@ impl GraftSession {
                 // typed bind/ownership error is never replaced by the latch's
                 // generic timeout or disconnect diagnostic.
                 let _ = stop_tx.send(());
-                match join_receive_loop_with_deadline(join_handle) {
-                    Err(worker_error) => Err(worker_error),
-                    Ok(()) => Err(readiness_error),
-                }
+                Err(receive_loop_startup_error(
+                    readiness_error,
+                    join_receive_loop_with_deadline(join_handle),
+                ))
             }
         }
     }
@@ -484,30 +614,63 @@ impl GraftSession {
     }
 }
 
+struct ReceiveLoopChannels {
+    ready_tx: std::sync::mpsc::SyncSender<()>,
+    stop_rx: std::sync::mpsc::Receiver<()>,
+}
+
 fn spawn_graft_receive_loop(
-    endpoint_path: PathBuf,
+    graft_root: PathBuf,
     options: GraftSessionOptions,
     worker_snapshot: Arc<RwLock<SessionSnapshot>>,
     injector: Arc<dyn HostNudgeInjector>,
     worker_observability: Arc<dyn GraftObservability>,
-    ready_tx: std::sync::mpsc::SyncSender<()>,
-    stop_rx: std::sync::mpsc::Receiver<()>,
+    client: Option<Arc<dyn GraftReceiverLeaseClient>>,
+    channels: ReceiveLoopChannels,
 ) -> Result<std::thread::JoinHandle<Result<(), AtmError>>, AtmError> {
     let thread_name = format!("atm-graft-{}", options.agent());
     std::thread::Builder::new()
         .name(thread_name)
         .spawn(move || {
             run_graft_receiver_loop(GraftReceiverLoopContext {
-                endpoint_path,
+                graft_root,
+                team: options.team().clone(),
+                agent: options.agent().clone(),
                 owner_chat_id: options.owner_chat_id(),
+                client,
                 snapshot: worker_snapshot,
                 injector,
                 observability: worker_observability,
-                stop_rx,
-                ready_tx: Some(ready_tx),
+                stop_rx: channels.stop_rx,
+                ready_tx: Some(channels.ready_tx),
+                receiver_target_tx: None,
             })
         })
         .map_err(spawn_receive_loop_error)
+}
+
+/// Reports the cause a caller can act on when receiver startup did not reach
+/// readiness.
+///
+/// The worker's own typed failure (bind refused, endpoint already owned, a
+/// lease/announce failure that ended the loop) is always the actionable one,
+/// so it replaces the latch's generic diagnostic outright. When the worker
+/// neither failed nor signaled in time, the readiness error is returned with
+/// the join outcome appended so a timeout is never reported bare.
+fn receive_loop_startup_error(
+    readiness_error: AtmError,
+    worker_result: Result<(), AtmError>,
+) -> AtmError {
+    match worker_result {
+        Err(worker_error) => worker_error,
+        Ok(()) => AtmError::new(
+            readiness_error.code(),
+            format!(
+                "{} (the receive loop stopped without reporting a failure)",
+                readiness_error.message()
+            ),
+        ),
+    }
 }
 
 fn spawn_receive_loop_error(source: std::io::Error) -> AtmError {
@@ -538,7 +701,7 @@ impl Drop for GraftSession {
 mod tests {
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     use atm_core::protocol::{
         RequestEnvelope as CoreRequestEnvelope, ResponseEnvelope as CoreResponseEnvelope,
@@ -687,6 +850,52 @@ mod tests {
         client.read_message(read_query).await.expect("read");
     }
 
+    #[test]
+    fn receiver_registers_at_bind_and_unregisters_its_generation_on_drop() {
+        let paths = test_paths();
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let captured = Arc::clone(&requests);
+        let transport = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+            let response = match &request {
+                CoreRequestEnvelope::GraftReceiverRegister(_) => {
+                    CoreResponseEnvelope::GraftReceiverRegister
+                }
+                CoreRequestEnvelope::GraftReceiverUnregister(_) => {
+                    CoreResponseEnvelope::GraftReceiverUnregister
+                }
+                other => panic!("unexpected receiver request: {other:?}"),
+            };
+            captured.lock().expect("request capture lock").push(request);
+            Ok(response)
+        })));
+        let client = GraftClient::from_fake_transport_for_test(transport);
+        let session = client
+            .activate_session(session_options(&paths), Arc::new(NoopInjector))
+            .expect("receiver activation");
+
+        let registration = {
+            let requests = requests.lock().expect("request capture lock");
+            assert_eq!(requests.len(), 1, "bind announces exactly one lease");
+            let CoreRequestEnvelope::GraftReceiverRegister(registration) = &requests[0] else {
+                panic!("bind must register the receiver")
+            };
+            registration.clone()
+        };
+        session.close().expect("receiver close");
+
+        let requests = requests.lock().expect("request capture lock");
+        assert_eq!(requests.len(), 2, "drop unregisters the receiver lease");
+        let CoreRequestEnvelope::GraftReceiverUnregister(unregistration) = &requests[1] else {
+            panic!("drop must unregister the receiver")
+        };
+        assert_eq!(unregistration.team, registration.team);
+        assert_eq!(unregistration.agent, registration.agent);
+        assert_eq!(
+            unregistration.owner_generation,
+            registration.owner_generation
+        );
+    }
+
     #[tokio::test]
     async fn mailbox_work_counts_projects_existing_non_mutating_read_buckets() {
         for (unread, pending_ack) in [(0, 0), (2, 0), (0, 3), (2, 3)] {
@@ -781,11 +990,18 @@ mod tests {
     #[test]
     fn session_activates_in_a_bare_workspace_without_atm_config() {
         let paths = test_paths();
-        let endpoint_path = atm_core::graft::graft_receiver_record_path_from_root(
-            &paths.workspace_root,
-            &TeamName::from_validated(TEST_TEAM),
-            &AgentName::from_validated("qa-a"),
-        );
+        let legacy_endpoint_path = paths
+            .workspace_root
+            .join(".atm")
+            .join("graft")
+            .join(TEST_TEAM)
+            .join("qa-a.json");
+        let lock_path = paths
+            .workspace_root
+            .join(".atm")
+            .join("graft")
+            .join(TEST_TEAM)
+            .join("qa-a.lock");
         let session = GraftSession::activate(session_options(&paths), Arc::new(NoopInjector))
             .expect("bare workspace must activate or return an error");
 
@@ -793,7 +1009,14 @@ mod tests {
             session.snapshot().expect("snapshot").state,
             GraftSessionState::Listening
         );
-        assert!(endpoint_path.exists(), "receiver record must be published");
+        assert!(
+            lock_path.exists(),
+            "receiver ownership lock must be retained"
+        );
+        assert!(
+            !legacy_endpoint_path.exists(),
+            "receiver must not publish a legacy endpoint artifact"
+        );
         session.close().expect("close active receiver");
     }
 
@@ -825,6 +1048,43 @@ mod tests {
             .expect_err("second receiver must report the endpoint ownership conflict");
 
         assert_eq!(error.code(), AtmErrorCode::GraftReceiverAlreadyActive);
+        active.close().expect("close active receiver");
+    }
+
+    #[test]
+    fn minimal_workspace_activation_conflict_reports_a_cause_not_a_bare_timeout() {
+        // RRG-HERMES-FLEET-NUDGE-001 shape: a Hermes host activates a
+        // receiver against a minimal workspace root whose `.atm.toml` carries
+        // only a default team. When that activation cannot succeed, the
+        // caller must receive the receive loop's own typed cause, promptly,
+        // rather than the readiness latch's bare `WaitTimeout`.
+        let paths = test_paths();
+        fs::write(
+            paths.workspace_root.join(".atm.toml"),
+            "[atm]\ndefault_team = \"test-team\"\n",
+        )
+        .expect("write minimal config");
+        let active = GraftSession::activate(session_options(&paths), Arc::new(NoopInjector))
+            .expect("minimal workspace root must activate a receiver");
+        assert_eq!(
+            active.snapshot().expect("snapshot").state,
+            GraftSessionState::Listening
+        );
+
+        let started = std::time::Instant::now();
+        let error = GraftSession::activate(session_options(&paths), Arc::new(NoopInjector))
+            .expect_err("a conflicting activation must fail");
+
+        assert_eq!(error.code(), AtmErrorCode::GraftReceiverAlreadyActive);
+        assert!(
+            !error.message().contains("readiness was not signaled"),
+            "startup failure must not be masked by the readiness timeout: {}",
+            error.message()
+        );
+        assert!(
+            started.elapsed() < RECEIVE_LOOP_READY_DEADLINE,
+            "a failed receive loop must be reported before the readiness deadline"
+        );
         active.close().expect("close active receiver");
     }
 

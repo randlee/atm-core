@@ -1,0 +1,401 @@
+{
+  "baseline_revision": 1,
+  "campaign_id": "20260831T210540Z-rand-m5.local-read",
+  "campaign_ids": [
+    "20260831T210540Z-rand-m5.local-read-read-fanout",
+    "20260831T210540Z-rand-m5.local-read-query-fts",
+    "20260831T210540Z-rand-m5.local-read-read-under-write-load"
+  ],
+  "corpus": {
+    "agents_per_team": 4,
+    "generator_version": "av4-corpus-generator-1",
+    "message_count": 32,
+    "message_size_distribution": {
+      "kind": "fixed",
+      "payload_bytes": 256
+    },
+    "messages_per_member": 1,
+    "seed": "av4-corpus-v1",
+    "skew_profile": "uniform:one-message-per-member",
+    "team_count": 8
+  },
+  "families": [
+    {
+      "baseline_p50_floor": 0.0,
+      "description": "Concurrent read, peek, and list against the seeded corpus",
+      "diagnostics": {
+        "deadline_expiries": {
+          "expired_in_queue": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          },
+          "interrupted_while_active": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          },
+          "observed_cli_timeouts": 0,
+          "other_cli_errors": 0,
+          "quarantined": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          }
+        },
+        "execution_ms": {
+          "max": 46.33691697381437,
+          "min": 5.242042010650039,
+          "p50": 22.575291979592294,
+          "p95": 37.44645894039422,
+          "p99": 40.52454105112702
+        },
+        "in_flight": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "lane": "mailbox",
+        "pool_size": 4,
+        "quarantine_exhausted_rejections": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "quarantined_worker_gauge": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "queue_depth": 16,
+        "retired_replaced_workers": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "saturation_events": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "wait_ms": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "wal_health": {
+          "current_wal_frame_count": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          },
+          "last_checkpoint_outcome": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          }
+        }
+      },
+      "family": "read-fanout",
+      "fanout": 32,
+      "latency_ms": {
+        "max": 46.33691697381437,
+        "min": 5.242042010650039,
+        "p50": 22.575291979592294,
+        "p95": 37.44645894039422,
+        "p99": 40.52454105112702
+      },
+      "mixed_read_p95_budget_ms": null,
+      "mixed_read_p95_budget_source": null,
+      "pool_size": 4,
+      "queue_depth": 16,
+      "requests": {
+        "success_rate": 1.0,
+        "successful": 3776,
+        "total": 3776
+      },
+      "status": "PASS",
+      "throughput_per_second": {
+        "max": 754.8485109810853,
+        "min": 754.8485109810853,
+        "p50": 754.8485109810853,
+        "p95": 754.8485109810853,
+        "p99": 754.8485109810853
+      },
+      "throughput_requests_per_second": 754.8485109810853,
+      "windows": {
+        "measurement_seconds": 5.0,
+        "warmup_seconds": 2.0
+      },
+      "writer": null
+    },
+    {
+      "baseline_p50_floor": 0.0,
+      "description": "Concurrent FTS search and filtered-list queries",
+      "diagnostics": {
+        "deadline_expiries": {
+          "expired_in_queue": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          },
+          "interrupted_while_active": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          },
+          "observed_cli_timeouts": 0,
+          "other_cli_errors": 0,
+          "quarantined": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          }
+        },
+        "execution_ms": {
+          "max": 45.16420792788267,
+          "min": 5.413000006228685,
+          "p50": 23.24197895359248,
+          "p95": 37.636166089214385,
+          "p99": 40.20412499085069
+        },
+        "in_flight": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "lane": "search",
+        "pool_size": 2,
+        "quarantine_exhausted_rejections": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "quarantined_worker_gauge": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "queue_depth": 8,
+        "retired_replaced_workers": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "saturation_events": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "wait_ms": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "wal_health": {
+          "current_wal_frame_count": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          },
+          "last_checkpoint_outcome": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          }
+        }
+      },
+      "family": "query-fts",
+      "fanout": 32,
+      "latency_ms": {
+        "max": 45.16420792788267,
+        "min": 5.413000006228685,
+        "p50": 23.24197895359248,
+        "p95": 37.636166089214385,
+        "p99": 40.20412499085069
+      },
+      "mixed_read_p95_budget_ms": null,
+      "mixed_read_p95_budget_source": null,
+      "pool_size": 2,
+      "queue_depth": 8,
+      "requests": {
+        "success_rate": 1.0,
+        "successful": 3776,
+        "total": 3776
+      },
+      "status": "PASS",
+      "throughput_per_second": {
+        "max": 753.0965761111854,
+        "min": 753.0965761111854,
+        "p50": 753.0965761111854,
+        "p95": 753.0965761111854,
+        "p99": 753.0965761111854
+      },
+      "throughput_requests_per_second": 753.0965761111854,
+      "windows": {
+        "measurement_seconds": 5.0,
+        "warmup_seconds": 2.0
+      },
+      "writer": null
+    },
+    {
+      "baseline_p50_floor": 0.0,
+      "description": "Read fan-out while fixed-rate writers sustain load",
+      "diagnostics": {
+        "deadline_expiries": {
+          "expired_in_queue": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          },
+          "interrupted_while_active": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          },
+          "observed_cli_timeouts": 0,
+          "other_cli_errors": 0,
+          "quarantined": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          }
+        },
+        "execution_ms": {
+          "max": 50.2962910104543,
+          "min": 5.172999924980104,
+          "p50": 23.51604151772335,
+          "p95": 38.42174995224923,
+          "p99": 40.88720795698464
+        },
+        "in_flight": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "lane": "mailbox",
+        "pool_size": 4,
+        "quarantine_exhausted_rejections": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "quarantined_worker_gauge": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "queue_depth": 16,
+        "retired_replaced_workers": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "saturation_events": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "wait_ms": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "wal_health": {
+          "current_wal_frame_count": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          },
+          "last_checkpoint_outcome": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          }
+        }
+      },
+      "family": "read-under-write-load",
+      "fanout": 32,
+      "latency_ms": {
+        "max": 50.2962910104543,
+        "min": 5.172999924980104,
+        "p50": 23.51604151772335,
+        "p95": 38.42174995224923,
+        "p99": 40.88720795698464
+      },
+      "mixed_read_p95_budget_ms": 1000.0,
+      "mixed_read_p95_budget_source": "AV.1a D5 interim p95 ceiling; replace when reader metrics are exported",
+      "pool_size": 4,
+      "queue_depth": 16,
+      "requests": {
+        "success_rate": 1.0,
+        "successful": 3712,
+        "total": 3712
+      },
+      "status": "PASS",
+      "throughput_per_second": {
+        "max": 739.2049099275857,
+        "min": 739.2049099275857,
+        "p50": 739.2049099275857,
+        "p95": 739.2049099275857,
+        "p99": 739.2049099275857
+      },
+      "throughput_requests_per_second": 739.2049099275857,
+      "windows": {
+        "measurement_seconds": 5.0,
+        "warmup_seconds": 2.0
+      },
+      "writer": {
+        "payload_bytes": 256,
+        "rate_per_second": 8.0,
+        "throughput_per_second": 5.9741776125613075
+      }
+    }
+  ],
+  "fanout": 32,
+  "generated_at": "2026-08-31T21:05:40.109476Z",
+  "harness_version": "av4-read-benchmark-1",
+  "host_label": "rand-m5.local",
+  "mixed_mode_budget": {
+    "p95_latency_ms": 1000.0,
+    "source": "AV.1a D5 interim p95 ceiling; replace when reader metrics are exported"
+  },
+  "partial_artifact": false,
+  "report_type": "read-query-benchmark",
+  "schema_version": 1,
+  "source_revision": "1a2e17426eddc4ec7549d0d2ad3b45fba16a034a",
+  "status": "PASS"
+}

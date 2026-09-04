@@ -4,7 +4,10 @@ import importlib.util
 from pathlib import Path
 import sys
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 from unittest import mock
+import hashlib
 
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "bootstrap.py"
@@ -26,13 +29,69 @@ class BootstrapTests(unittest.TestCase):
     def test_sc_compose_uses_the_exact_prebuilt_release_asset(self) -> None:
         manifest = bootstrap.load_manifest()
         asset, url = bootstrap.sc_compose_install_command(manifest.sc_compose, "aarch64-apple-darwin")
-        self.assertEqual(asset, "sc-compose_1.5.0_aarch64-apple-darwin.tar.gz")
-        self.assertEqual(url, "https://github.com/randlee/sc-compose/releases/download/v1.5.0/" + asset)
-        self.assertEqual(dict(manifest.sc_compose_checksums)["aarch64-apple-darwin"], "7751631cd86e6644e88cfcf3dd80f352779350f9f24f891f52983c8da0ed4620")
+        self.assertEqual(asset, "sc-compose_1.6.1_aarch64-apple-darwin.tar.gz")
+        self.assertEqual(url, "https://github.com/randlee/sc-compose/releases/download/v1.6.1/" + asset)
+        self.assertEqual(dict(manifest.sc_compose_checksums)["aarch64-apple-darwin"], "23db29325d95c0f4bb94dead48d02883e00311e82dc66820fe51b1dd855b7168")
+        self.assertEqual(
+            dict(manifest.sc_compose_checksums)["x86_64-pc-windows-msvc"],
+            "35671244d7cf42faf5fa2f88e78a6944beeb3fdcce28cb795ef63e97a8c6ce32",
+        )
 
     def test_sc_compose_install_never_uses_cargo(self) -> None:
         source = (SCRIPT.parents[1] / "tools" / "bootstrap.py").read_text(encoding="utf-8")
         self.assertNotIn('cargo", "install", "--locked", "--version", version, "sc-compose"', source)
+
+    def test_wyvern_uses_the_pinned_release_asset(self) -> None:
+        manifest = bootstrap.load_manifest()
+        asset, url = bootstrap.wyvern_install_command(manifest.wyvern, "aarch64-apple-darwin")
+        self.assertEqual(asset, "wyvern_0.6.0_aarch64-apple-darwin.tar.gz")
+        self.assertEqual(
+            url,
+            "https://github.com/randlee/wyvern/releases/download/v0.6.0/wyvern_0.6.0_aarch64-apple-darwin.tar.gz",
+        )
+        self.assertEqual(
+            dict(manifest.wyvern_checksums)[asset],
+            "b5f5b986868d65b37d39966d7e9fa0c2bb6fd35fd0675397cbe3b4f77dc6b9dc",
+        )
+
+    def test_wyvern_checksum_mismatch_is_a_hard_failure(self) -> None:
+        manifest = bootstrap.load_manifest()
+        with (
+            mock.patch.object(bootstrap, "sc_compose_target", return_value="aarch64-apple-darwin"),
+            mock.patch.object(bootstrap, "_download_release", return_value=b"tampered"),
+        ):
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "Wyvern release checksum mismatch"):
+                bootstrap.install_wyvern_release(manifest, dry_run=False)
+
+    def test_wyvern_missing_checksums_file_warns_and_uses_pinned_hash(self) -> None:
+        manifest = bootstrap.load_manifest()
+        archive = b"verified archive"
+        with (
+            mock.patch.object(bootstrap, "sc_compose_target", return_value="aarch64-apple-darwin"),
+            mock.patch.object(bootstrap, "_wyvern_release_checksum", return_value=hashlib.sha256(archive).hexdigest()),
+            mock.patch.object(
+                bootstrap,
+                "_download_release",
+                side_effect=[archive, bootstrap.BootstrapError("404 Not Found")],
+            ),
+            mock.patch.object(bootstrap, "_extract_wyvern") as extract,
+        ):
+            stderr = StringIO()
+            with redirect_stderr(stderr):
+                bootstrap.install_wyvern_release(manifest, dry_run=False)
+        self.assertIn("upstream checksums.txt missing; verified against pinned SHA256 only", stderr.getvalue())
+        extract.assert_called_once_with(archive, "wyvern_0.6.0_aarch64-apple-darwin.tar.gz", bootstrap.cargo_bin_path("wyvern"))
+
+    def test_wyvern_present_checksums_file_disagreement_is_a_hard_failure(self) -> None:
+        manifest = bootstrap.load_manifest()
+        archive = b"verified archive"
+        with (
+            mock.patch.object(bootstrap, "sc_compose_target", return_value="aarch64-apple-darwin"),
+            mock.patch.object(bootstrap, "_wyvern_release_checksum", return_value=hashlib.sha256(archive).hexdigest()),
+                mock.patch.object(bootstrap, "_download_release", side_effect=[archive, b"bad-hash  wyvern_0.6.0_aarch64-apple-darwin.tar.gz\n"]),
+        ):
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "checksums.txt does not confirm"):
+                bootstrap.install_wyvern_release(manifest, dry_run=False)
 
     def test_sc_compose_checksum_mismatch_is_a_hard_failure(self) -> None:
         manifest = bootstrap.load_manifest()
@@ -89,8 +148,12 @@ class BootstrapTests(unittest.TestCase):
             "cargo-shear": (),
             "cargo-modules": ("quick-install",),
         })
-        self.assertEqual(manifest.sc_compose, "1.5.0")
+        self.assertEqual(manifest.sc_compose, "1.6.1")
+        self.assertEqual(manifest.wyvern, "0.6.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
+        self.assertNotIn("sc-compose", dict(manifest.python_packages))
+        requirements = (SCRIPT.parents[1] / "tools" / "bootstrap-requirements.txt").read_text(encoding="utf-8")
+        self.assertNotIn("sc-compose==", requirements)
 
     def test_macos_homebrew_seed_formula_is_derived_from_the_exact_python_pin(self) -> None:
         manifest = bootstrap.load_manifest()
@@ -114,6 +177,7 @@ class BootstrapTests(unittest.TestCase):
             mock.patch.object(bootstrap, "verify_installed_tools") as verify,
             mock.patch.object(bootstrap, "registry_tool_matches", return_value=False),
             mock.patch.object(bootstrap, "sc_compose_matches", return_value=False),
+            mock.patch.object(bootstrap, "wyvern_matches", return_value=False),
             mock.patch.object(bootstrap.subprocess, "run") as run,
         ):
             bootstrap.bootstrap(manifest, dry_run=True)
@@ -184,6 +248,7 @@ class BootstrapTests(unittest.TestCase):
             mock.patch.object(bootstrap, "binstall_tool_matches", return_value=False),
             mock.patch.object(bootstrap, "cargo_binstall_available", return_value=True),
             mock.patch.object(bootstrap, "sc_compose_matches", return_value=True),
+            mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
             mock.patch.object(bootstrap, "verify_installed_tools"),
             mock.patch.object(bootstrap, "run", side_effect=failed_binstall),
         ):
@@ -220,6 +285,10 @@ class BootstrapTests(unittest.TestCase):
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn('PATH=\\"$PATH:/opt/homebrew/bin\\" python3.14', justfile)
         self.assertNotIn("PATH=/opt/homebrew/bin:$PATH python3.14", justfile)
+
+    def test_windows_seed_python_selects_the_pinned_major_minor(self) -> None:
+        justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
+        self.assertIn('if os_family() == "windows" { "py -3.14" }', justfile)
 
 
 if __name__ == "__main__":

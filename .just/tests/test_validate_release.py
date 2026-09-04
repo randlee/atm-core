@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 import tempfile
@@ -83,6 +84,50 @@ class ValidateReleaseContractTests(unittest.TestCase):
             VALIDATE_RELEASE.build_parser().parse_args(["phase-ad-readiness"]).target,
             "phase-ad-readiness",
         )
+
+    def test_default_release_targets_include_send_to_test_seams(self) -> None:
+        self.assertIn("send-to-test-seams", VALIDATE_RELEASE.DEFAULT_RELEASE_TARGETS)
+        self.assertEqual(
+            VALIDATE_RELEASE.build_parser().parse_args(["send-to-test-seams"]).target,
+            "send-to-test-seams",
+        )
+
+    @mock.patch.dict(os.environ, {}, clear=False)
+    def test_send_to_test_seams_pass_when_the_release_environment_is_clean(self) -> None:
+        for var in VALIDATE_RELEASE.SEND_TO_TEST_ONLY_ENV_VARS:
+            os.environ.pop(var, None)
+        findings: list[VALIDATE_RELEASE.Finding] = []
+
+        VALIDATE_RELEASE.validate_send_to_test_seams(self.root, findings)
+
+        self.assertFalse(findings)
+
+    @mock.patch.dict(os.environ, {"ATM_SEND_TO_PICKER": "/tmp/fake-picker"}, clear=False)
+    def test_send_to_test_seams_block_when_the_picker_override_leaks(self) -> None:
+        os.environ.pop("ATM_SEND_TO_NATIVE_PICKER", None)
+        findings: list[VALIDATE_RELEASE.Finding] = []
+
+        VALIDATE_RELEASE.validate_send_to_test_seams(self.root, findings)
+
+        self.assertEqual(len(findings), 1)
+        finding = findings[0]
+        self.assertEqual(finding.check, "send-to-test-seams")
+        self.assertTrue(finding.blocks)
+        self.assertIn("ATM_SEND_TO_PICKER", finding.detail)
+
+    @mock.patch.dict(
+        os.environ,
+        {"ATM_SEND_TO_PICKER": "/tmp/fake-picker", "ATM_SEND_TO_NATIVE_PICKER": "/tmp/fake-native"},
+        clear=False,
+    )
+    def test_send_to_test_seams_report_every_leaked_variable(self) -> None:
+        findings: list[VALIDATE_RELEASE.Finding] = []
+
+        VALIDATE_RELEASE.validate_send_to_test_seams(self.root, findings)
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn("ATM_SEND_TO_PICKER", findings[0].detail)
+        self.assertIn("ATM_SEND_TO_NATIVE_PICKER", findings[0].detail)
 
     @mock.patch.object(VALIDATE_RELEASE, "run_capture")
     def test_validate_cli_surface_uses_the_feature_gated_contract(self, run_capture: mock.Mock) -> None:

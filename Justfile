@@ -4,7 +4,9 @@ set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 # standard location as a developer-account fallback, never ahead of the
 # interpreter selected by CI (for example actions/setup-python's 3.14.7).
 # The bootstrap script verifies the exact patch release before doing any work.
-seed_python_cmd := if os_family() == "windows" { "python" } else { "env PATH=\"$PATH:/opt/homebrew/bin\" python3.14" }
+# Windows PATH can prefer an unrelated system Python. Use the launcher to
+# select the pinned major/minor line; bootstrap verifies the exact patch.
+seed_python_cmd := if os_family() == "windows" { "py -3.14" } else { "env PATH=\"$PATH:/opt/homebrew/bin\" python3.14" }
 # Keep the bootstrap venv first in PATH as well as executing its Python
 # directly. The path is absolute so helpers remain pinned after changing cwd;
 # PyO3 additionally receives its interpreter explicitly.
@@ -93,6 +95,10 @@ _lint-legacy-mailbox-paths:
     {{python_cmd}} scripts/check-legacy-mailbox-paths.py
 
 [private]
+_lint-nudge-taxonomy:
+    {{python_cmd}} scripts/check-nudge-taxonomy.py
+
+[private]
 _lint-capability-degradation:
     {{python_cmd}} scripts/check-capability-degradation.py
 
@@ -104,6 +110,11 @@ _lint-version:
 # Show current workspace version state or latest recommended direct dependency upgrades.
 version mode='current':
     {{python_cmd}} .just/run_version.py {{mode}}
+
+# Patch-bump the workspace, commit it on the current feature/fix branch, and
+# publish the matching prerelease/vX.Y.Z tag. Use --dry-run to inspect the plan.
+prerelease-tag *args:
+    {{python_cmd}} .just/prerelease_tag.py {{args}}
 
 # Enforce RULE-008 for test and cfg(test) code.
 [private]
@@ -173,6 +184,18 @@ test-admission-capacity:
 test-hermes-graft-bridge:
     {{python_cmd}} .just/run_hermes_graft_bridge_tests.py
 
+# Run the deterministic, harness-neutral ATM lifecycle-hook contract tests.
+# All three CI matrix OSes run this recipe (Claude Code runs on Windows too).
+test-queue-hooks-python:
+    {{python_cmd}} scripts/hooks/test_queue_hooks.py QueueHookTests
+
+# Run the Codex-specific ATM lifecycle-hook contract tests. Codex/hermes are
+# not used on Windows (ADR-054 AQ2.5 AC10); the CI workflow invokes this
+# recipe only on the ubuntu/macOS matrix legs. The test class itself also
+# self-skips on Windows so a direct/local invocation is safe everywhere.
+test-queue-hooks-python-codex:
+    {{python_cmd}} scripts/hooks/test_queue_hooks.py CodexQueueHookTests
+
 # Compatibility alias for the canonical `just smoke graft-hermes` entry point.
 test-hermes-graft-smoke:
     just smoke graft-hermes
@@ -236,6 +259,24 @@ benchmark-publish:
 benchmark-official *args:
     just bootstrap
     {{python_cmd}} scripts/smoke/benchmark_official.py {{args}}
+
+# AV.4 read/query family registration.  Only benchmark-read is an official
+# campaign; subordinate targets are diagnostic and cannot seed a floor.  The
+# dependency list is normative D7 composition; the private runner aggregates
+# the three completed lanes into one reviewed envelope.
+benchmark-read: benchmark-read-fanout benchmark-query-fts benchmark-read-under-write-load _benchmark-read-official
+
+_benchmark-read-official:
+    {{python_cmd}} -m scripts.smoke.read_benchmark --families read-fanout query-fts read-under-write-load
+
+benchmark-read-fanout:
+    {{python_cmd}} -m scripts.smoke.read_benchmark --family read-fanout --diagnostic-only
+
+benchmark-query-fts:
+    {{python_cmd}} -m scripts.smoke.read_benchmark --family query-fts --diagnostic-only
+
+benchmark-read-under-write-load:
+    {{python_cmd}} -m scripts.smoke.read_benchmark --family read-under-write-load --diagnostic-only
 
 # Generate architecture visualization artifacts.
 view target='all':

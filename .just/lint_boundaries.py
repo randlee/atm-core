@@ -11,6 +11,7 @@ import sys
 from lint_common import build_report
 from lint_common import discover_repo_root
 from lint_common import is_comment_line
+from lint_common import is_rust_test_cfg_attribute
 from lint_common import load_lint_config
 from lint_common import monotonic_now
 from lint_common import print_report
@@ -65,6 +66,8 @@ FORBIDDEN_EDGE_RE = re.compile(
 PUBLIC_TYPE_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+(?:struct|enum|type)\s+{name}\b"
 PUBLIC_REEXPORT_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+use\b.*\b{name}\b"
 PUBLIC_FUNCTION_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+fn\s+[A-Za-z_][A-Za-z0-9_]*\b")
+MOD_BLOCK_OPEN_RE = re.compile(r"^(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{")
+MOD_FILE_DECL_RE = re.compile(r"^(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;$")
 
 # ``ownership.io_forbidden`` is a source-level policy, not merely metadata.
 # Keep the vocabulary explicit so adding a new tag cannot silently create an
@@ -72,6 +75,7 @@ PUBLIC_FUNCTION_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+fn\s+[A-Za-z_][A-Za-z0
 # concrete implementation modules below; they are not searched through the
 # entire owner crate (which would conflate sibling boundaries).
 IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
+    "shell_interpolation": (r"\$\([^\n]+\)", r"`[^`\n]+`"),
     "ambient_singleton_lookup": (
         r"\bdefault_runtime\s*\(",
         r"\bget_default_runtime\s*\(",
@@ -194,6 +198,12 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
     "tls": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
     "tls_adapter": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
+    # ADR-060: peer addresses are never mapped back to names.
+    "reverse_dns": (
+        r"\blookup_addr\s*\(",
+        r"\bgetnameinfo\b",
+        r"\breverse_(?:dns|lookup)\b",
+    ),
     "peer_only_ingress": (
         r"\bPeerMessageArray\b",
         r"\bpeer_(?:delivery|http_listener)\b",
@@ -209,16 +219,40 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bsqlite_(?:open|connect|transaction|query|write)\s*\(",
     ),
     "storage_write": (r"\bstorage_write\b", r"\b(?:write|put|insert|update)_storage\s*\("),
+    "write_capable_connection": (
+        r"\bopen_writer_connection_for_target\s*\(",
+        r"\bConnection::open\s*\(",
+        # A flagged SQLite open is write-capable only when its declared flags
+        # include a write/create capability. Read-only workers explicitly use
+        # SQLITE_OPEN_READ_ONLY and remain permitted.
+        r"\bConnection::open_with_flags\s*\([^\n]*(?:SQLITE_OPEN_READ_WRITE|SQLITE_OPEN_CREATE)",
+    ),
+    "writer_lane": (r"\bSqliteWriter\b", r"\b(?:writer|write)_lane\b"),
     "task_changed_notifications": (r"\btask_changed_notifications\b", r"\bTaskChanged(?:Notification|Event)?\b", r"\btask_changed\b"),
     "template_rendering": (r"\btemplate_rendering\b", r"\b(?:render|render_template)\s*\(", r"\bTemplateRenderer\b"),
     "tls_handshake": (r"\b(?:rustls|native_tls)::", r"\b(?:Client|Server)Connection\b", r"\b(?:tls|TLS)[^\n]*handshake\b"),
     "tmux_nudge_delivery": (r"\btmux_nudge_delivery\b", r"\btmux[^\n]*nudge\b", r"\b(?:send|emit)_tmux_nudge\s*\("),
+    "tmux_send_keys": (r"\btmux[^\n]*send-keys\b", r"\btmux[^\n]*send_keys\b"),
     "transport_dispatch": (r"\btransport_dispatch\b", r"\bdispatch_transport\s*\(", r"\bTransportDispatcher\b"),
     "transport": (
         r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
         r"\b(?:reqwest|hyper)::",
         r"\btransport\b",
     ),
+}
+
+WRITE_CAPABLE_OPEN_WITH_FLAGS_RE = re.compile(
+    r"\bConnection::open_with_flags\s*\(.*?"
+    r"\b(?:SQLITE_OPEN_READ_WRITE|SQLITE_OPEN_CREATE)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+# Some boundaries expose a facade from ``lib.rs`` while their concrete
+# implementation is deliberately split into private modules. Keep those
+# modules explicit and tested so an ``io_forbidden`` policy cannot be evaded
+# by declaring only the crate root as the implementation source.
+IMPLEMENTATION_SOURCE_MODULES: dict[str, tuple[str, ...]] = {
+    "BOUNDARY-HttpRuntime": ("atm_http_runtime::client",),
 }
 
 # The runtime composition crate performs a deliberately short-lived listener
@@ -234,6 +268,13 @@ IO_FORBIDDEN_SOURCE_EXCEPTIONS: dict[tuple[str, str], tuple[str, ...]] = {
         r"\bTcpListener::bind\s*\(",
         r"\bstd::net::SocketAddr\b",
     ),
+    # PeerConfigStore stores a SocketAddr as inert control-plane metadata; it
+    # neither opens nor owns a socket.  Keep the exception exact so any real
+    # socket operation in the contract remains visible to the policy scan.
+    (
+        "BOUNDARY-PeerConfigStore",
+        "socket_io",
+    ): (r"\bstd::net::SocketAddr\b",),
 }
 SCB_CONFIG_ALLOWLIST_PATH = Path(".just/allowlists/scb_config_allowlist.toml")
 SCB_CONFIG_FIXTURE_PATH = Path(".just/fixtures/scb_config_known_bad.rs")
@@ -307,8 +348,7 @@ SCB_SINGLETON_ALLOWED_HOOK_CALLERS = {
     Path("crates/atm-daemon/src/composition.rs"),
 }
 SCB_OBSERVABILITY_ALLOWED_SRC_FILES = {
-    Path("crates/atm-daemon/src/daemon_runtime_observability.rs"),
-    Path("crates/atm-daemon/src/main.rs"),
+    Path("crates/atm-daemon-bootstrap/src/daemon_observability.rs"),
 }
 SCB_OBSERVABILITY_DIRECT_PATTERNS = (
     "sc_observability_types::ActionName",
@@ -349,6 +389,8 @@ class BoundaryRecord:
     forbidden_references: tuple[str, ...]
     allowed_test_double_paths: tuple[str, ...]
     forbidden_test_bypasses: tuple[str, ...]
+    io_forbidden_source_modules: tuple[tuple[str, tuple[str, ...]], ...]
+    no_in_repo_implementation: bool
     lint_rules: tuple[str, ...]
     review_gates: tuple[str, ...]
     status_state: str
@@ -1318,6 +1360,45 @@ def build_boundary_record(
         field_name="enforcement.review_gates",
         allow_empty=False,
     )
+    raw_io_forbidden_source_modules = nested_get(
+        data, ("enforcement", "io_forbidden_source_modules")
+    )
+    raw_no_in_repo_implementation = nested_get(
+        data, ("enforcement", "no_in_repo_implementation")
+    )
+    no_in_repo_implementation = raw_no_in_repo_implementation is True
+    if raw_no_in_repo_implementation is not None and not isinstance(
+        raw_no_in_repo_implementation, bool
+    ):
+        errors.append("enforcement.no_in_repo_implementation must be a boolean")
+    io_forbidden_source_modules: list[tuple[str, tuple[str, ...]]] = []
+    io_forbidden_source_module_errors: list[str] = []
+    if raw_io_forbidden_source_modules is not None:
+        if not isinstance(raw_io_forbidden_source_modules, dict):
+            io_forbidden_source_module_errors.append(
+                "enforcement.io_forbidden_source_modules must map io_forbidden tags to source-module lists"
+            )
+        else:
+            for tag, raw_modules in raw_io_forbidden_source_modules.items():
+                if not isinstance(tag, str) or tag not in io_forbidden:
+                    io_forbidden_source_module_errors.append(
+                        "enforcement.io_forbidden_source_modules keys must name declared ownership.io_forbidden tags"
+                    )
+                    continue
+                modules = as_string_list(raw_modules)
+                if not modules:
+                    io_forbidden_source_module_errors.append(
+                        f"enforcement.io_forbidden_source_modules.{tag} must be a non-empty list of strings"
+                    )
+                    continue
+                for module in modules:
+                    error = validate_rust_path(
+                        module,
+                        field_name=f"enforcement.io_forbidden_source_modules.{tag} entry",
+                    )
+                    if error:
+                        io_forbidden_source_module_errors.append(error)
+                io_forbidden_source_modules.append((tag, tuple(modules)))
 
     errors.extend(
         composition_errors
@@ -1331,6 +1412,7 @@ def build_boundary_record(
         + test_bypass_errors
         + lint_rule_errors
         + review_gate_errors
+        + io_forbidden_source_module_errors
     )
 
     for label, value in (
@@ -1390,6 +1472,8 @@ def build_boundary_record(
             errors.append("implementation.module must be null when implementation.visibility is trait_only")
         if implementation_constructor != "none":
             errors.append("implementation.constructor must be none when implementation.visibility is trait_only")
+    elif no_in_repo_implementation:
+        errors.append("enforcement.no_in_repo_implementation is only valid for trait_only boundaries")
     else:
         if implementation_type is None:
             errors.append("implementation.type is required for concrete boundaries")
@@ -1492,6 +1576,8 @@ def build_boundary_record(
         forbidden_references=tuple(forbidden_references),
         allowed_test_double_paths=tuple(allowed_test_double_paths),
         forbidden_test_bypasses=tuple(forbidden_test_bypasses),
+        io_forbidden_source_modules=tuple(io_forbidden_source_modules),
+        no_in_repo_implementation=no_in_repo_implementation,
         lint_rules=tuple(lint_rules),
         review_gates=tuple(review_gates),
         status_state=status_state,
@@ -1585,6 +1671,22 @@ def source_files_for_crate(info: ManifestInfo) -> list[Path]:
     return sorted(crate_root.glob("**/*.rs"))
 
 
+def test_source_files_for_crate(info: ManifestInfo) -> list[Path]:
+    """Return every dev-only integration-test source file under `info`'s `tests/`.
+
+    A sealed trait's boundary is not limited to a crate's `src/`: an
+    integration test in any workspace crate's `tests/` directory can still
+    provide an `impl Trait for SomeDouble` test double. Those files never
+    ship in a release build, but they are real implementations that a
+    `testing.allowed_test_double_paths` allowlist must be able to name and
+    the boundary lint must be able to see.
+    """
+    tests_root = info.path.parent / "tests"
+    if not tests_root.exists():
+        return []
+    return sorted(tests_root.glob("**/*.rs"))
+
+
 def dedupe_violations(violations: list[BoundaryViolation]) -> list[BoundaryViolation]:
     unique: dict[tuple[str, str], BoundaryViolation] = {}
     for violation in violations:
@@ -1642,6 +1744,7 @@ def collect_manifest_consistency_violations(repo_root: Path, records: list[Bound
 def collect_allowed_dependent_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
     infos = manifest_info(repo_root)
+    alias_map = manifest_by_alias(repo_root)
     workspace_aliases = {alias for info in infos for alias in info.aliases}
     records_by_owner: dict[str, list[BoundaryRecord]] = {}
     for record in records:
@@ -1662,7 +1765,8 @@ def collect_allowed_dependent_violations(repo_root: Path, records: list[Boundary
                     continue
                 for dependency_name, dependency in dependencies.items():
                     package_name = dependency_package_name(dependency_name, dependency)
-                    if package_name != owner_info.package_name:
+                    dependency_info = alias_map.get(package_name) or alias_map.get(dependency_name)
+                    if dependency_info is None or dependency_info.path != owner_info.path:
                         continue
                     depender_aliases = set(depender_info.aliases)
                     live_allowed_aliases.update(depender_aliases)
@@ -1875,18 +1979,120 @@ def resolve_module_file(repo_root: Path, module_path: str) -> list[Path]:
     return [path for path in candidates if path.exists()]
 
 
+def trait_implementation_source_files(repo_root: Path, trait: str | None) -> list[Path]:
+    """Return production source files that implement a trait-only boundary.
+
+    This supports both the explicit ``no_in_repo_implementation`` assertion
+    and the default source-policy target for a trait-only contract. A policy
+    must cover the production implementation sites that exercise the trait;
+    scanning its declaration alone leaves an out-of-crate implementation
+    ungoverned.
+    """
+    if trait is None:
+        return []
+    pattern = re.compile(
+        rf"\bimpl(?:\s*<[^>{{;]*>)?\s+(?:[A-Za-z0-9_:<> ,]+::)?{re.escape(trait)}"
+        r"(?:\s*<[^>{{;]*>)?\s+for\b"
+    )
+    paths: list[Path] = []
+    for info in manifest_info(repo_root):
+        for path in source_files_for_crate(info):
+            lines = path.read_text(encoding="utf-8").splitlines()
+            test_scope = rust_file_test_scope(path, lines)
+            if any(
+                not test_scope[index] and not is_comment_line(line) and pattern.search(line)
+                for index, line in enumerate(lines)
+            ):
+                paths.append(path)
+    return paths
+
+
+def trait_contract_source_regions(repo_root: Path, trait: str | None) -> list[tuple[Path, frozenset[int]]]:
+    """Return production source regions that declare a trait-only contract.
+
+    The declaration is the natural default for a trait-only record's
+    ``io_forbidden`` policy.  Explicit tag mappings can extend this to a
+    helper or adapter module when the policy is intentionally about that
+    module (as the AV.1a reader records do).  Deriving the declaration keeps
+    ordinary contract records covered if files move without turning adapter
+    implementations into false policy violations.
+    """
+    if trait is None:
+        return []
+    pattern = re.compile(
+        rf"\bpub(?:\s*\([^)]*\))?\s+trait\s+{re.escape(trait)}\b"
+    )
+    regions: list[tuple[Path, frozenset[int]]] = []
+    for info in manifest_info(repo_root):
+        for path in source_files_for_crate(info):
+            lines = path.read_text(encoding="utf-8").splitlines()
+            test_scope = rust_file_test_scope(path, lines)
+            for index, line in enumerate(lines):
+                if test_scope[index] or is_comment_line(line) or not pattern.search(line):
+                    continue
+                depth = 0
+                opened = False
+                end_index = index
+                for candidate_index in range(index, len(lines)):
+                    candidate = lines[candidate_index]
+                    depth += candidate.count("{") - candidate.count("}")
+                    opened = opened or "{" in candidate
+                    end_index = candidate_index
+                    if opened and depth <= 0:
+                        break
+                regions.append((path, frozenset(range(index + 1, end_index + 2))))
+    return regions
+
+
+def concrete_trait_implementation_delegates(
+    repo_root: Path,
+    records: list[BoundaryRecord],
+) -> set[Path]:
+    """Return production modules declared by concrete boundary records.
+
+    A trait contract must reach each production implementation file.  When an
+    implementation is already a declared concrete boundary module, that
+    concrete boundary remains the single policy owner for the module; scanning
+    it again through the abstract trait would conflate permitted adapter I/O
+    with contract I/O.  An owner crate alone is not sufficient: each
+    implementation file needs its own declared concrete boundary record.
+    """
+    concrete_modules: set[Path] = set()
+    for record in records:
+        if not record.is_active or record.implementation_visibility == "trait_only":
+            continue
+        if record.implementation_module is not None:
+            concrete_modules.update(
+                resolve_module_file(repo_root, record.implementation_module)
+            )
+    return concrete_modules
+
+
+def concrete_owner_delegates_trait_implementation(
+    source_path: Path,
+    concrete_modules: set[Path],
+) -> bool:
+    """Whether a concrete boundary, rather than an abstract trait, owns I/O.
+
+    This is source ownership, not an exception: the concrete record still
+    scans the module under its own policy.  It only applies to implementation
+    files discovered from a trait-only contract, never to the contract region.
+    """
+    return source_path in concrete_modules
+
+
 def collect_io_forbidden_source_violations(
     repo_root: Path,
     records: list[BoundaryRecord],
 ) -> list[BoundaryViolation]:
     """Enforce ``ownership.io_forbidden`` against concrete implementation modules.
 
-    A boundary record may describe a trait-only contract or a retired module;
-    those records have no implementation region to inspect.  Concrete active
-    records are deliberately checked only in their declared implementation
-    module so sibling boundaries in the same crate do not contaminate one
-    another.  Unknown tags are reported as policy errors instead of being
-    silently ignored, which keeps the mapping table mechanically complete.
+    A boundary record may declare tag-specific concrete source modules in
+    ``enforcement.io_forbidden_source_modules``. This lets a trait-only
+    contract guard its authorized adapter and lets a concrete boundary include
+    a private helper without scanning unrelated sibling ownership. Unknown
+    tags are reported as policy errors instead of being silently ignored,
+    which keeps the mapping table mechanically complete.
     """
 
     violations: list[BoundaryViolation] = []
@@ -1898,6 +2104,7 @@ def collect_io_forbidden_source_violations(
         key: tuple(re.compile(pattern, re.IGNORECASE) for pattern in patterns)
         for key, patterns in IO_FORBIDDEN_SOURCE_EXCEPTIONS.items()
     }
+    concrete_modules = concrete_trait_implementation_delegates(repo_root, records)
     for record in records:
         for tag in record.io_forbidden:
             patterns = compiled_patterns.get(tag)
@@ -1909,19 +2116,108 @@ def collect_io_forbidden_source_violations(
                     )
                 )
                 continue
-            if not record.is_active or record.implementation_visibility == "trait_only":
+            declared_source_modules = dict(record.io_forbidden_source_modules).get(tag, ())
+            is_unmapped_trait_contract = (
+                record.implementation_visibility == "trait_only"
+                and not declared_source_modules
+                and not record.no_in_repo_implementation
+            )
+            derived_source_regions = (
+                trait_contract_source_regions(repo_root, record.public_trait)
+                if is_unmapped_trait_contract
+                else []
+            )
+            derived_source_paths = [path for path, _ in derived_source_regions]
+            implementation_source_paths = (
+                trait_implementation_source_files(repo_root, record.public_trait)
+                if record.implementation_visibility == "trait_only"
+                else []
+            )
+            if record.no_in_repo_implementation and implementation_source_paths:
+                violations.append(
+                    BoundaryViolation(
+                        record.location,
+                        f"{record.boundary_id} declares no_in_repo_implementation but production impl sites exist",
+                    )
+                )
+            if is_unmapped_trait_contract and not implementation_source_paths:
+                violations.append(
+                    BoundaryViolation(
+                        record.location,
+                        f"{record.boundary_id} declares io_forbidden {tag!r} but has no production implementation source modules; declare no_in_repo_implementation or source modules",
+                    )
+                )
                 continue
-            if record.implementation_module is None:
+            if (
+                record.implementation_module is None
+                and not declared_source_modules
+                and not derived_source_paths
+                and not record.no_in_repo_implementation
+            ):
+                violations.append(
+                    BoundaryViolation(
+                        record.location,
+                        f"{record.boundary_id} declares io_forbidden {tag!r} but has no scannable source modules; declare no_in_repo_implementation or source modules",
+                    )
+                )
                 continue
-            source_paths = resolve_module_file(repo_root, record.implementation_module)
+            if not record.is_active:
+                continue
+            source_modules = tuple(
+                module
+                for module in (
+                    record.implementation_module,
+                    *IMPLEMENTATION_SOURCE_MODULES.get(record.boundary_id, ()),
+                    *declared_source_modules,
+                )
+                if module is not None
+            )
+            source_paths: list[Path] = []
+            seen_source_paths: set[Path] = set()
+            for source_module in source_modules:
+                for source_path in resolve_module_file(repo_root, source_module):
+                    if source_path not in seen_source_paths:
+                        seen_source_paths.add(source_path)
+                        source_paths.append(source_path)
+            explicit_source_paths = set(source_paths)
+            contract_lines_by_path = {
+                source_path: line_numbers
+                for source_path, line_numbers in derived_source_regions
+                if source_path not in explicit_source_paths
+            }
+            for source_path in derived_source_paths:
+                if source_path not in seen_source_paths:
+                    seen_source_paths.add(source_path)
+                    source_paths.append(source_path)
+            for source_path in implementation_source_paths:
+                if source_path not in seen_source_paths:
+                    seen_source_paths.add(source_path)
+                    source_paths.append(source_path)
             for source_path in source_paths:
+                implementation_is_concretely_owned = (
+                    source_path in implementation_source_paths
+                    and concrete_owner_delegates_trait_implementation(
+                        source_path, concrete_modules
+                    )
+                )
+                if implementation_is_concretely_owned:
+                    continue
                 rel_source = source_path.relative_to(repo_root).as_posix()
                 source_lines = source_path.read_text(encoding="utf-8").splitlines()
                 test_scope = rust_file_test_scope(source_path, source_lines)
                 for line_number, line in enumerate(source_lines, start=1):
+                    contract_line_numbers = contract_lines_by_path.get(source_path)
+                    if (
+                        contract_line_numbers is not None
+                        and source_path not in implementation_source_paths
+                        and line_number not in contract_line_numbers
+                    ):
+                        continue
                     if is_comment_line(line):
                         continue
-                    if tag == "background_work" and test_scope[line_number - 1]:
+                    if tag in {"background_work", "write_capable_connection"} and test_scope[
+                        line_number - 1
+                    ]:
                         continue
                     if any(
                         pattern.search(line)
@@ -1934,6 +2230,17 @@ def collect_io_forbidden_source_violations(
                         (pattern.pattern for pattern in patterns if pattern.search(line)),
                         None,
                     )
+                    if (
+                        matched_pattern is None
+                        and tag == "write_capable_connection"
+                        and "Connection::open_with_flags" in line
+                    ):
+                        call_window = "\n".join(source_lines[line_number - 1 : line_number + 8])
+                        call_end = call_window.find(")\n")
+                        if call_end >= 0:
+                            call_window = call_window[: call_end + 1]
+                        if WRITE_CAPABLE_OPEN_WITH_FLAGS_RE.search(call_window):
+                            matched_pattern = "Connection::open_with_flags(... WRITE/CREATE flags ...)"
                     if matched_pattern is None:
                         continue
                     violations.append(
@@ -2099,44 +2406,89 @@ def source_module_path(info: ManifestInfo, source_path: Path) -> str:
     return "::".join(("crate", *parts))
 
 
-def find_trait_only_test_double_violations(
-    record: BoundaryRecord,
-    owner_info: ManifestInfo,
-    source_path: Path,
-    repo_root: Path,
-) -> list[BoundaryViolation]:
-    """Require every owner-crate trait-only implementation to be an approved double.
+def test_module_path(info: ManifestInfo, source_path: Path) -> str:
+    """Return the module path an integration-test source file is addressed by.
 
-    A trait-only boundary that declares approved test doubles must name every
-    owner-crate implementation in ``testing.allowed_test_double_paths``. Keeping
-    this check in the generic boundary linter prevents a second ad-hoc test
-    emitter from silently bypassing the boundary manifest. Empty allowlists keep
-    legacy trait-only records observational until their test-double policy is
-    explicitly declared.
+    Each top-level file under `tests/` compiles as its own crate root, so it
+    is addressed from outside the crate as `<crate_path_name>::tests::<file>`
+    rather than the `crate::…` convention `src/` files use. This mirrors the
+    `<crate>::tests::<file_stem>::<Type>` shape boundary manifests use for
+    `testing.allowed_test_double_paths` entries naming a consumer crate's test
+    double (e.g. `atm_core::tests::nudge_mode::RecordingPendingNudgeStore`).
     """
 
-    if record.public_trait is None:
-        return []
-    trait_pattern = re.compile(
+    relative = source_path.relative_to(info.path.parent / "tests")
+    parts = list(relative.with_suffix("").parts)
+    if parts and parts[-1] in {"main", "mod"}:
+        parts.pop()
+    return "::".join((info.crate_path_name, "tests", *parts))
+
+
+def is_inside_string_literal(line: str, match_start: int) -> bool:
+    """Return whether `match_start` in `line` sits inside a `"…"` literal.
+
+    Counts unescaped double quotes preceding `match_start`; an odd count means
+    the position is inside an open string literal.
+    """
+
+    quote_count = 0
+    escaped = False
+    for character in line[:match_start]:
+        if escaped:
+            escaped = False
+            continue
+        if character == "\\":
+            escaped = True
+            continue
+        if character == '"':
+            quote_count += 1
+    return quote_count % 2 == 1
+
+
+def _trait_impl_pattern(public_trait: str) -> re.Pattern[str]:
+    return re.compile(
         rf"\bimpl(?:<[^>]+>)?\s+(?:[A-Za-z_][A-Za-z0-9_:]*::)?"
-        rf"{re.escape(record.public_trait)}(?:<[^>]+>)?\s+for\s+([A-Za-z_][A-Za-z0-9_]*)"
+        rf"{re.escape(public_trait)}(?:<[^>]+>)?\s+for\s+([A-Za-z_][A-Za-z0-9_]*)"
     )
-    module_path = source_module_path(owner_info, source_path)
+
+
+def _scan_lines_for_trait_impl_violations(
+    *,
+    record: BoundaryRecord,
+    trait_pattern: re.Pattern[str],
+    module_path: str,
+    rel_source: str,
+    lines: list[str],
+    line_offset: int = 0,
+) -> list[BoundaryViolation]:
+    """Scan `lines` (already sliced to the region under consideration) for
+    unapproved implementations of `record.public_trait`.
+
+    `line_offset` is the 0-based index of `lines[0]` within the original
+    file, so reported line numbers stay accurate when scanning a slice
+    (e.g. an inline `#[cfg(test)] mod { .. }` block) rather than a whole file.
+    """
+
     allowed_paths = set(record.allowed_test_double_paths)
     violations: list[BoundaryViolation] = []
-    rel_source = source_path.relative_to(repo_root).as_posix()
-    for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1):
+    for offset, line in enumerate(lines):
         if is_comment_line(line):
             continue
         match = trait_pattern.search(line)
         if match is None:
+            continue
+        if is_inside_string_literal(line, match.start()):
+            # Architecture/boundary tests commonly assert against source text
+            # via string literals, e.g.
+            # `source.contains("impl Foo for Bar")`. That inert literal is not
+            # a real implementation and must not be mistaken for one.
             continue
         implementation_path = f"{module_path}::{match.group(1)}"
         if implementation_path in allowed_paths:
             continue
         violations.append(
             BoundaryViolation(
-                f"{rel_source}:{line_number}",
+                f"{rel_source}:{line_offset + offset + 1}",
                 f"{record.boundary_id} trait-only implementation {implementation_path!r} "
                 "is not listed in testing.allowed_test_double_paths",
             )
@@ -2144,20 +2496,228 @@ def find_trait_only_test_double_violations(
     return violations
 
 
+def find_trait_only_test_double_violations(
+    record: BoundaryRecord,
+    module_path: str,
+    source_path: Path,
+    repo_root: Path,
+) -> list[BoundaryViolation]:
+    """Require every trait-only implementation to be an approved test double.
+
+    A trait-only boundary that declares approved test doubles must name every
+    implementation reachable from the owner crate's `src/` *and* every
+    workspace crate's `tests/` directory in ``testing.allowed_test_double_paths``.
+    Keeping this check in the generic boundary linter prevents a second ad-hoc
+    test emitter — in production code or in a consumer crate's integration
+    tests — from silently bypassing the boundary manifest. Empty allowlists
+    keep legacy trait-only records observational until their test-double
+    policy is explicitly declared.
+    """
+
+    if record.public_trait is None:
+        return []
+    rel_source = source_path.relative_to(repo_root).as_posix()
+    lines = source_path.read_text(encoding="utf-8").splitlines()
+    return _scan_lines_for_trait_impl_violations(
+        record=record,
+        trait_pattern=_trait_impl_pattern(record.public_trait),
+        module_path=module_path,
+        rel_source=rel_source,
+        lines=lines,
+    )
+
+
+def crate_qualified_module_path(info: ManifestInfo, source_path: Path) -> str:
+    """Return the module path a `src/` file is addressed by from *outside* its crate.
+
+    Mirrors `source_module_path`'s directory-derived path but replaces the
+    intra-crate `crate::` prefix with the crate's own path name (e.g.
+    `atm_core::…`), matching the `<crate>::<module path>` convention
+    `testing.allowed_test_double_paths` manifest entries use to name a
+    `#[cfg(test)]` test double declared in another workspace crate's `src/`
+    (e.g. `atm_core::ack::admission_tests::EmptyGraftReceiverStore`).
+    """
+
+    module_path = source_module_path(info, source_path)
+    suffix = module_path[len("crate") :]
+    return f"{info.crate_path_name}{suffix}"
+
+
+def find_inline_cfg_test_mod_blocks(lines: list[str]) -> list[tuple[str, int, int]]:
+    """Return `(mod_name, start_index, end_index)` for each outermost inline
+    ``#[cfg(test)] mod NAME { .. }`` block in `lines` (0-based, `end_index`
+    exclusive; the mod-declaration and closing-brace lines are excluded from
+    the range).
+
+    Only tracks the `#[cfg(test)]` attribute immediately preceding the `mod`
+    item (stacked attribute lines in between are tolerated) and relies on
+    `cargo fmt`'s convention of opening a block's brace on the same line as
+    its declaration, which this repository enforces as a CI gate.
+    """
+
+    blocks: list[tuple[str, int, int]] = []
+    pending_test_attr = False
+    index = 0
+    total = len(lines)
+    while index < total:
+        stripped = lines[index].strip()
+        if stripped.startswith("#[") and not stripped.startswith("#!["):
+            if is_rust_test_cfg_attribute(stripped):
+                pending_test_attr = True
+            index += 1
+            continue
+        match = MOD_BLOCK_OPEN_RE.match(stripped)
+        if match is not None and pending_test_attr:
+            name = match.group(1)
+            depth = lines[index].count("{") - lines[index].count("}")
+            end_index = index + 1
+            while end_index < total and depth > 0:
+                depth += lines[end_index].count("{") - lines[end_index].count("}")
+                end_index += 1
+            # `end_index - 1` is the block's closing-brace line; exclude it
+            # (and the opening `mod NAME {` line at `index`) from the range
+            # handed back to callers, which only care about the block body.
+            blocks.append((name, index + 1, end_index - 1))
+            pending_test_attr = False
+            index = end_index
+            continue
+        if stripped:
+            pending_test_attr = False
+        index += 1
+    return blocks
+
+
+def find_cfg_test_file_mod_declarations(lines: list[str]) -> list[str]:
+    """Return the names declared by top-level ``#[cfg(test)] mod NAME;`` file
+    modules in `lines`.
+
+    Declarations nested inside an inline `mod { .. }` block are intentionally
+    skipped here; `find_inline_cfg_test_mod_blocks` already accounts for
+    everything inside such a block, and Rust's file-module resolution for a
+    `mod NAME;` nested inside an inline module is an unusual (`#[path]`-only)
+    pattern this scanner does not need to resolve.
+    """
+
+    names: list[str] = []
+    pending_test_attr = False
+    depth = 0
+    for line in lines:
+        stripped = line.strip()
+        if depth == 0 and stripped.startswith("#[") and not stripped.startswith("#!["):
+            if is_rust_test_cfg_attribute(stripped):
+                pending_test_attr = True
+            depth += line.count("{") - line.count("}")
+            continue
+        if depth == 0:
+            match = MOD_FILE_DECL_RE.match(stripped)
+            if match is not None and pending_test_attr:
+                names.append(match.group(1))
+        if depth == 0 and stripped:
+            pending_test_attr = False
+        depth += line.count("{") - line.count("}")
+        depth = max(depth, 0)
+    return names
+
+
+def resolve_file_module_child(source_path: Path, name: str) -> Path | None:
+    """Resolve the file backing a ``mod NAME;`` declared inside `source_path`.
+
+    Follows Rust's module-file resolution: a directory-index file (`mod.rs`,
+    `lib.rs`, `main.rs`) declares children as siblings in its own directory;
+    any other file (`foo.rs`) declares children under a `foo/` sibling
+    directory. Both the 2018-edition sibling-directory form (`NAME.rs`) and
+    the legacy form (`NAME/mod.rs`) are accepted for the child itself.
+    """
+
+    if source_path.stem in {"mod", "lib", "main"}:
+        base_dir = source_path.parent
+    else:
+        base_dir = source_path.parent / source_path.stem
+
+    direct = base_dir / f"{name}.rs"
+    if direct.exists():
+        return direct
+    nested = base_dir / name / "mod.rs"
+    if nested.exists():
+        return nested
+    return None
+
+
+def find_cfg_test_src_module_test_double_violations(
+    record: BoundaryRecord,
+    info: ManifestInfo,
+    source_path: Path,
+    repo_root: Path,
+) -> list[BoundaryViolation]:
+    """Find sealed-trait test doubles hidden inside a `src/` file's
+    `#[cfg(test)]` modules — both inline `mod NAME { .. }` blocks and
+    `mod NAME;` file modules — in a workspace crate other than the boundary's
+    owner.
+
+    `collect_active_implementation_violations` already scans the owner
+    crate's entire `src/` (test-gated or not) and every crate's `tests/`
+    directory unconditionally. Neither pass visits a *consumer* crate's
+    `#[cfg(test)]` module inside `src/`, so a sealed-trait test double
+    declared that way (e.g. `atm_core::ack::admission_tests::EmptyGraftReceiverStore`)
+    was invisible to allowlist enforcement even though the manifest can name
+    it with the same `<crate>::<module path>` convention used for `tests/`
+    directory doubles.
+    """
+
+    if record.public_trait is None:
+        return []
+
+    violations: list[BoundaryViolation] = []
+    rel_source = source_path.relative_to(repo_root).as_posix()
+    lines = source_path.read_text(encoding="utf-8").splitlines()
+    base_module_path = crate_qualified_module_path(info, source_path)
+    trait_pattern = _trait_impl_pattern(record.public_trait)
+
+    for mod_name, start_index, end_index in find_inline_cfg_test_mod_blocks(lines):
+        module_path = f"{base_module_path}::{mod_name}"
+        violations.extend(
+            _scan_lines_for_trait_impl_violations(
+                record=record,
+                trait_pattern=trait_pattern,
+                module_path=module_path,
+                rel_source=rel_source,
+                lines=lines[start_index:end_index],
+                line_offset=start_index,
+            )
+        )
+
+    for mod_name in find_cfg_test_file_mod_declarations(lines):
+        child_path = resolve_file_module_child(source_path, mod_name)
+        if child_path is None:
+            continue
+        child_module_path = crate_qualified_module_path(info, child_path)
+        violations.extend(
+            find_trait_only_test_double_violations(record, child_module_path, child_path, repo_root)
+        )
+
+    return violations
+
+
 def collect_active_implementation_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
     alias_map = manifest_by_alias(repo_root)
+    all_infos = manifest_info(repo_root)
     for record in records:
         if not record.is_active:
             continue
         owner_info = alias_map.get(record.owner_package)
         if owner_info is None:
             continue
+        is_trait_only_with_allowlist = (
+            record.implementation_visibility == "trait_only" and record.allowed_test_double_paths
+        )
         source_files = source_files_for_crate(owner_info)
         for source_path in source_files:
-            if record.implementation_visibility == "trait_only" and record.allowed_test_double_paths:
+            if is_trait_only_with_allowlist:
                 violations.extend(
-                    find_trait_only_test_double_violations(record, owner_info, source_path, repo_root)
+                    find_trait_only_test_double_violations(
+                        record, source_module_path(owner_info, source_path), source_path, repo_root
+                    )
                 )
                 continue
             if record.implementation_visibility == "private":
@@ -2165,6 +2725,35 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
                 violations.extend(find_public_reexport_violations(record, source_path, repo_root))
             if record.implementation_constructor == "private":
                 violations.extend(find_public_constructor_violations(record, source_path, repo_root))
+        if is_trait_only_with_allowlist:
+            # A sealed trait's test doubles are not confined to the owner
+            # crate's own `src/`: any workspace crate may implement the trait
+            # from its dev-only `tests/` directory (e.g. a consumer crate's
+            # integration-test double). Scan every crate's `tests/` so such a
+            # double is either allowlisted or flagged, never invisible.
+            for test_info in all_infos:
+                for test_path in test_source_files_for_crate(test_info):
+                    violations.extend(
+                        find_trait_only_test_double_violations(
+                            record, test_module_path(test_info, test_path), test_path, repo_root
+                        )
+                    )
+            # Nor are they confined to `tests/`: a consumer crate can just as
+            # easily hide a `impl Trait for Double` inside a `#[cfg(test)]`
+            # module of its own `src/` (an inline `mod x { .. }` block or a
+            # `mod x;` file module). The owner crate's own `src/` is already
+            # fully scanned above regardless of test-gating, so skip it here
+            # to avoid re-flagging an already-approved `crate::…`-qualified
+            # double under a second, `<crate>::…`-qualified identity.
+            for consumer_info in all_infos:
+                if consumer_info.path == owner_info.path:
+                    continue
+                for consumer_src_path in source_files_for_crate(consumer_info):
+                    violations.extend(
+                        find_cfg_test_src_module_test_double_violations(
+                            record, consumer_info, consumer_src_path, repo_root
+                        )
+                    )
     return violations
 
 
@@ -2444,7 +3033,7 @@ def collect_scb_observability_rule_violations(
                 continue
             violations.append(
                 BoundaryViolation(
-                    f"SCB-OBSERVABILITY-001 {rel_source}:{line_number} direct sc_observability_types ActionName/OutcomeLabel imports are forbidden outside daemon_runtime_observability.rs and main.rs",
+                    f"SCB-OBSERVABILITY-001 {rel_source}:{line_number} direct sc_observability_types ActionName/OutcomeLabel imports are forbidden outside atm-daemon-bootstrap's daemon_observability.rs",
                     "",
                 )
             )

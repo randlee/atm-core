@@ -80,6 +80,46 @@ paths:
       responses:
         '200': { description: Heartbeat result, content: { application/json: { schema: { $ref: '#/components/schemas/HeartbeatResponse' } } } }
         default: { $ref: '#/components/responses/AtmError' }
+  /queue/get-next:
+    post:
+      operationId: getNextBareCliQueueMessages
+      description: Local-ingress-only FIFO pull for the authenticated caller's member.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/QueueGetNextRequest' } } } }
+      responses:
+        '200': { description: Queue messages, content: { application/json: { schema: { $ref: '#/components/schemas/QueueGetNextResponse' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /graft/receiver/register:
+    post:
+      operationId: registerGraftReceiver
+      description: Local-ingress-only registration of the current agent's graft receiver endpoint.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GraftReceiverRegistration' } } } }
+      responses:
+        '200': { description: Receiver registration accepted, content: { application/json: { schema: { type: 'null' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /graft/receiver/refresh:
+    post:
+      operationId: refreshGraftReceiver
+      description: Local-ingress-only owner-checked liveness keepalive for the current agent's graft receiver lease; rejected with a NotOwner error when another generation now owns the stored lease.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GraftReceiverRefreshRequest' } } } }
+      responses:
+        '200': { description: Receiver lease refreshed, content: { application/json: { schema: { type: 'null' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /graft/receiver/unregister:
+    post:
+      operationId: unregisterGraftReceiver
+      description: Local-ingress-only removal of the current agent's graft receiver registration.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GraftReceiverUnregistration' } } } }
+      responses:
+        '200': { description: Receiver registration removed, content: { application/json: { schema: { type: 'null' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /graft/receiver/lookup:
+    post:
+      operationId: lookupGraftReceiver
+      description: Local-ingress-only lookup of a registered graft receiver lease.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GraftReceiverLookupRequest' } } } }
+      responses:
+        '200': { description: Receiver lease when registered, content: { application/json: { schema: { nullable: true, $ref: '#/components/schemas/GraftReceiverLease' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
   /runtime/reload:
     post:
       operationId: reloadRuntimeView
@@ -190,6 +230,63 @@ components:
     HeartbeatResponse:
       type: object
       description: Team-member heartbeat result.
+    QueueGetNextRequest:
+      type: object
+      required: [team, member]
+      properties:
+        team: { type: string }
+        member: { type: string }
+    QueueGetNextResponse:
+      type: object
+      required: [messages]
+      properties:
+        messages: { type: array, items: { $ref: '#/components/schemas/QueuedNudgeMessage' } }
+    QueuedNudgeMessage:
+      type: object
+      required: [kind, msg_id, body]
+      properties:
+        kind: { type: string, enum: [steer, queue] }
+        msg_id: { type: string }
+        body: { type: string }
+    GraftReceiverRegistration:
+      type: object
+      required: [team, agent, endpoint, capability, owner_generation]
+      properties:
+        team: { type: string }
+        agent: { type: string }
+        endpoint: { type: string, format: uri }
+        capability: { type: string, format: byte }
+        owner_generation: { type: string }
+    GraftReceiverUnregistration:
+      type: object
+      required: [team, agent, owner_generation]
+      properties:
+        team: { type: string }
+        agent: { type: string }
+        owner_generation: { type: string }
+    GraftReceiverRefreshRequest:
+      type: object
+      required: [team, agent, owner_generation]
+      properties:
+        team: { type: string }
+        agent: { type: string }
+        owner_generation: { type: string }
+    GraftReceiverLookupRequest:
+      type: object
+      required: [team, agent]
+      properties:
+        team: { type: string }
+        agent: { type: string }
+    GraftReceiverLease:
+      type: object
+      required: [endpoint, capability, owner_generation, registered_at, last_seen_at]
+      properties:
+        endpoint: { type: string, format: uri }
+        capability: { type: string, format: byte }
+        owner_generation: { type: string }
+        registered_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        unreachable_since: { type: string, format: date-time, nullable: true }
     Message:
       type: object
       required: [message_id, from, to, body]

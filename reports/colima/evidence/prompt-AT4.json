@@ -1,0 +1,45 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT4-daemon-restart-in-session",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "harness-hook-precondition",
+      "status": "pass",
+      "detail": "restart-daemon.sh is present at /opt/testbed/harness/restart-daemon.sh and executable"
+    },
+    {
+      "name": "pre-restart-baseline",
+      "status": "pass",
+      "detail": "Sent AT4-PRE-1 message. Baseline history count = 1 message (contains AT4-PRE-1 with message_id 01M1CT9A5S3MDPFPQWKRGTD5QX)"
+    },
+    {
+      "name": "restart-triggered",
+      "status": "pass",
+      "detail": "Daemon restart successful via /opt/testbed/harness/restart-daemon.sh (exit code 0). Output: 'daemon restarted (endpoint record published)'"
+    },
+    {
+      "name": "post-restart-send",
+      "status": "pass",
+      "detail": "Immediately sent AT4-POST-1 message after restart with zero manual recovery steps. No retries, no re-authentication required. Message ID: 01M1CT9MZQ3NJ2QYJVB14Y387V"
+    },
+    {
+      "name": "post-restart-read",
+      "status": "pass",
+      "detail": "Read history successful. Final bucket_counts.history = 2. match_count = 2 with additional_match_count = 1, confirming both messages present"
+    },
+    {
+      "name": "no-loss-no-duplication",
+      "status": "pass",
+      "detail": "Both AT4-PRE-1 (01M1CT9A5S3MDPFPQWKRGTD5QX) and AT4-POST-1 (01M1CT9MZQ3NJ2QYJVB14Y387V) present exactly once each. Total count (2) = count_before (1) + 1. Zero message loss, zero duplication"
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {
+    "atm": "1.4.6",
+    "hermes_atm": "not-found",
+    "atm_graft": "not-found"
+  },
+  "started_at": "2026-08-31T21:05:58Z",
+  "finished_at": "2026-08-31T21:06:09Z"
+}

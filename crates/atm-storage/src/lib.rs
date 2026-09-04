@@ -7,10 +7,16 @@ pub mod error;
 mod error_catalog;
 pub mod error_codes;
 pub mod factory;
+pub mod peer_catalog_audit;
+pub mod request_budget;
 pub mod schema;
 pub mod search;
 pub mod template_catalog;
 pub mod template_workflow;
+/// Shared no-op test doubles for storage contract traits (RBQA-F002/F003).
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-utils"))]
+pub mod testing;
 pub mod tls;
 pub mod types;
 mod validation;
@@ -26,17 +32,22 @@ pub mod roles {
 pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
-    AcknowledgementSource, AgentType, AsyncMessageStore, BuiltInNudgeTemplateKind,
-    CertificateFingerprint, HttpsInterface, LocalCertificate, MailMessageState,
-    MailboxBucketCounts, Message, MessageFingerprint, MessageKey, MessageQuery,
-    MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, PeerConfigStore, PrivateKeyRef,
-    RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
-    StorageNotifier, TaskState, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
-    TrustedPeer, derive_ack_requirement,
+    AcknowledgementSource, AgentType, AsyncMailboxReader, AsyncMessageStore,
+    BuiltInNudgeTemplateKind, CertificateFingerprint, GraftEndpointStoreError,
+    GraftReceiverEndpointStore, GraftReceiverLease, GraftReceiverRegistration, HttpsInterface,
+    LocalCertificate, MAX_NUDGE_ATTEMPTS, MailMessageState, MailboxBucketCounts, MailboxScope,
+    Message, MessageFingerprint, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore,
+    NudgeClaim, NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, PrivateKeyRef,
+    ReadDeadline, ReadLaneError, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
+    RosterSnapshot, RosterStore, StorageNotifier, TaskState, TeamNudgeTemplateOverrideMode,
+    TeamNudgeTemplateOverrideRow, TrustedPeer, derive_ack_requirement,
 };
 pub use error::AtmError;
 pub use error_codes::AtmErrorCode;
-pub use factory::{StorageFactory, StorageHandleParts, StorageHandles};
+pub use factory::{
+    EffectiveReaderLane, EffectiveReaderLanes, StorageFactory, StorageHandleParts, StorageHandles,
+};
+pub use peer_catalog_audit::TrustedPeerCatalogAudit;
 pub use roles::ROLE_WORKER;
 pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
 pub use search::{
@@ -64,7 +75,8 @@ pub use tls::{
     install_tls_provider, normalize_fingerprint,
 };
 pub use types::{
-    AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, ModelName, PaneId, TaskId,
-    TeamName, TemplateFrontmatter, TemplateSha,
+    AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, LOCAL_CAPABILITY_BYTES,
+    LocalCapability, MemberKey, ModelName, OwnerGeneration, PaneId, TaskId, TeamName,
+    TemplateFrontmatter, TemplateSha,
 };
 pub use validation::{validate_agent_at_team, validate_path_segment};

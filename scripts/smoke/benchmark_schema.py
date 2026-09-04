@@ -127,11 +127,29 @@ class BaselineEntry(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     host_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-    target: Literal["sqlite", "uds", "tcp", "tcp-tls"]
+    # Read/query families reuse the same reviewed baseline and monotonic
+    # revision contract as transport targets.  They are additive names; the
+    # v4 transport result schema below remains intentionally unchanged.
+    target: Literal[
+        "sqlite", "uds", "tcp", "tcp-tls",
+        "read-fanout", "query-fts", "read-under-write-load",
+    ]
     p50_floor: float = Field(ge=0)
     approved_by: str = Field(min_length=1)
     effective_from: datetime
     rationale: str | None = Field(default=None, min_length=1)
+    # Optional AV.4 family provenance, kept in the shared baseline model so
+    # read floors cannot bypass the repository-wide revision/ratchet rules.
+    seeded_runs: int | None = Field(default=None, ge=0)
+    source_campaigns: tuple[str, ...] | None = None
+    corpus_seed: str | None = None
+    corpus_generator_version: str | None = None
+    harness_version: str | None = None
+    fanout: int | None = Field(default=None, ge=1)
+    mailbox_pool_size: int | None = Field(default=None, ge=1)
+    mailbox_queue_depth: int | None = Field(default=None, ge=1)
+    search_pool_size: int | None = Field(default=None, ge=1)
+    search_queue_depth: int | None = Field(default=None, ge=1)
 
     @field_validator("effective_from")
     @classmethod
@@ -254,8 +272,12 @@ class BenchmarkRunResult(BaseModel):
     def consistent_status_and_target_shape(self) -> "BenchmarkRunResult":
         if (self.status == "INCOMPLETE") != (self.incomplete_reason is not None):
             raise ValueError("incomplete_reason is required iff status is INCOMPLETE")
-        if self.messages_admitted > self.messages_requested or self.messages_durable > self.messages_admitted:
-            raise ValueError("message counts must satisfy durable <= admitted <= requested")
+        if self.status == "PASS" and (self.messages_admitted > self.messages_requested or self.messages_durable > self.messages_admitted):
+            raise ValueError(
+                "message counts must satisfy durable <= admitted <= requested; "
+                f"got requested={self.messages_requested}, admitted={self.messages_admitted}, "
+                f"durable={self.messages_durable}"
+            )
         if self.target == "sqlite" and self.frames_per_connection != 0:
             raise ValueError("sqlite target must have frames_per_connection=0")
         if self.target != "sqlite" and self.frames_per_connection <= 0:

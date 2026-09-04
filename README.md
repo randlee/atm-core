@@ -43,9 +43,15 @@ Published archives:
 | Platform | Archive |
 | --- | --- |
 | Linux (x86_64) | `atm_<version>_x86_64-unknown-linux-gnu.tar.gz` |
+| Linux (arm64) | `atm_<version>_aarch64-unknown-linux-gnu.tar.gz` |
 | macOS (Intel) | `atm_<version>_x86_64-apple-darwin.tar.gz` |
 | macOS (Apple Silicon) | `atm_<version>_aarch64-apple-darwin.tar.gz` |
 | Windows (x86_64) | `atm_<version>_x86_64-pc-windows-msvc.zip` |
+
+Each archive contains a top-level directory named
+`atm_<version>_<target-triple>/`, rather than placing binaries at the archive
+root. For example, the arm64 Linux CLI is at
+`atm_1.4.6_aarch64-unknown-linux-gnu/bin/atm` after extraction.
 
 Extract the archive and place `atm` or `atm.exe` somewhere on your `PATH`.
 

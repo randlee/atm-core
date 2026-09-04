@@ -74,6 +74,9 @@ impl AckRequest {
             expires_at: None,
             acknowledges_message_id: Some(self.message_id),
             dry_run: false,
+            // Acknowledgements always emit their receiver nudge immediately;
+            // deferred (queue) mode is caller-selected only for `atm send`.
+            nudge_mode: crate::send::NudgeMode::default(),
         }
     }
 

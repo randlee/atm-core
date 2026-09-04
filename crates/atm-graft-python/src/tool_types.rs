@@ -150,11 +150,17 @@ impl AtmToolError {
                 .ok()
                 .and_then(|attribute| attribute.extract::<String>().ok())
         };
+        let code =
+            attribute("code").unwrap_or_else(|| AtmErrorCode::InternalError.as_str().to_owned());
+        let recovery = if is_delivery_uncertain_code(&code) {
+            "the request outcome is uncertain; inspect mailbox or service-side effects before attempting it again"
+        } else {
+            "verify the local ATM daemon and configured identity, then retry"
+        };
         Self {
-            code: attribute("code")
-                .unwrap_or_else(|| AtmErrorCode::InternalError.as_str().to_owned()),
+            code,
             message: attribute("message").unwrap_or_else(|| error.to_string()),
-            recovery: "verify the local ATM daemon and configured identity, then retry".to_owned(),
+            recovery: recovery.to_owned(),
             layer: "native_client".to_owned(),
         }
     }
@@ -169,13 +175,29 @@ impl AtmToolError {
     }
 }
 
+const DELIVERY_UNCERTAIN_CODES: [AtmErrorCode; 3] = [
+    AtmErrorCode::DaemonMayHaveExecuted,
+    AtmErrorCode::RemoteDeliveryUnconfirmed,
+    AtmErrorCode::WaitTimeout,
+];
+
+fn is_delivery_uncertain_code(code: &str) -> bool {
+    match code.parse::<AtmErrorCode>() {
+        Ok(code) => DELIVERY_UNCERTAIN_CODES.contains(&code),
+        // An unknown future code must not receive recovery text that invites
+        // a potentially duplicating retry. Treat it as delivery-uncertain
+        // until the canonical registry classifies it explicitly.
+        Err(_) => true,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use atm_core::error::AtmErrorCode;
     use pyo3::exceptions::PyException;
     use pyo3::prelude::*;
 
-    use super::AtmToolError;
+    use super::{AtmToolError, is_delivery_uncertain_code};
 
     #[test]
     fn unstructured_python_errors_use_the_canonical_internal_error_code() {
@@ -187,5 +209,70 @@ mod tests {
             assert_eq!(result.code, AtmErrorCode::InternalError.as_str());
             assert_eq!(result.layer, "native_client");
         });
+    }
+
+    #[test]
+    fn unknown_error_codes_are_treated_as_delivery_uncertain() {
+        assert!(is_delivery_uncertain_code(
+            AtmErrorCode::DaemonMayHaveExecuted.as_str()
+        ));
+        assert!(is_delivery_uncertain_code(
+            AtmErrorCode::RemoteDeliveryUnconfirmed.as_str()
+        ));
+        assert!(is_delivery_uncertain_code(
+            AtmErrorCode::WaitTimeout.as_str()
+        ));
+        assert!(is_delivery_uncertain_code("ATM_FUTURE_UNSPECIFIED"));
+        assert!(!is_delivery_uncertain_code(
+            AtmErrorCode::DaemonUnavailable.as_str()
+        ));
+    }
+
+    /// Only the pre-send local-connect code enters stale-client recovery.
+    /// An uncertain request-write result must stay outside that path because
+    /// the daemon may already have accepted the request.
+    #[test]
+    fn only_the_daemon_unavailable_code_is_treated_as_a_recoverable_stale_client() {
+        let daemon_unavailable = AtmToolError {
+            code: AtmErrorCode::DaemonUnavailable.as_str().to_owned(),
+            message: "HTTP client could not connect to the configured daemon endpoint".to_owned(),
+            recovery: String::new(),
+            layer: "native_client".to_owned(),
+        };
+        assert!(daemon_unavailable.is_daemon_unavailable());
+
+        let wait_timeout = AtmToolError {
+            code: AtmErrorCode::WaitTimeout.as_str().to_owned(),
+            message: "HTTP client request exceeded its absolute request budget".to_owned(),
+            recovery: String::new(),
+            layer: "native_client".to_owned(),
+        };
+        assert!(
+            !wait_timeout.is_daemon_unavailable(),
+            "a request-budget timeout may mean the write already reached the server; \
+             it must never be classified as safe to silently retry"
+        );
+
+        let uncertain_write = AtmToolError {
+            code: AtmErrorCode::DaemonMayHaveExecuted.as_str().to_owned(),
+            message: "request acceptance is unknown".to_owned(),
+            recovery: "inspect mailbox or service-side effects before attempting it again"
+                .to_owned(),
+            layer: "native_client".to_owned(),
+        };
+        assert!(!uncertain_write.is_daemon_unavailable());
+
+        for code in [
+            AtmErrorCode::RemoteDeliveryUnconfirmed,
+            AtmErrorCode::WaitTimeout,
+        ] {
+            let error = AtmToolError {
+                code: code.as_str().to_owned(),
+                message: "request outcome is uncertain".to_owned(),
+                recovery: String::new(),
+                layer: "native_client".to_owned(),
+            };
+            assert!(!error.is_daemon_unavailable());
+        }
     }
 }

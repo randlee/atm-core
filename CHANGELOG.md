@@ -1,5 +1,89 @@
 # Changelog
 
+## Unreleased
+
+## 1.5.0
+
+- Phase AV mailbox-read serialization fix: dedicated reader lanes for mailbox
+  and search queries with bounded pools and queue depth, so reads no longer
+  serialize behind the writer lane; `atm doctor --json` now publishes the
+  effective `reader_lanes` contract (Phase AV, #1120, #1143)
+- release-readiness gate: the 1.4.7-1.4.13 readiness campaign on the
+  isolated atmbench host and Windows, with smoke/benchmark evidence and
+  benchmark floors recorded under `site/reports/` and triage records under
+  `.triage/readiness-1.4/` (#1141, #1150, #1151-#1155, #1159, #1167-#1169)
+- fix(http-runtime): dial direct peers by their routable address with a
+  short-lived resolution cache and surface the connect cause in the CLI
+  (#1142)
+- fix(peer-tls): fail closed on legacy literal-IP trusted-peer rows and print
+  the exact migration remediation (#972, #1138)
+- fix(storage): preserve the raw SQLite cause on mapped errors and print a
+  `Cause:` line in the CLI (#1134); one-time rebuild relaxing the legacy
+  `mail_messages.message_text NOT NULL` constraint so template sends work on
+  databases created before 2026-08-11 (#1135)
+- fix: retain OS causes for retained-log startup failures (#1130, #1131) and
+  harden the daemon observability boundary in `atm-observability` (#1133)
+- fix: support a pinned self-signed daemon-dev signing identity (Phase AS,
+  #1127)
+- fix(smoke): validated `ATM_SMOKE_DIRECT_PEER_PORT` override for the
+  direct-peer smoke rows (#1152)
+- fix(bootstrap): Windows `just bootstrap` selects the pinned Python 3.14
+  instead of the first `python.exe` on PATH (#1165)
+- lint: guard SQLite writer platform neutrality (ADR-007, #1107)
+- chore: upgrade the sc-compose ecosystem pins to 1.6.1 (#1129); centralize
+  workspace crate versioning (#1122)
+- document that release archives nest their binaries under a top-level
+  `atm_<version>_<target-triple>/` directory (for example,
+  `atm_1.4.6_aarch64-unknown-linux-gnu/bin/atm`) rather than a flat archive
+  root (Phase AS, #1105)
+- enforce the request-budget ordering between SQLite storage, the replacement
+  daemon, and same-host clients; rebuild local TCP and Unix transports after a
+  daemon generation change, classify pre-send reconnects separately from
+  writes whose delivery may have completed, and preserve fail-closed recovery
+  guidance for uncertain requests (Phase AQ, AQ1.9)
+- publish a native `aarch64-unknown-linux-gnu` release archive (arm64
+  Linux, e.g. Apple-Silicon colima/docker containers without emulation);
+  Homebrew arm-linux is not yet wired (#1057)
+- add the `atm queue` CLI verb (mirrors `atm send`'s full surface, including
+  `--attach`, with the recipient nudge deferred rather than fired
+  immediately) plus the nudge taxonomy and `PendingNudgeStore` storage
+  contract that every later Phase AQ sprint builds on (ADR-054: nudge as the
+  umbrella term, steer/queue as the two kinds) (Phase AQ, AQ1)
+- wire `atm-graft` dual-channel queue delivery to an actual delivery
+  trigger: harness idle-signal heartbeats and a bare-CLI Stop-pull path
+  backed by a bounded, per-member in-memory FIFO, so a deferred queue nudge
+  is guaranteed to drain even for a receiver with no persistent daemon
+  session (Phase AQ, AQ2 + AQ2.5)
+- add Herdr as a second, selector-gated local steer backend (`atm-herdr`)
+  alongside retained tmux, with its own health/circuit breaker (ADR-058)
+  (Phase AQ, AQ2.6)
+- add the Herdr poll-gated queue-wake pump: a fixed-cadence, roster-wide
+  Herdr session poll that drains pending queue messages on `RuntimeHealth`
+  idle transitions (Phase AQ, AQ2.7)
+- add tmux idle-drain (one queued nudge per idle transition) plus a
+  kind-agnostic recovery sweep that catches missed or crashed drains
+  (Phase AQ, AQ3)
+- ship ATM Send-To core: `atm send --attach`/`--from-json`, the `ATM_TEMP`
+  scratch-directory contract with a 30-day TTL sweeper, and per-host
+  cross-host transfer scripts (`scripts/transfer/sftp.sh`, `sftp.ps1`)
+  (ADR-055) (Phase AQ, AQ4)
+- ship the ATM Send-To human-visible surface: one-gesture per-OS shell entry
+  points for Finder/Explorer/Nautilus, the reference and native member
+  pickers, and the upstream Wyvern contract-test filing (wyvern#139,
+  wyvern#140) (Phase AQ, AQ5)
+- add the sc-ecosystem dependency release-preflight gate: pin-latest checks
+  for Wyvern/sc-compose/sc-observability plus their integration tests, run
+  before every release (Phase AQ, AQ6)
+- add the hermes-atm wheel verification harness: rebuilt wheel plus an
+  automated restart-matrix crash-guard suite (the live m5 restart-matrix run
+  remains an open follow-up, `AQ1.9-m5`) (Phase AQ, AQ1.9)
+
+## 1.4.5 (graft-registration slice of Phase AQ only; see Unreleased for the remainder)
+
+- complete the Phase AQ graft registration cutover: `atm-graft` now uses the
+  daemon registry lease and same-host flock instead of the retired endpoint
+  record, with the `atm-graft` Python wheel rebuilt against ADR-056
+
 ## 1.4.4
 
 - first kit-era release: the repository's publish surface is fully cut over to

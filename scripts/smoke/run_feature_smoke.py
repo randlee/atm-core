@@ -6,6 +6,9 @@ Run one progressively stronger smoke feature against the selected daemon.
 The runner never starts, stops, switches, or configures a daemon.  Use the
 daemon-switch skill before invoking ``just smoke``.  Local identity comes from the normal
 CLI environment: ``ATM_IDENTITY`` and ``ATM_TEAM``.
+
+The direct-peer smoke port defaults to 43101.  Account-local loopback
+fixtures can override it with ``ATM_SMOKE_DIRECT_PEER_PORT`` (1-65535).
 """
 from __future__ import annotations
 
@@ -57,6 +60,19 @@ CROSSHOST_CURL_MTLS = "crosshost-curl-tls"
 ADMISSION_CAPACITY = "admission-capacity"
 DOCTOR_BODY = '{"home_dir":"","current_dir":"","team_override":null,"caller_team":null,"caller_identity":null}'
 DEFAULT_LIVE_REPETITIONS = 10
+DEFAULT_DIRECT_PEER_PORT = 43101
+
+
+def direct_peer_port() -> int:
+    """Return the configured direct-peer port for the live smoke harness."""
+    value = os.environ.get("ATM_SMOKE_DIRECT_PEER_PORT", str(DEFAULT_DIRECT_PEER_PORT)).strip()
+    try:
+        port = int(value)
+    except ValueError as error:
+        raise SmokeError("ATM_SMOKE_DIRECT_PEER_PORT must be an integer between 1 and 65535") from error
+    if not 1 <= port <= 65535:
+        raise SmokeError("ATM_SMOKE_DIRECT_PEER_PORT must be between 1 and 65535")
+    return port
 
 
 def require_environment() -> tuple[str, str, str]:
@@ -267,7 +283,7 @@ def certificate_authority(pem: Path) -> str:
 def resolve_dns_addresses(host: str) -> list[str]:
     """Return every address the local resolver provides for a peer hostname."""
     try:
-        records = socket.getaddrinfo(host, 43101, type=socket.SOCK_STREAM)
+        records = socket.getaddrinfo(host, direct_peer_port(), type=socket.SOCK_STREAM)
     except OSError as error:
         raise SmokeError(f"DNS resolution for {host} failed: {error}") from error
     return sorted({record[4][0] for record in records})
@@ -275,9 +291,10 @@ def resolve_dns_addresses(host: str) -> list[str]:
 
 def remote_resolve_dns_addresses(peer: str, host: str) -> list[str]:
     """Resolve a hostname through the remote computer's normal resolver."""
+    port = direct_peer_port()
     script = (
         "import json, socket; "
-        f"print(json.dumps(sorted({{item[4][0] for item in socket.getaddrinfo({host!r}, 43101, type=socket.SOCK_STREAM)}})))"
+        f"print(json.dumps(sorted({{item[4][0] for item in socket.getaddrinfo({host!r}, {port}, type=socket.SOCK_STREAM)}})))"
     )
     result = remote_shell(peer, f"python3 -c {shlex.quote(script)}")
     try:
@@ -373,20 +390,21 @@ def curl_doctor(
                 local_authority = certificate_authority(local_public)
                 remote_authority = certificate_authority(remote_public)
                 scheme = "http" if plaintext else "https"
-                local_url = f"{scheme}://{local_authority}:43101/v1/atm/doctor"
-                remote_url = f"{scheme}://{remote_authority}:43101/v1/atm/doctor"
+                port = direct_peer_port()
+                local_url = f"{scheme}://{local_authority}:{port}/v1/atm/doctor"
+                remote_url = f"{scheme}://{remote_authority}:{port}/v1/atm/doctor"
                 headers = ["-H", "Content-Type: application/json"]
                 remote_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
                 if not plaintext:
                     remote_curl.extend(["--cert", remote_bundle, "--cacert", remote_local_ca])
-                remote_curl.extend(["--resolve", f"{local_authority}:43101:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url])
+                remote_curl.extend(["--resolve", f"{local_authority}:{port}:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url])
                 remote_result = remote_shell(peer, " ".join(shlex.quote(value) for value in remote_curl))
                 remote_report = parse_json(remote_result, f"{peer} curl doctor to local")
                 add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor", doctor_ready(remote_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not healthy/ready", origin=peer, destination=platform.node())
                 local_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
                 if not plaintext:
                     local_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
-                local_curl.extend(["--resolve", f"{remote_authority}:43101:{remote_host}", "--data", DOCTOR_BODY, remote_url])
+                local_curl.extend(["--resolve", f"{remote_authority}:{port}:{remote_host}", "--data", DOCTOR_BODY, remote_url])
                 local_result = command(local_curl)
                 local_report = parse_json(local_result, f"curl doctor to {peer}")
                 add_case(cases, f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor", doctor_ready(local_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not healthy/ready", origin=platform.node(), destination=peer)
@@ -398,7 +416,7 @@ def curl_doctor(
                     remote_negative = [
                         "curl", "--silent", "--show-error", "--connect-timeout", "2", "--max-time", "5",
                         "--write-out", "%{http_code}", "-X", "GET", *headers, "--cacert", remote_local_ca,
-                        "--resolve", f"{local_authority}:43101:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url,
+                        "--resolve", f"{local_authority}:{port}:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url,
                     ]
                     remote_negative_result = remote_shell(
                         peer, " ".join(shlex.quote(value) for value in remote_negative)
@@ -413,7 +431,7 @@ def curl_doctor(
                     local_negative = [
                         "curl", "--silent", "--show-error", "--connect-timeout", "2", "--max-time", "5",
                         "--write-out", "%{http_code}", "-X", "GET", *headers, "--cacert", str(remote_public),
-                        "--resolve", f"{remote_authority}:43101:{remote_host}", "--data", DOCTOR_BODY, remote_url,
+                        "--resolve", f"{remote_authority}:{port}:{remote_host}", "--data", DOCTOR_BODY, remote_url,
                     ]
                     local_negative_result = command(local_negative)
                     add_mtls_rejection_case(

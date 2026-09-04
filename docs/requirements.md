@@ -365,6 +365,17 @@ Satisfied by:
     closed with actionable recovery to use DNS/DDNS or enable mDNS; it must not
     fall back to a durable or inferred IP alias
 
+- `REQ-P-PLATFORM-003` The published release archive set is manifest-declared
+  (`release/publish-artifacts.toml`).
+
+  Required behavior:
+  - the archive set MUST include x86_64 and aarch64 Linux (gnu), x86_64 and
+    aarch64 macOS, and x86_64 Windows
+  - every target is built natively on a matching runner (no cross-linking)
+  - every target is carried by the same packaging path and produces
+    checksummed archives (sha256) alongside every other target
+  - adding a target is a manifest change plus docs, never a workflow fork
+
 ### 2.1 In Scope
 
 - one binary: `atm`
@@ -1701,6 +1712,46 @@ Human-readable `atm peek` and `atm read` output must render one message body
 only. When additional matches exist, they must state that more matches were
 found and direct the operator to `atm list` for metadata inspection instead of
 emitting additional full bodies.
+
+### 7.13 Read-Lane Concurrency And Read-State Handoff
+
+The following requirements make the AV mailbox-read cutover observable and
+non-regressible. They apply to the daemon's mailbox read-family operations,
+regardless of whether the caller is the CLI, an HTTP client, or a graft
+adapter.
+
+- `R-READ-CONC-1` Mailbox read-family operations (`read`, `peek`, `list`,
+  `doctor`, and `query`) MUST be serviced concurrently by a bounded
+  read-only reader lane. They MUST NOT share a concurrency bound with, or be
+  ordered behind, any write or housekeeping lane. A write-lane permit MUST
+  NOT be required to select or load read response data.
+- `R-READ-CONC-2` Read deadlines MUST be enforced cancellably. A request that
+  cannot acquire reader capacity before its deadline MUST fail explicitly
+  with a saturation or deadline outcome; it MUST NOT remain in an indefinite
+  queue. Reader capacity MUST be reclaimed when a cancelled request stops.
+- `R-STATE-RACE-1` Durable primary message records MUST be immutable after
+  admission. Mutable read, acknowledgement, and seen state is
+  race-tolerant: a read racing a state change MAY return either value. No
+  mailbox-read requirement may demand read-your-writes, snapshot pinning, or
+  reader/writer fencing.
+- `R-STATE-HANDOFF-1` Read-flow read/seen state transitions MUST be submitted
+  to a supervised, bounded, non-blocking in-process handoff. That handoff
+  owns writer admission and retry; the read path MUST NOT await the writer
+  lane. A transition MAY be lost only when the handoff buffer overflows or
+  the process exits. Buffer overflow MUST be counted and surfaced by
+  `atm doctor`. In either loss case the behavior MUST be fail-safe: the
+  affected message remains unread/unseen and is re-presented on a subsequent
+  read; it MUST NOT be hidden or discarded.
+  Its lifecycle MUST include readiness-gated startup, a monitored supervisor
+  task, and an atomic `Unavailable` state that rejects new handoffs while
+  preserving the buffered work if the task faults. The supervisor MUST
+  restart within a bounded budget. Restart exhaustion or permanent writer
+  failure MUST fail the runtime closed. `R-STATE-RACE-1` governs observation
+  only and MUST NOT authorize discarding a transition.
+
+The handoff behavior is a product decision recorded in ADR-059. The ADR
+records permanent drop and synchronous write-through as rejected alternatives
+and their operator consequences.
 
 ## 8. `atm ack`
 
@@ -4016,6 +4067,53 @@ mail correctness.
     pin; an OS bind collision fails closed and must not select another port
   - trust add, replace, and revoke refresh the one live daemon's verifier
     atomically without starting a second daemon
+
+- `REQ-CORE-TRANSPORT-002E` Outbound peer dialing must resolve the registered
+  hostname at connect time, dial only routable addresses in a fixed order
+  inside the request budget, and remember a working answer briefly in process
+  memory. Dial order, budget, cache, and diagnostics rules are defined by
+  ADR-060; this requirement fixes the contract and ADR-060 is the design of
+  record. Neither may drift without a superseding ADR.
+
+  Required behavior:
+  - the operating-system resolver (DNS, DDNS, or mDNS for `.local` names)
+    is the only address source; ATM performs no reverse lookup and stores no
+    resolved address durably (`REQ-CORE-TRANSPORT-002D`)
+  - an IPv6 answer that is link-local (`fe80::/10`) and carries no interface
+    scope is unroutable and is never dialed; IPv4 answers are dialed before
+    routable IPv6 answers; no more than four addresses are dialed for one
+    connect attempt
+  - each address attempt is bounded by an even share of the remaining request
+    budget across the addresses still untried, so one unresponsive address can
+    never consume the budget a later reachable address needs
+  - a process-local address cache keyed by the canonical registered hostname
+    holds a working answer for at least five minutes. `rand-m5`,
+    `rand-m5.local`, and any ASCII-case variant address one cache entry; the
+    `.local` suffix never selects a different code path
+  - a valid cache entry is found in well under one millisecond; when the
+    cached addresses no longer connect, the name is resolved again and dialed
+    again inside the same request budget, so a peer whose address changed
+    while moving between wired, Wi-Fi, and VPN networks is reached without an
+    error surfacing to the caller. A re-resolution taking milliseconds is
+    acceptable; an unreachable peer leaves no cache entry behind
+  - timing contract (non-functional): a dial against cached addresses is
+    bounded by the smaller of half the remaining budget and 500 ms, so with
+    the 3 s server request budget at least about 2 s remains for the fresh
+    lookup and dial. That covers an mDNS answer delayed by retransmits after
+    a network change (about 2 s worst case); only a resolver that never
+    answers, or a peer that is asleep or off the network, produces a
+    caller-visible, named failure
+  - the dial rules, constants, and cache key normalization are locked by
+    ADR-060 and enforced by the `peer-dial-seam` lint: name resolution and
+    peer TCP dialing exist only in `peer_dial.rs`, and the locked constants
+    may change only together with a superseding ADR
+  - the mTLS pooled connector and the `plaintext-test` direct connector
+    (`REQ-CORE-TRANSPORT-002B1`) apply the same address ordering; there is no
+    wire-security mode that dials an unfiltered answer
+  - a connect failure is logged at `warn` with the peer and every attempted
+    address and reason, and the caller-visible error names the attempted
+    addresses and reasons without exposing message content, tokens, or raw
+    configuration (`#904`)
 
 - `REQ-CORE-TRANSPORT-002B` Cross-host inbound authorization must use mTLS and
   a durable deny-by-default exact peer allowlist before routing.

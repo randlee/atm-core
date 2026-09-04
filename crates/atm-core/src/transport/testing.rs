@@ -100,6 +100,15 @@ impl LoopbackClientTransport {
             RequestEnvelope::Heartbeat(_) => Err(AtmError::daemon_unavailable(
                 "loopback heartbeat transport is not wired outside the daemon runtime",
             )),
+            RequestEnvelope::QueueGetNext(_) => Err(AtmError::daemon_unavailable(
+                "loopback queue pull transport is not wired outside the daemon runtime",
+            )),
+            RequestEnvelope::GraftReceiverRegister(_)
+            | RequestEnvelope::GraftReceiverRefresh(_)
+            | RequestEnvelope::GraftReceiverUnregister(_)
+            | RequestEnvelope::GraftReceiverLookup { .. } => Err(AtmError::daemon_unavailable(
+                "loopback graft receiver transport is not wired outside the daemon runtime",
+            )),
             RequestEnvelope::List(query) => {
                 list::list_mail(query, self.observability.as_ref()).map(ResponseEnvelope::List)
             }

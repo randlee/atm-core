@@ -37,6 +37,8 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["std::fs::read_to_string"]
 
 [enforcement]
+# No production implementer exists; cfg(test) doubles are intentionally ignored by the policy sweep.
+no_in_repo_implementation = true
 lint_rules = ["LINT-BOUNDARY-CONFIG-INGRESS-REFERENCES", "SCB-CONFIG-001", "SCB-CONFIG-002", "SCB-WORKSPACE-001"]
 review_gates = ["no_direct_config_parser_calls", "no_generic_runtime_team_lookup"]
 

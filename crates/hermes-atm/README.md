@@ -2,8 +2,9 @@
 
 `hermes-atm` is the package-owned Hermes gateway hook for ATM graft nudges.
 It installs one receiver for one Hermes profile and injects delivered nudges
-through the public `GatewayRunner.inject_internal_message(..., mode="queue")`
-API. It does not open an ATM database, select a Hermes adapter, or require any
+through the public `GatewayRunner.inject_internal_message(...,
+mode="queue"|"steer")` API according to the additive ATM nudge kind. It does
+not open an ATM database, select a Hermes adapter, or require any
 post-install source edits.
 
 ## Required settings

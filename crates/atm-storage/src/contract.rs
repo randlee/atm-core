@@ -1,14 +1,20 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fmt;
+use std::net::SocketAddr;
 use std::num::NonZeroU16;
 use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
-use crate::types::{AgentName, HostName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
+use crate::types::{
+    AgentName, HostName, IsoTimestamp, LocalCapability, MemberKey, ModelName, OwnerGeneration,
+    PaneId, TaskId, TeamName,
+};
 
 #[doc(hidden)]
 pub mod sealed {
@@ -336,6 +342,100 @@ pub struct MessageQuery {
     pub limit: Option<usize>,
 }
 
+/// The mailbox a read operation is authorized to inspect.
+///
+/// This deliberately travels with every asynchronous mailbox request instead
+/// of relying on callers to keep the team and agent embedded in a query in
+/// sync.  Backends must reject a mismatch before they schedule database work.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MailboxScope {
+    pub team: TeamName,
+    pub agent: AgentName,
+}
+
+impl MailboxScope {
+    #[must_use]
+    pub const fn new(team: TeamName, agent: AgentName) -> Self {
+        Self { team, agent }
+    }
+
+    #[must_use]
+    pub fn permits(&self, query: &MessageQuery) -> bool {
+        self.team == query.team && self.agent == query.agent
+    }
+}
+
+/// A storage-owned deadline for the bounded mailbox reader lane.
+///
+/// `atm-storage` intentionally does not depend on `atm-core`; the Tokio
+/// runtime translates its request deadline at its boundary before calling the
+/// reader capability.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReadDeadline {
+    remaining: Duration,
+}
+
+impl ReadDeadline {
+    pub fn new(remaining: Duration) -> Result<Self, AtmError> {
+        if remaining.is_zero() {
+            return Err(AtmError::validation(
+                "mailbox read deadline must be non-zero",
+            ));
+        }
+        Ok(Self { remaining })
+    }
+
+    #[must_use]
+    pub const fn remaining(self) -> Duration {
+        self.remaining
+    }
+}
+
+/// Explicit resource-management outcomes from a bounded reader lane.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReadLaneError {
+    UnauthorizedScope,
+    Saturated { reason: &'static str },
+    DeadlineExpired { stage: &'static str },
+    Unavailable { message: String },
+}
+
+impl fmt::Display for ReadLaneError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnauthorizedScope => {
+                formatter.write_str("mailbox scope does not authorize this read")
+            }
+            Self::Saturated { reason } => {
+                write!(formatter, "mailbox reader lane is saturated: {reason}")
+            }
+            Self::DeadlineExpired { stage } => {
+                write!(formatter, "mailbox reader deadline expired while {stage}")
+            }
+            Self::Unavailable { message } => {
+                write!(formatter, "mailbox reader lane is unavailable: {message}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ReadLaneError {}
+
+/// Translates the storage-owned reader-lane outcomes exactly once into the
+/// stable ATM error vocabulary. The original lane outcome remains attached as
+/// the machine-visible cause instead of being flattened into unavailability.
+impl From<ReadLaneError> for AtmError {
+    fn from(error: ReadLaneError) -> Self {
+        let code = match &error {
+            ReadLaneError::UnauthorizedScope => AtmErrorCode::MailboxReadFailed,
+            ReadLaneError::Saturated { .. } => AtmErrorCode::DaemonConnectionSaturated,
+            ReadLaneError::DeadlineExpired { .. } => AtmErrorCode::MailboxLockTimeout,
+            ReadLaneError::Unavailable { .. } => AtmErrorCode::DaemonUnavailable,
+        };
+        AtmError::new(code, "bounded mailbox reader lane request failed").with_cause(error)
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum RosterMemberKind {
@@ -566,15 +666,17 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
 /// async backpressure without exposing its transaction queue or database.
 #[async_trait::async_trait]
 pub trait AsyncMessageStore: MessageStore {
-    /// Materializes a mailbox projection through the backend-owned async lane.
-    ///
-    /// Threaded-message validation needs this snapshot before it can submit
-    /// its immutable successor. The Tokio daemon must therefore not fall back
-    /// to [`MessageStore::list_messages`], which can synchronously open a
-    /// database reader on a request worker.
-    async fn list_messages_async(&self, _query: MessageQuery) -> Result<Vec<Message>, AtmError> {
+    /// Applies the narrow state transition requested by a successful mailbox
+    /// read. Selection remains reader-lane work; this is the sole ordered
+    /// writer-lane follow-up and is deliberately asynchronous.
+    async fn apply_read_display_state_async(
+        &self,
+        _scope: MailboxScope,
+        _message_ids: Vec<MessageKey>,
+        _seen_watermark: Option<IsoTimestamp>,
+    ) -> Result<(), AtmError> {
         Err(AtmError::daemon_unavailable(
-            "message store does not implement async mailbox projection admission",
+            "message store does not implement async mailbox read-state transition",
         ))
     }
 
@@ -609,10 +711,173 @@ pub trait AsyncMessageStore: MessageStore {
     }
 }
 
+/// Tokio-safe, read-only mailbox capability.
+///
+/// This is intentionally separate from [`AsyncMessageStore`]: the latter is
+/// the ordered durable writer lane.  Implementations of this trait must not
+/// acquire that writer lane or a write-capable database connection.
+#[async_trait::async_trait]
+pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
+    async fn list_messages(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError>;
+
+    async fn load_message(
+        &self,
+        scope: MailboxScope,
+        key: MessageKey,
+        deadline: ReadDeadline,
+    ) -> Result<Option<Message>, ReadLaneError>;
+
+    /// Bounded roster projection used only to validate an explicitly
+    /// addressed mailbox. It remains on the read-only lane.
+    async fn mailbox_member_exists(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<bool, ReadLaneError>;
+
+    /// Bounded durable seen-state projection. The daemon never reads a
+    /// caller-owned seen-state file while servicing an HTTP mailbox request.
+    async fn load_seen_watermark(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<Option<IsoTimestamp>, ReadLaneError>;
+}
+
 pub trait RosterStore: sealed::Sealed + Send + Sync {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
+}
+
+/// Registration payload for one loopback graft receiver lease.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverRegistration {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub endpoint: SocketAddr,
+    pub capability: LocalCapability,
+    pub owner_generation: OwnerGeneration,
+}
+
+/// Durable graft receiver endpoint and its liveness observations.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverLease {
+    pub endpoint: SocketAddr,
+    pub capability: LocalCapability,
+    pub owner_generation: OwnerGeneration,
+    pub registered_at: DateTime<Utc>,
+    pub last_seen_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unreachable_since: Option<DateTime<Utc>>,
+}
+
+/// Errors returned by the durable graft receiver endpoint store.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GraftEndpointStoreError {
+    /// Reserved for a future caller that cannot prove same-host exclusivity
+    /// (ADR-056): same-host callers instead prove exclusivity through the
+    /// receiver's flock and are never rejected by this variant today.
+    AlreadyActive,
+    /// The supplied owner generation does not own the stored lease.
+    NotOwner,
+    /// No lease row exists for this receiver.
+    Absent,
+    /// The backend could not complete the requested operation.
+    ///
+    /// Preserves the originating [`AtmError`]'s code and cause chain (RBP-F001)
+    /// instead of flattening it into an opaque string, so callers can
+    /// distinguish e.g. a caller-input constraint violation from a true
+    /// backend outage rather than collapsing every failure into one generic
+    /// presentation.
+    Storage {
+        code: crate::error_codes::AtmErrorCode,
+        message: String,
+        cause: Option<String>,
+    },
+}
+
+impl GraftEndpointStoreError {
+    /// Wraps a structured backend [`AtmError`] as a [`Self::Storage`]
+    /// variant, preserving its code and cause instead of flattening it into
+    /// an opaque string.
+    #[must_use]
+    pub fn storage(error: &AtmError) -> Self {
+        Self::Storage {
+            code: error.code(),
+            message: error.message().to_string(),
+            cause: error.cause().map(ToOwned::to_owned),
+        }
+    }
+}
+
+impl fmt::Display for GraftEndpointStoreError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::AlreadyActive => formatter.write_str("graft receiver lease is already active"),
+            Self::NotOwner => {
+                formatter.write_str("graft receiver lease is owned by another generation")
+            }
+            Self::Absent => formatter.write_str("graft receiver lease is absent"),
+            Self::Storage {
+                code,
+                message,
+                cause,
+            } => match cause {
+                Some(cause) => write!(
+                    formatter,
+                    "graft receiver endpoint storage failed ({code}): {message}: {cause}"
+                ),
+                None => write!(
+                    formatter,
+                    "graft receiver endpoint storage failed ({code}): {message}"
+                ),
+            },
+        }
+    }
+}
+
+/// Durable registry for same-host graft receiver endpoints.
+pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
+    fn register(
+        &self,
+        registration: &GraftReceiverRegistration,
+        now: DateTime<Utc>,
+    ) -> Result<(), GraftEndpointStoreError>;
+
+    fn refresh(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        owner_generation: &OwnerGeneration,
+        now: DateTime<Utc>,
+    ) -> Result<(), GraftEndpointStoreError>;
+
+    fn unregister(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        owner_generation: &OwnerGeneration,
+    ) -> Result<(), GraftEndpointStoreError>;
+
+    fn lookup(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError>;
+
+    fn mark_unreachable(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        owner_generation: &OwnerGeneration,
+        now: DateTime<Utc>,
+    ) -> Result<(), GraftEndpointStoreError>;
 }
 
 /// A non-empty, opaque certificate fingerprint. It cannot be confused with a
@@ -769,27 +1034,135 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
     ) -> Result<bool, AtmError>;
 }
 
+/// Maximum automatic delivery attempts for one deferred (queue-kind) nudge.
+///
+/// At or above this count the marker stays set but becomes auto-retry
+/// ineligible and the row is reported stuck (ADR-054 (f)).
+pub const MAX_NUDGE_ATTEMPTS: u32 = 5;
+
+/// One claimed deferred nudge: the message and the failed-attempt count that
+/// preceded this claim.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NudgeClaim {
+    pub msg: AtmMessageId,
+    /// Value of `nudge_attempts` when the claim was taken. `requeue_pending`
+    /// stores `attempt + 1`; `release_pending` leaves it unchanged.
+    pub attempt: u32,
+}
+
+/// Durable at-most-once delivery state for deferred (`atm queue`) nudges.
+///
+/// The store owns one marker column pair on `mail_message_states`; no caller
+/// above the backend crate writes SQL. All methods are synchronous.
+pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
+    /// Marks one just-admitted message as awaiting a deferred nudge.
+    ///
+    /// Conditional on the row still being unread and not deleted. Returns
+    /// whether the marker was set.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn mark_pending(
+        &self,
+        member: &MemberKey,
+        msg: &AtmMessageId,
+        at: IsoTimestamp,
+    ) -> Result<bool, AtmError>;
+
+    /// Atomically selects and claims the oldest eligible pending message.
+    ///
+    /// Eligibility requires the row to be unread, marker set, not deleted,
+    /// and `nudge_attempts < MAX_NUDGE_ATTEMPTS`. Selection order is FIFO via
+    /// `message_key` (ULID order). `None` means nothing was eligible, or the
+    /// claim lost a race to another caller. This is THE at-most-once
+    /// mechanism: one conditional `UPDATE … RETURNING`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError>;
+
+    /// Restores the marker after a failed dispatch.
+    ///
+    /// Sets `nudge_attempts = claim.attempt + 1`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError>;
+
+    /// Restores a claim refused for a lifecycle reason (AQ2.7 `agent_blocked`).
+    ///
+    /// Leaves `nudge_attempts` unchanged. Conditional and idempotent on claim
+    /// identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError>;
+
+    /// Clears the marker for one message on the read path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn clear_pending_on_read(&self, member: &MemberKey, msg: &AtmMessageId)
+    -> Result<(), AtmError>;
+
+    /// Clears the marker for exactly one just-handed-off message.
+    ///
+    /// Unconditional and idempotent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn clear_pending_on_handoff(
+        &self,
+        member: &MemberKey,
+        msg: &AtmMessageId,
+    ) -> Result<(), AtmError>;
+
+    /// Enumerates members holding at least one eligible pending marker.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        AckRequirementState, BuiltInNudgeTemplateKind, CertificateFingerprint, Message, MessageKey,
-        MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore,
-        PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
-        RosterSnapshot, RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode,
-        TeamNudgeTemplateOverrideRow, derive_ack_requirement, sealed,
+        AckRequirementState, AtmMessageId, BuiltInNudgeTemplateKind, CertificateFingerprint,
+        GraftReceiverEndpointStore, GraftReceiverRegistration, Message, MessageKey, MessageQuery,
+        MessageReceivedEvent, MessageStore, NudgeClaim, NudgeTemplateOverrideStore,
+        PendingNudgeStore, PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember,
+        RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier,
+        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, derive_ack_requirement,
+        sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
     use crate::schema::MessageEnvelope;
-    use crate::types::{AgentName, IsoTimestamp, ModelName, TeamName};
+    use crate::types::{
+        AgentName, IsoTimestamp, LocalCapability, MemberKey, ModelName, OwnerGeneration, TeamName,
+    };
     use chrono::Utc;
     use serde_json::Map;
+    use std::net::SocketAddr;
 
     #[derive(Default)]
     struct DummyStore;
 
     #[derive(Default)]
     struct DummyNudgeTemplateOverrideStore;
+
+    // RBQA-F002/F003: the no-op `GraftReceiverEndpointStore` test double
+    // lives once in `crate::testing::NoopGraftReceiverEndpointStore`,
+    // shared with `atm-core`'s admission tests, instead of being duplicated
+    // here.
+    use crate::testing::NoopGraftReceiverEndpointStore as DummyGraftReceiverEndpointStore;
 
     impl sealed::Sealed for DummyStore {}
 
@@ -892,17 +1265,77 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct DummyPendingNudgeStore;
+
+    impl sealed::Sealed for DummyPendingNudgeStore {}
+
+    impl PendingNudgeStore for DummyPendingNudgeStore {
+        fn mark_pending(
+            &self,
+            _member: &MemberKey,
+            _msg: &AtmMessageId,
+            _at: IsoTimestamp,
+        ) -> Result<bool, AtmError> {
+            Ok(true)
+        }
+
+        fn claim_next_pending(&self, _member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
+            Ok(None)
+        }
+
+        fn requeue_pending(
+            &self,
+            _member: &MemberKey,
+            _claim: &NudgeClaim,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn release_pending(
+            &self,
+            _member: &MemberKey,
+            _claim: &NudgeClaim,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn clear_pending_on_read(
+            &self,
+            _member: &MemberKey,
+            _msg: &AtmMessageId,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn clear_pending_on_handoff(
+            &self,
+            _member: &MemberKey,
+            _msg: &AtmMessageId,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
+            Ok(Vec::new())
+        }
+    }
+
     #[test]
     fn storage_traits_are_object_safe() {
         let store = DummyStore;
         let message_store: &dyn MessageStore = &store;
         let roster_store: &dyn RosterStore = &store;
         let notifier: &dyn StorageNotifier = &store;
+        let pending_nudge_store: &dyn PendingNudgeStore = &DummyPendingNudgeStore;
         let override_store: &dyn NudgeTemplateOverrideStore = &DummyNudgeTemplateOverrideStore;
+        let graft_receiver_endpoint_store: &dyn GraftReceiverEndpointStore =
+            &DummyGraftReceiverEndpointStore;
 
         let team: TeamName = "test-team".parse().expect("team");
         let agent: AgentName = ROLE_WORKER.parse().expect("agent");
         let key = MessageKey::new("atm:test-1").expect("key");
+        let member = MemberKey::new(team.clone(), agent.clone());
 
         let message = Message {
             team: team.clone(),
@@ -994,6 +1427,77 @@ mod tests {
             )
             .expect("save override");
         assert_eq!(override_row.kind, BuiltInNudgeTemplateKind::DeliveryAck);
+
+        let msg = AtmMessageId::new();
+        assert!(
+            pending_nudge_store
+                .mark_pending(&member, &msg, IsoTimestamp::from_datetime(Utc::now()))
+                .expect("mark pending")
+        );
+        assert!(
+            pending_nudge_store
+                .claim_next_pending(&member)
+                .expect("claim next pending")
+                .is_none()
+        );
+        let claim = NudgeClaim { msg, attempt: 0 };
+        pending_nudge_store
+            .requeue_pending(&member, &claim)
+            .expect("requeue pending");
+        pending_nudge_store
+            .release_pending(&member, &claim)
+            .expect("release pending");
+        pending_nudge_store
+            .clear_pending_on_read(&member, &msg)
+            .expect("clear pending on read");
+        pending_nudge_store
+            .clear_pending_on_handoff(&member, &msg)
+            .expect("clear pending on handoff");
+        assert!(
+            pending_nudge_store
+                .list_pending_members()
+                .expect("list pending members")
+                .is_empty()
+        );
+
+        let generation =
+            OwnerGeneration::new("01J00000000000000000000001").expect("owner generation");
+        let registration = GraftReceiverRegistration {
+            team: "test-team".parse().expect("team"),
+            agent: ROLE_WORKER.parse().expect("agent"),
+            endpoint: "127.0.0.1:43101".parse::<SocketAddr>().expect("endpoint"),
+            capability: LocalCapability::generate().expect("capability"),
+            owner_generation: generation.clone(),
+        };
+        graft_receiver_endpoint_store
+            .register(&registration, Utc::now())
+            .expect("register");
+        assert!(
+            graft_receiver_endpoint_store
+                .lookup(&registration.team, &registration.agent)
+                .expect("lookup")
+                .is_none(),
+            "the dummy store never persists a lease"
+        );
+        graft_receiver_endpoint_store
+            .refresh(
+                &registration.team,
+                &registration.agent,
+                &generation,
+                Utc::now(),
+            )
+            .expect("refresh");
+        graft_receiver_endpoint_store
+            .mark_unreachable(
+                &registration.team,
+                &registration.agent,
+                &generation,
+                Utc::now(),
+            )
+            .expect("mark unreachable");
+        graft_receiver_endpoint_store
+            .unregister(&registration.team, &registration.agent, &generation)
+            .expect("unregister");
     }
 
     #[test]

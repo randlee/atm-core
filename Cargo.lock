@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "agent-team-mail"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "agent-team-mail-core",
  "anyhow",
@@ -13,6 +13,7 @@ dependencies = [
  "atm-daemon-client",
  "atm-graft",
  "atm-http-runtime",
+ "atm-observability",
  "atm-runtime-test-support",
  "atm-storage",
  "chrono",
@@ -28,11 +29,12 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "ulid",
 ]
 
 [[package]]
 name = "agent-team-mail-core"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "async-trait",
  "atm-error",
@@ -41,7 +43,6 @@ dependencies = [
  "base64",
  "chrono",
  "fs4",
- "getrandom 0.3.4",
  "interprocess",
  "libc",
  "parking_lot",
@@ -181,9 +182,10 @@ dependencies = [
 
 [[package]]
 name = "atm-architecture"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "cargo_metadata",
+ "quote",
  "serde",
  "syn 2.0.119",
  "toml",
@@ -191,34 +193,33 @@ dependencies = [
 
 [[package]]
 name = "atm-daemon"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "agent-team-mail-core",
  "atm-daemon-bootstrap",
- "chrono",
- "sc-observability",
- "sc-observability-types",
- "serde_json",
- "serial_test",
- "tempfile",
  "tokio",
- "tracing",
 ]
 
 [[package]]
 name = "atm-daemon-bootstrap"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "agent-team-mail-core",
+ "atm-herdr",
  "atm-http-runtime",
+ "atm-observability",
  "atm-runtime",
  "atm-runtime-test-support",
  "atm-storage",
  "atm-storage-rusqlite",
  "atm-template-sc-compose",
+ "chrono",
  "fs4",
  "peer-tls",
+ "sc-observability",
+ "sc-observability-types",
  "serde_json",
+ "serial_test",
  "tempfile",
  "tokio",
  "tracing",
@@ -227,7 +228,7 @@ dependencies = [
 
 [[package]]
 name = "atm-daemon-client"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "agent-team-mail-core",
  "atm-http-runtime",
@@ -242,7 +243,7 @@ dependencies = [
 
 [[package]]
 name = "atm-error"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -250,12 +251,13 @@ dependencies = [
 
 [[package]]
 name = "atm-graft"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "agent-team-mail-core",
  "async-trait",
  "atm-daemon-client",
  "atm-http-runtime",
+ "atm-runtime-test-support",
  "serde_json",
  "tempfile",
  "tokio",
@@ -264,7 +266,7 @@ dependencies = [
 
 [[package]]
 name = "atm-graft-python"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "agent-team-mail-core",
  "atm-graft",
@@ -274,11 +276,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm-herdr"
+version = "1.5.0"
+dependencies = [
+ "agent-team-mail-core",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "atm-http-runtime"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "agent-team-mail-core",
  "async-trait",
+ "atm-herdr",
+ "atm-runtime",
  "atm-runtime-test-support",
  "atm-storage",
  "axum",
@@ -300,8 +313,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm-observability"
+version = "1.5.0"
+dependencies = [
+ "agent-team-mail-core",
+ "sc-observability-types",
+ "tempfile",
+]
+
+[[package]]
 name = "atm-peer-tls-interop"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
@@ -312,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "atm-query-python"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "atm-storage",
  "atm-storage-rusqlite",
@@ -322,9 +344,11 @@ dependencies = [
 
 [[package]]
 name = "atm-runtime"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "agent-team-mail-core",
+ "async-trait",
+ "atm-runtime-test-support",
  "atm-storage",
  "serde_json",
  "tokio",
@@ -333,20 +357,24 @@ dependencies = [
 
 [[package]]
 name = "atm-runtime-test-support"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "agent-team-mail-core",
+ "async-trait",
  "atm-runtime",
+ "atm-storage",
  "atm-storage-rusqlite",
 ]
 
 [[package]]
 name = "atm-storage"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "async-trait",
  "atm-error",
+ "base64",
  "chrono",
+ "getrandom 0.3.4",
  "rustls",
  "serde",
  "serde_json",
@@ -359,7 +387,7 @@ dependencies = [
 
 [[package]]
 name = "atm-storage-rusqlite"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "async-trait",
  "atm-storage",
@@ -374,14 +402,14 @@ dependencies = [
 
 [[package]]
 name = "atm-storage-sqlserver-proof"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "atm-storage",
 ]
 
 [[package]]
 name = "atm-template-sc-compose"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
@@ -1443,7 +1471,7 @@ dependencies = [
 
 [[package]]
 name = "peer-tls"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "atm-storage",
  "rcgen",
@@ -1451,6 +1479,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-rustls",
+ "tracing",
 ]
 
 [[package]]
@@ -1892,9 +1921,9 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sc-composer"
-version = "1.4.1"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4415ff74a7f91a7505a7c9fc464908ed5e0e684d2648b5d731e0533c371edb2c"
+checksum = "f883872baa922b17ef660ff4e56da0db0423a6c293167e7df1a4f237896d3394"
 dependencies = [
  "minijinja",
  "quick-xml",
@@ -1922,7 +1951,7 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-boundary"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -1930,7 +1959,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sc-lint-attributes",
- "sc-lint-directives 1.4.4",
+ "sc-lint-directives 1.5.0",
  "serde",
  "serde_json",
  "syn 2.0.119",
@@ -1949,7 +1978,7 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-directives"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "quote",
  "syn 2.0.119",
@@ -1982,9 +2011,9 @@ dependencies = [
 
 [[package]]
 name = "sc-sha"
-version = "1.4.1"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01502b8bda56eef5c2f445a88396d75cc223c8ce91709ac007dbb81f40e577ba"
+checksum = "495557feffa63a81d3de6c932bae61bf08a1882c8dfd28c561591561ddb84f4e"
 dependencies = [
  "sha2",
 ]

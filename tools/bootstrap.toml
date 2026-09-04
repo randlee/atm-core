@@ -21,13 +21,22 @@ cargo-shear = []
 cargo-modules = ["quick-install"]
 
 [sc-compose]
-version = "1.5.0"
+version = "1.6.1"
 
 [sc-compose.checksums]
-aarch64-apple-darwin = "7751631cd86e6644e88cfcf3dd80f352779350f9f24f891f52983c8da0ed4620"
-x86_64-apple-darwin = "618bf0d856aa00dcdfb271ca098db6c5a4c228c6778b2cf2c7d7dbc7ff70966e"
-x86_64-pc-windows-msvc = "d1dcabae4f429483ce52d6821b293f4a4f40dd3884f99879e3c01c08d5b0a3ab"
-x86_64-unknown-linux-gnu = "1830bd70194832c5a6ef310c555e575a38922c6bb03141b51a2ab5ca1f3a509e"
+aarch64-apple-darwin = "23db29325d95c0f4bb94dead48d02883e00311e82dc66820fe51b1dd855b7168"
+x86_64-apple-darwin = "476147e831bc70f3142787241853d94d290029c0c8e66cfe83211a6d60aaa002"
+x86_64-pc-windows-msvc = "35671244d7cf42faf5fa2f88e78a6944beeb3fdcce28cb795ef63e97a8c6ce32"
+x86_64-unknown-linux-gnu = "2e09706e0814f30adaacc88310db4ad629dcd9314d1182ecf12767686f828204"
+
+[wyvern]
+version = "0.6.0"
+
+[wyvern.checksums]
+"wyvern_0.6.0_x86_64-unknown-linux-gnu.tar.gz" = "549d7898e717475cbb0a1412cb768f6d0cb08053acc461dccb8e4fe66854315c"
+"wyvern_0.6.0_aarch64-apple-darwin.tar.gz" = "b5f5b986868d65b37d39966d7e9fa0c2bb6fd35fd0675397cbe3b4f77dc6b9dc"
+"wyvern_0.6.0_x86_64-apple-darwin.tar.gz" = "325880ca0edf0d2e0afda4cf2ef4818f1dc2c3d7fe3d5811cf55a3893bc43cc6"
+"wyvern_0.6.0_x86_64-pc-windows-msvc.zip" = "d330f7f7903a738640613a497975b88fcdeab3fbb03ca4b27619dbc138ec0835"
 
 [python]
 codespell = "2.4.3"

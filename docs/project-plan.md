@@ -1342,7 +1342,7 @@ satisfied — AO merged to `develop` via the AO2 integration (PR #966). AP.1's
 physical hardware proof remains the mandatory entry gate; no AP dispatch has
 occurred.
 
-## 48. Phase AQ — ATM Send-To Shell Integration [PROPOSED — PLAN HARDENED, READY TO START]
+## 48. Phase AQ — ATM Send-To Shell Integration [COMPLETE ON DEVELOP (PR #1079) — 5 open follow-ups, 2 tied to Must PRD requirements (R1 GUI E2E, R15 m5); see qa-evidence-master.json follow_ups]
 
 Phase AQ delivers PRD Phase 1 of ATM "Send To": one gesture from the OS file
 manager (Finder / Explorer / Nautilus) to a delivered message whose text
@@ -1354,8 +1354,11 @@ change, no daemon transfer machinery. ADR-055 defines the system-level
 transfer-script seam; thin per-OS shell glue drives the pipeline
 `atm teams --json --members | <picker> | atm send --attach "$@" --from-json`.
 Phase 1 also delivers `atm queue` — `atm send` with the nudge deferred until
-the recipient harness is ready (nudge taxonomy: steer = immediate, queue =
-deferred; ADR-054) — via a `nudge_pending_at` marker, a `PendingNudgeStore`
+the recipient harness is ready (nudge taxonomy: steer and queue are message
+*kinds*, not delivery timings — the physical mechanism may itself defer a
+steer-kind notification until the next bare-CLI Stop pull, and mechanism
+timing never changes the kind; ADR-054, AQ2.5 addendum) — via a
+`nudge_pending_at` marker, a `PendingNudgeStore`
 storage capability, graft dual-channel wiring (harness owns landing; Hermes
 `/steer`+`/queue` complete), and a tmux idle-drain, under the ADR-054 nudge
 taxonomy (nudge = umbrella; steer/queue = kinds) with its code-rename
@@ -1363,6 +1366,11 @@ inventory. Queue ships first; trait foundation first, Herdr second
 (reordered 2026-08-26 per Rand). Fourteen sprints: AQ1 trait foundation +
 `atm queue` CLI verb + ADR-054 taxonomy + `PendingNudgeStore`; AQ2.6/AQ2.7
 Herdr local-steer backend + lifecycle-gated queue wake (most urgent);
+[AQ2.6 sprint](./plans/phase-aq/sprint-AQ2-6-herdr-steer-backend.md) is the
+authoritative implementation entry for the local Herdr backend and is
+complete after the AQ2.6 QA1 fix cycle. The [AQ2.7 sprint](./plans/phase-aq/sprint-AQ2-7-herdr-queue-wake.md)
+is complete with the fixed-cadence Herdr queue-wake pump and runtime health
+poll projection;
 AQ1.5–AQ1.9 graft push-registration (ADR-056), parallel with Herdr; AQ2
 graft dual-channel; AQ2.5 queue delivery triggers (heartbeat hooks,
 bare-CLI FIFO); AQ3 tmux idle-drain + recovery sweep; AQ4 Send-To core
@@ -1379,11 +1387,49 @@ plan is [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md); source PRD is
 [prd-atm-send-to](./plans/phase-aq/prd-atm-send-to.md). PRD Phase 2
 (agent-assisted drafting, Wyvern chat sessions) is explicitly deferred.
 
-Status 2026-08-26: plan hardened (plan-QA PASS 2026-08-24, queue-first
-6-sprint structure with the AQ1.5–AQ1.9 graft-registration insertion and
-AQ2.5 delivery triggers). AQ's entry dependency — Phase AO2 merged to
-`develop` (ADR-047/ADR-053 on the cut head) — is satisfied as of PR #966.
-Ready to start on approval.
+Phase AQ complete on `develop` (14/14 sprints) — `integrate/phase-aq` →
+`develop` merged via PR #1079 (`1f5666fa5`).
+
+Status 2026-08-28: all 14 of the phase's sprints are merged to
+`integrate/phase-aq`:
+
+- AQ1 trait foundation + `atm queue` CLI verb/taxonomy — PR #1040
+  (`feature/aq-1-trait-foundation`)
+- AQ1.5 graft push-registration API — PR #1045
+- AQ1.6 graft receiver registration client — PR #1046
+- AQ1.7 graft endpoint consumer cutover — PR #1048
+- AQ1.8 graft file-record retirement — PR #1049
+- AQ1.9 hermes-atm wheel verification + restart-matrix crash guard — PR #1050,
+  PR #1070 (`26fb5bc4d`); the m5 live matrix follow-up remains pending
+- AQ2 graft dual-channel queue delivery — PR #1051
+- AQ2.5 queue delivery triggers (heartbeat CLI surface, bare-CLI FIFO,
+  `QueuePull` classifier, ADR-054 delivery-trigger addendum) — PR #1053
+- AQ2.6 Herdr local-steer backend — PR #1042
+- AQ2.7 Herdr poll-gated queue wake — PR #1056, merged `6c70f88ce`
+  (cycle-5 QA-5 PASS, closing commit `d25b049d7`)
+- AQ3 tmux idle-drain + recovery sweep — PR #1054, merged `deed32e93`
+  (QA-final6 PASS 14/14)
+- AQ4 Send-To core (ATM_TEMP, CLI surface, transfer scripts, sweeper) —
+  PR #1055, merged `0adce24d6` (QA-3 PASS-with-deferral, 7/9 AC; Windows
+  loopback and tailscale legs deferred by ruling)
+- AQ5 Send-To surface + phase evidence — PR #1059, merged `53921169e` on
+  2026-08-28
+- AQ6 sc-ecosystem dependency preflight + Wyvern contract issue — PR #1066,
+  final head `29ac4a7c58796f446f3cdd6725f265ea6db2a66a`, merged `edb1a5381`
+  on 2026-08-28
+
+Tracked follow-ups (owner in parentheses): AQ1.9-m5 — live m5 restart matrix
+and hermes-atm suite run (Phase AQ closeout/AQ6); AQ4-tailscale-m5 — live
+tailscale transfer transcript (Phase AQ closeout); AQ4-windows-loopback —
+real Windows-host/POSIX-receiver reproduction of the ssh-under-pwsh loopback
+gap (Phase AQ closeout); AQ5-gui-e2e — live Finder/Explorer/Nautilus
+member-picker GUI E2E transcripts (Rand); AQ6-wyvern-pin-bump — Wyvern pin
+behind the latest upstream release, surfaced by ecosystem-preflight on
+PR #1076, bump before the next release, not a phase-merge blocker (Phase AQ
+closeout). See [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md) for the
+authoritative sprint-by-sprint detail and
+`docs/plans/phase-aq/.audit/qa-evidence-master.json` for QA/merge
+provenance.
 
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 
@@ -1479,6 +1525,17 @@ unreachable pre-kit installed-doc validator path and recorded every remaining
 legacy publish candidate as a gate-bound deferral in its receipt. The first
 kit-era release is the follow-up deletion trigger.
 
+## 52a. Phase AS (release validation 1.4.x) — Prerelease Archives [ACTIVE]
+
+This is a distinct, narrowly-scoped release-validation phase, not a revival
+of the superseded **Phase AS — Shared Publish-Kit Migration** above. It owns
+only the repository-local, tag-triggered prerelease archive workflow and its
+operator safeguards. Its current sprint is
+[`AS1.1 — Prerelease archive job`](./plans/phase-as/sprint-AS1-1-prerelease-archive.md),
+which builds CI-provenanced archives without publishing or modifying the
+vendored `sc-publish` kit. It does not inherit the retired phase's files,
+acceptance criteria, or release receipts.
+
 ## 53. Phase AU — Boundary Debt Retirement ✅ COMPLETE
 
 Phase AU retires the 22 pre-existing sc-boundary findings exposed when
@@ -1502,6 +1559,37 @@ The authoritative plan is
 [boundary-regression-plan](./plans/boundary-regression-plan.md) (arch-ctm
 critical review round 1 folded in); phase-au sprint docs are being cut from
 it under `docs/plans/phase-au/` on branch `plan/boundary-regression`.
+
+## 54. Phase AV — Async Mailbox-Read Cutover Completion [COMPLETE — INTEGRATION PR #1120]
+
+Phase AV fixes the mailbox-read serialization regression: every core job —
+including all reads — funnels through one single-permit `BlockingCoreBridge`
+in `atm-http-runtime`, so an unrelated slow job head-of-line blocks `atm
+read` past its client budget. The phase completes the Tokio cutover the AL
+phase left unfinished: a bounded read-only WAL reader lane
+(`AsyncMailboxReader`), atomic read-handler cutover with the hidden
+read-flow mutations split onto the writer lane, normative
+requirements/ADR hardening making re-serialization non-compliant,
+mechanical hard gates, and massively-parallel read/query benchmark
+families with ratcheted floors. Five sprints: `AV.1a` reader-lane
+foundation (runtime-inert), `AV.1b` read-handler cutover (the atomic
+behavior change), `AV.2` requirements/ADR hardening, `AV.3` mechanical
+hard gates, `AV.4` read/query benchmarks. Dependency chain:
+AV.1a→AV.1b→{AV.3, AV.4}; AV.2 parallel-safe with all.
+
+The authoritative plan is
+[phase-av-plan](./plans/phase-av/phase-av-plan.md) with per-sprint docs
+under `docs/plans/phase-av/`, authored on branch `plan/phase-av` (PR #1108).
+
+Phase AV sprint status:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AV.1a` | `merged` (PR #1112) | `fix/mailbox-read-blocking-serialization` | `docs/plans/phase-av/sprint-AV.1a-reader-lane-foundation.md` |
+| `AV.1b` | `merged` (PR #1115) | `feature/av1b-read-handler-cutover` | `docs/plans/phase-av/sprint-AV.1b-read-handler-cutover.md` |
+| `AV.2` | `complete` | `feature/av2-read-concurrency-requirements` | `docs/requirements.md`, `docs/adr/ADR-059-async-mailbox-read-concurrency.md`, `docs/plans/phase-av/av-closeout-record.md` |
+| `AV.3` | `complete` (PR #1113 merged) | `feature/av3-read-concurrency-gates` | `docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md` |
+| `AV.4` | `complete` (PR #1114 merged) | `feature/av4-read-query-benchmarks` | `docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md` |
 
 ## Publishing Improvements
 

@@ -32,6 +32,70 @@
         }
       }
     },
+    "/graft/receiver/lookup": {
+      "post": {
+        "operation_id": "lookupGraftReceiver",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/GraftReceiverLease"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/graft/receiver/refresh": {
+      "post": {
+        "operation_id": "refreshGraftReceiver",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/graft/receiver/register": {
+      "post": {
+        "operation_id": "registerGraftReceiver",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/graft/receiver/unregister": {
+      "post": {
+        "operation_id": "unregisterGraftReceiver",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
     "/heartbeat": {
       "post": {
         "operation_id": "teamMemberHeartbeat",
@@ -140,6 +204,22 @@
         }
       }
     },
+    "/queue/get-next": {
+      "post": {
+        "operation_id": "getNextBareCliQueueMessages",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/QueueGetNextResponse"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
     "/runtime/reload": {
       "post": {
         "operation_id": "reloadRuntimeView",
@@ -192,6 +272,73 @@
       "properties": [],
       "required": []
     },
+    "GraftReceiverLease": {
+      "properties": [
+        "capability",
+        "endpoint",
+        "last_seen_at",
+        "owner_generation",
+        "registered_at",
+        "unreachable_since"
+      ],
+      "required": [
+        "capability",
+        "endpoint",
+        "last_seen_at",
+        "owner_generation",
+        "registered_at"
+      ]
+    },
+    "GraftReceiverLookupRequest": {
+      "properties": [
+        "agent",
+        "team"
+      ],
+      "required": [
+        "agent",
+        "team"
+      ]
+    },
+    "GraftReceiverRefreshRequest": {
+      "properties": [
+        "agent",
+        "owner_generation",
+        "team"
+      ],
+      "required": [
+        "agent",
+        "owner_generation",
+        "team"
+      ]
+    },
+    "GraftReceiverRegistration": {
+      "properties": [
+        "agent",
+        "capability",
+        "endpoint",
+        "owner_generation",
+        "team"
+      ],
+      "required": [
+        "agent",
+        "capability",
+        "endpoint",
+        "owner_generation",
+        "team"
+      ]
+    },
+    "GraftReceiverUnregistration": {
+      "properties": [
+        "agent",
+        "owner_generation",
+        "team"
+      ],
+      "required": [
+        "agent",
+        "owner_generation",
+        "team"
+      ]
+    },
     "HeartbeatRequest": {
       "properties": [],
       "required": []
@@ -232,6 +379,36 @@
     "PeekQuery": {
       "properties": [],
       "required": []
+    },
+    "QueueGetNextRequest": {
+      "properties": [
+        "member",
+        "team"
+      ],
+      "required": [
+        "member",
+        "team"
+      ]
+    },
+    "QueueGetNextResponse": {
+      "properties": [
+        "messages"
+      ],
+      "required": [
+        "messages"
+      ]
+    },
+    "QueuedNudgeMessage": {
+      "properties": [
+        "body",
+        "kind",
+        "msg_id"
+      ],
+      "required": [
+        "body",
+        "kind",
+        "msg_id"
+      ]
     },
     "ReadQuery": {
       "properties": [],
