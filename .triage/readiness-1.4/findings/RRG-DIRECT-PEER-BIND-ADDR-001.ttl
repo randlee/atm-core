@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-DIRECT-PEER-BIND-ADDR-001>
+  a triage:Finding ;
+  triage:findingId "RRG-DIRECT-PEER-BIND-ADDR-001" ;
+  triage:title "Replacement runtime binds the direct-peer mTLS listener on 0.0.0.0 unconditionally; no loopback bind option exists, so an account-local fixture daemon cannot expose an mTLS peer endpoint without a wildcard socket" ;
+  triage:description "Found during release-readiness 1.4.13 on rand-m5 (2026-09-04): arch-ctm's atmbench fixture launched with --direct-peer-port 43111 opened a wildcard listener, which raised the macOS incoming-connection prompt that blocked the daemon; Rand ruled no more daemon UI prompts and fenix@rand-m5 made loopback-only fixtures a standing rule on rand-m5. Source on develop 5ca0fedce: crates/atm-http-runtime/src/lib.rs bind_configured_direct_peer_listener (line 558) constructs the bind address as SocketAddr::from(([0, 0, 0, 0], peer.port())) at line 565; DirectPeerTcpConfig (line 204) carries only port and allow_ephemeral_test_port, no bind address; the persisted peer interface bind address (atm peer interface set --bind) feeds only the mTLS preflight test-bind in crates/atm-runtime/src/composition.rs and the TLS identity, never the listener. The only loopback listener is the plaintext IPC listener (loopback_tcp), which is not an mTLS peer endpoint and cannot stand in for the direct-peer port. Bind failure falls back silently to local listeners with a warning, which is what the loopback-only read fixture relied on. Consequence: the RRG-TRUST-KEY-LOOPBACK-001 live legs (loopback mTLS against an account-local fixture) cannot be executed on rand-m5 under the standing rule; the only daemon the localhost stage can exercise is the host daemon on 43101, the path Rand withdrew. Classification: product, important, replacement runtime (atm-http-runtime) only; deferred past release per quality-mgr ruling on RRG-SMOKE-LOCALHOST-PORT-001 (TRUST-KEY legs stay open). Proposed fix scope when dispatched: an explicit direct-peer bind address on DirectPeerTcpConfig sourced from the persisted interface bind address or a launch flag, default unchanged (0.0.0.0), with a test that a loopback bind never opens a wildcard socket; pair with RRG-CLI-DIRECT-PEER-DIAL-PORT-001, both are required before the legs can run. Do not touch the frozen legacy synchronous daemon. Ruling source: fenix@rand-m5 01M1NMZCXV5QM3PWZGYA9Y4Y9H." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "peer-transport" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-04T07:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-04T06:37:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-DIRECT-PEER-BIND-ADDR-001/DEV-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-DIRECT-PEER-BIND-ADDR-001/DEV-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RRG-DIRECT-PEER-BIND-ADDR-001/DEV-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 565 ;
+  triage:snippet "let bind_address = SocketAddr::from(([0, 0, 0, 0], peer.port()));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "5ca0fedce" ;
+  triage:occursIn <urn:atm:triage:worktree/DEV/5ca0fedce> .
+
+<urn:atm:triage:occurrence/RRG-DIRECT-PEER-BIND-ADDR-001/DEV-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 204 ;
+  triage:snippet "pub struct DirectPeerTcpConfig { port: u16, allow_ephemeral_test_port: bool }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "5ca0fedce" ;
+  triage:occursIn <urn:atm:triage:worktree/DEV/5ca0fedce> .
+
+<urn:atm:triage:worktree/DEV/5ca0fedce>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core" ;
+  triage:branch "develop" ;
+  triage:headSha "5ca0fedce" ;
+  triage:orderIndex 1 .
