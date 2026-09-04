@@ -1462,6 +1462,13 @@ mod tests {
                 .cloned()
         }
 
+        fn remove_lease(&self, team: &TeamName, agent: &AgentName) {
+            self.leases
+                .lock()
+                .expect("leases")
+                .remove(&(team.clone(), agent.clone()));
+        }
+
         fn registration_count(&self) -> usize {
             self.registrations.load(Ordering::SeqCst)
         }
@@ -1510,11 +1517,18 @@ mod tests {
                             self.refreshes.fetch_add(1, Ordering::SeqCst);
                             Ok(ResponseEnvelope::GraftReceiverRefresh)
                         }
-                        _ => {
+                        Some(_) => {
                             self.refresh_failures.fetch_add(1, Ordering::SeqCst);
                             Err(AtmError::new(
                                 AtmErrorCode::GraftReceiverNotOwner,
                                 "fake graft registry: not owner",
+                            ))
+                        }
+                        None => {
+                            self.refresh_failures.fetch_add(1, Ordering::SeqCst);
+                            Err(AtmError::new(
+                                AtmErrorCode::GraftReceiverNotRegistered,
+                                "fake graft registry: lease absent",
                             ))
                         }
                     }
@@ -1856,6 +1870,46 @@ mod tests {
             "a displaced receiver must never reclaim or disturb the foreign generation's lease"
         );
 
+        stop_receiver(stop_tx, join);
+    }
+
+    #[test]
+    fn rrg_graft_lease_restart_001_live_receiver_reannounces_after_lease_row_loss() {
+        let paths = test_paths();
+        let registry = FakeGraftRegistry::new(true);
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        let (stop_tx, join, _snapshot, (endpoint, capability)) = spawn_receiver_with_client(
+            paths.workspace_root.clone(),
+            Arc::new(RecordingInjector::default()),
+            Some(registry.client()),
+        );
+        assert!(wait_until(Duration::from_secs(3), || registry
+            .lease(&team, &agent)
+            .is_some()));
+        let generation = registry
+            .lease(&team, &agent)
+            .expect("lease")
+            .owner_generation;
+        registry.remove_lease(&team, &agent);
+        assert!(
+            registry.lease(&team, &agent).is_none(),
+            "negative proof: row is absent"
+        );
+        assert!(wait_until(Duration::from_secs(3), || registry
+            .lease(&team, &agent)
+            .is_some()));
+        assert_eq!(
+            registry
+                .lease(&team, &agent)
+                .expect("reannounced")
+                .owner_generation,
+            generation
+        );
+        assert_eq!(
+            deliver_request(endpoint, &capability, request_event()),
+            GraftPostSendResponse::Delivered
+        );
         stop_receiver(stop_tx, join);
     }
 
