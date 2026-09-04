@@ -92,6 +92,10 @@ class BenchmarkSchemaV4Tests(unittest.TestCase):
     def test_non_durable_complete_result_is_fail(self) -> None:
         self.assertEqual(result(messages_durable=9, status="FAIL").status, "FAIL")
 
+    def test_count_invariant_error_includes_offending_values(self) -> None:
+        with self.assertRaisesRegex(ValidationError, r"requested=10, admitted=1, durable=9"):
+            result(messages_admitted=1, messages_durable=9)
+
     def test_complete_result_below_its_host_target_floor_is_fail(self) -> None:
         below_floor = result(
             status="FAIL",

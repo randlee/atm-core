@@ -252,7 +252,10 @@ pub(crate) fn build_replacement_handler(
         .clone()
         .with_state_handoff(HandoffConfig::default())?;
     let doctor_projection = StorageDoctorProjection::start(
-        DoctorProjectionConfig::default(),
+        DoctorProjectionConfig {
+            reader_lanes: assembly.reader_lanes,
+            ..DoctorProjectionConfig::default()
+        },
         assembly.service_runtime.clone(),
         assembly.doctor_ports.clone(),
         Arc::clone(&observability),

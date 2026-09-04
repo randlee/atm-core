@@ -3,6 +3,7 @@
 //! This is deliberately separate from `shared_db`: the durable writer surface
 //! must not grow with reader-lane composition details.
 
+use crate::control_path_pool::ControlPathConnections;
 use crate::mailbox_reader::{MailboxReaderMetrics, start_mailbox_reader};
 #[cfg(test)]
 use crate::observability::NullSqliteObservability;
@@ -27,6 +28,7 @@ static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
 pub(crate) struct SharedDb {
     pub(crate) target: Arc<SharedDbTarget>,
     pub(crate) writer: Arc<SqliteWriter>,
+    pub(crate) control_path: Arc<ControlPathConnections>,
     pub(crate) search_reader: Arc<SearchReader>,
     pub(crate) mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     pub(crate) mailbox_reader_metrics: MailboxReaderMetrics,
@@ -119,6 +121,7 @@ impl SharedDb {
             "sqlite boundary assembly opened"
         );
         Ok(Self {
+            control_path: Arc::new(ControlPathConnections::new(Arc::clone(&target))),
             target,
             writer,
             search_reader,

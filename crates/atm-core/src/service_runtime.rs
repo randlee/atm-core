@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 
 use atm_storage::{
     AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore, GraftEndpointStoreError,
@@ -37,6 +38,163 @@ enum WorkspaceConfigAccess {
 #[derive(Default)]
 struct RosterSnapshotCache {
     snapshots: RwLock<BTreeMap<TeamName, Arc<[crate::boundary::RosterEntry]>>>,
+}
+
+/// Lease snapshots avoid a control-path SQLite lookup for every admitted
+/// local message. A graft receiver refreshes every second, so retaining a
+/// value for that same bounded interval preserves restart recovery: a missing
+/// refresh expires the snapshot and the next delivery re-reads durable state.
+const GRAFT_RECEIVER_LEASE_CACHE_TTL: Duration = Duration::from_secs(1);
+
+#[derive(Clone)]
+struct CachedGraftReceiverLease {
+    lease: Option<GraftReceiverLease>,
+    expires_at: Instant,
+}
+
+#[derive(Default)]
+struct GraftReceiverLeaseEntry {
+    state: std::sync::Mutex<GraftReceiverLeaseState>,
+    changed: std::sync::Condvar,
+}
+
+#[derive(Default)]
+enum GraftReceiverLeaseState {
+    #[default]
+    Empty,
+    Loading,
+    Cached(CachedGraftReceiverLease),
+}
+
+struct GraftReceiverLeaseCache {
+    entries: RwLock<BTreeMap<(TeamName, AgentName), Arc<GraftReceiverLeaseEntry>>>,
+    ttl: Duration,
+}
+
+impl Default for GraftReceiverLeaseCache {
+    fn default() -> Self {
+        Self {
+            entries: RwLock::new(BTreeMap::new()),
+            ttl: GRAFT_RECEIVER_LEASE_CACHE_TTL,
+        }
+    }
+}
+
+impl GraftReceiverLeaseCache {
+    fn entry(&self, key: &(TeamName, AgentName)) -> Arc<GraftReceiverLeaseEntry> {
+        {
+            let entries = self
+                .entries
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if let Some(entry) = entries.get(key) {
+                return Arc::clone(entry);
+            }
+        }
+
+        let mut entries = self
+            .entries
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        Arc::clone(
+            entries
+                .entry(key.clone())
+                .or_insert_with(|| Arc::new(GraftReceiverLeaseEntry::default())),
+        )
+    }
+
+    fn invalidate(&self, team: &TeamName, agent: &AgentName) {
+        let key = (team.clone(), agent.clone());
+        let Some(entry) = self
+            .entries
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(&key)
+            .cloned()
+        else {
+            return;
+        };
+        let mut state = entry
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // Waiting for an in-flight durable lookup is deliberate: once a
+        // receiver lifecycle mutation returns, it cannot be overwritten by
+        // an older lookup that began before the mutation.
+        while matches!(*state, GraftReceiverLeaseState::Loading) {
+            state = entry
+                .changed
+                .wait(state)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+        *state = GraftReceiverLeaseState::Empty;
+    }
+
+    fn load(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        load: impl FnOnce() -> Result<Option<GraftReceiverLease>, AtmError>,
+    ) -> Result<Option<GraftReceiverLease>, AtmError> {
+        let key = (team.clone(), agent.clone());
+        let entry = self.entry(&key);
+        let mut load = Some(load);
+
+        loop {
+            let mut state = entry
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            match &*state {
+                GraftReceiverLeaseState::Cached(cached) if cached.expires_at > Instant::now() => {
+                    return Ok(cached.lease.clone());
+                }
+                GraftReceiverLeaseState::Loading => {
+                    while matches!(*state, GraftReceiverLeaseState::Loading) {
+                        state = entry
+                            .changed
+                            .wait(state)
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    }
+                }
+                GraftReceiverLeaseState::Cached(_) | GraftReceiverLeaseState::Empty => {
+                    // Only this key's entry lock is held while loading. Other
+                    // receivers remain free to perform their own durable
+                    // lookup instead of being serialized behind a process-wide
+                    // cache-map write guard.
+                    *state = GraftReceiverLeaseState::Loading;
+                    drop(state);
+                    let result = load
+                        .take()
+                        .expect("each cache caller owns one durable lookup")(
+                    );
+                    let mut state = entry
+                        .state
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    match &result {
+                        Ok(lease) => {
+                            *state = GraftReceiverLeaseState::Cached(CachedGraftReceiverLease {
+                                lease: lease.clone(),
+                                expires_at: Instant::now() + self.ttl,
+                            });
+                        }
+                        Err(_) => *state = GraftReceiverLeaseState::Empty,
+                    }
+                    entry.changed.notify_all();
+                    return result;
+                }
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn with_ttl(ttl: Duration) -> Self {
+        Self {
+            entries: RwLock::new(BTreeMap::new()),
+            ttl,
+        }
+    }
 }
 
 impl RosterSnapshotCache {
@@ -181,6 +339,9 @@ pub struct LocalServiceRuntime {
     /// message admission from opening another SQLite reader connection merely
     /// to rediscover an unchanged recipient.
     roster_cache: Arc<RosterSnapshotCache>,
+    /// Short-lived receiver endpoint snapshots keep the graft registry's
+    /// control-path SQLite lookup out of the local write hot path.
+    graft_receiver_lease_cache: Arc<GraftReceiverLeaseCache>,
     workspace_config_access: WorkspaceConfigAccess,
 }
 
@@ -206,6 +367,7 @@ impl LocalServiceRuntime {
             template_composer: None,
             template_catalog_store: None,
             roster_cache: Arc::new(RosterSnapshotCache::default()),
+            graft_receiver_lease_cache: Arc::new(GraftReceiverLeaseCache::default()),
             workspace_config_access: WorkspaceConfigAccess::Client,
         }
     }
@@ -326,6 +488,13 @@ impl LocalServiceRuntime {
                 "the graft receiver endpoint store was not installed in this runtime",
             )
         })
+    }
+
+    /// Invalidates a receiver's admission snapshot after a durable lease
+    /// mutation. Registration, refresh, unregistration, and delivery failure
+    /// all call this so a stale endpoint cannot outlive a receiver restart.
+    pub fn invalidate_graft_receiver_lease(&self, team: &TeamName, agent: &AgentName) {
+        self.graft_receiver_lease_cache.invalidate(team, agent);
     }
 
     /// Attaches the approved template renderer port at the composition root.
@@ -614,7 +783,9 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         let Some(store) = &self.graft_receiver_endpoint_store else {
             return Ok(None);
         };
-        store.lookup(team, agent).map_err(graft_store_error)
+        self.graft_receiver_lease_cache.load(team, agent, || {
+            store.lookup(team, agent).map_err(graft_store_error)
+        })
     }
 
     fn mark_graft_receiver_unreachable(
@@ -629,7 +800,9 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         };
         store
             .mark_unreachable(team, agent, owner_generation, now)
-            .map_err(graft_store_error)
+            .map_err(graft_store_error)?;
+        self.invalidate_graft_receiver_lease(team, agent);
+        Ok(())
     }
 
     fn inbox_path(
@@ -713,6 +886,10 @@ pub fn graft_store_error(error: GraftEndpointStoreError) -> AtmError {
             AtmErrorCode::GraftReceiverNotOwner,
             "graft receiver lease is owned by another generation",
         ),
+        GraftEndpointStoreError::Absent => AtmError::new(
+            AtmErrorCode::GraftReceiverNotRegistered,
+            "graft receiver lease is absent; re-announcement required",
+        ),
         GraftEndpointStoreError::AlreadyActive => {
             AtmError::validation("graft receiver lease is already active")
         }
@@ -760,8 +937,8 @@ mod workspace_config_tests {
 #[cfg(test)]
 mod tests {
     use super::{
-        LocalFileNonClaudeOutbound, MAX_NON_CLAUDE_PAYLOAD_BYTES, RosterSnapshotCache,
-        append_notification_log_at_path,
+        GraftReceiverLeaseCache, LocalFileNonClaudeOutbound, MAX_NON_CLAUDE_PAYLOAD_BYTES,
+        RosterSnapshotCache, append_notification_log_at_path,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::protocol::{NotificationEvent, NotificationKind};
@@ -770,6 +947,19 @@ mod tests {
     use chrono::Utc;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    /// Failure ceiling for the gated concurrency tests below. Every wait is
+    /// released by an observed event; this bound only turns a regression that
+    /// would hang into a reported failure.
+    const WAIT_CEILING: Duration = Duration::from_secs(30);
+
+    /// Repetitions of the invalidate-versus-load race. Which contender wins
+    /// the entry lock is scheduler-chosen, so a single attempt can miss the
+    /// interleaving a regression corrupts; repeating costs microseconds and
+    /// makes detection reliable without any timing assumption.
+    const RACE_ATTEMPTS: usize = 64;
     use tempfile::tempdir;
 
     fn message() -> InboxMessage {
@@ -877,6 +1067,302 @@ mod tests {
             })
             .expect("reloaded roster lookup");
         assert_eq!(loads.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    fn graft_lease_cache_avoids_a_control_path_lookup_per_local_admission() {
+        let cache = GraftReceiverLeaseCache::default();
+        let team = TeamName::from_validated("test-team");
+        let agent = AgentName::from_validated("recipient");
+        let durable_lookups = AtomicUsize::new(0);
+
+        for _ in 0..64 {
+            assert_eq!(
+                cache
+                    .load(&team, &agent, || {
+                        durable_lookups.fetch_add(1, Ordering::Relaxed);
+                        Ok(None)
+                    })
+                    .expect("lease cache lookup"),
+                None
+            );
+        }
+        assert_eq!(
+            durable_lookups.load(Ordering::Relaxed),
+            1,
+            "a local admission burst must load an absent graft lease once, not borrow the control path per message"
+        );
+
+        cache.invalidate(&team, &agent);
+        cache
+            .load(&team, &agent, || {
+                durable_lookups.fetch_add(1, Ordering::Relaxed);
+                Ok(None)
+            })
+            .expect("lookup after receiver lifecycle invalidation");
+        assert_eq!(
+            durable_lookups.load(Ordering::Relaxed),
+            2,
+            "registration, refresh, unregistration, and unreachable updates must invalidate the lease snapshot"
+        );
+
+        let expiry_cache = GraftReceiverLeaseCache::with_ttl(Duration::ZERO);
+        for _ in 0..2 {
+            expiry_cache
+                .load(&team, &agent, || {
+                    durable_lookups.fetch_add(1, Ordering::Relaxed);
+                    Ok(None)
+                })
+                .expect("lookup after lease snapshot expiry");
+        }
+        assert_eq!(
+            durable_lookups.load(Ordering::Relaxed),
+            4,
+            "an expired receiver snapshot must re-read durable state instead of surviving a restart"
+        );
+    }
+
+    #[test]
+    fn graft_lease_cache_does_not_serialize_unrelated_durable_misses() {
+        let cache = Arc::new(GraftReceiverLeaseCache::default());
+        let first_team = TeamName::from_validated("first-team");
+        let second_team = TeamName::from_validated("second-team");
+        let agent = AgentName::from_validated("recipient");
+        let (first_started_tx, first_started_rx) = mpsc::sync_channel(1);
+        let (release_first_tx, release_first_rx) = mpsc::sync_channel(0);
+        let (second_done_tx, second_done_rx) = mpsc::sync_channel(1);
+
+        std::thread::scope(|scope| {
+            let first_cache = Arc::clone(&cache);
+            let first_team = first_team.clone();
+            let first_agent = agent.clone();
+            let first = scope.spawn(move || {
+                first_cache
+                    .load(&first_team, &first_agent, || {
+                        first_started_tx.send(()).expect("announce first lookup");
+                        release_first_rx.recv().expect("release first lookup");
+                        Ok(None)
+                    })
+                    .expect("first cache lookup");
+            });
+            first_started_rx.recv().expect("first lookup started");
+
+            let second_cache = Arc::clone(&cache);
+            let second_agent = agent.clone();
+            scope.spawn(move || {
+                let result = second_cache.load(&second_team, &second_agent, || Ok(None));
+                second_done_tx.send(result).expect("report second lookup");
+            });
+
+            let second_result = second_done_rx.recv_timeout(Duration::from_secs(1));
+            release_first_tx.send(()).expect("release first lookup");
+            second_result
+                .expect("an unrelated cache miss must not wait behind the first durable lookup")
+                .expect("second cache lookup");
+            first.join().expect("first lookup thread");
+        });
+    }
+
+    /// A durable lease fixture; only its identity matters to the cache, which
+    /// never inspects the value it is asked to retain.
+    fn registered_lease() -> atm_storage::GraftReceiverLease {
+        atm_storage::GraftReceiverLease {
+            endpoint: std::net::SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                0,
+            ),
+            capability: atm_storage::LocalCapability::generate().expect("capability"),
+            owner_generation: atm_storage::OwnerGeneration::new(ulid::Ulid::new().to_string())
+                .expect("owner generation"),
+            registered_at: Utc::now(),
+            last_seen_at: Utc::now(),
+            unreachable_since: None,
+        }
+    }
+
+    /// QA-001 / ATM-QA-009: `invalidate` racing an in-flight `load` on the
+    /// *same* key. Per-key coalescing is what makes this reachable: a
+    /// receiver lifecycle mutation can land while an admission is already
+    /// inside its durable lookup, and the value that lookup read before the
+    /// mutation must not survive it.
+    ///
+    /// Every wait is released by an observed event, never by elapsed time:
+    /// the durable lookup blocks on a channel until this test releases it, so
+    /// the invalidation is issued while the lookup is provably in flight.
+    /// Which of the two contenders reaches the entry lock first is the
+    /// operating system's choice, so the race is repeated; the invariants
+    /// below must hold under either interleaving.
+    #[test]
+    fn graft_lease_cache_invalidation_racing_a_same_key_load_never_serves_a_stale_lease() {
+        for _ in 0..RACE_ATTEMPTS {
+            invalidate_a_lease_lookup_in_flight();
+        }
+    }
+
+    /// The shared state one `invalidate`-versus-`load` race is run against: a
+    /// cache holding no snapshot yet, and durable state that starts at a
+    /// registered lease and is unregistered mid-race.
+    struct LeaseRaceFixture {
+        cache: Arc<GraftReceiverLeaseCache>,
+        team: TeamName,
+        agent: AgentName,
+        lease: atm_storage::GraftReceiverLease,
+        durable_lease: Arc<std::sync::Mutex<Option<atm_storage::GraftReceiverLease>>>,
+        durable_lookups: Arc<AtomicUsize>,
+    }
+
+    impl LeaseRaceFixture {
+        fn new() -> Self {
+            let lease = registered_lease();
+            Self {
+                cache: Arc::new(GraftReceiverLeaseCache::default()),
+                team: TeamName::from_validated("test-team"),
+                agent: AgentName::from_validated("recipient"),
+                durable_lease: Arc::new(std::sync::Mutex::new(Some(lease.clone()))),
+                durable_lookups: Arc::new(AtomicUsize::new(0)),
+                lease,
+            }
+        }
+
+        /// One counted read of durable receiver state, as a durable lookup
+        /// passed to [`GraftReceiverLeaseCache::load`] would perform.
+        fn durable_read(&self) -> Option<atm_storage::GraftReceiverLease> {
+            self.durable_lookups.fetch_add(1, Ordering::SeqCst);
+            self.durable_lease.lock().expect("durable lease").clone()
+        }
+
+        /// The receiver unregisters: durable state goes from a registered
+        /// lease to none.
+        fn unregister(&self) {
+            *self.durable_lease.lock().expect("durable lease") = None;
+        }
+    }
+
+    /// One `invalidate`-versus-`load` race on a single key.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a waiter is served the pre-invalidation lease after the
+    /// invalidation completed, if `invalidate` returns while the lookup it
+    /// raced is still running, or if any participant fails to make progress
+    /// within [`WAIT_CEILING`].
+    fn invalidate_a_lease_lookup_in_flight() {
+        let fixture = LeaseRaceFixture::new();
+        race_invalidate_against_an_in_flight_lookup(&fixture);
+        assert_no_stale_lease_survives_the_invalidation(&fixture);
+    }
+
+    /// Drives the race itself: a durable lookup held in flight by a channel, a
+    /// same-key admission coalesced onto it, and an `invalidate` issued while
+    /// that lookup is provably still running.
+    fn race_invalidate_against_an_in_flight_lookup(fixture: &LeaseRaceFixture) {
+        let lookup_returned = std::sync::atomic::AtomicBool::new(false);
+        let (lookup_started_tx, lookup_started_rx) = mpsc::sync_channel(1);
+        let (release_lookup_tx, release_lookup_rx) = mpsc::sync_channel(0);
+        let (invalidating_tx, invalidating_rx) = mpsc::sync_channel(1);
+        let (waiter_done_tx, waiter_done_rx) = mpsc::sync_channel(1);
+        let (invalidated_tx, invalidated_rx) = mpsc::sync_channel(1);
+
+        std::thread::scope(|scope| {
+            let returned = &lookup_returned;
+            let loader = scope.spawn(move || {
+                fixture
+                    .cache
+                    .load(&fixture.team, &fixture.agent, || {
+                        // Reads durable state before the unregistration below
+                        // and returns after it: exactly the ordering that
+                        // would let a stale lease outlive the mutation.
+                        let lease = fixture.durable_read();
+                        lookup_started_tx.send(()).expect("announce durable lookup");
+                        release_lookup_rx.recv().expect("release durable lookup");
+                        returned.store(true, Ordering::SeqCst);
+                        Ok(lease)
+                    })
+                    .expect("in-flight lease lookup")
+            });
+            lookup_started_rx
+                .recv_timeout(WAIT_CEILING)
+                .expect("the durable lookup is in flight");
+
+            // A second admission for the same receiver coalesces onto the
+            // in-flight lookup instead of starting its own.
+            scope.spawn(move || {
+                let result = fixture
+                    .cache
+                    .load(&fixture.team, &fixture.agent, || Ok(fixture.durable_read()));
+                waiter_done_tx
+                    .send(result)
+                    .expect("report coalesced waiter");
+            });
+
+            fixture.unregister();
+            scope.spawn(move || {
+                invalidating_tx.send(()).expect("announce invalidation");
+                fixture.cache.invalidate(&fixture.team, &fixture.agent);
+                // Observed inside the racing thread: returning here while the
+                // raced lookup is still running would let its older value be
+                // cached after the mutation completed.
+                let observed = returned.load(Ordering::SeqCst);
+                invalidated_tx.send(observed).expect("report invalidation");
+            });
+            invalidating_rx
+                .recv_timeout(WAIT_CEILING)
+                .expect("the invalidation thread reached the cache");
+
+            release_lookup_tx.send(()).expect("release durable lookup");
+            assert_race_participants_agree(fixture, loader, &invalidated_rx, &waiter_done_rx);
+        });
+    }
+
+    /// The invariants every interleaving of the race must satisfy.
+    fn assert_race_participants_agree(
+        fixture: &LeaseRaceFixture,
+        loader: std::thread::ScopedJoinHandle<'_, Option<atm_storage::GraftReceiverLease>>,
+        invalidated_rx: &mpsc::Receiver<bool>,
+        waiter_done_rx: &mpsc::Receiver<
+            Result<Option<atm_storage::GraftReceiverLease>, crate::service_runtime::AtmError>,
+        >,
+    ) {
+        assert_eq!(
+            loader.join().expect("loader thread"),
+            Some(fixture.lease.clone()),
+            "the in-flight lookup returns the state it read, not a torn value"
+        );
+        assert!(
+            invalidated_rx
+                .recv_timeout(WAIT_CEILING)
+                .expect("invalidation must not deadlock behind the in-flight lookup"),
+            "invalidate must not return while the lookup it raced is still running, or \
+             a lookup that began before the receiver mutation could be cached after it"
+        );
+
+        let waited = waiter_done_rx
+            .recv_timeout(WAIT_CEILING)
+            .expect("a coalesced waiter must not deadlock behind the invalidation")
+            .expect("coalesced waiter lookup");
+        assert!(
+            waited.is_none() || waited == Some(fixture.lease.clone()),
+            "a coalesced waiter is served one of the two durable states, never a \
+             synthesized one"
+        );
+    }
+
+    /// The invalidation has completed. Well inside the snapshot TTL, the next
+    /// admission must still observe post-invalidation durable state.
+    fn assert_no_stale_lease_survives_the_invalidation(fixture: &LeaseRaceFixture) {
+        let after_invalidation = fixture
+            .cache
+            .load(&fixture.team, &fixture.agent, || Ok(fixture.durable_read()))
+            .expect("lookup after invalidation");
+        assert_eq!(
+            after_invalidation, None,
+            "no load after a completed invalidation may be served the pre-invalidation lease"
+        );
+        assert!(
+            fixture.durable_lookups.load(Ordering::SeqCst) >= 2,
+            "an invalidation that raced an in-flight lookup must still force a fresh \
+             durable read rather than retaining the raced snapshot"
+        );
     }
 
     // RBP-F001/RBP-F003: `graft_store_error` is the single canonical

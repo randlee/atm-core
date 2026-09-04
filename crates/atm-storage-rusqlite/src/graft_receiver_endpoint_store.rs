@@ -103,7 +103,23 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
             })
             .map_err(storage_error)?;
         if changed == 0 {
-            return Err(GraftEndpointStoreError::NotOwner);
+            let present: bool = self
+                .db
+                .with_connection(|connection| {
+                    connection
+                        .query_row(
+                            "SELECT EXISTS(SELECT 1 FROM graft_receiver_endpoints WHERE team = ?1 AND agent = ?2)",
+                            params![team.as_str(), agent.as_str()],
+                            |row| row.get(0),
+                        )
+                        .map_err(|error| self.db.error("failed to inspect graft receiver lease", error))
+                })
+                .map_err(storage_error)?;
+            return Err(if present {
+                GraftEndpointStoreError::NotOwner
+            } else {
+                GraftEndpointStoreError::Absent
+            });
         }
         Ok(())
     }
@@ -370,6 +386,16 @@ mod tests {
         assert_eq!(
             store.refresh(&team, &agent, &generation(GENERATION_ONE), timestamp(40)),
             Err(GraftEndpointStoreError::NotOwner)
+        );
+    }
+
+    #[test]
+    fn refresh_of_absent_lease_is_distinct_from_foreign_owner() {
+        let store = store();
+        let (team, agent) = names();
+        assert_eq!(
+            store.refresh(&team, &agent, &generation(GENERATION_ONE), timestamp(10)),
+            Err(GraftEndpointStoreError::Absent)
         );
     }
 

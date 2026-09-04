@@ -8,6 +8,7 @@
 //! message and roster contracts.
 
 mod analyst_query;
+mod control_path_pool;
 mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;
 mod mail_messages_schema;
@@ -56,7 +57,10 @@ use atm_storage::schema::MessageEnvelope;
 use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TemplateCatalogStore};
-use atm_storage::{AtmError, IsoTimestamp, StorageFactory, StorageHandleParts, StorageHandles};
+use atm_storage::{
+    AtmError, EffectiveReaderLane, EffectiveReaderLanes, IsoTimestamp, StorageFactory,
+    StorageHandleParts, StorageHandles,
+};
 use graft_receiver_endpoint_store::SqliteGraftReceiverEndpointStore;
 use rusqlite::{Connection, OptionalExtension, params};
 use search_schema::delete_message_projection;
@@ -719,6 +723,16 @@ impl SqliteStorageFactory {
 
 impl StorageFactory for SqliteStorageFactory {
     fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError> {
+        let effective_reader_lanes = EffectiveReaderLanes {
+            mailbox: EffectiveReaderLane {
+                pool_size: self.reader_lanes.mailbox.pool_size.get(),
+                queue_depth: self.reader_lanes.mailbox.queue_depth.get(),
+            },
+            search: EffectiveReaderLane {
+                pool_size: self.reader_lanes.search.pool_size.get(),
+                queue_depth: self.reader_lanes.search.queue_depth.get(),
+            },
+        };
         let backend = SqliteStorageBackend::new_with_reader_lanes(
             self.database_path(durable_state_root),
             self.reader_lanes,
@@ -735,6 +749,7 @@ impl StorageFactory for SqliteStorageFactory {
             template_catalog_store: backend.template_catalog_store(),
             message_search_store: backend.message_search_store(),
             async_message_search_store: backend.async_message_search_store(),
+            effective_reader_lanes: Some(effective_reader_lanes),
         }))
     }
 }

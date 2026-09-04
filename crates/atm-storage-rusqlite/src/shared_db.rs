@@ -14,15 +14,18 @@ use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};
 use std::path::PathBuf;
 use std::sync::Arc;
 #[cfg(test)]
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::LazyLock;
 #[cfg(test)]
-use std::sync::{LazyLock, Mutex};
+use std::sync::Mutex;
+#[cfg(test)]
+use std::sync::atomic::{AtomicU64, Ordering};
 
 // Search projection writes touch several B-trees and FTS segments inside the
 // sole durable writer transaction.  The SQLite default is only 2 MiB, which
 // churns cache pages under a concurrent admission burst.  This setting applies
 // only to the one writer connection and bounds its page cache at 32 MiB.
 const WRITER_CACHE_KIB: i64 = 32 * 1024;
+
 #[cfg(test)]
 pub(crate) static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
 #[cfg(test)]
@@ -195,8 +198,12 @@ impl SharedDb {
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
     ) -> Result<T, AtmError> {
         debug_assert_blocking_only("SharedDb::with_connection");
-        let mut connection = self.open_connection()?;
-        operation(&mut connection)
+        let mut lease = crate::control_path_pool::checkout(&self.control_path)?;
+        let outcome = operation(lease.connection());
+        if outcome.is_ok() {
+            lease.park();
+        }
+        outcome
     }
 
     /// Call only from backend-owned blocking code paths.
@@ -443,10 +450,6 @@ impl SharedDb {
             #[cfg(test)]
             SharedDbTarget::InMemory { .. } => None,
         }
-    }
-
-    fn open_connection(&self) -> Result<Connection, AtmError> {
-        open_connection_for_target(self.target.as_ref())
     }
 }
 
@@ -924,6 +927,89 @@ mod tests {
     use crate::observability::NullSqliteObservability;
     use crate::shared_db_reader_lanes::open_read_connection_for_target;
     use atm_storage::AtmErrorCode;
+
+    /// Number of control-path borrows a single burst is modelled on. Any
+    /// value comfortably above the connection bound proves reuse rather than
+    /// an accidentally oversized cache.
+    const CONTROL_PATH_BORROWS: usize = 32;
+
+    fn count_probe_rows(db: &SharedDb) -> Result<i64, AtmError> {
+        db.with_connection(|connection| {
+            connection
+                .query_row("SELECT COUNT(*) FROM mail_messages", [], |row| row.get(0))
+                .map_err(|error| sqlite_error(db.target(), "failed to count probe rows", error))
+        })
+    }
+
+    #[test]
+    fn control_path_borrows_reuse_one_connection_instead_of_reopening_per_call() {
+        let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
+        reset_opened_connection_count(db.target());
+
+        for _ in 0..CONTROL_PATH_BORROWS {
+            count_probe_rows(&db).expect("control-path read succeeds");
+        }
+
+        assert_eq!(
+            opened_connection_count(db.target()),
+            1,
+            "sequential control-path borrows must reuse one connection; opening per call \
+             multiplies descriptor demand by the in-flight admission count"
+        );
+    }
+
+    #[test]
+    fn concurrent_control_path_borrows_stay_within_the_connection_bound() {
+        let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
+        // Warm the pool so the burst below measures reuse, not first-touch.
+        count_probe_rows(&db).expect("control-path read succeeds");
+        reset_opened_connection_count(db.target());
+
+        let barrier = Arc::new(std::sync::Barrier::new(CONTROL_PATH_BORROWS));
+        std::thread::scope(|scope| {
+            for _ in 0..CONTROL_PATH_BORROWS {
+                let db = db.clone();
+                let barrier = Arc::clone(&barrier);
+                scope.spawn(move || {
+                    barrier.wait();
+                    count_probe_rows(&db).expect("control-path read succeeds");
+                });
+            }
+        });
+        let burst_opens = opened_connection_count(db.target());
+        assert!(
+            burst_opens <= crate::control_path_pool::MAX_CONTROL_PATH_CONNECTIONS,
+            "a control-path burst must never open more connections than the bound"
+        );
+
+        reset_opened_connection_count(db.target());
+        for _ in 0..CONTROL_PATH_BORROWS {
+            count_probe_rows(&db).expect("control-path read succeeds");
+        }
+        assert_eq!(
+            opened_connection_count(db.target()),
+            0,
+            "after a burst the parked connections must absorb the next round without reopening"
+        );
+    }
+
+    #[test]
+    fn failed_control_path_borrows_are_not_parked_for_reuse() {
+        let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
+        reset_opened_connection_count(db.target());
+
+        let failure = db
+            .with_connection(|_| Err::<(), _>(AtmError::mailbox_write("probe failure")))
+            .expect_err("the probe operation fails");
+        assert!(failure.message().starts_with("probe failure"));
+        count_probe_rows(&db).expect("control-path read succeeds");
+
+        assert_eq!(
+            opened_connection_count(db.target()),
+            2,
+            "a connection whose operation failed is dropped rather than parked"
+        );
+    }
 
     #[test]
     fn sqlite_constraint_violations_keep_the_sqlite_cause() {

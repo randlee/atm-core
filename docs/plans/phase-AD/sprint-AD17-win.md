@@ -44,11 +44,12 @@ target: integrate/phase-AD
 
 ## Native Windows Closure Scope
 
-This overlay exists because `AD.17`'s remaining risk is now concentrated in
-the real Windows `atm-daemon` lane. The non-Windows agent already:
+This historical overlay records the former Windows daemon-lane investigation.
+The accepted line now uses the replacement-workspace CI lane. The non-Windows
+agent already:
 
 - merged `AD.16` forward into the `AD.17` worktree
-- narrowed the blocker to the restored Windows `atm-daemon` CI lane
+- aligned CI to the replacement-workspace test lane
 - confirmed the failing cluster is not generic compile trouble, but a
   Windows-path lifecycle/lock-isolation defect
 
@@ -60,7 +61,7 @@ right tool:
 - validate the lifecycle shutdown path on a real Windows host
 - validate shared lifecycle-test state reset/teardown on a real Windows host
 - validate tempdir-scoped host-ownership locking on a real Windows host
-- close the restored `windows-latest` daemon lane in CI
+- confirm the replacement-workspace CI lane remains green
 
 Do not spend Windows time redoing macOS/Linux-only lint or non-Windows
 investigation that has already been completed elsewhere.
@@ -83,16 +84,15 @@ must be treated as the minimum required scope on the `AD.17` branch:
 If native Windows execution shows these fixes are already sufficient, close the
 lane with validation evidence. If Windows reveals an additional defect, keep
 the repair on the same `AD.17` worktree and do not widen scope beyond the
-restored daemon lane.
+replacement-workspace CI lane.
 
 ## Deliverables
 
 - native Windows execution report for `AD.17`
-- any Windows-only fix-forward required to make the restored
-  `windows-latest` `atm-daemon` lane green
+- any Windows-only fix-forward required to keep the replacement-workspace CI
+  lane green
 - exact evidence for the former hang cluster on Windows
-- exact evidence that the restored `Run atm-daemon tests` step is enabled and
-  green on Windows CI
+- exact evidence that the replacement-workspace CI lane is green on Windows
 
 ## Acceptance Criteria
 
@@ -108,10 +108,10 @@ restored daemon lane.
   a real Windows host
 - if a Windows-only defect is found, the fix lands on the same `AD.17`
   worktree and stays within `AD.17` scope
-- the restored `CI` workflow keeps the Windows daemon lane enabled; a manual
-  Windows repro is not an acceptable substitute for a green Windows CI result
+- the `CI` workflow keeps the replacement-workspace lane enabled; a manual
+  Windows repro is not an acceptable substitute for a green CI result
 - the final report records exact commands run, pass/fail results, commit hash,
-  and the GitHub Actions run URL showing the restored `windows-latest` lane
+  and the GitHub Actions run URL showing the replacement-workspace lane
 
 ## Required Validation
 
@@ -145,7 +145,7 @@ restored daemon lane.
 9. Re-run the targeted tests, then `cargo test -p atm-daemon`, then the full
    original `AD.17` validation set that is practical on the Windows host.
 10. Push the branch and report the final commit hash, validation results, and
-    CI evidence showing the Windows daemon lane green.
+   CI evidence showing the replacement-workspace lane green.
 
 ## Windows Execution Report
 

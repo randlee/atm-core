@@ -4,12 +4,12 @@
 //! streams. It owns neither HTTP nor any ATM request, route, persistence,
 //! acknowledgement, retry, hook, daemon lifecycle, or plaintext fallback.
 
-use std::{fmt, sync::Arc, time::Duration};
+use std::{fmt, num::NonZeroU16, sync::Arc, time::Duration};
 
 use atm_storage::{
-    AtmError, HostName, PeerConfigStore, PinnedClientVerifier, TlsIdentity, TrustedPeer,
-    TrustedPeerCatalogAudit, certificate_fingerprint, certificate_valid_now, install_tls_provider,
-    normalize_fingerprint,
+    AtmError, HostName, HttpsInterface, PeerConfigStore, PinnedClientVerifier, TlsIdentity,
+    TrustedPeer, TrustedPeerCatalogAudit, certificate_fingerprint, certificate_valid_now,
+    install_tls_provider, normalize_fingerprint,
 };
 use rustls::{
     CertificateError, ClientConfig, DigitallySignedStruct, Error, ServerConfig, SignatureScheme,
@@ -64,7 +64,29 @@ pub struct MtlsPeerStreamAdapter {
 
 struct PeerClientConfig {
     authority: HostName,
+    https_port: NonZeroU16,
     config: Arc<ClientConfig>,
+}
+
+fn loopback_port_collisions(
+    peers: &[TrustedPeer],
+    interfaces: &[HttpsInterface],
+) -> Vec<(HostName, NonZeroU16)> {
+    let ports: std::collections::HashSet<_> = interfaces
+        .iter()
+        .filter(|i| i.enabled)
+        .map(|i| i.bind_addr.port())
+        .filter_map(NonZeroU16::new)
+        .collect();
+    peers
+        .iter()
+        .filter(|p| {
+            p.enabled
+                && matches!(p.host.as_str(), "localhost" | "127.0.0.1" | "::1")
+                && ports.contains(&p.https_port)
+        })
+        .map(|p| (p.host.clone(), p.https_port))
+        .collect()
 }
 
 impl fmt::Debug for MtlsPeerStreamAdapter {
@@ -98,10 +120,8 @@ impl MtlsPeerStreamAdapter {
         store: &(dyn PeerConfigStore + Send + Sync),
         policy: LegacyLiteralIpPolicy,
     ) -> Result<Self, AtmError> {
-        let has_enabled_interface = store
-            .list_interfaces()?
-            .into_iter()
-            .any(|interface| interface.enabled);
+        let interfaces = store.list_interfaces()?;
+        let has_enabled_interface = interfaces.iter().any(|interface| interface.enabled);
         if !has_enabled_interface {
             return Err(AtmError::peer_config_validation(
                 "mTLS requires one enabled peer interface",
@@ -115,6 +135,13 @@ impl MtlsPeerStreamAdapter {
                 .with_cause(error.detail())
         })?;
         let trusted_peers = Self::admit_trusted_peers(store.list_trusted_peers()?, policy)?;
+        for (host, port) in loopback_port_collisions(&trusted_peers, &interfaces) {
+            tracing::warn!(
+                host = %host,
+                port = port.get(),
+                "enabled loopback trusted peer collides with a local HTTPS interface"
+            );
+        }
         install_tls_provider();
         let client_configs = trusted_peers
             .iter()
@@ -122,6 +149,7 @@ impl MtlsPeerStreamAdapter {
             .map(|peer| {
                 Ok(PeerClientConfig {
                     authority: peer.host.clone(),
+                    https_port: peer.https_port,
                     config: Arc::new(Self::build_client_config(&identity, peer)?),
                 })
             })
@@ -178,7 +206,16 @@ impl MtlsPeerStreamAdapter {
         tcp: TcpStream,
         peer: &HostName,
     ) -> Result<impl AsyncRead + AsyncWrite + Send + Unpin + use<>, AtmError> {
-        let config = self.client_config_for(peer)?;
+        let port = tcp
+            .peer_addr()
+            .map_err(|error| {
+                AtmError::peer_authentication("peer stream address unavailable")
+                    .with_cause(error.to_string())
+            })?
+            .port();
+        let port = NonZeroU16::new(port)
+            .ok_or_else(|| AtmError::peer_authentication("peer stream has invalid port"))?;
+        let config = self.client_config_for(peer, port)?;
         let server_name = ServerName::try_from(peer.as_str().to_owned()).map_err(|_| {
             AtmError::peer_authentication("configured peer hostname is not valid for mTLS")
         })?;
@@ -223,10 +260,14 @@ impl MtlsPeerStreamAdapter {
         Ok((TlsStream::Server(stream), source_host))
     }
 
-    fn client_config_for(&self, peer: &HostName) -> Result<&Arc<ClientConfig>, AtmError> {
+    fn client_config_for(
+        &self,
+        peer: &HostName,
+        port: NonZeroU16,
+    ) -> Result<&Arc<ClientConfig>, AtmError> {
         self.client_configs
             .iter()
-            .find(|candidate| candidate.authority == *peer)
+            .find(|candidate| candidate.authority == *peer && candidate.https_port == port)
             .map(|candidate| &candidate.config)
             .ok_or_else(|| {
                 AtmError::peer_authentication(
@@ -519,12 +560,16 @@ mod tests {
         }
     }
 
-    fn interface() -> HttpsInterface {
+    fn interface_with_port(port: u16) -> HttpsInterface {
         HttpsInterface {
-            bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+            bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port),
             advertise_host: "localhost".parse().expect("host"),
             enabled: true,
         }
+    }
+
+    fn interface() -> HttpsInterface {
+        interface_with_port(0)
     }
 
     fn peer(certificate: &LocalCertificate, enabled: bool) -> TrustedPeer {
@@ -532,12 +577,60 @@ mod tests {
     }
 
     fn peer_with_host(certificate: &LocalCertificate, host: &str, enabled: bool) -> TrustedPeer {
+        peer_with_port(
+            certificate,
+            host,
+            enabled,
+            NonZeroU16::new(443).expect("port"),
+        )
+    }
+
+    fn peer_with_port(
+        certificate: &LocalCertificate,
+        host: &str,
+        enabled: bool,
+        https_port: NonZeroU16,
+    ) -> TrustedPeer {
         TrustedPeer {
             host: host.parse().expect("host"),
             fingerprint: certificate.fingerprint.clone(),
             enabled,
-            https_port: NonZeroU16::new(443).expect("port"),
+            https_port,
         }
+    }
+
+    #[test]
+    fn loopback_port_collisions_returns_only_enabled_local_matches() {
+        let directory = tempfile::tempdir().expect("directory");
+        let certificate = identity(&directory, "peer");
+        let colliding = peer_with_port(
+            &certificate,
+            "localhost",
+            true,
+            NonZeroU16::new(43101).expect("port"),
+        );
+        let non_colliding = peer_with_port(
+            &certificate,
+            "localhost",
+            true,
+            NonZeroU16::new(43102).expect("port"),
+        );
+        let remote = peer_with_port(
+            &certificate,
+            "rand-m5.local",
+            true,
+            NonZeroU16::new(43101).expect("port"),
+        );
+        assert_eq!(
+            loopback_port_collisions(
+                &[colliding, non_colliding, remote],
+                &[interface_with_port(43101)],
+            ),
+            vec![(
+                "localhost".parse().expect("host"),
+                NonZeroU16::new(43101).unwrap()
+            )]
+        );
     }
 
     #[tokio::test]
@@ -551,16 +644,21 @@ mod tests {
             peers: vec![peer(&client_identity, true)],
         })
         .expect("server adapter");
-        let client = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
-            interfaces: vec![interface()],
-            certificate: Some(client_identity),
-            peers: vec![peer(&server_identity, true)],
-        })
-        .expect("client adapter");
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind");
         let address = listener.local_addr().expect("address");
+        let client = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
+            interfaces: vec![interface()],
+            certificate: Some(client_identity),
+            peers: vec![peer_with_port(
+                &server_identity,
+                "localhost",
+                true,
+                NonZeroU16::new(address.port()).expect("listener port"),
+            )],
+        })
+        .expect("client adapter");
         let server_task = tokio::spawn(async move {
             let (tcp, _) = listener.accept().await.expect("accept tcp");
             let (mut tls, peer) = server.accept_with_peer(tcp).await.expect("accept tls");
@@ -620,7 +718,9 @@ mod tests {
         })
         .expect("adapter");
         let host: HostName = "localhost".parse().expect("host");
-        let error = adapter.client_config_for(&host).expect_err("disabled peer");
+        let error = adapter
+            .client_config_for(&host, NonZeroU16::new(443).unwrap())
+            .expect_err("disabled peer");
         assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
     }
 
@@ -636,7 +736,7 @@ mod tests {
         .expect("adapter");
         let mismatched_host: HostName = "other-peer.example".parse().expect("host");
         let error = adapter
-            .client_config_for(&mismatched_host)
+            .client_config_for(&mismatched_host, NonZeroU16::new(443).unwrap())
             .expect_err("mismatched hostname");
         assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
     }
@@ -653,10 +753,51 @@ mod tests {
         })
         .expect("adapter");
         let host: HostName = "localhost".parse().expect("host");
-        let first = adapter.client_config_for(&host).expect("cached config");
-        let second = adapter.client_config_for(&host).expect("cached config");
+        let first = adapter
+            .client_config_for(&host, NonZeroU16::new(443).unwrap())
+            .expect("cached config");
+        let second = adapter
+            .client_config_for(&host, NonZeroU16::new(443).unwrap())
+            .expect("cached config");
         assert!(Arc::ptr_eq(first, second));
         assert_eq!(adapter.client_configs.len(), 1);
+    }
+
+    #[test]
+    fn rrg_trust_key_loopback_001_client_config_requires_exact_authority_port() {
+        let directory = tempfile::tempdir().expect("directory");
+        let local_certificate = identity(&directory, "local");
+        let foreign_certificate = identity(&directory, "foreign");
+        let real_certificate = identity(&directory, "real");
+        let adapter = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
+            interfaces: vec![interface()],
+            certificate: Some(local_certificate),
+            peers: vec![
+                peer_with_port(
+                    &foreign_certificate,
+                    "localhost",
+                    true,
+                    NonZeroU16::new(43102).expect("port"),
+                ),
+                peer_with_port(
+                    &real_certificate,
+                    "rand-m5.local",
+                    true,
+                    NonZeroU16::new(43101).expect("port"),
+                ),
+            ],
+        })
+        .expect("adapter");
+        let localhost: HostName = "localhost".parse().expect("host");
+        let error = adapter
+            .client_config_for(&localhost, NonZeroU16::new(43101).expect("port"))
+            .expect_err("a different localhost port must not select the foreign pin");
+        assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
+        assert!(
+            adapter
+                .client_config_for(&localhost, NonZeroU16::new(43102).expect("port"))
+                .is_ok()
+        );
     }
 
     #[test]
@@ -721,18 +862,19 @@ mod tests {
             peers: vec![peer(&client_identity, true)],
         })
         .expect("server adapter");
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let address = listener.local_addr().expect("address");
         let mut wrong_pin = peer(&server_identity, true);
         wrong_pin.fingerprint = CertificateFingerprint::try_from("00".repeat(32)).expect("pin");
+        wrong_pin.https_port = NonZeroU16::new(address.port()).expect("listener port");
         let client = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
             interfaces: vec![interface()],
             certificate: Some(client_identity),
             peers: vec![wrong_pin],
         })
         .expect("client adapter");
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind");
-        let address = listener.local_addr().expect("address");
         let server_task = tokio::spawn(async move {
             let (tcp, _) = listener.accept().await.expect("accept tcp");
             server.accept(tcp).await
@@ -763,16 +905,21 @@ mod tests {
             peers: vec![peer(&untrusted_identity, true)],
         })
         .expect("server adapter");
-        let client = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
-            interfaces: vec![interface()],
-            certificate: Some(client_identity),
-            peers: vec![peer(&server_identity, true)],
-        })
-        .expect("client adapter");
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind");
         let address = listener.local_addr().expect("address");
+        let client = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
+            interfaces: vec![interface()],
+            certificate: Some(client_identity),
+            peers: vec![peer_with_port(
+                &server_identity,
+                "localhost",
+                true,
+                NonZeroU16::new(address.port()).expect("listener port"),
+            )],
+        })
+        .expect("client adapter");
         let server_task = tokio::spawn(async move {
             let (tcp, _) = listener.accept().await.expect("accept tcp");
             server.accept(tcp).await
@@ -906,7 +1053,11 @@ mod tests {
         .expect("disabled legacy literal-IP row must not block startup");
         assert_eq!(adapter.client_configs.len(), 1);
         let hostname: HostName = "rand-m5.local".parse().expect("host");
-        assert!(adapter.client_config_for(&hostname).is_ok());
+        assert!(
+            adapter
+                .client_config_for(&hostname, NonZeroU16::new(443).unwrap())
+                .is_ok()
+        );
     }
 
     #[test]
@@ -929,10 +1080,14 @@ mod tests {
         .expect("skip policy must not fail closed");
         assert_eq!(adapter.client_configs.len(), 1);
         let hostname: HostName = "rand-m5.local".parse().expect("host");
-        assert!(adapter.client_config_for(&hostname).is_ok());
+        assert!(
+            adapter
+                .client_config_for(&hostname, NonZeroU16::new(443).unwrap())
+                .is_ok()
+        );
         let literal_ip: HostName = "192.168.128.29".parse().expect("host");
         let error = adapter
-            .client_config_for(&literal_ip)
+            .client_config_for(&literal_ip, NonZeroU16::new(443).unwrap())
             .expect_err("skipped literal-IP row must not be an authority");
         assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
     }

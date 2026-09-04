@@ -6,7 +6,7 @@
 //! idle-transition notification. Durable pending-nudge state and the recovery
 //! sweep remain the correctness backstop.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use atm_core::boundary::MemberKey;
@@ -15,6 +15,7 @@ use atm_core::protocol::{
     RuntimeObservationSource, RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot,
     TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
 };
+use atm_core::team_admin::MembersList;
 use atm_core::types::{IsoTimestamp, SessionId};
 use tokio::sync::watch;
 
@@ -68,6 +69,7 @@ struct RuntimeHealthState {
     queue_messages_drained_total: u64,
     queue_drain_failures_total: u64,
     blocking_core_bridge_stalls_total: u64,
+    detached_received_hook_warnings_total: u64,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -183,6 +185,31 @@ impl RuntimeHealth {
     pub fn record_queue_drain_failure(&self) {
         let mut state = self.lock();
         state.queue_drain_failures_total = state.queue_drain_failures_total.saturating_add(1);
+    }
+
+    /// Records one receiver-hook warning raised by a peer write whose hook
+    /// runs after the response was already returned.
+    ///
+    /// Peer ingress answers once the message is durably persisted, so the
+    /// hook cannot report through the response envelope. The warning is
+    /// logged with the originating request id; this counter is the numeric
+    /// signal that such warnings occurred rather than being discarded.
+    pub fn record_detached_received_hook_warning(&self) {
+        let mut state = self.lock();
+        state.detached_received_hook_warnings_total = state
+            .detached_received_hook_warnings_total
+            .saturating_add(1);
+    }
+
+    /// Returns how many detached receiver-hook warnings have been observed.
+    ///
+    /// Production observes these warnings in the log record written next to
+    /// this counter; only harnesses read the count directly, so the accessor
+    /// follows `subscribe_herdr_queue_tick`'s gating convention.
+    #[cfg(any(test, feature = "test-support"))]
+    #[must_use]
+    pub fn detached_received_hook_warnings_total(&self) -> u64 {
+        self.lock().detached_received_hook_warnings_total
     }
 
     /// Records one blocking-core-bridge job that ran longer than the
@@ -316,25 +343,26 @@ impl RuntimeHealth {
 
     #[must_use]
     pub fn snapshot(&self) -> RuntimeStatusSnapshot {
-        let state = self.lock();
-        let mut members: Vec<_> = state
+        self.snapshot_with_member_keys(&[])
+    }
+
+    /// Return runtime observations merged with the durable roster. Members
+    /// without an observation are explicitly projected as unknown so an empty
+    /// observation set cannot look like an empty roster in doctor output.
+    #[must_use]
+    pub fn snapshot_with_roster(&self, roster: &MembersList) -> RuntimeStatusSnapshot {
+        let roster = roster
             .members
             .iter()
-            .map(|(key, record)| RuntimeMemberObservation {
-                team: key.team.clone(),
-                member: key.agent.clone(),
-                state: record.state,
-                session_id: record.session_id.clone(),
-                pid: record.pid,
-                last_active_at: record.last_active_at,
-                state_changed_by: Some(record.state_source),
-                state_changed_at: record.state_changed_at,
-                session_changed_by: record
-                    .session_changed_at
-                    .map(|_| RuntimeObservationSource::Heartbeat),
-                session_changed_at: record.session_changed_at,
-            })
-            .collect();
+            .map(|member| MemberKey::new(roster.team.clone(), member.name.clone()))
+            .collect::<Vec<_>>();
+        self.snapshot_with_member_keys(&roster)
+    }
+
+    fn snapshot_with_member_keys(&self, roster: &[MemberKey]) -> RuntimeStatusSnapshot {
+        let state = self.lock();
+        let mut members = observed_members(&state.members);
+        append_unobserved_roster_members(&mut members, &state.members, roster);
         members.sort_by(|left, right| {
             left.team
                 .as_str()
@@ -386,6 +414,51 @@ impl RuntimeHealth {
         self.inner
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+fn observed_members(records: &HashMap<MemberKey, MemberRecord>) -> Vec<RuntimeMemberObservation> {
+    records
+        .iter()
+        .map(|(key, record)| RuntimeMemberObservation {
+            team: key.team.clone(),
+            member: key.agent.clone(),
+            state: record.state,
+            session_id: record.session_id.clone(),
+            pid: record.pid,
+            last_active_at: record.last_active_at,
+            state_changed_by: Some(record.state_source),
+            state_changed_at: record.state_changed_at,
+            session_changed_by: record
+                .session_changed_at
+                .map(|_| RuntimeObservationSource::Heartbeat),
+            session_changed_at: record.session_changed_at,
+        })
+        .collect()
+}
+
+fn append_unobserved_roster_members(
+    members: &mut Vec<RuntimeMemberObservation>,
+    records: &HashMap<MemberKey, MemberRecord>,
+    roster: &[MemberKey],
+) {
+    let mut known_members: HashSet<_> = records.keys().cloned().collect();
+    for key in roster {
+        if members.len() == MAX_RUNTIME_STATUS_MEMBERS || !known_members.insert(key.clone()) {
+            continue;
+        }
+        members.push(RuntimeMemberObservation {
+            team: key.team.clone(),
+            member: key.agent.clone(),
+            state: RuntimeMemberState::Unknown,
+            session_id: None,
+            pid: None,
+            last_active_at: None,
+            state_changed_by: None,
+            state_changed_at: None,
+            session_changed_by: None,
+            session_changed_at: None,
+        });
     }
 }
 
@@ -478,6 +551,32 @@ mod tests {
         assert_eq!(
             member.session_changed_by,
             Some(RuntimeObservationSource::Heartbeat)
+        );
+    }
+
+    #[test]
+    fn rrg_doctor_members_zero_001_unobserved_roster_members_count_as_unknown() {
+        let health = RuntimeHealth::default();
+        let roster = vec![
+            MemberKey::new(
+                "runtime-team".parse().expect("team"),
+                "first-agent".parse().expect("agent"),
+            ),
+            MemberKey::new(
+                "runtime-team".parse().expect("team"),
+                "second-agent".parse().expect("agent"),
+            ),
+        ];
+
+        let snapshot = health.snapshot_with_member_keys(&roster);
+
+        assert_eq!(snapshot.members.len(), 2);
+        assert_eq!(snapshot.member_counts.unknown_members, 2);
+        assert!(
+            snapshot
+                .members
+                .iter()
+                .all(|member| member.state == RuntimeMemberState::Unknown)
         );
     }
 

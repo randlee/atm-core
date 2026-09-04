@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-WRITER-IDLE-SPIN-001>
+  a triage:Finding ;
+  triage:findingId "RRG-WRITER-IDLE-SPIN-001" ;
+  triage:title "Storage writer collect_batch busy-spins with yield_now until the 1ms batch deadline whenever the submit queue is empty, burning a runtime thread and shrinking batches under intermittent arrival; deferred, not a release blocker" ;
+  triage:description "Found during the RRG-INGRESS-ADMIT-001 fix round 7 code pass on 2026-09-04 (read-only explore over the daemon write path, verified in the tree at d697963bd). Since ad20f3a66 (fix(storage): avoid scheduler-expanded write batching) crates/atm-storage-rusqlite/src/writer/mod.rs collect_batch no longer parks on timeout_at(deadline, receiver.recv()) between arrivals; on TryRecvError::Empty it checks Instant::now against the fixed 1ms BATCH_TIME_BUDGET deadline and calls tokio::task::yield_now, looping until the deadline passes. Consequences: whenever the submit queue is momentarily empty the writer task spins for up to 1ms per batch on its runtime thread, stealing scheduler time from the request tasks, and it returns as soon as the deadline passes without waiting for the next arrival, so batches can be smaller under intermittent arrival and the writer commits more often per message. The 1ms budget itself does not bound throughput to 833 batches per second because try_recv drains a queued burst immediately; the cost is the spin and the batch shape. Not measured live: fix round 7 scratch variant D (kind guard on the Immediate bare-CLI marker clear) alone recovered uds f8 to p50 24054.79 exact on atmbench, above the 18000 floor, so this mechanism was not the dominant residual and the planned scratch variant E (revert the empty arm to timeout_at recv and observe daemon CPU) was not run. Deferred: not a release-readiness blocker; fix should be measured against the AO2 batching contract that motivated ad20f3a66 (platform-neutral window not expanded by scheduler granularity) rather than reverted blindly, for example park on recv with the deadline but cap the expansion, or spin only while the queue was non-empty in the previous iteration. Ruled out in the same pass: ControlPathSyncBridge capacity-1 semaphore is Deferred-only and pre-existing; roster lookup is served from the in-process snapshot; nudge template rendering hits SQLite only on the tmux and graft hook branches." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "storage-writer" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-04T05:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-04T05:12:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-WRITER-IDLE-SPIN-001/CAND-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RRG-WRITER-IDLE-SPIN-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/mod.rs" ;
+  triage:line 558 ;
+  triage:snippet "if tokio::time::Instant::now() >= deadline { return; } tokio::task::yield_now().await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "d697963bd" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/d697963bd> .
+
+<urn:atm:triage:worktree/CAND/d697963bd>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "d697963bd" ;
+  triage:orderIndex 1 .

@@ -32,8 +32,8 @@ pub use report::{
     GraftReceiversDoctorReport, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
     HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport, LegacyLiteralIpPeerDoctorReport,
     PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
-    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
-    RecipientDeliveryPathReport,
+    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, ReaderLaneDoctorReport,
+    ReaderLanesDoctorReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
 
 /// Async application port for the live Herdr visibility checks performed by
@@ -369,6 +369,7 @@ fn build_doctor_report(
         environment: environment.clone(),
         client_context: doctor_client_context(&environment),
         daemon_context: None,
+        reader_lanes: None,
         member_roster,
         graft_receivers,
         observability: observability_health,

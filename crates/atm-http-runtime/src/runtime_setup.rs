@@ -91,3 +91,42 @@ pub(crate) fn validate_unix_socket_path(path: &Path) -> Result<(), AtmError> {
 fn preflight(field: &str, cause: impl std::fmt::Display) -> AtmError {
     AtmError::config(format!("invalid runtime configuration field `{field}`")).with_cause(cause)
 }
+
+/// Raises this process's descriptor soft limit once, before any listener or
+/// SQLite connection is opened.
+///
+/// A daemon started by a service manager inherits that manager's soft
+/// `RLIMIT_NOFILE` (256 under macOS launchd), which ordinary admission load
+/// can exhaust. The outcome is always reported: a failed raise is a warning,
+/// never a silent degrade.
+pub(super) fn ensure_process_descriptor_limit() {
+    static RAISED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    RAISED.get_or_init(
+        || match atm_core::descriptor_limit::raise_descriptor_soft_limit() {
+            atm_core::descriptor_limit::DescriptorLimitOutcome::Raised { previous, current } => {
+                tracing::info!(
+                    previous,
+                    current,
+                    "raised the process descriptor soft limit"
+                );
+            }
+            atm_core::descriptor_limit::DescriptorLimitOutcome::AlreadyAtMaximum { current } => {
+                tracing::debug!(
+                    current,
+                    "process descriptor soft limit is already at its maximum"
+                );
+            }
+            atm_core::descriptor_limit::DescriptorLimitOutcome::Unsupported => {
+                tracing::debug!("this platform exposes no process descriptor soft limit to raise");
+            }
+            atm_core::descriptor_limit::DescriptorLimitOutcome::Failed { current, errno } => {
+                tracing::warn!(
+                    ?current,
+                    errno,
+                    "failed to raise the process descriptor soft limit; sustained admission load \
+                 may exhaust it and surface as sqlite CannotOpen failures"
+                );
+            }
+        },
+    );
+}

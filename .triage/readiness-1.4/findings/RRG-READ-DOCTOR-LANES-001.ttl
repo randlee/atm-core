@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-READ-DOCTOR-LANES-001>
+  a triage:Finding ;
+  triage:findingId "RRG-READ-DOCTOR-LANES-001" ;
+  triage:title "atm doctor --json never publishes effective reader_lanes, so the AV.4 read benchmark preflight refuses every daemon and the read/query family cannot produce official evidence" ;
+  triage:description "Release-readiness step 1 on prerelease/v1.4.12 (4f1202bf2), atmbench@rand-m5.local, 2026-09-04T05:5xZ, arch-ctm under fenix@rand-m5 GO: with a healthy account-local 1.4.12 daemon (doctor healthy, mutual-tls, readiness ready, loopback interface only), just benchmark-read fails in preflight at recipe benchmark-read-fanout with: read benchmark: daemon doctor report does not expose effective reader_lanes; refusing to validate Python constants. No requests were issued. scripts/smoke/read_benchmark.py _parse_effective_lane_settings (line 283) requires reader_lanes.mailbox and reader_lanes.search pool_size/queue_depth at the top level or under config in the doctor JSON, as mandated by docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md (Effective lane settings, line 151: a report without those settings is a hard failure and Python constants are not a proxy). That harness requirement landed in 16704d9ac (2026-09-01T01:11Z) but no daemon or CLI code ever emits reader_lanes in the doctor report: the only reader_lanes references in crates are the storage layer (shared_db_reader_lanes.rs, reader_pool.rs, analyst_query.rs); the doctor JSON on 1.4.12 has top-level keys summary, findings, recommendations, environment, client_context, daemon_context, member_roster, graft_receivers, observability, herdr_breaker, herdr_queue_pump, post_send, config, mail_store, roster_store, drift_findings, runtime_status, and config carries only findings. The committed read evidence of 2026-08-31T21:03Z predates the enforcing commit. Consequence: the read/query family is unrunnable on any build, so release readiness cannot collect read evidence. Classification: product, blocking for the read family (plan section 3.2 lists just benchmark-read as a step-1 stage); the send lanes are unaffected. Fix scope: the replacement runtime doctor projection must publish the effective reader lane contract (reader_lanes.mailbox and reader_lanes.search with pool_size and queue_depth, sourced from the running daemon effective storage configuration, not from constants) in the doctor JSON, with a test asserting the fields are present and equal the configured values; do not touch the frozen legacy synchronous daemon. Proof: just benchmark-read passes preflight and runs all three families against a 1.4.x daemon on atmbench." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doctor-reporting" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-04T06:12:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-04T05:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-READ-DOCTOR-LANES-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-READ-DOCTOR-LANES-001/CAND-2> ;
+  triage:triageRecordVersion "2" ;
+  triage:qa10Note "QA-10 (quality-mgr, 2026-09-04): code fix for both occurrences verified by req-qa/arch-qa/ruthless-boundary-qa/rust-qa-agent at commit 56cfd142b (PR #1143 branch, arch-ctm). Both occurrences marked fixed below. Finding-level status intentionally left 'open': per fenix's QA-10 dispatch, closure of this finding requires the atmbench read-campaign benchmark-read evidence (tracked separately, PR #1150), not just the code fix." .
+
+<urn:atm:triage:occurrence/RRG-READ-DOCTOR-LANES-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 292 ;
+  triage:snippet "pub daemon_context: Option<DoctorExecutionContext>, -- fixed at 56cfd142b: DoctorReport gained reader_lanes: Option<ReaderLanesDoctorReport> at report.rs:309 (serde skip_serializing_if none), sourced end-to-end from the live SQLite factory's effective pool config (atm-storage-rusqlite -> atm-storage -> atm-runtime composition/doctor_projection -> atm-daemon-bootstrap replacement_handler -> atm-core doctor report), verified by all four QA-10 reviewers (rust-qa-agent mutation-falsified the wiring by nulling reader_lanes in doctor_projection.rs and confirming the new test fails)." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "56cfd142b" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/56cfd142b-doctor-lanes> .
+
+<urn:atm:triage:occurrence/RRG-READ-DOCTOR-LANES-001/CAND-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 283 ;
+  triage:snippet "raw = payload.get(\"reader_lanes\") -- fixed at 56cfd142b: the doctor JSON now emits the top-level reader_lanes key this parser expects; _parse_effective_lane_settings correctly fails closed (ReadBenchmarkError) when the key is absent, verified directly in code by req-qa (ATM-QA-101 minor follow-up filed only for a missing negative-path unit test pinning that fail-closed branch, non-blocking, routed to arch-ctm)." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "56cfd142b" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/56cfd142b-doctor-lanes> .
+
+<urn:atm:triage:worktree/CAND/110d4d9ad>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "110d4d9ad" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/CAND/56cfd142b-doctor-lanes>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "56cfd142b" ;
+  triage:orderIndex 2 .

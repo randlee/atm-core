@@ -29,6 +29,7 @@ HOST_LABEL = "m5-atmbench"
 DEPLOY_KEY_ENVIRONMENT_VARIABLE = "ATM_BENCHMARK_DEPLOY_KEY"
 LOG_DIRECTORY = Path.home() / "benchmark-logs"
 RELEASE_BINARIES = (ROOT / "target/release/atm", ROOT / "target/release/atm-daemon")
+RETAINED_EVIDENCE_PREFIX = "site/reports/"
 
 Run = Callable[..., subprocess.CompletedProcess[str]]
 Write = Callable[[str], None]
@@ -258,7 +259,49 @@ class OfficialBenchmark:
     def require_clean_tree(self, stage: str) -> None:
         dirty = self.command(["git", "status", "--porcelain"]).stdout.strip()
         if dirty:
-            raise OfficialBenchmarkError(f"working tree is dirty {stage}; commit or remove local changes first")
+            raise OfficialBenchmarkError(self.dirty_tree_detail(stage, dirty.splitlines()))
+
+    @staticmethod
+    def classify_dirty_lines(lines: Sequence[str]) -> tuple[list[str], list[str]]:
+        """Split porcelain lines into retained report evidence and everything else.
+
+        Untracked files under site/reports/ are prior campaign evidence whose
+        push failed; they must be committed on the evidence branch, never
+        deleted, so they are reported separately from real source edits.
+        """
+        evidence: list[str] = []
+        other: list[str] = []
+        for line in lines:
+            entry = line.rstrip()
+            if not entry:
+                continue
+            status = entry[:2]
+            path = entry[3:].strip().strip('"')
+            if status == "??" and path.startswith(RETAINED_EVIDENCE_PREFIX):
+                evidence.append(entry)
+            else:
+                other.append(entry)
+        return evidence, other
+
+    def dirty_tree_detail(self, stage: str, lines: Sequence[str]) -> str:
+        evidence, other = self.classify_dirty_lines(lines)
+        parts = [f"working tree is dirty {stage}; refusing to run so ambient state cannot leak into official evidence."]
+        if evidence:
+            paths = " ".join(entry[3:].strip().strip('"') for entry in evidence)
+            parts.append(
+                "Retained evidence (untracked files under "
+                f"{RETAINED_EVIDENCE_PREFIX}) — never delete these; commit them on the evidence branch:\n"
+                + "\n".join(f"  {entry}" for entry in evidence)
+                + "\n  suggested: git add "
+                + paths
+                + " && git commit -m 'reports: retain prior campaign evidence'"
+            )
+        if other:
+            parts.append(
+                "Unexpected local changes — resolve these yourself before rerunning:\n"
+                + "\n".join(f"  {entry}" for entry in other)
+            )
+        return " ".join(parts)
 
     def push_environment(self) -> dict[str, str]:
         deploy_key = self.environ.get(DEPLOY_KEY_ENVIRONMENT_VARIABLE, "").strip()

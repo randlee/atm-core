@@ -43,6 +43,17 @@ report.
    - `just benchmark-official` (send family) → `site/reports/send-message-benchmark/`
    - `just benchmark-read` (read/query family, Phase AV) → `site/reports/read-query-benchmark/`
    - `just reports-index --check` green; reports committed and pushed.
+   The read/query family has an account-local serving precondition: a 1.4.x
+   daemon must already be running on the benchmark account and must remain
+   running for the duration of the read campaign. The operator proves this
+   from that account before starting the family with:
+
+   ```text
+   atm doctor
+   ```
+
+   A failed or unavailable doctor check means the read campaign is not
+   runnable yet; provision or restore the account-local daemon first.
    Floors: committed `baselines.json` per family (AO2 ratchet convention;
    read/query revision 1, unrounded p50). A missed floor is a product
    failure, never re-run to pass.

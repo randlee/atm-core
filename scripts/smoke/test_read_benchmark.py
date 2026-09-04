@@ -21,6 +21,24 @@ class ReadBenchmarkContractTests(unittest.TestCase):
         )
         self.assertEqual(benchmark.FANOUT, 32)
 
+    def test_effective_lanes_parse_from_the_real_doctor_json_shape(self) -> None:
+        payload = {
+            "summary": {"status": "healthy"},
+            "findings": [],
+            "config": {"findings": []},
+            "reader_lanes": {
+                "mailbox": {"pool_size": 4, "queue_depth": 16},
+                "search": {"pool_size": 2, "queue_depth": 8},
+            },
+        }
+        self.assertEqual(
+            benchmark._parse_effective_lane_settings(payload),
+            {
+                "mailbox": {"pool_size": 4, "queue_depth": 16},
+                "search": {"pool_size": 2, "queue_depth": 8},
+            },
+        )
+
     def test_corpus_is_deterministic_and_meets_d7_shape(self) -> None:
         first = benchmark.deterministic_corpus()
         second = benchmark.deterministic_corpus()

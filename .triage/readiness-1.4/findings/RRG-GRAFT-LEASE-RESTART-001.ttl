@@ -1,0 +1,87 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-GRAFT-LEASE-RESTART-001>
+  a triage:Finding ;
+  triage:findingId "RRG-GRAFT-LEASE-RESTART-001" ;
+  triage:title "graft receiver lease store returns NotOwner for an absent row as well as a foreign owner generation, so an announced receiver whose row disappears marks itself displaced for good and never re-announces (latent silent-starvation gap)" ;
+  triage:description "Reported by fenix@rand-m5 at 20:13Z on 2026-09-03 during the 1.4.10 Colima pre-tier host check: after each daemon cycle that day (1.4.9 and 1.4.10 stage, relink, kickstart of com.atm.daemon.crosshost-smoke), atm doctor --json reports graft_receivers as an empty list, and nothing re-registers the hermes-atm receiver. Effect: mailbox delivery still works but no nudges reach hermes-harness agents; loki accumulated 77 unread including both Colima GO dispatches and never started until Rand nudged him manually. atm-dev tmux-hook nudges are a separate path and unaffected. Code reading on 0656b8a28: leases are durable rows in graft_receiver_endpoints (atm-storage-rusqlite graft_receiver_endpoint_store.rs) and the doctor report lists every roster member with a row regardless of age (atm-core doctor mod.rs graft_receivers_doctor_report), so an empty list means the row is absent, not stale. Only an owner-matched unregister deletes a row; the store refresh returns NotOwner for an absent row as well as a foreign generation (refresh changed == 0), and the receiver lease state machine in atm-graft runtime lease_client.rs then sets displaced permanently and never re-announces (RegisteredGraftReceiver::refresh). The receiver also caches its daemon client permanently after the first connect_existing (lease_client.rs line 231). Candidate mechanisms, unconfirmed: (1) the receiver process restarted around the daemon cycle (for example a hermes gateway reset), Drop unregistered the row, and the new receiver never announced successfully; (2) the daemon restart removed or relocated the row so refresh saw NotOwner and the receiver marked itself displaced for good; (3) the cached client cannot reach the restarted daemon and every refresh fails under the 30s capped backoff. Same class as the HerdrQueueWakePump never-started finding: a lifecycle gap that needs daemon-restart resilience plus a real-startup integration test with a negative proof. Discriminating evidence requested from rand-m5 without message bodies or capability values: daemon stderr log lines for graft receiver register, refresh, and unregister around the restart; loki hermes log lines from subsystem atm_graft.receiver_loop with the outcome and error code fields; the graft_receiver_endpoints rows for the hermes agents excluding the capability column; doctor --json graft_receivers and herdr_queue_pump snapshot at 20:13Z. Reclassified at 20:20Z by quality-mgr after rand-m5 evidence: the graft_receiver_endpoints table on rand-m5 had zero rows, loki hermes logs contain zero atm_graft.receiver_loop lines at any date, and loki gateway process ran since 2026-08-26 with no restart, so the m5 observation is a deployment or fleet gap (gateway never registered a receiver) tracked separately as RRG-HERMES-FLEET-NUDGE-001 and not a candidate-branch regression. This record now covers only the residual product defect, downgraded from blocking to important for the PR 1143 merge gate: no live restart-triggered regression was demonstrated this round, but arch-ctm confirmed the code path with the existing test refresh_tick_observing_notowner_on_a_live_receiver_sets_displaced_and_stops_refreshing. Closure requires a dynamic regression test that simulates the row being absent while the receiver believes it is registered, proving the next refresh tick re-announces (fails pre-fix, passes post-fix), under fix round r3 item G; a live gateway restart is confirmatory for the deployment question only." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "graft-receiver-lifecycle" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-03T20:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S2 ;
+  triage:foundAt "2026-09-03T20:13:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-GRAFT-LEASE-RESTART-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-GRAFT-LEASE-RESTART-001/CAND-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-GRAFT-LEASE-RESTART-001/CAND-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-GRAFT-LEASE-RESTART-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-09-03T22:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RRG-GRAFT-LEASE-RESTART-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime/lease_client.rs" ;
+  triage:line 231 ;
+  triage:snippet "let client: Arc<dyn GraftReceiverLeaseClient> = Arc::new(GraftClient::connect_existing()?);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "0656b8a28" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/0656b8a28> .
+
+<urn:atm:triage:occurrence/RRG-GRAFT-LEASE-RESTART-001/CAND-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/graft_receiver_endpoint_store.rs" ;
+  triage:line 105 ;
+  triage:snippet "if changed == 0 {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "0656b8a28" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/0656b8a28> .
+
+<urn:atm:triage:occurrence/RRG-GRAFT-LEASE-RESTART-001/CAND-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 407 ;
+  triage:snippet "let lease = match runtime.graft_receiver_lease(team, &member.agent_name) {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "0656b8a28" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/0656b8a28> .
+
+<urn:atm:triage:worktree/CAND/0656b8a28>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "0656b8a28" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/RRG-GRAFT-LEASE-RESTART-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime/lease_client.rs" ;
+  triage:line 231 ;
+  triage:snippet "quality-mgr QA-4b independent re-verification confirmed fixed: dynamic regression test proves next refresh tick re-announces after a row-absent NotOwner tick (fails pre-fix, passes post-fix)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "d1e148a6b" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/d1e148a6b> .
+
+<urn:atm:triage:worktree/CAND/d1e148a6b>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "d1e148a6b" ;
+  triage:orderIndex 2 .

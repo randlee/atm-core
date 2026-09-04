@@ -44,7 +44,9 @@ pub use contract::{
 };
 pub use error::AtmError;
 pub use error_codes::AtmErrorCode;
-pub use factory::{StorageFactory, StorageHandleParts, StorageHandles};
+pub use factory::{
+    EffectiveReaderLane, EffectiveReaderLanes, StorageFactory, StorageHandleParts, StorageHandles,
+};
 pub use peer_catalog_audit::TrustedPeerCatalogAudit;
 pub use roles::ROLE_WORKER;
 pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};

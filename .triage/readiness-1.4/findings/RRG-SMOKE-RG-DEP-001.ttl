@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-SMOKE-RG-DEP-001>
+  a triage:Finding ;
+  triage:findingId "RRG-SMOKE-RG-DEP-001" ;
+  triage:title "Thorough smoke rows shell out to rg, so the smoke run aborts with FileNotFoundError before any row executes on a host whose child PATH lacks ripgrep" ;
+  triage:description "Release-readiness step 1 on prerelease/v1.4.12 (4f1202bf2), atmbench account on rand-m5, 2026-09-04T05:4xZ (arch-ctm under fenix@rand-m5 step-1 GO): just smoke thorough failed before producing any row because scripts/smoke/run_thorough.py rows (for example the AD.9 update-member row around line 575 and the row around line 672) execute the external rg binary for source-pattern assertions, and the child process inherits the invoking shell PATH, which on the atmbench account does not resolve rg. Classification: harness, minor, blocking only the smoke stage on that host. The thorough smoke must not depend on a third-party CLI that is not a declared prerequisite; the pattern assertions should be performed in Python (read the file, regex search) with the same pass and fail semantics, or the harness must declare and verify the prerequisite at start with an actionable error naming the missing tool. Interim workaround used for the campaign: prepend the ripgrep install directory to PATH for the smoke run. No product code involved." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "smoke-harness" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-04T05:52:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-04T05:47:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-SMOKE-RG-DEP-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-SMOKE-RG-DEP-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-09-04T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RRG-SMOKE-RG-DEP-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough.py" ;
+  triage:line 575 ;
+  triage:snippet "[ rg, -n, r\"fn build_member_add_roster_record\\(request: &AddMemberRequest\\) -> RosterEntry\", crates/atm-core/src/team_admin/member_mutation.rs ]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "4f1202bf2" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/4f1202bf2> .
+
+<urn:atm:triage:worktree/CAND/4f1202bf2>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "4f1202bf2" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/RRG-SMOKE-RG-DEP-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/source_pattern.py" ;
+  triage:line 1 ;
+  triage:snippet "QA-8: fixed at 6b8fe580f via stdlib-only source_pattern.py matcher preserving rg -n exit-code semantics (0 match/1 no-match/2 unreadable); independently confirmed closed by req-qa, arch-qa, and ruthless-boundary-qa via whole-workspace sweep of scripts/smoke/*.py, zero remaining rg shellouts; regression guard test_smoke_rows_no_longer_shell_out_to_ripgrep added" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "110d4d9ad" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/110d4d9ad-smokergdep> .
+
+<urn:atm:triage:worktree/CAND/110d4d9ad-smokergdep>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "110d4d9ad" ;
+  triage:orderIndex 2 .
