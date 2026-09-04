@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-29T22:47:02.194731Z",
-  "host_label": "windows-x64-01",
+  "generated_at": "2026-09-04T05:49:52.700442Z",
+  "host_label": "m5-atmbench",
   "report_html": "send-message-benchmark/index.html",
   "report_type": "benchmark",
   "schema_version": 1

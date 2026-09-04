@@ -1,0 +1,210 @@
+{
+  "baseline_revision": 2,
+  "campaign_id": "20260904T065446Z-rand-m5.local-read-query-fts",
+  "campaign_ids": [
+    "20260904T065446Z-rand-m5.local-read-read-fanout",
+    "20260904T065446Z-rand-m5.local-read-query-fts",
+    "20260904T065446Z-rand-m5.local-read-read-under-write-load"
+  ],
+  "corpus": {
+    "agents_per_team": 4,
+    "generator_version": "av4-corpus-generator-1",
+    "message_count": 32,
+    "message_size_distribution": {
+      "kind": "fixed",
+      "payload_bytes": 256
+    },
+    "messages_per_member": 1,
+    "seed": "av4-corpus-v1",
+    "skew_profile": "uniform:one-message-per-member",
+    "team_count": 8
+  },
+  "effective_lane_settings": {
+    "mailbox": {
+      "pool_size": 4,
+      "queue_depth": 16
+    },
+    "search": {
+      "pool_size": 2,
+      "queue_depth": 8
+    }
+  },
+  "execution_identity": {
+    "execution_account": "atmbench",
+    "home": "/Users/atmbench",
+    "hostname": "rand-m5.local",
+    "uid": 502
+  },
+  "families": [
+    {
+      "baseline_p50_floor": 753.0965761111854,
+      "description": "Concurrent FTS search and filtered-list queries",
+      "diagnostics": {
+        "deadline_expiries": {
+          "expired_in_queue": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          },
+          "interrupted_while_active": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          },
+          "observed_cli_timeouts": 0,
+          "other_cli_errors": 0,
+          "quarantined": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          }
+        },
+        "execution_ms": {
+          "max": 40.24783299973933,
+          "min": 4.6624999995401595,
+          "p50": 21.99541650043102,
+          "p95": 35.73954199964646,
+          "p99": 37.973124999552965
+        },
+        "in_flight": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "lane": "search",
+        "pool_size": 2,
+        "quarantine_exhausted_rejections": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "quarantined_worker_gauge": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "queue_depth": 8,
+        "retired_replaced_workers": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "saturation_events": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "wait_ms": {
+          "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+          "source": "cli-not-exposed",
+          "status": "unimplemented",
+          "value": null
+        },
+        "wal_health": {
+          "current_wal_frame_count": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          },
+          "last_checkpoint_outcome": {
+            "reason": "the CLI does not expose this AV.1a D5 runtime gauge yet",
+            "source": "cli-not-exposed",
+            "status": "unimplemented",
+            "value": null
+          }
+        }
+      },
+      "family": "query-fts",
+      "fanout": 32,
+      "latency_ms": {
+        "max": 40.24783299973933,
+        "min": 4.6624999995401595,
+        "p50": 21.99541650043102,
+        "p95": 35.73954199964646,
+        "p99": 37.973124999552965
+      },
+      "mixed_read_p95_budget_ms": null,
+      "mixed_read_p95_budget_source": null,
+      "pool_size": 2,
+      "queue_depth": 8,
+      "requests": {
+        "success_rate": 1.0,
+        "successful": 4000,
+        "total": 4000
+      },
+      "status": "PASS",
+      "throughput_per_second": {
+        "max": 799.1104369741917,
+        "min": 799.1104369741917,
+        "p50": 799.1104369741917,
+        "p95": 799.1104369741917,
+        "p99": 799.1104369741917
+      },
+      "throughput_requests_per_second": 799.1104369741917,
+      "windows": {
+        "measurement_seconds": 5.0,
+        "warmup_seconds": 2.0
+      },
+      "writer": null
+    }
+  ],
+  "fanout": 32,
+  "generated_at": "2026-09-04T06:54:46.399585Z",
+  "harness_version": "av4-read-benchmark-1",
+  "host_label": "rand-m5.local",
+  "measurement_note": "Throughput floors are end-to-end CLI (spawn-dominated) sensors; deeper lane-sensitivity redesign is deferred under AV-EXP-C6.",
+  "mixed_mode_budget": {
+    "p95_latency_ms": 1000.0,
+    "source": "AV.1a D5 interim p95 ceiling; replace when reader metrics are exported"
+  },
+  "partial_artifact": false,
+  "ratchet": {
+    "convention": "AO2 observed p50 minus tolerance",
+    "current_revision": 2,
+    "engaged": true,
+    "entries": [
+      {
+        "candidate_floor": 758.8592069539346,
+        "current_floor": 754.8485109810853,
+        "host_label": "rand-m5.local",
+        "observed_p50": 798.799165214668,
+        "previous_floor": 754.8485109810853,
+        "proposed_floor": 758.8592069539346,
+        "target": "read-fanout"
+      },
+      {
+        "candidate_floor": 759.154915125482,
+        "current_floor": 753.0965761111854,
+        "host_label": "rand-m5.local",
+        "observed_p50": 799.1104369741917,
+        "previous_floor": 753.0965761111854,
+        "proposed_floor": 759.154915125482,
+        "target": "query-fts"
+      },
+      {
+        "candidate_floor": 751.157910935966,
+        "current_floor": 739.2049099275857,
+        "host_label": "rand-m5.local",
+        "observed_p50": 790.6925378273327,
+        "previous_floor": 739.2049099275857,
+        "proposed_floor": 751.157910935966,
+        "target": "read-under-write-load"
+      }
+    ],
+    "previous_revision": 1,
+    "tolerance_pct": 5
+  },
+  "report_type": "read-query-benchmark",
+  "schema_version": 1,
+  "source_revision": "e1a6639f918b0a59bb1e3005c3611ee03bc361c2",
+  "status": "PASS"
+}
