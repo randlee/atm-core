@@ -33,7 +33,7 @@
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 886 ;
-  triage:snippet "if committed.newly_persisted { let hook = self.clone(); if ingress == AuthenticatedIngress::Local { ... emit_received_hook(...).await" ;
+  triage:snippet "if committed.newly_persisted { let hook = self.clone(); if ingress == AuthenticatedIngress::Local { ... emit_received_hook(...).await -- re-scoped at QA-4c (arch-qa ARCH-002): distinct mechanism, untouched by fix rounds 3-6, tracked separately by RRG-INGRESS-LOCAL-HOOK-AWAIT-001; NOT covered by this finding's closure" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "chore/readiness-candidate-1.4.7" ;
@@ -44,9 +44,9 @@
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/graft_receiver_endpoint_store.rs" ;
   triage:line 211 ;
-  triage:snippet "error(\"failed to look up graft receiver endpoint\", error)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "error(\"failed to look up graft receiver endpoint\", error) -- QA-9: closed via fix rounds 4-6 (control_path_pool bound + descriptor_limit raise + graft receiver lease snapshot cache), official step-1 campaign 20260904T054952Z-m5-atmbench shows exact admission on every network lane, zero HTTP 503 ATM_MAILBOX_WRITE_FAILED" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "chore/readiness-candidate-1.4.7" ;
   triage:headSha "eefa01418" ;
   triage:occursIn <urn:atm:triage:worktree/CAND/eefa01418> .
@@ -61,9 +61,9 @@
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
   triage:line 1 ;
-  triage:snippet "ControlPathConnections bounded idle pool; residual 503 ATM_MAILBOX_WRITE_FAILED on graft receiver endpoint lookup at uds f8" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "ControlPathConnections bounded idle pool; residual 503 ATM_MAILBOX_WRITE_FAILED on graft receiver endpoint lookup at uds f8 -- QA-9: closed, same evidence basis as CAND-2 (fix rounds 4-6, official campaign 20260904T054952Z-m5-atmbench zero residual 503s)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "chore/readiness-candidate-1.4.7" ;
   triage:headSha "c7f0fe7ec" ;
   triage:occursIn <urn:atm:triage:worktree/CAND/c7f0fe7ec> .
@@ -79,9 +79,9 @@
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/control_path_pool.rs" ;
   triage:line 27 ;
-  triage:snippet "pub(crate) const MAX_CONTROL_PATH_CONNECTIONS: usize = 8; full step 1 at f5de13551: admission correct on all lanes, uds p50 6105 vs 18000, tcp 5523 vs 17000, tcp-tls 7371 vs 13500" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "pub(crate) const MAX_CONTROL_PATH_CONNECTIONS: usize = 8; full step 1 at f5de13551: admission correct on all lanes, uds p50 6105 vs 18000, tcp 5523 vs 17000, tcp-tls 7371 vs 13500 -- QA-9: closed, fix round 6 (39327974c, graft receiver lease snapshot cache) plus round 7 (40b00b236, skip marker work for immediate bare-cli writes) recovered the floors: v15 official campaign shows uds 21832.42 vs 18000, tcp 18671.16 vs 17000, tcp-tls 16361.64 vs 13500, all PASS" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "chore/readiness-candidate-1.4.7" ;
   triage:headSha "f5de13551" ;
   triage:occursIn <urn:atm:triage:worktree/CAND/f5de13551-ingress> .
