@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline};
-use atm_core::boundary::{MemberKey, MessageReceivedHookSelector};
+use atm_core::boundary::MessageReceivedHookSelector;
 use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
@@ -620,14 +620,7 @@ impl StorageAndNudgeRouter {
                 deadline,
             )
             .await?;
-        let roster = report.member_roster.as_ref().map(|roster| {
-            roster
-                .members
-                .iter()
-                .map(|member| MemberKey::new(roster.team.clone(), member.name.clone()))
-                .collect::<Vec<_>>()
-        });
-        let mut runtime_status = roster.as_deref().map_or_else(
+        let mut runtime_status = report.member_roster.as_ref().map_or_else(
             || runtime_health.snapshot(),
             |roster| runtime_health.snapshot_with_roster(roster),
         );

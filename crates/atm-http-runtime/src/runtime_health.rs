@@ -15,6 +15,7 @@ use atm_core::protocol::{
     RuntimeObservationSource, RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot,
     TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
 };
+use atm_core::team_admin::MembersList;
 use atm_core::types::{IsoTimestamp, SessionId};
 use tokio::sync::watch;
 
@@ -316,51 +317,26 @@ impl RuntimeHealth {
 
     #[must_use]
     pub fn snapshot(&self) -> RuntimeStatusSnapshot {
-        self.snapshot_with_roster(&[])
+        self.snapshot_with_member_keys(&[])
     }
 
     /// Return runtime observations merged with the durable roster. Members
     /// without an observation are explicitly projected as unknown so an empty
     /// observation set cannot look like an empty roster in doctor output.
     #[must_use]
-    pub fn snapshot_with_roster(&self, roster: &[MemberKey]) -> RuntimeStatusSnapshot {
-        let state = self.lock();
-        let mut members: Vec<_> = state
+    pub fn snapshot_with_roster(&self, roster: &MembersList) -> RuntimeStatusSnapshot {
+        let roster = roster
             .members
             .iter()
-            .map(|(key, record)| RuntimeMemberObservation {
-                team: key.team.clone(),
-                member: key.agent.clone(),
-                state: record.state,
-                session_id: record.session_id.clone(),
-                pid: record.pid,
-                last_active_at: record.last_active_at,
-                state_changed_by: Some(record.state_source),
-                state_changed_at: record.state_changed_at,
-                session_changed_by: record
-                    .session_changed_at
-                    .map(|_| RuntimeObservationSource::Heartbeat),
-                session_changed_at: record.session_changed_at,
-            })
-            .collect();
-        let mut known_members: HashSet<_> = state.members.keys().cloned().collect();
-        for key in roster {
-            if members.len() == MAX_RUNTIME_STATUS_MEMBERS || !known_members.insert(key.clone()) {
-                continue;
-            }
-            members.push(RuntimeMemberObservation {
-                team: key.team.clone(),
-                member: key.agent.clone(),
-                state: RuntimeMemberState::Unknown,
-                session_id: None,
-                pid: None,
-                last_active_at: None,
-                state_changed_by: None,
-                state_changed_at: None,
-                session_changed_by: None,
-                session_changed_at: None,
-            });
-        }
+            .map(|member| MemberKey::new(roster.team.clone(), member.name.clone()))
+            .collect::<Vec<_>>();
+        self.snapshot_with_member_keys(&roster)
+    }
+
+    fn snapshot_with_member_keys(&self, roster: &[MemberKey]) -> RuntimeStatusSnapshot {
+        let state = self.lock();
+        let mut members = observed_members(&state.members);
+        append_unobserved_roster_members(&mut members, &state.members, roster);
         members.sort_by(|left, right| {
             left.team
                 .as_str()
@@ -412,6 +388,51 @@ impl RuntimeHealth {
         self.inner
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+fn observed_members(records: &HashMap<MemberKey, MemberRecord>) -> Vec<RuntimeMemberObservation> {
+    records
+        .iter()
+        .map(|(key, record)| RuntimeMemberObservation {
+            team: key.team.clone(),
+            member: key.agent.clone(),
+            state: record.state,
+            session_id: record.session_id.clone(),
+            pid: record.pid,
+            last_active_at: record.last_active_at,
+            state_changed_by: Some(record.state_source),
+            state_changed_at: record.state_changed_at,
+            session_changed_by: record
+                .session_changed_at
+                .map(|_| RuntimeObservationSource::Heartbeat),
+            session_changed_at: record.session_changed_at,
+        })
+        .collect()
+}
+
+fn append_unobserved_roster_members(
+    members: &mut Vec<RuntimeMemberObservation>,
+    records: &HashMap<MemberKey, MemberRecord>,
+    roster: &[MemberKey],
+) {
+    let mut known_members: HashSet<_> = records.keys().cloned().collect();
+    for key in roster {
+        if members.len() == MAX_RUNTIME_STATUS_MEMBERS || !known_members.insert(key.clone()) {
+            continue;
+        }
+        members.push(RuntimeMemberObservation {
+            team: key.team.clone(),
+            member: key.agent.clone(),
+            state: RuntimeMemberState::Unknown,
+            session_id: None,
+            pid: None,
+            last_active_at: None,
+            state_changed_by: None,
+            state_changed_at: None,
+            session_changed_by: None,
+            session_changed_at: None,
+        });
     }
 }
 
@@ -521,7 +542,7 @@ mod tests {
             ),
         ];
 
-        let snapshot = health.snapshot_with_roster(&roster);
+        let snapshot = health.snapshot_with_member_keys(&roster);
 
         assert_eq!(snapshot.members.len(), 2);
         assert_eq!(snapshot.member_counts.unknown_members, 2);
