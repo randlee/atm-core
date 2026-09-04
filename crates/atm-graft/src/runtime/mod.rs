@@ -165,24 +165,47 @@ impl Drop for HelperThreadPermit {
     }
 }
 
+/// One-shot startup handshake between a session owner and its receive loop.
+///
+/// The latch deliberately does **not** retain a sender of its own:
+/// [`Self::notifier`] moves the only [`SyncSender`] to the receive-loop
+/// thread. A worker that fails before signaling readiness therefore drops the
+/// last sender and is observed as a disconnect immediately, instead of being
+/// masked by a full `timeout` wait that reports a bare, causeless timeout
+/// (the shape reported as RRG-HERMES-FLEET-NUDGE-001).
 pub(crate) struct ReceiverReadyLatch {
-    ready_tx: SyncSender<()>,
+    ready_tx: Option<SyncSender<()>>,
     ready_rx: Receiver<()>,
 }
 
 impl ReceiverReadyLatch {
     pub(crate) fn new() -> Self {
         let (ready_tx, ready_rx) = mpsc::sync_channel(1);
-        Self { ready_tx, ready_rx }
+        Self {
+            ready_tx: Some(ready_tx),
+            ready_rx,
+        }
     }
 
-    pub(crate) fn notifier(&self) -> SyncSender<()> {
-        self.ready_tx.clone()
+    /// Hands the receive loop the latch's only readiness sender.
+    ///
+    /// # Panics
+    ///
+    /// Panics when called more than once for one latch; each latch arms
+    /// exactly one receive loop.
+    pub(crate) fn notifier(&mut self) -> SyncSender<()> {
+        self.ready_tx
+            .take()
+            .expect("a graft receiver readiness latch arms exactly one receive loop")
     }
 
     #[cfg(test)]
     pub(crate) fn signal_listening(&self) -> Result<(), AtmError> {
-        signal_ready_sender(&self.ready_tx)
+        signal_ready_sender(
+            self.ready_tx
+                .as_ref()
+                .expect("readiness notifier was already handed to a receive loop"),
+        )
     }
 
     pub(crate) fn wait_until_listening(
@@ -194,13 +217,13 @@ impl ReceiverReadyLatch {
             Err(RecvTimeoutError::Timeout) => Err(AtmError::new(
                 AtmErrorCode::WaitTimeout,
                 format!(
-                    "graft receiver readiness was not signaled within {:?}",
-                    timeout
+                    "graft receiver readiness was not signaled within {timeout:?}; the receive \
+                     loop is still running and has not bound its loopback endpoint"
                 ),
             )),
             Err(RecvTimeoutError::Disconnected) => Err(AtmError::new(
                 AtmErrorCode::InternalError,
-                "graft receiver readiness latch disconnected before signaling startup",
+                "graft receive loop exited before signaling readiness",
             )),
         }
     }
@@ -987,7 +1010,7 @@ mod tests {
         client: Option<GraftClient>,
     ) -> SpawnedReceiver {
         let (stop_tx, stop_rx) = mpsc::channel();
-        let ready_latch = ReceiverReadyLatch::new();
+        let mut ready_latch = ReceiverReadyLatch::new();
         let (target_tx, target_rx) = mpsc::sync_channel(1);
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
             team: TeamName::from_validated(TEST_TEAM),
@@ -1050,6 +1073,32 @@ mod tests {
         latch
             .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
             .expect("wait");
+    }
+
+    #[test]
+    fn receiver_ready_latch_reports_a_worker_exit_without_burning_the_deadline() {
+        let mut latch = ReceiverReadyLatch::new();
+        // A receive loop that fails before signaling readiness drops its
+        // notifier. The latch must observe that immediately instead of
+        // waiting out `RECEIVE_LOOP_READY_DEADLINE` and reporting a bare,
+        // causeless timeout.
+        drop(latch.notifier());
+        let started = Instant::now();
+        let error = latch
+            .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
+            .expect_err("a dropped notifier must not be reported as readiness");
+        assert!(
+            started.elapsed() < RECEIVE_LOOP_READY_DEADLINE,
+            "worker exit must be observed before the readiness deadline"
+        );
+        assert_eq!(error.code(), AtmErrorCode::InternalError);
+        assert!(
+            error
+                .message()
+                .contains("exited before signaling readiness"),
+            "unexpected latch diagnostic: {}",
+            error.message()
+        );
     }
 
     #[test]
