@@ -15,15 +15,17 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-04T06:12:00Z"^^xsd:dateTime ;
   triage:foundIn triage:RRG-S1 ;
   triage:foundAt "2026-09-04T05:58:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-READ-DOCTOR-LANES-001/CAND-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-READ-DOCTOR-LANES-001/CAND-2> ;
-  triage:triageRecordVersion "2" ;
-  triage:qa10Note "QA-10 (quality-mgr, 2026-09-04): code fix for both occurrences verified by req-qa/arch-qa/ruthless-boundary-qa/rust-qa-agent at commit 56cfd142b (PR #1143 branch, arch-ctm). Both occurrences marked fixed below. Finding-level status intentionally left 'open': per fenix's QA-10 dispatch, closure of this finding requires the atmbench read-campaign benchmark-read evidence (tracked separately, PR #1150), not just the code fix." .
+  triage:triageRecordVersion "3" ;
+  triage:qa10Note "QA-10 (quality-mgr, 2026-09-04): code fix for both occurrences verified by req-qa/arch-qa/ruthless-boundary-qa/rust-qa-agent at commit 56cfd142b (PR #1143 branch, arch-ctm). Both occurrences marked fixed below. Finding-level status intentionally left 'open': per fenix's QA-10 dispatch, closure of this finding requires the atmbench read-campaign benchmark-read evidence (tracked separately, PR #1150), not just the code fix." ;
+  triage:closureNote "quality-mgr closure (2026-09-04, qa-readiness-read-evidence-r11): official read campaign 20260904T065446Z-rand-m5.local-read landed on PR #1150 (commit ceda87608a), executed against 1.4.13 content merged to develop (5ca0fedce, includes the 56cfd142b doctor-lanes fix). Doctor report published effective reader_lanes end to end (mailbox pool_size 4/queue_depth 16, search pool_size 2/queue_depth 8) and the benchmark preflight accepted it — all three families (read-fanout, query-fts, read-under-write-load) status PASS, success_rate 1.0, observed p50 throughput well above the current floors (798.8 vs 754.8; 799.1 vs 753.1; 790.7 vs 739.2). Independently re-verified the raw campaign JSON directly (not just arch-ctm's summary) before closing. Finding-level status flipped to fixed/closed: both the code fix and the required read-campaign evidence are now in hand." .
 
 <urn:atm:triage:occurrence/RRG-READ-DOCTOR-LANES-001/CAND-1>
   a triage:Occurrence ;
