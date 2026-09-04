@@ -1199,6 +1199,45 @@ mod tests {
         }
     }
 
+    /// The shared state one `invalidate`-versus-`load` race is run against: a
+    /// cache holding no snapshot yet, and durable state that starts at a
+    /// registered lease and is unregistered mid-race.
+    struct LeaseRaceFixture {
+        cache: Arc<GraftReceiverLeaseCache>,
+        team: TeamName,
+        agent: AgentName,
+        lease: atm_storage::GraftReceiverLease,
+        durable_lease: Arc<std::sync::Mutex<Option<atm_storage::GraftReceiverLease>>>,
+        durable_lookups: Arc<AtomicUsize>,
+    }
+
+    impl LeaseRaceFixture {
+        fn new() -> Self {
+            let lease = registered_lease();
+            Self {
+                cache: Arc::new(GraftReceiverLeaseCache::default()),
+                team: TeamName::from_validated("test-team"),
+                agent: AgentName::from_validated("recipient"),
+                durable_lease: Arc::new(std::sync::Mutex::new(Some(lease.clone()))),
+                durable_lookups: Arc::new(AtomicUsize::new(0)),
+                lease,
+            }
+        }
+
+        /// One counted read of durable receiver state, as a durable lookup
+        /// passed to [`GraftReceiverLeaseCache::load`] would perform.
+        fn durable_read(&self) -> Option<atm_storage::GraftReceiverLease> {
+            self.durable_lookups.fetch_add(1, Ordering::SeqCst);
+            self.durable_lease.lock().expect("durable lease").clone()
+        }
+
+        /// The receiver unregisters: durable state goes from a registered
+        /// lease to none.
+        fn unregister(&self) {
+            *self.durable_lease.lock().expect("durable lease") = None;
+        }
+    }
+
     /// One `invalidate`-versus-`load` race on a single key.
     ///
     /// # Panics
@@ -1208,15 +1247,16 @@ mod tests {
     /// raced is still running, or if any participant fails to make progress
     /// within [`WAIT_CEILING`].
     fn invalidate_a_lease_lookup_in_flight() {
-        let cache = Arc::new(GraftReceiverLeaseCache::default());
-        let team = TeamName::from_validated("test-team");
-        let agent = AgentName::from_validated("recipient");
-        let lease = registered_lease();
-        // The receiver unregisters while the lookup is in flight: durable
-        // state goes from a registered lease to none.
-        let durable_lease = Arc::new(std::sync::Mutex::new(Some(lease.clone())));
-        let durable_lookups = Arc::new(AtomicUsize::new(0));
-        let lookup_returned = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let fixture = LeaseRaceFixture::new();
+        race_invalidate_against_an_in_flight_lookup(&fixture);
+        assert_no_stale_lease_survives_the_invalidation(&fixture);
+    }
+
+    /// Drives the race itself: a durable lookup held in flight by a channel, a
+    /// same-key admission coalesced onto it, and an `invalidate` issued while
+    /// that lookup is provably still running.
+    fn race_invalidate_against_an_in_flight_lookup(fixture: &LeaseRaceFixture) {
+        let lookup_returned = std::sync::atomic::AtomicBool::new(false);
         let (lookup_started_tx, lookup_started_rx) = mpsc::sync_channel(1);
         let (release_lookup_tx, release_lookup_rx) = mpsc::sync_channel(0);
         let (invalidating_tx, invalidating_rx) = mpsc::sync_channel(1);
@@ -1224,23 +1264,18 @@ mod tests {
         let (invalidated_tx, invalidated_rx) = mpsc::sync_channel(1);
 
         std::thread::scope(|scope| {
-            let loader_cache = Arc::clone(&cache);
-            let loader_team = team.clone();
-            let loader_agent = agent.clone();
-            let loader_durable = Arc::clone(&durable_lease);
-            let loader_lookups = Arc::clone(&durable_lookups);
-            let loader_returned = Arc::clone(&lookup_returned);
+            let returned = &lookup_returned;
             let loader = scope.spawn(move || {
-                loader_cache
-                    .load(&loader_team, &loader_agent, || {
-                        loader_lookups.fetch_add(1, Ordering::SeqCst);
+                fixture
+                    .cache
+                    .load(&fixture.team, &fixture.agent, || {
                         // Reads durable state before the unregistration below
                         // and returns after it: exactly the ordering that
                         // would let a stale lease outlive the mutation.
-                        let lease = loader_durable.lock().expect("durable lease").clone();
+                        let lease = fixture.durable_read();
                         lookup_started_tx.send(()).expect("announce durable lookup");
                         release_lookup_rx.recv().expect("release durable lookup");
-                        loader_returned.store(true, Ordering::SeqCst);
+                        returned.store(true, Ordering::SeqCst);
                         Ok(lease)
                     })
                     .expect("in-flight lease lookup")
@@ -1251,33 +1286,23 @@ mod tests {
 
             // A second admission for the same receiver coalesces onto the
             // in-flight lookup instead of starting its own.
-            let waiter_cache = Arc::clone(&cache);
-            let waiter_team = team.clone();
-            let waiter_agent = agent.clone();
-            let waiter_durable = Arc::clone(&durable_lease);
-            let waiter_lookups = Arc::clone(&durable_lookups);
             scope.spawn(move || {
-                let result = waiter_cache.load(&waiter_team, &waiter_agent, || {
-                    waiter_lookups.fetch_add(1, Ordering::SeqCst);
-                    Ok(waiter_durable.lock().expect("durable lease").clone())
-                });
+                let result = fixture
+                    .cache
+                    .load(&fixture.team, &fixture.agent, || Ok(fixture.durable_read()));
                 waiter_done_tx
                     .send(result)
                     .expect("report coalesced waiter");
             });
 
-            *durable_lease.lock().expect("durable lease") = None;
-            let invalidator_cache = Arc::clone(&cache);
-            let invalidator_team = team.clone();
-            let invalidator_agent = agent.clone();
-            let invalidator_returned = Arc::clone(&lookup_returned);
+            fixture.unregister();
             scope.spawn(move || {
                 invalidating_tx.send(()).expect("announce invalidation");
-                invalidator_cache.invalidate(&invalidator_team, &invalidator_agent);
+                fixture.cache.invalidate(&fixture.team, &fixture.agent);
                 // Observed inside the racing thread: returning here while the
                 // raced lookup is still running would let its older value be
                 // cached after the mutation completed.
-                let observed = invalidator_returned.load(Ordering::SeqCst);
+                let observed = returned.load(Ordering::SeqCst);
                 invalidated_tx.send(observed).expect("report invalidation");
             });
             invalidating_rx
@@ -1285,44 +1310,56 @@ mod tests {
                 .expect("the invalidation thread reached the cache");
 
             release_lookup_tx.send(()).expect("release durable lookup");
-            assert_eq!(
-                loader.join().expect("loader thread"),
-                Some(lease.clone()),
-                "the in-flight lookup returns the state it read, not a torn value"
-            );
-            assert!(
-                invalidated_rx
-                    .recv_timeout(WAIT_CEILING)
-                    .expect("invalidation must not deadlock behind the in-flight lookup"),
-                "invalidate must not return while the lookup it raced is still running, or \
-                 a lookup that began before the receiver mutation could be cached after it"
-            );
-
-            let waited = waiter_done_rx
-                .recv_timeout(WAIT_CEILING)
-                .expect("a coalesced waiter must not deadlock behind the invalidation")
-                .expect("coalesced waiter lookup");
-            assert!(
-                waited.is_none() || waited == Some(lease.clone()),
-                "a coalesced waiter is served one of the two durable states, never a \
-                 synthesized one"
-            );
+            assert_race_participants_agree(fixture, loader, &invalidated_rx, &waiter_done_rx);
         });
+    }
 
-        // The invalidation has completed. Well inside the snapshot TTL, the
-        // next admission must still observe post-invalidation durable state.
-        let after_invalidation = cache
-            .load(&team, &agent, || {
-                durable_lookups.fetch_add(1, Ordering::SeqCst);
-                Ok(durable_lease.lock().expect("durable lease").clone())
-            })
+    /// The invariants every interleaving of the race must satisfy.
+    fn assert_race_participants_agree(
+        fixture: &LeaseRaceFixture,
+        loader: std::thread::ScopedJoinHandle<'_, Option<atm_storage::GraftReceiverLease>>,
+        invalidated_rx: &mpsc::Receiver<bool>,
+        waiter_done_rx: &mpsc::Receiver<
+            Result<Option<atm_storage::GraftReceiverLease>, crate::service_runtime::AtmError>,
+        >,
+    ) {
+        assert_eq!(
+            loader.join().expect("loader thread"),
+            Some(fixture.lease.clone()),
+            "the in-flight lookup returns the state it read, not a torn value"
+        );
+        assert!(
+            invalidated_rx
+                .recv_timeout(WAIT_CEILING)
+                .expect("invalidation must not deadlock behind the in-flight lookup"),
+            "invalidate must not return while the lookup it raced is still running, or \
+             a lookup that began before the receiver mutation could be cached after it"
+        );
+
+        let waited = waiter_done_rx
+            .recv_timeout(WAIT_CEILING)
+            .expect("a coalesced waiter must not deadlock behind the invalidation")
+            .expect("coalesced waiter lookup");
+        assert!(
+            waited.is_none() || waited == Some(fixture.lease.clone()),
+            "a coalesced waiter is served one of the two durable states, never a \
+             synthesized one"
+        );
+    }
+
+    /// The invalidation has completed. Well inside the snapshot TTL, the next
+    /// admission must still observe post-invalidation durable state.
+    fn assert_no_stale_lease_survives_the_invalidation(fixture: &LeaseRaceFixture) {
+        let after_invalidation = fixture
+            .cache
+            .load(&fixture.team, &fixture.agent, || Ok(fixture.durable_read()))
             .expect("lookup after invalidation");
         assert_eq!(
             after_invalidation, None,
             "no load after a completed invalidation may be served the pre-invalidation lease"
         );
         assert!(
-            durable_lookups.load(Ordering::SeqCst) >= 2,
+            fixture.durable_lookups.load(Ordering::SeqCst) >= 2,
             "an invalidation that raced an in-flight lookup must still force a fresh \
              durable read rather than retaining the raced snapshot"
         );
