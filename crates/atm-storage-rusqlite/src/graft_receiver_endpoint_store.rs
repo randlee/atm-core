@@ -389,6 +389,16 @@ mod tests {
         );
     }
 
+    #[test]
+    fn refresh_of_absent_lease_is_distinct_from_foreign_owner() {
+        let store = store();
+        let (team, agent) = names();
+        assert_eq!(
+            store.refresh(&team, &agent, &generation(GENERATION_ONE), timestamp(10)),
+            Err(GraftEndpointStoreError::Absent)
+        );
+    }
+
     // Truth table for `unregister` (QA-1 finding #1): the caller's
     // owner_generation is checked against the stored lease before any row is
     // touched. Matching generation removes the row; a foreign generation
