@@ -103,9 +103,18 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
             })
             .map_err(storage_error)?;
         if changed == 0 {
-            let present: bool = self.db.with_connection(|connection| {
-                connection.query_row("SELECT EXISTS(SELECT 1 FROM graft_receiver_endpoints WHERE team = ?1 AND agent = ?2)", params![team.as_str(), agent.as_str()], |row| row.get(0))
-            }).map_err(storage_error)?;
+            let present: bool = self
+                .db
+                .with_connection(|connection| {
+                    connection
+                        .query_row(
+                            "SELECT EXISTS(SELECT 1 FROM graft_receiver_endpoints WHERE team = ?1 AND agent = ?2)",
+                            params![team.as_str(), agent.as_str()],
+                            |row| row.get(0),
+                        )
+                        .map_err(|error| self.db.error("failed to inspect graft receiver lease", error))
+                })
+                .map_err(storage_error)?;
             return Err(if present {
                 GraftEndpointStoreError::NotOwner
             } else {
