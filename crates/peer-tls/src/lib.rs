@@ -120,10 +120,8 @@ impl MtlsPeerStreamAdapter {
         store: &(dyn PeerConfigStore + Send + Sync),
         policy: LegacyLiteralIpPolicy,
     ) -> Result<Self, AtmError> {
-        let has_enabled_interface = store
-            .list_interfaces()?
-            .into_iter()
-            .any(|interface| interface.enabled);
+        let interfaces = store.list_interfaces()?;
+        let has_enabled_interface = interfaces.iter().any(|interface| interface.enabled);
         if !has_enabled_interface {
             return Err(AtmError::peer_config_validation(
                 "mTLS requires one enabled peer interface",
@@ -137,6 +135,13 @@ impl MtlsPeerStreamAdapter {
                 .with_cause(error.detail())
         })?;
         let trusted_peers = Self::admit_trusted_peers(store.list_trusted_peers()?, policy)?;
+        for (host, port) in loopback_port_collisions(&trusted_peers, &interfaces) {
+            tracing::warn!(
+                host = %host,
+                port = port.get(),
+                "enabled loopback trusted peer collides with a local HTTPS interface"
+            );
+        }
         install_tls_provider();
         let client_configs = trusted_peers
             .iter()
@@ -555,12 +560,16 @@ mod tests {
         }
     }
 
-    fn interface() -> HttpsInterface {
+    fn interface_with_port(port: u16) -> HttpsInterface {
         HttpsInterface {
-            bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+            bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port),
             advertise_host: "localhost".parse().expect("host"),
             enabled: true,
         }
+    }
+
+    fn interface() -> HttpsInterface {
+        interface_with_port(0)
     }
 
     fn peer(certificate: &LocalCertificate, enabled: bool) -> TrustedPeer {
@@ -568,12 +577,60 @@ mod tests {
     }
 
     fn peer_with_host(certificate: &LocalCertificate, host: &str, enabled: bool) -> TrustedPeer {
+        peer_with_port(
+            certificate,
+            host,
+            enabled,
+            NonZeroU16::new(443).expect("port"),
+        )
+    }
+
+    fn peer_with_port(
+        certificate: &LocalCertificate,
+        host: &str,
+        enabled: bool,
+        https_port: NonZeroU16,
+    ) -> TrustedPeer {
         TrustedPeer {
             host: host.parse().expect("host"),
             fingerprint: certificate.fingerprint.clone(),
             enabled,
-            https_port: NonZeroU16::new(443).expect("port"),
+            https_port,
         }
+    }
+
+    #[test]
+    fn loopback_port_collisions_returns_only_enabled_local_matches() {
+        let directory = tempfile::tempdir().expect("directory");
+        let certificate = identity(&directory, "peer");
+        let colliding = peer_with_port(
+            &certificate,
+            "localhost",
+            true,
+            NonZeroU16::new(43101).expect("port"),
+        );
+        let non_colliding = peer_with_port(
+            &certificate,
+            "localhost",
+            true,
+            NonZeroU16::new(43102).expect("port"),
+        );
+        let remote = peer_with_port(
+            &certificate,
+            "rand-m5.local",
+            true,
+            NonZeroU16::new(43101).expect("port"),
+        );
+        assert_eq!(
+            loopback_port_collisions(
+                &[colliding, non_colliding, remote],
+                &[interface_with_port(43101)],
+            ),
+            vec![(
+                "localhost".parse().expect("host"),
+                NonZeroU16::new(43101).unwrap()
+            )]
+        );
     }
 
     #[tokio::test]
@@ -587,16 +644,21 @@ mod tests {
             peers: vec![peer(&client_identity, true)],
         })
         .expect("server adapter");
-        let client = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
-            interfaces: vec![interface()],
-            certificate: Some(client_identity),
-            peers: vec![peer(&server_identity, true)],
-        })
-        .expect("client adapter");
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind");
         let address = listener.local_addr().expect("address");
+        let client = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
+            interfaces: vec![interface()],
+            certificate: Some(client_identity),
+            peers: vec![peer_with_port(
+                &server_identity,
+                "localhost",
+                true,
+                NonZeroU16::new(address.port()).expect("listener port"),
+            )],
+        })
+        .expect("client adapter");
         let server_task = tokio::spawn(async move {
             let (tcp, _) = listener.accept().await.expect("accept tcp");
             let (mut tls, peer) = server.accept_with_peer(tcp).await.expect("accept tls");
@@ -702,6 +764,43 @@ mod tests {
     }
 
     #[test]
+    fn rrg_trust_key_loopback_001_client_config_requires_exact_authority_port() {
+        let directory = tempfile::tempdir().expect("directory");
+        let local_certificate = identity(&directory, "local");
+        let foreign_certificate = identity(&directory, "foreign");
+        let real_certificate = identity(&directory, "real");
+        let adapter = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
+            interfaces: vec![interface()],
+            certificate: Some(local_certificate),
+            peers: vec![
+                peer_with_port(
+                    &foreign_certificate,
+                    "localhost",
+                    true,
+                    NonZeroU16::new(43102).expect("port"),
+                ),
+                peer_with_port(
+                    &real_certificate,
+                    "rand-m5.local",
+                    true,
+                    NonZeroU16::new(43101).expect("port"),
+                ),
+            ],
+        })
+        .expect("adapter");
+        let localhost: HostName = "localhost".parse().expect("host");
+        let error = adapter
+            .client_config_for(&localhost, NonZeroU16::new(43101).expect("port"))
+            .expect_err("a different localhost port must not select the foreign pin");
+        assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
+        assert!(
+            adapter
+                .client_config_for(&localhost, NonZeroU16::new(43102).expect("port"))
+                .is_ok()
+        );
+    }
+
+    #[test]
     fn bad_key_is_rejected_as_a_non_secret_certificate_error() {
         let directory = tempfile::tempdir().expect("directory");
         let identity = identity(&directory, "local");
@@ -763,18 +862,19 @@ mod tests {
             peers: vec![peer(&client_identity, true)],
         })
         .expect("server adapter");
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let address = listener.local_addr().expect("address");
         let mut wrong_pin = peer(&server_identity, true);
         wrong_pin.fingerprint = CertificateFingerprint::try_from("00".repeat(32)).expect("pin");
+        wrong_pin.https_port = NonZeroU16::new(address.port()).expect("listener port");
         let client = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
             interfaces: vec![interface()],
             certificate: Some(client_identity),
             peers: vec![wrong_pin],
         })
         .expect("client adapter");
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind");
-        let address = listener.local_addr().expect("address");
         let server_task = tokio::spawn(async move {
             let (tcp, _) = listener.accept().await.expect("accept tcp");
             server.accept(tcp).await
@@ -805,16 +905,21 @@ mod tests {
             peers: vec![peer(&untrusted_identity, true)],
         })
         .expect("server adapter");
-        let client = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
-            interfaces: vec![interface()],
-            certificate: Some(client_identity),
-            peers: vec![peer(&server_identity, true)],
-        })
-        .expect("client adapter");
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind");
         let address = listener.local_addr().expect("address");
+        let client = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
+            interfaces: vec![interface()],
+            certificate: Some(client_identity),
+            peers: vec![peer_with_port(
+                &server_identity,
+                "localhost",
+                true,
+                NonZeroU16::new(address.port()).expect("listener port"),
+            )],
+        })
+        .expect("client adapter");
         let server_task = tokio::spawn(async move {
             let (tcp, _) = listener.accept().await.expect("accept tcp");
             server.accept(tcp).await

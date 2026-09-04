@@ -274,10 +274,10 @@ impl RegisteredGraftReceiver {
             && error.code() == AtmErrorCode::GraftReceiverNotOwner
         {
             self.displaced = true;
-        } else if let Err(error) = &result {
-            if error.code() == AtmErrorCode::GraftReceiverNotRegistered {
-                self.announced = false;
-            }
+        } else if let Err(error) = &result
+            && error.code() == AtmErrorCode::GraftReceiverNotRegistered
+        {
+            self.announced = false;
         }
         result
     }
