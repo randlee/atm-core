@@ -22,29 +22,30 @@
   triage:foundAt "2026-09-04T05:58:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-READ-DOCTOR-LANES-001/CAND-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-READ-DOCTOR-LANES-001/CAND-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:qa10Note "QA-10 (quality-mgr, 2026-09-04): code fix for both occurrences verified by req-qa/arch-qa/ruthless-boundary-qa/rust-qa-agent at commit 56cfd142b (PR #1143 branch, arch-ctm). Both occurrences marked fixed below. Finding-level status intentionally left 'open': per fenix's QA-10 dispatch, closure of this finding requires the atmbench read-campaign benchmark-read evidence (tracked separately, PR #1150), not just the code fix." .
 
 <urn:atm:triage:occurrence/RRG-READ-DOCTOR-LANES-001/CAND-1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/doctor/report.rs" ;
   triage:line 292 ;
-  triage:snippet "pub daemon_context: Option<DoctorExecutionContext>," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "pub daemon_context: Option<DoctorExecutionContext>, -- fixed at 56cfd142b: DoctorReport gained reader_lanes: Option<ReaderLanesDoctorReport> at report.rs:309 (serde skip_serializing_if none), sourced end-to-end from the live SQLite factory's effective pool config (atm-storage-rusqlite -> atm-storage -> atm-runtime composition/doctor_projection -> atm-daemon-bootstrap replacement_handler -> atm-core doctor report), verified by all four QA-10 reviewers (rust-qa-agent mutation-falsified the wiring by nulling reader_lanes in doctor_projection.rs and confirming the new test fails)." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "chore/readiness-candidate-1.4.7" ;
-  triage:headSha "110d4d9ad" ;
-  triage:occursIn <urn:atm:triage:worktree/CAND/110d4d9ad> .
+  triage:headSha "56cfd142b" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/56cfd142b-doctor-lanes> .
 
 <urn:atm:triage:occurrence/RRG-READ-DOCTOR-LANES-001/CAND-2>
   a triage:Occurrence ;
   triage:file "scripts/smoke/read_benchmark.py" ;
   triage:line 283 ;
-  triage:snippet "raw = payload.get(\"reader_lanes\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "raw = payload.get(\"reader_lanes\") -- fixed at 56cfd142b: the doctor JSON now emits the top-level reader_lanes key this parser expects; _parse_effective_lane_settings correctly fails closed (ReadBenchmarkError) when the key is absent, verified directly in code by req-qa (ATM-QA-101 minor follow-up filed only for a missing negative-path unit test pinning that fail-closed branch, non-blocking, routed to arch-ctm)." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "chore/readiness-candidate-1.4.7" ;
-  triage:headSha "110d4d9ad" ;
-  triage:occursIn <urn:atm:triage:worktree/CAND/110d4d9ad> .
+  triage:headSha "56cfd142b" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/56cfd142b-doctor-lanes> .
 
 <urn:atm:triage:worktree/CAND/110d4d9ad>
   a triage:WorktreeSnapshot ;
@@ -52,3 +53,10 @@
   triage:branch "chore/readiness-candidate-1.4.7" ;
   triage:headSha "110d4d9ad" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/CAND/56cfd142b-doctor-lanes>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "56cfd142b" ;
+  triage:orderIndex 2 .
