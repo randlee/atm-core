@@ -15,13 +15,16 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-04T05:52:00Z"^^xsd:dateTime ;
   triage:foundIn triage:RRG-S1 ;
   triage:foundAt "2026-09-04T05:47:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-SMOKE-RG-DEP-001/CAND-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-SMOKE-RG-DEP-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-09-04T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RRG-SMOKE-RG-DEP-001/CAND-1>
   a triage:Occurrence ;
@@ -40,3 +43,21 @@
   triage:branch "chore/readiness-candidate-1.4.7" ;
   triage:headSha "4f1202bf2" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/RRG-SMOKE-RG-DEP-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/source_pattern.py" ;
+  triage:line 1 ;
+  triage:snippet "QA-8: fixed at 6b8fe580f via stdlib-only source_pattern.py matcher preserving rg -n exit-code semantics (0 match/1 no-match/2 unreadable); independently confirmed closed by req-qa, arch-qa, and ruthless-boundary-qa via whole-workspace sweep of scripts/smoke/*.py, zero remaining rg shellouts; regression guard test_smoke_rows_no_longer_shell_out_to_ripgrep added" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "110d4d9ad" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/110d4d9ad-smokergdep> .
+
+<urn:atm:triage:worktree/CAND/110d4d9ad-smokergdep>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "110d4d9ad" ;
+  triage:orderIndex 2 .

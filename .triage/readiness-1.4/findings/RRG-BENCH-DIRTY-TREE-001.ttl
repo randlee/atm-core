@@ -15,13 +15,16 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-04T05:52:00Z"^^xsd:dateTime ;
   triage:foundIn triage:RRG-S1 ;
   triage:foundAt "2026-09-04T05:47:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-DIRTY-TREE-001/CAND-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-DIRTY-TREE-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-09-04T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RRG-BENCH-DIRTY-TREE-001/CAND-1>
   a triage:Occurrence ;
@@ -40,3 +43,21 @@
   triage:branch "chore/readiness-candidate-1.4.7" ;
   triage:headSha "4f1202bf2" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/RRG-BENCH-DIRTY-TREE-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_official.py" ;
+  triage:line 259 ;
+  triage:snippet "QA-8: fixed at 6b8fe580f via classify_dirty_lines/dirty_tree_detail (benchmark_official.py:259-304): names every porcelain path, splits retained site/reports/ untracked evidence from real source changes, suggests (never executes) commit for evidence paths, never suggests deletion; independently confirmed closed by req-qa, arch-qa, and ruthless-boundary-qa, including a tracked-modification-under-site/reports bypass check" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "110d4d9ad" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/110d4d9ad-benchdirty> .
+
+<urn:atm:triage:worktree/CAND/110d4d9ad-benchdirty>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "110d4d9ad" ;
+  triage:orderIndex 2 .
