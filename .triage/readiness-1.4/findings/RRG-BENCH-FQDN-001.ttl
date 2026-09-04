@@ -15,14 +15,17 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-03T18:58:00Z"^^xsd:dateTime ;
   triage:foundIn triage:RRG-S1 ;
   triage:foundAt "2026-09-03T18:36:28Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-FQDN-001/CAND-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-FQDN-001/CAND-2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-FQDN-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-09-03T22:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/RRG-BENCH-FQDN-001/CAND-1>
   a triage:Occurrence ;
@@ -52,3 +55,21 @@
   triage:branch "chore/readiness-candidate-1.4.7" ;
   triage:headSha "2e3c93a7c" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/RRG-BENCH-FQDN-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1213 ;
+  triage:snippet "quality-mgr QA-4b independent re-verification confirmed fixed at 50e8614f9: over-length/.arpa getfqdn() result rejected with actionable error, rand-m5.local used as explicit host" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "d1e148a6b" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/d1e148a6b> .
+
+<urn:atm:triage:worktree/CAND/d1e148a6b>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "d1e148a6b" ;
+  triage:orderIndex 2 .
