@@ -286,6 +286,10 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn('PATH=\\"$PATH:/opt/homebrew/bin\\" python3.14', justfile)
         self.assertNotIn("PATH=/opt/homebrew/bin:$PATH python3.14", justfile)
 
+    def test_windows_seed_python_selects_the_pinned_major_minor(self) -> None:
+        justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
+        self.assertIn('if os_family() == "windows" { "py -3.14" }', justfile)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,256 @@
+{
+  "campaign_id": "20260904T152523Z-windows-x64-01",
+  "completed_at": "2026-09-04T15:27:00.094199Z",
+  "host_label": "windows-x64-01",
+  "os": "windows",
+  "phase": "ao2",
+  "results": [
+    {
+      "baseline": {
+        "p50_floor": 16035.345045815106,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "8991b7d0522786d597ad99d0ed974c99d07334c36e4994464810f8f33af950eb",
+        "atm-daemon": "57fb6a879239d7777be24d32d24a5cbf44c7de952ae7f1ec43be2dd461fe6f3d"
+      },
+      "campaign_id": "20260904T152523Z-windows-x64-01",
+      "direct_sqlite_message_write": {
+        "accepted_count": 493000,
+        "admissions_per_second": 24617.936122917345,
+        "elapsed_seconds": 20.0260492,
+        "kind": "async_storage_admission",
+        "requested_count": 493000,
+        "worker_count": 512
+      },
+      "durability_after_restart": {
+        "expected_accepted_count": 493000,
+        "method": "isolated_sqlite_exact_count_after_restart",
+        "observed_mailbox_count": 493000,
+        "passed": true
+      },
+      "frames_per_connection": 0,
+      "generated_at": "2026-09-04T15:25:44.184195Z",
+      "host_label": "windows-x64-01",
+      "incomplete_reason": null,
+      "messages_admitted": 493000,
+      "messages_durable": 493000,
+      "messages_requested": 493000,
+      "metrics": {
+        "accepted_count": 493000,
+        "admissions_per_second": {
+          "max": 31721.05770694818,
+          "min": 5627.272011074471,
+          "p50": 26976.646317283128,
+          "p95": 30358.687897509073,
+          "p99": 31083.79881322056
+        },
+        "application_wire_bytes": null,
+        "application_wire_bytes_per_second": null,
+        "connection_count": null,
+        "connections_per_second": null,
+        "first_failure": null,
+        "interval_count": 493,
+        "interval_latency_ms": {
+          "max": 0.0,
+          "min": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "passed_interval_count": 493,
+        "request_frames_per_second": null,
+        "requested_count": 493000,
+        "response_count": 493000,
+        "time_to_send_1k_s": {
+          "max": 0.177706,
+          "min": 0.0315248,
+          "p50": 0.0370691,
+          "p95": 0.0501609,
+          "p99": 0.0866413
+        }
+      },
+      "os": "windows",
+      "schema_version": 4,
+      "source_revision": "f39c2236477a891abf5c8b99f1611a9b453bc714",
+      "status": "PASS",
+      "target": "sqlite"
+    },
+    {
+      "baseline": {
+        "p50_floor": 8793.914612253,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "8991b7d0522786d597ad99d0ed974c99d07334c36e4994464810f8f33af950eb",
+        "atm-daemon": "57fb6a879239d7777be24d32d24a5cbf44c7de952ae7f1ec43be2dd461fe6f3d"
+      },
+      "campaign_id": "20260904T152523Z-windows-x64-01",
+      "direct_sqlite_message_write": null,
+      "durability_after_restart": {
+        "expected_accepted_count": 154000,
+        "method": "isolated_sqlite_exact_count_after_restart",
+        "observed_mailbox_count": 154000,
+        "passed": true
+      },
+      "frames_per_connection": 8,
+      "generated_at": "2026-09-04T15:26:08.824506Z",
+      "host_label": "windows-x64-01",
+      "incomplete_reason": null,
+      "messages_admitted": 154000,
+      "messages_durable": 154000,
+      "messages_requested": 154000,
+      "metrics": {
+        "accepted_count": 154000,
+        "admissions_per_second": {
+          "max": 10432.739599860946,
+          "min": 5645.453127681611,
+          "p50": 7564.123162565458,
+          "p95": 9490.151119091119,
+          "p99": 10120.986262580594
+        },
+        "application_wire_bytes": {
+          "request": 122684640,
+          "response": 63394640,
+          "total": 186079280
+        },
+        "application_wire_bytes_per_second": {
+          "max": 12579275.772532336,
+          "min": 6829586.921212829,
+          "p50": 9143130.91182633,
+          "p95": 11444737.319180781,
+          "p99": 12203379.186106551
+        },
+        "connection_count": 19250,
+        "connections_per_second": {
+          "max": 1304.0924499826183,
+          "min": 705.6816409602013,
+          "p50": 945.5153953206823,
+          "p95": 1186.2688898863898,
+          "p99": 1265.1232828225743
+        },
+        "first_failure": null,
+        "interval_count": 154,
+        "interval_latency_ms": {
+          "max": 159.27869989536703,
+          "min": 1.9133000168949366,
+          "p50": 57.55485006375238,
+          "p95": 124.29790012538433,
+          "p99": 145.6946001853794
+        },
+        "passed_interval_count": 154,
+        "request_frames_per_second": {
+          "max": 10432.739599860946,
+          "min": 5645.453127681611,
+          "p50": 7564.123162565458,
+          "p95": 9490.151119091119,
+          "p99": 10120.986262580594
+        },
+        "requested_count": 154000,
+        "response_count": 154000,
+        "time_to_send_1k_s": {
+          "max": 0.17713369987905025,
+          "min": 0.09585210005752742,
+          "p50": 0.13220305007416755,
+          "p95": 0.15124940010719,
+          "p99": 0.16294860001653433
+        }
+      },
+      "os": "windows",
+      "schema_version": 4,
+      "source_revision": "f39c2236477a891abf5c8b99f1611a9b453bc714",
+      "status": "FAIL",
+      "target": "tcp"
+    },
+    {
+      "baseline": {
+        "p50_floor": 6891.680319866575,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "8991b7d0522786d597ad99d0ed974c99d07334c36e4994464810f8f33af950eb",
+        "atm-daemon": "57fb6a879239d7777be24d32d24a5cbf44c7de952ae7f1ec43be2dd461fe6f3d"
+      },
+      "campaign_id": "20260904T152523Z-windows-x64-01",
+      "direct_sqlite_message_write": null,
+      "durability_after_restart": {
+        "expected_accepted_count": 139000,
+        "method": "isolated_sqlite_exact_count_after_restart",
+        "observed_mailbox_count": 139000,
+        "passed": true
+      },
+      "frames_per_connection": 8,
+      "generated_at": "2026-09-04T15:26:34.301058Z",
+      "host_label": "windows-x64-01",
+      "incomplete_reason": null,
+      "messages_admitted": 139000,
+      "messages_durable": 139000,
+      "messages_requested": 139000,
+      "metrics": {
+        "accepted_count": 139000,
+        "admissions_per_second": {
+          "max": 9562.871568955548,
+          "min": 767.2802248176689,
+          "p50": 7381.778966109825,
+          "p95": 9026.59054796292,
+          "p99": 9471.903498145048
+        },
+        "application_wire_bytes": {
+          "request": 114755015,
+          "response": 57209015,
+          "total": 171964030
+        },
+        "application_wire_bytes_per_second": {
+          "max": 11807755.669767862,
+          "min": 950468.3784928874,
+          "p50": 9131775.48432573,
+          "p95": 11163635.860193143,
+          "p99": 11695432.844334597
+        },
+        "connection_count": 17375,
+        "connections_per_second": {
+          "max": 1195.3589461194435,
+          "min": 95.91002810220861,
+          "p50": 922.7223707637281,
+          "p95": 1128.323818495365,
+          "p99": 1183.987937268131
+        },
+        "first_failure": null,
+        "interval_count": 139,
+        "interval_latency_ms": {
+          "max": 1274.411000078544,
+          "min": 1.7226999625563622,
+          "p50": 48.42950007878244,
+          "p95": 116.43510009162128,
+          "p99": 208.9464000891894
+        },
+        "passed_interval_count": 139,
+        "request_frames_per_second": {
+          "max": 9562.871568955548,
+          "min": 767.2802248176689,
+          "p50": 7381.778966109825,
+          "p95": 9026.59054796292,
+          "p99": 9471.903498145048
+        },
+        "requested_count": 139000,
+        "response_count": 139000,
+        "time_to_send_1k_s": {
+          "max": 1.3033048000652343,
+          "min": 0.10457110009156168,
+          "p50": 0.1354686999693513,
+          "p95": 0.15653859986923635,
+          "p99": 0.22740580001845956
+        }
+      },
+      "os": "windows",
+      "schema_version": 4,
+      "source_revision": "f39c2236477a891abf5c8b99f1611a9b453bc714",
+      "status": "PASS",
+      "target": "tcp-tls"
+    }
+  ],
+  "schema_version": 4,
+  "source_revision": "f39c2236477a891abf5c8b99f1611a9b453bc714",
+  "started_at": "2026-09-04T15:25:23.739111Z",
+  "status": "FAIL"
+}
