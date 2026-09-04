@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline};
-use atm_core::boundary::MessageReceivedHookSelector;
+use atm_core::boundary::{MemberKey, MessageReceivedHookSelector};
 use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
@@ -606,20 +606,34 @@ impl StorageAndNudgeRouter {
         let runtime_health = self.runtime_health.clone();
         let bare_cli_queue_full_drops = self.bare_cli_queue_full_drops.clone();
         let daemon_context = self.daemon_context.clone();
-        let mut runtime_status = runtime_health.snapshot();
-        runtime_status.bare_cli_queue_full_drops_total =
+        let mut initial_runtime_status = runtime_health.snapshot();
+        initial_runtime_status.bare_cli_queue_full_drops_total =
             bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
         let mut report = doctor_projection
             .project(
                 query.with_daemon_paths(self.daemon_home.clone()),
                 DoctorProjectionContext {
-                    runtime_status: Some(runtime_status),
+                    runtime_status: Some(initial_runtime_status),
                     daemon_context,
                     handoff,
                 },
                 deadline,
             )
             .await?;
+        let roster = report.member_roster.as_ref().map(|roster| {
+            roster
+                .members
+                .iter()
+                .map(|member| MemberKey::new(roster.team.clone(), member.name.clone()))
+                .collect::<Vec<_>>()
+        });
+        let mut runtime_status = roster.as_deref().map_or_else(
+            || runtime_health.snapshot(),
+            |roster| runtime_health.snapshot_with_roster(roster),
+        );
+        runtime_status.bare_cli_queue_full_drops_total =
+            bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
+        report.runtime_status = Some(runtime_status);
         let runtime_status = report
             .runtime_status
             .as_ref()

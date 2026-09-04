@@ -6,7 +6,7 @@
 //! idle-transition notification. Durable pending-nudge state and the recovery
 //! sweep remain the correctness backstop.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use atm_core::boundary::MemberKey;
@@ -316,6 +316,14 @@ impl RuntimeHealth {
 
     #[must_use]
     pub fn snapshot(&self) -> RuntimeStatusSnapshot {
+        self.snapshot_with_roster(&[])
+    }
+
+    /// Return runtime observations merged with the durable roster. Members
+    /// without an observation are explicitly projected as unknown so an empty
+    /// observation set cannot look like an empty roster in doctor output.
+    #[must_use]
+    pub fn snapshot_with_roster(&self, roster: &[MemberKey]) -> RuntimeStatusSnapshot {
         let state = self.lock();
         let mut members: Vec<_> = state
             .members
@@ -335,6 +343,24 @@ impl RuntimeHealth {
                 session_changed_at: record.session_changed_at,
             })
             .collect();
+        let mut known_members: HashSet<_> = state.members.keys().cloned().collect();
+        for key in roster {
+            if members.len() == MAX_RUNTIME_STATUS_MEMBERS || !known_members.insert(key.clone()) {
+                continue;
+            }
+            members.push(RuntimeMemberObservation {
+                team: key.team.clone(),
+                member: key.agent.clone(),
+                state: RuntimeMemberState::Unknown,
+                session_id: None,
+                pid: None,
+                last_active_at: None,
+                state_changed_by: None,
+                state_changed_at: None,
+                session_changed_by: None,
+                session_changed_at: None,
+            });
+        }
         members.sort_by(|left, right| {
             left.team
                 .as_str()
@@ -478,6 +504,32 @@ mod tests {
         assert_eq!(
             member.session_changed_by,
             Some(RuntimeObservationSource::Heartbeat)
+        );
+    }
+
+    #[test]
+    fn rrg_doctor_members_zero_001_unobserved_roster_members_count_as_unknown() {
+        let health = RuntimeHealth::default();
+        let roster = vec![
+            MemberKey::new(
+                "runtime-team".parse().expect("team"),
+                "first-agent".parse().expect("agent"),
+            ),
+            MemberKey::new(
+                "runtime-team".parse().expect("team"),
+                "second-agent".parse().expect("agent"),
+            ),
+        ];
+
+        let snapshot = health.snapshot_with_roster(&roster);
+
+        assert_eq!(snapshot.members.len(), 2);
+        assert_eq!(snapshot.member_counts.unknown_members, 2);
+        assert!(
+            snapshot
+                .members
+                .iter()
+                .all(|member| member.state == RuntimeMemberState::Unknown)
         );
     }
 
