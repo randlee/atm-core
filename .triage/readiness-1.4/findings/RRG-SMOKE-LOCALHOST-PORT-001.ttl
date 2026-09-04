@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-SMOKE-LOCALHOST-PORT-001>
+  a triage:Finding ;
+  triage:findingId "RRG-SMOKE-LOCALHOST-PORT-001" ;
+  triage:title "run_feature_smoke.py hardcodes the direct-peer port 43101, so the localhost smoke stage cannot target an account-local fixture daemon and the RRG-TRUST-KEY-LOOPBACK-001 live legs cannot be executed without touching the host daemon" ;
+  triage:description "Release-readiness on prerelease/v1.4.13 (7e4302d98), atmbench@rand-m5.local, 2026-09-04T06:4xZ, arch-ctm under fenix@rand-m5 GO, executing RRG-TRUST-KEY-LOOPBACK-001 leg A against the approved isolated fixture (process-spawned account-local 1.4.13 daemon, direct-peer listener on port 43111 chosen to avoid the uid-501 host daemon on 43101, empty trust store): just smoke localhost passes all 10 doctor checks on 1.4.13 but all 10 send/read and ack-required checks FAIL closed at localhost:43101 with no enabled exact mTLS authority, because scripts/smoke/run_feature_smoke.py hardcodes 43101 for peer resolution (line 270, also line 280) and for the localhost doctor URLs (lines 376-377) and exposes no port override (the only ATM_SMOKE_* knobs are ATM_SMOKE_ATM, ATM_SMOKE_ADVERTISED_HOST, ATM_SMOKE_REMOTE_IDENTITY, ATM_SMOKE_REMOTE_TEAM). The smoke therefore never reaches the fixture and cannot prove legs A or B. arch-ctm correctly declined to bind 43101, alter the host daemon, or invent an override. Related product observation, not yet a separate record: the replacement runtime binds the direct-peer listener on 0.0.0.0 with the port taken only from the --direct-peer-port launch flag (crates/atm-http-runtime/src/lib.rs bind_configured_direct_peer_listener), ignoring the bind IP of the persisted peer interface and falling back silently to local listeners on bind failure; on rand-m5 the 0.0.0.0 bind also raises the macOS network permission dialog, which Rand has ruled out (no more daemon UI prompts), so any future fixture must be loopback-only. Consequence: the two loopback live legs of RRG-TRUST-KEY-LOOPBACK-001 remain unproven; the rand-m5 host daemon must stay at 1.4.10 with its trust store untouched (team-lead ruling 01M1NGH32YF05AM931QJDB77MN). Classification: harness gap, important; blocking only for the TRUST-KEY loopback legs. Candidate resolutions for quality-mgr ruling: (a) an explicit smoke port override (for example ATM_SMOKE_DIRECT_PEER_PORT) honoured at lines 270, 280 and 376-377, with a loopback-only fixture that is reachable without a non-loopback bind; (b) prove the legs by a different sanctioned path that does not need the host daemon. Do not patch the frozen legacy synchronous daemon." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "smoke-harness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-04T06:52:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-04T06:43:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-SMOKE-LOCALHOST-PORT-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-SMOKE-LOCALHOST-PORT-001/CAND-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RRG-SMOKE-LOCALHOST-PORT-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_feature_smoke.py" ;
+  triage:line 270 ;
+  triage:snippet "records = socket.getaddrinfo(host, 43101, type=socket.SOCK_STREAM)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "7517ab486" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/7517ab486> .
+
+<urn:atm:triage:occurrence/RRG-SMOKE-LOCALHOST-PORT-001/CAND-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_feature_smoke.py" ;
+  triage:line 376 ;
+  triage:snippet "local_url = f\"{scheme}://{local_authority}:43101/v1/atm/doctor\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "7517ab486" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/7517ab486> .
+
+<urn:atm:triage:worktree/CAND/7517ab486>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "7517ab486" ;
+  triage:orderIndex 1 .

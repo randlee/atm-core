@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-READ-RATCHET-STATE-001>
+  a triage:Finding ;
+  triage:findingId "RRG-READ-RATCHET-STATE-001" ;
+  triage:title "Official read/query campaigns fail closed on missing baselines.previous.json, which has never existed on any ref and cannot validly exist for a revision-1 baseline, so the read family has been unrunnable since AV.4 seeding" ;
+  triage:description "Release-readiness step 1 on prerelease/v1.4.13 (7e4302d98), atmbench@rand-m5.local, 2026-09-04T06:3xZ, arch-ctm under fenix@rand-m5 GO, after the RRG-READ-DOCTOR-LANES-001 fix: the doctor report now publishes reader_lanes (mailbox 4/16, search 2/8) and all three read diagnostics PASS above the revision-1 floors (query-fts about 802/s, read-under-write-load about 777/s, read-fanout PASS versus floors about 753 to 755/s). The official aggregation then fails closed with: official read campaign requires ratchet state at site/reports/read-query-benchmark/baselines.previous.json; missing baselines.previous.json is not a dormant ratchet. Facts: (1) scripts/smoke/read_benchmark.py line 848 derives previous_path next to BASELINES_PATH and line 849 calls load_previous_baselines for every non-diagnostic run, as mandated by docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md lines 144-149 (the runner must load baselines.previous.json for every official run and fail closed when missing). (2) The file has never existed on any ref (git log --all is empty for it); only baselines.json exists, ratified at revision 1 in c330637c2 (2026-08-31, three rand-m5.local seeding campaigns approved by quality-mgr). (3) Nothing ever writes it: engage_ratchet records an in-memory proposal only and the plan says changing the reviewed floor is a separate commit. (4) scripts/smoke/benchmark_schema.py require_non_decreasing_baselines line 190 demands previous.revision strictly less than current.revision, so for a revision-1 baselines.json no valid previous file can exist; a verbatim copy fails with baseline revision must increase. Consequence: every official read campaign since the seeding commit has been unrunnable on every host; the committed read evidence of 2026-08-31 predates the enforcing runner. The send family is unaffected (its runner has no previous-state requirement; official 1.4.12 send campaign 20260904T054952Z PASS). Classification: harness/process gap, blocking for official read evidence only; not a product defect and not fixable on the benchmark host. Candidate resolutions for quality-mgr ruling: (a) reviewed process commit on the candidate branch with no code change: baselines.previous.json equal to the current revision-1 file verbatim, baselines.json bumped to revision 2 with floors, provenance and source campaigns unchanged and a rationale line stating ratchet state seeded with floors unchanged; this preserves fail-closed semantics and never moves a floor. (b) harness change allowing a revision-1 baseline to run with an explicit recorded no-prior-revision seed state instead of failing closed. Ratchet state must never be synthesized from campaign output; floors never move down. Proof: just benchmark-read completes the official aggregation for all three families on atmbench with both baseline revisions recorded in the campaign artifact." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "benchmark-harness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-04T06:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-04T06:38:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-READ-RATCHET-STATE-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-READ-RATCHET-STATE-001/CAND-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RRG-READ-RATCHET-STATE-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/read_benchmark.py" ;
+  triage:line 849 ;
+  triage:snippet "previous = None if diagnostic_only else load_previous_baselines(previous_path)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "7517ab486" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/7517ab486> .
+
+<urn:atm:triage:occurrence/RRG-READ-RATCHET-STATE-001/CAND-2>
+  a triage:Occurrence ;
+  triage:file "site/reports/read-query-benchmark/baselines.json" ;
+  triage:line 3 ;
+  triage:snippet "\"revision\": 1," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "7517ab486" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/7517ab486> .
+
+<urn:atm:triage:worktree/CAND/7517ab486>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "7517ab486" ;
+  triage:orderIndex 1 .
