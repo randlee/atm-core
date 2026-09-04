@@ -572,14 +572,14 @@ THOROUGH_ROWS = [
                 "update_member_rejects_caller_",
             ],
             [
-                "rg",
-                "-n",
+                sys.executable,
+                "scripts/smoke/source_pattern.py",
                 r"fn build_member_add_roster_record\(request: &AddMemberRequest\) -> RosterEntry",
                 "crates/atm-core/src/team_admin/member_mutation.rs",
             ],
             [
-                "rg",
-                "-n",
+                sys.executable,
+                "scripts/smoke/source_pattern.py",
                 r"validate_update_member_caller\(",
                 "crates/atm-core/src/team_admin/member_mutation.rs",
             ],
@@ -669,8 +669,8 @@ THOROUGH_ROWS = [
         flow="CI exercises the replacement runtime without restoring the frozen daemon lane",
         commands=[
             [
-                "rg",
-                "-n",
+                sys.executable,
+                "scripts/smoke/source_pattern.py",
                 "Run replacement-workspace tests excluding legacy atm-daemon",
                 ".github/workflows/ci.yml",
             ],

@@ -562,8 +562,8 @@ NORMAL_ROWS = FAST_ROWS + [
         flow="CI exercises the replacement runtime without restoring the frozen daemon lane",
         commands=[
             [
-                "rg",
-                "-n",
+                sys.executable,
+                "scripts/smoke/source_pattern.py",
                 "Run replacement-workspace tests excluding legacy atm-daemon",
                 ".github/workflows/ci.yml",
             ],
