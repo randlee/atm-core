@@ -139,8 +139,11 @@ shape-only completion fails the sprint.
   machine in `crates/atm-storage/src/task_state.rs` per code contract
   C1; add the `TaskStore` trait, `DummyTaskStore`, `MessageWriteOrigin`
   and `DAEMON_ACTOR_NAME` in new `crates/atm-storage/src/task_store.rs`
-  per code contracts C2 and C6 (the `sealed` module in `contract.rs`
-  becomes `pub(crate)` so sibling modules can seal). `contract.rs` gains
+  per code contracts C2 and C6. The `sealed` module in `contract.rs`
+  (line 19) is already `pub` and reachable from a sibling module, so its
+  visibility does not change; external crates implement `Sealed` today
+  (`atm-storage-rusqlite/src/lib.rs` 374–375, `atm-storage-sqlserver-proof`)
+  and must keep compiling. `contract.rs` gains
   only `pub use crate::task_store::*` plus the two defaulted provenance
   methods, so every existing `atm_storage::contract::X` path keeps
   working and the daemon-runtime crates import through
