@@ -99,6 +99,7 @@ pub use client::{
     direct_peer_tcp_client, loopback_tcp_client, preferred_local_client, selected_write_transport,
     shared_direct_peer_client,
 };
+pub use diagnostics_route::{DEFAULT_DIAGNOSTICS_LIMIT, MAX_DIAGNOSTICS_LIMIT};
 pub use herdr_queue_wake::{
     HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
     HerdrQueueWakePump, HerdrQueueWakeStats,
@@ -588,30 +589,44 @@ impl HttpRuntime<Configured> {
     }
 }
 
-impl HttpRuntime<Configured> {
-    fn canonical_router(&self) -> axum::Router {
-        // The read-only auxiliary routes (`/v1/health`, `/v1/diagnostics`)
-        // are merged after `canonical_api_router`'s own `route_layer`, so
-        // without an admission layer of their own they would bypass the
-        // load-shed/concurrency bound applied to every canonical write
-        // route. Build an equivalent bound here, sized from the same
-        // configured limits, so a saturated auxiliary reader is rejected
-        // the same way a saturated canonical route is.
-        let auxiliary_admission = tower::ServiceBuilder::new()
+/// Applies the bounded admission stack used for the read-only auxiliary
+/// routes (`/v1/health`, `/v1/diagnostics`) to `router`.
+///
+/// These routes are merged into [`canonical_router`](HttpRuntime::canonical_router)
+/// after `canonical_api_router`'s own `route_layer`, so without an admission
+/// layer of their own they would bypass the load-shed/concurrency bound
+/// applied to every canonical write route (AW-READY-O7 items C12/C14). This
+/// is extracted as a standalone function, rather than inlined at the one
+/// production call site, so tests can drive the exact production layer
+/// stack to saturation instead of a stand-in approximation of it.
+fn with_auxiliary_admission(router: axum::Router, max_connections: usize) -> axum::Router {
+    // `Router::route_layer` installs a distinct service for every matching
+    // route. That would make the limit per endpoint: a saturated diagnostics
+    // query would not shed a simultaneous health request. The auxiliary
+    // surface is intentionally one bounded read lane, so wrap the completed
+    // router as the outer fallback service instead. All requests to this
+    // router traverse this one shared concurrency semaphore.
+    axum::Router::new().fallback_service(
+        tower::ServiceBuilder::new()
             .layer(axum::error_handling::HandleErrorLayer::new(
                 message_handler::overload_response,
             ))
             .layer(tower::load_shed::LoadShedLayer::new())
-            .layer(tower::limit::ConcurrencyLimitLayer::new(
-                self.config.limits.max_connections,
-            ));
-        let auxiliary_routes =
+            .layer(tower::limit::ConcurrencyLimitLayer::new(max_connections))
+            .service(router),
+    )
+}
+
+impl HttpRuntime<Configured> {
+    fn canonical_router(&self) -> axum::Router {
+        let auxiliary_routes = with_auxiliary_admission(
             health_route::health_router(self.health.clone(), self.diagnostic_counters.clone())
                 .merge(diagnostics_route::diagnostics_router(
                     self.diagnostic_timeline.clone(),
                     self.config.timeouts.request,
-                ))
-                .route_layer(auxiliary_admission);
+                )),
+            self.config.limits.max_connections,
+        );
 
         canonical_api_router(
             Arc::clone(&self.handler),
@@ -963,7 +978,8 @@ mod tests {
         AcceptedPeerStream, AuthenticatedPeerStream, CanonicalWriteHandler, DirectPeerTcpConfig,
         HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration,
         PeerStreamAdapter, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, UnixSocketConfig,
-        UnixSocketMode, UnixSocketOwnerUid, direct_peer_tcp_client,
+        UnixSocketMode, UnixSocketOwnerUid, diagnostics_route, direct_peer_tcp_client,
+        health_route, with_auxiliary_admission,
     };
     use ulid::Ulid;
 
@@ -2910,5 +2926,147 @@ mod tests {
             .finish()
             .await
             .expect("Windows drain");
+    }
+
+    /// Test-only handler that proves the shared admission layer's semaphore
+    /// is genuinely exhausted (rather than merely trusting the layer stack
+    /// in isolation): it notifies the test the instant it is entered, then
+    /// parks on an explicit release signal instead of returning immediately.
+    /// Merged into the same outer admission service as the real
+    /// `/v1/health` and `/v1/diagnostics` routes, it lets the test hold the
+    /// auxiliary lane's one permit deterministically and observe that the
+    /// real routes are shed while it is held (AW-READY-O7 C12/C14).
+    #[derive(Default)]
+    struct AuxiliarySaturationGate {
+        entered: tokio::sync::Notify,
+        release: tokio::sync::Notify,
+    }
+
+    async fn hold_until_released(
+        axum::extract::State(gate): axum::extract::State<Arc<AuxiliarySaturationGate>>,
+    ) -> axum::http::StatusCode {
+        gate.entered.notify_one();
+        gate.release.notified().await;
+        axum::http::StatusCode::OK
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn auxiliary_admission_layer_sheds_saturated_health_and_diagnostics_requests() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
+
+        let gate = Arc::new(AuxiliarySaturationGate::default());
+        let saturating_route = axum::Router::new()
+            .route(
+                "/test/hold-one-permit",
+                axum::routing::get(hold_until_released),
+            )
+            .with_state(Arc::clone(&gate));
+
+        // Exactly one connection admitted at a time, so a single held
+        // request exhausts the auxiliary admission layer's capacity.
+        let router = with_auxiliary_admission(
+            health_route::health_router(RuntimeHealth::default(), None)
+                .merge(diagnostics_route::diagnostics_router(
+                    None,
+                    Duration::from_secs(1),
+                ))
+                .merge(saturating_route),
+            1,
+        );
+
+        let holder_router = router.clone();
+        let holder = tokio::spawn(async move {
+            holder_router
+                .oneshot(
+                    Request::get("/test/hold-one-permit")
+                        .body(Body::empty())
+                        .expect("saturating request"),
+                )
+                .await
+                .expect("saturating response")
+        });
+
+        // Deterministic: wait for the saturating handler to actually be
+        // entered (not merely scheduled) before asserting shed behavior.
+        gate.entered.notified().await;
+
+        let shed_health = router
+            .clone()
+            .oneshot(
+                Request::get("/v1/health")
+                    .body(Body::empty())
+                    .expect("health request"),
+            )
+            .await
+            .expect("shed health response");
+        assert_eq!(
+            shed_health.status(),
+            StatusCode::SERVICE_UNAVAILABLE,
+            "the real /v1/health route must share the saturated admission layer, not bypass it"
+        );
+        let body = shed_health
+            .into_body()
+            .collect()
+            .await
+            .expect("shed health body")
+            .to_bytes();
+        let error: AtmError =
+            serde_json::from_slice(&body).expect("ADR-032 overload JSON for /v1/health");
+        assert_eq!(
+            error.code(),
+            atm_core::error::AtmErrorCode::DaemonConnectionSaturated
+        );
+
+        let shed_diagnostics = router
+            .clone()
+            .oneshot(
+                Request::get("/v1/diagnostics")
+                    .body(Body::empty())
+                    .expect("diagnostics request"),
+            )
+            .await
+            .expect("shed diagnostics response");
+        assert_eq!(
+            shed_diagnostics.status(),
+            StatusCode::SERVICE_UNAVAILABLE,
+            "the real /v1/diagnostics route must share the saturated admission layer, not bypass it"
+        );
+        let body = shed_diagnostics
+            .into_body()
+            .collect()
+            .await
+            .expect("shed diagnostics body")
+            .to_bytes();
+        let error: AtmError =
+            serde_json::from_slice(&body).expect("ADR-032 overload JSON for /v1/diagnostics");
+        assert_eq!(
+            error.code(),
+            atm_core::error::AtmErrorCode::DaemonConnectionSaturated
+        );
+
+        // Release the held permit and confirm both auxiliary routes recover.
+        gate.release.notify_one();
+        assert_eq!(
+            holder.await.expect("holder task joins").status(),
+            StatusCode::OK
+        );
+
+        let recovered_health = router
+            .clone()
+            .oneshot(
+                Request::get("/v1/health")
+                    .body(Body::empty())
+                    .expect("recovered health request"),
+            )
+            .await
+            .expect("recovered health response");
+        assert_eq!(recovered_health.status(), StatusCode::OK);
+        // The response body carries the admission permit until the response
+        // is released; drop it before issuing the next request so this test
+        // measures recovery after a completed health exchange.
+        drop(recovered_health);
     }
 }

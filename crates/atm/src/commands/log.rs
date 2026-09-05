@@ -16,8 +16,16 @@ use crate::commands::caller_context::{CallerContextOverrides, resolve_cli_caller
 use crate::observability::CliObservability;
 use crate::output;
 
-// Keep retained log snapshot output bounded for interactive use.
-const DEFAULT_SNAPSHOT_LIMIT: usize = 50;
+// Keep retained log snapshot output bounded for interactive use. Sourced
+// from the same canonical default the `/v1/diagnostics` route falls back to
+// (AW-READY-O7 item 2) so the CLI and the HTTP route can never silently
+// disagree about the effective default page size.
+const DEFAULT_SNAPSHOT_LIMIT: usize = atm_http_runtime::DEFAULT_DIAGNOSTICS_LIMIT;
+
+const _: () = assert!(
+    DEFAULT_SNAPSHOT_LIMIT == atm_http_runtime::DEFAULT_DIAGNOSTICS_LIMIT,
+    "atm log's default snapshot limit must track the /v1/diagnostics route's canonical default"
+);
 // Tail mode polls the shared follow surface at a human-readable cadence.
 const DEFAULT_TAIL_POLL_INTERVAL_MS: u64 = 250;
 const MERGED_LOSS_NOTE: &str =
@@ -619,7 +627,10 @@ mod tests {
                 bytes.extend_from_slice(&chunk[..count]);
             }
             let request = String::from_utf8(bytes).expect("UTF-8 fixture request");
-            assert!(request.starts_with("GET /v1/diagnostics?limit=50 HTTP/1.1\r\n"));
+            assert!(request.starts_with(&format!(
+                "GET /v1/diagnostics?limit={} HTTP/1.1\r\n",
+                atm_http_runtime::DEFAULT_DIAGNOSTICS_LIMIT
+            )));
             assert!(request.to_ascii_lowercase().contains(
                 &format!("x-atm-local-capability: {}", expected_capability).to_ascii_lowercase()
             ));

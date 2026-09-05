@@ -4,7 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::observability_counters::{
-    DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticTimelineRecord, DiagnosticTimelineResponse,
+    DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticTimelineRecord,
+    DiagnosticTimelineResponse,
 };
 use atm_runtime::{DiagnosticCursor, DiagnosticTimelineStore};
 use axum::extract::{Query, State};
@@ -14,7 +15,11 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::Deserialize;
 
-const DEFAULT_LIMIT: usize = 50;
+/// Re-exported so callers that must document or test the effective default
+/// page size use the same identifier as the storage-layer default
+/// (`atm_storage::diagnostics::DIAGNOSTIC_QUERY_DEFAULT_LIMIT`) instead of a
+/// second, potentially divergent constant (AW-READY-O7 item 2).
+pub const DEFAULT_DIAGNOSTICS_LIMIT: usize = DIAGNOSTIC_QUERY_DEFAULT_LIMIT;
 
 /// Re-exported so callers that must document or test the effective cap use
 /// the same identifier as the storage-layer clamp (`atm_storage::diagnostics
@@ -60,7 +65,7 @@ async fn query_diagnostics(
     State(state): State<DiagnosticsState>,
     Query(query): Query<DiagnosticsQuery>,
 ) -> Result<Json<DiagnosticTimelineResponse>, axum::response::Response> {
-    let limit = query.limit.unwrap_or(DEFAULT_LIMIT);
+    let limit = query.limit.unwrap_or(DEFAULT_DIAGNOSTICS_LIMIT);
     if limit == 0 {
         return Err(diagnostics_error(
             StatusCode::BAD_REQUEST,
@@ -149,6 +154,7 @@ fn diagnostics_error(status: StatusCode, message: impl Into<String>) -> Response
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::time::Duration;
 
     use atm_core::error::AtmError;
@@ -165,10 +171,55 @@ mod tests {
 
     use super::diagnostics_router;
 
+    /// Synchronizes a fixture query with its test so a bounded-deadline test
+    /// can advance paused tokio time deterministically instead of racing a
+    /// real wall-clock sleep against the configured deadline (AW-READY-O7
+    /// item 3: no sleeps-and-hope, explicit synchronisation only).
+    ///
+    /// [`FixtureStore::query`] runs inside `tokio::task::spawn_blocking`, on
+    /// a dedicated OS thread independent of the paused async-runtime clock,
+    /// so blocking that thread on a rendezvous channel does not stall the
+    /// test's executor.
+    struct QueryGate {
+        entered: tokio::sync::Notify,
+        release: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+    }
+
+    impl std::fmt::Debug for QueryGate {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("QueryGate").finish_non_exhaustive()
+        }
+    }
+
+    impl QueryGate {
+        fn new() -> (Arc<Self>, std::sync::mpsc::SyncSender<()>) {
+            let (release_tx, release_rx) = std::sync::mpsc::sync_channel(0);
+            (
+                Arc::new(Self {
+                    entered: tokio::sync::Notify::new(),
+                    release: std::sync::Mutex::new(release_rx),
+                }),
+                release_tx,
+            )
+        }
+
+        /// Called from the dedicated `spawn_blocking` thread: signals the
+        /// test that the store call has genuinely started, then parks this
+        /// thread (never the async executor) until the test releases it.
+        fn enter_and_wait(&self) {
+            self.entered.notify_one();
+            self.release
+                .lock()
+                .expect("query gate release channel lock")
+                .recv()
+                .expect("query gate released before the parked query returned");
+        }
+    }
+
     #[derive(Debug, Default)]
     struct FixtureStore {
         rows: Vec<DiagnosticEvent>,
-        query_delay: Option<Duration>,
+        gate: Option<Arc<QueryGate>>,
     }
 
     impl DiagnosticTimelineStore for FixtureStore {
@@ -177,8 +228,8 @@ mod tests {
         }
 
         fn query(&self, query: &DiagnosticQuery) -> Result<Vec<DiagnosticEvent>, AtmError> {
-            if let Some(delay) = self.query_delay {
-                std::thread::sleep(delay);
+            if let Some(gate) = &self.gate {
+                gate.enter_and_wait();
             }
             let cursor = query.cursor;
             let mut rows: Vec<_> = self
@@ -262,10 +313,7 @@ mod tests {
     async fn truncated_flag_and_cursor_page_through_every_row_once() {
         let rows: Vec<_> = (0..7).map(|id| fixture_event(id, 100 - id)).collect();
         let store: std::sync::Arc<dyn DiagnosticTimelineStore> =
-            std::sync::Arc::new(FixtureStore {
-                rows,
-                query_delay: None,
-            });
+            std::sync::Arc::new(FixtureStore { rows, gate: None });
         let router = diagnostics_router(Some(store), Duration::from_secs(5));
 
         let (status, body) = get(router.clone(), "/v1/diagnostics?limit=3").await;
@@ -325,16 +373,35 @@ mod tests {
         assert_eq!(status, StatusCode::BAD_REQUEST);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn a_query_that_exceeds_its_deadline_is_reported_as_unavailable() {
+        let (gate, release) = QueryGate::new();
+        let deadline = Duration::from_millis(20);
         let store: std::sync::Arc<dyn DiagnosticTimelineStore> =
             std::sync::Arc::new(FixtureStore {
                 rows: vec![fixture_event(1, 1)],
-                query_delay: Some(Duration::from_millis(200)),
+                gate: Some(Arc::clone(&gate)),
             });
-        let router = diagnostics_router(Some(store), Duration::from_millis(20));
-        let (status, _) = get(router, "/v1/diagnostics").await;
+        let router = diagnostics_router(Some(store), deadline);
+
+        let request = tokio::spawn(get(router, "/v1/diagnostics"));
+
+        // Deterministic: wait until the fixture query has genuinely started
+        // (on its own `spawn_blocking` thread) before advancing the paused
+        // clock, instead of racing a real sleep against the deadline.
+        gate.entered.notified().await;
+        tokio::time::advance(deadline + Duration::from_millis(1)).await;
+
+        let (status, _) = request
+            .await
+            .expect("request task completes once the bounded deadline elapses");
         assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+
+        // Let the parked fixture query thread return so it does not leak
+        // past the end of the test.
+        release
+            .send(())
+            .expect("release the parked fixture query thread");
     }
 
     #[tokio::test]
@@ -343,10 +410,7 @@ mod tests {
         // tie-break exclusively.
         let rows: Vec<_> = (0..5).map(|id| fixture_event(id, 1)).collect();
         let store: std::sync::Arc<dyn DiagnosticTimelineStore> =
-            std::sync::Arc::new(FixtureStore {
-                rows,
-                query_delay: None,
-            });
+            std::sync::Arc::new(FixtureStore { rows, gate: None });
         let router = diagnostics_router(Some(store), Duration::from_secs(5));
 
         let (status, body) = get(router.clone(), "/v1/diagnostics?limit=2").await;
