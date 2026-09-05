@@ -840,10 +840,11 @@ Tracks that run in parallel once `integrate/phase-ay` exists:
 - **Core track:** AY.2 -> AY.3 -> AY.4 (a `must_follow` chain). Touches
   `crates/atm-herdr`, `crates/atm-daemon-bootstrap`, `crates/atm-core`
   doctor, `crates/atm-architecture` tests, the `daemon-switch` skill.
-- **Socket track:** AY.6 after AY.1, AY.2 and AY.3 have merged
-  (AYP-R3-011: AY.3 lands the long-lived-child grep guard in
-  `boundary_enforcement.rs` and AY.6 edits the same file), in parallel
-  with AY.4 and AY.5. Touches the new
+- **Socket track:** AY.6 after AY.1, AY.2 and AY.3 have all merged into
+  `integrate/phase-ay`; its branch is created from `integrate/phase-ay`
+  at that point, never stacked (AYS-R4-001; AYP-R3-011: AY.3 lands the
+  long-lived-child grep guard in `boundary_enforcement.rs` and AY.6 edits
+  the same file), in parallel with AY.4 and AY.5. Touches the new
   `crates/atm-herdr/src/transport_socket.rs` and its test fixtures, the
   `Socket(SocketIo)` arm in `crates/atm-herdr/src/transport.rs`, one
   `mod transport_socket;` line in `crates/atm-herdr/src/lib.rs`, the
@@ -872,7 +873,8 @@ installer's Windows branch, the audit doc, evidence). AY.6 is **not**
 parallel-safe with AY.3 (AYP-R3-011): both edit
 `crates/atm-architecture/tests/boundary_enforcement.rs` (AY.3's
 long-lived-child grep guard; AY.6's AI.11 exemption and pin-test
-amendment), so AY.6 must_follow AY.3 and stacks on its branch. AY.6 does not touch
+amendment), so AY.6 must_follow AY.3 as a multi-parent join, not a
+stack (stacking rule below). AY.6 does not touch
 `build_replacement_handler` (crates/atm-daemon-bootstrap), doctor, the
 installer or `transport_cli.rs`: transport selection in the composition
 root is AY.7's first deliverable, so the only composition edits of the
@@ -893,10 +895,12 @@ on the child. PR-completion trigger: the parent PR merges into
 `gh stack sync` or `gh stack merge` in this repo (merge commits only, no
 rebase, no force-push); `gh pr merge --merge` per PR in stack order.
 Parallel-safe sprints are independent branches off `integrate/phase-ay`,
-not stacked. A sprint with two parents (AY.6 after AY.1 and AY.2; AY.7
-after AY.5 and AY.6) is never stacked on either parent: it is dispatched
-only after both parent PRs have merged into `integrate/phase-ay`, and its
-branch is created from `integrate/phase-ay` at that point. No merge of an
+not stacked. A sprint with several parents (AY.6 after AY.1, AY.2 and AY.3; AY.7
+after AY.5 and AY.6) is never stacked on any parent (AY.3's branch
+already carries AY.4 as its stacked child, and gh-stack refuses a branch
+shared by two stacks): it is dispatched only after every parent PR has
+merged into `integrate/phase-ay`, and its branch is created from
+`integrate/phase-ay` at that point (AYS-R4-001). No merge of an
 unmerged sibling into a sprint branch, ever.
 
 Sprint docs: `/plan-hardening` produces one sprint doc per row at
@@ -1444,7 +1448,8 @@ Out of scope: socket transport on Windows (AY.7).
 ## Sprint AY.6: direct socket/pipe transport, no cutover (size L)
 
 Branch `feature/ay6-herdr-socket-transport`, created from
-`feature/ay3-herdr-startup-failure-model` (stacked) once AY.1 has merged.
+`integrate/phase-ay` once AY.1, AY.2 and AY.3 have all merged (a
+multi-parent join, not stacked; stacking rule under "Sprint map").
 Dependencies: must_follow AY.1 (`docs/atm-herdr/herdr-versions.md`
 exists; ADR-058 D3 amended text is the protocol authority), AY.2
 (`HerdrIo`, fake-herdr replay recordings) and AY.3 (its
@@ -1974,7 +1979,7 @@ AX does not wait on any AY sprint.
   AYP-R3-010 (one request per connection, no hot-path `ping`; doctor's
   `server_info` opens its own connection; fake refuses a second line),
   AYP-R3-011 (AY.6 must_follow AY.3: table, tracks, rationale,
-  dependencies and file set corrected; AY.6 stacks on AY.3), AYP-R4-001
+  dependencies and file set corrected), AYP-R4-001
   (`--restart-herdr <endpoint>`: one endpoint per invocation, scoped argv
   and entry identifier, refusal codes, never restarts the daemon, daemon
   restart refused while any endpoint mismatches), AYP-R4-002 (aggregate
@@ -1987,3 +1992,8 @@ AX does not wait on any AY sprint.
   AYS-R3-003 (`herdr_is_configured` takes the same `MembersList` doctor
   builds from one roster load), AYS-R3-M1 (AY.2 and AY.6 acceptance
   lists renumbered in reading order).
+- r12 (2026-09-05): plan-scope r4 AYS-R4-001 (AY.6 dependency trigger
+  stated four ways in r11): one rule everywhere, AY.6 is a multi-parent
+  join created from `integrate/phase-ay` after AY.1, AY.2 and AY.3 have
+  merged, never stacked (AY.4 is AY.3's stacked child); Socket track,
+  rationale, stacking rule, AY.6 header and the r11 ledger line agree.
