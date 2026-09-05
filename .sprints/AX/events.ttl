@@ -234,3 +234,7 @@ triage:a13 a triage:Assignment ;
 triage:c12 a triage:Completion ;
     triage:ofSprint triage:AX4 ;
     triage:at "2026-09-05T10:43:31Z"^^xsd:dateTime .
+
+triage:c13 a triage:Completion ;
+    triage:ofSprint triage:AX3 ;
+    triage:at "2026-09-05T10:52:05Z"^^xsd:dateTime .
