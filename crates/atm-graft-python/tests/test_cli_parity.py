@@ -18,7 +18,6 @@ import subprocess
 import tempfile
 import time
 import unittest
-from unittest import mock
 
 # Bounded wait for the daemon readiness handshake and for every CLI
 # subprocess invocation. Every blocking call in this module must be bounded
@@ -94,11 +93,15 @@ class _GeneratedParityFixture:
         temp_dir = self.root / "tmp"
         for directory in (home, atm_home, log_dir, temp_dir):
             directory.mkdir(parents=True, exist_ok=True)
-        environment = {
+        return {
             **os.environ,
             "HOME": str(home),
             "ATM_HOME": str(atm_home),
             "ATM_CONFIG_HOME": str(atm_home),
+            # current_host_runtime_scope intentionally ignores HOME and
+            # ATM_HOME for real processes. This debug/test-only override is
+            # the explicit isolation boundary for the paired CLI/daemon.
+            "ATM_TEST_RUNTIME_HOME": str(home),
             "ATM_TEAM": self.team,
             "ATM_CHAT_ID": self.chat_id,
             "ATM_LOG_DIR": str(log_dir),
@@ -106,13 +109,6 @@ class _GeneratedParityFixture:
             "TMP": str(temp_dir),
             "TEMP": str(temp_dir),
         }
-        # The mandatory parity lane loads a release atm-graft wheel. Release
-        # artifacts intentionally ignore ATM_TEST_RUNTIME_HOME, while the
-        # checked-out debug daemon would honor it; retaining the override
-        # would split the paired native client and daemon across two sockets.
-        # Let both use their ordinary host runtime scope instead.
-        environment.pop("ATM_TEST_RUNTIME_HOME", None)
-        return environment
 
     @staticmethod
     def _binary(environment_name: str, default: Path) -> Path:
@@ -277,18 +273,6 @@ def _parity_enabled() -> bool:
     return bool(os.environ.get("ATM_CLI_PARITY_FIXTURE")) or os.environ.get(
         "ATM_CLI_PARITY_CI"
     ) == "1"
-
-
-class GeneratedParityFixtureTests(unittest.TestCase):
-    def test_environment_removes_debug_runtime_override_for_release_wheel_parity(self) -> None:
-        with mock.patch.dict(
-            os.environ, {"ATM_TEST_RUNTIME_HOME": "/tmp/inherited-test-scope"}
-        ):
-            fixture = _GeneratedParityFixture()
-            try:
-                self.assertNotIn("ATM_TEST_RUNTIME_HOME", fixture._environment())
-            finally:
-                fixture.close()
 
 
 @unittest.skipUnless(
