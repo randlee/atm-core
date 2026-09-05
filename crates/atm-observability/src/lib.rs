@@ -14,13 +14,7 @@ use sc_observability_types::DiagnosticInfo;
 
 /// Opaque shared retained logger handle. Its concrete backend is deliberately
 /// confined to this facade.
-pub struct RetainedLogger(RetainedLoggerBackend);
-
-enum RetainedLoggerBackend {
-    Logger(sc_observability::Logger),
-    #[cfg(test)]
-    QueueFull,
-}
+pub struct RetainedLogger(sc_observability::Logger);
 
 /// Process-neutral settings for ATM's retained JSONL logger.
 #[derive(Debug, Clone, Copy)]
@@ -43,32 +37,31 @@ pub enum RetainedLogOffer {
 
 impl RetainedLogger {
     pub fn health(&self) -> sc_observability_types::LoggingHealthReport {
-        match &self.0 {
-            RetainedLoggerBackend::Logger(logger) => logger.health(),
-            #[cfg(test)]
-            RetainedLoggerBackend::QueueFull => {
-                panic!("test queue-full logger has no health report")
-            }
-        }
+        self.0.health()
     }
 
     pub fn try_log(&self, event: sc_observability_types::LogEvent) -> RetainedLogOffer {
-        match &self.0 {
-            RetainedLoggerBackend::Logger(logger) => match logger.try_log(event) {
-                Ok(()) => RetainedLogOffer::Accepted,
-                Err(sc_observability::TryLogError::QueueFull(_)) => RetainedLogOffer::QueueFull,
-                Err(error) => RetainedLogOffer::Rejected {
-                    diagnostic_code: try_log_error_code(&error).to_string(),
-                },
+        #[cfg(test)]
+        if queue_full_for_test() {
+            return RetainedLogOffer::QueueFull;
+        }
+        match self.0.try_log(event) {
+            Ok(()) => RetainedLogOffer::Accepted,
+            Err(sc_observability::TryLogError::QueueFull(_)) => RetainedLogOffer::QueueFull,
+            Err(error) => RetainedLogOffer::Rejected {
+                diagnostic_code: try_log_error_code(&error).to_string(),
             },
-            #[cfg(test)]
-            RetainedLoggerBackend::QueueFull => RetainedLogOffer::QueueFull,
         }
     }
 
     #[cfg(test)]
-    pub(crate) fn queue_full_for_test() -> Self {
-        Self(RetainedLoggerBackend::QueueFull)
+    pub(crate) fn force_queue_full_for_test<T>(operation: impl FnOnce() -> T) -> T {
+        QUEUE_FULL_FOR_TEST.with(|forced| {
+            assert!(!forced.replace(true), "queue-full test mode must not nest");
+            let result = operation();
+            forced.set(false);
+            result
+        })
     }
 }
 
@@ -104,12 +97,22 @@ pub fn build_retained_logger(
     };
     config.enable_console_sink = false;
     sc_observability::Logger::builder(config)
-        .map(|builder| RetainedLogger(RetainedLoggerBackend::Logger(builder.build())))
+        .map(|builder| RetainedLogger(builder.build()))
         .map_err(|_| {
             AtmError::observability_bootstrap(
                 "failed to initialize shared daemon observability logger",
             )
         })
+}
+
+#[cfg(test)]
+thread_local! {
+    static QUEUE_FULL_FOR_TEST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+fn queue_full_for_test() -> bool {
+    QUEUE_FULL_FOR_TEST.with(std::cell::Cell::get)
 }
 
 fn try_log_error_code(error: &sc_observability::TryLogError) -> &str {

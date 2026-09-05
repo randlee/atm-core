@@ -454,7 +454,7 @@ mod tests {
             if content.lines().count() >= expected || Instant::now() >= deadline {
                 return content;
             }
-            std::thread::sleep(Duration::from_millis(10));
+            std::thread::yield_now();
         }
     }
 
@@ -523,12 +523,14 @@ mod tests {
 
     #[test]
     fn ac4_queue_full_offer_is_non_blocking() {
-        let bridge = TracingBridgeLayer::new(Arc::new(RetainedLogger::queue_full_for_test()));
+        let (_tempdir, bridge) = bridge();
         let start = Instant::now();
-        tracing::subscriber::with_default(
-            tracing_subscriber::Registry::default().with(bridge.clone()),
-            || tracing::warn!(target: "atm_http_runtime::listener", "queue pressure"),
-        );
+        RetainedLogger::force_queue_full_for_test(|| {
+            tracing::subscriber::with_default(
+                tracing_subscriber::Registry::default().with((*bridge).clone()),
+                || tracing::warn!(target: "atm_http_runtime::listener", "queue pressure"),
+            );
+        });
         assert!(start.elapsed() < Duration::from_secs(1));
         assert_eq!(
             bridge
@@ -560,10 +562,14 @@ mod tests {
     #[test]
     fn ac7_second_global_install_is_rejected() {
         let (_tempdir, first) = bridge();
-        assert!(TracingBridgeLayer::install(Arc::clone(&first.logger)).is_ok());
+        assert!(
+            TracingBridgeLayer::new(Arc::clone(&first.logger))
+                .install_inner()
+                .is_ok()
+        );
         let (_tempdir, second) = bridge();
         assert!(matches!(
-            TracingBridgeLayer::install(Arc::clone(&second.logger)),
+            TracingBridgeLayer::new(Arc::clone(&second.logger)).install_inner(),
             Err(super::BridgeError::AlreadyInstalled)
         ));
     }
