@@ -13,3 +13,6 @@ foundIn
 # AQ3 evidence transcript false positives (partial words from pane content).
 fals
 afte
+
+# Plural of `static` (Rust storage-duration item), not a typo for "statistics".
+statics

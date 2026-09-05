@@ -43,7 +43,9 @@ pub use contract::{
     RosterSnapshot, RosterStore, StorageNotifier, TaskState, TeamNudgeTemplateOverrideMode,
     TeamNudgeTemplateOverrideRow, TrustedPeer, derive_ack_requirement,
 };
-pub use diagnostics::{DiagnosticEvent, DiagnosticQuery, DiagnosticTimelineStore};
+pub use diagnostics::{
+    DiagnosticEvent, DiagnosticQuery, DiagnosticRecordError, DiagnosticTimelineStore,
+};
 pub use error::AtmError;
 pub use error_codes::AtmErrorCode;
 pub use factory::{

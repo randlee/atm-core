@@ -701,6 +701,7 @@ async fn shutdown_replacement_daemon(
         .await;
     workflow_telemetry.shutdown().await;
     atm_temp_sweeper.shutdown().await;
+    diagnostic_timeline::stop_flush_worker();
     let _stopped = stopped?;
     Ok(())
 }
