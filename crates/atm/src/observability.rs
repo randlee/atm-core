@@ -380,7 +380,7 @@ mod tests {
                 "error_message",
             ]
             .iter()
-            .all(|key| record.fields.get(*key).is_none())
+            .all(|key| record.fields.get(key).is_none())
         }));
     }
 
