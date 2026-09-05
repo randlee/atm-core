@@ -253,8 +253,10 @@ shape-only completion fails the sprint.
   justification under ADR-018 §3 as re-counted by ADR-054, and the phase
   plan §2.1 defaults; `docs/adr/INDEX.md` entry; dated amendment
   appended to `docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md`
-  re-counting the capability traits to seven; `docs/requirements.md` §7
-  (storage) lists `TaskStore`, the two tables, and `MessageWriteOrigin`.
+  re-counting the capability traits to seven; `docs/requirements.md`
+  §22.1 (SQLite mail and roster ownership) gains a "Task storage"
+  subsection listing `TaskStore`, the two tables, and
+  `MessageWriteOrigin` (§7 is queue inspection and is not touched).
 - [ ] D8 — tests listed under Required validation.
 - [ ] D10 — supersede the Phase-AC task-storage deferral. `docs/requirements.md`
   lines 52–64 ("Phase-AC supersession note") and `docs/architecture.md`

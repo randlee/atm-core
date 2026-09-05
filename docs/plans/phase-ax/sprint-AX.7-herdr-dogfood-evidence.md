@@ -90,10 +90,10 @@ None.
 ## Acceptance criteria
 
 1. C1–C5, C7–C14, C16, and C18 PASS with transcripts.
-4. C17 PASS or recorded as not run.
 2. C6 PASS, or FAIL attributed to coalescing with the evidence attached
    and the follow-up issue referenced.
 3. C15 and C15b PASS or recorded as not run.
+4. C17 PASS or recorded as not run.
 
 ## Required validation
 

@@ -60,8 +60,10 @@ for member in blocked:
     if now − since < BLOCKED_NOTIFY_MS: continue                        # 60 s: a prompt answered quickly is not an incident
     if last_blocked_notice[member] is Some and now − it < BLOCKED_RENOTIFY_MS: continue   # repeat every 10 min while still blocked
     open := tasks.open_tasks(member) if the store is available else []
-    escalate(member.team, C3 body(member, since, open), "blocked_escalated")   # outcome ignored: no per-task row to record
-    last_blocked_notice[member] := now; stats.blocked_escalations += 1
+    outcome := escalate(member.team, C3 body(member, since, open), "blocked_escalated")
+    if outcome.lead_write is None and outcome.recipients_written == 0 and not outcome.notify_ok:
+        continue                                                        # nothing reached anyone: no stamp, retried next tick (not in 10 min)
+    last_blocked_notice[member] := now; stats.blocked_escalations += 1  # no per-task row; the stamp is the only record
 ```
 
 ### Escalation channel (shared by both rules)
@@ -72,15 +74,23 @@ struct EscalationOutcome { lead: Option<MemberName>, lead_write: Option<MessageI
 escalate(team, body, kind) -> EscalationOutcome:                      # kind ∈ {"lead_notified", "blocked_escalated"}; the only two callers are the two rules above
     lead := the single roster member of team with agent_type == Lead   # None if zero or several; visible via doctor (D3)
     configured := tasks.effective_escalation_recipients(team)          # team list, else daemon list (D8 / C5)
-    lead_write := if lead: write queued message from DAEMON_ACTOR_NAME to lead, body, requires_ack = false   # None on failure, logged
-    for r in configured: write queued message from DAEMON_ACTOR_NAME to r, body, requires_ack = false        # per-recipient; failure logged, counted
-    notify_ok := herdr_process.notify(title = first line of body, body = remaining lines, deadline).is_ok()  # C4; failure logged
+    if len(configured) > ESCALATION_RECIPIENT_CAP: log once per tick; configured := first ESCALATION_RECIPIENT_CAP
+    lead_write := if lead: run_blocking(write queued message from DAEMON_ACTOR_NAME to lead, body, requires_ack = false)   # None on failure, logged
+    for r in configured: run_blocking(write queued message from DAEMON_ACTOR_NAME to r, body, requires_ack = false)        # per-recipient; failure logged, counted
+    notify_ok := herdr_process.notify(title = first line of body, body = remaining lines, RequestDeadline::after(HERDR_NOTIFY_DEADLINE)).is_ok()   # C4; failure logged
     log herdr_queue_poll_outcome outcome = kind, team, lead present?, recipients_written, recipients_failed, notify_ok
     return EscalationOutcome { lead, lead_write, recipients_written, recipients_failed, notify_ok }
 ```
 
+Both call sites bind `outcome` and apply
 `stats.escalation_writes_failed += outcome.recipients_failed` and
-`stats.notifications_failed += !notify_ok` at both call sites (D6).
+`stats.notifications_failed += !outcome.notify_ok` (D6). Every mail write
+inside `escalate` runs inside the pump's existing `run_blocking` helper
+(`herdr_queue_wake.rs` line 509), never on the Tokio worker; `notify` is
+awaited on the adapter like `emit_received_message`. Constants, all
+beside `HERDR_REQUEST_DEADLINE` (line 32): `HERDR_NOTIFY_DEADLINE:
+Duration = Duration::from_secs(5)`, `ESCALATION_RECIPIENT_CAP: usize =
+8`, `BLOCKED_NOTIFY_MS`, `BLOCKED_RENOTIFY_MS`.
 
 Three layers, all pushed. **Lead**: the coordinating agent on the team.
 **Escalation recipients**: one daemon-wide oversight list of ATM
@@ -143,7 +153,11 @@ shape-only completion fails the sprint.
   `herdr_and_mixed_backend_codes_have_specific_catalog_guidance` in
   `crates/atm-storage/src/error.rs` extended to the five codes. Code
   contract C2.
-- [ ] D4 — docs: `docs/requirements.md` §11.3 lists the five doctor
+- [ ] D4 — docs: `docs/requirements.md` §1 adds, beside the Phase `Y`
+  `atm help` entry, "Approved additive CLI feature for the Phase `AX`
+  line: `atm escalation`" so `REQ-P-PRODUCT-001` records the new surface
+  the same way `atm help` was recorded, and §2.1 In Scope lists it;
+  §11.3 lists the five doctor
   codes with remediation; §12.3 (or the reserved-identifier section)
   lists `atm-daemon`; ADR-061 gains a "Lead notification" section;
   `docs/user-documents/nudge-templates.md` and `docs/team-protocol.md`
@@ -153,10 +167,15 @@ shape-only completion fails the sprint.
   (`crates/atm-http-runtime/src/herdr_queue_wake.rs`) per the rule:
   pump-private `blocked_since` and `last_blocked_notice` maps keyed by
   `MemberKey`, cleared when a member leaves `Blocked`; the shared
-  `escalate` helper used by both rules; `HerdrQueueWakeStats` and the
-  `herdr_queue_poll_tick` record gain `blocked_escalations: usize` and
+  `escalate` helper used by both rules, with its writes inside
+  `run_blocking` exactly as D2 requires for the lead write;
+  `HerdrQueueWakeStats` and the `herdr_queue_poll_tick` record gain
+  `blocked_escalations: usize`, `escalation_writes_failed: usize` and
   `notifications_failed: usize`.
-- [ ] D7 — Herdr desktop notification through the sealed adapter:
+- [ ] D7 — Herdr desktop notification through the public,
+  boundary-toml-enforced adapter trait (`HerdrProcessAdapter` is
+  intentionally public per `boundaries/atm-herdr/herdr-process-adapter.toml`
+  `visibility = "public"`; nothing here seals it):
   `HerdrProcessAdapter::notify` (code contract C4) in
   `crates/atm-herdr/src/lib.rs` beside `list` (line 203) with the real
   and fake implementations; new fixture section in
@@ -164,7 +183,8 @@ shape-only completion fails the sprint.
   argv row `["herdr","notification","show","<title>","--body","<body>","--sound","request"]`
   and its success/failure rows; dated ADR-058 amendment (second entry
   after AX.2's) adding the notification verb to the argv table and
-  recording that it never targets a pane; `boundaries/atm-herdr/herdr-process-adapter.toml`
+  recording that it never targets a pane and that the trait remains
+  public; `boundaries/atm-herdr/herdr-process-adapter.toml`
   `[contracts]` note that notification text is caller-composed and
   contains member, task id, ages and a remediation command only, never a
   message body (HR-SAFE-003 holds); `docs/atm-herdr/requirements.md`
@@ -196,6 +216,15 @@ shape-only completion fails the sprint.
   and the sqlite companion gain the three methods in `request_types` /
   notes. `docs/team-protocol.md` and `docs/user-documents/tasks.md`
   describe the three layers and the commands.
+
+- [ ] D9 — pump file size (arch-qa RULE-003): `herdr_queue_wake.rs` is
+  613 non-test lines today (tests start at line 614) and AX.5 adds the
+  task step. This sprint puts `escalate`, `EscalationOutcome`, the
+  `blocked_since` / `last_blocked_notice` maps and the four constants in
+  a new `pub(crate)` sibling module
+  `crates/atm-http-runtime/src/herdr_escalation.rs`, leaving only the two
+  rule call sites in `herdr_queue_wake.rs`. Gate (AC 8): both files stay
+  under 1000 non-test lines.
 
 ### Paths to delete
 
@@ -286,7 +315,8 @@ MemberBlocked,       // "ATM_MEMBER_BLOCKED"
 methods); the AX.5 reminder cadence and pseudo-rule (this
 sprint adds `record_lead_notified` and `list_task_events` calls inside
 the task step, which AX.5 property 6 already permits); roster schema;
-`AgentType` enum; every existing doctor code.
+`AgentType` enum; every existing doctor code; `HerdrProcessAdapter`
+visibility (public).
 
 ## Acceptance criteria
 
@@ -320,7 +350,14 @@ the task step, which AX.5 property 6 already permits); roster schema;
    and doctor still warns `ATM_ROSTER_NO_LEAD`; a failed write to one
    recipient does not stop the others and increments
    `escalation_writes_failed`; `atm escalation add 'not an address'`
-   exits 3; add/remove/list round-trip in both scopes.
+   exits 3; add/remove/list round-trip in both scopes. A blocked
+   escalation whose lead write, every recipient write and `notify` all
+   fail leaves `last_blocked_notice` unset and is retried on the next
+   tick; one that reaches anyone is stamped.
+8. `awk '/^#\[cfg\(test\)\]/{exit} {n++} END{exit n>1000}'` passes for
+   `crates/atm-http-runtime/src/herdr_queue_wake.rs` and
+   `crates/atm-http-runtime/src/herdr_escalation.rs`; `docs/requirements.md`
+   §1 lists `atm escalation` as the Phase `AX` additive CLI feature.
 
 ## Required validation
 
@@ -357,4 +394,6 @@ Configurable thresholds; escalation channels owned by the daemon beyond
 lead mail, configured-recipient mail and the Herdr notification (how a
 recipient reaches its human is that recipient's business, not ATM); notifications
 for non-Herdr backends (they have no blocked signal); any change to the
-reminder cadence.
+reminder cadence; a doctor warning for a persistently failing escalation
+recipient (the `escalation_writes_failed` counter and log are the
+surface; follow-up on #1173).
