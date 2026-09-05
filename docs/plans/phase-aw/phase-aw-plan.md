@@ -252,6 +252,11 @@ AW.1 ──merged──▶ { AW.2 ∥ AW.4 } ──both merged──▶ AW.3
   immediately, CI is a merge gate only.
 - Merge-forward from `integrate/phase-aw` on every parent merge
   (`feedback_merge_forward_asap`).
+- **Execution deviation (recorded 2026-09-05):** AW.3 was cut and reviewed
+  before AW.2 merged, violating the declared `AW.2 → AW.3 must_follow`
+  relation. Merge-forward from `integrate/phase-aw` after AW.2 (PR #1179,
+  #1195) and AW.4 landed substituted for the ordering; AW.3 (PR #1182, #1196, #1198)
+  was re-verified by quality-mgr on the merged base before its final merge.
 - Hermes-side (`crates/hermes-atm`, Python) is in-repo and owned by AW.4
   (fallback envelope consumption) and AW.5 (projections); no Hermes logger
   or path logic is ever written in Python.
