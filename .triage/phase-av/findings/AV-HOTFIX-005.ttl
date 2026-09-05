@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T21:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV4 ;
@@ -55,3 +57,41 @@
   triage:branch "integrate/phase-av" ;
   triage:headSha "d7e6b0040" ;
   triage:orderIndex 1 .
+
+# quality-mgr, 2026-09-05, qa-pr1221-r1: closing the observability-gap scope
+# of this record only. fix/cipher-easy-round @ 3ec0977e04cddd17935e5d182a75e10c80c3d9b5
+# (PR #1221) adds tracing::info!(subsystem="atm_core.peer", action="peer_send",
+# outcome="delivered", peer_host, message_id) in dispatch_resolved_peer_write's
+# ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) arm
+# (storage_and_nudge_router.rs:483-492), plus CLI-side
+# print_send_result_to_peer/render_send_stdout (crates/atm/src/output.rs) which
+# prints "Delivered to peer host: <host>" (human) or a delivered_to_peer_host
+# JSON field, sourced from send.rs's existing successful SendOutcome -- no new
+# call, retry, or dial. Independently confirmed (own read of the diff, plus 4/4
+# dispatched reviewers -- req-qa, arch-qa, ruthless-boundary-qa, rust-qa-agent --
+# corroborating) that this stays strictly inside the already-approved
+# AV-HOTFIX-001 interim-rule boundary: no new persistence, outbox, queue, or
+# retry path; only peer_host/message_id/agent/team identifiers appear in the
+# new log/CLI text, no body/address/token content. This closes only the
+# success-direction sender-side observability gap this record describes. The
+# durable ordered outbox / stale-by replay design (GitHub issue #1216) remains
+# a separate, unimplemented, still design-gated item -- not touched by this
+# closure.
+
+<urn:atm:triage:occurrence/AV-HOTFIX-005/AV4-fixed-3ec0977e0>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 483 ;
+  triage:snippet "tracing::info!(subsystem = \"atm_core.peer\", action = \"peer_send\", outcome = \"delivered\", peer_host = %host, message_id = %message_id, ...)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/cipher-easy-round" ;
+  triage:headSha "3ec0977e04cddd17935e5d182a75e10c80c3d9b5" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-cipher-easy-round/3ec0977e0> .
+
+<urn:atm:triage:worktree/fix-cipher-easy-round/3ec0977e0>
+  a triage:WorktreeSnapshot ;
+  triage:path "../atm-core-worktrees/fix/cipher-easy-round" ;
+  triage:branch "fix/cipher-easy-round" ;
+  triage:headSha "3ec0977e04cddd17935e5d182a75e10c80c3d9b5" ;
+  triage:orderIndex 2 .
