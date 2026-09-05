@@ -6,9 +6,10 @@ use atm_core::observability::{
     AtmJsonNumber, AtmLogQuery, LogFieldKey, LogFieldMatch, LogFieldValue, LogLevelFilter, LogMode,
     LogOrder, ObservabilityPort,
 };
+use atm_core::observability_counters::{DiagnosticTimelineRecord, DiagnosticTimelineResponse};
 use atm_core::types::IsoTimestamp;
 use clap::{Args, Subcommand, ValueEnum};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::commands::caller_context::{CallerContextOverrides, resolve_cli_caller_context};
 use crate::observability::CliObservability;
@@ -225,7 +226,7 @@ impl QueryArgs {
             Duration::from_secs(10),
         )
         .await?;
-        let response: DiagnosticsResponse = serde_json::from_slice(&body)
+        let response: DiagnosticTimelineResponse = serde_json::from_slice(&body)
             .context("daemon returned an invalid diagnostic timeline response")?;
         Ok(response
             .records
@@ -314,7 +315,7 @@ struct TimelineRecord {
 }
 
 impl TimelineRecord {
-    fn from_record(event: DiagnosticRecord, source: LogSource) -> Self {
+    fn from_record(event: DiagnosticTimelineRecord, source: LogSource) -> Self {
         Self {
             source: match source {
                 LogSource::Jsonl => "jsonl",
@@ -393,22 +394,6 @@ impl TimelineRecord {
             _ => unreachable!("merged source is constrained"),
         }
     }
-}
-
-#[derive(Deserialize)]
-struct DiagnosticsResponse {
-    records: Vec<DiagnosticRecord>,
-}
-
-#[derive(Deserialize)]
-struct DiagnosticRecord {
-    ts_unix_ms: i64,
-    level: String,
-    component: String,
-    code: Option<String>,
-    correlation_id: Option<String>,
-    origin: String,
-    message: String,
 }
 
 fn level_name(level: CliLogLevel) -> &'static str {

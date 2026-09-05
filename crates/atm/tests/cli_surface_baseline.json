@@ -764,6 +764,17 @@
               },
               "required": false,
               "short": null
+            },
+            {
+              "has_default": false,
+              "id": "until",
+              "long": "until",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
             }
           ],
           "name": "filter",
@@ -855,6 +866,17 @@
               "num_args": {
                 "max": 0,
                 "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "until",
+              "long": "until",
+              "num_args": {
+                "max": 1,
+                "min": 1
               },
               "required": false,
               "short": null
@@ -960,6 +982,17 @@
               "num_args": {
                 "max": 0,
                 "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "until",
+              "long": "until",
+              "num_args": {
+                "max": 1,
+                "min": 1
               },
               "required": false,
               "short": null

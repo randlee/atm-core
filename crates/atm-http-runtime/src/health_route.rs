@@ -2,11 +2,12 @@
 
 use std::sync::Arc;
 
-use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
+use atm_core::observability_counters::{
+    DiagnosticCounters, DiagnosticCountersSource, RetainedObservabilityHealthResponse,
+};
 use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
-use serde::Serialize;
 
 use crate::RuntimeHealth;
 
@@ -29,68 +30,12 @@ pub(crate) fn health_router(
         })
 }
 
-async fn health(State(state): State<HealthState>) -> Json<HealthResponse> {
+async fn health(State(state): State<HealthState>) -> Json<RetainedObservabilityHealthResponse> {
     let counters = state.counters.as_deref().map_or_else(
         DiagnosticCounters::default,
         DiagnosticCountersSource::snapshot,
     );
-    Json(HealthResponse::from(counters))
-}
-
-#[derive(Debug, Serialize)]
-struct HealthResponse {
-    observability: ObservabilityHealth,
-}
-
-#[derive(Debug, Serialize)]
-struct ObservabilityHealth {
-    jsonl: JsonlCounters,
-    timeline: TimelineCounters,
-    degraded: Vec<&'static str>,
-}
-
-#[derive(Debug, Serialize)]
-struct JsonlCounters {
-    forwarded_total: u64,
-    dropped_queue_full_total: u64,
-    dropped_reentrant_total: u64,
-}
-
-#[derive(Debug, Serialize)]
-struct TimelineCounters {
-    written_total: u64,
-    dropped_queue_full_total: u64,
-    dropped_persist_error_total: u64,
-}
-
-impl From<DiagnosticCounters> for HealthResponse {
-    fn from(counters: DiagnosticCounters) -> Self {
-        let mut degraded = Vec::new();
-        if counters.jsonl_dropped_queue_full_total > 0 || counters.jsonl_dropped_reentrant_total > 0
-        {
-            degraded.push("jsonl");
-        }
-        if counters.timeline_dropped_queue_full_total > 0
-            || counters.timeline_dropped_persist_error_total > 0
-        {
-            degraded.push("timeline");
-        }
-        Self {
-            observability: ObservabilityHealth {
-                jsonl: JsonlCounters {
-                    forwarded_total: counters.jsonl_forwarded_total,
-                    dropped_queue_full_total: counters.jsonl_dropped_queue_full_total,
-                    dropped_reentrant_total: counters.jsonl_dropped_reentrant_total,
-                },
-                timeline: TimelineCounters {
-                    written_total: counters.timeline_written_total,
-                    dropped_queue_full_total: counters.timeline_dropped_queue_full_total,
-                    dropped_persist_error_total: counters.timeline_dropped_persist_error_total,
-                },
-                degraded,
-            },
-        }
-    }
+    Json(counters.into())
 }
 
 #[cfg(test)]

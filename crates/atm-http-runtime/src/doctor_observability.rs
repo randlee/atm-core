@@ -2,7 +2,7 @@
 
 use atm_core::doctor::{DoctorFinding, DoctorSeverity};
 use atm_core::error::AtmErrorCode;
-use atm_core::observability_counters::DiagnosticCounters;
+use atm_core::observability_counters::{DiagnosticCounters, RetainedObservabilityHealth};
 
 pub(crate) fn append_counter_finding(
     findings: &mut Vec<DoctorFinding>,
@@ -42,14 +42,5 @@ pub(crate) fn append_counter_finding(
 }
 
 pub(crate) fn degraded_sources(counters: DiagnosticCounters) -> Vec<String> {
-    let mut degraded = Vec::new();
-    if counters.jsonl_dropped_queue_full_total > 0 || counters.jsonl_dropped_reentrant_total > 0 {
-        degraded.push("jsonl".to_owned());
-    }
-    if counters.timeline_dropped_queue_full_total > 0
-        || counters.timeline_dropped_persist_error_total > 0
-    {
-        degraded.push("timeline".to_owned());
-    }
-    degraded
+    RetainedObservabilityHealth::from(counters).degraded
 }

@@ -1058,7 +1058,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
     }
 }
 
-fn compatibility_verdict(
+pub(crate) fn compatibility_verdict(
     preflight: atm_core::protocol::CompatibilityPreflight,
 ) -> CompatibilityVerdict {
     let daemon_release = ReleaseVersion::current();
@@ -1085,7 +1085,7 @@ fn compatibility_verdict(
     }
 }
 
-fn validate_heartbeat_member(
+pub(crate) fn validate_heartbeat_member(
     runtime: &LocalServiceRuntime,
     team: &atm_core::types::TeamName,
     member: &atm_core::types::AgentName,
@@ -1096,7 +1096,7 @@ fn validate_heartbeat_member(
     Ok(())
 }
 
-fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Result<(), AtmError> {
+pub(crate) fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Result<(), AtmError> {
     if ingress != AuthenticatedIngress::Local {
         return Err(AtmError::validation(
             "graft receiver registration is available only through authenticated local HTTP adapters",
@@ -1105,7 +1105,7 @@ fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Result<(), AtmE
     Ok(())
 }
 
-fn validate_graft_receiver_member(
+pub(crate) fn validate_graft_receiver_member(
     runtime: &LocalServiceRuntime,
     team: &atm_core::types::TeamName,
     agent: &atm_core::types::AgentName,
@@ -1132,7 +1132,7 @@ fn write_response(outcome: WriteOutcome) -> ResponseEnvelope {
     }
 }
 
-fn hook_warning(error: AtmError) -> WarningEntry {
+pub(crate) fn hook_warning(error: AtmError) -> WarningEntry {
     WarningEntry::with_code(
         error.code(),
         format!("message received successfully, but its receiver hook did not run: {error}"),

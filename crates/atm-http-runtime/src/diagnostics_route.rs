@@ -2,13 +2,14 @@
 
 use std::sync::Arc;
 
+use atm_core::observability_counters::{DiagnosticTimelineRecord, DiagnosticTimelineResponse};
 use atm_runtime::DiagnosticTimelineStore;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 const DEFAULT_LIMIT: usize = 50;
 pub const MAX_DIAGNOSTICS_LIMIT: usize = 5_000;
@@ -38,15 +39,19 @@ struct DiagnosticsQuery {
 async fn query_diagnostics(
     State(state): State<DiagnosticsState>,
     Query(query): Query<DiagnosticsQuery>,
-) -> Result<Json<DiagnosticsResponse>, DiagnosticsError> {
+) -> Result<Json<DiagnosticTimelineResponse>, axum::response::Response> {
     let limit = query.limit.unwrap_or(DEFAULT_LIMIT);
     if limit > MAX_DIAGNOSTICS_LIMIT {
-        return Err(DiagnosticsError::bad_request(format!(
-            "limit must be at most {MAX_DIAGNOSTICS_LIMIT}"
-        )));
+        return Err(diagnostics_error(
+            StatusCode::BAD_REQUEST,
+            format!("limit must be at most {MAX_DIAGNOSTICS_LIMIT}"),
+        ));
     }
     let store = state.store.ok_or_else(|| {
-        DiagnosticsError::unavailable("diagnostic timeline was not installed at daemon startup")
+        diagnostics_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "diagnostic timeline was not installed at daemon startup",
+        )
     })?;
     let storage_query = atm_runtime::DiagnosticQuery {
         since: query.since,
@@ -57,72 +62,31 @@ async fn query_diagnostics(
     };
     let events = tokio::task::spawn_blocking(move || store.query(&storage_query))
         .await
-        .map_err(|_| DiagnosticsError::unavailable("diagnostic timeline query worker stopped"))?
-        .map_err(|error| DiagnosticsError::unavailable(error.to_string()))?;
-    Ok(Json(DiagnosticsResponse {
-        records: events.into_iter().map(DiagnosticRecord::from).collect(),
+        .map_err(|_| {
+            diagnostics_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "diagnostic timeline query worker stopped",
+            )
+        })?
+        .map_err(|error| diagnostics_error(StatusCode::SERVICE_UNAVAILABLE, error.to_string()))?;
+    Ok(Json(DiagnosticTimelineResponse {
+        records: events.into_iter().map(diagnostic_record).collect(),
     }))
 }
 
-#[derive(Debug, Serialize)]
-struct DiagnosticsResponse {
-    records: Vec<DiagnosticRecord>,
-}
-
-#[derive(Debug, Serialize)]
-struct DiagnosticRecord {
-    ts_unix_ms: i64,
-    level: String,
-    component: String,
-    code: Option<String>,
-    correlation_id: Option<String>,
-    origin: String,
-    message: String,
-    detail: Option<String>,
-}
-
-impl From<atm_runtime::DiagnosticEvent> for DiagnosticRecord {
-    fn from(event: atm_runtime::DiagnosticEvent) -> Self {
-        Self {
-            ts_unix_ms: event.ts_unix_ms,
-            level: event.level,
-            component: event.component,
-            code: event.code,
-            correlation_id: event.correlation_id,
-            origin: event.origin,
-            message: event.message,
-            detail: event.detail,
-        }
+fn diagnostic_record(event: atm_runtime::DiagnosticEvent) -> DiagnosticTimelineRecord {
+    DiagnosticTimelineRecord {
+        ts_unix_ms: event.ts_unix_ms,
+        level: event.level,
+        component: event.component,
+        code: event.code,
+        correlation_id: event.correlation_id,
+        origin: event.origin,
+        message: event.message,
+        detail: event.detail,
     }
 }
 
-struct DiagnosticsError {
-    status: StatusCode,
-    message: String,
-}
-
-impl DiagnosticsError {
-    fn bad_request(message: String) -> Self {
-        Self {
-            status: StatusCode::BAD_REQUEST,
-            message,
-        }
-    }
-
-    fn unavailable(message: impl Into<String>) -> Self {
-        Self {
-            status: StatusCode::SERVICE_UNAVAILABLE,
-            message: message.into(),
-        }
-    }
-}
-
-impl IntoResponse for DiagnosticsError {
-    fn into_response(self) -> Response {
-        (
-            self.status,
-            Json(serde_json::json!({ "error": self.message })),
-        )
-            .into_response()
-    }
+fn diagnostics_error(status: StatusCode, message: impl Into<String>) -> Response {
+    (status, Json(serde_json::json!({ "error": message.into() }))).into_response()
 }

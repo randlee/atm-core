@@ -127,6 +127,7 @@ Query ATM log records using explicit field filters
 | `--level` |  | no | Restrict results to one or more severity levels |
 | `--match` |  | no | Match one structured ATM field exactly, for example command=send |
 | `--since` |  | no | Inclusive lower time bound as RFC3339 or a relative duration like 15m |
+| `--until` |  | no | Inclusive upper time bound as RFC3339 or a relative duration |
 | `--component` |  | no | Restrict timeline records to a component prefix |
 | `--limit` |  | no | Maximum number of returned records |
 | `--json` |  | no | Emit machine-readable JSON output |
@@ -142,6 +143,7 @@ Query recent ATM log records
 | `--level` |  | no | Restrict results to one or more severity levels |
 | `--match` |  | no | Match one structured ATM field exactly, for example command=send |
 | `--since` |  | no | Inclusive lower time bound as RFC3339 or a relative duration like 15m |
+| `--until` |  | no | Inclusive upper time bound as RFC3339 or a relative duration |
 | `--component` |  | no | Restrict timeline records to a component prefix |
 | `--limit` |  | no | Maximum number of returned records |
 | `--json` |  | no | Emit machine-readable JSON output |
@@ -157,6 +159,7 @@ Follow new ATM log records as they arrive
 | `--level` |  | no | Restrict results to one or more severity levels |
 | `--match` |  | no | Match one structured ATM field exactly, for example command=send |
 | `--since` |  | no | Inclusive lower time bound as RFC3339 or a relative duration like 15m |
+| `--until` |  | no | Inclusive upper time bound as RFC3339 or a relative duration |
 | `--component` |  | no | Restrict timeline records to a component prefix |
 | `--limit` |  | no | Maximum number of returned records |
 | `--json` |  | no | Emit machine-readable JSON output |

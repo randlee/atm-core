@@ -409,6 +409,15 @@ fn render_doctor_observability(report: &DoctorReport) -> String {
         ));
         output.push('\n');
     }
+    output.push_str(&format!(
+        "Observability: jsonl forwarded={} queue_full_dropped={} reentrant_dropped={}; timeline written={} queue_full_dropped={} persist_error_dropped={}\n",
+        report.observability.jsonl.forwarded_total,
+        report.observability.jsonl.dropped_queue_full_total,
+        report.observability.jsonl.dropped_reentrant_total,
+        report.observability.timeline.written_total,
+        report.observability.timeline.dropped_queue_full_total,
+        report.observability.timeline.dropped_persist_error_total,
+    ));
     if !report.observability.degraded.is_empty() {
         output.push_str(&format!(
             "WARN: Retained observability degraded: {}\n",
