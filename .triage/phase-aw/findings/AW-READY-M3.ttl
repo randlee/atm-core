@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-M3>
+  a triage:Finding ;
+  triage:findingId "AW-READY-M3" ;
+  triage:title "7-day age-based diagnostic prune (AW.2 AC4) never fires on a quiet daemon because it is gated by a 500-row batch threshold, not an independent age-based schedule" ;
+  triage:description "arch-ctm review-phase-aw-r1 (01M1S6VD1Y1G7CK9WKKA42DVKM), confirmed by quality-mgr via direct read. WriteOp::PruneDiagnostics only runs when diagnostic_rows_since_prune + batch_len >= DIAGNOSTIC_PRUNE_CHECK_EVERY (500) in crates/atm-storage-rusqlite/src/writer/mod.rs:611-668; the 250ms start_flush_worker background thread (crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs:70-92) only calls writer.flush_due(), never independently triggers a time-based prune. A daemon receiving fewer than 500 diagnostic events total therefore never prunes, regardless of row age -- violating sprint AW.2's own AC4 (rows older than 7 days must prune regardless of count, docs/plans/phase-aw/sprint-AW.2-sqlite-diagnostic-timeline.md:114-117). Fix: independent bounded age-prune schedule decoupled from row-count batching, quiet-daemon clock test, overdue-prune health signal." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "retention-lifecycle" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:52:20Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW2 ;
+  triage:foundAt "2026-09-05T16:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M3/AW2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M3/AW2-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-M3/AW2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 23 ;
+  triage:snippet "pub const DIAGNOSTIC_PRUNE_CHECK_EVERY: usize = 500;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/aw-integrate-1/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-M3/AW2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/mod.rs" ;
+  triage:line 621 ;
+  triage:snippet "diagnostic_rows_since_prune.saturating_add(batch_len) >= DIAGNOSTIC_PRUNE_CHECK_EVERY;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/aw-integrate-1/7e61ad87e> .
+
+<urn:atm:triage:worktree/aw-integrate-1/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/aw-integrate" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .

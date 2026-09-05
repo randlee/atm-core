@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-O4>
+  a triage:Finding ;
+  triage:findingId "AW-READY-O4" ;
+  triage:title "refresh_persisted_stats() overwrites (not sums into) timeline_dropped_persist_error_total, silently discarding bootstrap-side WriterClosed/InvalidBatch drop counts from /v1/health" ;
+  triage:description "fenix-C architecture/boundaries review (01M1S751VVM0K4C7ZW6YDPC7BQ, their F4). quality-mgr confirmed by direct read: crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs:220-249 refresh_persisted_stats() does self.stats.timeline_dropped_persist_error_total.store(persistence.persist_error_total(), Ordering::Relaxed) -- an unconditional overwrite, not a sum -- discarding whatever flush_locked() had already fetch_add'd for bootstrap-side non-queue-full drops (WriterClosed/InvalidBatch). Those drops become invisible to /v1/health, a genuine counter-ownership / honest loss semantics bug: an operator watching health would see zero drops even while some occurred. Fix: sum the persisted-store count into the existing counter (fetch_add) instead of overwriting it, or maintain the two counters as clearly separate, distinctly-named metrics with a combined total exposed separately." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "observability-health" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW2 ;
+  triage:foundAt "2026-09-05T16:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O4/AW2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-O4/AW2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs" ;
+  triage:line 250 ;
+  triage:snippet "self.stats.timeline_dropped_persist_error_total.store(persistence.persist_error_total(), Ordering::Relaxed);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/aw-integrate/7e61ad87e> .
+
+<urn:atm:triage:worktree/aw-integrate/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/aw-integrate" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .

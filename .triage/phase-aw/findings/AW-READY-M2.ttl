@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-M2>
+  a triage:Finding ;
+  triage:findingId "AW-READY-M2" ;
+  triage:title "tracing_bridge RetainedVisitor::keep() bypasses RETAINED_FIELD_ALLOWLIST for the message field, so free-text message/detail can carry any secret verbatim into retained output" ;
+  triage:description "arch-ctm review-phase-aw-r1 (01M1S6VD1Y1G7CK9WKKA42DVKM) and fenix reviewer-A (01M1S6XV64XHNGSP00NWXK26RQ) independently converged on this from different angles; quality-mgr confirmed by direct read. crates/atm-observability/src/tracing_bridge.rs:31-50 RETAINED_FIELD_ALLOWLIST includes the key names message and detail, but RetainedVisitor::keep() at :366-378 does if field.name() == message { self.message = ... } unconditionally, bypassing the allowlist membership check that gates every other field; record_str/record_debug then format arbitrary interpolated content into detail. The only existing test ac5_removes_sensitive_fields_and_values (:546-562) proves named-field secrets (body/recipient/token/env) are dropped, never that an interpolated secret inside the message/detail string itself is safe. router_support.rs:150 (detail = %warning.message) and graft.rs:331 build free-text that can carry recipient/agent identity into a %error re-log. Fix: closed typed templates/enums or mandatory sanitization for message/detail content; source/boundary lint; adversarial message/detail tests with an interpolated secret." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "data-hygiene" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW1 ;
+  triage:foundAt "2026-09-05T16:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M2/AW1-MSG-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-M2/AW1-MSG-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-observability/src/tracing_bridge.rs" ;
+  triage:line 369 ;
+  triage:snippet "if field.name() == message { self.message = value.as_str().map(ToOwned::to_owned); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/aw1/7e61ad87e> .
+
+<urn:atm:triage:worktree/aw1/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/aw1" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .

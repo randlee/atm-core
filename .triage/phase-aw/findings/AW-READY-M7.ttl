@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-M7>
+  a triage:Finding ;
+  triage:findingId "AW-READY-M7" ;
+  triage:title "/v1/diagnostics?level= performs a lexical string compare instead of a severity-rank comparison, so level=info silently drops all error rows" ;
+  triage:description "fenix reviewer-A (01M1S6XV64XHNGSP00NWXK26RQ) and fenix-C (01M1S751VVM0K4C7ZW6YDPC7BQ, their F1, duplicate noted as O1, counted once here); quality-mgr confirmed the exact query text: crates/atm-storage-rusqlite/src/diagnostic_timeline.rs:92 query against TEXT column storing lowercase level-name strings (error/warn/info/trace). Lexical ordering puts error below info, so level=info silently drops every error row instead of including it. No test exercises level_at_least semantics. The CLI itself is unaffected because it filters client-side after fetching (crates/atm/src/commands/log.rs:232-238), but any direct HTTP consumer of the route is exposed. Fix: integer rank column or CASE expression for severity ordering; test error inclusion at warn/info thresholds." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "query-correctness" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:52:43Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T16:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M7/AW3-query-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-M7/AW3-query-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 92 ;
+  triage:snippet "SELECT query at line 92 with level >= ?3 against TEXT column" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e> .
+
+<urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .

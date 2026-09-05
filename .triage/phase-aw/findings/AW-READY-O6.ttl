@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-O6>
+  a triage:Finding ;
+  triage:findingId "AW-READY-O6" ;
+  triage:title "attach_timeline is not idempotent: a second call swaps the bridge's sink to a new writer and spawns a second flush thread while the first OnceLock-held writer/counters remain live" ;
+  triage:description "fenix-C architecture/boundaries review (01M1S751VVM0K4C7ZW6YDPC7BQ, their F6). attach_timeline (crates/atm-observability/src/tracing_bridge.rs) is not idempotent: a second call would swap the bridge's sink to a new writer and spawn a second flush thread while leaving the first OnceLock-held writer/counters live, so the original sink would silently stop being flushed on cadence. Not reachable today (called exactly once in production), but nothing guards against a future second call introducing a silent data-loss regression. Consistent with fenix-A's minor #7 (related OnceLock/flush-thread observations, same file, same design shape -- see also AW-READY-N6 bundle and AW-READY-M8 bundle item (c)). Fix: guard attach_timeline with an explicit already-attached check that errors loudly (or is a documented no-op) rather than silently reassigning the sink." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-contract" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW1 ;
+  triage:foundAt "2026-09-05T16:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O6/AW1-O6-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-O6/AW1-O6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs" ;
+  triage:line 41 ;
+  triage:snippet "pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticTimeline>) {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-aw/7e61ad87e> .
+
+<urn:atm:triage:worktree/integrate-aw/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .

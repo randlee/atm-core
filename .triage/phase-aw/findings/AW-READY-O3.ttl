@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-O3>
+  a triage:Finding ;
+  triage:findingId "AW-READY-O3" ;
+  triage:title "queue-full classification crosses the atm-storage -> atm-daemon-bootstrap crate boundary via string-sniffing an error message instead of a typed offer enum" ;
+  triage:description "fenix-C architecture/boundaries review (01M1S751VVM0K4C7ZW6YDPC7BQ, their F3), elevating fenix-A's minor #8 (`error.message().contains(\"queue is full\")` at crates/atm-storage-rusqlite/src/diagnostic_timeline.rs:226) from brittle-string-match to a cross-boundary contract gap: DiagnosticTimelineStore::record_batch's contract returns an untyped AtmError instead of a typed offer enum (e.g. Accepted/QueueFull/Closed), forcing the daemon-bootstrap consumer to classify drop counters by parsing message text across the crate boundary. quality-mgr confirms this elevation (a crate-boundary API-contract gap is architecturally worse than a brittle string match in isolation). Fix: typed offer/error enum on the storage-side API so daemon-bootstrap classifies drops without string matching." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-contract" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW2 ;
+  triage:foundAt "2026-09-05T16:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O3/AW1-7e61ad87e-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-O3/AW1-7e61ad87e-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs" ;
+  triage:line 226 ;
+  triage:snippet "error.message().contains(\"queue is full\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW1/7e61ad87e> .
+
+<urn:atm:triage:worktree/AW1/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AW1" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .

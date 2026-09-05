@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-N3>
+  a triage:Finding ;
+  triage:findingId "AW-READY-N3" ;
+  triage:title "fresh_database_migrates_and_writer_lane_persists_a_diagnostic polls query() to a 2s deadline after an async try_send instead of using the diagnostic lane's own FIFO reply signal" ;
+  triage:description "fenix reviewer-B (01M1S72R6GNBE5ZETPK6943JMX). crates/atm-storage-rusqlite/src/diagnostic_timeline.rs:161 fresh_database_migrates_and_writer_lane_persists_a_diagnostic: record_batch is try_send, then the test polls query() to a 2s deadline waiting for the async write to land. Redesign: the diagnostic lane is FIFO and Prune{reply} on the same channel waits for a reply; call prune(0) (or a test-only drain() op) after record_batch, then assert once with no polling loop." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-determinism" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:40:30Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW2 ;
+  triage:foundAt "2026-09-05T16:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N3/AW2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-N3/AW2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 161 ;
+  triage:snippet "fn fresh_database_migrates_and_writer_lane_persists_a_diagnostic()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/aw/7e61ad87e> .
+
+<urn:atm:triage:worktree/aw/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .

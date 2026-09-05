@@ -1,0 +1,90 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-N6>
+  a triage:Finding ;
+  triage:findingId "AW-READY-N6" ;
+  triage:title "Minor bundle: OnceLock warn-once test fragility, unchecked Instant subtraction panic risk, global-install test order dependency" ;
+  triage:description "fenix reviewer-B (01M1S72R6GNBE5ZETPK6943JMX). (1) crates/atm-graft-python/src/tool_types.rs:294,305 FROM_AGENT_WARNING OnceLock; deprecated_from_agent_warns_once_and_matches_from asserts exactly one warning, breaks if any other test touches from_agent first -- fix via inject/reset test hook. (2) crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs:542-545 ac7 does `Instant::now() - 61s`, which can panic on a fresh VM whose monotonic clock is younger than 61s -- use checked_sub or an injected now/offset. (3) crates/atm-observability/src/tracing_bridge.rs:565 ac7_second_global_install_is_rejected uses the real global install, safe only while no other test installs globally -- document/guard the ordering dependency. Bundled as one minor-severity record spanning AW1 (tracing_bridge, primary), AW2 (daemon-bootstrap diagnostic_timeline), and AW4 (graft-python tool_types)." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-determinism" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:54:15Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW1 ;
+  triage:foundAt "2026-09-05T16:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N6/AW-N6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N6/AW-N6-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N6/AW-N6-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N6/AW-N6-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N6/AW-N6-5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-N6/AW-N6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs" ;
+  triage:line 24 ;
+  triage:snippet "static INSTALLED_BRIDGE: OnceLock<Arc<atm_observability::TracingBridgeLayer>> = OnceLock::new();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-N6/AW-N6-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs" ;
+  triage:line 25 ;
+  triage:snippet "static ACTIVE_TIMELINE: OnceLock<Arc<DiagnosticTimelineWriter>> = OnceLock::new();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-N6/AW-N6-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs" ;
+  triage:line 26 ;
+  triage:snippet "static ACTIVE_COUNTERS: OnceLock<Arc<CombinedDiagnosticCounters>> = OnceLock::new();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-N6/AW-N6-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs" ;
+  triage:line 27 ;
+  triage:snippet "static DEGRADATION_MONITOR: OnceLock<DegradationMonitor> = OnceLock::new();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-N6/AW-N6-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/tool_types.rs" ;
+  triage:line 294 ;
+  triage:snippet "static FROM_AGENT_WARNING: OnceLock<()> = OnceLock::new();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e> .
+
+<urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .

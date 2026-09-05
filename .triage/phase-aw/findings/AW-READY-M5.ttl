@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-M5>
+  a triage:Finding ;
+  triage:findingId "AW-READY-M5" ;
+  triage:title "Diagnostic prune passes run unbounded per-scheduled-pass deletes in one Immediate transaction on the shared writer lane, risking primary-write latency under backlog" ;
+  triage:description "arch-ctm review-phase-aw-r1 (01M1S6VD1Y1G7CK9WKKA42DVKM). Both prune passes (age-based and count-based) run as unbounded per-scheduled-pass deletes inside one Immediate transaction (crates/atm-storage-rusqlite/src/writer/ops.rs:214-244) on the shared, priority-biased but non-preemptible durable writer lane (writer/mod.rs:564). A large expired/backlogged table can monopolize the writer and add latency to primary (non-diagnostic) writes. Accepted on arch-ctm's citation, consistent with quality-mgr's own read of the same file for AW-READY-M3/M4. Fix: bounded chunk/transaction per scheduled pass, yield/reselect primary work between chunks, concurrent primary-write latency test under worst-case prune backlog." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "retention-lifecycle" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW2 ;
+  triage:foundAt "2026-09-05T16:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M5/occ-195> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M5/occ-214> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-M5/occ-195>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 195 ;
+  triage:snippet "execute_diagnostic_prune(*now_unix_ms, connection, target)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-M5/occ-214>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 214 ;
+  triage:snippet "fn execute_diagnostic_prune(now_unix_ms: i64, connection: &Connection, target: &SharedDbTarget)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e> .
+
+<urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .

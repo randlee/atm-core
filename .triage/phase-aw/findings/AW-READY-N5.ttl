@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-N5>
+  a triage:Finding ;
+  triage:findingId "AW-READY-N5" ;
+  triage:title "test_cli_parity.py isolates HOME/ATM_HOME but current_host_runtime_scope ignores them by design, so the 'disposable' parity daemon owns the real ~/.atm/daemon and can collide with a live host daemon" ;
+  triage:description "fenix reviewer-B (01M1S72R6GNBE5ZETPK6943JMX). crates/atm-graft-python/tests/test_cli_parity.py:150-156 isolates HOME/ATM_HOME/ATM_LOG_DIR/TMPDIR, but crates/atm-core/src/home.rs:48-62 current_host_runtime_scope has an inline comment explicitly stating it intentionally ignores HOME/USERPROFILE/ATM_HOME/cwd - process scoped, resolving owner_lock/socket/durable_state_root via libc::getpwuid(libc::geteuid()). The test daemon owns ~/.atm/daemon and ~/.atm/db; any live daemon fails on owner.lock. Masked by CI runs once per job on fresh VMs. Also carries hang hazards: readline() no timeout, stderr PIPE never drained, CliParityTests._cli no subprocess timeout. Architecture mismatch, not timing bug. Fix: runtime-scope override for tests, thread-drained pipes, subprocess timeout." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "host-isolation" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW5 ;
+  triage:foundAt "2026-09-05T16:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N5/AW1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-N5/AW1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 48 ;
+  triage:snippet "pub fn current_host_runtime_scope() -> Result<HostRuntimeScope, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-aw/7e61ad87e> .
+
+<urn:atm:triage:worktree/integrate-aw/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .
