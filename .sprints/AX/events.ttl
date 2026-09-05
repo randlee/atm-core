@@ -469,3 +469,14 @@ triage:a24 a triage:Assignment ;
     triage:ofSprint triage:AX6 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-09-05T19:52:40Z"^^xsd:dateTime .
+
+triage:c23 a triage:Completion ;
+    triage:ofSprint triage:AX6 ;
+    triage:at "2026-09-05T19:58:18Z"^^xsd:dateTime .
+
+triage:r82 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA3-002> ; triage:resolvedAt "2026-09-05T20:02:30Z"^^xsd:dateTime .
+
+triage:a25 a triage:Assignment ;
+    triage:ofSprint triage:AX6 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-05T20:11:12Z"^^xsd:dateTime .

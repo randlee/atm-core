@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T20:02:30Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr AX.6 QA-4 recheck (QA-AX6-R4-1788638300) at head ba19d6236; fixed by arch-ctm fix pass GO-AX6-FIX3-1788637962 (Completion c23). Report: PR #1204 comment 5554428957. Sprint verdict remains FAIL on new finding AX6-QA4-001." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T19:48:33Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
@@ -47,8 +50,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 539 ;
   triage:snippet ".add_escalation_recipient(&daemon, \"ops@atm-dev\", now)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
@@ -58,8 +61,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 544 ;
   triage:snippet ".add_escalation_recipient(&daemon, \"ops@atm-dev\", now)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
@@ -69,8 +72,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 551 ;
   triage:snippet "vec![\"ops@atm-dev\"]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
@@ -80,8 +83,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 557 ;
   triage:snippet "vec![\"ops@atm-dev\"]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
@@ -91,8 +94,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 562 ;
   triage:snippet ".add_escalation_recipient(&team, \"team-ops@atm-dev\", now)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
@@ -102,8 +105,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 569 ;
   triage:snippet "vec![\"team-ops@atm-dev\"]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
@@ -113,8 +116,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 573 ;
   triage:snippet ".remove_escalation_recipient(&team, \"team-ops@atm-dev\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
@@ -124,8 +127,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 580 ;
   triage:snippet "vec![\"ops@atm-dev\"]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
@@ -135,8 +138,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 586 ;
   triage:snippet ".add_escalation_recipient(&daemon, &format!(\"ops-{index}@atm-dev\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
@@ -146,8 +149,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 591 ;
   triage:snippet ".add_escalation_recipient(&daemon, \"overflow@atm-dev\", now)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
@@ -157,8 +160,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 539 ;
   triage:snippet ".add_escalation_recipient(&daemon, \"ops@atm-dev\", now)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-live-proof" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
@@ -168,8 +171,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 544 ;
   triage:snippet ".add_escalation_recipient(&daemon, \"ops@atm-dev\", now)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-live-proof" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
@@ -179,8 +182,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 551 ;
   triage:snippet "vec![\"ops@atm-dev\"]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-live-proof" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
@@ -190,8 +193,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 557 ;
   triage:snippet "vec![\"ops@atm-dev\"]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-live-proof" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
@@ -201,8 +204,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 562 ;
   triage:snippet ".add_escalation_recipient(&team, \"team-ops@atm-dev\", now)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-live-proof" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
@@ -212,8 +215,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 569 ;
   triage:snippet "vec![\"team-ops@atm-dev\"]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-live-proof" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
@@ -223,8 +226,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 573 ;
   triage:snippet ".remove_escalation_recipient(&team, \"team-ops@atm-dev\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-live-proof" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
@@ -234,8 +237,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 580 ;
   triage:snippet "vec![\"ops@atm-dev\"]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-live-proof" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
@@ -245,8 +248,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 586 ;
   triage:snippet ".add_escalation_recipient(&daemon, &format!(\"ops-{index}@atm-dev\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-live-proof" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
@@ -256,8 +259,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
   triage:line 591 ;
   triage:snippet ".add_escalation_recipient(&daemon, \"overflow@atm-dev\", now)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-live-proof" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
