@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW5-CI-002>
+  a triage:Finding ;
+  triage:findingId "AW5-CI-002" ;
+  triage:title "CI Test (ubuntu-latest) fails: test_cli_parity read/peek envelope mismatch now that the parity test runs in CI" ;
+  triage:description "PR #1184 at 1fb8e08cb, ci.yml run 33945711374 job 101251737238: crates/atm-graft-python/tests/test_cli_parity.py::CliParityTests::test_list_read_send_and_ack_match_cli FAILS in _assert_parity (line 284, called from 296): the native read envelope reports action read while the CLI envelope reports action peek and carries additional_match_count; the two dicts differ. The test now executes in CI (closes the ATM-QA-AW5R1-002 gap) and immediately exposes a real AW.5 parity defect between the native typed read result and the CLI read output. Fix the envelope (action name and field set) so native read is byte-equivalent to the CLI, do not weaken the assertion." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T05:12:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW5 ;
+  triage:foundAt "2026-09-05T05:03:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW5-CI-002/AW5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW5-CI-002/AW5-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW5-CI-002/AW5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_cli_parity.py" ;
+  triage:line 284 ;
+  triage:snippet "_assert_parity read envelope action read vs peek" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "1fb8e08cb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/1fb8e08cb> .
+
+<urn:atm:triage:occurrence/AW5-CI-002/AW5-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/tool_types.rs" ;
+  triage:line 1 ;
+  triage:snippet "native read envelope action and field set differ from CLI" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "1fb8e08cb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/1fb8e08cb> .
+
+<urn:atm:triage:worktree/AW5/1fb8e08cb>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw5-native-tool-parity" ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "1fb8e08cb" ;
+  triage:orderIndex 5 .
