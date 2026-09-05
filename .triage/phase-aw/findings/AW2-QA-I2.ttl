@@ -21,7 +21,18 @@
   triage:foundIn triage:AW2 ;
   triage:foundAt "2026-09-05T03:12:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW2-QA-I2/AW2-1> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
+
+# UPDATE (qa-pr1179-r9, quality-mgr): req-qa's round-9 full-AC audit (filed
+# as ATM-QA-AW2R9-002) independently confirmed the AC7 gap remains: the
+# PausedTimeline mock (diagnostic_timeline.rs:423-445) manufactures a canned
+# "queue is full" error after N accepted calls via
+# atm_runtime_test_support::diagnostic_queue_batches_for_test() rather than
+# exercising the real bounded tokio::sync::mpsc channel that lives in
+# crates/atm-storage-rusqlite/src/writer/mod.rs. quality-mgr independently
+# read the mock's implementation and confirms this characterization. Status
+# stays open/important; superseded in tracking terms by ATM-QA-AW2R9-002 but
+# this record is retained per append-only convention.
 
 # PARTIAL FIX (qa-pr1179-r8, quality-mgr): AW.2 round-8 (fee01b959) added
 # ac2_policy_selected_info_rows_reach_the_timeline,
