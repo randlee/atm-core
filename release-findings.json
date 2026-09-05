@@ -1,21 +1,9 @@
 {
-  "generatedAt": "2026-09-05T07:22:40.780292Z",
+  "generatedAt": "2026-09-05T10:05:11.183542Z",
   "branch": "feature/ax4-task-cli-and-docs",
   "version": "1.5.0",
-  "status": "fail",
+  "status": "pass",
   "findings": [
-    {
-      "check": "lint",
-      "severity": "error",
-      "summary": "just lint failed",
-      "detail": "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" \"$PWD/.bootstrap-venv/bin/python\" .just/run_lint.py all\nerror: recipe `lint` failed on line 213 with exit code 1",
-      "command": [
-        "just",
-        "lint"
-      ],
-      "exit_code": 1,
-      "blocks": true
-    },
     {
       "check": "publish-version-unpublished",
       "severity": "warning",

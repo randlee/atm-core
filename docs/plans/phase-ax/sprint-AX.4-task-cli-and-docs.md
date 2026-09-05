@@ -38,13 +38,13 @@ This is the authoritative deliverable checklist. Every listed deliverable
 lands production-ready for the scope this sprint claims; partial or
 shape-only completion fails the sprint.
 
-- [ ] D1 — `atm send --task-complete <TASK_ID>`
+- [x] D1 — `atm send --task-complete <TASK_ID>`
   (`crates/atm/src/commands/send.rs`, clap `conflicts_with = "task_id"`),
   mapped to `SendRequest::with_task_complete`. `atm queue` inherits the
   flag through the flattened `SendCommand` in
   `crates/atm/src/commands/queue.rs`; no separate change. `--json`
   output shows `task_complete` (AX.3 C8).
-- [ ] D2 — `atm list --tasks [--member <name>]` and
+- [x] D2 — `atm list --tasks [--member <name>]` and
   `atm list --task-events <TASK_ID> [--member <name>]`
   (`crates/atm/src/commands/list.rs`, which owns parsing and rendering),
   reading through `LocalServiceRuntime::task_store()` and importing
@@ -53,7 +53,7 @@ shape-only completion fails the sprint.
   sanctioned path `nudge-template-override-store.toml` grants `atm`);
   `conflicts_with_all` against every mailbox filter including the
   existing `--task <id>`; human and `--json` output per code contract C1.
-- [ ] D3 — docs: `docs/requirements.md` §6.5 (`atm send` flags) and §7.3/§7.12
+- [x] D3 — docs: `docs/requirements.md` §6.5 (`atm send` flags) and §7.3/§7.12
   (`atm list` flags) list the new flags; §15.4 "Task Metadata Rule"
   extended with the state machine summary, the ack gate,
   `--task-complete`, the completion-from-Assigned acknowledgement rule,
@@ -64,7 +64,7 @@ shape-only completion fails the sprint.
   the `task` kind; a new `docs/user-documents/tasks.md` documents the
   three states, the two flags, and the two list surfaces with the C1
   examples.
-- [ ] D4 — tests listed under Required validation.
+- [x] D4 — tests listed under Required validation.
 
 ### Paths to delete
 
