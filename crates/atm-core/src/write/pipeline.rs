@@ -98,7 +98,13 @@ impl PreparedWrite {
         observability: &dyn ObservabilityPort,
     ) -> Result<WriteOutcome, AtmError> {
         let outcome = self.finish(runtime, observability)?;
-        let _ = self.mark_pending_if_deferred(runtime);
+        if let Err(error) = self.mark_pending_if_deferred(runtime) {
+            tracing::warn!(
+                message_id = %self.persisted_message_id(),
+                %error,
+                "synchronous deferred-write queue marker failed after durable write"
+            );
+        }
         Ok(outcome)
     }
 

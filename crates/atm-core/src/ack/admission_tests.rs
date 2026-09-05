@@ -479,8 +479,8 @@ fn graft_receiver_runtime_wiring_and_unconfigured_defaults_are_explicit() {
 }
 
 /// Minimal executor: with in-memory stores the admission future never pends,
-/// so a noop-waker poll loop is sufficient and atm-core keeps its zero
-/// tokio dev-dependency footprint.
+/// so a noop-waker poll loop is sufficient and atm-core keeps its
+/// runtime-neutral production dependency footprint.
 fn block_on<F: std::future::Future>(future: F) -> F::Output {
     let waker = std::task::Waker::noop();
     let mut context = std::task::Context::from_waker(waker);

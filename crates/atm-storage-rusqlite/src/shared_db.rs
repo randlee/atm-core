@@ -136,26 +136,9 @@ DROP TABLE IF EXISTS peer_sync_policies;
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.
 
-pub(crate) type SqliteConnection = Connection;
-
-#[derive(Debug, Clone)]
-pub(crate) enum SharedDbTarget {
-    Path(PathBuf),
-    #[cfg(test)]
-    InMemory {
-        uri: String,
-    },
-}
-
-impl SharedDbTarget {
-    pub(crate) fn display(&self) -> String {
-        match self {
-            Self::Path(path) => path.display().to_string(),
-            #[cfg(test)]
-            Self::InMemory { uri } => uri.clone(),
-        }
-    }
-}
+pub(crate) use crate::shared_db_support::{
+    SharedDbTarget, SqliteConnection, ensure_column, sqlite_error, sqlite_open_error,
+};
 
 /// Test-only instrumentation at the concrete SQLite open sites. Entries are
 /// keyed by the target so parallel tests cannot contaminate each other's
@@ -579,8 +562,12 @@ pub(crate) fn ensure_schema(
     crate::search_schema::ensure_schema(connection, target)?;
     ensure_team_roster_columns(connection, target)?;
     crate::team_roster_schema::ensure_team_roster_harness_values(connection, target)?;
-    ensure_team_nudge_template_override_columns(connection, target)?;
-    migrate_template_override_kinds_to_seven(connection, target)?;
+    crate::template_override_migration::ensure_team_nudge_template_override_columns(
+        connection, target,
+    )?;
+    crate::template_override_migration::migrate_template_override_kinds_to_seven(
+        connection, target,
+    )?;
     ensure_mail_message_states_nudge_columns(connection, target)?;
     crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
     ensure_column(
@@ -689,222 +676,6 @@ fn ensure_team_roster_columns(
     )
 }
 
-fn ensure_team_nudge_template_override_columns(
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    ensure_column(
-        connection,
-        target,
-        "team_nudge_template_overrides",
-        "mode",
-        "ALTER TABLE team_nudge_template_overrides ADD COLUMN mode TEXT NOT NULL DEFAULT 'override';",
-    )?;
-    connection
-        .execute(
-            "UPDATE team_nudge_template_overrides
-             SET mode = 'disabled'
-             WHERE mode = 'override' AND template_body = '';",
-            [],
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to normalize legacy empty nudge-template override rows",
-                error,
-            )
-        })?;
-    Ok(())
-}
-
-type TemplateOverrideRow = (String, String, String, String, String);
-
-fn load_template_override_rows(
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<Vec<TemplateOverrideRow>, AtmError> {
-    let mut statement = connection
-        .prepare(
-            "SELECT team_name, template_kind, mode, template_body, updated_at
-             FROM team_nudge_template_overrides;",
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to read nudge-template overrides for migration",
-                error,
-            )
-        })?;
-    statement
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-            ))
-        })
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to enumerate nudge-template overrides for migration",
-                error,
-            )
-        })?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to read nudge-template override row for migration",
-                error,
-            )
-        })
-}
-
-fn create_seven_kind_override_table(
-    transaction: &rusqlite::Transaction<'_>,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    transaction
-        .execute_batch(
-            "CREATE TABLE team_template_overrides_rebuild (
-                team_name TEXT NOT NULL,
-                template_kind TEXT NOT NULL
-                    CHECK(template_kind IN (
-                        'delivery', 'delivery_ack', 'queue', 'queue_ack', 'task',
-                        'acknowledge', 'acknowledge_task'
-                    )),
-                mode TEXT NOT NULL DEFAULT 'override'
-                    CHECK(mode IN ('override', 'disabled')),
-                template_body TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                PRIMARY KEY (team_name, template_kind)
-            );",
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to create seven-kind nudge-template override table",
-                error,
-            )
-        })
-}
-
-fn copy_seven_kind_override_rows(
-    transaction: &rusqlite::Transaction<'_>,
-    target: &SharedDbTarget,
-    rows: Vec<TemplateOverrideRow>,
-) -> Result<(), AtmError> {
-    for (team_name, template_kind, mode, template_body, updated_at) in rows {
-        if matches!(
-            template_kind.as_str(),
-            "delivery_task" | "delivery_task_ack"
-        ) {
-            tracing::warn!(
-                team = %team_name,
-                kind = %template_kind,
-                "dropping retired nudge-template override during seven-kind migration"
-            );
-            continue;
-        }
-        if !matches!(
-            template_kind.as_str(),
-            "delivery"
-                | "delivery_ack"
-                | "queue"
-                | "queue_ack"
-                | "task"
-                | "acknowledge"
-                | "acknowledge_task"
-        ) {
-            return Err(AtmError::validation(format!(
-                "cannot migrate unknown nudge-template kind `{template_kind}` for team `{team_name}`"
-            )));
-        }
-        transaction
-            .execute(
-                "INSERT INTO team_template_overrides_rebuild
-                    (team_name, template_kind, mode, template_body, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5);",
-                rusqlite::params![team_name, template_kind, mode, template_body, updated_at],
-            )
-            .map_err(|error| {
-                sqlite_error(
-                    target,
-                    "failed to copy nudge-template override during seven-kind migration",
-                    error,
-                )
-            })?;
-    }
-    Ok(())
-}
-
-fn replace_override_table(
-    transaction: rusqlite::Transaction<'_>,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    transaction
-        .execute_batch(
-            "DROP TABLE team_nudge_template_overrides;
-             ALTER TABLE team_template_overrides_rebuild RENAME TO team_nudge_template_overrides;
-             CREATE INDEX IF NOT EXISTS idx_team_nudge_template_overrides_team_name
-                 ON team_nudge_template_overrides(team_name);",
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to replace nudge-template override table",
-                error,
-            )
-        })?;
-    transaction.commit().map_err(|error| {
-        sqlite_error(
-            target,
-            "failed to commit seven-kind nudge-template override migration",
-            error,
-        )
-    })
-}
-
-fn migrate_template_override_kinds_to_seven(
-    connection: &mut Connection,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let table_sql = connection
-        .query_row(
-            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'team_nudge_template_overrides';",
-            [],
-            |row| row.get::<_, Option<String>>(0),
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to inspect nudge-template override schema",
-                error,
-            )
-        })?;
-    let Some(table_sql) = table_sql else {
-        return Ok(());
-    };
-    if table_sql.to_ascii_lowercase().contains("'queue'") {
-        return Ok(());
-    }
-
-    let rows = load_template_override_rows(connection, target)?;
-
-    let transaction = connection.transaction().map_err(|error| {
-        sqlite_error(
-            target,
-            "failed to begin nudge-template override migration",
-            error,
-        )
-    })?;
-    create_seven_kind_override_table(&transaction, target)?;
-    copy_seven_kind_override_rows(&transaction, target, rows)?;
-    replace_override_table(transaction, target)
-}
-
 fn ensure_mail_message_states_nudge_columns(
     connection: &Connection,
     target: &SharedDbTarget,
@@ -961,55 +732,6 @@ fn ensure_mail_messages_message_id_compat(
     )
 }
 
-pub(crate) fn ensure_column(
-    connection: &Connection,
-    target: &SharedDbTarget,
-    table: &str,
-    column: &str,
-    ddl: &str,
-) -> Result<(), AtmError> {
-    let mut statement = connection
-        .prepare(&format!("PRAGMA table_info({table});"))
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                format!("failed to inspect sqlite table {table}"),
-                error,
-            )
-        })?;
-    let columns = statement
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                format!("failed to enumerate sqlite columns for {table}"),
-                error,
-            )
-        })?;
-    let collected = columns
-        .into_iter()
-        .map(|entry| {
-            entry.map_err(|error| {
-                sqlite_error(
-                    target,
-                    format!("failed to read sqlite column metadata for {table}"),
-                    error,
-                )
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    if collected.into_iter().any(|value| value == column) {
-        return Ok(());
-    }
-    connection.execute_batch(ddl).map_err(|error| {
-        sqlite_error(
-            target,
-            format!("failed to migrate sqlite table {table}"),
-            error,
-        )
-    })
-}
-
 fn table_exists(
     connection: &Connection,
     target: &SharedDbTarget,
@@ -1029,57 +751,6 @@ fn table_exists(
                 error,
             )
         })
-}
-
-pub(crate) fn sqlite_open_error(target: &SharedDbTarget, source: RusqliteError) -> AtmError {
-    sqlite_error(
-        target,
-        format!("failed to open sqlite database {}", target.display()),
-        source,
-    )
-}
-
-pub(crate) fn sqlite_error(
-    target: &SharedDbTarget,
-    message: impl Into<String>,
-    source: RusqliteError,
-) -> AtmError {
-    let message = message.into();
-    // Every arm keeps the stable code/message contract; the raw SQLite
-    // failure rides along as the machine-preserved cause so a constraint
-    // violation or schema mismatch is diagnosable from the surfaced error.
-    let error =
-        match &source {
-            RusqliteError::SqliteFailure(error, _) => match error.code {
-                rusqlite::ffi::ErrorCode::ConstraintViolation => AtmError::validation(message),
-                rusqlite::ffi::ErrorCode::DatabaseBusy
-                | rusqlite::ffi::ErrorCode::DatabaseLocked => match target {
-                    SharedDbTarget::Path(path) => AtmError::mailbox_lock_timeout(path),
-                    #[cfg(test)]
-                    SharedDbTarget::InMemory { .. } => AtmError::mailbox_lock(format!(
-                        "timed out waiting for sqlite database lock on {}",
-                        target.display()
-                    )),
-                },
-                rusqlite::ffi::ErrorCode::OperationInterrupted => match target {
-                    SharedDbTarget::Path(path) => AtmError::mailbox_lock_timeout(path),
-                    #[cfg(test)]
-                    SharedDbTarget::InMemory { .. } => AtmError::mailbox_lock(
-                        "sqlite query exceeded its caller-provided execution budget",
-                    ),
-                },
-                rusqlite::ffi::ErrorCode::CannotOpen => AtmError::mailbox_write(message),
-                rusqlite::ffi::ErrorCode::ReadOnly => AtmError::mailbox_write(message),
-                rusqlite::ffi::ErrorCode::DatabaseCorrupt
-                | rusqlite::ffi::ErrorCode::NotADatabase => AtmError::mailbox_read(message),
-                rusqlite::ffi::ErrorCode::SystemIoFailure | rusqlite::ffi::ErrorCode::DiskFull => {
-                    AtmError::mailbox_write(message)
-                }
-                _ => AtmError::mailbox_write(message),
-            },
-            _ => AtmError::mailbox_write(message),
-        };
-    error.with_cause(source)
 }
 
 fn json_error(message: impl Into<String>, source: serde_json::Error) -> AtmError {
@@ -1514,8 +1185,11 @@ mod tests {
             )
             .expect("insert legacy empty-body row");
 
-        ensure_team_nudge_template_override_columns(&connection, &target)
-            .expect("migrate override table");
+        crate::template_override_migration::ensure_team_nudge_template_override_columns(
+            &connection,
+            &target,
+        )
+        .expect("migrate override table");
 
         let mode_exists = connection
             .prepare("PRAGMA table_info(team_nudge_template_overrides);")

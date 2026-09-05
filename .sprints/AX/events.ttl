@@ -19,3 +19,17 @@ triage:a3 a triage:Assignment ;
     triage:ofSprint triage:AX2 ;
     triage:assignedTo "cipher" ;
     triage:assignedAt "2026-09-05T05:01:32Z"^^xsd:dateTime .
+
+triage:a4 a triage:Assignment ;
+    triage:ofSprint triage:AX1 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-05T05:25:18Z"^^xsd:dateTime .
+
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:AX3 ;
+    triage:at "2026-09-05T05:48:14Z"^^xsd:dateTime .
+
+triage:a5 a triage:Assignment ;
+    triage:ofSprint triage:AX4 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-05T05:50:46Z"^^xsd:dateTime .
