@@ -40,3 +40,22 @@
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "aec9e5ed" ;
   triage:orderIndex 1 .
+
+# Developer fix evidence; QA retains authority to close the canonical finding.
+<urn:atm:triage:occurrence/FTQ-002/FTQ-002-fixed-efc01fd3a>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 1716 ;
+  triage:snippet "explicit Gate synchronization proves the first request holds the permit before load-shed assertions" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "efc01fd3a" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-EASY/efc01fd3a> .
+
+<urn:atm:triage:worktree/AW-EASY/efc01fd3a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "efc01fd3a" ;
+  triage:orderIndex 2 .

@@ -40,3 +40,22 @@
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "aec9e5ed9" ;
   triage:orderIndex 1 .
+
+# Developer fix evidence; QA retains authority to close the canonical finding.
+<urn:atm:triage:occurrence/FTQ-AW-P1-001/AW-P1-001-fixed-efc01fd3a>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/daemon_observability.rs" ;
+  triage:line 694 ;
+  triage:snippet "Condvar::wait_timeout_while waits for the background writer shutdown completion signal" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "efc01fd3a" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/efc01fd3a> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/efc01fd3a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "efc01fd3a" ;
+  triage:orderIndex 2 .
