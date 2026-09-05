@@ -10,9 +10,9 @@ use atm_core::api::RequestDeadline;
 
 use atm_core::error::AtmError;
 
-use atm_core::protocol::RequestId;
+use atm_core::protocol::{RequestId, ResponseEnvelope, SendResponseEnvelope};
 
-use atm_core::send::WarningEntry;
+use atm_core::send::{WarningEntry, WriteOutcome};
 
 use crate::RuntimeHealth;
 
@@ -179,4 +179,28 @@ impl DetachedReceivedHooks {
             .lock()
             .expect("detached received-hook registry is never held across a panic")
     }
+}
+
+pub(super) fn append_warnings(outcome: &mut WriteOutcome, warnings: Vec<WarningEntry>) {
+    match outcome {
+        WriteOutcome::Sent(outcome) => outcome.warnings.extend(warnings),
+        WriteOutcome::Acknowledged(outcome) => outcome.warnings.extend(warnings),
+    }
+}
+
+pub(super) fn write_response(outcome: WriteOutcome) -> ResponseEnvelope {
+    match outcome {
+        WriteOutcome::Sent(outcome) => ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)),
+        WriteOutcome::Acknowledged(outcome) => {
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+        }
+    }
+}
+
+pub(super) fn hook_warning(error: AtmError) -> WarningEntry {
+    WarningEntry::with_code(
+        error.code(),
+        format!("message received successfully, but its receiver hook did not run: {error}"),
+        Some("inspect the receiver hook endpoint or harness, then continue normally"),
+    )
 }

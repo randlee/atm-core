@@ -17,6 +17,12 @@ use crate::output;
 #[derive(Debug, Args)]
 /// Read one ATM mailbox message and optionally update read state.
 pub struct ReadCommand {
+    /// Positional message IDs are rejected with a migration hint. Keeping
+    /// this parser slot lets the CLI explain the supported option instead of
+    /// returning clap's generic unexpected-argument error.
+    #[arg(index = 1, value_name = "MESSAGE_ID")]
+    message_id_positional: Option<String>,
+
     #[arg(long)]
     team: Option<String>,
 
@@ -74,6 +80,9 @@ pub struct ReadCommand {
 
 impl ReadCommand {
     pub async fn run(self, observability: &CliObservability) -> Result<()> {
+        if let Some(message_id) = self.message_id_positional.as_deref() {
+            return Err(positional_message_id_error(message_id).into());
+        }
         let warnings = self.deprecation_warnings();
         let (home_dir, current_dir) = resolve_command_runtime_context("read")?;
         let json = self.json;
@@ -182,6 +191,13 @@ impl ReadCommand {
         }
         warnings
     }
+}
+
+fn positional_message_id_error(message_id: &str) -> atm_core::error::AtmError {
+    atm_core::error::AtmError::validation_with_recovery(
+        format!("positional message ID `{message_id}` is not supported by `atm read`"),
+        "use `atm read --message-id <id>`",
+    )
 }
 
 #[cfg(test)]
@@ -321,19 +337,23 @@ mod tests {
 
     #[test]
     fn cli_rejects_positional_mailbox_target_for_owner_only_read() {
-        let error = crate::commands::Cli::try_parse_from(["atm", "read", "recipient@test-team"])
-            .expect_err("owner-only read must reject positional target");
+        let parsed =
+            crate::commands::Cli::try_parse_from(["atm", "read", "01KX5TEST00000000000000001"])
+                .expect("positional message ID is parsed for an actionable error");
+        let rendered = format!("{parsed:?}");
+        assert!(rendered.contains("message_id_positional"), "{rendered}");
+    }
 
-        let rendered = error.to_string();
-        assert!(
-            rendered.contains("unexpected argument 'recipient@test-team'")
-                || rendered.contains("unexpected argument"),
-            "{rendered}"
-        );
+    #[test]
+    fn positional_message_id_error_points_to_message_id_option() {
+        let error = super::positional_message_id_error("01KX5TEST00000000000000001");
+        assert!(error.message().contains("positional message ID"));
+        assert!(error.message().contains("atm read --message-id <id>"));
     }
 
     fn base_command() -> ReadCommand {
         ReadCommand {
+            message_id_positional: None,
             team: None,
             chat_id: None,
             actor: None,
