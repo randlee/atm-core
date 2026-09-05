@@ -48,6 +48,7 @@ def build_suite(repo_root: Path) -> unittest.TestSuite:
     suite = unittest.TestSuite()
     test_paths = sorted((repo_root / ".just/tests").glob("test_*.py"))
     test_paths.extend(sorted((repo_root / "scripts/smoke").glob("test_*.py")))
+    test_paths.extend(sorted((repo_root / "scripts/tests").glob("test_*.py")))
     test_paths.extend(sorted((repo_root / "scripts/phase-aq").glob("test_*.py")))
     for test_path in test_paths:
         relative = test_path.relative_to(repo_root)

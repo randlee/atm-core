@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".just"))
+from lint_common import rust_file_test_scope
+
 PRE_BOOTSTRAP_STDERR_ALLOWLIST: frozenset[str] = frozenset({
     # These paths are intentionally empty today. Any future exception must be
     # a pre-logger `file:function` entry and be documented in logging.md.
@@ -16,11 +19,6 @@ RUNTIME_ROOTS = (
 )
 
 
-def production_source(text: str) -> str:
-    """Tests may print diagnostics; the first test-only section is excluded."""
-    return text.split("#[cfg(test)]", 1)[0]
-
-
 def violations(root: Path) -> list[str]:
     findings: list[str] = []
     for relative_root in RUNTIME_ROOTS:
@@ -28,7 +26,11 @@ def violations(root: Path) -> list[str]:
             if "src/bin" in path.as_posix():
                 continue
             relative = path.relative_to(root).as_posix()
-            for line_number, line in enumerate(production_source(path.read_text()).splitlines(), 1):
+            lines = path.read_text().splitlines()
+            test_scope = rust_file_test_scope(path, lines)
+            for line_number, (line, is_test) in enumerate(zip(lines, test_scope, strict=True), 1):
+                if is_test:
+                    continue
                 if "eprintln!(" in line or "println!(" in line:
                     findings.append(f"{relative}:{line_number}: runtime stdout/stderr bypass")
     return findings
