@@ -586,6 +586,16 @@ impl StorageAndNudgeRouter {
         query: ListQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
+        if query.task_ledger.is_some() {
+            if deadline.expired() {
+                return Err(AtmError::daemon_unavailable(
+                    "request deadline expired before task-ledger inspection",
+                ));
+            }
+            return atm_core::list::list_task_ledger_with_runtime(query, &self.service_runtime)
+                .map(ResponseEnvelope::List)
+                .map(ApiResponse::new);
+        }
         let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "async mailbox runtime was not installed at daemon startup",
@@ -2520,6 +2530,59 @@ mod tests {
                 "{handler} must not acquire the global blocking bridge"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn task_ledger_list_uses_the_installed_task_store_without_mailbox_runtime() {
+        let fixture = fixture(true, None, None);
+        let mut write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        write.task_id = Some("t-42".parse().expect("task id"));
+        write.requires_ack = true;
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("seed task through canonical write path");
+
+        let query = atm_core::list::ListQuery::new(
+            fixture.home_dir.clone(),
+            fixture.current_dir.clone(),
+            "sender".parse().expect("caller"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::Actionable,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query")
+        .with_task_ledger(atm_core::list::TaskLedgerQuery::Tasks {
+            member: Some("recipient".parse().expect("member")),
+        });
+        let listed = fixture
+            .router
+            .dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    query,
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("list task ledger through task store")
+            .into_inner();
+
+        assert!(matches!(listed, ResponseEnvelope::List(outcome)
+            if outcome.task_rows.len() == 1
+                && outcome.task_rows[0].task_id.as_str() == "t-42"
+                && outcome.task_rows[0].state == atm_storage::TaskState::Assigned));
     }
 
     #[tokio::test]

@@ -1,6 +1,7 @@
 mod ops;
 mod ops_envelope;
 mod stmt_cache;
+mod task_transitions;
 
 pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
 

@@ -124,6 +124,10 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bdirect_socket_io\b",
     ),
     "direct_sqlite_io": (r"\b(?:rusqlite|sqlx)::", r"\b(?:Sqlite|SQLite)[A-Za-z0-9_]*\b", r"\bdirect_sqlite_io\b"),
+    "task_state_transition": (
+        r"\b(?:apply|transition)_task_(?:state|transition)\s*\(",
+        r"\btask_state_transition\b",
+    ),
     "direct_rusqlite_calls": (
         r"\brusqlite::",
         r"\bSqlite(?:Connection|Transaction|Statement|Database)\b",

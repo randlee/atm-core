@@ -80,6 +80,7 @@ impl AsRef<str> for MessageKey {
 }
 
 pub use crate::peer_contract::*;
+pub use crate::task_state::{TaskEventRow, TaskRow};
 pub use crate::task_store::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]

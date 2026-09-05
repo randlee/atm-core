@@ -228,6 +228,12 @@ impl WriteRequest {
     }
 
     #[must_use]
+    pub fn with_task_complete_opt(mut self, task_id: Option<TaskId>) -> Self {
+        self.task_complete = task_id;
+        self
+    }
+
+    #[must_use]
     pub fn with_max_message_bytes(mut self, max_message_bytes: usize) -> Self {
         self.max_message_bytes = max_message_bytes;
         self
