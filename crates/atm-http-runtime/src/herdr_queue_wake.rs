@@ -50,6 +50,7 @@ pub(crate) struct HerdrQueueWakeStats {
     pub breaker_open: usize,
     pub not_present: usize,
     pub task_reminders: usize,
+    pub task_reminders_failed: usize,
     pub task_reminders_unrenderable: usize,
     pub task_reminders_blocked: usize,
     pub task_step_skipped: bool,
@@ -245,6 +246,7 @@ impl HerdrQueueWakePump {
             released = stats.released,
             breaker_open = stats.breaker_open,
             task_reminders = stats.task_reminders,
+            task_reminders_failed = stats.task_reminders_failed,
             task_reminders_unrenderable = stats.task_reminders_unrenderable,
             task_reminders_blocked = stats.task_reminders_blocked,
             task_step_skipped = stats.task_step_skipped,
@@ -534,6 +536,8 @@ impl HerdrQueueWakePump {
             }
             Err(error) if error.code() == AtmErrorCode::HerdrUnavailable => stats.breaker_open += 1,
             Err(error) => {
+                stats.task_reminders_failed += 1;
+                self.stamp_task_attempt(&candidate.member.key, now);
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_emit", outcome = "failed", error = %error, error_code = ?error.code(), member = %candidate.member.key, "Herdr task reminder emission failed")
             }
         }
@@ -552,11 +556,15 @@ impl HerdrQueueWakePump {
             .record_task_reminder(task_store, member, row, now, outcome)
             .await
         {
-            if outcome == ReminderOutcome::Emitted {
-                stats.prompted += 1;
-                stats.task_reminders += 1;
-                self.stamp_task_attempt(member, now);
+            match outcome {
+                ReminderOutcome::Emitted => {
+                    stats.prompted += 1;
+                    stats.task_reminders += 1;
+                }
+                ReminderOutcome::Unrenderable => stats.task_reminders_unrenderable += 1,
+                ReminderOutcome::Blocked => stats.task_reminders_blocked += 1,
             }
+            self.stamp_task_attempt(member, now);
             return;
         }
         match outcome {
@@ -1448,6 +1456,14 @@ mod tests {
         statuses: Vec<HerdrAgentStatus>,
         fail_reminders: bool,
     ) -> TaskOnlyPumpFixture {
+        build_task_only_pump_with_template(statuses, fail_reminders, None)
+    }
+
+    fn build_task_only_pump_with_template(
+        statuses: Vec<HerdrAgentStatus>,
+        fail_reminders: bool,
+        task_template: Option<&str>,
+    ) -> TaskOnlyPumpFixture {
         let root = tempfile::tempdir().expect("temporary root");
         let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
         let team: TeamName = "ax5-task-only".parse().expect("team");
@@ -1486,6 +1502,16 @@ mod tests {
                 lead_notified_count: 0,
             })
             .collect();
+        if let Some(template) = task_template {
+            assembly
+                .nudge_template_override_store
+                .save_template_override(
+                    &team,
+                    atm_storage::BuiltInNudgeTemplateKind::Task,
+                    template,
+                )
+                .expect("task template override");
+        }
         let task_store = Arc::new(atm_storage::DummyTaskStore::with_rows(
             rows.clone(),
             fail_reminders,
@@ -1893,6 +1919,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn ax5_09_generic_emit_failure_counts_and_respects_cooldown() {
+        let (_root, _runtime, fake, pump, store, keys, now) =
+            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+        fake.queue_prompt_result(Err(atm_herdr::HerdrError::AgentPromptStalled));
+        pump.tick_once().await;
+
+        let task_id = "AX5-TASK-00".parse().expect("task id");
+        assert_eq!(pump.stats().task_reminders_failed, 1);
+        assert_eq!(pump.stats().task_reminders, 0);
+        assert_eq!(store.row(&keys[0], &task_id).reminder_count, 0);
+        assert_eq!(prompt_texts(&fake).len(), 1);
+
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str("2030-01-01T00:00:05Z").expect("test timestamp");
+        queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+        pump.tick_once().await;
+        assert_eq!(prompt_texts(&fake).len(), 1, "cooldown suppresses a retry");
+
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
+        queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+        pump.tick_once().await;
+        assert_eq!(pump.stats().task_reminders, 1);
+        assert_eq!(
+            prompt_texts(&fake).len(),
+            2,
+            "cooldown expires after one minute"
+        );
+        assert_eq!(store.row(&keys[0], &task_id).reminder_count, 1);
+    }
+
+    #[tokio::test]
+    async fn ax5_10_failed_blocked_and_unrenderable_audits_count_and_cool_down() {
+        let (_root, _runtime, fake, pump, store, keys, now) =
+            build_task_only_pump(vec![HerdrAgentStatus::Blocked], true);
+        pump.tick_once().await;
+        assert_eq!(pump.stats().task_reminders_blocked, 1);
+        assert_eq!(
+            store
+                .row(&keys[0], &"AX5-TASK-00".parse().expect("task id"))
+                .reminder_count,
+            0
+        );
+        assert!(prompt_texts(&fake).is_empty());
+
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str("2030-01-01T00:00:05Z").expect("test timestamp");
+        queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
+        pump.tick_once().await;
+        assert_eq!(
+            pump.stats().task_reminders_blocked,
+            0,
+            "blocked cooldown holds"
+        );
+
+        let (_root, _runtime, fake, pump, store, keys, _now) = build_task_only_pump_with_template(
+            vec![HerdrAgentStatus::Idle],
+            true,
+            Some("{{missing}}"),
+        );
+        pump.tick_once().await;
+        assert_eq!(pump.stats().task_reminders_unrenderable, 1);
+        assert_eq!(
+            store
+                .row(&keys[0], &"AX5-TASK-00".parse().expect("task id"))
+                .reminder_count,
+            0
+        );
+        assert!(prompt_texts(&fake).is_empty());
+    }
+
+    #[tokio::test]
     async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let first: TaskId = "AX5-ACTIVE".parse().expect("task id");
@@ -1994,12 +2092,27 @@ mod tests {
                 .reminder_count,
             0
         );
+        assert_eq!(pump.stats().task_reminders_failed, 1);
 
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:02:05Z").expect("test timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
-        assert_eq!(pump.stats().task_reminders, 1, "the next tick retries");
+        assert_eq!(
+            pump.stats().task_reminders,
+            0,
+            "cooldown suppresses a retry"
+        );
+
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str("2030-01-01T00:03:00Z").expect("test timestamp");
+        queue_idle_result(&fake, &key);
+        pump.tick_once().await;
+        assert_eq!(
+            pump.stats().task_reminders,
+            1,
+            "the cooldown eventually expires"
+        );
     }
 
     #[tokio::test]
