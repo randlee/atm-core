@@ -196,6 +196,8 @@ For phase-ending QA:
 - always run `rust-best-practices-agent`
 - always run `rust-service-hardening-agent`
 - always run `flaky-test-qa`
+- always run `schema-reviewer` (blocking on any breaking wire change or
+  plan drift lacking Rand's cited sign-off)
 - require a successful `just validate` result from the assigned execution
   reviewer (normally `rust-qa-agent`) before phase-ending QA can report PASS;
   verify its `executed_checks.artifacts` result in the rendered phase-end
@@ -209,6 +211,8 @@ For docs-only plan review (`review_mode: plan`):
 - run `ruthless-boundary-qa`
 - always run `rust-best-practices-agent`
 - always run `rust-service-hardening-agent`
+- always run `schema-reviewer` (blocking on any planned breaking wire
+  change lacking Rand's cited approval)
 - do not run `rust-qa-agent` for docs-only review
 
 Reviewer ownership note:
@@ -216,6 +220,9 @@ Reviewer ownership note:
   and named artifacts are actually present in the implementation or planning
   docs; req-qa also owns the deliverable completion percentage
 - `arch-qa` owns structural and boundary compliance of the code that exists
+- `schema-reviewer` owns HTTP/peer wire-schema semver: it records minor
+  bumps and blocks breaking changes or plan drift that lack Rand's recorded
+  approval and sign-off (rules on GitHub issue #1217)
 - a branch is not merge-ready if req-qa cannot trace planned deliverables to
   concrete repository evidence
 - a branch is not merge-ready if deliverable completion is below `100%`
