@@ -15,3 +15,18 @@ triage:a1 a triage:Assignment ;
 triage:c1 a triage:Completion ;
     triage:ofSprint triage:AW1 ;
     triage:at "2026-09-05T00:26:34Z"^^xsd:dateTime .
+
+# AW.2 / AW.4 dispatched in parallel on AW.1 dev completion (c1), per Rand
+# 2026-09-05 ("completed in short order", "work in parallel wherever possible").
+# Branches cut from feature/aw1-tracing-bridge @ 1106a5db4; merge-forward from
+# integrate/phase-aw when PR #1176 lands. Dispatch msgs 01M1QPDJ55MC130TMMYG54B1X4
+# (arch-ctm) and 01M1QPDJPC8VDWXMYQ81DJVVZH (cipher).
+triage:a2 a triage:Assignment ;
+    triage:ofSprint triage:AW2 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-05T02:33:00Z"^^xsd:dateTime .
+
+triage:a3 a triage:Assignment ;
+    triage:ofSprint triage:AW4 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-05T02:33:05Z"^^xsd:dateTime .
