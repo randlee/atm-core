@@ -118,6 +118,113 @@ workflow (does `herdr.exe` build and ship at all); plus a grep for
 | Framing on the pipe (same NDJSON as the socket?) and PROTOCOL_VERSION behaviour | W2 |
 | Pipe ACL / impersonation model | W2 |
 
+## Facts read from Herdr v0.8.2 (34ba52cc, 2026-09-05, IPC and session)
+
+Read by an Explore pass at tag v0.8.2; `src/ipc.rs` and `src/session.rs`
+have zero commits after v0.8.2, so these hold at HEAD too.
+
+- Endpoint resolution order: explicit `--session` > `HERDR_SOCKET_PATH`
+  > `HERDR_SESSION` > default (`src/session.rs:173-181`; env constants
+  `src/api/mod.rs:20`, `src/session.rs:10-11`). Default path is
+  `<config_dir>/herdr.sock`, named session
+  `<config_dir>/sessions/<name>/herdr.sock` (`src/session.rs:161-171`);
+  `config_dir` on Windows is `%APPDATA%\herdr` (`src/config/io.rs:30-59`),
+  `herdr-dev` in debug builds. Session names: ASCII alnum plus `. _ -`,
+  max 64 bytes (`src/session.rs:13,425-446`).
+- Windows pipe name: the resolved path string is used verbatim as an
+  `interprocess` namespaced name (`src/ipc.rs:44-51`), so the endpoint is
+  `\\.\pipe\C:\Users\<user>\AppData\Roaming\herdr\herdr.sock` (or the
+  `sessions\<name>\` variant, or `\\.\pipe\<HERDR_SOCKET_PATH>`). There is
+  no short session-derived pipe name. The `.sock` path still exists on
+  disk on Windows as a marker file holding `<pid>:<nanos>`
+  (`src/ipc.rs:76,326-333`); identity checks use marker contents there
+  and dev/ino on Unix (`src/ipc.rs:287-303`). Doctor reporting for W1
+  prints this derived name.
+- Transport: `interprocess` 2.4.2 local sockets, named pipe on Windows
+  and UDS on Unix (`src/ipc.rs:10-11,137,247`). Framing is identical: one
+  NDJSON request line, one JSON response line (`src/api/client.rs:158-174`);
+  server caps the request at 1 MiB with a 5 s initial deadline
+  (`src/api/server.rs:28-32,510-554`). PROTOCOL_VERSION 20, checked by
+  `src/cli/protocol_guard.rs:16-43` (`protocol_mismatch`).
+- Timeouts: the default CLI request path sets no read/write timeout
+  (`src/api/client.rs:55-61`), and on Windows an `Unsupported` timeout
+  failure is swallowed (`src/api/client.rs:115-120`). So atm's own
+  process deadline plus kill-and-reap is the only bound on a hung
+  `herdr.exe`; W1's Windows kill/reap correctness item is mandatory, not
+  hygiene.
+- ACL: Unix API socket is chmod 0600 (`src/server/socket_paths.rs:12`);
+  on Windows `restrict_socket_permissions` is a no-op for the API pipe
+  (`src/ipc.rs:342-345`); the same-user SDDL DACL exists only on the
+  private remote-attach listener (`src/ipc.rs:143-168`). W2 must treat
+  the Windows API pipe as reachable by any local user and record that in
+  the boundary revision; W1 doctor should report it.
+- Child env: every pane gets `HERDR_SOCKET_PATH` and `HERDR_BIN_PATH`
+  (`src/integration/env.rs:28-33`); `HERDR_SESSION` is NOT propagated to
+  panes, and `HERDR_SOCKET_PATH` outranks `HERDR_SESSION`
+  (`src/session.rs:82-83`). Also `HERDR_ENV=1` blocks nested launches
+  (`src/main.rs:478-482`).
+- Consequence for atm (Rand, 2026-09-05): the atm daemon is a singleton
+  under launchd / a Windows service, so it never inherits a pane's
+  `HERDR_SOCKET_PATH`; it must own the Herdr endpoint itself. Today
+  `session_environment` only sets `HERDR_SESSION` on the child
+  (`crates/atm-herdr/src/lib.rs:627-629`) and works because the launchd
+  environment is clean. W1 makes this explicit: the daemon resolves the
+  endpoint from its configured `HerdrSession` (or an optional configured
+  socket path) using Herdr's own rules above, sets `HERDR_SOCKET_PATH`
+  and `HERDR_SESSION` on every child, and removes any inherited
+  `HERDR_SOCKET_PATH`/`HERDR_CLIENT_SOCKET_PATH`/`HERDR_ENV`. On Windows
+  the same path value is what Herdr maps to `\\.\pipe\<path>`, so one
+  code path serves both platforms. Doctor reports the resolved endpoint.
+  The fixture covers a polluted parent env (pane-launched daemon for
+  dev/dogfood) and a clean one. This is also the endpoint field W2's
+  direct client reuses.
+
+## Facts read from Herdr v0.8.2 (CLI parity)
+
+- Exit codes are platform-independent code: 0 success (JSON on stdout),
+  1 server error, `server_not_running` or `protocol_mismatch` (JSON on
+  stderr), 2 usage (`src/cli.rs:738-746`, `src/main.rs:559-570`,
+  `src/cli/agent.rs:762-816`). Dead-socket classification is
+  ErrorKind-only and commented as deliberately transport-neutral
+  (`src/cli.rs:816-824`). `herdr status` exits 0 even with no server, so
+  doctor must probe with `agent list`/ping, not `status`.
+- Output is single-line compact JSON, LF only (`println!`, no CRLF
+  handling anywhere under `src/cli*`): `{"id":"cli:agent:<cmd>","result":{"type":...}}`
+  with `agent_list`/`agent_info`/`agent_prompted`, error
+  `{"id","error":{"code","message"}}` (`src/api/schema/response.rs:30-109`).
+  atm's parsers may still tolerate a trailing `\r` defensively.
+- Argv is hand-rolled positional: `agent prompt <target> <text> [--wait]
+  [--until S]... [--timeout MS]`, `agent wait <target> [--until S]...
+  [--timeout MS]`, `agent get <target>`, `agent list` (no args). `--timeout`
+  is milliseconds; omitted means wait indefinitely; `--flag=value` is not
+  accepted for agent commands (`src/cli/agent.rs:424-545,757-826`). atm's
+  builders (`crates/atm-herdr/src/lib.rs:631-657`) match this exactly,
+  including milliseconds; the phase-ax contract text saying `--timeout
+  <secs>` is a doc slip to correct in `docs/atm-herdr/requirements.md`.
+- The only CLI platform branches are `agent start` busy-pane retry
+  (`src/cli/agent.rs:644-674`, unused by atm) and Kitty keyboard flags.
+  One behavioural divergence: on a closed stdout, Unix dies by SIGPIPE
+  silently while Windows panics (exit 101) because `begin_cli_output` is
+  a no-op there (`src/platform/mod.rs:204-208`). atm captures stdout to
+  a buffer, so it is not hit; the audit records it.
+- Packaging: release builds `x86_64-pc-windows-msvc` only, as
+  `herdr-windows-x86_64.zip` containing `herdr.exe` plus a `conpty/`
+  sibling directory that must stay together (`release.yml:64-68,159-175`,
+  install.mdx:96). The installer places releases under
+  `%USERPROFILE%\.herdr\packages\standalone\releases` with
+  `%LOCALAPPDATA%\Programs\Herdr\bin` as a junction on the user PATH.
+  W1's configured-binary-path option must accept a directory-resident
+  exe, never copy `herdr.exe` alone, and PATH lookup needs no PATHEXT
+  work (`herdr.exe` is a real exe, not a `.cmd` shim). ARM64 Windows runs
+  the x86_64 build under emulation. No code signing: SmartScreen prompts
+  are expected on first run, which matters for the FastPC4 setup.
+
+- Post-0.8.2 drift on the API paths (not adopted): cc88b3b8 stable
+  client endpoint handshake, 207be3c7 client-side shell rendering,
+  7916be16/8633a398 prompt-delay and wait changes, 20a500a7 lifecycle
+  subscription start, and two Windows key-identity fixes; several bump
+  PROTOCOL_VERSION.
+
 ## Sprint W1 (AY.1): parity via the CLI transport, proven on Windows (size M)
 
 Sprint AY.1, branch `feature/ay1-windows-herdr-cli-parity` off
