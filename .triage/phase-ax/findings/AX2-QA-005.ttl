@@ -8,15 +8,15 @@
   a triage:Finding ;
   triage:findingId "AX2-QA-005" ;
   triage:title "Stale doc comment on render_built_in_nudge_for_dispatch names only Tmux and graft as consumers of the identical text" ;
-  triage:description "crates/atm-core/src/send/hook.rs ~99-100 doc comment reads 'Tmux and graft therefore receive identical XML text', but AX.2 D1 added the Herdr call site (~48) to the same shared render function, a third consumer, as verified by tmux_and_herdr_dispatches_share_the_rendered_template in crates/atm-core/src/send/tests.rs. Fix: name Tmux, Herdr, and graft. Found by quality-mgr, corroborated by ruthless-boundary-qa RBQA-F001 on PR #1186 QA-1 (head 4f77d2fff)." ;
+  triage:description "Follow-up after cipher's fix pass. quality-mgr QA-2 (PR #1186 Final Quality Report, 2026-09-05T07:36:04Z) verified fixed at e7d4d5453: the doc comment on render_built_in_nudge_for_dispatch in crates/atm-core/src/send/hook.rs now names Tmux, Herdr and graft as consumers. Confirm at HEAD and record the finding as fixed on feature/ax2-herdr-template-rendering at e7d4d5453." ;
   triage:phaseId "phase-ax" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "QA" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
   triage:foundIn triage:AX2 ;
   triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
@@ -27,16 +27,16 @@
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/hook.rs" ;
   triage:line 100 ;
-  triage:snippet "Tmux and graft therefore receive identical XML text." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Tmux, Herdr, and graft therefore receive identical XML text." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
-  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
-  triage:occursIn <urn:atm:triage:worktree/ax2/4f77d2fff> .
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2/e7d4d545> .
 
-<urn:atm:triage:worktree/ax2/4f77d2fff>
+<urn:atm:triage:worktree/ax2/e7d4d545>
   a triage:WorktreeSnapshot ;
   triage:path "feature/ax2-herdr-template-rendering" ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
-  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
-  triage:orderIndex 3 .
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:orderIndex 1 .

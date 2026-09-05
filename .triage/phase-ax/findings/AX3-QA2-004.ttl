@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-QA2-004>
+  a triage:Finding ;
+  triage:findingId "AX3-QA2-004" ;
+  triage:title "AX.3 QA-2 re-assessment of AX3-013: admit()/transition() rejection message still omits the task id and the writer hand-rolls its own message instead of applying the pure functions (C6 one-application-site violation)" ;
+  triage:description "AX.3 QA-2 (quality-mgr ax3-qa-r2, PR #1191 Final Quality Report 2026-09-05T07:37Z; req-qa's C6 framing adopted over rust-qa-agent's minor rating) at head 116bd23b0. The pure state machine in crates/atm-storage/src/task_state.rs (admit()/transition()) still emits 'no open task for <actor>' without the task id, contrary to the spec text 'no open task <id> for <actor>', and a test asserts that stale contract. Production avoids the user-facing mismatch only because apply_task_completion in crates/atm-storage-rusqlite/src/writer/task_ops.rs hand-rolls its own correct message rather than applying admit()/transition() -- a second application site, violating the sprint's C6 'one application site' contract. Fix: make the rejection message carry the task id at the pure-function level (thread the id through the event or return a structured error the caller formats) and route the writer's missing-completion rejection through the single admit()/transition() path; update the test to the correct contract. Supersedes AX3-013's disposition (severity escalated from minor to important; does not edit AX3-013.ttl)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T09:06:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T07:37:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA2-004/ax3qa2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA2-004/ax3qa2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA2-004/ax3qa2-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA2-004/ax3qa2-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-QA2-004/ax3qa2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_state.rs" ;
+  triage:line 83 ;
+  triage:snippet "(None, TaskEvent::Completed) => Err(TaskRejected::new(\"no open task for actor\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:occursIn <urn:atm:triage:worktree/ax3/116bd23b0> .
+
+<urn:atm:triage:occurrence/AX3-QA2-004/ax3qa2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_state.rs" ;
+  triage:line 111 ;
+  triage:snippet "Err(TaskRejected::new(format!(\"no open task for {actor}\")))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:occursIn <urn:atm:triage:worktree/ax3/116bd23b0> .
+
+<urn:atm:triage:occurrence/AX3-QA2-004/ax3qa2-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_state.rs" ;
+  triage:line 255 ;
+  triage:snippet "assert!(missing.detail.contains(\"no open task for assignee\"));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:occursIn <urn:atm:triage:worktree/ax3/116bd23b0> .
+
+<urn:atm:triage:occurrence/AX3-QA2-004/ax3qa2-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 342 ;
+  triage:snippet "no open task {task_id} for {} -- hand-rolled second application site in apply_task_completion, bypasses admit()/transition() called two lines later via transition_for()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:occursIn <urn:atm:triage:worktree/ax3/116bd23b0> .
+
+<urn:atm:triage:worktree/ax3/116bd23b0>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:orderIndex 2 .

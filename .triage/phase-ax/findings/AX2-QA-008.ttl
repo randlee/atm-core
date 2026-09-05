@@ -8,29 +8,29 @@
   a triage:Finding ;
   triage:findingId "AX2-QA-008" ;
   triage:title "run_command_with_binary drains the Herdr child's stdout/stderr with unbounded read_to_end" ;
-  triage:description "crates/atm-herdr/src/lib.rs ~616-627 run_command_with_binary reads a spawned herdr child's pipes to completion with no size cap, so a verbose or misbehaving herdr CLI is buffered fully into memory. Fix: apply an explicit byte cap when draining stdout/stderr (take(N) or equivalent) and surface truncation. Reported by rust-service-hardening-agent RSH-003 (minor) on PR #1186 QA-1 (head 4f77d2fff). In your notes, state whether this code predates the AX.2 diff (compare git show origin/feature/ax1-queue-template-class:crates/atm-herdr/src/lib.rs) so the orchestrator can judge scope." ;
+  triage:description "Follow-up after cipher's fix pass. quality-mgr QA-2 (PR #1186 Final Quality Report, 2026-09-05T07:36:04Z) verified fixed at e7d4d5453: run_command_with_binary in crates/atm-herdr/src/lib.rs now caps stdout/stderr capture at 64KiB and surfaces an output_truncated advisory, with a test. Confirm at HEAD that the byte cap and truncation signal exist on the Herdr child read path, then record the finding as fixed on feature/ax2-herdr-template-rendering at e7d4d5453." ;
   triage:phaseId "phase-ax" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "RSH" ;
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
   triage:foundIn triage:AX2 ;
   triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-008/AX2-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-008/AX2-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AX2-QA-008/AX2-1>
   a triage:Occurrence ;
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 619 ;
   triage:snippet "let _ = pipe.read_to_end(&mut stdout).await;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
   triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
   triage:occursIn <urn:atm:triage:worktree/AX2-ax2/4f77d2fff0b384b60d5297e1dbfa0981a0192419> .
@@ -40,8 +40,8 @@
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 622 ;
   triage:snippet "let _ = pipe.read_to_end(&mut stderr).await;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
   triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
   triage:occursIn <urn:atm:triage:worktree/AX2-ax2/4f77d2fff0b384b60d5297e1dbfa0981a0192419> .
@@ -52,3 +52,10 @@
   triage:branch "feature/ax2-herdr-template-rendering" ;
   triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
   triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AX2-ax2/e7d4d54535669339ca184c3eec978f19412d4ec7>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:orderIndex 1 .

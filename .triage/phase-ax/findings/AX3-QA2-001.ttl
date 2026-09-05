@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-QA2-001>
+  a triage:Finding ;
+  triage:findingId "AX3-QA2-001" ;
+  triage:title "cargo clippy --all-targets --all-features fails to compile: atm-daemon-benchmark.rs direct_storage_message() literal is missing the task_complete field (4th AX3-002 miss, feature-gated)" ;
+  triage:description "AX.3 QA-2 (quality-mgr ax3-qa-r2, PR #1191 Final Quality Report 2026-09-05T07:37Z, found by rust-qa-agent) at head 116bd23b0. crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs:352 direct_storage_message() builds an atm_storage::InboxMessage / MessageEnvelope literal without the task_complete field that the AX3-002 fix added to the other three sites (mailbox_runtime.rs:803, client.rs:1447, message_handler.rs:996). The bin is gated behind the benchmark-harness feature, so just validate's clippy step (--all-targets only) and plain cargo test --workspace never compile it, but the QA-mandated cargo clippy --all-targets --all-features -- -D warnings fails with error[E0063]: missing field task_complete. Fix: add task_complete: None (or the correct value) at that site and sweep every other feature-gated literal of these types so --all-features compiles clean. Workspace-wide repeatable sweep of InboxMessage/MessageEnvelope struct literals at HEAD found this as the sole remaining occurrence; all other literals either already set task_complete explicitly or spread from a helper (message()/message_at()) that already sets it." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T09:07:42Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T07:37:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA2-001/AX3QA2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-QA2-001/AX3QA2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs" ;
+  triage:line 352 ;
+  triage:snippet "envelope: MessageEnvelope { ... task_id: None, extra: serde_json::Map::new() } (task_complete field absent, E0063 under --all-features)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:occursIn <urn:atm:triage:worktree/ax3-task-state-machine/116bd23> .
+
+<urn:atm:triage:worktree/ax3-task-state-machine/116bd23>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:orderIndex 2 .

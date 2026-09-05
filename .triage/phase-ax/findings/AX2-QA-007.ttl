@@ -10,33 +10,33 @@
   triage:title "FakeHerdrProcessAdapter::prompt names its used text parameter _text" ;
   triage:description "crates/atm-herdr/src/lib.rs: the C2 trait-implementation update on FakeHerdrProcessAdapter::prompt introduced a parameter named _text (Rust's intentionally-unused convention) that the body immediately uses (_text.to_owned()) to populate FakeHerdrCall::Prompt; clippy pedantic used_underscore_binding flags this and it misleads readers. Introduced by the AX.2 diff. Fix: rename to text." ;
   triage:phaseId "phase-ax" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "RBP" ;
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
   triage:foundIn triage:AX2 ;
   triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-007/AX2-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AX2-QA-007/AX2-1>
   a triage:Occurrence ;
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 893 ;
-  triage:snippet "_text: &'a str," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "fn prompt<'a>( ... ) -> ... // parameter now: text (not _text)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
-  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
-  triage:occursIn <urn:atm:triage:worktree/ax2-herdr-template-rendering/4f77d2fff> .
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2-herdr-template-rendering/e7d4d545> .
 
-<urn:atm:triage:worktree/ax2-herdr-template-rendering/4f77d2fff>
+<urn:atm:triage:worktree/ax2-herdr-template-rendering/e7d4d545>
   a triage:WorktreeSnapshot ;
   triage:path "feature/ax2-herdr-template-rendering" ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
-  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
-  triage:orderIndex 3 .
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:orderIndex 1 .
