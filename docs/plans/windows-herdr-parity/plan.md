@@ -235,8 +235,9 @@ a Herdr-backed roster member on that box.
 Blocking preconditions (no dispatch until all three are recorded in the
 sprint doc with a date):
 
-- P-A: `integrate/phase-ay` exists, cut from develop after
-  `integrate/phase-ax` has merged (see Ordering with phase AX).
+- P-A: `integrate/phase-ay` exists, cut from `integrate/phase-ax` (or
+  from develop if phase-ax has already merged; see Ordering with phase
+  AX).
 - P-B: the FastPC4 Windows `atm-dev` team exists, has Herdr v0.8.2
   installed via the official installer, and its parked reporter agent
   has delivered one round-trip report to rand-m4 or M5 (see Windows
@@ -465,15 +466,14 @@ Status 2026-09-05 (fenix@rand-m5): AX.1 through AX.5 are merged into
 integrate/phase-ax; AX.6 merges when its QA gate clears; then one PR
 integrate/phase-ax -> develop follows AX.7 and the phase-ending review.
 
-Decision (default, stands unless Rand overrides): AY does not start
-until integrate/phase-ax has merged to develop; `integrate/phase-ay` is
-then cut from develop (precondition P-A). AY.1 therefore takes the AX
-contract, including HR-CORE-010 notify, as its baseline with no
-merge-forward juggling. AX does not wait on AY.1. AX.7's evidence
-scope is widened to a Windows Herdr run once AY.1 lands. If Rand wants
-AY.1 to start earlier, the alternative is to cut `integrate/phase-ay`
-from `integrate/phase-ax` and retarget after AX merges; that is a
-documented exception, not the plan.
+Decision (Rand, 2026-09-05): `integrate/phase-ay` is cut from
+`integrate/phase-ax` if phase-ax has not yet merged to develop at the
+moment AY starts; from develop otherwise. Either way AY.1 takes the AX
+contract, including HR-CORE-010 notify, as its baseline. When cut from
+phase-ax, `integrate/phase-ay` is retargeted to develop and merged
+forward once the phase-ax PR lands, before the phase-ay PR opens. AX
+does not wait on AY.1. AX.7's evidence scope is widened to a Windows
+Herdr run once AY.1 lands.
 
 ## Risks
 
@@ -483,7 +483,8 @@ documented exception, not the plan.
    commit, unedited fixtures.
 3. Orphaned herdr.exe after timeout: explicit live-verified test.
 4. Console flash per nudge: CREATE_NO_WINDOW plus visual confirmation.
-5. Merge collision with AX: AY starts after phase-ax merges (P-A).
+5. Merge collision with AX: AY branches from phase-ax and merges
+   forward after the phase-ax PR lands (P-A).
 7. W2 quietly dropped again: the Phase AY exit gate requires a dated
    Ship/Defer/Cancel decision before the phase PR.
 6. Hot-path regression: official benchmark run before merge.
