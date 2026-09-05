@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-HOTFIX-001>
+  a triage:Finding ;
+  triage:findingId "AV-HOTFIX-001" ;
+  triage:title "Host-qualified send is persisted into the local same-named mailbox and lost when the peer is unreachable" ;
+  triage:description "Discovered during AV phase dogfooding: atm send fenix@rand-m5 -> daemon log 'handled send with outcome sent' with agent=fenix (local mailbox) BEFORE the peer dial; then peer_connection_pool 'direct peer TCP connect failed' and CLI error RemoteDeliveryUnconfirmed. Code: storage_and_nudge_router.rs commit_write persists first, dispatch_resolved_peer_write comment says 'record is already durable ... creates neither a second application route nor delivery recovery state' (ADR-057). Local ingress in message_handler.rs normalize_write does not strip the host, but the persisted record lands in the local (team, agent) mailbox, so the local fenix reads it as inbound and the remote never receives it, with no retry or outbox. Network context at observation time: rand-m5 was offline on Tailscale (last seen, rx 0) and mDNS gave only a link-local v6 address." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-gate" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T18:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV1B ;
+  triage:foundAt "2026-09-05T18:10:43Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-HOTFIX-001/AV-001-persist> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-HOTFIX-001/AV-001-normalize> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-HOTFIX-001/AV-001-persist>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 369 ;
+  triage:snippet "commit_write persists to local mailbox before peer dial resolves; dispatch_resolved_peer_write treats the record as already durable per ADR-057 with no second route or delivery-recovery state" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "9a810ab2" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/9a810ab2> .
+
+<urn:atm:triage:occurrence/AV-HOTFIX-001/AV-001-normalize>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 170 ;
+  triage:snippet "normalize_write Local ingress arm does not strip the host qualifier from request.to before mailbox resolution" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "9a810ab2" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/9a810ab2> .
+
+<urn:atm:triage:worktree/integrate-phase-av/9a810ab2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "9a810ab2" ;
+  triage:orderIndex 1 .
