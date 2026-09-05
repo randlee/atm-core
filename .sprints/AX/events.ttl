@@ -409,3 +409,11 @@ triage:a20 a triage:Assignment ;
 triage:c19 a triage:Completion ;
     triage:ofSprint triage:AX5 ;
     triage:at "2026-09-05T15:27:13Z"^^xsd:dateTime .
+
+triage:r59 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX5-QA3-004> ;
+    triage:resolvedAt "2026-09-05T15:36:45Z"^^xsd:dateTime .
+
+triage:r60 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX5-QA3-005> ;
+    triage:resolvedAt "2026-09-05T15:36:45Z"^^xsd:dateTime .
