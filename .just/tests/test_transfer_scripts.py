@@ -163,12 +163,20 @@ FAKE_TRANSFER_LIB = textwrap.dedent(
     def resolve_within_profile(raw_path: str):
         \"\"\"Resolve `raw_path`, refusing (returns None) any path that would
         land outside `FAKE_PROFILE_ROOT` when that containment env var is
-        set. When it is unset, every path is accepted (the default,
-        permissive shape most contract tests use).\"\"\"
+        set. When it is unset (the default, permissive shape most contract
+        tests use), every path is accepted but re-rooted under
+        `FAKE_REMOTE_ROOT`, the fixture's per-test scratch directory: the
+        scripts under test hardcode the *remote* landing root
+        (`/tmp/atm-$(id -u)/send-to/<transfer-id>`), and this fake stands
+        in for the remote host, so it must never create that literal path
+        on the developer's real filesystem.\"\"\"
         resolved = pathlib.Path(raw_path).resolve()
         profile_root = os.environ.get("FAKE_PROFILE_ROOT")
         if profile_root is None:
-            return resolved
+            remote_root = os.environ.get("FAKE_REMOTE_ROOT")
+            if not remote_root:
+                raise SystemExit("fake ssh/scp: the test fixture must set FAKE_REMOTE_ROOT")
+            return pathlib.Path(remote_root) / resolved.relative_to(resolved.anchor)
         root_resolved = pathlib.Path(profile_root).resolve()
         try:
             resolved.relative_to(root_resolved)
@@ -273,6 +281,9 @@ class _TransferScriptContractTestsMixin:
         env = {
             "PATH": (str(bin_dir) + os.pathsep + os.environ.get("PATH", "")) if with_fake_bin else "",
             "FAKE_LOG": str(log_path),
+            # Where the fake ssh/scp materialise the "remote" landing
+            # directory (see fake_transfer_lib.resolve_within_profile).
+            "FAKE_REMOTE_ROOT": str(tmp / "remote"),
             # Ambient ATM child-environment allow-list variables (ADR-055
             # decision (c)): present in a real invocation, harmless here
             # since these scripts never read them directly.
@@ -488,6 +499,7 @@ class SftpPs1Tests(unittest.TestCase):
         env = dict(os.environ)
         env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
         env["FAKE_LOG"] = str(log_path)
+        env["FAKE_REMOTE_ROOT"] = str(tmp / "remote")
         env["ATM_TEMP"] = str(tmp / "atm-temp")
         env["ATM_IDENTITY"] = "test-agent"
         env["ATM_TEAM"] = "test-team"
