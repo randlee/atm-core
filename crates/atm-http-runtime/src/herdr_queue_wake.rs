@@ -1484,24 +1484,7 @@ mod tests {
             })
             .expect("roster");
         let assigned_at = IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("timestamp");
-        let rows: Vec<TaskRow> = agents
-            .iter()
-            .enumerate()
-            .map(|(index, agent)| TaskRow {
-                team: team.clone(),
-                task_id: format!("AX5-TASK-{index:02}").parse().expect("task id"),
-                assignee: agent.parse().expect("agent"),
-                assigner: "sender".parse().expect("assigner"),
-                state: TaskState::Assigned,
-                assignment_message_id: AtmMessageId::new(),
-                description: format!("reminder body {index}"),
-                assigned_at,
-                updated_at: assigned_at,
-                last_reminded_at: None,
-                reminder_count: 0,
-                lead_notified_count: 0,
-            })
-            .collect();
+        let rows = task_rows(&team, &agents, assigned_at);
         if let Some(template) = task_template {
             assembly
                 .nudge_template_override_store
@@ -1543,6 +1526,27 @@ mod tests {
             .map(|agent| atm_storage::MemberKey::new(team.clone(), agent.parse().expect("agent")))
             .collect();
         (root, runtime, fake, pump, task_store, keys, now)
+    }
+
+    fn task_rows(team: &TeamName, agents: &[String], assigned_at: IsoTimestamp) -> Vec<TaskRow> {
+        agents
+            .iter()
+            .enumerate()
+            .map(|(index, agent)| TaskRow {
+                team: team.clone(),
+                task_id: format!("AX5-TASK-{index:02}").parse().expect("task id"),
+                assignee: agent.parse().expect("agent"),
+                assigner: "sender".parse().expect("assigner"),
+                state: TaskState::Assigned,
+                assignment_message_id: AtmMessageId::new(),
+                description: format!("reminder body {index}"),
+                assigned_at,
+                updated_at: assigned_at,
+                last_reminded_at: None,
+                reminder_count: 0,
+                lead_notified_count: 0,
+            })
+            .collect()
     }
 
     fn build_test_pump_with_two_sessions() -> (
