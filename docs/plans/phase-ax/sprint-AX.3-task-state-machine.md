@@ -64,7 +64,7 @@ is written.
 | From \ Event | `Assigned` | `Acked` | `Completed` |
 | --- | --- | --- | --- |
 | ∅ (no row) | → `Assigned` | **No-op** (the ack proceeds; the machine never blocks an ack it has no row for: pre-upgrade mail, peer-delivered tasks) | Reject `no open task <id> for <actor>` |
-| `Assigned` | → `Assigned` (re-send: `assignment_message_id` and `description` updated; event detail `resend`) | → `Active` (admit guard G1) | → `Complete` (assignment message marked acknowledged in the same transaction, code contract C7) |
+| `Assigned` | → `Assigned` (re-send: `assignment_message_id` and `description` updated; event marker `resend`) | → `Active` (admit guard G1) | → `Complete` (assignment message marked acknowledged in the same transaction, code contract C7) |
 | `Active` | → `Active` (re-send, as above) | → `Active` (no change, one `Acked` event row) | → `Complete` |
 | `Complete` | Reject `task <id> already complete; use a new id` | Reject `task <id> already complete` | Reject `task <id> already complete` |
 
@@ -349,8 +349,13 @@ pub struct TaskEventRow {
     pub actor: TaskActor,
     pub message_id: Option<AtmMessageId>,
     pub outcome: Option<ReminderOutcome>, // Reminded rows only; typed, never free text
-    pub detail: Option<String>,      // "resend" on a re-send; rejection text on Rejected; None otherwise
+    pub marker: Option<TaskEventMarker>,  // Assigned(resend) / Completed(assignment_missing); typed
+    pub detail: Option<String>,      // Rejected rows only: the TaskRejected prose; None otherwise
 }
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskEventMarker { Resend, AssignmentMissing }
 ```
 
 `Reject` maps to `AtmError` with code `MessageValidationFailed` and the
@@ -428,7 +433,8 @@ CREATE TABLE IF NOT EXISTS task_events (
     actor TEXT NOT NULL,          -- member name or 'atm-daemon'
     message_id TEXT NULL,
     outcome TEXT NULL CHECK(outcome IN ('emitted', 'unrenderable', 'blocked')),
-    detail TEXT NULL,
+    marker TEXT NULL CHECK(marker IN ('resend', 'assignment_missing')),
+    detail TEXT NULL,             -- Rejected rows only
     PRIMARY KEY (team, task_id, assignee, seq)
 );
 ```
@@ -670,7 +676,7 @@ paths; `atm read` / `atm ack` argument shapes; `DeliveryRecipientSnapshot`;
    writes no completion message.
 3. Re-sending an open task id updates `assignment_message_id` and
    `description`, leaves the state unchanged, and appends one `Assigned`
-   event row with detail `resend`.
+   event row with marker `resend`.
 4. A `Peer` write carrying a `task_id` creates no task row; a local ack
    of that message succeeds and creates no row and no event; a local ack
    of a task message that predates the `tasks` table succeeds the same

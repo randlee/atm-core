@@ -70,15 +70,21 @@ for member in blocked:
 
 ```
 escalate(body):
-    lead := the single Lead of the team
-    if lead is some: write queued message from DAEMON_ACTOR_NAME to lead, body, requires_ack = false   # failure logged
-    herdr_process.notify(title = first line of body, body = remaining lines, deadline)                 # C4; failure logged
-    log herdr_queue_poll_outcome outcome = "lead_notified" | "blocked_escalated", member, lead present?, notify ok?
+    recipients := {the single Lead of the team} ∪ {every roster member with agent_type == Operator}
+    for r in recipients: write queued message from DAEMON_ACTOR_NAME to r, body, requires_ack = false   # per-recipient; failure logged
+    herdr_process.notify(title = first line of body, body = remaining lines, deadline)                   # C4; failure logged
+    log herdr_queue_poll_outcome outcome = "lead_notified" | "blocked_escalated", member, recipients count, notify ok?
 ```
 
-The Herdr notification fires even when the team has no lead, so a
-blocked agent or stalled task is visible on the human's screen without
-anyone running doctor or reading mail. `BLOCKED_NOTIFY_MS = 60_000`,
+Three layers, all pushed. **Lead**: the coordinating agent on the team.
+**Operator**: any roster member with the new `agent_type = operator`
+(D8), typically a hermes-bridged agent such as `pater` whose own harness
+relays to the human's phone; it may be graft-backed, so the message
+leaves the host over the graft queue channel like any other queued mail.
+**Screen**: the Herdr notification, which fires even when the team has
+neither lead nor operator. Nothing here depends on anyone running
+doctor or reading a mailbox. The daemon does not know or care how an
+operator agent reaches its human; that is the operator harness's job. `BLOCKED_NOTIFY_MS = 60_000`,
 `BLOCKED_RENOTIFY_MS = 600_000`, both constants beside
 `TASK_REMINDER_INTERVAL_MS`. Nothing is ever sent to the blocked agent
 itself.
@@ -154,6 +160,18 @@ shape-only completion fails the sprint.
   contains member, task id, ages and a remediation command only, never a
   message body (HR-SAFE-003 holds); `docs/atm-herdr/requirements.md`
   gains `HR-CORE-004` (notification verb, fixed argv shape, fail-soft).
+- [ ] D8 — operator agent type: `AgentType::Operator` (serde and CLI
+  string `operator`) in `crates/atm-storage/src/contract.rs` line 478
+  with its `From<String>` / `Display` / `Serialize` / `Deserialize` arms
+  (lines 493–548, no other change to that file); `atm teams add-member`
+  and `update-member` accept `--agent-type operator`; `atm members`
+  renders `type=operator`; the roster-store `team_roster` `agent_type`
+  column needs no schema change (free text). Doctor's per-team info line
+  (D3) adds the operator count; no new warning code, since an operator
+  is optional and the Herdr notification is the floor. `docs/team-protocol.md`
+  and `docs/user-documents/tasks.md` describe the three layers and how
+  to register an operator (example: `atm teams add-member atm-dev pater
+  --agent-type operator --harness hermes`).
 
 ### Paths to delete
 
@@ -244,6 +262,12 @@ the task step, which AX.5 property 6 already permits); roster schema;
 6. Every task lead notification (AC 1) is accompanied by one `notify`
    call; a failing `notify` is counted in `notifications_failed` and does
    not affect the mail or the `LeadNotified` row.
+7. With one lead and one graft-backed `operator` member, each escalation
+   writes two queued messages (one per recipient) and the operator's copy
+   produces one graft dispatch with `NudgeKind::Queue`; with an operator
+   and no lead, one message and no `ATM_ROSTER_NO_LEAD` suppression
+   (doctor still warns); a failed write to one recipient does not stop
+   the other.
 
 ## Required validation
 
@@ -260,6 +284,11 @@ the task step, which AX.5 property 6 already permits); roster schema;
   blocked 30 s then idle produces nothing.
 - `crates/atm-herdr` tests: `notify` argv matches the fixture row
   verbatim; a non-zero exit maps to `HerdrError`.
+- `crates/atm-storage/src/contract.rs` tests: `AgentType::Operator`
+  round-trips through `From<String>`, `Display`, serde; unknown strings
+  still map to `Unknown`.
+- `crates/atm-http-runtime/src/herdr_queue_wake.rs` tests (`ax6_03_*`):
+  AC 7 recipient fan-out with a recording graft emitter.
 - `crates/atm-core/src/doctor/mod.rs` tests: the five codes and the
   info counts.
 - `crates/atm-storage/src/error.rs` catalog test extended.
@@ -267,7 +296,8 @@ the task step, which AX.5 property 6 already permits); roster schema;
 
 ## Out of scope
 
-Configurable thresholds; escalation channels beyond lead mail and the
-Herdr notification (no email, chat, or push); notifications for
-non-Herdr backends (they have no blocked signal); any change to the
+Configurable thresholds; escalation channels owned by the daemon beyond
+lead mail, operator mail and the Herdr notification (how an operator
+agent reaches its human is that agent's harness, not ATM); notifications
+for non-Herdr backends (they have no blocked signal); any change to the
 reminder cadence.
