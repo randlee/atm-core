@@ -336,8 +336,6 @@ class ValidateReleaseContractTests(unittest.TestCase):
         self.assertTrue(any(finding.check == "cargo-package-published-crate" and finding.blocks for finding in findings))
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class ManifestDependencyCoverageTests(unittest.TestCase):
@@ -473,3 +471,36 @@ class ManifestDependencyCoverageTests(unittest.TestCase):
 
         self.assertEqual(len(findings), 1)
         self.assertIn("atm-ghost: cargo_toml", findings[0].detail)
+
+    def test_unresolvable_workspace_members_fail_closed(self) -> None:
+        (self.root / "Cargo.toml").write_text(
+            '[workspace]\nresolver = "2"\n\n[workspace.package]\nversion = "1.5.0"\n',
+            encoding="utf-8",
+        )
+        self.write_manifest("atm-leaf", "atm-mid", "atm-top")
+
+        findings = self.coverage_findings()
+
+        self.assertEqual(len(findings), 1)
+        self.assertTrue(findings[0].blocks)
+        self.assertIn("[workspace].members resolved to no crates", findings[0].detail)
+        self.assertIn("atm-top: not a resolvable [workspace].members crate", findings[0].detail)
+
+    def test_published_crate_outside_the_member_list_fails_closed(self) -> None:
+        (self.root / "Cargo.toml").write_text(
+            (self.root / "Cargo.toml").read_text(encoding="utf-8").replace('members = ["crates/*"]', 'members = ["crates/atm-leaf", "crates/atm-mid"]'),
+            encoding="utf-8",
+        )
+        self.write_manifest("atm-leaf", "atm-mid", "atm-top")
+
+        findings = self.coverage_findings()
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(
+            findings[0].detail.splitlines(),
+            ["atm-top: not a resolvable [workspace].members crate at crates/atm-top/Cargo.toml"],
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

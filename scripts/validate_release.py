@@ -398,6 +398,9 @@ def workspace_dependency_names(crate_toml: Path, root: Path, members: dict[str, 
 def validate_manifest_dependency_coverage(root: Path, findings: list[Finding]) -> None:
     """Every workspace dependency of a published crate must itself be published by the manifest.
 
+    Fails closed: if the workspace member list cannot be resolved, or a published crate is not
+    itself a resolvable member, the check reports an error instead of evaluating nothing.
+
     Consumer-owned check absent from the kit CLI (upstream sc-publish gap): the kit's
     ``validate-publish-order`` silently ignores dependencies missing from the manifest,
     which let the 1.5.0 readiness preflight run without ``atm-herdr`` and
@@ -409,11 +412,16 @@ def validate_manifest_dependency_coverage(root: Path, findings: list[Finding]) -
     published = {crate.get("package") for crate in crates}
     members = workspace_member_manifests(root)
     problems: list[str] = []
+    if crates and not members:
+        problems.append("Cargo.toml [workspace].members resolved to no crates; dependency coverage cannot be evaluated")
     for crate in crates:
         package = crate.get("package")
         crate_toml = root / str(crate.get("cargo_toml", ""))
         if not crate_toml.is_file():
             problems.append(f"{package}: cargo_toml {crate.get('cargo_toml')!r} does not exist")
+            continue
+        if members.get(package) != crate_toml:
+            problems.append(f"{package}: not a resolvable [workspace].members crate at {crate.get('cargo_toml')}")
             continue
         for dependency in sorted(workspace_dependency_names(crate_toml, root, members)):
             dependency_toml = members.get(dependency)
