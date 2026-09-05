@@ -264,3 +264,15 @@ triage:a15 a triage:Assignment ;
     triage:ofSprint triage:AX3 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-09-05T11:11:32Z"^^xsd:dateTime .
+
+triage:r34 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX4-QA3-001> ;
+    triage:resolvedAt "2026-09-05T11:20:54Z"^^xsd:dateTime .
+
+triage:r35 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX4-QA2-004> ;
+    triage:resolvedAt "2026-09-05T11:20:54Z"^^xsd:dateTime .
+
+triage:r36 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX4-QA-009> ;
+    triage:resolvedAt "2026-09-05T11:20:54Z"^^xsd:dateTime .
