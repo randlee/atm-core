@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001" ;
+  triage:title "Missing end-to-end task-mode integration coverage in nudge_mode.rs (AC3/AC4)" ;
+  triage:description "Sprint AX.1's Required Validation section names crates/atm-core/tests/nudge_mode.rs for AC3 (byte-identical Acknowledge/AcknowledgeTask snapshot) and AC4 (task-tagged send resolves NudgeMode::Deferred + Task kind on both prepare_persisted_write and prepare_persisted_write_async, per-backend Delivery/DeliveryAck vs Queue/QueueAck resolution). The file is unchanged by AX.1's diff (443 pre-existing lines) with zero matches for task/Herdr/byte_identical/snapshot/Acknowledge/AcknowledgeTask content. Only coverage is the isolated pure-function unit test task_request_forces_deferred_mode_while_ordinary_request_is_unchanged in crates/atm-core/src/send/mod.rs:703-746, which never runs through the full pipeline." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T05:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX1 ;
+  triage:foundAt "2026-09-05T05:17:14Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/integrate-phase-ax>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "eb6c35163" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/feature-ax1-queue-template-class>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ax1-queue-template-class" ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "1452df008" ;
+  triage:orderIndex 1 .

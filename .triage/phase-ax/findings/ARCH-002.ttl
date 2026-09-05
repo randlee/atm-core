@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-002>
+  a triage:Finding ;
+  triage:findingId "ARCH-002" ;
+  triage:title "RULE-003 line-cap violation, crates/atm-storage-rusqlite/src/shared_db.rs (newly introduced by AX.1)" ;
+  triage:description "shared_db.rs exceeds the 1000-line cap on AX.1. Confirmed newly introduced this sprint: base was 922 lines; AX.1's ensure_team_nudge_template_override_columns / migrate_template_override_kinds_to_seven and helpers added ~190 net lines. Squarely AX.1's own responsibility — must be split or shrunk before merge. AX.3 (feature/ax3-task-state-machine) has also merged AX.1 forward and is now modifying this same file — current state recorded. Line counts per branch: integrate/phase-ax 1442, feature/ax1-queue-template-class 1716, feature/ax3-task-state-machine 1776." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T05:22:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX1 ;
+  triage:foundAt "2026-09-05T05:17:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/AX0-1442> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/AX1-1716> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/AX3-1776> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-002/AX0-1442>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 690 ;
+  triage:snippet "fn ensure_team_nudge_template_override_columns(...) / fn migrate_template_override_kinds_to_seven(...); 1442 lines total (exceeds 1000-line cap by 442)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "eb6c35163" ;
+  triage:occursIn <urn:atm:triage:worktree/AX0/eb6c35163> .
+
+<urn:atm:triage:occurrence/ARCH-002/AX1-1716>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 692 ;
+  triage:snippet "fn ensure_team_nudge_template_override_columns(...) / fn migrate_template_override_kinds_to_seven(...); 1716 lines total (exceeds 1000-line cap by 716)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "1452df008" ;
+  triage:occursIn <urn:atm:triage:worktree/AX1/1452df008> .
+
+<urn:atm:triage:occurrence/ARCH-002/AX3-1776>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 752 ;
+  triage:snippet "fn ensure_team_nudge_template_override_columns(...) / fn migrate_template_override_kinds_to_seven(...); 1776 lines total (exceeds 1000-line cap by 776)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "acfe3e556" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/acfe3e556> .
+
+<urn:atm:triage:worktree/AX0/eb6c35163>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "eb6c35163" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AX1/1452df008>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax1-queue-template-class" ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "1452df008" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AX3/acfe3e556>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "acfe3e556" ;
+  triage:orderIndex 2 .

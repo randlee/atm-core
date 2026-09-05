@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-004" ;
+  triage:title "AX.1 gate artifacts not yet produced: green just validate run, posted Final Quality Report, arch-qa ADR-019 amendment sign-off" ;
+  triage:description "Sprint AX.1 acceptance requires (a) a green just validate run on feature/ax1-queue-template-class, (b) quality-mgr's Final Quality Report posted on PR #1185, and (c) arch-qa sign-off on the ADR-019 amendment. The amendment section now exists; this finding tracks the remaining gate items and closes when all are satisfied." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-04T22:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX1 ;
+  triage:foundAt "2026-09-05T05:17:08Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/ax1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-004/ax1-1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md" ;
+  triage:line 175 ;
+  triage:snippet "## Amendment — Phase AX seven-kind queue template surface" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "1452df008fdde42bb6a152ba207fe4061c4fd5d6" ;
+  triage:occursIn <urn:atm:triage:worktree/ax1/1452df008fdde42bb6a152ba207fe4061c4fd5d6> .
+
+<urn:atm:triage:worktree/ax1/1452df008fdde42bb6a152ba207fe4061c4fd5d6>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax1-queue-template-class" ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "1452df008fdde42bb6a152ba207fe4061c4fd5d6" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ax3/acfe3e556d14675b0ab5bef57eea7d7a02b9e370>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "acfe3e556d14675b0ab5bef57eea7d7a02b9e370" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/ax2/e560bb1b69d9a38be5e0013e35752c2d6c7d4f28>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "e560bb1b69d9a38be5e0013e35752c2d6c7d4f28" ;
+  triage:orderIndex 3 .

@@ -1,0 +1,117 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F002>
+  a triage:Finding ;
+  triage:findingId "RBP-F002" ;
+  triage:title "InternalNudgeInput::from_env discards the env-var and serde_json error causes" ;
+  triage:description "crates/atm/src/commands/internal_nudge.rs line 68: InternalNudgeInput::from_env maps the std::env::var error with |_| and the serde_json::from_str error with |_source| into a validation error, discarding the underlying causes instead of attaching them as the error source. Minor idiom note, no correctness impact. Reported by rust-best-practices-agent on PR #1185 QA-1 (commit 1452df008); exact location supplied by quality-mgr. Note: lines predate AX.1 (commit 30d3814e83, 2026-07-08)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T05:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX1 ;
+  triage:foundAt "2026-09-05T05:17:08Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AX1-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AX1-72> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AX2-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AX2-72> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AX3-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AX3-72> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F002/AX1-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 68 ;
+  triage:snippet "let raw_payload = std::env::var(INTERNAL_NUDGE_ENV).map_err(|_| {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "1452df008fdde42bb6a152ba207fe4061c4fd5d6" ;
+  triage:occursIn <urn:atm:triage:worktree/AX1> .
+
+<urn:atm:triage:occurrence/RBP-F002/AX1-72>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 72 ;
+  triage:snippet "serde_json::from_str(&raw_payload).map_err(|_source| {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "1452df008fdde42bb6a152ba207fe4061c4fd5d6" ;
+  triage:occursIn <urn:atm:triage:worktree/AX1> .
+
+<urn:atm:triage:occurrence/RBP-F002/AX2-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 68 ;
+  triage:snippet "let raw_payload = std::env::var(INTERNAL_NUDGE_ENV).map_err(|_| {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "acfe3e556d14675b0ab5bef57eea7d7a02b9e370" ;
+  triage:occursIn <urn:atm:triage:worktree/AX2> .
+
+<urn:atm:triage:occurrence/RBP-F002/AX2-72>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 72 ;
+  triage:snippet "serde_json::from_str(&raw_payload).map_err(|_source| {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "acfe3e556d14675b0ab5bef57eea7d7a02b9e370" ;
+  triage:occursIn <urn:atm:triage:worktree/AX2> .
+
+<urn:atm:triage:occurrence/RBP-F002/AX3-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 68 ;
+  triage:snippet "let raw_payload = std::env::var(INTERNAL_NUDGE_ENV).map_err(|_| {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "e560bb1b69d9a38be5e0013e35752c2d6c7d4f28" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3> .
+
+<urn:atm:triage:occurrence/RBP-F002/AX3-72>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 72 ;
+  triage:snippet "serde_json::from_str(&raw_payload).map_err(|_source| {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "e560bb1b69d9a38be5e0013e35752c2d6c7d4f28" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3> .
+
+<urn:atm:triage:worktree/AX1>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax1-queue-template-class" ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "1452df008fdde42bb6a152ba207fe4061c4fd5d6" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AX2>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "acfe3e556d14675b0ab5bef57eea7d7a02b9e370" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AX3>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "e560bb1b69d9a38be5e0013e35752c2d6c7d4f28" ;
+  triage:orderIndex 3 .
+

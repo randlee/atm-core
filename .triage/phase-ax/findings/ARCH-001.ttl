@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-001" ;
+  triage:title "RULE-003 line-cap violation, crates/atm-storage/src/contract.rs (pre-existing)" ;
+  triage:description "contract.rs exceeds the 1000 non-test-line RULE-003 cap on integrate/phase-ax before AX.1 (~1133 non-test lines) and on AX.1 (1139, +6 net). Already tracked as AX.3 D9's own deliverable (TaskStore trait extraction, retiring the unused TaskState newtype, ADR-061). AX.3 (feature/ax3-task-state-machine) is actively modifying this exact file right now (arch-ctm has merged AX.1 forward and started dev). team-lead needs this record to decide: does AX.3's in-flight work already bring the file back under cap, or does it need explicit sequencing." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX1 ;
+  triage:foundAt "2026-09-05T05:17:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/AX0-001> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/AX1-001> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/AX3-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-001/AX0-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 1550 ;
+  triage:snippet "1550 total lines (exceeds 1000 cap)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "eb6c35163" ;
+  triage:occursIn <urn:atm:triage:worktree/AX0/eb6c35163> .
+
+<urn:atm:triage:occurrence/ARCH-001/AX1-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 1582 ;
+  triage:snippet "1582 total lines (exceeds 1000 cap)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "1452df008" ;
+  triage:occursIn <urn:atm:triage:worktree/AX1/1452df008> .
+
+<urn:atm:triage:occurrence/ARCH-001/AX3-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 1311 ;
+  triage:snippet "1311 total lines (exceeds 1000 cap)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "acfe3e556" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/acfe3e556> .
+
+<urn:atm:triage:worktree/AX0/eb6c35163>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "eb6c35163" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AX1/1452df008>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax1-queue-template-class" ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "1452df008" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AX3/acfe3e556>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "acfe3e556" ;
+  triage:orderIndex 2 .
