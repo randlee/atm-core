@@ -525,70 +525,74 @@ mod tests {
     use super::*;
     use crate::SqliteStorageBackend;
 
+    const TEST_TEAM: &str = "ax6-recipient-test";
+    const DAEMON_RECIPIENT: &str = "ops@ax6-recipient-test";
+    const TEAM_RECIPIENT: &str = "team-ops@ax6-recipient-test";
+
     #[test]
     fn escalation_recipients_are_scoped_deduplicated_and_capped() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.task_store();
         let daemon = EscalationScope::Daemon;
-        let team_name: TeamName = "ax6-team".parse().expect("team");
+        let team_name: TeamName = TEST_TEAM.parse().expect("team");
         let team = EscalationScope::Team(team_name.clone());
         let now = IsoTimestamp::now();
 
         assert!(
             store
-                .add_escalation_recipient(&daemon, "ops@atm-dev", now)
+                .add_escalation_recipient(&daemon, DAEMON_RECIPIENT, now)
                 .expect("daemon add")
         );
         assert!(
             !store
-                .add_escalation_recipient(&daemon, "ops@atm-dev", now)
+                .add_escalation_recipient(&daemon, DAEMON_RECIPIENT, now)
                 .expect("duplicate add")
         );
         assert_eq!(
             store
                 .list_escalation_recipients(&daemon)
                 .expect("daemon list"),
-            vec!["ops@atm-dev"]
+            vec![DAEMON_RECIPIENT]
         );
         assert_eq!(
             store
                 .effective_escalation_recipients(&team_name)
                 .expect("daemon fallback"),
-            vec!["ops@atm-dev"]
+            vec![DAEMON_RECIPIENT]
         );
 
         assert!(
             store
-                .add_escalation_recipient(&team, "team-ops@atm-dev", now)
+                .add_escalation_recipient(&team, TEAM_RECIPIENT, now)
                 .expect("team add")
         );
         assert_eq!(
             store
                 .effective_escalation_recipients(&team_name)
                 .expect("team override"),
-            vec!["team-ops@atm-dev"]
+            vec![TEAM_RECIPIENT]
         );
         assert!(
             store
-                .remove_escalation_recipient(&team, "team-ops@atm-dev")
+                .remove_escalation_recipient(&team, TEAM_RECIPIENT)
                 .expect("team remove")
         );
         assert_eq!(
             store
                 .effective_escalation_recipients(&team_name)
                 .expect("fallback after remove"),
-            vec!["ops@atm-dev"]
+            vec![DAEMON_RECIPIENT]
         );
 
         for index in 0..MAX_ESCALATION_RECIPIENTS.saturating_sub(1) {
             assert!(
                 store
-                    .add_escalation_recipient(&daemon, &format!("ops-{index}@atm-dev"), now,)
+                    .add_escalation_recipient(&daemon, &format!("ops-{index}@{TEST_TEAM}"), now,)
                     .expect("recipient add")
             );
         }
         let error = store
-            .add_escalation_recipient(&daemon, "overflow@atm-dev", now)
+            .add_escalation_recipient(&daemon, &format!("overflow@{TEST_TEAM}"), now)
             .expect_err("scope cap");
         assert!(error.message().contains("maximum"));
     }
