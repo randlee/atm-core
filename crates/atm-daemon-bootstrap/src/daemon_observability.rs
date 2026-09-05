@@ -11,7 +11,7 @@ use atm_core::observability::{
     LogTailSession, ObservabilityPort, diagnostic_code,
 };
 use atm_observability::{
-    RetainedLogOffer, RetainedLogPolicy, RetainedLogger, build_retained_logger,
+    RetainedLogOffer, RetainedLogPolicy, RetainedLogger, build_retained_logger_from_env,
 };
 use serde_json::Map;
 
@@ -334,7 +334,8 @@ fn build_logger(
     retained_log_policy: RetainedLogPolicy,
 ) -> Result<(RetainedLogger, PathBuf), AtmError> {
     let active_log_path = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
-    let logger = build_retained_logger(service_name.clone(), log_dir, retained_log_policy)?;
+    let logger =
+        build_retained_logger_from_env(service_name.clone(), log_dir, retained_log_policy)?;
     Ok((logger, active_log_path))
 }
 

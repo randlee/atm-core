@@ -968,7 +968,7 @@ fn resolve_adapter_log_dir(_home_dir: &Path) -> Result<PathBuf, AtmError> {
 mod adapter_tests {
     use anyhow::anyhow;
     use atm_core::error::{AtmError, AtmErrorCode};
-    use atm_core::test_support::EnvGuard;
+    use atm_core::test_support::{EnvGuard, FakeEnvSource};
     use sc_observability_types::LevelFilter as SharedLevelFilter;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -976,21 +976,8 @@ mod adapter_tests {
 
     use super::{
         ATM_LOG_LEVEL_ENV, ensure_retained_log_ready, exit_code_for_atm_error, exit_code_for_error,
-        init_observability, level_for_outcome, logger_level_override, tracing_level_filter,
+        init_observability, level_for_outcome, tracing_level_filter,
     };
-
-    fn with_env_var<R>(key: &'static str, value: Option<&str>, f: impl FnOnce() -> R) -> R {
-        match value {
-            Some(value) => {
-                let _guard = EnvGuard::set_raw(key, value);
-                f()
-            }
-            None => {
-                let _guard = EnvGuard::unset_raw(key);
-                f()
-            }
-        }
-    }
 
     #[test]
     fn unknown_outcome_maps_to_warn() {
@@ -1030,28 +1017,28 @@ mod adapter_tests {
     }
 
     #[test]
-    #[serial(env)]
     fn logger_level_override_accepts_debug() {
-        with_env_var(ATM_LOG_LEVEL_ENV, Some("debug"), || {
-            assert_eq!(
-                logger_level_override().expect("override"),
-                Some(SharedLevelFilter::Debug)
-            );
-        });
+        let env = FakeEnvSource::new([(ATM_LOG_LEVEL_ENV, Some("debug"))]);
+
+        assert_eq!(
+            atm_observability::logger_level_override_from(&env).expect("override"),
+            Some(SharedLevelFilter::Debug)
+        );
     }
 
     #[test]
-    #[serial(env)]
     fn logger_level_override_rejects_invalid_values() {
-        with_env_var(ATM_LOG_LEVEL_ENV, Some("verbose"), || {
-            let error = logger_level_override().expect_err("invalid override");
-            assert!(
-                error
-                    .to_string()
-                    .contains("invalid ATM_LOG value `verbose`"),
-                "{error}"
-            );
-        });
+        let env = FakeEnvSource::new([(ATM_LOG_LEVEL_ENV, Some("verbose"))]);
+
+        let error =
+            atm_observability::logger_level_override_from(&env).expect_err("invalid override");
+
+        assert!(
+            error
+                .to_string()
+                .contains("invalid ATM_LOG value `verbose`"),
+            "{error}"
+        );
     }
 
     #[test]
