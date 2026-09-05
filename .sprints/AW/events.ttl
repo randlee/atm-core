@@ -81,3 +81,7 @@ triage:a5 a triage:Assignment ;
 triage:c4 a triage:Completion ;
     triage:ofSprint triage:AW3 ;
     triage:at "2026-09-05T03:19:53Z"^^xsd:dateTime .
+# AW.5 dev completion: cipher msg 01M1QWMV6RY3NYY8BDBQ2QNJA0, feature/aw5-native-tool-parity @ 3d1862c25 (PR #1184), contains integrate/phase-aw ffd78e16f.
+triage:c5 a triage:Completion ;
+    triage:ofSprint triage:AW5 ;
+    triage:at "2026-09-05T04:17:31Z"^^xsd:dateTime .
