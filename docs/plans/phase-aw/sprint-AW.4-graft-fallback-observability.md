@@ -47,7 +47,6 @@ parallel_safe: [AW.2]
    - `ATM_GRAFT_RECOVERY_ATTEMPT` — `attempt`, `strategy`;
    - `ATM_GRAFT_RECOVERY_RESULT` — `outcome ∈ {recovered, failed}`,
      `elapsed_ms`;
-   - `ATM_GRAFT_FALLBACK_WRITE_FAILED` — `error_layer`.
    `endpoint_kind` is sourced from
    `atm_daemon_client::local_daemon_transport()` and serialises as
    `unix_domain_socket | tcp_loopback` (the only variants of

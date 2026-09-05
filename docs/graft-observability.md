@@ -27,7 +27,6 @@ events with `origin = "graft"`:
 | `ATM_GRAFT_DAEMON_UNAVAILABLE` | `action`, `endpoint_kind`, `failure_class`, `strategy`, `correlation_id`; endpoint failure also has `refresh_error_code` |
 | `ATM_GRAFT_RECOVERY_ATTEMPT` | `action`, `attempt`, `strategy` |
 | `ATM_GRAFT_RECOVERY_RESULT` | `action`, `outcome` (`recovered` or `failed`), `elapsed_ms` |
-| `ATM_GRAFT_FALLBACK_WRITE_FAILED` | `error_layer` when the satellite cannot retain a diagnostic |
 
 `endpoint_kind` is `unix_domain_socket` or `tcp_loopback`; `failure_class` is
 `stale_client` or `endpoint_unavailable`. `action` identifies the native
