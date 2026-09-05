@@ -327,7 +327,11 @@ Deliverables:
    already-running server, as a user would, with its environment
    passed through unchanged. With the backend enabled it runs one
    `herdr agent list` at startup and exits with one diagnostic naming
-   the socket if that fails. A process not launched by Herdr has no pane id and
+   the socket if that fails. On a power cycle Herdr is expected to
+   start first (its own login autostart); if the daemon ever comes up
+   ahead of it, that exit plus the supervisor's restart policy
+   (launchd KeepAlive, Windows service recovery) retries until Herdr
+   answers, so atm enforces no ordering itself. A process not launched by Herdr has no pane id and
    gets no nudges, by design. W2's socket transport connects to
    `HERDR_SOCKET_PATH` as given. Doctor herdr section reports transport
    kind, resolved binary, resolved endpoint (the `\\.\pipe\` form on
