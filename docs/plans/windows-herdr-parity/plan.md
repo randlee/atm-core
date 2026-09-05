@@ -326,16 +326,12 @@ Deliverables:
    - Children get the inherited `HERDR_SOCKET_PATH` and
      `HERDR_BIN_PATH` as-is; `HERDR_ENV` is stripped so Herdr does not
      treat them as nested.
-   - Pane identity (Rand, 2026-09-05): every process Herdr launches in
-     a pane receives `HERDR_PANE_ID`, `HERDR_TAB_ID` and
-     `HERDR_WORKSPACE_ID` (src/integration/env.rs:8-10). atm agents and
-     any atm process running in a pane MUST take their pane, tab and
-     workspace identity from those variables, never from config,
-     argv, or name matching; the CLI exposes them (`atm doctor`, roster
-     registration) so the daemon targets the right pane. Missing
-     variables in a pane-launched process is an error, not a fallback.
-   - Doctor shows the two paths, the three ids when present, and the
-     probe result.
+   - Pane identity (Rand, 2026-09-05): Herdr already gives every pane
+     process `HERDR_PANE_ID`, `HERDR_TAB_ID` and `HERDR_WORKSPACE_ID`
+     (src/integration/env.rs:8-10). Agents get pane and workspace
+     identity from the environment; atm adds nothing and never
+     substitutes config or name matching for it.
+   - Doctor shows the two paths and the probe result.
    - Backend disabled: nothing above applies.
    - W2's socket transport connects to `HERDR_SOCKET_PATH` as given. Doctor herdr section reports transport
    kind, resolved binary, resolved endpoint (the `\\.\pipe\` form on
