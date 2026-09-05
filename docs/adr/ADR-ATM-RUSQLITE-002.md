@@ -77,3 +77,20 @@ Phase `AC` follow-up note:
 - benchmark the resulting hot-path throughput and latency
 - review WAL autocheckpoint tuning separately if sustained write load requires
   it
+
+## Phase AW amendment (2026-09)
+
+The single writer now owns a second, lower-priority diagnostic timeline lane.
+Its channel carries batches of at most 128 events and has eight batch slots;
+therefore best-effort diagnostics have a hard in-flight ceiling of 1,024
+events. The worker uses a biased receive: primary durable-state work is always
+selected first, and it drains no more than one diagnostic batch on an idle
+tick after the primary channel is empty.
+
+Diagnostic producers use `try_send` only. A full or unavailable diagnostic
+lane drops the whole batch and records counters; a persistence failure is also
+counted and dropped. Neither case changes a mailbox, acknowledgement, send,
+or read outcome, and no diagnostic path opens a competing SQLite writer
+connection. Retention pruning runs on that same lower-priority worker after a
+bounded written-row interval; every individual deletion statement is capped
+at 1,000 rows.
