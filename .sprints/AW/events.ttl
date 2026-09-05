@@ -30,3 +30,5 @@ triage:a3 a triage:Assignment ;
     triage:ofSprint triage:AW4 ;
     triage:assignedTo "cipher" ;
     triage:assignedAt "2026-09-05T02:33:05Z"^^xsd:dateTime .
+
+# AW.2 first push: arch-ctm msg 01M1QPSEW3TTNQN5GM95BHBPKX, PR #1179 @ e61bb3588 (partial; dev continuing)
