@@ -22,7 +22,7 @@ pub(crate) fn build_built_in_dispatch<R>(
     event: &PostSendHookEvent,
     message_body: &str,
     nudge_mode: NudgeMode,
-) -> Option<BuiltInPostSendDispatch>
+) -> Result<Option<BuiltInPostSendDispatch>, AtmError>
 where
     R: RetainedServiceRuntime + ?Sized,
 {
@@ -31,9 +31,14 @@ where
         let pane_id = event
             .recipient_pane_id
             .clone()
-            .or_else(|| delivery_snapshot.recipient_pane_id.as_ref().cloned())?;
-        let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event, kind)?;
-        return Some(BuiltInPostSendDispatch {
+            .or_else(|| delivery_snapshot.recipient_pane_id.as_ref().cloned());
+        let Some(pane_id) = pane_id else {
+            return Ok(None);
+        };
+        let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
+            return Ok(None);
+        };
+        return Ok(Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(
                 LocalTmuxNudgeTarget {
@@ -42,22 +47,26 @@ where
                 },
             )),
             kind,
-        });
+        }));
     }
     if delivery_snapshot.local_herdr_post_send {
-        let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event, kind)?;
-        return Some(BuiltInPostSendDispatch {
+        let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
+            return Ok(None);
+        };
+        return Ok(Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
                 session: delivery_snapshot.herdr_session.clone(),
                 rendered_nudge,
             })),
             kind,
-        });
+        }));
     }
     if delivery_snapshot.graft_post_send {
-        let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event, kind)?;
-        return Some(BuiltInPostSendDispatch {
+        let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
+            return Ok(None);
+        };
+        return Ok(Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
                 recipient: event.recipient.clone(),
@@ -66,10 +75,10 @@ where
                 message_body: message_body.to_owned(),
             }),
             kind,
-        });
+        }));
     }
     if delivery_snapshot.bare_cli_post_send {
-        return Some(BuiltInPostSendDispatch {
+        return Ok(Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::QueuePull(QueuePullTarget {
                 team: event.recipient_team.clone(),
@@ -79,9 +88,9 @@ where
                 body: message_body.to_owned(),
             }),
             kind,
-        });
+        }));
     }
-    None
+    Ok(None)
 }
 
 /// Maps the write-time delivery mode to the dispatch's `NudgeKind`.
@@ -102,7 +111,7 @@ fn render_built_in_nudge_for_dispatch<R>(
     runtime: &R,
     event: &PostSendHookEvent,
     delivery_kind: NudgeKind,
-) -> Option<String>
+) -> Result<Option<String>, AtmError>
 where
     R: RetainedServiceRuntime + ?Sized,
 {
@@ -122,21 +131,10 @@ where
         }
     };
     let template = nudge_template::resolve_template(override_row, kind);
-    let template_body = template.body.as_deref()?;
-    match nudge_template::render_built_in_nudge(event, template_body) {
-        Ok(rendered) => Some(rendered),
-        Err(error) => {
-            warn!(
-                code = %error.code(),
-                recipient = %event.recipient,
-                recipient_team = %event.recipient_team,
-                message_id = %event.message_id,
-                %error,
-                "failed to render built-in nudge"
-            );
-            None
-        }
-    }
+    let Some(template_body) = template.body.as_deref() else {
+        return Ok(None);
+    };
+    nudge_template::render_built_in_nudge(event, template_body).map(Some)
 }
 
 pub(crate) fn post_send_event_from_message(
