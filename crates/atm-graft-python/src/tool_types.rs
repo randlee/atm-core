@@ -723,7 +723,6 @@ fn display_bucket(value: DisplayBucket) -> &'static str {
 }
 
 fn classified_message_json(message: &atm_core::read::ClassifiedMessage) -> String {
-    let envelope = &message.envelope;
     let mut value = String::from("{");
     let mut first = true;
     string_field(
@@ -738,77 +737,98 @@ fn classified_message_json(message: &atm_core::read::ClassifiedMessage) -> Strin
         "class",
         message_class(message.class),
     );
-    string_field(&mut value, &mut first, "from", envelope.from.as_ref());
+    classified_message_content(&mut value, &mut first, &message.envelope);
+    classified_message_ack_metadata(&mut value, &mut first, &message.envelope);
+    classified_message_lifecycle(&mut value, &mut first, &message.envelope);
+    value.push('}');
+    value
+}
+
+fn classified_message_content(
+    output: &mut String,
+    first: &mut bool,
+    envelope: &atm_core::schema::InboxMessage,
+) {
+    string_field(output, first, "from", envelope.from.as_ref());
     optional_string_field(
-        &mut value,
-        &mut first,
+        output,
+        first,
         "sourceChatId",
         envelope.source_chat_id.as_ref().map(ToString::to_string),
     );
-    string_field(&mut value, &mut first, "text", &envelope.text);
+    string_field(output, first, "text", &envelope.text);
     string_field(
-        &mut value,
-        &mut first,
+        output,
+        first,
         "timestamp",
         &canonical_timestamp(&envelope.timestamp),
     );
-    bool_field(&mut value, &mut first, "read", envelope.read);
+    bool_field(output, first, "read", envelope.read);
     optional_string_field(
-        &mut value,
-        &mut first,
+        output,
+        first,
         "source_team",
         envelope.source_team.as_ref().map(ToString::to_string),
     );
     optional_string_field(
-        &mut value,
-        &mut first,
+        output,
+        first,
         "destinationChatId",
         envelope
             .destination_chat_id
             .as_ref()
             .map(ToString::to_string),
     );
-    optional_string_field(&mut value, &mut first, "summary", envelope.summary.clone());
+    optional_string_field(output, first, "summary", envelope.summary.clone());
+}
+
+fn classified_message_ack_metadata(
+    output: &mut String,
+    first: &mut bool,
+    envelope: &atm_core::schema::InboxMessage,
+) {
     optional_string_field(
-        &mut value,
-        &mut first,
+        output,
+        first,
         "message_id",
         envelope.message_id.map(|id| id.to_string()),
     );
-    bool_field(
-        &mut value,
-        &mut first,
-        "requires_ack",
-        envelope.requires_ack,
-    );
+    bool_field(output, first, "requires_ack", envelope.requires_ack);
     optional_string_field(
-        &mut value,
-        &mut first,
+        output,
+        first,
         "pendingAckAt",
         envelope.pending_ack_at.as_ref().map(canonical_timestamp),
     );
     optional_string_field(
-        &mut value,
-        &mut first,
+        output,
+        first,
         "acknowledgedAt",
         envelope.acknowledged_at.as_ref().map(canonical_timestamp),
     );
     optional_string_field(
-        &mut value,
-        &mut first,
+        output,
+        first,
         "acknowledgesMessageId",
         envelope.acknowledges_message_id.map(|id| id.to_string()),
     );
     optional_string_field(
-        &mut value,
-        &mut first,
+        output,
+        first,
         "parentMessageId",
         envelope.parent_message_id.map(|id| id.to_string()),
     );
+}
+
+fn classified_message_lifecycle(
+    output: &mut String,
+    first: &mut bool,
+    envelope: &atm_core::schema::InboxMessage,
+) {
     if let Some(thread_mode) = envelope.thread_mode {
         string_field(
-            &mut value,
-            &mut first,
+            output,
+            first,
             "threadMode",
             match thread_mode {
                 ThreadMode::AddDetails => "add-details",
@@ -817,22 +837,20 @@ fn classified_message_json(message: &atm_core::read::ClassifiedMessage) -> Strin
         );
     }
     optional_string_field(
-        &mut value,
-        &mut first,
+        output,
+        first,
         "expiresAt",
         envelope.expires_at.as_ref().map(canonical_timestamp),
     );
     optional_string_field(
-        &mut value,
-        &mut first,
+        output,
+        first,
         "taskId",
         envelope.task_id.as_ref().map(ToString::to_string),
     );
     for (name, item) in &envelope.extra {
-        field(&mut value, &mut first, name, &item.to_string());
+        field(output, first, name, &item.to_string());
     }
-    value.push('}');
-    value
 }
 
 fn read_outcome_json(outcome: &ReadOutcome) -> String {
