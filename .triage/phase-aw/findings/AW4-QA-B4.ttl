@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW4-QA-B4>
+  a triage:Finding ;
+  triage:findingId "AW4-QA-B4" ;
+  triage:title "AC11: acking a non-pending message returning the CLI error code has no test coverage" ;
+  triage:description "qa-pr1181-r1 (msg 01M1QS4C69FTKB887D5K0V12Y8) at 9f4d3170e: req-qa: the AC11 path (atm_ack on a message not pending ack must return the CLI's error code) has zero test coverage. CLOSURE (qa-cipher-fix, quality-mgr): 79c6faa46 added ack_tool_preserves_cli_code_for_a_non_pending_message (crates/atm-graft-python/src/lib.rs, mod tests): a fake write-transport returns AtmError::validation(\"acknowledgement source is not pending acknowledgement\"), asserting the resulting AtmToolError.code == AtmErrorCode::MessageValidationFailed, the message contains \"not pending acknowledgement\", and reconnect_attempts stays 0 (validation failures must not trigger a session refresh). quality-mgr ran the test directly at 79c6faa46: PASS. Finding closed." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T03:18:47Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW4 ;
+  triage:foundAt "2026-09-05T03:12:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW4-QA-B4/AW4-1> ;
+  triage:closedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AW4-QA-B4/AW4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/tool_types.rs" ;
+  triage:line 1 ;
+  triage:snippet "AtmAckRequest" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/aw4-graft-fallback-observability" ;
+  triage:headSha "9f4d3170e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW4/9f4d3170e> .
+
+<urn:atm:triage:worktree/AW4/9f4d3170e>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw4-graft-fallback-observability" ;
+  triage:branch "feature/aw4-graft-fallback-observability" ;
+  triage:headSha "9f4d3170e" ;
+  triage:orderIndex 3 .

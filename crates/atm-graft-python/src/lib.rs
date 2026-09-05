@@ -27,6 +27,7 @@ use pyo3::prelude::*;
 
 mod observability;
 mod query;
+mod recovery;
 mod tool_types;
 
 pub use tool_types::AtmSendResult as AtmAckResult;
@@ -494,7 +495,7 @@ impl PyGraftSession {
             }
         }
 
-        // Re-resolve the one selected daemon endpoint.  A managed restart may
+        // Re-resolve the one selected daemon endpoint. A managed restart may
         // replace its Unix socket and invalidate a long-lived embedded host's
         // pooled transport; this never starts a competing daemon.
         #[cfg(test)]
@@ -615,166 +616,6 @@ impl PyGraftSession {
         fields: impl IntoIterator<Item = (&'static str, String)>,
     ) -> observability::ObservabilityStatus {
         self.fallback_logger.record(code, fields)
-    }
-
-    /// Execute one native operation and recover a stale local client exactly
-    /// once when the managed daemon has cycled.  Writes are never replayed;
-    /// read-only operations may retry once on the refreshed client.
-    fn with_daemon_recovery<T: Send>(
-        &self,
-        py: Python<'_>,
-        policy: DaemonRecoveryPolicy,
-        action: &'static str,
-        mut operation: impl FnMut() -> PyResult<T> + Send,
-    ) -> DaemonRecovery<T> {
-        let mut observability = observability::ObservabilityStatus::default();
-        let error = match py.detach(&mut operation) {
-            Ok(value) => return DaemonRecovery::Completed(value, observability),
-            Err(error) => error,
-        };
-        if !AtmToolError::from_native_error(py, &error).is_daemon_unavailable() {
-            return DaemonRecovery::Failed {
-                error,
-                refreshed: false,
-                refresh_error: None,
-                observability,
-            };
-        }
-
-        let strategy = match policy {
-            DaemonRecoveryPolicy::RefreshOnly => "refresh_only",
-            DaemonRecoveryPolicy::RetryOnce => "retry_once",
-        };
-        let correlation_id = format!("graft-{}", observability::correlation_id());
-        let endpoint_kind = self
-            .client()
-            .ok()
-            .and_then(|client| client.local_transport_label().ok())
-            .unwrap_or("tcp_loopback")
-            .to_owned();
-        observability.merge(self.emit_graft_event(
-            "ATM_GRAFT_RECOVERY_ATTEMPT",
-            [
-                ("action", action.to_owned()),
-                ("attempt", "1".to_owned()),
-                ("strategy", strategy.to_owned()),
-                ("correlation_id", correlation_id.clone()),
-            ],
-        ));
-        let started = Instant::now();
-        match py.detach(|| self.reconnect_client()) {
-            Err(refresh_error) => {
-                let refresh_error_code = AtmToolError::from_native_error(py, &refresh_error).code;
-                observability.merge(self.emit_graft_event(
-                    "ATM_GRAFT_DAEMON_UNAVAILABLE",
-                    [
-                        ("action", action.to_owned()),
-                        ("endpoint_kind", endpoint_kind.clone()),
-                        ("failure_class", "endpoint_unavailable".to_owned()),
-                        ("strategy", strategy.to_owned()),
-                        ("correlation_id", correlation_id.clone()),
-                        ("refresh_error_code", refresh_error_code),
-                    ],
-                ));
-                observability.merge(self.emit_graft_event(
-                    "ATM_GRAFT_RECOVERY_RESULT",
-                    [
-                        ("action", action.to_owned()),
-                        ("outcome", "failed".to_owned()),
-                        ("elapsed_ms", started.elapsed().as_millis().to_string()),
-                        ("strategy", strategy.to_owned()),
-                        ("correlation_id", correlation_id),
-                    ],
-                ));
-                DaemonRecovery::Failed {
-                    error,
-                    refreshed: false,
-                    refresh_error: Some(refresh_error),
-                    observability,
-                }
-            }
-            Ok(()) if matches!(policy, DaemonRecoveryPolicy::RefreshOnly) => {
-                observability.merge(self.emit_graft_event(
-                    "ATM_GRAFT_DAEMON_UNAVAILABLE",
-                    [
-                        ("action", action.to_owned()),
-                        ("endpoint_kind", endpoint_kind),
-                        ("failure_class", "stale_client".to_owned()),
-                        ("strategy", strategy.to_owned()),
-                        ("correlation_id", correlation_id.clone()),
-                    ],
-                ));
-                observability.merge(self.emit_graft_event(
-                    "ATM_GRAFT_RECOVERY_RESULT",
-                    [
-                        ("action", action.to_owned()),
-                        ("outcome", "recovered".to_owned()),
-                        ("elapsed_ms", started.elapsed().as_millis().to_string()),
-                        ("strategy", strategy.to_owned()),
-                        ("correlation_id", correlation_id),
-                    ],
-                ));
-                DaemonRecovery::Failed {
-                    error,
-                    refreshed: true,
-                    refresh_error: None,
-                    observability,
-                }
-            }
-            Ok(()) => match py.detach(&mut operation) {
-                Ok(value) => {
-                    observability.merge(self.emit_graft_event(
-                        "ATM_GRAFT_DAEMON_UNAVAILABLE",
-                        [
-                            ("action", action.to_owned()),
-                            ("endpoint_kind", endpoint_kind),
-                            ("failure_class", "stale_client".to_owned()),
-                            ("strategy", strategy.to_owned()),
-                            ("correlation_id", correlation_id.clone()),
-                        ],
-                    ));
-                    observability.merge(self.emit_graft_event(
-                        "ATM_GRAFT_RECOVERY_RESULT",
-                        [
-                            ("action", action.to_owned()),
-                            ("outcome", "recovered".to_owned()),
-                            ("elapsed_ms", started.elapsed().as_millis().to_string()),
-                            ("strategy", strategy.to_owned()),
-                            ("correlation_id", correlation_id),
-                        ],
-                    ));
-                    DaemonRecovery::Completed(value, observability)
-                }
-                Err(error) => DaemonRecovery::Failed {
-                    observability: {
-                        observability.merge(self.emit_graft_event(
-                            "ATM_GRAFT_DAEMON_UNAVAILABLE",
-                            [
-                                ("action", action.to_owned()),
-                                ("endpoint_kind", endpoint_kind),
-                                ("failure_class", "stale_client".to_owned()),
-                                ("strategy", strategy.to_owned()),
-                                ("correlation_id", correlation_id.clone()),
-                            ],
-                        ));
-                        observability.merge(self.emit_graft_event(
-                            "ATM_GRAFT_RECOVERY_RESULT",
-                            [
-                                ("action", action.to_owned()),
-                                ("outcome", "failed".to_owned()),
-                                ("elapsed_ms", started.elapsed().as_millis().to_string()),
-                                ("strategy", strategy.to_owned()),
-                                ("correlation_id", correlation_id),
-                            ],
-                        ));
-                        observability
-                    },
-                    error,
-                    refreshed: true,
-                    refresh_error: None,
-                },
-            },
-        }
     }
 
     #[allow(clippy::result_large_err)]
@@ -1098,7 +939,7 @@ mod tests {
     use super::{
         _atm_graft, AtmGraftError, AtmToolError, PyAgentAddress, PyGraftSession,
         PyGraftSessionOptions, PyMailboxWorkCounts, PyNudge, PythonNudgeInjector, atm_error,
-        observability,
+        observability, observability_paths,
     };
     use atm_core::boundary::{NudgeKind, PostSendHookEvent};
     use atm_core::error::{AtmError, AtmErrorCode};
@@ -1106,13 +947,15 @@ mod tests {
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
     use atm_core::read::{BucketCounts, ReadOutcome};
     use atm_core::send::{SendCommandOutcome, SendOutcome};
+    use atm_core::test_support::EnvGuard;
     use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AgentName, ChatId, CommandAction, ReadSelection, TeamName};
     use atm_graft::{GraftClient, HostNudge, HostNudgeInjector, MailboxWorkCounts};
     use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Barrier, Mutex};
+    use std::thread;
     use tempfile::TempDir;
 
     const TEST_RECIPIENT: &str = "test-recipient";
@@ -1191,6 +1034,157 @@ mod tests {
             ))),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
+        }
+    }
+
+    fn test_session_with_fallback_path(
+        initial: Arc<FakeClientTransport>,
+        replacement: Arc<FakeClientTransport>,
+        fallback_path: &std::path::Path,
+        sender: String,
+    ) -> PyGraftSession {
+        let caller = PyAgentAddress::new(sender, TEST_TEAM.to_string(), None).expect("caller");
+        PyGraftSession {
+            caller: caller.to_typed().expect("typed caller"),
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(initial))),
+            receiver: Mutex::new(None),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                fallback_path.to_owned(),
+            )),
+            reconnect_replacement: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
+                replacement,
+            ))),
+            reconnect_attempts: AtomicUsize::new(0),
+            reconnect_fallback_attempts: AtomicUsize::new(0),
+        }
+    }
+
+    #[test]
+    fn four_concurrent_sessions_survive_restart_without_corrupt_fallback_lines() {
+        Python::initialize();
+        let tempdir = TempDir::new().expect("fallback log directory");
+        let fallback_path = tempdir.path().join("atm-graft-fallback.jsonl");
+        let initial_calls = Arc::new(AtomicUsize::new(0));
+        let replacement_calls = Arc::new(AtomicUsize::new(0));
+        let start = Arc::new(Barrier::new(4));
+        let sessions = (0..4)
+            .map(|index| {
+                let initial_calls = Arc::clone(&initial_calls);
+                let replacement_calls = Arc::clone(&replacement_calls);
+                let initial = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                    assert!(matches!(request, RequestEnvelope::List(_)));
+                    initial_calls.fetch_add(1, Ordering::SeqCst);
+                    Err(AtmError::daemon_unavailable("induced daemon restart"))
+                })));
+                let replacement = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                    assert!(matches!(request, RequestEnvelope::List(_)));
+                    replacement_calls.fetch_add(1, Ordering::SeqCst);
+                    Ok(ResponseEnvelope::List(list_outcome()))
+                })));
+                test_session_with_fallback_path(
+                    initial,
+                    replacement,
+                    &fallback_path,
+                    format!("{TEST_SENDER}-{index}"),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let outcomes = thread::scope(|scope| {
+            sessions
+                .into_iter()
+                .map(|session| {
+                    let start = Arc::clone(&start);
+                    scope.spawn(move || {
+                        start.wait();
+                        Python::attach(|py| session.list(py).map_err(|error| error.to_string()))
+                    })
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|handle| handle.join().expect("concurrent graft session"))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .expect("all four primary outcomes survive the induced restart");
+
+        assert_eq!(outcomes, vec![0; 4]);
+        assert_eq!(initial_calls.load(Ordering::SeqCst), 4);
+        assert_eq!(replacement_calls.load(Ordering::SeqCst), 4);
+
+        let text = std::fs::read_to_string(&fallback_path).expect("fallback events");
+        let lines = text.lines().collect::<Vec<_>>();
+        assert_eq!(lines.len(), 12, "each recovered session emits three events");
+        for line in &lines {
+            assert!(line.starts_with("{\"origin\":\"graft\",\"ts\":\""));
+            assert!(line.ends_with('}'), "event line is complete: {line}");
+            assert!(line.contains("\"code\":\"ATM_GRAFT_"));
+            assert!(line.contains("\"correlation_id\":\"graft-"));
+        }
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("\"code\":\"ATM_GRAFT_RECOVERY_ATTEMPT\""))
+                .count(),
+            4
+        );
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("\"code\":\"ATM_GRAFT_DAEMON_UNAVAILABLE\""))
+                .count(),
+            4
+        );
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("\"code\":\"ATM_GRAFT_RECOVERY_RESULT\""))
+                .count(),
+            4
+        );
+    }
+
+    #[test]
+    fn observability_paths_reports_each_log_directory_source() {
+        let tempdir = TempDir::new().expect("observability path fixtures");
+        let log_dir = tempdir.path().join("explicit-logs");
+        let atm_home = tempdir.path().join("atm-home");
+        let log_dir_text = log_dir.to_str().expect("utf8 log path");
+        let atm_home_text = atm_home.to_str().expect("utf8 ATM home");
+
+        {
+            let _env = EnvGuard::set_many([
+                ("ATM_LOG_DIR", Some(log_dir_text)),
+                ("ATM_HOME", Some(atm_home_text)),
+            ]);
+            let paths = observability_paths().expect("ATM_LOG_DIR paths");
+            assert_eq!(paths.log_dir, log_dir.display().to_string());
+            assert_eq!(paths.log_dir_source, "env:ATM_LOG_DIR");
+            assert!(paths.canonical_log_path.starts_with(&paths.log_dir));
+            assert!(paths.fallback_log_path.starts_with(&paths.log_dir));
+        }
+
+        {
+            let _env =
+                EnvGuard::set_many([("ATM_LOG_DIR", None), ("ATM_HOME", Some(atm_home_text))]);
+            let paths = observability_paths().expect("ATM_HOME paths");
+            let expected = atm_home.join(".atm").join("logs");
+            assert_eq!(paths.log_dir, expected.display().to_string());
+            assert_eq!(paths.log_dir_source, "env:ATM_HOME");
+            assert!(paths.canonical_log_path.starts_with(&paths.log_dir));
+            assert!(paths.fallback_log_path.starts_with(&paths.log_dir));
+        }
+
+        {
+            let _env = EnvGuard::set_many([("ATM_LOG_DIR", None), ("ATM_HOME", None)]);
+            let paths = observability_paths().expect("default paths");
+            let expected = atm_core::home::host_log_dir()
+                .expect("default host log directory")
+                .display()
+                .to_string();
+            assert_eq!(paths.log_dir, expected);
+            assert_eq!(paths.log_dir_source, "default");
+            assert!(paths.canonical_log_path.starts_with(&paths.log_dir));
+            assert!(paths.fallback_log_path.starts_with(&paths.log_dir));
         }
     }
 
@@ -1600,6 +1594,52 @@ mod tests {
                 "native_client"
             );
         });
+    }
+
+    #[test]
+    fn ack_tool_preserves_cli_code_for_a_non_pending_message() {
+        Python::initialize();
+        let message_id = "01KZSSREKYM7G39237P0YQ3CW3".to_owned();
+        let expected_id = message_id.parse().expect("message id");
+        let session = test_session(
+            Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                let RequestEnvelope::Write(request) = request else {
+                    panic!("ack must use the canonical write path")
+                };
+                assert_eq!(request.acknowledges_message_id, Some(expected_id));
+                Err(AtmError::validation(
+                    "acknowledgement source is not pending acknowledgement",
+                ))
+            }))),
+            Arc::new(FakeClientTransport::new(Box::new(|_| {
+                panic!("validation failure must not refresh the session")
+            }))),
+        );
+
+        Python::attach(|py| {
+            let result = session
+                .ack_tool(py, message_id, "already handled".to_owned())
+                .expect("ack returns a typed error result");
+            let result = result.bind(py);
+            assert!(result.is_instance_of::<AtmToolError>());
+            assert_eq!(
+                result
+                    .getattr("code")
+                    .expect("error code")
+                    .extract::<String>()
+                    .expect("string error code"),
+                AtmErrorCode::MessageValidationFailed.as_str()
+            );
+            assert!(
+                result
+                    .getattr("message")
+                    .expect("error message")
+                    .extract::<String>()
+                    .expect("string error message")
+                    .contains("not pending acknowledgement")
+            );
+        });
+        assert_eq!(session.reconnect_attempts.load(Ordering::SeqCst), 0);
     }
 
     #[test]

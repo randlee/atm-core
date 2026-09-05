@@ -8,29 +8,31 @@
   a triage:Finding ;
   triage:findingId "AW1-RBP-F001" ;
   triage:title "retained.origin compared against raw string literals instead of a typed enum" ;
-  triage:description "rust-best-practices-agent RBP-F001: crates/atm-observability/src/tracing_bridge.rs:192-193 compares retained.origin against \"sqlite\" / \"timeline\" string literals; should be a typed origin enum (or shared constants) so AW.2's timeline sink and the bridge cannot drift." ;
+  triage:description "rust-best-practices-agent RBP-F001: crates/atm-observability/src/tracing_bridge.rs:192-193 compares retained.origin against \"sqlite\" / \"timeline\" string literals; should be a typed origin enum (or shared constants) so AW.2's timeline sink and the bridge cannot drift. Fix confirmed at feature/aw1-tracing-bridge@52c888ce1: retained.origin comparisons replaced by a typed EventOrigin enum (Tracing/Sqlite/Timeline/Other) in crates/atm-observability/src/tracing_bridge.rs. quality-mgr independently verified CLOSED at 1106a5db4." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
   triage:category "AW1-RBP" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-09-05T02:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-09-04T22:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW1 ;
   triage:foundAt "2026-09-05T00:43:44Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW1-RBP-F001/AW1-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW1-RBP-F001/AW1-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AW1-RBP-F001/AW1-1>
   a triage:Occurrence ;
   triage:file "crates/atm-observability/src/tracing_bridge.rs" ;
   triage:line 192 ;
   triage:snippet "if retained.origin != \"sqlite\"" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw1-tracing-bridge" ;
   triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
   triage:occursIn <urn:atm:triage:worktree/AW1-TB/3427357a> .
@@ -40,8 +42,8 @@
   triage:file "crates/atm-observability/src/tracing_bridge.rs" ;
   triage:line 193 ;
   triage:snippet "&& retained.origin != \"timeline\"" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw1-tracing-bridge" ;
   triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
   triage:occursIn <urn:atm:triage:worktree/AW1-TB/3427357a> .

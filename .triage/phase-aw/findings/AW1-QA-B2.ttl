@@ -8,29 +8,31 @@
   a triage:Finding ;
   triage:findingId "AW1-QA-B2" ;
   triage:title "atm-daemon-bootstrap imports sc_observability directly (arch-qa RULE-001)" ;
-  triage:description "crates/atm-daemon-bootstrap/src/daemon_observability.rs directly imported and owned sc_observability backend types (Logger, LoggerConfig, RetainedLogPolicy, TryLogError, LogSink ...). Ruling: facade. Fix claimed complete at feature/aw1-tracing-bridge@774272997 (opaque RetainedLogger facade in crates/atm-observability/src/lib.rs; bootstrap uses only that facade). quality-mgr independently verified CLOSED at 774272997 (message 01M1QNT9FRKW805N8AKR484WB8): zero raw sc_observability:: references remain in daemon_observability.rs; sc_observability_types:: aliases are out of RULE-001 scope; cargo test -p atm-observability -p atm-daemon-bootstrap passed." ;
+  triage:description "crates/atm-daemon-bootstrap/src/daemon_observability.rs directly imported and owned sc_observability backend types (Logger, LoggerConfig, RetainedLogPolicy, TryLogError, LogSink ...). Ruling: facade. Fix claimed complete at feature/aw1-tracing-bridge@774272997 (opaque RetainedLogger facade in crates/atm-observability/src/lib.rs; bootstrap uses only that facade). quality-mgr independently verified CLOSED at 774272997 (message 01M1QNT9FRKW805N8AKR484WB8): zero raw sc_observability:: references remain in daemon_observability.rs; sc_observability_types:: aliases are out of RULE-001 scope; cargo test -p atm-observability -p atm-daemon-bootstrap passed. Re-confirmed holding at merge-forward tip 1106a5db4 (qa-pr1176-r2): cargo-shear independently flags sc-observability as an unused dependency in crates/atm-daemon-bootstrap/Cargo.toml, corroborating zero direct backend usage remains; that stale Cargo.toml entry is tracked as a separate r2 regression finding, not a reopening of this record." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "followup_pass" ;
   triage:category "AW1-QA" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-04T16:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-05T02:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AW1 ;
   triage:foundAt "2026-09-05T00:43:44Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW1-QA-B2/AW1-QA-B2-INT1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW1-QA-B2/AW1-QA-B2-FT1> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AW1-QA-B2/AW1-QA-B2-INT1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon-bootstrap/src/daemon_observability.rs" ;
   triage:line 22 ;
   triage:snippet "use sc_observability::{" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "5ad1a653ec3be01805bf0045bad19847315a9947" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/5ad1a653ec3be01805bf0045bad19847315a9947> .
