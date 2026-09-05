@@ -371,12 +371,23 @@ async fn post_messages_with_request_id(
         Ok(ingress) => ingress,
         Err(error) => return error_response(error),
     };
+    let peer_ingress = matches!(
+        ingress,
+        AuthenticatedIngress::Peer | AuthenticatedIngress::UntrustedSmoke(_)
+    );
     let deadline = RequestDeadline::after(state.request_timeout);
 
     let response = state
         .handler
         .write_with_request_id(request, ingress, deadline, request_id)
         .await;
+    if peer_ingress && let Err(error) = &response {
+        warn!(
+            %request_id,
+            error_code = %error.code(),
+            "rejected inbound peer write"
+        );
+    }
     response
         .and_then(map_write_response)
         .unwrap_or_else(error_response)
