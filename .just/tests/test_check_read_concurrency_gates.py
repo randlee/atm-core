@@ -112,7 +112,7 @@ async fn doctor() {}
                 encoding="utf-8",
             )
             ops.write_text(
-                "pub(crate) enum WriteOp {\n    UpsertMessage(Message),\n    UpsertMessages(Vec<Message>),\n    Acknowledge(Ack),\n    RegisterTemplate(Template),\n    AdmitDecomposedMessage(Admission),\n    AdmitTemplateMessage(Admission),\n    ApplyReadDisplayState { mailbox: MailboxId },\n}\n",
+                "pub(crate) enum WriteOp {\n    UpsertMessage(Message),\n    UpsertMessages(Vec<Message>),\n    Acknowledge(Ack),\n    RegisterTemplate(Template),\n    AdmitDecomposedMessage(Admission),\n    AdmitTemplateMessage(Admission),\n    ApplyReadDisplayState { mailbox: MailboxId },\n    PruneDiagnostics { now_unix_ms: i64 },\n    RecordDiagnostics(Vec<DiagnosticEvent>),\n}\n",
                 encoding="utf-8",
             )
             self.assertEqual(check(root), [])
