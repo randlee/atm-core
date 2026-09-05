@@ -322,16 +322,27 @@ Deliverables:
    `HERDR_SOCKET_PATH` set (daemon in a pane) the `herdr` CLI uses it;
    with it unset (daemon under launchd or a Windows service) the CLI
    uses the default session socket in its config dir
-   (src/session.rs). atm never starts or supervises Herdr; it only
-   runs `herdr agent prompt|wait|get|list` client commands against the
-   already-running server, as a user would, with its environment
-   passed through unchanged. With the backend enabled it runs one
-   `herdr agent list` at startup and exits with one diagnostic naming
-   the socket if that fails. On a power cycle Herdr is expected to
-   start first (its own login autostart); if the daemon ever comes up
-   ahead of it, that exit plus the supervisor's restart policy
-   (launchd KeepAlive, Windows service recovery) retries until Herdr
-   answers, so atm enforces no ordering itself. A process not launched by Herdr has no pane id and
+   (src/session.rs). atm runs `herdr agent prompt|wait|get|list`
+   client commands against the running server, as a user would, with
+   its environment passed through unchanged.
+
+   Herdr mode startup (Rand, 2026-09-05): the daemon runs one
+   `herdr agent list`. If that reports `server_not_running`, the daemon
+   starts Herdr itself with `herdr server`, Herdr's documented headless
+   entry point for supervised setups (cli-reference.mdx "Server";
+   src/main.rs:579 -> server::headless::run_server), detached from the
+   daemon's stdio and lifetime, then waits a bounded time for
+   `agent list` to answer. Still no answer, or any other probe error:
+   exit with one diagnostic naming the socket and the error; the
+   supervisor (launchd KeepAlive, Windows service recovery) retries.
+   Herdr is expected to autostart at login ahead of the daemon, so this
+   path is the power-cycle and crash fallback, not the normal case.
+   Herdr keeps ownership of its socket, session state and restart;
+   atm never stops it and never computes its paths. Audit rows for
+   deliverable 0: does `herdr server` refuse a duplicate cleanly when
+   a server is already up; what the GUI does when it launches over an
+   existing headless server; stdio handling of the detached child on
+   Windows. A process not launched by Herdr has no pane id and
    gets no nudges, by design. W2's socket transport connects to
    `HERDR_SOCKET_PATH` as given. Doctor herdr section reports transport
    kind, resolved binary, resolved endpoint (the `\\.\pipe\` form on
