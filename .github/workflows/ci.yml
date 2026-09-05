@@ -350,12 +350,33 @@ jobs:
           python -m pip install --disable-pip-version-check --requirement tools/bootstrap-requirements.txt
           python -m pip install --no-deps "$ATM_GRAFT_WHEEL" crates/hermes-atm
 
+      - name: Install isolated debug CLI/native parity packages
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv_root="$GITHUB_WORKSPACE/.bootstrap-venv"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            venv_python="$venv_root/Scripts/python.exe"
+            venv_bin="$venv_root/Scripts"
+          else
+            venv_python="$venv_root/bin/python"
+            venv_bin="$venv_root/bin"
+          fi
+          export VIRTUAL_ENV="$venv_root"
+          export PATH="$venv_bin:$PATH"
+          "$venv_python" -m pip install --no-deps crates/hermes-atm
+          maturin develop --manifest-path crates/atm-graft-python/Cargo.toml
+          "$venv_python" -c 'import atm_graft._atm_graft as extension; assert hasattr(extension, "_debug_runtime_scope")'
+          echo "ATM_PARITY_PYTHON=$venv_python" >> "$GITHUB_ENV"
+
       - name: Run CLI/native parity test with a generated fixture
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         shell: bash
         env:
           ATM_CLI_PARITY_CI: "1"
-        run: python -m unittest discover -s crates/atm-graft-python/tests -p "test_cli_parity.py"
+        run: |
+          "$ATM_PARITY_PYTHON" -m unittest discover -s crates/atm-graft-python/tests -p "test_cli_parity.py"
 
       - name: Run ATM queue lifecycle hook tests
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
