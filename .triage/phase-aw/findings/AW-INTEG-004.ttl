@@ -15,23 +15,72 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T08:55:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW-INTEGRATION-REVIEW ;
   triage:foundAt "2026-09-05T08:50:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AW-INTEG-004/INTEG-1> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-INTEG-004/INTEG-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-INTEG-004/PR1198-1> ;
+  triage:closedAt "2026-09-05T09:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+# CLOSURE (qa-pr1198-r1, quality-mgr): PR #1198 at 8777d9c84 mints two new
+# AtmErrorCode variants scoped exclusively to retained-diagnostics counter
+# health -- RetainedDiagnosticsHealthOk ("ATM_RETAINED_DIAGNOSTICS_HEALTH_OK")
+# and WarningRetainedDiagnosticsDegraded
+# ("ATM_WARNING_RETAINED_DIAGNOSTICS_DEGRADED") -- in
+# crates/atm-error/src/error_codes.rs (enum variant, as_str, and
+# parse_observability_or_warning_code wired symmetrically), with a new
+# round-trip test retained_diagnostics_codes_keep_distinct_stable_wire_spellings
+# (crates/atm-error/src/lib.rs). doctor_observability.rs::append_counter_finding
+# now emits these new codes instead of ObservabilityHealthOk /
+# WarningObservabilityHealthDegraded; quality-mgr independently confirmed
+# atm-core/src/doctor/health.rs::observability_finding (the original owner of
+# those two codes for the unrelated logging_state decision) is untouched by
+# this PR (empty diff), and grepped doctor_observability.rs post-fix to
+# confirm zero remaining references to the shared codes -- the collision is
+# fully eliminated, not just aliased. New unit test
+# retained_diagnostics_finding_uses_its_own_error_codes
+# (doctor_observability.rs) and an added assertion in
+# storage_and_nudge_router.rs's doctor_observability_fields_match_health_projection
+# test both assert the new codes end-to-end through the real dispatch path.
+# quality-mgr ran `cargo test -p atm-error retained_diagnostics` (1 passed)
+# and `cargo test -p atm-http-runtime doctor_observability`/
+# `retained_diagnostics_finding_uses_its_own` (3 passed, 0 failed) directly.
+# No crates/atm-daemon/ (legacy synchronous daemon) files touched. This
+# closes the machine-readable-code ownership collision this finding was
+# filed for. This was the last open finding in .triage/phase-aw/findings/.
 
 <urn:atm:triage:occurrence/AW-INTEG-004/INTEG-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/doctor_observability.rs" ;
   triage:line 27 ;
   triage:snippet "append_counter_finding reuses AtmErrorCode::ObservabilityHealthOk / WarningObservabilityHealthDegraded, already owned by atm-core/src/doctor/health.rs::observability_finding for an unrelated logging_state decision" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "d9ef17ca3" ;
   triage:occursIn <urn:atm:triage:worktree/AW-INTEG/d9ef17ca3-004> .
+
+<urn:atm:triage:occurrence/AW-INTEG-004/PR1198-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/doctor_observability.rs" ;
+  triage:line 28 ;
+  triage:snippet "append_counter_finding now emits AtmErrorCode::RetainedDiagnosticsHealthOk / WarningRetainedDiagnosticsDegraded, distinct from doctor/health.rs::observability_finding's codes" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "8777d9c84" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-INTEG/8777d9c84-004> .
+
+<urn:atm:triage:worktree/AW-INTEG/8777d9c84-004>
+  a triage:WorktreeSnapshot ;
+  triage:path "verify-pr1198" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "8777d9c84" ;
+  triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/AW-INTEG/d9ef17ca3-004>
   a triage:WorktreeSnapshot ;
