@@ -190,6 +190,13 @@ impl AtmReadResult {
             observability: None,
         })
     }
+
+    /// Keep the public native-read envelope aligned with the CLI's `read`
+    /// outcome while retaining the native tool's non-mutating peek request.
+    pub(crate) fn from_peek_outcome(mut outcome: ReadOutcome) -> PyResult<Self> {
+        outcome.action = CommandAction::Read;
+        Self::from_outcome(outcome)
+    }
 }
 
 #[pymethods]

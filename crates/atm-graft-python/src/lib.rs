@@ -953,6 +953,13 @@ mod tests {
         }
     }
 
+    fn peek_outcome() -> ReadOutcome {
+        ReadOutcome {
+            action: CommandAction::Peek,
+            ..read_outcome()
+        }
+    }
+
     fn list_outcome() -> ListOutcome {
         ListOutcome {
             action: CommandAction::List,
@@ -1798,7 +1805,7 @@ mod tests {
     fn native_read_and_list_retry_once_on_the_refreshed_fake_transport() {
         Python::initialize();
         for (operation, replacement_response) in [
-            ("read", ResponseEnvelope::Peek(Box::new(read_outcome()))),
+            ("read", ResponseEnvelope::Peek(Box::new(peek_outcome()))),
             ("list", ResponseEnvelope::List(list_outcome())),
         ] {
             let initial_calls = Arc::new(AtomicUsize::new(0));
@@ -1836,6 +1843,18 @@ mod tests {
                     !result.bind(py).is_instance_of::<AtmToolError>(),
                     "{operation} returns its success projection after one retry"
                 );
+                if operation == "read" {
+                    let json = result
+                        .bind(py)
+                        .call_method0("to_json")
+                        .expect("native read exposes canonical JSON")
+                        .extract::<String>()
+                        .expect("native read JSON is a string");
+                    let value: serde_json::Value =
+                        serde_json::from_str(&json).expect("native read JSON is valid");
+                    assert_eq!(value["action"], "read");
+                    assert!(value.get("additional_match_count").is_some());
+                }
             });
             assert_eq!(initial_calls.load(Ordering::SeqCst), 1, "{operation}");
             assert_eq!(
