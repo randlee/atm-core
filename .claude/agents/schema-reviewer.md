@@ -38,13 +38,15 @@ Output fenced JSON findings only; do not send ATM messages directly.
 ## Herdr IPC (second governed interface, Rand 2026-09-05)
 
 The Herdr IPC consumed by `crates/atm-herdr` (CLI JSON envelopes today,
-socket / named-pipe NDJSON with Herdr's integer `PROTOCOL_VERSION`) is
-governed by the same pattern, with one difference: Herdr's wire drifts
-outside this repository's control.
+socket / named-pipe NDJSON API later) is governed by the same pattern, with
+one difference: Herdr's wire drifts outside this repository's control.
 
-- `atm-core` declares a `HERDR_MINIMUM_VERSION`. It is our responsibility to
-  support **every** Herdr version at or above that minimum, at the same time,
-  from one daemon build.
+- `atm-core` declares a `HERDR_MINIMUM_VERSION`, keyed on the Herdr
+  **release** version (semver, as reported by `ping.version`; minimum 0.8.0
+  per Rand). Herdr's integer `PROTOCOL_VERSION` versions only its bincode
+  client socket, not the NDJSON API, and is recorded per release as a
+  secondary fact. It is our responsibility to support **every** Herdr
+  release at or above the minimum, at the same time, from one daemon build.
 - Raising `HERDR_MINIMUM_VERSION` drops support for real installed Herdr
   builds. It is a breaking change: Rand's explicit, recorded approval and
   sign-off are required, exactly as for a major bump of `HTTP_API_VERSION`.
