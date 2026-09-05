@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-05T06:10:11.784336Z",
+  "generatedAt": "2026-09-05T07:22:40.780292Z",
   "branch": "feature/ax4-task-cli-and-docs",
   "version": "1.5.0",
   "status": "fail",
@@ -26,138 +26,6 @@
       "blocks": false
     },
     {
-      "check": "cargo-package-atm-storage",
-      "severity": "error",
-      "summary": "`cargo package` failed for atm-storage",
-      "detail": "error: 1 files in the working directory contain changes that were not yet committed into git:\n\ncrates/atm-storage/src/contract.rs\n\nto proceed despite this and include the uncommitted changes, pass the `--allow-dirty` flag",
-      "command": [
-        "cargo",
-        "package",
-        "-p",
-        "atm-storage",
-        "--locked",
-        "--no-verify"
-      ],
-      "exit_code": 101,
-      "blocks": true
-    },
-    {
-      "check": "cargo-publish-dry-run-atm-storage",
-      "severity": "error",
-      "summary": "`cargo publish --dry-run` failed for atm-storage",
-      "detail": "Updating crates.io index\nwarning: crate atm-storage@1.5.0 already exists on crates.io index\nerror: 1 files in the working directory contain changes that were not yet committed into git:\n\ncrates/atm-storage/src/contract.rs\n\nto proceed despite this and include the uncommitted changes, pass the `--allow-dirty` flag",
-      "command": [
-        "cargo",
-        "publish",
-        "--dry-run",
-        "-p",
-        "atm-storage",
-        "--locked",
-        "--no-verify"
-      ],
-      "exit_code": 101,
-      "blocks": true
-    },
-    {
-      "check": "cargo-package-agent-team-mail-core",
-      "severity": "error",
-      "summary": "`cargo package` failed for agent-team-mail-core",
-      "detail": "error: 2 files in the working directory contain changes that were not yet committed into git:\n\ncrates/atm-core/src/list.rs\ncrates/atm-core/src/send/mod.rs\n\nto proceed despite this and include the uncommitted changes, pass the `--allow-dirty` flag",
-      "command": [
-        "cargo",
-        "package",
-        "-p",
-        "agent-team-mail-core",
-        "--locked",
-        "--no-verify"
-      ],
-      "exit_code": 101,
-      "blocks": true
-    },
-    {
-      "check": "cargo-publish-dry-run-agent-team-mail-core",
-      "severity": "error",
-      "summary": "`cargo publish --dry-run` failed for agent-team-mail-core",
-      "detail": "Updating crates.io index\nwarning: crate agent-team-mail-core@1.5.0 already exists on crates.io index\nerror: 2 files in the working directory contain changes that were not yet committed into git:\n\ncrates/atm-core/src/list.rs\ncrates/atm-core/src/send/mod.rs\n\nto proceed despite this and include the uncommitted changes, pass the `--allow-dirty` flag",
-      "command": [
-        "cargo",
-        "publish",
-        "--dry-run",
-        "-p",
-        "agent-team-mail-core",
-        "--locked",
-        "--no-verify"
-      ],
-      "exit_code": 101,
-      "blocks": true
-    },
-    {
-      "check": "cargo-package-atm-http-runtime",
-      "severity": "error",
-      "summary": "`cargo package` failed for atm-http-runtime",
-      "detail": "error: 3 files in the working directory contain changes that were not yet committed into git:\n\ncrates/atm-http-runtime/src/client.rs\ncrates/atm-http-runtime/src/message_handler.rs\ncrates/atm-http-runtime/src/storage_and_nudge_router.rs\n\nto proceed despite this and include the uncommitted changes, pass the `--allow-dirty` flag",
-      "command": [
-        "cargo",
-        "package",
-        "-p",
-        "atm-http-runtime",
-        "--locked",
-        "--no-verify"
-      ],
-      "exit_code": 101,
-      "blocks": true
-    },
-    {
-      "check": "cargo-publish-dry-run-atm-http-runtime",
-      "severity": "error",
-      "summary": "`cargo publish --dry-run` failed for atm-http-runtime",
-      "detail": "Updating crates.io index\nwarning: crate atm-http-runtime@1.5.0 already exists on crates.io index\nerror: 3 files in the working directory contain changes that were not yet committed into git:\n\ncrates/atm-http-runtime/src/client.rs\ncrates/atm-http-runtime/src/message_handler.rs\ncrates/atm-http-runtime/src/storage_and_nudge_router.rs\n\nto proceed despite this and include the uncommitted changes, pass the `--allow-dirty` flag",
-      "command": [
-        "cargo",
-        "publish",
-        "--dry-run",
-        "-p",
-        "atm-http-runtime",
-        "--locked",
-        "--no-verify"
-      ],
-      "exit_code": 101,
-      "blocks": true
-    },
-    {
-      "check": "cargo-package-agent-team-mail",
-      "severity": "error",
-      "summary": "`cargo package` failed for agent-team-mail",
-      "detail": "Blocking waiting for file lock on package cache\nerror: 7 files in the working directory contain changes that were not yet committed into git:\n\ncrates/atm/src/commands/list.rs\ncrates/atm/src/commands/queue.rs\ncrates/atm/src/commands/send.rs\ncrates/atm/src/commands/send_fan_out.rs\ncrates/atm/src/composition.rs\ncrates/atm/src/output.rs\ncrates/atm/tests/cli_surface_baseline.json\n\nto proceed despite this and include the uncommitted changes, pass the `--allow-dirty` flag",
-      "command": [
-        "cargo",
-        "package",
-        "-p",
-        "agent-team-mail",
-        "--locked",
-        "--no-verify"
-      ],
-      "exit_code": 101,
-      "blocks": true
-    },
-    {
-      "check": "cargo-publish-dry-run-agent-team-mail",
-      "severity": "error",
-      "summary": "`cargo publish --dry-run` failed for agent-team-mail",
-      "detail": "Updating crates.io index\n    Blocking waiting for file lock on package cache\nwarning: crate agent-team-mail@1.5.0 already exists on crates.io index\n    Blocking waiting for file lock on package cache\nerror: 7 files in the working directory contain changes that were not yet committed into git:\n\ncrates/atm/src/commands/list.rs\ncrates/atm/src/commands/queue.rs\ncrates/atm/src/commands/send.rs\ncrates/atm/src/commands/send_fan_out.rs\ncrates/atm/src/composition.rs\ncrates/atm/src/output.rs\ncrates/atm/tests/cli_surface_baseline.json\n\nto proceed despite this and include the uncommitted changes, pass the `--allow-dirty` flag",
-      "command": [
-        "cargo",
-        "publish",
-        "--dry-run",
-        "-p",
-        "agent-team-mail",
-        "--locked",
-        "--no-verify"
-      ],
-      "exit_code": 101,
-      "blocks": true
-    },
-    {
       "check": "cargo-lock-drift",
       "severity": "warning",
       "summary": "Cargo.lock drift check skipped outside explicit release-candidate mode",
@@ -174,15 +42,6 @@
       "command": null,
       "exit_code": null,
       "blocks": false
-    },
-    {
-      "check": "sc-ecosystem-preflight",
-      "severity": "error",
-      "summary": "Wyvern is required on PATH for ecosystem preflight",
-      "detail": "install wyvern before running preflight; AQ5 runtime lanes remain Wyvern-optional.",
-      "command": null,
-      "exit_code": null,
-      "blocks": true
     }
   ]
 }
