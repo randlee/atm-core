@@ -241,6 +241,9 @@ def _dev_states(events: Graph | None) -> dict[str, dict[str, Any]]:
     return states
 
 
+QA_VERDICT_ENUM = frozenset({"PASS", "FAIL", "BLOCKING", "SUPERSEDED"})
+
+
 def _qa_runs(master: Any) -> dict[str, dict[str, Any]]:
     if master is None:
         return {}
@@ -255,6 +258,13 @@ def _qa_runs(master: Any) -> dict[str, dict[str, Any]]:
         sprint = run.get("aich_sprint")
         if not sprint:
             continue
+        verdict = run.get("verdict")
+        if verdict is not None and verdict not in QA_VERDICT_ENUM:
+            raise ReportError(
+                f"QA evidence master run {run.get('run_id')!r} has invalid verdict "
+                f"{verdict!r}; verdict must be one of {sorted(QA_VERDICT_ENUM)}. "
+                "Qualifier/detail text belongs in the evidence field, not verdict."
+            )
         candidate = _timestamp(run.get("result_time_utc") or run.get("assignment_time_utc"))
         previous = latest.get(sprint)
         previous_dt = _timestamp(previous.get("result_time_utc")) if previous else None
@@ -309,6 +319,13 @@ def _gate_icon(value: bool | None) -> str:
     if value is False:
         return ICONS["blocked"]
     return "?"
+
+
+def _flags_cell(q: dict[str, Any]) -> str:
+    blockers = q["blockers"] if q["blockers"] is not None else "?"
+    important = q["important"] if q["important"] is not None else "?"
+    minor = q["minor"] if q["minor"] is not None else "?"
+    return f"{blockers}:{important}:{minor}"
 
 
 def _pr_cell(meta: dict[str, Any]) -> str:
@@ -1047,7 +1064,7 @@ def build_report(
         )
         row["dev_icon"] = ICONS.get(row["dev_status"], "—")
         qa_value = row["qa"]["verdict"]
-        row["qa_icon"] = "✅" if qa_value and qa_value.upper() == "PASS" else (ICONS["fail"] if qa_value else "—")
+        row["qa_icon"] = "✅" if qa_value == "PASS" else (ICONS["fail"] if qa_value else "—")
         row["ci_icon"] = _status_icon(row["ci_status"])
         row["ready_icon"] = _gate_icon(row["ready_to_merge"])
         row["ok_icon"] = _gate_icon(row["ok_to_merge"])
@@ -1060,8 +1077,7 @@ def build_report(
         marker = " ⚠️" if row.get("diagnostics") else ""
         lines.append(
             f"| {row['id']} ({phase_sprint}){marker} | {row['dev_icon']} | {row['qa_icon']} | "
-            f"{row['ci_icon']} | {_pr_cell(row)} | {q['blockers'] if q['blockers'] is not None else '?'} | "
-            f"{q['important'] if q['important'] is not None else '?'} | {q['minor'] if q['minor'] is not None else '?'} | "
+            f"{row['ci_icon']} | {_pr_cell(row)} | {_flags_cell(q)} | "
             f"{row['ready_icon']} | {row['ok_icon']} |"
         )
         detail = (
@@ -1084,10 +1100,10 @@ def build_report(
                 f"- {_diagnostic_text(item)}" for item in row["diagnostics"]
             )
         detailed.append(detail)
-    integration_row = f"| **integrate/{plan_phase or ('phase-' + phase_name)}** | | — | — | — | — | — | — | — | — |"
+    integration_row = f"| **integrate/{plan_phase or ('phase-' + phase_name)}** | | — | — | — | — | — | — |"
     table = (
-        "| Sprint | DEV | QA | CI | PR | Live B | Live I | Live M | Ready | OK |\n"
-        "|--------|-----|----|----|----|--------|--------|--------|-------|----|\n"
+        "| Sprint | DEV | QA | CI | PR | FLAGS | Ready | OK |\n"
+        "|--------|-----|----|----|----|-------|-------|----|\n"
         + "\n".join(lines) + "\n" + integration_row
     )
     if diagnostics:
