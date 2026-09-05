@@ -523,13 +523,12 @@ async fn run_until_shutdown(
 }
 
 #[cfg(test)]
-async fn start_replacement_runtime(
+async fn start_replacement_runtime_for_test(
     config: HttpRuntimeConfig,
     handler: Arc<StorageAndNudgeRouter>,
     runtime_health: RuntimeHealth,
 ) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
-    start_replacement_runtime_with_optional_diagnostics(config, handler, runtime_health, None, None)
-        .await
+    start_replacement_runtime(config, handler, runtime_health, None, None).await
 }
 
 async fn start_replacement_runtime_with_diagnostics(
@@ -541,7 +540,7 @@ async fn start_replacement_runtime_with_diagnostics(
         Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
     >,
 ) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
-    start_replacement_runtime_with_optional_diagnostics(
+    start_replacement_runtime(
         config,
         handler,
         runtime_health,
@@ -551,7 +550,7 @@ async fn start_replacement_runtime_with_diagnostics(
     .await
 }
 
-async fn start_replacement_runtime_with_optional_diagnostics(
+async fn start_replacement_runtime(
     config: HttpRuntimeConfig,
     handler: Arc<StorageAndNudgeRouter>,
     runtime_health: RuntimeHealth,
@@ -1315,7 +1314,7 @@ mod replacement_runtime_tests {
             PeerPoolConfig::default(),
         );
 
-        let running = start_replacement_runtime(config, handler, runtime_health.clone())
+        let running = start_replacement_runtime_for_test(config, handler, runtime_health.clone())
             .await
             .expect("start the real replacement runtime entry point");
 

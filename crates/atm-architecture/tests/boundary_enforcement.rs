@@ -4136,6 +4136,8 @@ fn av3_read_handler_allowed_types() -> BTreeSet<String> {
     const D1_NAMED_TYPES: &[&str] = &[
         "ApiResponse",
         "AsyncMailboxRuntime",
+        "DiagnosticCounters",
+        "DiagnosticCountersSource",
         "DoctorProjection",
         "ResponseEnvelope",
     ];

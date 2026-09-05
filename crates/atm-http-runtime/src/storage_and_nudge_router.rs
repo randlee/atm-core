@@ -34,6 +34,7 @@ use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
 use crate::RuntimeHealth;
 use crate::bare_cli_fifo::{BareCliFifo, BareCliQueueFullDrops, drain_bare_cli_messages};
+use crate::doctor_observability::append_counter_finding;
 
 fn retry_deferred_marker<F>(health: &RuntimeHealth, mut mark: F) -> Result<(), AtmError>
 where
@@ -59,43 +60,6 @@ where
             }
         }
     }
-}
-
-fn append_observability_counter_finding(
-    findings: &mut Vec<atm_core::doctor::DoctorFinding>,
-    counters: DiagnosticCounters,
-) {
-    let degraded = counters.jsonl_dropped_queue_full_total > 0
-        || counters.jsonl_dropped_reentrant_total > 0
-        || counters.timeline_dropped_queue_full_total > 0
-        || counters.timeline_dropped_persist_error_total > 0;
-    let severity = if degraded {
-        atm_core::doctor::DoctorSeverity::Warning
-    } else {
-        atm_core::doctor::DoctorSeverity::Info
-    };
-    let code = if degraded {
-        atm_core::error::AtmErrorCode::WarningObservabilityHealthDegraded
-    } else {
-        atm_core::error::AtmErrorCode::ObservabilityHealthOk
-    };
-    findings.push(atm_core::doctor::DoctorFinding {
-        severity,
-        code,
-        message: format!(
-            "retained diagnostics: jsonl forwarded={} queue_full_dropped={} reentrant_dropped={}; timeline written={} queue_full_dropped={} persist_error_dropped={}",
-            counters.jsonl_forwarded_total,
-            counters.jsonl_dropped_queue_full_total,
-            counters.jsonl_dropped_reentrant_total,
-            counters.timeline_written_total,
-            counters.timeline_dropped_queue_full_total,
-            counters.timeline_dropped_persist_error_total,
-        ),
-        remediation: degraded.then(|| {
-            "Inspect retained-log queue pressure and timeline persistence; query /v1/health for the current counters."
-                .to_owned()
-        }),
-    });
 }
 
 /// Bounded bridge for synchronous core operations that are not storage-writer
@@ -763,7 +727,7 @@ impl StorageAndNudgeRouter {
             .expect("projection retains runtime status");
         report.herdr_queue_pump.last_tick_at = runtime_status.herdr_queue_last_tick_at;
         report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
-        append_observability_counter_finding(&mut report.findings, diagnostic_counters);
+        append_counter_finding(&mut report.findings, diagnostic_counters);
         Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
 

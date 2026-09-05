@@ -53,6 +53,7 @@ use tokio::task::JoinHandle;
 mod bare_cli_fifo;
 mod client;
 mod diagnostics_route;
+mod doctor_observability;
 mod health_route;
 mod herdr_queue_wake;
 mod http1_server;
