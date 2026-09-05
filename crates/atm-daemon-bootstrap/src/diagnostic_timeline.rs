@@ -11,7 +11,7 @@ use atm_observability::{
     DiagnosticSink, DropReason, RETAINED_FIELD_ALLOWLIST, RETAINED_INFO_TARGETS, RetainedEvent,
     SinkOffer, TracingBridgeStats,
 };
-use atm_storage::{DiagnosticEvent, DiagnosticTimelineStore};
+use atm_storage::{DiagnosticEvent, DiagnosticRecordError, DiagnosticTimelineStore};
 use atm_storage_rusqlite::DIAGNOSTIC_DETAIL_MAX_BYTES;
 use atm_storage_rusqlite::DiagnosticTimelinePersistenceStats;
 use serde_json::{Map, Value};
@@ -38,7 +38,17 @@ pub(crate) fn active_counters() -> Option<Arc<dyn DiagnosticCountersSource>> {
         .map(|counters| Arc::clone(counters) as Arc<dyn DiagnosticCountersSource>)
 }
 
+/// Attaches the SQLite-backed timeline to the process-global tracing bridge.
+///
+/// Idempotent: a second call (whether a genuine re-attach attempt or a race
+/// between concurrent bootstrap paths) is a no-op. Only the first caller to
+/// win [`ACTIVE_TIMELINE`] swaps the bridge's diagnostic sink and starts the
+/// flush worker; every later call returns immediately so the original writer
+/// keeps draining on its cadence instead of being silently orphaned.
 pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticTimeline>) {
+    if ACTIVE_TIMELINE.get().is_some() {
+        return;
+    }
     let Some(bridge) = INSTALLED_BRIDGE.get() else {
         return;
     };
@@ -62,8 +72,12 @@ pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticT
         counters.snapshot().timeline_dropped_queue_full_total,
     );
     monitor.observe("jsonl", counters.snapshot().jsonl_dropped_queue_full_total);
+    if ACTIVE_TIMELINE.set(Arc::clone(&writer)).is_err() {
+        // Lost a race with a concurrent attach call; the winner already owns
+        // the bridge sink and flush worker, so leave both untouched.
+        return;
+    }
     let _ = ACTIVE_COUNTERS.set(counters);
-    let _ = ACTIVE_TIMELINE.set(Arc::clone(&writer));
     bridge.set_diagnostic_sink(writer);
     start_flush_worker();
 }
@@ -122,6 +136,13 @@ pub struct DiagnosticTimelineStats {
     pub timeline_written_total: AtomicU64,
     pub timeline_dropped_queue_full_total: AtomicU64,
     pub timeline_dropped_persist_error_total: AtomicU64,
+    /// Last persistence-side `persist_error_total` observed by
+    /// [`DiagnosticTimelineWriter::refresh_persisted_stats`], used to fold the
+    /// writer worker's own persistence failures into
+    /// `timeline_dropped_persist_error_total` as a delta instead of an
+    /// overwrite, so bootstrap-side drops (`WriterClosed`/`InvalidBatch`) are
+    /// never discarded.
+    writer_persist_error_baseline: AtomicU64,
 }
 
 /// AW.3 consumes a single snapshot source without importing either concrete
@@ -223,13 +244,17 @@ impl DiagnosticTimelineWriter {
         let count = events.len() as u64;
         match self.store.record_batch(&events) {
             Ok(()) => SinkOffer::Accepted,
-            Err(error) if error.message().contains("queue is full") => {
+            Err(DiagnosticRecordError::QueueFull) => {
                 self.stats
                     .timeline_dropped_queue_full_total
                     .fetch_add(count, Ordering::Relaxed);
                 SinkOffer::Dropped(DropReason::QueueFull)
             }
-            Err(_) => {
+            Err(
+                DiagnosticRecordError::WriterClosed
+                | DiagnosticRecordError::InvalidBatch
+                | DiagnosticRecordError::PersistFailed(_),
+            ) => {
                 self.stats
                     .timeline_dropped_persist_error_total
                     .fetch_add(count, Ordering::Relaxed);
@@ -238,6 +263,18 @@ impl DiagnosticTimelineWriter {
         }
     }
 
+    /// Folds the persistence-layer's own counters into the shared stats.
+    ///
+    /// `written_total` is solely owned by the writer worker so it is safe to
+    /// mirror directly. `persist_error_total`, however, counts a disjoint
+    /// population from `timeline_dropped_persist_error_total`: the writer
+    /// worker only increments it for failures discovered *after* a batch was
+    /// already accepted onto the queue, whereas `flush_locked` above
+    /// increments `timeline_dropped_persist_error_total` for batches that
+    /// never reached the writer at all (`WriterClosed`/`InvalidBatch`).
+    /// Overwriting one with the other would silently discard whichever
+    /// source was not the most recent poll, so the writer's contribution is
+    /// folded in as a monotonic delta instead.
     fn refresh_persisted_stats(&self) {
         let Some(persistence) = &self.persistence_stats else {
             return;
@@ -245,9 +282,18 @@ impl DiagnosticTimelineWriter {
         self.stats
             .timeline_written_total
             .store(persistence.written_total(), Ordering::Relaxed);
-        self.stats
-            .timeline_dropped_persist_error_total
-            .store(persistence.persist_error_total(), Ordering::Relaxed);
+        let observed = persistence.persist_error_total();
+        let previous = self
+            .stats
+            .writer_persist_error_baseline
+            .swap(observed, Ordering::Relaxed);
+        if let Some(delta) = observed.checked_sub(previous)
+            && delta > 0
+        {
+            self.stats
+                .timeline_dropped_persist_error_total
+                .fetch_add(delta, Ordering::Relaxed);
+        }
     }
 }
 
@@ -397,18 +443,26 @@ mod tests {
         DiagnosticTimelineStats, DiagnosticTimelineWriter,
     };
     use atm_observability::{DiagnosticSink, DropReason, RetainedEvent, SinkOffer};
-    use atm_storage::{AtmError, DiagnosticEvent, DiagnosticQuery, DiagnosticTimelineStore};
+    use atm_storage::{
+        AtmError, DiagnosticEvent, DiagnosticQuery, DiagnosticRecordError, DiagnosticTimelineStore,
+    };
 
     #[derive(Default)]
     struct FixtureTimeline {
         batches: std::sync::Mutex<Vec<Vec<DiagnosticEvent>>>,
         fail: AtomicBool,
+        fail_queue_full: AtomicBool,
     }
 
     impl DiagnosticTimelineStore for FixtureTimeline {
-        fn record_batch(&self, events: &[DiagnosticEvent]) -> Result<(), AtmError> {
+        fn record_batch(&self, events: &[DiagnosticEvent]) -> Result<(), DiagnosticRecordError> {
+            if self.fail_queue_full.load(Ordering::Relaxed) {
+                return Err(DiagnosticRecordError::QueueFull);
+            }
             if self.fail.load(Ordering::Relaxed) {
-                return Err(AtmError::daemon_unavailable("fixture persistence failure"));
+                return Err(DiagnosticRecordError::PersistFailed(
+                    AtmError::daemon_unavailable("fixture persistence failure"),
+                ));
             }
             self.batches
                 .lock()
@@ -506,6 +560,100 @@ mod tests {
         assert_eq!(store.batches.lock().expect("fixture batches").len(), 1);
     }
 
+    /// C3/A8: `record_batch` failures must classify by the typed
+    /// [`DiagnosticRecordError`] variant, not by sniffing `AtmError` message
+    /// text, so a queue-full drop is never miscounted as a persist error (or
+    /// vice versa).
+    #[test]
+    fn queue_full_offer_is_classified_as_queue_full_not_persist_error() {
+        let store = std::sync::Arc::new(FixtureTimeline::default());
+        store.fail_queue_full.store(true, Ordering::Relaxed);
+        let writer = fixture_writer(std::sync::Arc::clone(&store));
+        let event = info_event(atm_observability::RETAINED_INFO_TARGETS[0]);
+
+        for _ in 1..super::DIAGNOSTIC_BATCH_MAX {
+            assert_eq!(writer.offer(&event), SinkOffer::Accepted);
+        }
+        assert_eq!(
+            writer.offer(&event),
+            SinkOffer::Dropped(DropReason::QueueFull)
+        );
+        let stats = writer.stats();
+        assert_eq!(
+            stats
+                .timeline_dropped_queue_full_total
+                .load(Ordering::Relaxed),
+            super::DIAGNOSTIC_BATCH_MAX as u64
+        );
+        assert_eq!(
+            stats
+                .timeline_dropped_persist_error_total
+                .load(Ordering::Relaxed),
+            0,
+            "a queue-full drop must not also be counted as a persist error"
+        );
+    }
+
+    /// C4: the writer worker's own late persistence failures (visible only
+    /// through `DiagnosticTimelinePersistenceStats::persist_error_total`)
+    /// must be folded into `timeline_dropped_persist_error_total` alongside
+    /// drops already recorded at offer time (`WriterClosed`/`InvalidBatch`),
+    /// never overwrite them.
+    #[test]
+    fn refresh_persisted_stats_folds_writer_errors_without_discarding_offer_time_drops() {
+        let store = std::sync::Arc::new(FixtureTimeline::default());
+        store.fail.store(true, Ordering::Relaxed);
+        let persistence_stats = std::sync::Arc::new(
+            atm_storage_rusqlite::DiagnosticTimelinePersistenceStats::default(),
+        );
+        let writer = DiagnosticTimelineWriter::new_with_persistence(
+            store,
+            DiagnosticPolicy::default(),
+            std::sync::Arc::new(DiagnosticTimelineStats::default()),
+            std::sync::Arc::clone(&persistence_stats),
+        );
+        let event = info_event(atm_observability::RETAINED_INFO_TARGETS[0]);
+
+        for _ in 0..super::DIAGNOSTIC_BATCH_MAX {
+            writer.offer(&event);
+        }
+        // The offer-time (bootstrap-owned) drop is recorded first, before any
+        // writer-thread persistence stats exist.
+        assert_eq!(
+            writer
+                .stats()
+                .timeline_dropped_persist_error_total
+                .load(Ordering::Relaxed),
+            super::DIAGNOSTIC_BATCH_MAX as u64
+        );
+
+        // The writer thread now separately observes two of its own
+        // persistence failures.
+        persistence_stats.increment_persist_error_total_for_test();
+        persistence_stats.increment_persist_error_total_for_test();
+        writer.flush_due();
+
+        assert_eq!(
+            writer
+                .stats()
+                .timeline_dropped_persist_error_total
+                .load(Ordering::Relaxed),
+            super::DIAGNOSTIC_BATCH_MAX as u64 + 2,
+            "the writer's own persist errors must add to, not replace, the offer-time drop count"
+        );
+
+        // A repeat poll before any further writer-thread failures must not
+        // double count the already-folded delta.
+        writer.flush_due();
+        assert_eq!(
+            writer
+                .stats()
+                .timeline_dropped_persist_error_total
+                .load(Ordering::Relaxed),
+            super::DIAGNOSTIC_BATCH_MAX as u64 + 2
+        );
+    }
+
     #[test]
     fn ac6_logging_contract_constants_match_the_timeline_source() {
         let logging_contract = include_str!("../../../docs/atm-daemon/logging.md");
@@ -554,6 +702,61 @@ mod tests {
                 .expect("recovered state")
                 .degraded_since
                 .is_none()
+        );
+    }
+
+    fn test_retained_log_policy() -> atm_observability::RetainedLogPolicy {
+        atm_observability::RetainedLogPolicy {
+            rotation_max_bytes: 1_048_576,
+            rotation_max_files: 1,
+            retention_max_age: std::time::Duration::from_secs(60),
+            maintenance_cadence: std::time::Duration::from_secs(60),
+            writer_shutdown_timeout: std::time::Duration::from_secs(1),
+            maintenance_max_work_per_pass: None,
+        }
+    }
+
+    /// C6/A7: a second `attach_timeline` call (a genuine re-attach attempt or
+    /// a race between concurrent bootstrap paths) must not replace the
+    /// active writer, swap the bridge's diagnostic sink, or spawn a second
+    /// flush thread that would leave the live writer never flushed on
+    /// cadence. This is the only test in this module that touches the
+    /// process-global `INSTALLED_BRIDGE`/`ACTIVE_TIMELINE` statics.
+    #[test]
+    fn attach_timeline_second_call_does_not_replace_the_active_writer() {
+        let log_dir = tempfile::tempdir().expect("temp log dir");
+        let service_name =
+            sc_observability_types::ServiceName::new("atm-test").expect("valid service name");
+        let logger = std::sync::Arc::new(
+            atm_observability::build_retained_logger(
+                service_name,
+                log_dir.path(),
+                test_retained_log_policy(),
+                None,
+            )
+            .expect("retained logger builds"),
+        );
+        let bridge = std::sync::Arc::new(atm_observability::TracingBridgeLayer::new(logger));
+        super::register_bridge(std::sync::Arc::clone(&bridge));
+
+        let backend_a =
+            atm_storage_rusqlite::SqliteStorageBackend::new(log_dir.path().join("a.db"))
+                .expect("backend a opens");
+        super::attach_timeline(backend_a.diagnostic_timeline());
+        let first = super::ACTIVE_TIMELINE.get().cloned().expect("attached");
+
+        let backend_b =
+            atm_storage_rusqlite::SqliteStorageBackend::new(log_dir.path().join("b.db"))
+                .expect("backend b opens");
+        super::attach_timeline(backend_b.diagnostic_timeline());
+        let second = super::ACTIVE_TIMELINE
+            .get()
+            .cloned()
+            .expect("still attached");
+
+        assert!(
+            std::sync::Arc::ptr_eq(&first, &second),
+            "a second attach_timeline call must not replace the active writer or its flush cadence"
         );
     }
 }

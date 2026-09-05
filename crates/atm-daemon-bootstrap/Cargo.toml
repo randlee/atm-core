@@ -40,6 +40,7 @@ atm-core = { workspace = true, features = ["test-utils"] }
 atm-herdr = { workspace = true, features = ["test-utils"] }
 atm-http-runtime = { workspace = true, features = ["test-support"] }
 atm-runtime-test-support.workspace = true
+atm-storage-rusqlite = { workspace = true, features = ["test-support"] }
 serial_test = "3"
 serde_json.workspace = true
 tempfile = "3"

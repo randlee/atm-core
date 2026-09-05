@@ -101,6 +101,14 @@ impl DiagnosticTimelinePersistenceStats {
     pub fn persist_error_total(&self) -> u64 {
         self.persist_error_total.load(Ordering::Relaxed)
     }
+
+    /// Simulates a writer-thread persistence failure without a real SQLite
+    /// fault, so cross-crate regression tests can exercise counter-fold
+    /// logic that only consumes this type's public getters.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn increment_persist_error_total_for_test(&self) {
+        self.persist_error_total.fetch_add(1, Ordering::Relaxed);
+    }
 }
 
 struct QueuedWrite {
