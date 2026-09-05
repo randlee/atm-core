@@ -400,3 +400,8 @@ triage:r57 a triage:Resolution ;
 triage:r58 a triage:Resolution ;
     triage:resolves <urn:atm:triage:finding/AX5-QA2-008> ;
     triage:resolvedAt "2026-09-05T15:11:27Z"^^xsd:dateTime .
+
+triage:a20 a triage:Assignment ;
+    triage:ofSprint triage:AX5 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-05T15:13:38Z"^^xsd:dateTime .
