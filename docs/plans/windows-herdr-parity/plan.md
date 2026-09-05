@@ -107,7 +107,10 @@ The real gaps:
 
 ## Herdr minimum version, drift and schema management
 
-Ruling (Rand, 2026-09-05, recorded in randlee/atm-core#1217): Herdr drifts
+Ruling (Rand, 2026-09-05; authority: ADR-061
+`docs/adr/ADR-061-governed-interface-schema-versioning.md`, landing on PR
+#1218 together with the constant itself at 29e483e50; discussion in
+randlee/atm-core#1217): Herdr drifts
 outside our control, and atm-core is responsible for supporting **every
 Herdr version at or above `HERDR_MINIMUM_VERSION`**, following the same
 schema-management pattern as the HTTP API semver rules. Rand's minimum
@@ -117,9 +120,12 @@ approach.
 Plan-declared schema rules (checked by the `schema-reviewer` agent, PR
 #1218, at plan review and phase-ending review):
 
-1. `crates/atm-herdr` declares `HERDR_MINIMUM_VERSION = 0.8.0` (Herdr
-   release version, semver, as reported by `ping.version` and `herdr
-   --version`). One daemon build supports every Herdr version at or above
+1. `crates/atm-herdr` declares `pub const HERDR_MINIMUM_VERSION` = 0.8.0
+   (Herdr release version, semver, as reported by `ping.version` and
+   `herdr --version`). Rand set it on PR #1218 (29e483e50,
+   `crates/atm-herdr/src/lib.rs`, with a guard test); AY.1 builds the
+   doctor check on that constant and does not introduce it. Changing the
+   value is a separate PR after #1218 completes. One daemon build supports every Herdr version at or above
    it simultaneously. Herdr's integer `PROTOCOL_VERSION` (19 at v0.8.0,
    20 at v0.8.2, 22 at master 3a822e81) is recorded per release as a
    secondary fact; it versions Herdr's bincode client socket, not the
@@ -153,9 +159,10 @@ Plan-declared schema rules (checked by the `schema-reviewer` agent, PR
    until that agent ships, quality-mgr's req-qa pass performs the check
    from the recorded table.
 
-Today `crates/atm-herdr` has no version constant and a mismatch surfaces
-only as `HerdrError::ProtocolMismatch`. AY.1 lands rules 1 to 5 for the
-CLI transport; AY.3 extends the same matrix to the direct socket client.
+Before PR #1218 `crates/atm-herdr` had no version constant and a mismatch
+surfaced only as `HerdrError::ProtocolMismatch`. AY.1 lands rules 2 to 5
+for the CLI transport on top of the #1218 constant; AY.3 extends the same
+matrix to the direct socket client.
 
 ### Mechanism: low-code by design (Rand, 2026-09-05)
 
@@ -604,7 +611,7 @@ Deliverables:
    `HerdrError` mapping (codes only, never message text). Creates
    `docs/atm-herdr/herdr-versions.md` (rule 4) with rows for v0.8.0,
    v0.8.2 and the master commit the dev hosts run, and lands
-   `HERDR_MINIMUM_VERSION` in `crates/atm-herdr` (rule 1). Replaces
+   the doctor check on the existing `HERDR_MINIMUM_VERSION` (PR #1218). Replaces
    ADR-058's PROTOCOL_VERSION pin with the minimum-version rule and the
    compatibility statement below. Does not touch HR-CORE-003 (already
    correct).
@@ -632,7 +639,7 @@ Deliverables:
        async fn execute(&self, request: &HerdrRequest, deadline: Deadline) -> Result<HerdrRawResponse, HerdrError>;
        async fn observed_version(&self) -> Result<HerdrVersion, HerdrError>; // doctor only: `herdr --version` (Cli) / ping.version (Socket)
    }
-   pub const HERDR_MINIMUM_VERSION: HerdrVersion = HerdrVersion::new(0, 8, 0); // doctor check, not a runtime branch
+   // HERDR_MINIMUM_VERSION already exists (PR #1218, 29e483e50); doctor check, not a runtime branch
    // HerdrError: the existing closed enum in lib.rs, unchanged
    // (AgentBlocked, AgentNotFound, AgentNotReady, AgentTargetAmbiguous, AgentNotRunning,
    //  AgentPromptStalled, ServerNotRunning, ProtocolMismatch, Timeout, InvalidAgentName,
@@ -984,7 +991,8 @@ AX does not wait on any AY sprint.
   2026-09-05): findings in "Herdr minimum version, drift and schema
   management"; PROTOCOL_VERSION section corrected; prompt-wait semantics
   and Windows PATH change added to AY.1/AY.2 deliverables.
-- Rand, 2026-09-05 (via fenix@rand-m4, randlee/atm-core#1217): Herdr IPC
+- Rand, 2026-09-05 (via fenix@rand-m4; ADR-061 on PR #1218 is the
+  authority, discussion in #1217): Herdr IPC
   follows the HTTP schema-management pattern; support every Herdr version
   at or above `HERDR_MINIMUM_VERSION` (0.8.0 today); raising it needs
   Rand's recorded sign-off; new capability adopted additively; a
