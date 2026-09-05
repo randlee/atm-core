@@ -1308,8 +1308,9 @@ Validation:
    exit 0 against the published floors; evidence path is the run's
    published report directory, cited in the PR.
 
-Out of scope: composition changes, doctor, installer, Windows-specific
-code, socket transport.
+Out of scope: composition changes; doctor runtime, port, report
+assembly and CLI rendering (the doctor DTO file is deliverable 1's,
+AYF-R17-001); installer; Windows-specific code; socket transport.
 
 ## Sprint AY.3: startup/failure model (size L)
 
@@ -1318,9 +1319,10 @@ Branch `feature/ay3-herdr-startup-failure-model`, created from
 AY.2 (uses `HerdrClientConfig`, `HerdrIo`, `HerdrDoctorProbe`, fake-herdr);
 parallel_safe none (AY.6 must_follow AY.3, AYP-R3-011: both edit
 `boundary_enforcement.rs`). recommended_agent arch-ctm/deep-reasoning.
-Size L (AYS-R5-001; the boundary record, the doctor port and DTOs, the
-presence correlation and the config reader were added by the review
-rounds) with the same internal order AY.4 uses (AYS-R2-005): **stage 1**
+Size L (AYS-R5-001; the boundary record, the doctor port over the AY.2
+DTOs, the presence correlation and the config reader were added by the
+review rounds; the estimate is unchanged by the DTO move) with the same
+internal order AY.4 uses (AYS-R2-005): **stage 1**
 is the P-E(a) boundary TOML as the first commit, then the whole of
 deliverable 2 (port over the AY.2 DTOs, both `HerdrEndpointDoctor` impls including
 `HerdrEndpointDoctorAdapter` over a `HerdrDoctorProbe` built from
@@ -2278,3 +2280,10 @@ AX does not wait on any AY sprint.
   `HerdrDoctorProbe::observe` returns and consumes it and AY.3 must_follow
   AY.2; port, closed impl, `presence_findings`, predicate and boundary
   record stay AY.3 stage 1.
+- r18 (2026-09-05): critical-plan-reviewer R9 (solar, on r17: 0 blocking,
+  0 important, 1 minor; AYP-R8-001..003 closed, AYF-R17-001 assessed
+  sound) and plan-scope r8 (PASS, 1 minor wording). AYP-R9-001 and
+  AYS-R8-M1: AY.2 out-of-scope line now excepts the DTO file and names
+  the doctor pieces it excludes; AY.3 size-L rationale says "port over the
+  AY.2 DTOs" and states the estimate is unchanged. AY.2 deliverable 1 is
+  the authoritative DTO ownership statement.
