@@ -246,19 +246,23 @@ mod tests {
             );
             deleted += pass;
         }
-        let retained: i64 = timeline
+        let (retained, oldest_ts, newest_ts): (i64, i64, i64) = timeline
             .db
             .with_connection(|connection| {
                 connection
-                    .query_row("SELECT COUNT(*) FROM diagnostic_events", [], |row| {
-                        row.get(0)
-                    })
+                    .query_row(
+                        "SELECT COUNT(*), MIN(ts_unix_ms), MAX(ts_unix_ms) FROM diagnostic_events",
+                        [],
+                        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                    )
                     .map_err(|error| AtmError::mailbox_read(error.to_string()))
             })
             .expect("count retained diagnostics");
 
         assert_eq!(deleted, (FIXTURE_ROWS - DIAGNOSTIC_MAX_ROWS) as u64);
         assert_eq!(retained, DIAGNOSTIC_MAX_ROWS as i64);
+        assert_eq!(oldest_ts, (FIXTURE_ROWS - DIAGNOSTIC_MAX_ROWS) as i64);
+        assert_eq!(newest_ts, (FIXTURE_ROWS - 1) as i64);
     }
 
     #[test]
