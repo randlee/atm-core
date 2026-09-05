@@ -132,7 +132,7 @@ This is the authoritative deliverable checklist. Every listed deliverable
 lands production-ready for the scope this sprint claims; partial or
 shape-only completion fails the sprint.
 
-- [ ] D1 — retire the unused newtype `pub struct TaskState(String)` in
+- [x] D1 — retire the unused newtype `pub struct TaskState(String)` in
   `crates/atm-storage/src/contract.rs` and its three re-exports
   (`crates/atm-storage/src/lib.rs`, `crates/atm-core/src/boundary/mod.rs`,
   `crates/atm-core/src/lib.rs`); add task types and the pure state
@@ -149,7 +149,7 @@ shape-only completion fails the sprint.
   working and the daemon-runtime crates import through
   `atm_core::boundary` (same pattern as `PendingNudgeStore`). All new identifiers avoid the `nudge` word
   family so `scripts/check-nudge-taxonomy.py` needs no allowlist change.
-- [ ] D2 — `TaskStore` sealed trait (`crates/atm-storage/src/task_store.rs`,
+- [x] D2 — `TaskStore` sealed trait (`crates/atm-storage/src/task_store.rs`,
   re-exported from `contract.rs` per D1; code contract C2),
   `DummyTaskStore` double beside `DummyPendingNudgeStore`, boundary file
   `boundaries/atm-storage/task-store.toml` and its implementation
@@ -161,7 +161,7 @@ shape-only completion fails the sprint.
   nothing in `atm-storage-rusqlite`; a SQL Server implementation adds a
   `TaskStore` impl and the two provenance overrides in its own crate
   with its own DDL and touches nothing above the trait.
-- [ ] D3 — wiring, one site per file, mirroring `PendingNudgeStore`:
+- [x] D3 — wiring, one site per file, mirroring `PendingNudgeStore`:
   `crates/atm-storage/src/factory.rs` (`StorageHandleParts.task_store`
   field at line 50, `StorageHandles::task_store()` accessor beside
   `pending_nudge_store()` at line 133, and the `StorageHandles::from_parts`
@@ -179,7 +179,7 @@ shape-only completion fails the sprint.
   (assembly field near line 1401 and installation near line 1515).
   Consumers (AX.4 list command, AX.5 pump, AX.6 doctor) obtain the store
   only through `LocalServiceRuntime::task_store()`.
-- [ ] D4 — envelope and request fields. `MessageEnvelope` in
+- [x] D4 — envelope and request fields. `MessageEnvelope` in
   `crates/atm-storage/src/schema/inbox_message.rs` gains
   `task_complete: Option<TaskId>` with
   `#[serde(rename = "taskComplete", default, skip_serializing_if = "Option::is_none")]`
@@ -196,7 +196,7 @@ shape-only completion fails the sprint.
   line 461 and `persist_send_message_async` in
   `crates/atm-core/src/send/async_persistence.rs` line 51) carry it. A request
   with both `task_id` and `task_complete` is rejected at validation.
-- [ ] D5 — write provenance carrier, code contract C6. Merge-forward first:
+- [x] D5 — write provenance carrier, code contract C6. Merge-forward first:
   AX.1 (landed on `feature/ax1-queue-template-class` at 1452df008) already
   edits `prepare_persisted_write` and `prepare_persisted_write_async`
   (`request.nudge_mode = send_mode_for_task_request(...)`, lines 526/595)
@@ -240,7 +240,7 @@ shape-only completion fails the sprint.
   `crates/atm-runtime-test-support/src/lib.rs` `RecordingWriter`,
   `crates/atm-core/src/ack/admission_tests.rs` `InMemoryAsyncStore`);
   none applies transitions, and both trait docs state this.
-- [ ] D6 — rusqlite implementation
+- [x] D6 — rusqlite implementation
   (`crates/atm-storage-rusqlite/src/task_store.rs`, schema in
   `crates/atm-storage-rusqlite/src/shared_db.rs`, application in
   `crates/atm-storage-rusqlite/src/writer/ops.rs`): tables per code
@@ -262,7 +262,7 @@ shape-only completion fails the sprint.
   existing transaction. `WriteOp::Acknowledge` (`execute_acknowledgement`
   line 413) is the only `Acked` site and uses the loaded source. C7 for
   completion from `Assigned`.
-- [ ] D7 — `docs/adr/ADR-061-task-state-machine.md` recording the
+- [x] D7 — `docs/adr/ADR-061-task-state-machine.md` recording the
   states, events, transition table (including the ∅/`Acked` no-op),
   guards, row resolution, provenance rule and carrier, the one-site
   rule, the precise replay claim, the seventh-capability-trait
@@ -273,8 +273,8 @@ shape-only completion fails the sprint.
   §22.1 (SQLite mail and roster ownership) gains a "Task storage"
   subsection listing `TaskStore`, the two tables, and
   `MessageWriteOrigin` (§7 is queue inspection and is not touched).
-- [ ] D8 — tests listed under Required validation.
-- [ ] D10 — supersede the Phase-AC task-storage deferral. `docs/requirements.md`
+- [x] D8 — tests listed under Required validation.
+- [x] D10 — supersede the Phase-AC task-storage deferral. `docs/requirements.md`
   lines 52–64 ("Phase-AC supersession note") and `docs/architecture.md`
   lines 2871–2880 ("Task Storage (Deferred)") say a later task store
   "starts from Claude-code task schema plus Pydantic validation". Both
@@ -291,7 +291,7 @@ shape-only completion fails the sprint.
   the deleted scaffolding. Gate: the `Pydantic` references in the two named
   Phase-AC notes each have the Phase-AX amendment; the unrelated historical
   Phase-AA note is outside this sprint's scope.
-- [ ] D9 — `crates/atm-storage/src/contract.rs` decomposition (arch-qa
+- [x] D9 — `crates/atm-storage/src/contract.rs` decomposition (arch-qa
   RULE-003): the file is already 1133 non-test lines (tests start at
   line 1134) and AX.1, AX.3 and AX.6 all add to it. Extract the graft
   receiver and peer-configuration section (lines 760–1003:
@@ -356,7 +356,12 @@ pub struct TaskRejected { pub detail: String }
 pub enum Transition { To(TaskState), NoOp }
 
 /// Row-local machine: the twelve-cell table above. Pure.
-pub fn transition(state: Option<TaskState>, event: TaskEvent) -> Result<Transition, TaskRejected>;
+pub fn transition(
+    state: Option<TaskState>,
+    event: TaskEvent,
+    task_id: &TaskId,
+    actor: &AgentName,
+) -> Result<Transition, TaskRejected>;
 
 /// Cross-row guards G1 and G2. `open` is every non-Complete row for the
 /// assignee. Pure.
@@ -364,6 +369,7 @@ pub fn admit(
     row: Option<&TaskRow>,
     open: &[TaskRow],
     event: TaskEvent,
+    task_id: &TaskId,
     actor: &AgentName,
 ) -> Result<(), TaskRejected>;
 
