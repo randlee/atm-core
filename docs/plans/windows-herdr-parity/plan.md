@@ -206,14 +206,18 @@ failure), not the socket code.
 
 ## Ordering with phase AX
 
-No AX sprint assumes Windows Herdr works (AX.7 excludes it). AX.2 and
-AX.6 both edit `HerdrProcessAdapter` and ADR-058. Land W1 before AX.2 and
-AX.6: W1 changes no argv and no trait method, and once it lands every
-later argv change is validated on Windows by the platform-neutral argv
-contract test. If AX.2 lands first, W1 rebases and re-runs the full
-Windows evidence set. Widen AX.7 to capture a Windows Herdr run. AX.6's notify
-(HR-CORE-010) must be in the platform-neutral argv contract test before
-W1 evidence is captured, or W1 captures it in a follow-up evidence round.
+Status 2026-09-05 (fenix@rand-m5): AX.1 through AX.5 are merged into
+integrate/phase-ax, AX.2 included; AX.6 merges as soon as its QA gate
+clears; then the single PR integrate/phase-ax -> develop follows AX.7 and
+the phase-ending review. The AY.1-before-AX.2 ordering is therefore
+moot. Default path: AY.1 takes the AX contract as its baseline, so
+integrate/phase-ay branches from develop after integrate/phase-ax
+merges, or AY.1 merges integrate/phase-ax forward before the Windows
+evidence is captured. The AX.6 notify command (HR-CORE-010) is then in
+scope for the platform-neutral argv contract test and the Windows
+evidence set in a single round. AX.7's evidence scope is widened to a
+Windows Herdr run once AY.1 lands. Only Rand can rule that AX waits on
+AY.1; this plan does not assume it.
 
 ## Risks
 
