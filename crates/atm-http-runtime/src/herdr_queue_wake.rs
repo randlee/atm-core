@@ -231,6 +231,10 @@ impl HerdrQueueWakePump {
             .await;
         self.remind_open_tasks(task_candidates, &prompted_by_drain, &mut stats)
             .await;
+        self.finish_tick(stats);
+    }
+
+    fn finish_tick(&self, stats: HerdrQueueWakeStats) {
         self.save_stats(stats.clone());
         tracing::info!(
             event = "herdr_queue_poll_tick",
@@ -1062,7 +1066,7 @@ mod tests {
     use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
-        PostSendEmissionPath, RosterEntry, RosterHarness, RosterMemberKind, TaskStore,
+        PostSendEmissionPath, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::observability::NullObservability;
@@ -1070,14 +1074,13 @@ mod tests {
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
     use atm_core::test_support as atm_storage;
-    use atm_core::types::{AgentName, IsoTimestamp, ModelName, TaskId, TeamName};
+    use atm_core::types::{IsoTimestamp, ModelName, TaskId, TeamName};
     use atm_herdr::{
         AgentSnapshot, HerdrAgentStatus, HerdrListOutcome, HerdrProcessAdapter, HerdrPromptOutcome,
     };
     use atm_runtime_test_support::open_isolated_sqlite_boundary;
-    use atm_storage::{RosterSnapshot, TaskEventRow, TaskRow, TaskState};
+    use atm_storage::{RosterSnapshot, TaskRow, TaskState};
     use serde_json::json;
-    use std::collections::HashMap;
     use std::future::Future;
     use std::pin::Pin;
     use std::str::FromStr;
@@ -1114,126 +1117,6 @@ mod tests {
             _dispatch: &BuiltInPostSendDispatch,
         ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
             None
-        }
-    }
-
-    struct RecordingTaskStore {
-        rows: Mutex<HashMap<(atm_storage::MemberKey, TaskId), TaskRow>>,
-        fail_reminders: bool,
-    }
-
-    impl RecordingTaskStore {
-        fn new(rows: Vec<TaskRow>, fail_reminders: bool) -> Self {
-            let rows = rows
-                .into_iter()
-                .map(|row| {
-                    let key = atm_storage::MemberKey::new(row.team.clone(), row.assignee.clone());
-                    (key, row.task_id.clone(), row)
-                })
-                .map(|(member, task_id, row)| ((member, task_id), row))
-                .collect();
-            Self {
-                rows: Mutex::new(rows),
-                fail_reminders,
-            }
-        }
-
-        fn row(&self, member: &atm_storage::MemberKey, task_id: &TaskId) -> TaskRow {
-            self.rows
-                .lock()
-                .expect("task rows lock")
-                .get(&(member.clone(), task_id.clone()))
-                .expect("recorded task row")
-                .clone()
-        }
-    }
-
-    impl atm_storage::contract::sealed::Sealed for RecordingTaskStore {}
-
-    impl TaskStore for RecordingTaskStore {
-        fn load_task(
-            &self,
-            member: &atm_storage::MemberKey,
-            task_id: &TaskId,
-        ) -> Result<Option<TaskRow>, AtmError> {
-            Ok(self
-                .rows
-                .lock()
-                .expect("task rows lock")
-                .get(&(member.clone(), task_id.clone()))
-                .cloned())
-        }
-
-        fn open_tasks(&self, member: &atm_storage::MemberKey) -> Result<Vec<TaskRow>, AtmError> {
-            Ok(self
-                .rows
-                .lock()
-                .expect("task rows lock")
-                .iter()
-                .filter(|((row_member, _), _)| row_member == member)
-                .map(|(_, row)| row.clone())
-                .collect())
-        }
-
-        fn list_tasks(
-            &self,
-            team: &TeamName,
-            member: Option<&AgentName>,
-        ) -> Result<Vec<TaskRow>, AtmError> {
-            Ok(self
-                .rows
-                .lock()
-                .expect("task rows lock")
-                .values()
-                .filter(|row| {
-                    &row.team == team && member.is_none_or(|agent| &row.assignee == agent)
-                })
-                .cloned()
-                .collect())
-        }
-
-        fn list_task_events(
-            &self,
-            _team: &TeamName,
-            _task_id: &TaskId,
-            _assignee: Option<&AgentName>,
-        ) -> Result<Vec<TaskEventRow>, AtmError> {
-            Ok(Vec::new())
-        }
-
-        fn record_reminder(
-            &self,
-            member: &atm_storage::MemberKey,
-            task_id: &TaskId,
-            at: IsoTimestamp,
-            _outcome: atm_core::boundary::ReminderOutcome,
-        ) -> Result<TaskRow, AtmError> {
-            if self.fail_reminders {
-                return Err(AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "injected reminder bookkeeping failure",
-                ));
-            }
-            let mut rows = self.rows.lock().expect("task rows lock");
-            let row = rows
-                .get_mut(&(member.clone(), task_id.clone()))
-                .ok_or_else(|| {
-                    AtmError::new(AtmErrorCode::InternalError, "recorded task row missing")
-                })?;
-            row.last_reminded_at = Some(at);
-            row.reminder_count = row.reminder_count.saturating_add(1);
-            Ok(row.clone())
-        }
-
-        fn record_lead_notified(
-            &self,
-            _member: &atm_storage::MemberKey,
-            _task_id: &TaskId,
-            _at: IsoTimestamp,
-            _lead: &AgentName,
-            _message_id: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            Ok(())
         }
     }
 
@@ -1556,7 +1439,7 @@ mod tests {
         LocalServiceRuntime,
         Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
         HerdrQueueWakePump,
-        Arc<RecordingTaskStore>,
+        Arc<atm_storage::DummyTaskStore>,
         Vec<atm_storage::MemberKey>,
         Arc<Mutex<IsoTimestamp>>,
     );
@@ -1603,7 +1486,10 @@ mod tests {
                 lead_notified_count: 0,
             })
             .collect();
-        let task_store = Arc::new(RecordingTaskStore::new(rows.clone(), fail_reminders));
+        let task_store = Arc::new(atm_storage::DummyTaskStore::with_rows(
+            rows.clone(),
+            fail_reminders,
+        ));
         let reader = Arc::new(
             atm_runtime_test_support::InMemoryTaskLedgerReader::with_rows(rows, Vec::new()),
         );
