@@ -432,3 +432,20 @@ triage:a22 a triage:Assignment ;
     triage:assignedTo "cipher" ;
     triage:assignedAt "2026-09-05T17:04:20Z"^^xsd:dateTime .
 triage:c21 a triage:Completion ; triage:ofSprint triage:AX6 ; triage:at "2026-09-05T17:49:40Z"^^xsd:dateTime .
+
+triage:r61 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-010> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r62 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-011> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r63 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-012> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r64 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-013> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r65 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-014> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r66 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-015> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r67 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-016> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r68 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-017> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r69 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-018> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r70 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-019> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r71 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-020> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r72 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-021> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r73 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-022> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r74 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-023> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r75 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA1-024> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
+triage:r76 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX5-QA4-001> ; triage:resolvedAt "2026-09-05T19:01:51Z"^^xsd:dateTime .
