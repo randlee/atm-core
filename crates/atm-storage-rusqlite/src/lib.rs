@@ -29,6 +29,7 @@ mod shared_db;
 mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
 mod shared_db_support;
+mod task_ledger_reader;
 mod task_store;
 mod team_roster_schema;
 mod template_catalog_schema;
@@ -52,8 +53,8 @@ pub use crate::observability::{
 };
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMailboxReader,
-    AsyncMessageStore, GraftReceiverEndpointStore, MailboxBucketCounts, MailboxScope, Message,
-    MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    AsyncMessageStore, AsyncTaskLedgerReader, GraftReceiverEndpointStore, MailboxBucketCounts,
+    MailboxScope, Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 use atm_storage::schema::MessageEnvelope;
 #[cfg(test)]
@@ -706,6 +707,7 @@ pub struct SqliteStorageBackend {
     message_search_store: Arc<dyn MessageSearchStore>,
     async_message_search_store: Arc<dyn AsyncMessageSearchStore>,
     async_mailbox_reader: Arc<dyn AsyncMailboxReader>,
+    async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader>,
 }
 
 impl std::fmt::Debug for SqliteStorageBackend {
@@ -776,6 +778,7 @@ impl StorageFactory for SqliteStorageFactory {
             message_store: backend.message_store(),
             async_message_store: backend.async_message_store(),
             async_mailbox_reader: backend.async_mailbox_reader(),
+            async_task_ledger_reader: backend.async_task_ledger_reader(),
             roster_store: backend.roster_store(),
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
@@ -843,6 +846,7 @@ impl SqliteStorageBackend {
             message_search_store: search_store(Arc::clone(&db)),
             async_message_search_store: async_search_store(Arc::clone(&db)),
             async_mailbox_reader: db.mailbox_reader(),
+            async_task_ledger_reader: db.task_ledger_reader(),
         })
     }
 
@@ -865,6 +869,7 @@ impl SqliteStorageBackend {
             message_search_store: search_store(Arc::clone(&db)),
             async_message_search_store: async_search_store(Arc::clone(&db)),
             async_mailbox_reader: db.mailbox_reader(),
+            async_task_ledger_reader: db.task_ledger_reader(),
         })
     }
 
@@ -878,6 +883,10 @@ impl SqliteStorageBackend {
 
     pub fn async_mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
         self.async_mailbox_reader.clone()
+    }
+
+    pub fn async_task_ledger_reader(&self) -> Arc<dyn AsyncTaskLedgerReader + Send + Sync> {
+        self.async_task_ledger_reader.clone()
     }
 
     pub fn save_message_record(

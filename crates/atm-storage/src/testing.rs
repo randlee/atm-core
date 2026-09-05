@@ -10,11 +10,12 @@
 use chrono::{DateTime, Utc};
 
 use crate::contract::{
-    AsyncMailboxReader, GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
-    GraftReceiverRegistration, MailboxScope, Message, MessageKey, MessageQuery, ReadDeadline,
-    ReadLaneError, sealed,
+    AsyncMailboxReader, AsyncTaskLedgerReader, GraftEndpointStoreError, GraftReceiverEndpointStore,
+    GraftReceiverLease, GraftReceiverRegistration, MailboxScope, Message, MessageKey, MessageQuery,
+    ReadDeadline, ReadLaneError, sealed,
 };
-use crate::types::{AgentName, IsoTimestamp, OwnerGeneration, TeamName};
+use crate::task_state::{TaskEventRow, TaskRow};
+use crate::types::{AgentName, IsoTimestamp, OwnerGeneration, TaskId, TeamName};
 
 /// A `GraftReceiverEndpointStore` that accepts every write and reports no
 /// lease. Used by callers that need a wired store to compile against but
@@ -168,5 +169,81 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
                 message: "in-memory mailbox reader seen-state lock poisoned".to_owned(),
             })
             .map(|watermarks| watermarks.get(&(scope.team, scope.agent)).copied())
+    }
+}
+
+/// Deterministic in-memory double for the sealed async task-ledger read
+/// contract. It is intentionally available only through `test-utils`.
+#[derive(Debug, Default)]
+pub struct InMemoryTaskLedgerReader {
+    tasks: std::sync::Mutex<Vec<TaskRow>>,
+    events: std::sync::Mutex<Vec<TaskEventRow>>,
+}
+
+impl InMemoryTaskLedgerReader {
+    #[must_use]
+    pub fn with_rows(tasks: Vec<TaskRow>, events: Vec<TaskEventRow>) -> Self {
+        Self {
+            tasks: std::sync::Mutex::new(tasks),
+            events: std::sync::Mutex::new(events),
+        }
+    }
+
+    pub fn replace_rows(&self, tasks: Vec<TaskRow>, events: Vec<TaskEventRow>) {
+        *self.tasks.lock().expect("in-memory task rows lock") = tasks;
+        *self.events.lock().expect("in-memory task events lock") = events;
+    }
+}
+
+impl sealed::Sealed for InMemoryTaskLedgerReader {}
+
+#[async_trait::async_trait]
+impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
+    async fn list_tasks(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        self.tasks
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory task-ledger reader task lock poisoned".to_owned(),
+            })
+            .map(|tasks| {
+                tasks
+                    .iter()
+                    .filter(|task| {
+                        task.team == team
+                            && member.as_ref().is_none_or(|agent| &task.assignee == agent)
+                    })
+                    .cloned()
+                    .collect()
+            })
+    }
+
+    async fn list_task_events(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        member: Option<AgentName>,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<TaskEventRow>, ReadLaneError> {
+        self.events
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory task-ledger reader event lock poisoned".to_owned(),
+            })
+            .map(|events| {
+                events
+                    .iter()
+                    .filter(|event| {
+                        event.team == team
+                            && event.task_id == task_id
+                            && member.as_ref().is_none_or(|agent| &event.assignee == agent)
+                    })
+                    .cloned()
+                    .collect()
+            })
     }
 }

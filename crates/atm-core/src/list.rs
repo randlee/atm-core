@@ -270,9 +270,10 @@ pub fn list_task_ledger_with_runtime(
 ) -> Result<ListOutcome, AtmError> {
     let task_ledger = query
         .task_ledger
+        .clone()
         .ok_or_else(|| AtmError::validation("task ledger list requires a task-ledger selection"))?;
     let store = runtime.task_store()?;
-    let (mut task_rows, mut task_event_rows) = match task_ledger {
+    let (task_rows, task_event_rows) = match task_ledger {
         TaskLedgerQuery::Tasks { member } => (
             store.list_tasks(&query.caller_team, member.as_ref())?,
             Vec::new(),
@@ -282,9 +283,49 @@ pub fn list_task_ledger_with_runtime(
             store.list_task_events(&query.caller_team, &task_id, member.as_ref())?,
         ),
     };
+    Ok(build_task_ledger_outcome(query, task_rows, task_event_rows))
+}
+
+/// Reads one task-ledger view through the bounded storage-owned async reader
+/// lane. This is the daemon/HTTP path; the synchronous sibling remains for
+/// the bare CLI runtime.
+pub async fn list_task_ledger_with_runtime_async(
+    query: ListQuery,
+    runtime: &LocalServiceRuntime,
+    deadline: atm_storage::ReadDeadline,
+) -> Result<ListOutcome, AtmError> {
+    let task_ledger = query
+        .task_ledger
+        .clone()
+        .ok_or_else(|| AtmError::validation("task ledger list requires a task-ledger selection"))?;
+    let reader = runtime.async_task_ledger_reader()?;
+    let (task_rows, task_event_rows) = match task_ledger {
+        TaskLedgerQuery::Tasks { member } => (
+            reader
+                .list_tasks(query.caller_team.clone(), member, deadline)
+                .await
+                .map_err(AtmError::from)?,
+            Vec::new(),
+        ),
+        TaskLedgerQuery::Events { task_id, member } => (
+            Vec::new(),
+            reader
+                .list_task_events(query.caller_team.clone(), task_id, member, deadline)
+                .await
+                .map_err(AtmError::from)?,
+        ),
+    };
+    Ok(build_task_ledger_outcome(query, task_rows, task_event_rows))
+}
+
+fn build_task_ledger_outcome(
+    query: ListQuery,
+    mut task_rows: Vec<TaskRow>,
+    mut task_event_rows: Vec<TaskEventRow>,
+) -> ListOutcome {
     task_rows.sort_by(|left, right| right.assigned_at.cmp(&left.assigned_at));
     task_event_rows.sort_by_key(|row| row.seq);
-    Ok(ListOutcome {
+    ListOutcome {
         action: CommandAction::List,
         team: query.caller_team,
         agent: query.caller_identity,
@@ -299,7 +340,7 @@ pub fn list_task_ledger_with_runtime(
         },
         task_rows,
         task_event_rows,
-    })
+    }
 }
 
 pub fn list_mail(

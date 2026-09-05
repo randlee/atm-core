@@ -96,6 +96,43 @@ impl SqliteTaskStore {
         })
     }
 
+    pub(crate) fn decode_event_row(row: &Row<'_>) -> rusqlite::Result<TaskEventRow> {
+        let actor: String = row.get(8)?;
+        let message_id: Option<String> = row.get(9)?;
+        let outcome: Option<String> = row.get(10)?;
+        let marker: Option<String> = row.get(11)?;
+        Ok(TaskEventRow {
+            team: parse(&row.get::<_, String>(0)?, "event team")?,
+            task_id: parse(&row.get::<_, String>(1)?, "event task id")?,
+            assignee: parse(&row.get::<_, String>(2)?, "event assignee")?,
+            seq: row.get(3)?,
+            at: parse(&row.get::<_, String>(4)?, "event timestamp")?,
+            event: parse_event(&row.get::<_, String>(5)?)?,
+            from_state: row
+                .get::<_, Option<String>>(6)?
+                .as_deref()
+                .map(parse_state)
+                .transpose()?,
+            to_state: row
+                .get::<_, Option<String>>(7)?
+                .as_deref()
+                .map(parse_state)
+                .transpose()?,
+            actor: if actor == atm_storage::DAEMON_ACTOR_NAME {
+                TaskActor::Daemon
+            } else {
+                TaskActor::Member(parse(&actor, "event actor")?)
+            },
+            message_id: message_id
+                .as_deref()
+                .map(|value| parse(value, "event message id"))
+                .transpose()?,
+            outcome: outcome.as_deref().map(parse_outcome).transpose()?,
+            marker: marker.as_deref().map(parse_marker).transpose()?,
+            detail: row.get(12)?,
+        })
+    }
+
     fn load_row(
         &self,
         connection: &Connection,
@@ -239,42 +276,7 @@ impl TaskStore for SqliteTaskStore {
                         task_id.as_str(),
                         assignee.map(AgentName::as_str)
                     ],
-                    |row| {
-                        let actor: String = row.get(8)?;
-                        let message_id: Option<String> = row.get(9)?;
-                        let outcome: Option<String> = row.get(10)?;
-                        let marker: Option<String> = row.get(11)?;
-                        Ok(TaskEventRow {
-                            team: parse(&row.get::<_, String>(0)?, "event team")?,
-                            task_id: parse(&row.get::<_, String>(1)?, "event task id")?,
-                            assignee: parse(&row.get::<_, String>(2)?, "event assignee")?,
-                            seq: row.get(3)?,
-                            at: parse(&row.get::<_, String>(4)?, "event timestamp")?,
-                            event: parse_event(&row.get::<_, String>(5)?)?,
-                            from_state: row
-                                .get::<_, Option<String>>(6)?
-                                .as_deref()
-                                .map(parse_state)
-                                .transpose()?,
-                            to_state: row
-                                .get::<_, Option<String>>(7)?
-                                .as_deref()
-                                .map(parse_state)
-                                .transpose()?,
-                            actor: if actor == atm_storage::DAEMON_ACTOR_NAME {
-                                TaskActor::Daemon
-                            } else {
-                                TaskActor::Member(parse(&actor, "event actor")?)
-                            },
-                            message_id: message_id
-                                .as_deref()
-                                .map(|value| parse(value, "event message id"))
-                                .transpose()?,
-                            outcome: outcome.as_deref().map(parse_outcome).transpose()?,
-                            marker: marker.as_deref().map(parse_marker).transpose()?,
-                            detail: row.get(12)?,
-                        })
-                    },
+                    Self::decode_event_row,
                 )
                 .map_err(|error| self.db.error("failed to list task events", error))?;
             rows.map(|row| row.map_err(|error| self.db.error("failed to decode task event", error)))

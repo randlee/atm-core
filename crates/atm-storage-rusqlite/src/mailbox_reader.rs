@@ -11,7 +11,7 @@ use atm_storage::{
 };
 use rusqlite::{Connection, OptionalExtension, params};
 
-use crate::reader_pool::{ReaderPool, ReaderPoolConfig};
+use crate::reader_pool::ReaderPool;
 use crate::shared_db::{SharedDbTarget, deserialize_json, sqlite_error};
 
 struct MailboxReader {
@@ -36,10 +36,8 @@ impl MailboxReaderMetrics {
 }
 
 impl MailboxReader {
-    fn start(target: Arc<SharedDbTarget>, config: ReaderPoolConfig) -> Result<Self, AtmError> {
-        Ok(Self {
-            pool: ReaderPool::start("mailbox", target, config)?,
-        })
+    fn from_pool(pool: ReaderPool) -> Self {
+        Self { pool }
     }
 
     async fn submit_list(
@@ -96,21 +94,17 @@ impl MailboxReader {
     }
 }
 
-pub(crate) fn start_mailbox_reader(
-    target: Arc<SharedDbTarget>,
-    config: ReaderPoolConfig,
-) -> Result<
-    (
-        Arc<dyn AsyncMailboxReader + Send + Sync>,
-        MailboxReaderMetrics,
-    ),
-    AtmError,
-> {
-    let reader = MailboxReader::start(target, config)?;
+pub(crate) fn start_mailbox_reader_from_pool(
+    pool: ReaderPool,
+) -> (
+    Arc<dyn AsyncMailboxReader + Send + Sync>,
+    MailboxReaderMetrics,
+) {
+    let reader = MailboxReader::from_pool(pool);
     let metrics = MailboxReaderMetrics {
         pool: reader.pool.clone(),
     };
-    Ok((Arc::new(reader), metrics))
+    (Arc::new(reader), metrics)
 }
 
 #[async_trait::async_trait]

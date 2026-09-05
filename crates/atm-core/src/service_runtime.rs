@@ -10,10 +10,10 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
 use atm_storage::{
-    AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore, GraftEndpointStoreError,
-    GraftReceiverEndpointStore, GraftReceiverLease, MessageStore as SharedMessageStore,
-    OwnerGeneration, PendingNudgeStore, RosterStore as SharedRosterStore, TaskStore,
-    TemplateCatalogStore,
+    AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore, AsyncTaskLedgerReader,
+    GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
+    MessageStore as SharedMessageStore, OwnerGeneration, PendingNudgeStore,
+    RosterStore as SharedRosterStore, TaskStore, TemplateCatalogStore,
 };
 
 use crate::boundary::TemplateComposer;
@@ -314,6 +314,7 @@ pub struct LocalServiceRuntime {
     pub(crate) message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
     async_message_store: Option<std::sync::Arc<dyn SharedAsyncMessageStore + Send + Sync>>,
     async_mailbox_reader: Option<std::sync::Arc<dyn atm_storage::AsyncMailboxReader + Send + Sync>>,
+    async_task_ledger_reader: Option<std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>>,
     async_message_search_store: Option<std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>>,
     pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
     pub(crate) nudge_template_override_store:
@@ -360,6 +361,7 @@ impl LocalServiceRuntime {
             message_store,
             async_message_store: None,
             async_mailbox_reader: None,
+            async_task_ledger_reader: None,
             async_message_search_store: None,
             roster_store,
             nudge_template_override_store,
@@ -419,6 +421,28 @@ impl LocalServiceRuntime {
     ) -> Result<std::sync::Arc<dyn atm_storage::AsyncMailboxReader + Send + Sync>, AtmError> {
         self.async_mailbox_reader.clone().ok_or_else(|| {
             AtmError::daemon_unavailable("Tokio mailbox reader was not installed in this runtime")
+        })
+    }
+
+    /// Attaches the bounded read-only task-ledger capability selected by the
+    /// storage composition root.
+    #[must_use]
+    pub fn with_async_task_ledger_reader(
+        mut self,
+        reader: std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+    ) -> Self {
+        self.async_task_ledger_reader = Some(reader);
+        self
+    }
+
+    /// Returns the runtime-selected bounded task-ledger reader.
+    pub fn async_task_ledger_reader(
+        &self,
+    ) -> Result<std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>, AtmError> {
+        self.async_task_ledger_reader.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio task-ledger reader was not installed in this runtime",
+            )
         })
     }
 
@@ -684,6 +708,10 @@ impl fmt::Debug for LocalServiceRuntime {
                 &std::sync::Arc::as_ptr(&self.message_store),
             )
             .field("async_message_store", &self.async_message_store.is_some())
+            .field(
+                "async_task_ledger_reader",
+                &self.async_task_ledger_reader.is_some(),
+            )
             .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
             .field(
                 "nudge_template_override_store",

@@ -40,7 +40,10 @@ notes = [
 ]
 
 [testing]
-allowed_test_double_paths = ["crate::task_store::DummyTaskStore"]
+allowed_test_double_paths = [
+    "crate::task_store::DummyTaskStore",
+    "crate::testing::InMemoryTaskLedgerReader",
+]
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]
