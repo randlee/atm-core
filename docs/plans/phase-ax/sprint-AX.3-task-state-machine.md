@@ -8,11 +8,17 @@ integration_branch: integrate/phase-ax
 status: draft
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
+execution_track: B
+parallel_with: [AX.1, AX.2]
 dependency_relations:
+  - prerequisite: AX.1
+    dependent: AX.3
+    relation: parallel_safe
+    rationale: this sprint changes no nudge behaviour and its completion message renders with either six or seven kinds; the overlap is additive edits in different regions of crates/atm-storage/src/contract.rs.
   - prerequisite: AX.2
     dependent: AX.3
-    relation: must_follow
-    rationale: both edit crates/atm-storage/src/contract.rs and the re-export surface in crates/atm-core/src/boundary/mod.rs; this sprint merges integrate/phase-ax forward (with AX.1 and AX.2 merged) before every round.
+    relation: parallel_safe
+    rationale: no functional dependency; both add lines to crates/atm-core/src/boundary/mod.rs. Before opening its PR this sprint merges integrate/phase-ax forward (after track A lands) and resolves that overlap; the AX.3 PR merges after the AX.2 PR.
   - prerequisite: AX.3
     dependent: AX.4
     relation: must_follow
@@ -25,8 +31,10 @@ Persist task state as one explicit, backend-agnostic state machine
 applied inside the existing message-write transactions, with an
 append-only audit log. This sprint changes **no nudge behaviour**: a
 task-tagged send still steers or queues exactly as today (rendering the
-AX.1 `Task` body). It adds the ack gate, the completion flag, and the
-inspection surfaces. The reminder cycle is AX.4.
+AX.1 `Task` body, or today's `DeliveryTask` body if AX.1 has not merged
+yet). It adds the ack gate, the completion flag, and the inspection
+surfaces. The reminder cycle is AX.4. This sprint **executes in parallel
+with AX.1 and AX.2** on its own gh-stack rooted on `integrate/phase-ax`.
 
 ## State machine
 

@@ -8,7 +8,13 @@ integration_branch: integrate/phase-ax
 status: draft
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
+execution_track: C
+parallel_with: []
 dependency_relations:
+  - prerequisite: AX.2
+    dependent: AX.4
+    relation: must_follow
+    rationale: the task step emits through HerdrNudgeTarget.rendered_nudge and prompt(text) from AX.2; starts only after tracks A and B are both merged to integrate/phase-ax.
   - prerequisite: AX.3
     dependent: AX.4
     relation: must_follow

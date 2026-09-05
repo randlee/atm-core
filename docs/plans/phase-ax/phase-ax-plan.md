@@ -12,10 +12,18 @@ dependency_relations:
     dependent: AX.2
     relation: must_follow
     rationale: AX.2 renders Queue-family templates on the Herdr pump path and both edit send/hook.rs (AX.1 changes render_built_in_nudge_for_dispatch, AX.2 changes the Herdr branch of build_built_in_dispatch).
+  - prerequisite: AX.1
+    dependent: AX.3
+    relation: parallel_safe
+    rationale: AX.3 changes no nudge behaviour and its completion message renders with either six or seven kinds; the only overlap is additive edits in different regions of crates/atm-storage/src/contract.rs, resolved by merge-forward before the AX.3 PR.
   - prerequisite: AX.2
     dependent: AX.3
+    relation: parallel_safe
+    rationale: no functional dependency; both add re-exports to crates/atm-core/src/boundary/mod.rs (AX.2 HerdrNudgeTarget field, AX.3 TaskStore types) in different lines, resolved by merge-forward before the AX.3 PR.
+  - prerequisite: AX.2
+    dependent: AX.4
     relation: must_follow
-    rationale: both edit the re-export surface in crates/atm-core/src/boundary/mod.rs (AX.2 HerdrNudgeTarget; AX.3 TaskStore re-exports) and crates/atm-storage/src/contract.rs.
+    rationale: the pump task step emits through the rendered-text path AX.2 introduces (HerdrNudgeTarget.rendered_nudge, prompt(text)).
   - prerequisite: AX.3
     dependent: AX.4
     relation: must_follow
@@ -23,11 +31,25 @@ dependency_relations:
   - prerequisite: AX.4
     dependent: AX.5
     relation: must_follow
-    rationale: the lead notification is triggered from the reminder counter AX.4 maintains and doctor ATM_TASK_STALLED reads it.
+    rationale: the lead notification is triggered from the reminder counter AX.4 maintains inside the same pump function, and doctor ATM_TASK_STALLED reads it.
   - prerequisite: AX.5
     dependent: AX.6
     relation: must_follow
     rationale: AX.6 is a proof sprint on the merged integrate head.
+execution_tracks:
+  - track: A
+    sprints: [AX.1, AX.2]
+    stack: gh-stack A rooted on integrate/phase-ax
+  - track: B
+    sprints: [AX.3]
+    stack: gh-stack B rooted on integrate/phase-ax
+    parallel_with: A
+  - track: C
+    sprints: [AX.4, AX.5]
+    stack: gh-stack C rooted on integrate/phase-ax after A and B merge
+  - track: D
+    sprints: [AX.6]
+    stack: none (proof on the integrate head)
 ---
 
 # Phase AX — Nudge templates on every backend and task-state tracking
@@ -139,20 +161,32 @@ follow-up options on #1173, not open questions.
 | Re-sending an open task id to the same assignee | accepted: state unchanged, `assignment_message_id` and `description` updated, one `Resent` event row | rejected as a duplicate |
 | Completing a task that was never acked | accepted; the assignment message is marked acknowledged in the same transaction so it does not stay pending-ack forever | reject and require an ack first |
 
-## 3. Sprints
+## 3. Sprints and execution tracks
 
-| Sprint | Title | Owns | Doc |
-| --- | --- | --- | --- |
-| AX.1 | Queue template class and default template fixes | `BuiltInNudgeTemplateKind`, override-table migration, kind selection, default bodies, CLI kind strings, six-kind statements in docs and ADR-019 amendment, nudge scripts | `sprint-AX.1-queue-template-class.md` |
-| AX.2 | Herdr renders the built-in template | `HerdrNudgeTarget`, `send/hook.rs` Herdr branch, `HerdrProcessAdapter::prompt` and its three impls, bootstrap selector call site, ADR-058 amendment, Herdr boundary record | `sprint-AX.2-herdr-template-rendering.md` |
-| AX.3 | Task state machine and completion | `atm-storage` task types and pure transition, `TaskStore`, rusqlite tables and in-transaction application, ack gate, `--task-complete`, `atm list --tasks`, ADR-061, ADR-054 amendment, requirements §6.5/§7/§15.4 | `sprint-AX.3-task-state-machine.md` |
-| AX.4 | Task reminder cycle in the Herdr pump | pump task step and idle-set widening, task-row reminder rendering, Herdr task-mail steer and marker suppression, bootstrap composition | `sprint-AX.4-task-reminder-cycle.md` |
-| AX.5 | Lead notification and doctor | `atm-daemon` reserved sender, lead message, three doctor codes with catalog guidance | `sprint-AX.5-lead-notification-doctor.md` |
-| AX.6 | Live Herdr dogfood evidence | `docs/plans/phase-ax/ax6-live-proof.md` | `sprint-AX.6-herdr-dogfood-evidence.md` |
+| Sprint | Track | Execute | Title | Owns | Doc |
+| --- | --- | --- | --- | --- | --- |
+| AX.1 | A | **parallel with AX.3** | Queue template class and default template fixes | `BuiltInNudgeTemplateKind`, override-table migration, kind selection, default bodies, CLI kind strings, six-kind statements in docs and ADR-019 amendment, nudge scripts | `sprint-AX.1-queue-template-class.md` |
+| AX.2 | A | after AX.1; **parallel with AX.3** | Herdr renders the built-in template | `HerdrNudgeTarget`, `send/hook.rs` Herdr branch, `HerdrProcessAdapter::prompt` and its three impls, bootstrap selector call site, ADR-058 amendment, Herdr boundary record | `sprint-AX.2-herdr-template-rendering.md` |
+| AX.3 | B | **parallel with AX.1 and AX.2** | Task state machine and completion | `atm-storage` task types and pure transition, `TaskStore`, rusqlite tables and in-transaction application, ack gate, `--task-complete`, `atm list --tasks`, ADR-061, ADR-054 amendment, requirements §6.5/§7/§15.4 | `sprint-AX.3-task-state-machine.md` |
+| AX.4 | C | after AX.2 and AX.3 merge | Task reminder cycle in the Herdr pump | pump task step and idle-set widening, task-row reminder rendering, Herdr task-mail steer and marker suppression, bootstrap composition | `sprint-AX.4-task-reminder-cycle.md` |
+| AX.5 | C | after AX.4 | Lead notification and doctor | `atm-daemon` reserved sender, lead message, four doctor codes with catalog guidance | `sprint-AX.5-lead-notification-doctor.md` |
+| AX.6 | D | after AX.5 merges | Live Herdr dogfood evidence | `docs/plans/phase-ax/ax6-live-proof.md` | `sprint-AX.6-herdr-dogfood-evidence.md` |
 
-Dependency chain: AX.1 → AX.2 → AX.3 → AX.4 → AX.5 → AX.6, all
-`must_follow` (see frontmatter rationale). No pair is parallel-safe: every
-adjacent pair shares a file or a public contract.
+Dependency graph:
+
+```
+integrate/phase-ax
+ ├── track A: AX.1 ──► AX.2 ──┐
+ │                            ├──► track C: AX.4 ──► AX.5 ──► track D: AX.6
+ └── track B: AX.3 ───────────┘
+```
+
+Tracks A and B **execute in parallel** from day one. `must_follow` edges:
+AX.1→AX.2, AX.2→AX.4, AX.3→AX.4, AX.4→AX.5, AX.5→AX.6. `parallel_safe`
+pairs: AX.1∥AX.3, AX.2∥AX.3 (frontmatter carries the rationale). The
+price of the parallel pair is one merge-forward of `integrate/phase-ax`
+into the AX.3 branch after track A merges, with a trivial conflict in
+`crates/atm-core/src/boundary/mod.rs` where both add lines.
 
 ## 4. Acceptance contract for the phase
 
@@ -219,13 +253,59 @@ test or evidence gate.
 
 ## 6. Execution notes
 
-- All sprint branches are worktrees off `integrate/phase-ax` via
-  `sc-git-worktree`; PRs target `integrate/phase-ax`; merge commits only.
+- Development happens in worktrees created by `sc-git-worktree`; PR
+  bases and bottom-to-top merging are managed by `gh stack`. `gh stack`
+  navigation, `init`, `checkout`, `rebase`, and `sync` are **not used**:
+  they switch or rewrite branches in one checkout, which conflicts with
+  the per-branch worktrees and the merge-commit policy. Merge-forward
+  replaces rebase.
+- PRs target `integrate/phase-ax` (bottom of each stack) or the branch
+  below them in the stack; merge commits only (`--merge`); the phase PR
+  `integrate/phase-ax → develop` is opened after AX.6.
 - team-lead dispatches via j2 template over `atm send --stdin`;
-  quality-mgr gates each PR with a posted Final Quality Report.
-- `must_follow` merge-forward: merge the parent branch into the child
-  before every dev or fix round once the parent's development is pushed;
-  the parent PR merges first.
+  quality-mgr gates each PR with a posted Final Quality Report. `gh
+  stack merge` checks only open/not-draft, so it is run only after every
+  PR in the stack has its report posted.
+- Sequence (team-lead, from the main repo unless noted):
+
+```bash
+# Day one: tracks A and B in parallel
+/sc-git-worktree --create feature/ax1-queue-template-class integrate/phase-ax
+/sc-git-worktree --create feature/ax3-task-state-machine integrate/phase-ax
+git push -u origin feature/ax1-queue-template-class feature/ax3-task-state-machine
+gh stack link feature/ax1-queue-template-class                    # stack A
+gh stack link feature/ax3-task-state-machine                      # stack B
+# dispatch AX.1 (Cipher-311d) and AX.3 (arch-ctm) in the same batch
+
+# When AX.1 dev is pushed: AX.2 stacks on AX.1
+/sc-git-worktree --create feature/ax2-herdr-template-rendering feature/ax1-queue-template-class
+gh stack link feature/ax1-queue-template-class feature/ax2-herdr-template-rendering
+gh stack submit --auto --open --remote origin                     # AX.1 → integrate, AX.2 → AX.1
+# in the AX.2 worktree before every fix round:
+#   git merge origin/feature/ax1-queue-template-class
+
+# Track A merge (both QA reports posted)
+gh stack merge <AX.2 PR#> --yes --merge
+
+# Track B merge: AX.3 merges integrate forward first (boundary/mod.rs overlap), then
+gh stack submit --auto --open --remote origin                     # from the AX.3 worktree
+gh stack merge <AX.3 PR#> --yes --merge
+
+# Track C: after A and B are in integrate
+/sc-git-worktree --create feature/ax4-task-reminder-cycle integrate/phase-ax
+# when AX.4 dev is pushed:
+/sc-git-worktree --create feature/ax5-lead-notification-doctor feature/ax4-task-reminder-cycle
+gh stack link feature/ax4-task-reminder-cycle feature/ax5-lead-notification-doctor
+gh stack submit --auto --open --remote origin
+gh stack merge <AX.5 PR#> --yes --merge
+
+# Track D: AX.6 on the integrate head, then the phase PR to develop
+```
+
+- `must_follow` merge-forward inside a stack: merge the branch below into
+  the branch above before every dev or fix round once the lower branch's
+  development is pushed; the lower PR merges first (`gh stack merge`
+  does this bottom to top).
 - AX.6 runs on rand-m5 under fenix; the daemon is rebuilt from the
   integrate head into `~/.atm-builds/` (outside `~/Documents`) for the
   live proof.

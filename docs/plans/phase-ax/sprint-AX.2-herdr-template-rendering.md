@@ -8,6 +8,8 @@ integration_branch: integrate/phase-ax
 status: draft
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
+execution_track: A
+parallel_with: [AX.3]
 dependency_relations:
   - prerequisite: AX.1
     dependent: AX.2
@@ -15,8 +17,12 @@ dependency_relations:
     rationale: needs the Queue-family kinds for the pump path and shares crates/atm-core/src/send/hook.rs edits.
   - prerequisite: AX.2
     dependent: AX.3
+    relation: parallel_safe
+    rationale: no functional dependency; both add lines to crates/atm-core/src/boundary/mod.rs (HerdrNudgeTarget field here, TaskStore re-exports in AX.3), resolved by AX.3 merging integrate/phase-ax forward before its PR.
+  - prerequisite: AX.2
+    dependent: AX.4
     relation: must_follow
-    rationale: both edit the re-export surface in crates/atm-core/src/boundary/mod.rs; AX.3 merges this sprint forward before every round.
+    rationale: the AX.4 pump task step emits through the rendered-text path this sprint introduces.
 ---
 
 # AX.2 — Herdr renders the built-in nudge template

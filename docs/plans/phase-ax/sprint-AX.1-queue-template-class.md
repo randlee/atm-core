@@ -8,11 +8,17 @@ integration_branch: integrate/phase-ax
 status: draft
 recommended_agent: Cipher-311d
 recommended_model: fast
+execution_track: A
+parallel_with: [AX.3]
 dependency_relations:
   - prerequisite: AX.1
     dependent: AX.2
     relation: must_follow
     rationale: AX.2 renders Queue-family templates on the Herdr pump path and both sprints edit crates/atm-core/src/send/hook.rs (this sprint changes render_built_in_nudge_for_dispatch; AX.2 changes the Herdr branch of build_built_in_dispatch).
+  - prerequisite: AX.1
+    dependent: AX.3
+    relation: parallel_safe
+    rationale: AX.3 changes no nudge behaviour; the only overlap is additive edits in different regions of crates/atm-storage/src/contract.rs, resolved by AX.3 merging integrate/phase-ax forward before its PR.
 ---
 
 # AX.1 — Queue template class and default template fixes

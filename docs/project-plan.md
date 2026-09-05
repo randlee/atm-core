@@ -1602,8 +1602,12 @@ reminded. Six sequential sprints: `AX.1` queue template class and
 default-body fixes, `AX.2` Herdr template rendering, `AX.3` task state
 machine and `--task-complete`, `AX.4` task reminder cycle in the Herdr
 pump, `AX.5` lead notification and doctor codes, `AX.6` live Herdr
-evidence. Dependency graph (all `must_follow`):
-AX.1 → AX.2 → AX.3 → AX.4 → AX.5 → AX.6.
+evidence. Execution tracks: A = AX.1 → AX.2 and B = AX.3 **run in
+parallel** from day one (`parallel_safe`: AX.1∥AX.3, AX.2∥AX.3); C =
+AX.4 → AX.5 starts after A and B merge; D = AX.6 last. `must_follow`
+edges: AX.1→AX.2, AX.2→AX.4, AX.3→AX.4, AX.4→AX.5, AX.5→AX.6. Branches
+are worktrees via `sc-git-worktree`; PR bases and merges via `gh stack`
+(sequence in the phase plan §6).
 
 The authoritative plan is
 [phase-ax-plan](./plans/phase-ax/phase-ax-plan.md) with per-sprint docs
@@ -1611,14 +1615,14 @@ under `docs/plans/phase-ax/`, authored on branch `integrate/phase-ax`.
 
 Phase AX sprint status:
 
-| Sprint | Status | Branch | Artifacts |
-| --- | --- | --- | --- |
-| `AX.1` | `planned` | `feature/ax1-queue-template-class` | `docs/plans/phase-ax/sprint-AX.1-queue-template-class.md`, ADR-019 amendment |
-| `AX.2` | `planned` | `feature/ax2-herdr-template-rendering` | `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md`, ADR-058 amendment, `boundaries/atm-herdr/herdr-process-adapter.toml` |
-| `AX.3` | `planned` | `feature/ax3-task-state-machine` | `docs/plans/phase-ax/sprint-AX.3-task-state-machine.md`, `docs/adr/ADR-061-task-state-machine.md`, ADR-054 amendment, `boundaries/atm-storage/task-store.toml` |
-| `AX.4` | `planned` | `feature/ax4-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.4-task-reminder-cycle.md`, ADR-054 amendment (marker exception) |
-| `AX.5` | `planned` | `feature/ax5-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.5-lead-notification-doctor.md` |
-| `AX.6` | `planned` | none (proof on `integrate/phase-ax`) | `docs/plans/phase-ax/ax6-live-proof.md` |
+| Sprint | Track | Execute | Status | Branch | Artifacts |
+| --- | --- | --- | --- | --- | --- |
+| `AX.1` | A | parallel with AX.3 | `planned` | `feature/ax1-queue-template-class` | `docs/plans/phase-ax/sprint-AX.1-queue-template-class.md`, ADR-019 amendment |
+| `AX.2` | A | after AX.1; parallel with AX.3 | `planned` | `feature/ax2-herdr-template-rendering` | `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md`, ADR-058 amendment, `boundaries/atm-herdr/herdr-process-adapter.toml` |
+| `AX.3` | B | parallel with AX.1, AX.2 | `planned` | `feature/ax3-task-state-machine` | `docs/plans/phase-ax/sprint-AX.3-task-state-machine.md`, `docs/adr/ADR-061-task-state-machine.md`, ADR-054 amendment, `boundaries/atm-storage/task-store.toml` |
+| `AX.4` | C | after AX.2 and AX.3 merge | `planned` | `feature/ax4-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.4-task-reminder-cycle.md`, ADR-054 amendment (marker exception) |
+| `AX.5` | C | after AX.4 | `planned` | `feature/ax5-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.5-lead-notification-doctor.md` |
+| `AX.6` | D | after AX.5 merges | `planned` | none (proof on `integrate/phase-ax`) | `docs/plans/phase-ax/ax6-live-proof.md` |
 
 ## Publishing Improvements
 

@@ -8,6 +8,8 @@ status: draft
 recommended_agent: none
 recommended_model: n/a
 operator: fenix (rand-m5 owner; a proof sprint, not a coding sprint)
+execution_track: D
+parallel_with: []
 dependency_relations:
   - prerequisite: AX.5
     dependent: AX.6

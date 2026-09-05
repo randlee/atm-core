@@ -8,6 +8,8 @@ integration_branch: integrate/phase-ax
 status: draft
 recommended_agent: Cipher-311d
 recommended_model: fast
+execution_track: C
+parallel_with: []
 dependency_relations:
   - prerequisite: AX.4
     dependent: AX.5
