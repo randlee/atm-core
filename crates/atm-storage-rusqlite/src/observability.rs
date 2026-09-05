@@ -102,7 +102,11 @@ mod tests {
         rust_sources(&source_root, &mut sources);
 
         for path in sources {
-            let source = fs::read_to_string(&path).expect("Rust source is UTF-8");
+            // Git may materialize Rust sources with CRLF on Windows. The
+            // source-contract is about Rust's test gates, not checkout EOL.
+            let source = fs::read_to_string(&path)
+                .expect("Rust source is UTF-8")
+                .replace('\r', "");
             let test_module = source.find("#[cfg(test)]\nmod tests {");
             let lines = source.lines().collect::<Vec<_>>();
             for (index, line) in lines.iter().enumerate() {
