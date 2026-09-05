@@ -15,7 +15,9 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T21:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T19:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV4 ;
@@ -89,3 +91,44 @@
   triage:branch "integrate/phase-av" ;
   triage:headSha "9a810ab29743e0f11b71881d8c3d359ad8d1b9ca" ;
   triage:orderIndex 1 .
+
+# quality-mgr, 2026-09-05, qa-pr1220-r1: closing this record for the
+# approved code-scope items (1, 2, 5) confirmed on fix/av-hotfix-crosshost
+# @ 295ae10d4 (PR #1220). Item 4 (manual live cleanup on rand-m4) remains
+# assigned to team-lead@rand-m5 and is NOT closed by this record.
+# 1. crates/atm/src/commands/peer.rs:453-455 -- trust add/replace requires
+#    exactly 64 hex chars; test trust_add_and_replace_require_exactly_64_hex_fingerprint_characters.
+#    crates/atm-core/src/doctor/mod.rs:307-340 -- malformed_fingerprint_findings
+#    flags any malformed fingerprint already in the store.
+# 2. Independently swept all 8 occurrences of the literal "peer.example.test"
+#    across the worktree (client.rs, doctor.rs, recipient.rs, post_write_tests.rs,
+#    provenance.rs, address.rs, ack/mod.rs, send/tests.rs): every one is an
+#    in-memory fixture/RecordingConnector/tempdir()-backed TestRuntime, never a
+#    default/home-relative store. scripts/smoke/ has zero references to the
+#    string or to "peer trust add". No path that writes this fixture into the
+#    real ~/.atm store remains.
+# 5. crates/atm/src/commands/peer.rs:182-206 (InterfaceSubcommand::Set never
+#    calls is_durable_hostname() on advertise_host) + doctor/mod.rs:325-341
+#    (literal_advertise_host_findings, warning-level only) + zero matches for
+#    advertise_host in crates/atm/src/commands/send.rs -- bare-IP
+#    advertise_host is a doctor WARNING only, never rejected at config load,
+#    peer-interface-add, or send.
+# localhost trust entries confirmed untouched.
+
+<urn:atm:triage:occurrence/AV-HOTFIX-002/AV-HOTFIX-002-fixed-295ae10d4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 453 ;
+  triage:snippet "fingerprint length==64 && all ascii_hexdigit validated on trust add/replace; literal-IP advertise_host accepted everywhere, flagged only as a doctor warning" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/av-hotfix-crosshost" ;
+  triage:headSha "295ae10d4" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-av-hotfix-crosshost/295ae10d4> .
+
+<urn:atm:triage:worktree/fix-av-hotfix-crosshost/295ae10d4>
+  a triage:WorktreeSnapshot ;
+  triage:path "../atm-core-worktrees/fix/av-hotfix-crosshost" ;
+  triage:branch "fix/av-hotfix-crosshost" ;
+  triage:headSha "295ae10d4" ;
+  triage:orderIndex 2 .

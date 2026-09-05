@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T21:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T18:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV1B ;
@@ -73,3 +75,38 @@
   triage:branch "integrate/phase-av" ;
   triage:headSha "9a810ab2" ;
   triage:orderIndex 1 .
+
+# quality-mgr, 2026-09-05, qa-pr1220-r1: independently confirmed on
+# fix/av-hotfix-crosshost @ 295ae10d4 (PR #1220). The raw host-qualified
+# early-return in write_with_request_id now runs strictly BEFORE
+# commit_write -- extracted this round into dispatch_raw_host_qualified_local_write
+# (storage_and_nudge_router.rs) -- so a host-qualified send is never
+# admitted into the local mailbox; a peer-dial failure surfaces as a CLI
+# error with no local echo (test: locally_admitted_host_qualified_write_is_forwarded_by_the_selected_daemon,
+# asserts local store has zero messages, remote store exactly one). ACK
+# replies (host resolves only post-commit) are unaffected -- handled by
+# the distinct post-commit branch, per ADR-057, and are out of this
+# record's scope. cargo test -p atm-http-runtime --lib: 200/200 passed.
+# Follow-up (non-blocking, new finding, not part of this closure): req-qa
+# flagged that if the post-commit peer-forward for an already-locally-committed
+# ACK subsequently fails, the handler still returns Err to the caller even
+# though the local commit succeeded -- track separately, does not affect
+# the raw-send behavior this record covers.
+
+<urn:atm:triage:occurrence/AV-HOTFIX-001/AV-001-persist-fixed-295ae10d4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 503 ;
+  triage:snippet "dispatch_raw_host_qualified_local_write returns before commit_write is ever reached for a raw host-qualified Local-ingress write" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/av-hotfix-crosshost" ;
+  triage:headSha "295ae10d4" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-av-hotfix-crosshost/295ae10d4> .
+
+<urn:atm:triage:worktree/fix-av-hotfix-crosshost/295ae10d4>
+  a triage:WorktreeSnapshot ;
+  triage:path "../atm-core-worktrees/fix/av-hotfix-crosshost" ;
+  triage:branch "fix/av-hotfix-crosshost" ;
+  triage:headSha "295ae10d4" ;
+  triage:orderIndex 2 .

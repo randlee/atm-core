@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T21:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T18:26:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AV4 ;
@@ -40,3 +42,35 @@
   triage:branch "integrate/phase-av" ;
   triage:headSha "4f4c283c4" ;
   triage:orderIndex 1 .
+
+# quality-mgr, 2026-09-05, qa-pr1220-r1: independently confirmed on
+# fix/av-hotfix-crosshost @ 295ae10d4. crates/atm-core/src/api.rs:303-316
+# decode_http_response decodes any non-2xx body into a full AtmError and
+# returns ResponseEnvelope::Error(error), not a generic InternalError.
+# dispatch_resolved_peer_write's `ResponseEnvelope::Error(error) => Err(error)`
+# passes it straight through; InternalError is used only for the genuinely
+# unexpected non-write-response branch. message_handler.rs:749-781
+# (HttpErrorBody/error_response) redacts only the internal diagnostic
+# `cause` chain -- code and message reach the wire intact. Receiver-side
+# logging: message_handler.rs:352-394 post_messages_with_request_id fires
+# `warn!(%request_id, error_code = %error.code(), "rejected inbound peer
+# write")` for Peer/UntrustedSmoke ingress, with no body/address/token
+# fields in the log call.
+
+<urn:atm:triage:occurrence/AV-HOTFIX-004/AV4-fixed-295ae10d4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 374 ;
+  triage:snippet "warn!(%request_id, error_code = %error.code(), \"rejected inbound peer write\") -- request_id and error_code only, no body/address/token" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/av-hotfix-crosshost" ;
+  triage:headSha "295ae10d4" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-av-hotfix-crosshost/295ae10d4> .
+
+<urn:atm:triage:worktree/fix-av-hotfix-crosshost/295ae10d4>
+  a triage:WorktreeSnapshot ;
+  triage:path "../atm-core-worktrees/fix/av-hotfix-crosshost" ;
+  triage:branch "fix/av-hotfix-crosshost" ;
+  triage:headSha "295ae10d4" ;
+  triage:orderIndex 2 .
