@@ -217,12 +217,12 @@ shape-only completion fails the sprint.
   because `write/pipeline.rs` lines 433–435 route an authenticated-peer
   ack receipt onto it. Only `SqliteMessageStore`
   (`crates/atm-storage-rusqlite/src/lib.rs` line 625) overrides either
-  method. Every other `MessageStore` implementor keeps the sync default
+  method. Every other `MessageStore` implementer keeps the sync default
   (`crates/atm-storage/src/contract.rs` `DummyStore`,
   `crates/atm-core/src/doctor/mod.rs` `UnusedMailStore`,
   `crates/atm-storage-sqlserver-proof/src/lib.rs`
   `SqlServerMessageStore`, plus the three below) and every other
-  `AsyncMessageStore` implementor keeps the async default
+  `AsyncMessageStore` implementer keeps the async default
   (`crates/atm-runtime/src/mailbox_runtime.rs` `TestOnlyWriterLane`,
   `crates/atm-runtime-test-support/src/lib.rs` `RecordingWriter`,
   `crates/atm-core/src/ack/admission_tests.rs` `InMemoryAsyncStore`);
