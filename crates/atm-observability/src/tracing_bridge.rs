@@ -6,7 +6,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
 use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
-use sc_observability::Logger;
 use sc_observability_types::{
     ActionName, CorrelationId, Level, LogEvent, ProcessIdentity, SchemaVersion, ServiceName,
     TargetCategory, Timestamp,
@@ -16,6 +15,8 @@ use tracing::field::{Field, Visit};
 use tracing::{Event, Level as TracingLevel, Subscriber};
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::{Layer, Registry};
+
+use crate::{RetainedLogOffer, RetainedLogger};
 
 /// Canonical retained event file shared by daemon and CLI projections.
 pub const CANONICAL_LOG_FILE_NAME: &str = "atm.log.jsonl";
@@ -108,13 +109,13 @@ pub enum BridgeError {
 /// The sole process-wide retained tracing layer installed by daemon bootstrap.
 #[derive(Clone)]
 pub struct TracingBridgeLayer {
-    logger: Arc<Logger>,
+    logger: Arc<RetainedLogger>,
     stats: Arc<TracingBridgeStats>,
     sink: Arc<RwLock<Option<Arc<dyn DiagnosticSink>>>>,
 }
 
 impl TracingBridgeLayer {
-    pub fn new(logger: Arc<Logger>) -> Self {
+    pub fn new(logger: Arc<RetainedLogger>) -> Self {
         Self {
             logger,
             stats: Arc::new(TracingBridgeStats::default()),
@@ -134,7 +135,7 @@ impl TracingBridgeLayer {
 
     /// Installs once as the process-global subscriber; a second subscriber is
     /// intentionally rejected rather than layered around an unknown sink.
-    pub fn install(logger: Arc<Logger>) -> Result<Arc<Self>, BridgeError> {
+    pub fn install(logger: Arc<RetainedLogger>) -> Result<Arc<Self>, BridgeError> {
         Self::new(logger).install_inner()
     }
 
@@ -180,14 +181,16 @@ impl TracingBridgeLayer {
         let correlation_id = retained.field_string("correlation_id");
         let log_event = retained.log_event(correlation_id);
         match self.logger.try_log(log_event) {
-            Ok(()) => self.stats.forwarded_total.fetch_add(1, Ordering::Relaxed),
-            Err(sc_observability::TryLogError::QueueFull(_)) => {
+            RetainedLogOffer::Accepted => {
+                self.stats.forwarded_total.fetch_add(1, Ordering::Relaxed)
+            }
+            RetainedLogOffer::QueueFull => {
                 self.stats
                     .dropped_queue_full_total
                     .fetch_add(1, Ordering::Relaxed);
                 return;
             }
-            Err(_) => return,
+            RetainedLogOffer::Rejected { .. } => return,
         };
         if retained.origin != "sqlite"
             && retained.origin != "timeline"

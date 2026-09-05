@@ -8,18 +8,12 @@ use atm_core::home;
 use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmMaintenanceHealthReport, AtmMaintenanceWorkerState,
     AtmObservabilityDiagnostic, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
-    LogTailSession, ObservabilityPort, RetainedSinkFaultMode, diagnostic_code,
+    LogTailSession, ObservabilityPort, diagnostic_code,
 };
-use atm_observability::build_retained_logger;
-#[cfg(test)]
-use atm_observability::retained_sink_fault_mode as shared_retained_sink_fault_mode;
+use atm_observability::{
+    RetainedLogOffer, RetainedLogPolicy, RetainedLogger, build_retained_logger,
+};
 use serde_json::Map;
-
-#[cfg(test)]
-use sc_observability::{
-    JsonlFileSink, LoggerBuilder, RetentionPolicy, RotationPolicy, SinkRegistration,
-};
-use sc_observability_types::DiagnosticInfo;
 
 type ActionName = sc_observability_types::ActionName;
 type CorrelationId = sc_observability_types::CorrelationId;
@@ -44,7 +38,7 @@ const RETAINED_LOG_MAINTENANCE_CADENCE: Duration = Duration::from_secs(60);
 // daemon stop window by itself.
 const RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
 
-struct LoggerLifecycle(Arc<sc_observability::Logger>);
+struct LoggerLifecycle(Arc<RetainedLogger>);
 
 impl LoggerLifecycle {
     fn health(&self) -> sc_observability_types::LoggingHealthReport {
@@ -118,10 +112,8 @@ impl DaemonObservability {
         let target_category = TargetCategory::new(ATM_DAEMON_TARGET).map_err(|_source| {
             AtmError::observability_bootstrap("failed to validate ATM daemon observability target")
         })?;
-        let retained_sink_fault = retained_sink_fault_mode()?;
         let (logger, active_log_path) = build_logger(
             &log_dir,
-            retained_sink_fault,
             &service_name,
             retained_log_policy(rotation_max_bytes),
         )?;
@@ -136,7 +128,7 @@ impl DaemonObservability {
     #[cfg(test)]
     fn bootstrap_at_log_dir_with_policy_for_test(
         log_dir: PathBuf,
-        retained_log_policy: sc_observability::RetainedLogPolicy,
+        retained_log_policy: RetainedLogPolicy,
     ) -> Result<Self, AtmError> {
         let service_name = ServiceName::new(ATM_SERVICE_NAME).map_err(|_source| {
             AtmError::observability_bootstrap("failed to validate ATM daemon service name")
@@ -144,8 +136,7 @@ impl DaemonObservability {
         let target_category = TargetCategory::new(ATM_DAEMON_TARGET).map_err(|_source| {
             AtmError::observability_bootstrap("failed to validate ATM daemon observability target")
         })?;
-        let (logger, active_log_path) =
-            build_logger(&log_dir, None, &service_name, retained_log_policy)?;
+        let (logger, active_log_path) = build_logger(&log_dir, &service_name, retained_log_policy)?;
         Ok(Self {
             logger: Arc::new(Mutex::new(LoggerLifecycle(Arc::new(logger)))),
             active_log_path,
@@ -327,62 +318,31 @@ impl DaemonObservability {
             )
         })?;
         match logger.0.try_log(event) {
-            Ok(()) | Err(sc_observability::TryLogError::QueueFull(_)) => Ok(()),
-            Err(source) => {
-                let code = try_log_error_code(&source);
-                Err(AtmError::observability_emit(format!(
-                    "shared daemon observability log admission failed ({code})"
-                )))
-            }
-        }
-    }
-}
-
-fn try_log_error_code(source: &sc_observability::TryLogError) -> &str {
-    match source {
-        sc_observability::TryLogError::InvalidEvent(error) => error.diagnostic().code.as_str(),
-        sc_observability::TryLogError::QueueFull(context)
-        | sc_observability::TryLogError::WriterDegraded(context)
-        | sc_observability::TryLogError::ShutdownTimedOut(context) => {
-            context.diagnostic().code.as_str()
+            RetainedLogOffer::Accepted | RetainedLogOffer::QueueFull => Ok(()),
+            RetainedLogOffer::Rejected { diagnostic_code } => Err(AtmError::observability_emit(
+                format!("shared daemon observability log admission failed ({diagnostic_code})"),
+            )),
         }
     }
 }
 
 fn build_logger(
     log_dir: &Path,
-    retained_sink_fault: Option<RetainedSinkFaultMode>,
     service_name: &ServiceName,
-    retained_log_policy: sc_observability::RetainedLogPolicy,
-) -> Result<(sc_observability::Logger, PathBuf), AtmError> {
+    retained_log_policy: RetainedLogPolicy,
+) -> Result<(RetainedLogger, PathBuf), AtmError> {
     let active_log_path = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
     let logger = build_retained_logger(service_name.clone(), log_dir, retained_log_policy)?;
-    #[cfg(test)]
-    let builder = if let Some(mode) = retained_sink_fault {
-        register_retained_sink_fault(builder, log_dir, mode)
-    } else {
-        builder
-    };
-    #[cfg(not(test))]
-    let _ = retained_sink_fault;
     Ok((logger, active_log_path))
 }
 
-fn retained_log_policy(rotation_max_bytes: u64) -> sc_observability::RetainedLogPolicy {
-    sc_observability::RetainedLogPolicy {
-        rotation_max_bytes: sc_observability::ByteCount::from_bytes(rotation_max_bytes),
-        rotation_max_files: sc_observability_types::FileCount::from_usize(
-            RETAINED_LOG_ROTATION_MAX_FILES,
-        ),
-        retention_max_age: sc_observability::RetentionMaxAge::from_duration(
-            RETAINED_LOG_RETENTION_MAX_AGE,
-        ),
-        maintenance_cadence: sc_observability::MaintenanceCadence::new(
-            RETAINED_LOG_MAINTENANCE_CADENCE,
-        ),
-        writer_shutdown_timeout: sc_observability::WriterShutdownTimeout::new(
-            RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT,
-        ),
+fn retained_log_policy(rotation_max_bytes: u64) -> RetainedLogPolicy {
+    RetainedLogPolicy {
+        rotation_max_bytes,
+        rotation_max_files: RETAINED_LOG_ROTATION_MAX_FILES,
+        retention_max_age: RETAINED_LOG_RETENTION_MAX_AGE,
+        maintenance_cadence: RETAINED_LOG_MAINTENANCE_CADENCE,
+        writer_shutdown_timeout: RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT,
         maintenance_max_work_per_pass: Some(RETAINED_LOG_ROTATION_MAX_FILES),
     }
 }
@@ -430,44 +390,11 @@ fn writer_state_label(state: sc_observability_types::WriterState) -> &'static st
     }
 }
 
-#[cfg(test)]
-fn fault_injection_log_path(log_dir: &Path) -> PathBuf {
-    log_dir.join("atm-fault-injection.log.jsonl")
-}
-
-#[cfg(test)]
-fn register_retained_sink_fault(
-    mut builder: LoggerBuilder,
-    log_dir: &Path,
-    mode: RetainedSinkFaultMode,
-) -> LoggerBuilder {
-    let sink = Arc::new(JsonlFileSink::new(
-        fault_injection_log_path(log_dir),
-        RotationPolicy::default(),
-        RetentionPolicy::default(),
-    ));
-    builder.register_sink(SinkRegistration::new(Arc::new(
-        RetainedSinkHealthOverride::new(sink, mode),
-    )));
-    builder
-}
-
 fn maintenance_state_label(state: sc_observability_types::MaintenanceWorkerState) -> &'static str {
     match state {
         sc_observability_types::MaintenanceWorkerState::Running => "running",
         sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
         sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
-    }
-}
-
-fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {
-    #[cfg(not(test))]
-    {
-        Ok(None)
-    }
-    #[cfg(test)]
-    {
-        shared_retained_sink_fault_mode()
     }
 }
 
@@ -556,64 +483,6 @@ fn level_for_outcome(subsystem: &str, action: &ActionName, outcome: &str) -> Lev
 }
 
 #[cfg(test)]
-struct RetainedSinkHealthOverride {
-    inner: Arc<dyn sc_observability::LogSink>,
-    mode: RetainedSinkFaultMode,
-}
-
-#[cfg(test)]
-impl RetainedSinkHealthOverride {
-    fn new(inner: Arc<dyn sc_observability::LogSink>, mode: RetainedSinkFaultMode) -> Self {
-        Self { inner, mode }
-    }
-}
-
-#[cfg(test)]
-impl sc_observability::LogSink for RetainedSinkHealthOverride {
-    fn write(&self, _event: &LogEvent) -> Result<(), sc_observability_types::LogSinkError> {
-        match self.mode {
-            RetainedSinkFaultMode::Degraded => Err(sc_observability_types::LogSinkError(Box::new(
-                sc_observability_types::ErrorContext::new(
-                    sc_observability_types::ErrorCode::new_static("SC_TEST_DAEMON_SINK_DEGRADED"),
-                    "daemon retained sink degraded by test fault injection",
-                    sc_observability_types::Remediation::not_recoverable(
-                        "clear the daemon retained sink fault injection mode before retrying",
-                    ),
-                ),
-            ))),
-            RetainedSinkFaultMode::Unavailable => Err(sc_observability_types::LogSinkError(
-                Box::new(sc_observability_types::ErrorContext::new(
-                    sc_observability_types::ErrorCode::new_static(
-                        "SC_TEST_DAEMON_SINK_UNAVAILABLE",
-                    ),
-                    "daemon retained sink unavailable by test fault injection",
-                    sc_observability_types::Remediation::not_recoverable(
-                        "clear the daemon retained sink fault injection mode before retrying",
-                    ),
-                )),
-            )),
-        }
-    }
-
-    fn flush(&self) -> Result<(), sc_observability_types::LogSinkError> {
-        self.inner.flush()
-    }
-
-    fn health(&self) -> sc_observability_types::SinkHealth {
-        let mut health = self.inner.health();
-        health.state = match self.mode {
-            RetainedSinkFaultMode::Degraded => {
-                sc_observability_types::SinkHealthState::DegradedDropping
-            }
-            RetainedSinkFaultMode::Unavailable => {
-                sc_observability_types::SinkHealthState::Unavailable
-            }
-        };
-        health
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use std::time::{Duration, Instant};
 
@@ -622,7 +491,7 @@ mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
 
-    use super::{ActionName, DaemonObservability};
+    use super::{ActionName, DaemonObservability, RetainedLogPolicy};
 
     #[test]
     fn delivery_policy_outcomes_map_to_debug() {
@@ -761,18 +630,12 @@ mod tests {
         let rotated_log_path = log_dir.join("atm.log.jsonl.1");
         std::fs::write(&rotated_log_path, "stale\n").expect("rotated log");
 
-        let policy = sc_observability::RetainedLogPolicy {
-            rotation_max_bytes: sc_observability::ByteCount::from_bytes(1024),
-            rotation_max_files: sc_observability_types::FileCount::from_usize(5),
-            retention_max_age: sc_observability::RetentionMaxAge::from_duration(
-                Duration::from_millis(1),
-            ),
-            maintenance_cadence: sc_observability::MaintenanceCadence::new(Duration::from_millis(
-                10,
-            )),
-            writer_shutdown_timeout: sc_observability::WriterShutdownTimeout::new(
-                Duration::from_secs(1),
-            ),
+        let policy = RetainedLogPolicy {
+            rotation_max_bytes: 1024,
+            rotation_max_files: 5,
+            retention_max_age: Duration::from_millis(1),
+            maintenance_cadence: Duration::from_millis(10),
+            writer_shutdown_timeout: Duration::from_secs(1),
             maintenance_max_work_per_pass: Some(5),
         };
         let observability =
