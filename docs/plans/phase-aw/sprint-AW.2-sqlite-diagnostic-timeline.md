@@ -2,6 +2,8 @@
 sprint: AW.2
 title: "SQLite diagnostic timeline and production SqliteObservability adapter"
 branch: feature/aw2-sqlite-diagnostic-timeline
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aw2-sqlite-diagnostic-timeline
+status: complete
 base: integrate/phase-aw
 issues: "#905 ids 905-3, 905-4, 905-5, 905-6 (diagnostic), 905-8 (non-interference/retention/saturation)"
 must_follow: [AW.1]
