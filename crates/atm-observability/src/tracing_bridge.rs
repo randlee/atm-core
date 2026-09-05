@@ -106,10 +106,11 @@ pub enum BridgeError {
 }
 
 /// The sole process-wide retained tracing layer installed by daemon bootstrap.
+#[derive(Clone)]
 pub struct TracingBridgeLayer {
     logger: Arc<Logger>,
     stats: Arc<TracingBridgeStats>,
-    sink: RwLock<Option<Arc<dyn DiagnosticSink>>>,
+    sink: Arc<RwLock<Option<Arc<dyn DiagnosticSink>>>>,
 }
 
 impl TracingBridgeLayer {
@@ -117,7 +118,7 @@ impl TracingBridgeLayer {
         Self {
             logger,
             stats: Arc::new(TracingBridgeStats::default()),
-            sink: RwLock::new(None),
+            sink: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -139,9 +140,7 @@ impl TracingBridgeLayer {
 
     fn install_inner(self) -> Result<Arc<Self>, BridgeError> {
         let bridge = Arc::new(self);
-        tracing::subscriber::set_global_default(
-            Registry::default().with(TracingBridgeLayerHandle(Arc::clone(&bridge))),
-        )
+        tracing::subscriber::set_global_default(Registry::default().with((*bridge).clone()))
         .map_err(|_| BridgeError::AlreadyInstalled)?;
         Ok(bridge)
     }
@@ -248,13 +247,12 @@ impl TracingBridgeLayer {
     }
 }
 
-struct TracingBridgeLayerHandle(Arc<TracingBridgeLayer>);
-impl<S> Layer<S> for TracingBridgeLayerHandle
+impl<S> Layer<S> for TracingBridgeLayer
 where
     S: Subscriber,
 {
     fn on_event(&self, event: &Event<'_>, _context: Context<'_, S>) {
-        self.0.emit(event);
+        self.emit(event);
     }
 }
 
