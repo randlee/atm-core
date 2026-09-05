@@ -15,9 +15,11 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T05:22:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-05T06:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AX1 ;
   triage:foundAt "2026-09-05T05:17:14Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/AX0-1442> ;

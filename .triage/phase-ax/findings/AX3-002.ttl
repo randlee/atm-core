@@ -1,0 +1,73 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-002>
+  a triage:Finding ;
+  triage:findingId "AX3-002" ;
+  triage:title "Workspace test build fails: three test struct literals miss the new task_complete field (E0063)" ;
+  triage:description "cargo test --workspace --exclude atm-daemon fails to compile at 88c579a18 (cargo build is clean): crates/atm-runtime/src/mailbox_runtime.rs:803 (MessageEnvelope in test helper message()), crates/atm-http-runtime/src/client.rs:1447 and crates/atm-http-runtime/src/message_handler.rs:996 (SendOutcome in test helper sent_response()). D4 added task_complete to MessageEnvelope and SendOutcome without propagating it to these three of 25 construction sites. Found by quality-mgr directly on PR #1191 QA-1. A background CI-fix agent is adding the field at the three sites; QA-2 must re-verify cargo test compiles." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:06:41Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T06:06:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-002/AX3-2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-002/AX3-2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-002/AX3-2-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-002/AX3-2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/mailbox_runtime.rs" ;
+  triage:line 803 ;
+  triage:snippet "envelope: MessageEnvelope { from, source_chat_id, text, timestamp, read, source_team, destination_chat_id" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-002/AX3-2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 1447 ;
+  triage:snippet "let outcome = atm_core::send::SendOutcome { action, team, agent, sender, outcome, message_id, requires_ack, task_id" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-002/AX3-2-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 996 ;
+  triage:snippet "SendOutcome { action, team, agent, sender, outcome, message_id, requires_ack, task_id" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/88c579a18> .
+
+<urn:atm:triage:worktree/AX3/88c579a18>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AX4/88c579a18>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 4 .
