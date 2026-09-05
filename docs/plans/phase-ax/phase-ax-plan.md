@@ -213,6 +213,17 @@ follow-up options on #1173, not open questions.
 | Re-sending an open task id to the same assignee | accepted: state unchanged, `assignment_message_id` and `description` updated, one `Assigned` event row with detail `resend` | rejected as a duplicate |
 | Completing a task that was never acked | accepted; the assignment message is marked acknowledged in the same transaction so it does not stay pending-ack forever | reject and require an ack first |
 
+- **The design is storage-backend neutral** (Rand, 2026-09-05: "the
+  design should not be dependent on sqlite, i.e. we can replace w/
+  sql"). Everything that defines a task lives in `atm-storage` with no
+  rusqlite dependency: the types, the pure transition function, the
+  `TaskStore` trait and its `DummyTaskStore`, the `MessageWriteOrigin`
+  carrier and the defaulted provenance methods on `MessageStore` /
+  `AsyncMessageStore`. The SQL in the sprint docs is the rusqlite
+  backend's DDL, written in portable SQL; a SQL Server backend
+  implements `TaskStore` and overrides the two provenance methods with
+  its own DDL and changes nothing above the trait. AX.3 AC 6 gates
+  `atm-storage` compiling with no `rusqlite` in its dependency tree.
 - **Task storage is approved; the Phase-AC deferral is superseded.**
   `docs/requirements.md` (Phase-AC supersession note) and
   `docs/architecture.md` ("Task Storage (Deferred)") still say a later

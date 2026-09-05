@@ -271,6 +271,7 @@ fn effective_escalation_recipients(&self, team: &TeamName) -> Result<Vec<String>
 ```
 
 ```sql
+-- rusqlite backend DDL (portable SQL apart from IF NOT EXISTS); another backend supplies its own for the same rows
 CREATE TABLE IF NOT EXISTS escalation_recipients (
     scope_key TEXT NOT NULL,      -- 'daemon' or 'team:<team_name>'
     address TEXT NOT NULL,        -- ADR-040 form as typed; resolved at send time
