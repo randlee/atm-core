@@ -476,7 +476,10 @@ impl StorageAndNudgeRouter {
                 )?,
             },
         };
-        let request = request.clone().with_origin_metadata(message_id, timestamp);
+        let request = request
+            .clone()
+            .with_origin_metadata(message_id, timestamp)
+            .with_peer_http_api_version();
         match client
             .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
             .await?

@@ -60,6 +60,7 @@ impl AckRequest {
             caller_team: self.caller_team,
             activity_observation: self.activity_observation,
             authenticated_source_host: None,
+            peer_http_api_version: None,
             origin_message_id: None,
             origin_timestamp: None,
             to: None,
