@@ -17,7 +17,7 @@
   "host_arch": "amd64",
   "host_label": "windows-x64-01-isolated",
   "host_os": "windows",
-  "host_state_isolation": "dedicated_benchmark_os_account",
+  "host_state_isolation": "current_account_not_isolated",
   "messages_per_connection": 16,
   "metrics": null,
   "minimum_sample_count": 10,
