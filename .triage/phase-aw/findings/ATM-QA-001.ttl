@@ -21,15 +21,28 @@
   triage:foundIn triage:AW3 ;
   triage:foundAt "2026-09-05T06:50:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/AW3-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T06:42:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+# CLOSURE (qa-pr1182-r5, quality-mgr): independently confirmed at 95230ff18
+# in /tmp/verify-aw3-r5 -- arch-ctm's fix (96edb1de9) added
+# ac6_logging_contract_constants_match_the_timeline_source
+# (crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs:539) which asserts
+# docs/atm-daemon/logging.md contains a `NAME = value` substring for each of
+# DIAGNOSTIC_BATCH_MAX, DIAGNOSTIC_FLUSH_INTERVAL_MS,
+# DEGRADATION_RECOVERY_WINDOW_SECS and DEGRADATION_RATE_LIMIT_SECS read
+# directly from the source constants (not hardcoded copies) -- this is a
+# genuine drift guard, not a placeholder. `cargo test -p atm-daemon-bootstrap
+# ac6_logging_contract_constants_match_the_timeline_source`: 1 passed.
 
 <urn:atm:triage:occurrence/ATM-QA-001/AW3-1>
   a triage:Occurrence ;
   triage:file "docs/atm-daemon/logging.md" ;
   triage:line 6 ;
   triage:snippet "DIAGNOSTIC_BATCH_MAX=128" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "52cd886bd" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/52cd886bd> .
