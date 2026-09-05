@@ -5,6 +5,13 @@ use std::path::Path;
 use atm_storage::AtmError;
 use rusqlite::{Connection, params};
 
+/// Returns the concrete lower-priority diagnostic queue bound for
+/// cross-crate saturation fixtures.
+#[doc(hidden)]
+pub fn diagnostic_queue_batches_for_test() -> usize {
+    crate::writer::DIAGNOSTIC_QUEUE_BATCHES
+}
+
 #[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TemplateAdmissionSnapshot {
