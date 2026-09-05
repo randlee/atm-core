@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F103-AW3>
+  a triage:Finding ;
+  triage:findingId "RBQA-F103-AW3" ;
+  triage:title "atm log.rs hand-mirrors diagnostics_route.rs response shapes field-for-field across the crate boundary" ;
+  triage:description "qa-pr1182-r2 ruthless-boundary-qa (quality-mgr msg 01M1QZ1W1KA2JM9M0YKMQ4XG1E, independently confirmed by quality-mgr). crates/atm/src/commands/log.rs lines 399-404 redeclare DiagnosticsResponse and DiagnosticRecord as private mirrors of the atm-http-runtime route types; a direct consequence of RBQA-F101-AW3. Fix: consume the single authorized response contract instead of a hand copy; closes with F101." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T05:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T05:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F103-AW3/AW3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F103-AW3/AW3-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F103-AW3/AW3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/log.rs" ;
+  triage:line 399 ;
+  triage:snippet "struct DiagnosticsResponse mirror of route type" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "b41b1fcdb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/b41b1fcdb> .
+
+<urn:atm:triage:occurrence/RBQA-F103-AW3/AW3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/diagnostics_route.rs" ;
+  triage:line 73 ;
+  triage:snippet "struct DiagnosticRecord source of the mirrored shape" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "b41b1fcdb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/b41b1fcdb> .
+
+<urn:atm:triage:worktree/AW3/b41b1fcdb>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "b41b1fcdb" ;
+  triage:orderIndex 3 .

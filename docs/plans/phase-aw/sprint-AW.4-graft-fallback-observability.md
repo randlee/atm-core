@@ -2,7 +2,9 @@
 sprint: AW.4
 title: "Graft fallback observability on the atm-graft-python binding"
 branch: feature/aw4-graft-fallback-observability
+worktree: atm-core-worktrees/feature/aw4-graft-fallback-observability
 base: integrate/phase-aw
+status: complete
 issues: "#904 ids 904-1, 904-2, 904-3, 904-5, 904-6, 904-7, 904-8"
 must_follow: [AW.1]
 parallel_safe: [AW.2]
@@ -45,7 +47,6 @@ parallel_safe: [AW.2]
    - `ATM_GRAFT_RECOVERY_ATTEMPT` — `attempt`, `strategy`;
    - `ATM_GRAFT_RECOVERY_RESULT` — `outcome ∈ {recovered, failed}`,
      `elapsed_ms`;
-   - `ATM_GRAFT_FALLBACK_WRITE_FAILED` — `error_layer`.
    `endpoint_kind` is sourced from
    `atm_daemon_client::local_daemon_transport()` and serialises as
    `unix_domain_socket | tcp_loopback` (the only variants of
@@ -79,7 +80,7 @@ parallel_safe: [AW.2]
    "atm-observability", "pydantic"]`; `response_types` gains
    `AtmAckResult` and `PyObservabilityPaths`; `request_types` gains
    `AtmAckRequest` (final lists are stated verbatim in AW.5 D4);
-   `.just/lint-config.toml` line 156 allowlist for
+   `.just/lint-config.toml` line 160 allowlist for
    `crates/atm-graft-python/Cargo.toml` gains `"atm-observability"`;
    `boundaries/atm-observability/tracing-bridge.toml` `allowed_dependents`
    gains `"atm-graft-python"` (this sprint, not AW.1, per the phase-plan
@@ -118,10 +119,13 @@ parallel_safe: [AW.2]
   diff adds no Cargo dependency other than `atm-observability` to
   `crates/atm-graft-python/Cargo.toml`; no `crates/atm-daemon/` change.
 - AC10 (atm_ack happy path): against a running daemon, `atm_ack` on a
-  message that requires an ack returns `kind = "success"`, the message no
-  longer appears under `atm_list(selection="pending_ack")`, and the result
-  equals `atm ack <id> "<reply>" --json` key-for-key (same fixture as
-  AW.5's parity test).
+  message that requires an ack returns a typed success, the message no
+  longer appears under `atm_list(selection="pending_ack")`, and the
+  delivered acknowledgement subset (`message_id`, `requires_ack`, and
+  `outcome`) matches `atm ack <id> "<reply>" --json` for those keys. Full
+  key-for-key projection parity, including the canonical envelope, is owned
+  by AW.5 D1/D2 and its parity test (AC6); AW.4 does not implement that
+  projection.
 - AC11 (atm_ack errors): missing `reply` or `message_id` fails pydantic
   validation with the standard `invalid_request` envelope; acking a message
   that is not pending returns the same `AtmToolError` code the CLI reports

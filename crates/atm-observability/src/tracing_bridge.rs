@@ -42,6 +42,7 @@ pub const RETAINED_FIELD_ALLOWLIST: &[&str] = &[
     "strategy",
     "endpoint_kind",
     "failure_class",
+    "refresh_error_code",
     "error_layer",
     "origin",
     "message",

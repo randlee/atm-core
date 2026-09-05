@@ -79,12 +79,18 @@ the nudge will fail closed because it cannot find or contact the receiver.
 
 ## Native ATM tools
 
-The same installer registers exactly three native Hermes tools through the
-public plugin API: `atm_send`, `atm_read`, and `atm_list`. They use the typed
-`atm-graft` client and the installed profile's identity, team, and workspace;
-tool arguments cannot override those profile settings. `atm_read` is read-only
-and `atm_list` returns bounded metadata. Administrative and advanced CLI
-operations remain `atm` CLI operations.
+The same installer registers exactly four native Hermes tools through the
+public plugin API: `atm_send`, `atm_read`, `atm_list`, and `atm_ack`. They use
+the typed `atm-graft` client and the installed profile's identity, team, and
+workspace; tool arguments cannot override those profile settings. `atm_read`
+is read-only, `atm_list` returns bounded metadata, and `atm_ack` acknowledges
+one pending message through the canonical send path. Successful tool results
+are the same canonical JSON outcome objects emitted by `atm --json`; the
+parity regression test covers list, read, send, and acknowledgement results.
+Administrative and advanced CLI operations remain `atm` CLI operations.
+
+List rows expose `row.from`. The older `row.from_agent` alias remains
+available for compatibility and emits one `DeprecationWarning` per process.
 
 For the reproducible native-tool proof, see [NATIVE_TOOLS_PROOF.md](NATIVE_TOOLS_PROOF.md).
 The implementation checklist and validation record are in [TASKLIST.md](TASKLIST.md).

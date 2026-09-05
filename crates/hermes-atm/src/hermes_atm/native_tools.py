@@ -28,6 +28,16 @@ def _error(*, code: str, message: str, recovery: str, layer: str) -> ToolEnvelop
     }
 
 
+def _observability(result: Any) -> dict[str, Any] | None:
+    value = getattr(result, "observability", None)
+    if value is None:
+        return None
+    return {
+        "fallback_write_failed": value.fallback_write_failed,
+        "code": value.code,
+    }
+
+
 def _render_for_hermes(envelope: ToolEnvelope) -> str:
     """Serialize the typed ATM union at Hermes' string-only tool boundary.
 
@@ -61,62 +71,27 @@ def _validate(model: type[Any], arguments: Mapping[str, Any]) -> Any | ToolEnvel
 def _native_error(error: Any) -> ToolEnvelope:
     """Project the typed Rust native-client error without rebuilding it."""
 
-    return _error(
+    envelope = _error(
         code=error.code,
         message=error.message,
         recovery=error.recovery,
         layer=error.layer,
     )
-
-
-def _message_result(message: Any | None) -> dict[str, Any] | None:
-    if message is None:
-        return None
-    return {
-        "message_id": message.message_id,
-        "source": {
-            "agent": message.source.agent,
-            "team": message.source.team,
-            "chat_id": message.source.chat_id,
-        },
-        "body": message.body,
-    }
+    if (observability := _observability(error)) is not None:
+        envelope["error"]["observability"] = observability
+    return envelope
 
 
 def _send_result(result: Any) -> dict[str, Any]:
-    return {
-        "message_id": result.message_id,
-        "requires_ack": result.requires_ack,
-        "outcome": result.outcome,
-    }
+    return json.loads(result.to_json())
 
 
 def _read_result(result: Any) -> dict[str, Any]:
-    return {
-        "count": result.count,
-        "match_count": result.match_count,
-        "additional_match_count": result.additional_match_count,
-        "mutation_applied": result.mutation_applied,
-        "message": _message_result(result.message),
-    }
+    return json.loads(result.to_json())
 
 
 def _list_result(result: Any) -> dict[str, Any]:
-    return {
-        "count": result.count,
-        "rows": [
-            {
-                "message_id": row.message_id,
-                "summary": row.summary,
-                "from_agent": row.from_agent,
-                "timestamp": row.timestamp,
-                "read": row.read,
-                "pending_ack": row.pending_ack,
-                "task_id": row.task_id,
-            }
-            for row in result.rows
-        ],
-    }
+    return json.loads(result.to_json())
 
 
 def _invoke(call: Callable[[], Any], project: Callable[[Any], dict[str, Any]]) -> ToolEnvelope:
@@ -178,6 +153,17 @@ class AtmNativeTools:
             )
         )
 
+    def atm_ack(self, arguments: Mapping[str, Any], **_: Any) -> str:
+        request = _validate(atm_graft.AtmAckRequest, arguments)
+        if isinstance(request, dict):
+            return _render_for_hermes(request)
+        return _render_for_hermes(
+            _invoke(
+                lambda: self._session.ack_tool(request.message_id, request.reply),
+                _send_result,
+            )
+        )
+
     def atm_list(self, arguments: Mapping[str, Any], **_: Any) -> str:
         request = _validate(atm_graft.AtmListRequest, arguments)
         if isinstance(request, dict):
@@ -204,6 +190,7 @@ def tool_schemas() -> dict[str, dict[str, Any]]:
         "atm_send": atm_graft.AtmSendRequest.model_json_schema(),
         "atm_read": atm_graft.AtmReadRequest.model_json_schema(),
         "atm_list": atm_graft.AtmListRequest.model_json_schema(),
+        "atm_ack": atm_graft.AtmAckRequest.model_json_schema(),
     }
 
 
@@ -226,6 +213,11 @@ def register_tools(context: Any, *, identity: str, team: str, chat_id: str) -> N
             "atm_list",
             tools.atm_list,
             "List ATM mailbox metadata without mutating it; use the ATM CLI for administrative or advanced operations.",
+        ),
+        (
+            "atm_ack",
+            tools.atm_ack,
+            "Acknowledge one ATM mailbox message that requires an acknowledgement.",
         ),
     ):
         context.register_tool(

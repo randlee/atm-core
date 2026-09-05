@@ -8,28 +8,30 @@
   a triage:Finding ;
   triage:findingId "AW2-QA-B2" ;
   triage:title "RULE-002 function-length: writer/mod.rs drop (81 lines) and writer/ops.rs execute (93 lines) are new hard violations" ;
-  triage:description "qa-pr1179-r4 (msg 01M1QS4C69FTKB887D5K0V12Y8) at d3eee516b: reproduced by fenix and quality-mgr on the merge of feature/aw2 onto integrate/phase-aw with #1176 present: crates/atm-storage-rusqlite/src/writer/mod.rs:430-510 drop (81 lines) and writer/ops.rs:130-222 execute (93 lines) exceed the 80-line hard cap and are not grandfathered. Refactor by extracting sub-steps into named helpers; hot path: preserve primary-lane ordering, batching and fsync behaviour exactly." ;
+  triage:description "qa-pr1179-r4 (msg 01M1QS4C69FTKB887D5K0V12Y8) at d3eee516b: reproduced by fenix and quality-mgr on the merge of feature/aw2 onto integrate/phase-aw with #1176 present: crates/atm-storage-rusqlite/src/writer/mod.rs:430-510 drop (81 lines) and writer/ops.rs:130-222 execute (93 lines) exceed the 80-line hard cap and are not grandfathered. Refactor by extracting sub-steps into named helpers; hot path: preserve primary-lane ordering, batching and fsync behaviour exactly. PARTIAL FIX (qa-pr1179-r5, quality-mgr): 062cbe9c2 fixed only the ops.rs execute half via delegation to pre-existing execute_diagnostic_batch/execute_diagnostic_prune helpers (69 lines, confirmed); writer/mod.rs drop() was untouched by that commit (git show --stat proved it), remaining an 81-line violation -- corroborated independently by req-qa. CLOSURE (qa-pr1179-r6, quality-mgr): 5a4bdefc7 extracts the bounded worker-join out of drop() into SqliteWriter::join_worker/finish_failed_join/finish_timed_out_join. Diff read directly: identical recv_timeout match arms (Ok(Ok), Ok(Err), Timeout, Disconnected), identical tracing::warn!/observability.emit_or_warn calls and detail strings, identical shutdown_join_deadline usage -- a pure mechanical extraction, no ordering/batching/fsync/backpressure change. quality-mgr ran scripts/check-function-length.py at 5a4bdefc7: drop() and its helpers are not flagged (RULE-002 function-length passed, only pre-existing unrelated advisories remain). .just/check_line_counts.py: RULE-003 passed. .just/check_read_concurrency_gates.py: AV.3 gate passed. cargo check -p atm-storage-rusqlite: compiles clean. Both halves of this finding are now fixed. Finding closed." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
   triage:category "function-length" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T03:18:47Z"^^xsd:dateTime ;
   triage:foundIn triage:AW2 ;
   triage:foundAt "2026-09-05T03:12:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW2-QA-B2/AW2-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AW2-QA-B2/AW2-1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
   triage:line 130 ;
   triage:snippet "fn execute" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
   triage:headSha "d3eee516b" ;
   triage:occursIn <urn:atm:triage:worktree/AW2/d3eee516b> .

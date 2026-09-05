@@ -1572,6 +1572,8 @@ The authoritative plan is [phase-aw-plan](./plans/phase-aw/phase-aw-plan.md).
 | --- | --- | --- | --- |
 | `AW.1` | `complete` | `feature/aw1-tracing-bridge` | `docs/plans/phase-aw/sprint-AW.1-tracing-bridge.md` |
 | `AW.2` | `complete` | `feature/aw2-sqlite-diagnostic-timeline` | `docs/plans/phase-aw/sprint-AW.2-sqlite-diagnostic-timeline.md` |
+| `AW.4` | `complete` | `feature/aw4-graft-fallback-observability` | `docs/plans/phase-aw/sprint-AW.4-graft-fallback-observability.md` |
+| `AW.5` | `complete` | `feature/aw5-native-tool-parity` | `docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md` |
 
 ## 54. Phase AV — Async Mailbox-Read Cutover Completion [COMPLETE — INTEGRATION PR #1120]
 
