@@ -15,7 +15,9 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T18:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T18:19:50Z"^^xsd:dateTime ;
   triage:foundIn triage:AWReadinessReview ;
@@ -28,8 +30,8 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 1741 ;
   triage:snippet "assert!(started.elapsed() < Duration::from_secs(1)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "aec9e5ed" ;
   triage:occursIn <urn:atm:triage:worktree/AW-EASY/aec9e5ed> .
@@ -41,6 +43,12 @@
   triage:headSha "aec9e5ed" ;
   triage:orderIndex 1 .
 
+# quality-mgr, 2026-09-05, qa-pr1215-r4: independently confirmed by req-qa and
+# flaky-test-qa on fix/aw-readiness-easy at 450f36b91. No Instant/elapsed/sleep
+# timing assertion remains anywhere in message_handler.rs; the explicit Gate
+# (wait_until_entered) synchronization is intact and no new timing dependency
+# was introduced. just lint 36/36 passed in this worktree.
+
 # Developer fix evidence; QA retains authority to close the canonical finding.
 <urn:atm:triage:occurrence/FTQ-002/FTQ-002-fixed-efc01fd3a>
   a triage:Occurrence ;
@@ -48,7 +56,7 @@
   triage:line 1716 ;
   triage:snippet "explicit Gate synchronization proves the first request holds the permit before load-shed assertions" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "efc01fd3a" ;
   triage:occursIn <urn:atm:triage:worktree/AW-EASY/efc01fd3a> .

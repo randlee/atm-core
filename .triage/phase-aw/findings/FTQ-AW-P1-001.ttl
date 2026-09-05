@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T18:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T18:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:qa-pr1215-r2 ;
@@ -28,8 +30,8 @@
   triage:file "crates/atm-daemon-bootstrap/src/daemon_observability.rs" ;
   triage:line 657 ;
   triage:snippet "while Instant::now() < deadline { ... std::thread::yield_now() ... }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "aec9e5ed9" ;
   triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/aec9e5ed9> .
@@ -41,6 +43,14 @@
   triage:headSha "aec9e5ed9" ;
   triage:orderIndex 1 .
 
+# quality-mgr, 2026-09-05, qa-pr1215-r4: independently confirmed by req-qa and
+# flaky-test-qa on fix/aw-readiness-easy at 450f36b91. No Instant::now/yield_now
+# busy-poll remains anywhere in daemon_observability.rs; the completion signal
+# is a real Mutex<Option<LoggingHealthReport>> + Condvar set by the shutdown
+# worker thread, waited on via wait_timeout_while(Duration::from_secs(2), ...),
+# with both the signal (state.is_some()) and the timeout (!timed_out()) asserted.
+# just lint 36/36 passed in this worktree (bootstrapped by quality-mgr).
+
 # Developer fix evidence; QA retains authority to close the canonical finding.
 <urn:atm:triage:occurrence/FTQ-AW-P1-001/AW-P1-001-fixed-efc01fd3a>
   a triage:Occurrence ;
@@ -48,7 +58,7 @@
   triage:line 694 ;
   triage:snippet "Condvar::wait_timeout_while waits for the background writer shutdown completion signal" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "efc01fd3a" ;
   triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/efc01fd3a> .

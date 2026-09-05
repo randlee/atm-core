@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-AW-P1-003>
+  a triage:Finding ;
+  triage:findingId "FTQ-AW-P1-003" ;
+  triage:title "Gate::wait_until_entered/wait_until_released use an untimed Condvar::wait; an assertion failure before gate.release() leaks a permanently-blocked thread" ;
+  triage:description "flaky-test-qa (qa-pr1215-r4). crates/atm-http-runtime/src/message_handler.rs:912-927 (test-only Gate helper, #[cfg(test)] at line 791) uses a bare `while !state.entered { state = self.changed.wait(state)... }` with no timeout. In load_shed_rejects_without_an_application_queue (and any other test sharing this Gate), if the status/error-code assertion at line 1743-1746 ever fails -- e.g. a genuine overload-detection regression -- the test panics before gate.release() runs, leaving the spawned first-request thread permanently blocked in wait_until_released with no deadline and never joined. Does not affect the passing-path determinism verified in qa-pr1215-r4 (FTQ-AW-P1-001/FTQ-002 both PASS); this is pre-existing shared test infrastructure, not part of that round's diff. Fix: bounded wait_timeout_while-based variant, or a scope-guard that calls gate.release() on any panic path before the panic propagates." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-hygiene" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T18:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:qa-pr1215-r4 ;
+  triage:foundAt "2026-09-05T18:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-AW-P1-003/AW-P1-003-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FTQ-AW-P1-003/AW-P1-003-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 913 ;
+  triage:snippet "while !state.entered { state = self.changed.wait(state).expect(\"wait gate\"); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "450f36b91" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/450f36b91> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/450f36b91>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "450f36b91" ;
+  triage:orderIndex 1 .
