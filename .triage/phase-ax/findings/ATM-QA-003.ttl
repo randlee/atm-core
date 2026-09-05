@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003" ;
+  triage:title "Missing CLI-level test: retired nudge kind rejected with exit 3 and a use-task hint" ;
+  triage:description "Sprint AX.1 AC1 requires atm teams set-nudge-template <team> delivery_task_ack --file x.xml to exit 3 with a hint to use the task kind. No test under crates/atm/** or in team_admin.rs exercises a retired kind through the CLI/team_admin layer with that hint text; only a generic not-a-kind rejection exists there. The retirement error and hint are proven only at the contract.rs FromStr layer; propagation through team_admin.rs and the CLI exit-code mapping is unproven end-to-end. Reported by req-qa on PR #1185 QA-1 (commit 1452df008)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T05:22:12Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX1 ;
+  triage:foundAt "2026-09-05T05:17:08Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/ax1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/ax3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/ax2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-003/ax1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin.rs" ;
+  triage:line 1643 ;
+  triage:snippet "fn set_nudge_template_override_rejects_invalid_kind() - missing retired-kind test case" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "1452df008fdde42bb6a152ba207fe4061c4fd5d6" ;
+  triage:occursIn <urn:atm:triage:worktree/ax1/1452df008> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/ax3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin.rs" ;
+  triage:line 1643 ;
+  triage:snippet "fn set_nudge_template_override_rejects_invalid_kind() - missing retired-kind test case" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "acfe3e556d14675b0ab5bef57eea7d7a02b9e370" ;
+  triage:occursIn <urn:atm:triage:worktree/ax3/acfe3e55> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/ax2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin.rs" ;
+  triage:line 1643 ;
+  triage:snippet "fn set_nudge_template_override_rejects_invalid_kind() - missing retired-kind test case" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "e560bb1b69d9a38be5e0013e35752c2d6c7d4f28" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2/e560bb1b> .
+
+<urn:atm:triage:worktree/ax1/1452df008>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax1-queue-template-class" ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "1452df008fdde42bb6a152ba207fe4061c4fd5d6" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ax3/acfe3e55>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "acfe3e556d14675b0ab5bef57eea7d7a02b9e370" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/ax2/e560bb1b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "e560bb1b69d9a38be5e0013e35752c2d6c7d4f28" ;
+  triage:orderIndex 3 .
