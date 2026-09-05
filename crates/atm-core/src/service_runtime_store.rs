@@ -28,7 +28,9 @@ type DefaultRuntimeFactory = fn() -> Result<LocalServiceRuntime, AtmError>;
 #[derive(Clone)]
 enum DefaultRuntimeProvider {
     Factory(DefaultRuntimeFactory),
-    Instance(LocalServiceRuntime),
+    // Boxed so an installed instance (which grew with AX.3's optional
+    // task-store capability) does not bloat every `Factory` match arm.
+    Instance(Box<LocalServiceRuntime>),
 }
 
 static DEFAULT_RUNTIME_PROVIDER: OnceLock<DefaultRuntimeProvider> = OnceLock::new();
@@ -53,7 +55,7 @@ pub(crate) fn install_default_runtime_factory(factory: DefaultRuntimeFactory) {
 }
 
 pub(crate) fn install_default_runtime_instance(runtime: LocalServiceRuntime) {
-    let _ = DEFAULT_RUNTIME_PROVIDER.set(DefaultRuntimeProvider::Instance(runtime));
+    let _ = DEFAULT_RUNTIME_PROVIDER.set(DefaultRuntimeProvider::Instance(Box::new(runtime)));
 }
 
 pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
@@ -65,7 +67,7 @@ pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
     {
         return match provider {
             DefaultRuntimeProvider::Factory(factory) => factory(),
-            DefaultRuntimeProvider::Instance(runtime) => Ok(runtime),
+            DefaultRuntimeProvider::Instance(runtime) => Ok(*runtime),
         };
     }
 
@@ -80,7 +82,7 @@ pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
         })
         .and_then(|provider| match provider {
             DefaultRuntimeProvider::Factory(factory) => factory(),
-            DefaultRuntimeProvider::Instance(runtime) => Ok(runtime),
+            DefaultRuntimeProvider::Instance(runtime) => Ok(*runtime),
         })
 }
 

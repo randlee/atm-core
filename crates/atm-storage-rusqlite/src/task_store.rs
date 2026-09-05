@@ -119,6 +119,7 @@ impl SqliteTaskStore {
             .map_err(|error| self.db.error("failed to load task row", error))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn append_event(
         &self,
         connection: &Connection,
