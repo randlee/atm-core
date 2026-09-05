@@ -61,10 +61,10 @@ parallel_safe: []
    `file:function` entries in the script, initially the log-dir-unwritable
    and observability-init-failed paths that run before a logger exists).
    The allowlist is reproduced in `docs/atm-daemon/logging.md`.
-4. **Shared path constants** in `crates/atm-observability`:
-   `CANONICAL_LOG_FILE_NAME = "atm.log.jsonl"` and
-   `GRAFT_FALLBACK_LOG_FILE_NAME = "atm-graft-fallback.jsonl"`, plus
-   `pub fn graft_fallback_log_path(log_dir: &Path) -> PathBuf`. AW.4
+4. **Shared path constants**: `CANONICAL_LOG_FILE_NAME =
+   "atm.log.jsonl"`, the graft satellite filename, and
+   `pub fn graft_fallback_log_path(log_dir: &Path) -> PathBuf` are owned by
+   `atm-core` so lightweight producers do not pull the tracing bridge. AW.4
    consumes these; nothing else in AW.1 touches graft.
 5. **Doc alignment**: `docs/atm-daemon/logging.md` "default retained event
    set" section rewritten to describe what is actually bridged (levels,

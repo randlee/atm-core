@@ -407,13 +407,28 @@ fn observability_paths() -> PyResult<PyObservabilityPaths> {
     let (log_dir, source) = observability_log_dir()?;
     Ok(PyObservabilityPaths {
         canonical_log_path: log_dir
-            .join(atm_observability::CANONICAL_LOG_FILE_NAME)
+            .join(atm_core::observability::CANONICAL_LOG_FILE_NAME)
             .display()
             .to_string(),
-        fallback_log_path: observability::fallback_path(&log_dir).display().to_string(),
+        fallback_log_path: atm_core::observability::graft_fallback_log_path(&log_dir)
+            .display()
+            .to_string(),
         log_dir: log_dir.display().to_string(),
         log_dir_source: source.to_owned(),
     })
+}
+
+/// Return the debug runtime root selected for process-pair integration tests.
+///
+/// This private diagnostic is deliberately compiled only into debug extension
+/// artifacts. The CLI/native parity fixture uses it to fail before opening a
+/// native session when a release wheel would ignore its isolated test scope.
+#[cfg(debug_assertions)]
+#[pyfunction]
+fn _debug_runtime_scope() -> PyResult<String> {
+    atm_core::home::current_host_runtime_scope()
+        .map(|scope| scope.runtime_root.as_ref().display().to_string())
+        .map_err(atm_error)
 }
 
 impl PyGraftSession {
@@ -564,14 +579,6 @@ impl PyGraftSession {
             .map_err(atm_error)
     }
 
-    fn emit_graft_event(
-        &self,
-        code: &'static str,
-        fields: impl IntoIterator<Item = (&'static str, String)>,
-    ) -> observability::ObservabilityStatus {
-        self.fallback_logger.record(code, fields)
-    }
-
     #[allow(clippy::result_large_err)]
     fn tool_error_from_recovery<T>(
         py: Python<'_>,
@@ -616,7 +623,9 @@ impl PyGraftSession {
             // selected for this machine; it must never auto-start another one.
             client: Mutex::new(Some(GraftClient::connect_existing().map_err(atm_error)?)),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&log_dir),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&log_dir),
+            )),
             #[cfg(test)]
             reconnect_replacement: Mutex::new(None),
             #[cfg(test)]
@@ -870,6 +879,8 @@ impl PyGraftSession {
 fn _atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("AtmGraftError", m.py().get_type::<AtmGraftError>())?;
     m.add_function(wrap_pyfunction!(observability_paths, m)?)?;
+    #[cfg(debug_assertions)]
+    m.add_function(wrap_pyfunction!(_debug_runtime_scope, m)?)?;
     m.add_class::<PyObservability>()?;
     m.add_class::<PyObservabilityPaths>()?;
     m.add_class::<PyAgentAddress>()?;
@@ -1005,7 +1016,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(initial))),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
+            )),
             reconnect_replacement: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
                 replacement,
             ))),
@@ -1330,7 +1343,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
+            )),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1531,7 +1546,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
+            )),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1890,7 +1907,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
+            )),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1990,7 +2009,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(transport))),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
+            )),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -2051,7 +2072,9 @@ mod tests {
                 })),
             )))),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
+            )),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),

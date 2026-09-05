@@ -14,7 +14,6 @@ use atm_observability::{
     SinkOffer, TracingBridgeStats,
 };
 use atm_storage::{DiagnosticEvent, DiagnosticRecordError, DiagnosticTimelineStore};
-use atm_storage_rusqlite::DIAGNOSTIC_DETAIL_MAX_BYTES;
 use atm_storage_rusqlite::DiagnosticTimelinePersistenceStats;
 use serde_json::{Map, Value};
 
@@ -54,11 +53,19 @@ pub(crate) fn active_counters() -> Option<Arc<dyn DiagnosticCountersSource>> {
 /// flush worker; every later call returns immediately so the original writer
 /// keeps draining on its cadence instead of being silently orphaned.
 pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticTimeline>) {
+    let _ = try_attach_timeline(store);
+}
+
+/// Attaches the timeline and reports whether this caller won the process-wide
+/// writer claim. The boolean is kept internal so bootstrap continues to expose
+/// an idempotent observer callback while concurrent-call tests can prove the
+/// real claim path rather than a stand-alone `OnceLock` helper.
+fn try_attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticTimeline>) -> bool {
     if ACTIVE_TIMELINE.get().is_some() {
-        return;
+        return false;
     }
     let Some(bridge) = INSTALLED_BRIDGE.get() else {
-        return;
+        return false;
     };
     let persistence_stats = store.persistence_stats();
     let store: Arc<dyn DiagnosticTimelineStore> = store;
@@ -83,11 +90,12 @@ pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticT
     if !claim_once(&ACTIVE_TIMELINE, Arc::clone(&writer)) {
         // Lost a race with a concurrent attach call; the winner already owns
         // the bridge sink and flush worker, so leave both untouched.
-        return;
+        return false;
     }
     let _ = ACTIVE_COUNTERS.set(counters);
     bridge.set_diagnostic_sink(writer);
     start_flush_worker();
+    true
 }
 
 fn start_flush_worker() {
@@ -131,6 +139,7 @@ fn run_flush_worker(stop_rx: Receiver<()>) {
             return;
         };
         writer.flush_due();
+        writer.prune_for_maintenance(chrono::Utc::now().timestamp_millis());
         if let Some(counters) = ACTIVE_COUNTERS.get()
             && let Some(monitor) = DEGRADATION_MONITOR.get()
         {
@@ -167,8 +176,7 @@ impl Default for DiagnosticPolicy {
 
 impl DiagnosticPolicy {
     pub fn permits(&self, event: &RetainedEvent<'_>) -> bool {
-        !matches!(event.level, sc_observability_types::Level::Info)
-            || self.info_targets.contains(event.component)
+        !event.level.is_info() || self.info_targets.contains(event.component)
     }
 }
 
@@ -280,6 +288,24 @@ impl DiagnosticTimelineWriter {
         self.refresh_persisted_stats();
     }
 
+    /// Runs one lower-priority retention pass from bootstrap's maintenance
+    /// cadence.  This is intentionally independent of incoming diagnostic
+    /// volume so a quiet daemon still removes expired rows.
+    pub fn prune_for_maintenance(&self, now_unix_ms: i64) {
+        if let Err(error) = self.store.prune(now_unix_ms) {
+            self.stats
+                .timeline_dropped_persist_error_total
+                .fetch_add(1, Ordering::Relaxed);
+            tracing::warn!(
+                origin = "timeline",
+                code = "ATM_DIAGNOSTIC_PRUNE_FAILED",
+                error = %error,
+                "diagnostic timeline retention pass failed"
+            );
+        }
+        self.refresh_persisted_stats();
+    }
+
     fn flush_locked(&self, buffered: &mut BufferedEvents) -> SinkOffer {
         let events = std::mem::take(&mut buffered.events);
         buffered.last_flush = Instant::now();
@@ -371,13 +397,16 @@ fn diagnostic_event(event: &RetainedEvent<'_>) -> DiagnosticEvent {
     let detail = retained_detail(event.fields);
     DiagnosticEvent {
         ts_unix_ms: event.ts_unix_ms,
-        level: format!("{:?}", event.level).to_lowercase(),
+        level: event.level.as_str().to_owned(),
         component: event.component.to_owned(),
         code: event.code.map(str::to_owned),
         correlation_id: event.correlation_id.map(str::to_owned),
         origin: event.origin.to_owned(),
         message: event.message.to_owned(),
         detail,
+        // Assigned only by the storage query path once persisted; see
+        // `DiagnosticEvent::id` for why the pre-insert value is always 0.
+        id: 0,
     }
 }
 
@@ -398,22 +427,8 @@ fn retained_detail(fields: &[(&'static str, Value)]) -> Option<String> {
         return None;
     }
     let encoded = Value::Object(detail).to_string();
-    Some(truncate_utf8(&encoded, DIAGNOSTIC_DETAIL_MAX_BYTES))
-}
-
-fn truncate_utf8(value: &str, max_bytes: usize) -> String {
-    if value.len() <= max_bytes {
-        return value.to_owned();
-    }
-    let marker = "…";
-    let limit = max_bytes.saturating_sub(marker.len());
-    let end = value
-        .char_indices()
-        .take_while(|(index, _)| *index <= limit)
-        .map(|(index, _)| index)
-        .last()
-        .unwrap_or_default();
-    format!("{}{marker}", &value[..end])
+    // The storage adapter is the sole owner of UTF-8-safe detail truncation.
+    Some(encoded)
 }
 
 /// Rate-limited saturation state machine. The emitted timeline-origin events
@@ -484,7 +499,7 @@ mod tests {
         BufferedEvents, DEGRADATION_RECOVERY_WINDOW_SECS, DegradationMonitor, DiagnosticPolicy,
         DiagnosticTimelineStats, DiagnosticTimelineWriter,
     };
-    use atm_observability::{DiagnosticSink, DropReason, RetainedEvent, SinkOffer};
+    use atm_observability::{DiagnosticSink, DropReason, RetainedEvent, RetainedLevel, SinkOffer};
     use atm_storage::{
         AtmError, DiagnosticEvent, DiagnosticQuery, DiagnosticRecordError, DiagnosticTimelineStore,
     };
@@ -492,6 +507,7 @@ mod tests {
     #[derive(Default)]
     struct FixtureTimeline {
         batches: std::sync::Mutex<Vec<Vec<DiagnosticEvent>>>,
+        prunes: std::sync::Mutex<Vec<i64>>,
         fail: AtomicBool,
         fail_queue_full: AtomicBool,
     }
@@ -517,7 +533,11 @@ mod tests {
             Ok(Vec::new())
         }
 
-        fn prune(&self, _now_unix_ms: i64) -> Result<u64, AtmError> {
+        fn prune(&self, now_unix_ms: i64) -> Result<u64, AtmError> {
+            self.prunes
+                .lock()
+                .expect("fixture prunes")
+                .push(now_unix_ms);
             Ok(0)
         }
     }
@@ -538,7 +558,7 @@ mod tests {
     fn info_event(component: &'static str) -> RetainedEvent<'static> {
         RetainedEvent {
             ts_unix_ms: 42,
-            level: sc_observability_types::Level::Info,
+            level: RetainedLevel::Info,
             component,
             code: Some("ATM_FIXTURE"),
             correlation_id: None,
@@ -697,6 +717,19 @@ mod tests {
     }
 
     #[test]
+    fn ac4_quiet_daemon_prunes_on_the_maintenance_clock() {
+        let store = std::sync::Arc::new(FixtureTimeline::default());
+        let writer = fixture_writer(std::sync::Arc::clone(&store));
+
+        writer.prune_for_maintenance(1_700_000_000_000);
+
+        assert_eq!(
+            *store.prunes.lock().expect("fixture prunes"),
+            vec![1_700_000_000_000]
+        );
+    }
+
+    #[test]
     fn ac6_logging_contract_constants_match_the_timeline_source() {
         let logging_contract = include_str!("../../../docs/atm-daemon/logging.md");
         for (name, value) in [
@@ -769,20 +802,15 @@ mod tests {
         }
     }
 
-    /// C6/A7: a second `attach_timeline` call (a genuine re-attach attempt or
-    /// a race between concurrent bootstrap paths) must not replace the
-    /// active writer, swap the bridge's diagnostic sink, or spawn a second
-    /// flush thread that would leave the live writer never flushed on
-    /// cadence. This is the only test in this module that touches the
-    /// process-global `INSTALLED_BRIDGE`/`ACTIVE_TIMELINE` statics.
+    /// C6/A7/O6: concurrent bootstrap callers must leave one and only one
+    /// timeline writer and flush worker installed. This is the only test in
+    /// this module that touches the process-global bridge/timeline statics.
     #[test]
-    fn attach_timeline_second_call_does_not_replace_the_active_writer() {
+    fn concurrent_attach_timeline_has_one_writer_and_keeps_it_on_reattach() {
         let log_dir = tempfile::tempdir().expect("temp log dir");
-        let service_name =
-            sc_observability_types::ServiceName::new("atm-test").expect("valid service name");
         let logger = std::sync::Arc::new(
             atm_observability::build_retained_logger(
-                service_name,
+                "atm-test",
                 log_dir.path(),
                 test_retained_log_policy(),
                 None,
@@ -792,16 +820,46 @@ mod tests {
         let bridge = std::sync::Arc::new(atm_observability::TracingBridgeLayer::new(logger));
         super::register_bridge(std::sync::Arc::clone(&bridge));
 
-        let backend_a =
-            atm_storage_rusqlite::SqliteStorageBackend::new(log_dir.path().join("a.db"))
-                .expect("backend a opens");
-        super::attach_timeline(backend_a.diagnostic_timeline());
-        let first = super::ACTIVE_TIMELINE.get().cloned().expect("attached");
+        const CONTENDERS: usize = 8;
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(CONTENDERS));
+        let contenders = (0..CONTENDERS)
+            .map(|index| {
+                let barrier = std::sync::Arc::clone(&barrier);
+                let database_path = log_dir.path().join(format!("contender-{index}.db"));
+                std::thread::spawn(move || {
+                    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(database_path)
+                        .expect("contender backend opens");
+                    barrier.wait();
+                    super::try_attach_timeline(backend.diagnostic_timeline())
+                })
+            })
+            .collect::<Vec<_>>();
+        let winners = contenders
+            .into_iter()
+            .map(|contender| contender.join().expect("contender finishes"))
+            .filter(|won| *won)
+            .count();
 
-        let backend_b =
-            atm_storage_rusqlite::SqliteStorageBackend::new(log_dir.path().join("b.db"))
-                .expect("backend b opens");
-        super::attach_timeline(backend_b.diagnostic_timeline());
+        assert_eq!(
+            winners, 1,
+            "exactly one concurrent attach_timeline caller owns the writer"
+        );
+        assert!(
+            super::FLUSH_WORKER
+                .lock()
+                .expect("flush worker lock")
+                .is_some(),
+            "the one winning writer starts exactly one managed flush worker"
+        );
+
+        let first = super::ACTIVE_TIMELINE.get().cloned().expect("attached");
+        let backend =
+            atm_storage_rusqlite::SqliteStorageBackend::new(log_dir.path().join("reattach.db"))
+                .expect("reattach backend opens");
+        assert!(
+            !super::try_attach_timeline(backend.diagnostic_timeline()),
+            "a later re-attach does not claim a second writer"
+        );
         let second = super::ACTIVE_TIMELINE
             .get()
             .cloned()
@@ -811,34 +869,7 @@ mod tests {
             std::sync::Arc::ptr_eq(&first, &second),
             "a second attach_timeline call must not replace the active writer or its flush cadence"
         );
-    }
-
-    /// O6: the production claim helper must cover the losing `OnceLock::set`
-    /// path under concurrent bootstrap attempts, not merely a later sequential
-    /// no-op call.
-    #[test]
-    fn concurrent_timeline_claim_has_exactly_one_winner() {
-        let slot = std::sync::Arc::new(std::sync::OnceLock::new());
-        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
-        let contender_slot = std::sync::Arc::clone(&slot);
-        let contender_barrier = std::sync::Arc::clone(&barrier);
-        let contender = std::thread::spawn(move || {
-            contender_barrier.wait();
-            super::claim_once(&contender_slot, "contender")
-        });
-
-        barrier.wait();
-        let primary_won = super::claim_once(&slot, "primary");
-        let contender_won = contender.join().expect("contender finishes");
-
-        assert_ne!(
-            primary_won, contender_won,
-            "concurrent OnceLock::set claims must take exactly one winner path"
-        );
-        assert!(
-            slot.get().is_some(),
-            "the winning claim installs the timeline"
-        );
+        super::stop_flush_worker();
     }
 
     #[test]

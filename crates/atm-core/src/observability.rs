@@ -1,7 +1,7 @@
 //! ATM-owned observability boundary and projected log/health types.
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use sc_lint_attributes::sc_lint;
 use serde::de::Error as DeError;
@@ -11,9 +11,46 @@ use serde_json::{Map, Value};
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
+use crate::observability_counters::{JsonlDiagnosticCounters, TimelineDiagnosticCounters};
 use crate::protocol::RequestId;
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+
+/// Canonical retained event file shared by daemon and CLI projections.
+pub const CANONICAL_LOG_FILE_NAME: &str = "atm.log.jsonl";
+/// AW.4's dedicated graft fallback satellite file.
+pub const GRAFT_FALLBACK_LOG_FILE_NAME: &str = "atm-graft-fallback.jsonl";
+
+/// The redaction boundary shared by retained-log producers.
+pub const RETAINED_FIELD_ALLOWLIST: &[&str] = &[
+    "ts",
+    "level",
+    "component",
+    "code",
+    "command",
+    "action",
+    "correlation_id",
+    "outcome",
+    "elapsed_ms",
+    "attempt",
+    "strategy",
+    "endpoint_kind",
+    "failure_class",
+    "refresh_error_code",
+    "error_layer",
+    "origin",
+];
+
+/// Removes fields that are not permitted to reach retained diagnostics.
+pub fn sanitize_retained_fields(mut fields: Map<String, Value>) -> Map<String, Value> {
+    fields.retain(|key, _| RETAINED_FIELD_ALLOWLIST.contains(&key.as_str()));
+    fields
+}
+
+/// Returns the dedicated graft fallback satellite path.
+pub fn graft_fallback_log_path(log_dir: &Path) -> PathBuf {
+    log_dir.join(GRAFT_FALLBACK_LOG_FILE_NAME)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
@@ -562,21 +599,11 @@ pub struct AtmObservabilityDiagnostic {
     pub message: String,
 }
 
-/// Process-owned JSONL retained-log counters projected by daemon doctor.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct AtmJsonlObservabilityCounters {
-    pub forwarded_total: u64,
-    pub dropped_queue_full_total: u64,
-    pub dropped_reentrant_total: u64,
-}
+/// Backward-compatible name for the shared JSONL counter projection.
+pub type AtmJsonlObservabilityCounters = JsonlDiagnosticCounters;
 
-/// Process-owned timeline counters projected by daemon doctor.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct AtmTimelineObservabilityCounters {
-    pub written_total: u64,
-    pub dropped_queue_full_total: u64,
-    pub dropped_persist_error_total: u64,
-}
+/// Backward-compatible name for the shared timeline counter projection.
+pub type AtmTimelineObservabilityCounters = TimelineDiagnosticCounters;
 
 impl AtmObservabilityHealth {
     /// Projects the shared retained-diagnostics health contract onto the
@@ -585,16 +612,8 @@ impl AtmObservabilityHealth {
         &mut self,
         retained: crate::observability_counters::RetainedObservabilityHealth,
     ) {
-        self.jsonl = AtmJsonlObservabilityCounters {
-            forwarded_total: retained.jsonl.forwarded_total,
-            dropped_queue_full_total: retained.jsonl.dropped_queue_full_total,
-            dropped_reentrant_total: retained.jsonl.dropped_reentrant_total,
-        };
-        self.timeline = AtmTimelineObservabilityCounters {
-            written_total: retained.timeline.written_total,
-            dropped_queue_full_total: retained.timeline.dropped_queue_full_total,
-            dropped_persist_error_total: retained.timeline.dropped_persist_error_total,
-        };
+        self.jsonl = retained.jsonl;
+        self.timeline = retained.timeline;
         self.degraded = retained.degraded;
     }
 }

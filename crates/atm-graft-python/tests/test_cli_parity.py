@@ -3,25 +3,8 @@
 Local runs stay opt-in: set ``ATM_CLI_PARITY_FIXTURE`` to a JSON fixture
 pointing at an operator-owned disposable daemon. CI sets
 ``ATM_CLI_PARITY_CI=1``; in that mode this module creates an isolated roster,
-starts the checked-out CLI's paired daemon, and tears it down after the test.
-
-KNOWN ISOLATION GAP (readiness-review B5, tracked as a follow-up, not fixed
-here): ``_GeneratedParityFixture._environment`` below sets ``HOME``,
-``ATM_HOME``, ``ATM_LOG_DIR``, and ``TMPDIR`` to a disposable per-run
-directory, but ``atm-core::home::current_host_runtime_scope`` (the daemon's
-own runtime-scope resolver) intentionally ignores all of those and always
-resolves ``owner.lock``, the endpoint, and the durable state root from the
-real OS user record (``getpwuid``/equivalent) -- that is deliberate host-scope
-behavior for the real daemon, not a bug, and this test file must not change
-it. The practical effect is that the "disposable" daemon this fixture starts
-actually owns the operator's real ``~/.atm/daemon`` and writes the real
-``~/.atm/db``: this class is therefore host-exclusive today. It reliably
-passes only on a host with no other ``atm-daemon`` already running (e.g. a
-fresh CI VM); running it on a workstation with a live personal daemon will
-fail on the ``owner.lock`` acquisition, not because of a defect in this test.
-Until a real runtime-scope override lands for tests, treat this suite as
-serialized/host-exclusive and do not run it concurrently with any other
-``atm-daemon`` instance on the same machine.
+redirects its debug-only daemon runtime scope under that fixture, starts the
+checked-out CLI's paired daemon, and tears it down after the test.
 """
 
 from __future__ import annotations
@@ -89,7 +72,14 @@ class _GeneratedParityFixture:
     chat_id = "parity"
 
     def __init__(self) -> None:
-        self._temporary = tempfile.TemporaryDirectory(prefix="atm-cli-parity-")
+        # macOS can place its default temporary directory deeply below
+        # /var/folders. Keep the Unix-socket fixture root short enough for
+        # the platform sockaddr_un limit while retaining the normal system
+        # temporary location on Windows.
+        unix_temp_root = "/tmp" if os.name == "posix" and Path("/tmp").is_dir() else None
+        self._temporary = tempfile.TemporaryDirectory(
+            prefix="atm-cli-parity-", dir=unix_temp_root
+        )
         self.root = Path(self._temporary.name)
         self.process: subprocess.Popen[str] | None = None
         self._stderr_lines: list[str] = []
@@ -108,6 +98,10 @@ class _GeneratedParityFixture:
             "HOME": str(home),
             "ATM_HOME": str(atm_home),
             "ATM_CONFIG_HOME": str(atm_home),
+            # current_host_runtime_scope intentionally ignores HOME and
+            # ATM_HOME for real processes. This debug/test-only override is
+            # the explicit isolation boundary for the paired CLI/daemon.
+            "ATM_TEST_RUNTIME_HOME": str(home),
             "ATM_TEAM": self.team,
             "ATM_CHAT_ID": self.chat_id,
             "ATM_LOG_DIR": str(log_dir),
@@ -288,6 +282,31 @@ def _parity_enabled() -> bool:
 class CliParityTests(unittest.TestCase):
     """Compare native tool JSON with CLI JSON on one disposable daemon."""
 
+    @staticmethod
+    def _assert_debug_native_scope(environment: dict[str, str]) -> None:
+        """Reject a release extension before it can connect outside the fixture."""
+
+        runtime_home = environment.get("ATM_TEST_RUNTIME_HOME")
+        if not runtime_home:
+            raise RuntimeError("generated parity fixture requires ATM_TEST_RUNTIME_HOME")
+
+        import atm_graft._atm_graft as extension
+
+        try:
+            actual_runtime_root = Path(extension._debug_runtime_scope()).resolve()
+        except AttributeError as error:
+            raise RuntimeError(
+                "CLI/native parity requires a debug atm-graft extension; "
+                "a release wheel ignores ATM_TEST_RUNTIME_HOME"
+            ) from error
+
+        expected_runtime_root = (Path(runtime_home) / ".atm" / "daemon").resolve()
+        if actual_runtime_root != expected_runtime_root:
+            raise RuntimeError(
+                "CLI/native parity native runtime is outside the disposable fixture: "
+                f"expected {expected_runtime_root}, got {actual_runtime_root}"
+            )
+
     @classmethod
     def setUpClass(cls) -> None:
         fixture_path = os.environ.get("ATM_CLI_PARITY_FIXTURE")
@@ -306,6 +325,12 @@ class CliParityTests(unittest.TestCase):
         cls.second_identity = cls.fixture.get("second_identity", cls.identity)
         cls.team = cls.fixture["team"]
         cls.chat_id = cls.fixture.get("chat_id", "parity")
+        cls._prior_environment = os.environ.copy()
+        os.environ.clear()
+        os.environ.update(cls.environment)
+
+        if cls._generated is not None:
+            cls._assert_debug_native_scope(cls.environment)
 
         from hermes_atm import native_tools
 
@@ -322,8 +347,12 @@ class CliParityTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
-        if cls._generated is not None:
-            cls._generated.close()
+        try:
+            if cls._generated is not None:
+                cls._generated.close()
+        finally:
+            os.environ.clear()
+            os.environ.update(cls._prior_environment)
 
     @classmethod
     def _cli(cls, *arguments: str, identity: str | None = None) -> dict[str, object]:

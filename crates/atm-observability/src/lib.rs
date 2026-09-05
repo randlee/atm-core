@@ -5,17 +5,38 @@
 //! ownership of their logger and sink configuration.
 
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::time::Duration;
 use std::{fs, fs::OpenOptions};
 
 use atm_core::error::AtmError;
-use atm_core::observability::RetainedSinkFaultMode;
+use atm_core::observability::{
+    AtmMaintenanceHealthReport, AtmMaintenanceWorkerState, AtmObservabilityDiagnostic,
+    AtmObservabilityHealth, AtmObservabilityHealthState, RetainedSinkFaultMode, diagnostic_code,
+    sanitize_retained_fields,
+};
+use atm_core::types::IsoTimestamp;
 use atm_core::{EnvSource, ProcessEnvSource};
-use sc_observability_types::DiagnosticInfo;
+use sc_observability_types::{
+    ActionName, DiagnosticInfo, Level, LogEvent, OutcomeLabel, ProcessIdentity, SchemaVersion,
+    ServiceName, TargetCategory, Timestamp,
+};
+use serde_json::Map;
 
 /// Opaque shared retained logger handle. Its concrete backend is deliberately
 /// confined to this facade.
 pub struct RetainedLogger(sc_observability::Logger);
+
+/// ATM-owned logging level for the retained logger bootstrap boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RetainedLogLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+    Off,
+}
 
 /// Process-neutral settings for ATM's retained JSONL logger.
 #[derive(Debug, Clone, Copy)]
@@ -36,24 +57,51 @@ pub enum RetainedLogOffer {
     Rejected { diagnostic_code: String },
 }
 
+/// ATM-owned stable metadata for a direct retained command record.
+///
+/// This deliberately has no body, identity, request-id, task-id, or backend
+/// type fields; callers cannot bypass the retained-data policy.
+pub struct RetainedCommandEvent<'a> {
+    pub target: &'a str,
+    pub action: &'a str,
+    pub outcome: &'a str,
+    pub code: Option<&'a str>,
+}
+
 impl RetainedLogger {
-    pub fn health(&self) -> sc_observability_types::LoggingHealthReport {
-        self.0.health()
+    /// Projects backend health onto ATM's public doctor contract.
+    pub fn health_at(&self, active_log_path: PathBuf) -> Result<AtmObservabilityHealth, AtmError> {
+        let report = self.0.health();
+        let diagnostic = report.last_error.clone().map(map_diagnostic_summary);
+        let detail = build_observability_detail(&report, diagnostic.as_ref());
+        Ok(AtmObservabilityHealth {
+            active_log_path: Some(active_log_path),
+            logging_state: map_logging_state(report.state),
+            query_state: None,
+            maintenance: report
+                .maintenance
+                .clone()
+                .map(map_maintenance_report)
+                .transpose()?,
+            diagnostic,
+            jsonl: Default::default(),
+            timeline: Default::default(),
+            degraded: Vec::new(),
+            detail,
+        })
     }
 
-    /// Synchronously flushes all registered sinks through the writer-owned
-    /// runtime. Test-only: production callers rely on the writer's own
-    /// maintenance cadence and must not force a flush on the hot path.
-    ///
-    /// # Errors
-    /// Returns the underlying [`sc_observability_types::FlushError`] when a
-    /// sink fails to flush.
-    #[cfg(test)]
-    pub(crate) fn flush(&self) -> Result<(), sc_observability_types::FlushError> {
+    /// Flushes all events admitted before this call to the configured sinks.
+    pub fn flush(&self) -> Result<(), sc_observability_types::FlushError> {
         self.0.flush()
     }
 
-    pub fn try_log(&self, event: sc_observability_types::LogEvent) -> RetainedLogOffer {
+    /// Drains the retained-log writer and returns its final health snapshot.
+    pub fn shutdown(self) -> sc_observability_types::LoggingHealthReport {
+        self.0.shutdown().health()
+    }
+
+    pub(crate) fn try_log(&self, event: LogEvent) -> RetainedLogOffer {
         #[cfg(test)]
         if queue_full_for_test() {
             return RetainedLogOffer::QueueFull;
@@ -67,6 +115,49 @@ impl RetainedLogger {
         }
     }
 
+    /// Admits a direct command outcome through the same allowlist used by the
+    /// tracing bridge.
+    pub fn try_log_command(
+        &self,
+        event: RetainedCommandEvent<'_>,
+    ) -> Result<RetainedLogOffer, AtmError> {
+        let action = ActionName::new(event.action.to_owned()).map_err(|_| {
+            AtmError::observability_emit("failed to validate retained command action")
+        })?;
+        let outcome = OutcomeLabel::new(event.outcome.to_owned()).map_err(|_| {
+            AtmError::observability_emit("failed to validate retained command outcome")
+        })?;
+        let target = TargetCategory::new(event.target.to_owned()).map_err(|_| {
+            AtmError::observability_emit("failed to validate retained command target")
+        })?;
+        let mut fields = Map::new();
+        if let Some(code) = event.code {
+            fields.insert(
+                "code".to_owned(),
+                serde_json::Value::String(code.to_owned()),
+            );
+        }
+        let log_event = LogEvent {
+            version: SchemaVersion::new(sc_observability_types::OBSERVATION_ENVELOPE_VERSION)
+                .expect("literal schema version"),
+            timestamp: Timestamp::now_utc(),
+            level: retained_command_level(event.outcome),
+            service: ServiceName::new("atm").expect("literal service name"),
+            target,
+            action,
+            message: None,
+            identity: ProcessIdentity::default(),
+            trace: None,
+            request_id: None,
+            correlation_id: None,
+            outcome: Some(outcome),
+            diagnostic: None,
+            state_transition: None,
+            fields: sanitize_retained_fields(fields),
+        };
+        Ok(self.try_log(log_event))
+    }
+
     #[cfg(test)]
     pub(crate) fn force_queue_full_for_test<T>(operation: impl FnOnce() -> T) -> T {
         QUEUE_FULL_FOR_TEST.with(|forced| {
@@ -75,6 +166,26 @@ impl RetainedLogger {
             forced.set(false);
             result
         })
+    }
+}
+
+fn retained_command_level(outcome: &str) -> Level {
+    match outcome {
+        "ok" | "sent" | "dry_run" | "expected_peer_disconnect" => Level::Info,
+        "error" | "failed" | "malformed_request" | "transport_failure" | "request_failure"
+        | "saturated" => Level::Error,
+        _ => Level::Warn,
+    }
+}
+
+fn backend_level(level: RetainedLogLevel) -> sc_observability_types::LevelFilter {
+    match level {
+        RetainedLogLevel::Trace => sc_observability_types::LevelFilter::Trace,
+        RetainedLogLevel::Debug => sc_observability_types::LevelFilter::Debug,
+        RetainedLogLevel::Info => sc_observability_types::LevelFilter::Info,
+        RetainedLogLevel::Warn => sc_observability_types::LevelFilter::Warn,
+        RetainedLogLevel::Error => sc_observability_types::LevelFilter::Error,
+        RetainedLogLevel::Off => sc_observability_types::LevelFilter::Off,
     }
 }
 
@@ -90,17 +201,20 @@ impl RetainedLogger {
 /// Returns [`AtmError::observability_bootstrap`] when the retained log
 /// directory cannot be prepared or the backing logger cannot be built.
 pub fn build_retained_logger(
-    service_name: sc_observability_types::ServiceName,
+    service_name: &str,
     log_dir: &Path,
     retained_log_policy: RetainedLogPolicy,
-    level_override: Option<sc_observability_types::LevelFilter>,
+    level_override: Option<RetainedLogLevel>,
 ) -> Result<RetainedLogger, AtmError> {
     prepare_retained_log(log_dir)?;
+    let service_name = ServiceName::new(service_name.to_owned()).map_err(|_| {
+        AtmError::observability_bootstrap("failed to validate retained logger service name")
+    })?;
     let mut config = sc_observability::LoggerConfig::default_for(
         service_name,
         logger_root_for_log_dir(log_dir)?,
     );
-    config.level = level_override.unwrap_or(sc_observability_types::LevelFilter::Info);
+    config.level = level_override.map_or(sc_observability_types::LevelFilter::Info, backend_level);
     config.retained_log_policy = sc_observability::RetainedLogPolicy {
         rotation_max_bytes: sc_observability::ByteCount::from_bytes(
             retained_log_policy.rotation_max_bytes,
@@ -140,7 +254,7 @@ pub fn build_retained_logger(
 /// Returns [`AtmError::observability_bootstrap`] when `ATM_LOG` holds an
 /// unsupported value, or for any error reported by [`build_retained_logger`].
 pub fn build_retained_logger_from_env(
-    service_name: sc_observability_types::ServiceName,
+    service_name: &str,
     log_dir: &Path,
     retained_log_policy: RetainedLogPolicy,
 ) -> Result<RetainedLogger, AtmError> {
@@ -171,19 +285,17 @@ fn try_log_error_code(error: &sc_observability::TryLogError) -> &str {
 
 pub mod tracing_bridge;
 
+pub use atm_core::observability::{
+    CANONICAL_LOG_FILE_NAME, GRAFT_FALLBACK_LOG_FILE_NAME, RETAINED_FIELD_ALLOWLIST,
+    graft_fallback_log_path,
+};
 pub use tracing_bridge::{
-    BridgeError, CANONICAL_LOG_FILE_NAME, DiagnosticSink, DropReason, FieldValue,
-    GRAFT_FALLBACK_LOG_FILE_NAME, RETAINED_FIELD_ALLOWLIST, RETAINED_INFO_TARGETS, RetainedEvent,
-    SinkOffer, TracingBridgeLayer, TracingBridgeStats,
+    BridgeError, DiagnosticSink, DropReason, FieldValue, RETAINED_INFO_TARGETS, RetainedEvent,
+    RetainedLevel, SinkOffer, TracingBridgeLayer, TracingBridgeStats,
 };
 
 pub const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
 pub const ATM_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
-
-/// Returns AW.4's dedicated, bounded graft fallback satellite path.
-pub fn graft_fallback_log_path(log_dir: &Path) -> PathBuf {
-    log_dir.join(GRAFT_FALLBACK_LOG_FILE_NAME)
-}
 
 /// Validates a retained-log directory and its active log file before logger
 /// construction. The returned path is the exact file checked for append access.
@@ -228,8 +340,114 @@ pub fn logger_root_for_log_dir(log_dir: &Path) -> Result<PathBuf, AtmError> {
 /// # Errors
 /// Returns [`AtmError::observability_bootstrap`] when `ATM_LOG` holds an
 /// unsupported value.
-pub fn logger_level_override() -> Result<Option<sc_observability_types::LevelFilter>, AtmError> {
+pub fn logger_level_override() -> Result<Option<RetainedLogLevel>, AtmError> {
     logger_level_override_from(&ProcessEnvSource)
+}
+
+fn build_observability_detail(
+    report: &sc_observability_types::LoggingHealthReport,
+    diagnostic: Option<&AtmObservabilityDiagnostic>,
+) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(diagnostic) = diagnostic {
+        parts.push(diagnostic.message.clone());
+    }
+    parts.push(format!(
+        "writer_state={} queue_depth={} queue_capacity={} queue_high_water_mark={} queue_full_drops_total={}",
+        writer_state_label(report.writer_state),
+        report.queue_depth,
+        report.queue_capacity,
+        report.queue_high_water_mark,
+        report.queue_full_drops_total,
+    ));
+    if let Some(maintenance) = &report.maintenance {
+        let last_pass = maintenance
+            .last_pass_at
+            .map(|timestamp| timestamp.into_inner().to_string())
+            .unwrap_or_else(|| "never".to_string());
+        let mut summary = format!(
+            "maintenance state={} rotated_files_total={} pruned_files_total={} last_pass_at={last_pass}",
+            maintenance_state_label(maintenance.state),
+            maintenance.rotated_files_total,
+            maintenance.pruned_files_total,
+        );
+        if let Some(last_error) = &maintenance.last_error {
+            summary.push_str(&format!(" maintenance_last_error={}", last_error.message));
+        }
+        parts.push(summary);
+    }
+    (!parts.is_empty()).then(|| parts.join(" | "))
+}
+
+fn writer_state_label(state: sc_observability_types::WriterState) -> &'static str {
+    match state {
+        sc_observability_types::WriterState::Running => "running",
+        sc_observability_types::WriterState::Degraded => "degraded",
+        sc_observability_types::WriterState::Stopped => "stopped",
+    }
+}
+
+fn maintenance_state_label(state: sc_observability_types::MaintenanceWorkerState) -> &'static str {
+    match state {
+        sc_observability_types::MaintenanceWorkerState::Running => "running",
+        sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
+        sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
+    }
+}
+
+fn map_logging_state(
+    state: sc_observability_types::LoggingHealthState,
+) -> AtmObservabilityHealthState {
+    match state {
+        sc_observability_types::LoggingHealthState::Healthy => AtmObservabilityHealthState::Healthy,
+        sc_observability_types::LoggingHealthState::DegradedDropping => {
+            AtmObservabilityHealthState::Degraded
+        }
+        sc_observability_types::LoggingHealthState::Unavailable => {
+            AtmObservabilityHealthState::Unavailable
+        }
+    }
+}
+
+fn map_maintenance_report(
+    report: sc_observability_types::MaintenanceHealthReport,
+) -> Result<AtmMaintenanceHealthReport, AtmError> {
+    Ok(AtmMaintenanceHealthReport {
+        state: match report.state {
+            sc_observability_types::MaintenanceWorkerState::Running => {
+                AtmMaintenanceWorkerState::Running
+            }
+            sc_observability_types::MaintenanceWorkerState::Degraded => {
+                AtmMaintenanceWorkerState::Degraded
+            }
+            sc_observability_types::MaintenanceWorkerState::Stopped => {
+                AtmMaintenanceWorkerState::Stopped
+            }
+        },
+        rotated_files_total: report.rotated_files_total.as_usize() as u64,
+        pruned_files_total: report.pruned_files_total.as_usize() as u64,
+        last_pass_at: report
+            .last_pass_at
+            .map(|timestamp| IsoTimestamp::from_str(&timestamp.to_string()))
+            .transpose()
+            .map_err(|_source| {
+                AtmError::observability_query(
+                    "shared maintenance timestamp could not be converted to ATM timestamp",
+                )
+            })?,
+    })
+}
+
+fn map_diagnostic_summary(
+    summary: sc_observability_types::DiagnosticSummary,
+) -> AtmObservabilityDiagnostic {
+    AtmObservabilityDiagnostic {
+        code: summary.code.map(|code| {
+            diagnostic_code(code.as_str().to_string())
+                .expect("shared diagnostic codes must be non-empty")
+        }),
+        message: summary.message,
+    }
 }
 
 /// Resolves the `ATM_LOG` override from an explicit environment source.
@@ -239,7 +457,7 @@ pub fn logger_level_override() -> Result<Option<sc_observability_types::LevelFil
 /// unsupported value.
 pub fn logger_level_override_from(
     env: &dyn EnvSource,
-) -> Result<Option<sc_observability_types::LevelFilter>, AtmError> {
+) -> Result<Option<RetainedLogLevel>, AtmError> {
     match env.var(ATM_LOG_LEVEL_ENV) {
         Some(raw_value) => parse_logger_level(&raw_value),
         None => Ok(None),
@@ -254,21 +472,19 @@ pub fn logger_level_override_from(
 /// # Errors
 /// Returns [`AtmError::observability_bootstrap`] for any value other than
 /// `trace`, `debug`, `info`, `warn`, `error`, or `off`.
-pub fn parse_logger_level(
-    value: &str,
-) -> Result<Option<sc_observability_types::LevelFilter>, AtmError> {
+pub fn parse_logger_level(value: &str) -> Result<Option<RetainedLogLevel>, AtmError> {
     let raw_value = value.trim();
     if raw_value.is_empty() {
         return Ok(None);
     }
 
     match raw_value.to_ascii_lowercase().as_str() {
-        "trace" => Ok(Some(sc_observability_types::LevelFilter::Trace)),
-        "debug" => Ok(Some(sc_observability_types::LevelFilter::Debug)),
-        "info" => Ok(Some(sc_observability_types::LevelFilter::Info)),
-        "warn" => Ok(Some(sc_observability_types::LevelFilter::Warn)),
-        "error" => Ok(Some(sc_observability_types::LevelFilter::Error)),
-        "off" => Ok(Some(sc_observability_types::LevelFilter::Off)),
+        "trace" => Ok(Some(RetainedLogLevel::Trace)),
+        "debug" => Ok(Some(RetainedLogLevel::Debug)),
+        "info" => Ok(Some(RetainedLogLevel::Info)),
+        "warn" => Ok(Some(RetainedLogLevel::Warn)),
+        "error" => Ok(Some(RetainedLogLevel::Error)),
+        "off" => Ok(Some(RetainedLogLevel::Off)),
         _ => Err(AtmError::observability_bootstrap(format!(
             "invalid {ATM_LOG_LEVEL_ENV} value `{raw_value}`; use `trace`, `debug`, `info`, `warn`, `error`, or `off`"
         ))),
@@ -300,7 +516,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        ATM_LOG_LEVEL_ENV, logger_level_override_from, parse_logger_level, prepare_retained_log,
+        ATM_LOG_LEVEL_ENV, RetainedLogLevel, logger_level_override_from, parse_logger_level,
+        prepare_retained_log,
     };
 
     #[test]
@@ -325,12 +542,12 @@ mod tests {
     #[test]
     fn parses_every_supported_level_case_insensitively() {
         let cases = [
-            ("TRACE", sc_observability_types::LevelFilter::Trace),
-            ("debug", sc_observability_types::LevelFilter::Debug),
-            (" info ", sc_observability_types::LevelFilter::Info),
-            ("Warn", sc_observability_types::LevelFilter::Warn),
-            ("error", sc_observability_types::LevelFilter::Error),
-            ("off", sc_observability_types::LevelFilter::Off),
+            ("TRACE", RetainedLogLevel::Trace),
+            ("debug", RetainedLogLevel::Debug),
+            (" info ", RetainedLogLevel::Info),
+            ("Warn", RetainedLogLevel::Warn),
+            ("error", RetainedLogLevel::Error),
+            ("off", RetainedLogLevel::Off),
         ];
 
         for (value, expected) in cases {
@@ -353,7 +570,7 @@ mod tests {
 
         assert_eq!(
             logger_level_override_from(&env).expect("override"),
-            Some(sc_observability_types::LevelFilter::Debug)
+            Some(RetainedLogLevel::Debug)
         );
         assert_eq!(
             logger_level_override_from(&FakeEnvSource::empty()).expect("no override"),

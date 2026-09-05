@@ -29,7 +29,7 @@ use atm_core::observability::{
 #[cfg(any(test, feature = "fault-injection"))]
 use atm_observability::retained_sink_fault_mode as shared_retained_sink_fault_mode;
 use atm_observability::{
-    logger_level_override as shared_logger_level_override,
+    RetainedLogLevel, logger_level_override as shared_logger_level_override,
     logger_root_for_log_dir as shared_logger_root_for_log_dir, prepare_retained_log,
 };
 use chrono::{DateTime, Utc};
@@ -45,9 +45,9 @@ use sc_observability::{ConsoleSink, Logger, LoggerConfig, SinkRegistration};
 #[cfg(any(test, feature = "fault-injection"))]
 use sc_observability::{JsonlFileSink, RetentionPolicy, RotationPolicy};
 use sc_observability_types::{
-    ActionName, CorrelationId, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent,
-    LogQuery, OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName,
-    TargetCategory, Timestamp,
+    ActionName, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent, LogQuery,
+    OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName, TargetCategory,
+    Timestamp,
 };
 #[cfg(any(test, feature = "fault-injection"))]
 use sc_observability_types::{SinkHealth, SinkHealthState};
@@ -302,8 +302,10 @@ pub(crate) fn build_logger(
     service_name: &ServiceName,
 ) -> Result<(Logger, PathBuf), AtmError> {
     let active_log_path = prepare_retained_log(log_dir)?;
-    let mut config =
-        LoggerConfig::default_for(service_name.clone(), logger_root_for_log_dir(log_dir)?);
+    let mut config = LoggerConfig::default_for(
+        service_name.clone(),
+        shared_logger_root_for_log_dir(log_dir)?,
+    );
     config.level = logger_level_override()?.unwrap_or(SharedLevelFilter::Info);
     // Make the retained file threshold explicit so lifecycle info! events stay
     // in the default retained log unless ATM_LOG overrides the level.
@@ -328,10 +330,6 @@ fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(
     let prepared = prepare_retained_log(log_dir)?;
     debug_assert_eq!(prepared, active_log_path);
     Ok(())
-}
-
-fn logger_root_for_log_dir(log_dir: &Path) -> Result<PathBuf, AtmError> {
-    shared_logger_root_for_log_dir(log_dir)
 }
 
 #[cfg(any(test, feature = "fault-injection"))]
@@ -359,7 +357,18 @@ fn init_tracing(stderr_logs: bool) -> Result<(), AtmError> {
 }
 
 fn logger_level_override() -> Result<Option<SharedLevelFilter>, AtmError> {
-    shared_logger_level_override()
+    shared_logger_level_override().map(|level| level.map(shared_level_filter))
+}
+
+fn shared_level_filter(level: RetainedLogLevel) -> SharedLevelFilter {
+    match level {
+        RetainedLogLevel::Trace => SharedLevelFilter::Trace,
+        RetainedLogLevel::Debug => SharedLevelFilter::Debug,
+        RetainedLogLevel::Info => SharedLevelFilter::Info,
+        RetainedLogLevel::Warn => SharedLevelFilter::Warn,
+        RetainedLogLevel::Error => SharedLevelFilter::Error,
+        RetainedLogLevel::Off => SharedLevelFilter::Off,
+    }
 }
 
 fn tracing_level_filter(level: SharedLevelFilter) -> TracingLevelFilter {
@@ -621,51 +630,13 @@ fn build_command_event_fields(event: &CommandEvent) -> Map<String, serde_json::V
         "command".to_string(),
         serde_json::Value::String(event.command.to_string()),
     );
-    fields.insert(
-        "team".to_string(),
-        serde_json::Value::String(event.team.to_string()),
-    );
-    fields.insert(
-        "agent".to_string(),
-        serde_json::Value::String(event.agent.to_string()),
-    );
-    fields.insert(
-        "sender".to_string(),
-        serde_json::Value::String(event.sender.to_string()),
-    );
-    fields.insert(
-        "requires_ack".to_string(),
-        serde_json::Value::Bool(event.requires_ack),
-    );
-    fields.insert(
-        "dry_run".to_string(),
-        serde_json::Value::Bool(event.dry_run),
-    );
-    if let Some(message_id) = event.message_id {
-        fields.insert(
-            "message_id".to_string(),
-            serde_json::Value::String(message_id.to_string()),
-        );
-    }
-    if let Some(task_id) = &event.task_id {
-        fields.insert(
-            "task_id".to_string(),
-            serde_json::Value::String(task_id.to_string()),
-        );
-    }
     if let Some(error_code) = event.error_code {
         fields.insert(
-            "error_code".to_string(),
+            "code".to_string(),
             serde_json::Value::String(error_code.to_string()),
         );
     }
-    if let Some(error_message) = &event.error_message {
-        fields.insert(
-            "error_message".to_string(),
-            serde_json::Value::String(error_message.clone()),
-        );
-    }
-    fields
+    atm_core::observability::sanitize_retained_fields(fields)
 }
 
 fn map_command_event(
@@ -678,21 +649,6 @@ fn map_command_event(
             .map_err(|_source| {
                 AtmError::observability_emit("failed to validate ATM observability schema version")
             })?;
-    let request_id = event
-        .message_id
-        .map(|value| CorrelationId::new(value.to_string()))
-        .transpose()
-        .map_err(|_source| {
-            AtmError::observability_emit("failed to validate ATM observability request id")
-        })?;
-    let correlation_id = event
-        .task_id
-        .as_deref()
-        .map(CorrelationId::new)
-        .transpose()
-        .map_err(|_source| {
-            AtmError::observability_emit("failed to validate ATM observability correlation id")
-        })?;
     let fields = build_command_event_fields(&event);
     let action = ActionName::new(event.action.as_str()).map_err(|_source| {
         AtmError::observability_emit("failed to validate ATM observability action")
@@ -707,14 +663,11 @@ fn map_command_event(
         service: service_name.clone(),
         target: target_category.clone(),
         action,
-        message: Some(format!(
-            "ATM command {} completed with outcome {}",
-            event.command, event.outcome
-        )),
+        message: None,
         identity: ProcessIdentity::default(),
         trace: None,
-        request_id,
-        correlation_id,
+        request_id: None,
+        correlation_id: None,
         outcome: Some(outcome),
         diagnostic: None,
         state_transition: None,
@@ -1025,7 +978,7 @@ mod adapter_tests {
 
         assert_eq!(
             atm_observability::logger_level_override_from(&env).expect("override"),
-            Some(SharedLevelFilter::Debug)
+            Some(atm_observability::RetainedLogLevel::Debug)
         );
     }
 

@@ -1,0 +1,71 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-AW-P1-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-AW-P1-001" ;
+  triage:title "retained_log_prune_runs_on_a_background_worker busy-polls a wall clock instead of using an explicit completion signal" ;
+  triage:description "quality-mgr (qa-pr1215-r2, flaky-test-qa sub-review): crates/atm-daemon-bootstrap/src/daemon_observability.rs:657 retained_log_prune_runs_on_a_background_worker races a real background worker against a 2-second wall-clock deadline using `while Instant::now() < deadline { ... thread::yield_now() ... }` — classic sleep-based/busy-poll synchronization, CPU-spinning, with no completion signal from the worker itself. This is NOT within fix/aw-readiness-easy's original scope (round-1's fix claim pointed at diagnostic_timeline.rs, which is confirmed clean — the actual unfixed busy-poll test lives in the sibling file daemon_observability.rs). Recommended fix: replace the wall-clock poll loop with an explicit completion signal (channel or Condvar) the same way arch-ctm just fixed PR #1211's diagnostics_route.rs QueryGate — a Condvar + wait_timeout_while with a hard-bounded timeout that is asserted (not silently swallowed), no busy-poll, nothing blocks forever." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-hygiene" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T18:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T18:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:qa-pr1215-r2 ;
+  triage:foundAt "2026-09-05T18:17:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-AW-P1-001/AW-P1-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FTQ-AW-P1-001/AW-P1-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/daemon_observability.rs" ;
+  triage:line 657 ;
+  triage:snippet "while Instant::now() < deadline { ... std::thread::yield_now() ... }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "aec9e5ed9" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/aec9e5ed9> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/aec9e5ed9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "aec9e5ed9" ;
+  triage:orderIndex 1 .
+
+# quality-mgr, 2026-09-05, qa-pr1215-r4: independently confirmed by req-qa and
+# flaky-test-qa on fix/aw-readiness-easy at 450f36b91. No Instant::now/yield_now
+# busy-poll remains anywhere in daemon_observability.rs; the completion signal
+# is a real Mutex<Option<LoggingHealthReport>> + Condvar set by the shutdown
+# worker thread, waited on via wait_timeout_while(Duration::from_secs(2), ...),
+# with both the signal (state.is_some()) and the timeout (!timed_out()) asserted.
+# just lint 36/36 passed in this worktree (bootstrapped by quality-mgr).
+
+# Developer fix evidence; QA retains authority to close the canonical finding.
+<urn:atm:triage:occurrence/FTQ-AW-P1-001/AW-P1-001-fixed-efc01fd3a>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/daemon_observability.rs" ;
+  triage:line 694 ;
+  triage:snippet "Condvar::wait_timeout_while waits for the background writer shutdown completion signal" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "efc01fd3a" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/efc01fd3a> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/efc01fd3a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "efc01fd3a" ;
+  triage:orderIndex 2 .

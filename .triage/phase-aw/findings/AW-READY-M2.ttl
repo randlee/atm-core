@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T18:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T16:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW1 ;
@@ -23,13 +25,19 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M2/AW1-MSG-001> ;
   triage:triageRecordVersion "1" .
 
+# quality-mgr, 2026-09-05, qa-pr1212-r2: RETAINED_FIELD_ALLOWLIST no longer
+# includes message/detail at all; three tests (ac5_removes_sensitive_fields_and_values,
+# retained_jsonl_and_json_projection_exclude_secret_substrings,
+# retained_free_text_never_persists_even_when_it_contains_a_secret) assert free-text
+# secrets never reach retained output. Independently confirmed by req-qa on
+# fix/aw-readiness-arch at 8af276eb3.
 <urn:atm:triage:occurrence/AW-READY-M2/AW1-MSG-001>
   a triage:Occurrence ;
   triage:file "crates/atm-observability/src/tracing_bridge.rs" ;
   triage:line 369 ;
   triage:snippet "if field.name() == message { self.message = value.as_str().map(ToOwned::to_owned); }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:occursIn <urn:atm:triage:worktree/aw1/7e61ad87e> .

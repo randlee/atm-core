@@ -20,6 +20,7 @@ from lint_boundaries import IO_FORBIDDEN_SOURCE_PATTERNS
 from lint_boundaries import parse_boundary_records
 from lint_boundaries import parse_simple_yaml_document
 from lint_boundaries import run
+from run_lint import build_tasks
 
 
 ROOT_MANIFEST = """\
@@ -199,6 +200,17 @@ notes = []
 
 
 class LintBoundariesTests(unittest.TestCase):
+    def test_declared_peer_dial_lint_rule_resolves_to_registered_runner(self) -> None:
+        records, parse_violations = parse_boundary_records(REPO_ROOT)
+        self.assertEqual(parse_violations, [])
+        runtime = next(
+            record
+            for record in records
+            if record.source_path == Path("boundaries/atm-http-runtime/http-runtime.toml")
+        )
+        self.assertIn("peer-dial-seam", runtime.lint_rules)
+        self.assertIn("peer-dial-seam", build_tasks(REPO_ROOT))
+
     def test_graft_shared_client_has_no_direct_interprocess_dependency(self) -> None:
         manifest = tomllib.loads(
             (REPO_ROOT / "crates/atm-graft/Cargo.toml").read_text(encoding="utf-8")

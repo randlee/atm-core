@@ -217,30 +217,20 @@ fn execute_diagnostic_prune(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     let cutoff = now_unix_ms - crate::DIAGNOSTIC_MAX_AGE_DAYS * 24 * 60 * 60 * 1_000;
-    let mut deleted = 0_u64;
-    loop {
-        let rows = connection
-            .execute(
-                "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events WHERE ts_unix_ms < ?1 ORDER BY id LIMIT ?2)",
-                params![cutoff, crate::DIAGNOSTIC_PRUNE_BATCH],
-            )
-            .map_err(|error| sqlite_error(target, "failed to prune expired diagnostic events", error))?;
-        deleted += rows as u64;
-        if rows < crate::DIAGNOSTIC_PRUNE_BATCH {
-            break;
-        }
+    let expired_rows = connection
+        .execute(
+            "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events WHERE ts_unix_ms < ?1 ORDER BY id LIMIT ?2)",
+            params![cutoff, crate::DIAGNOSTIC_PRUNE_BATCH],
+        )
+        .map_err(|error| sqlite_error(target, "failed to prune expired diagnostic events", error))?;
+    if expired_rows > 0 {
+        return Ok(WriteOpResult::DiagnosticsPruned(expired_rows as u64));
     }
-    loop {
-        let rows = connection.execute(
-            "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms ASC LIMIT ?1 OFFSET ?2)",
-            params![crate::DIAGNOSTIC_PRUNE_BATCH, crate::DIAGNOSTIC_MAX_ROWS],
-        ).map_err(|error| sqlite_error(target, "failed to prune excess diagnostic events", error))?;
-        deleted += rows as u64;
-        if rows == 0 {
-            break;
-        }
-    }
-    Ok(WriteOpResult::DiagnosticsPruned(deleted))
+    let excess_rows = connection.execute(
+        "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms DESC, id DESC LIMIT ?1 OFFSET ?2)",
+        params![crate::DIAGNOSTIC_PRUNE_BATCH, crate::DIAGNOSTIC_MAX_ROWS],
+    ).map_err(|error| sqlite_error(target, "failed to prune excess diagnostic events", error))?;
+    Ok(WriteOpResult::DiagnosticsPruned(excess_rows as u64))
 }
 
 fn execute_read_display_state(

@@ -135,7 +135,7 @@ impl PyGraftSession {
         action: &'static str,
         context: &RecoveryContext,
     ) -> super::observability::ObservabilityStatus {
-        self.emit_graft_event(
+        self.fallback_logger.record(
             "ATM_GRAFT_RECOVERY_ATTEMPT",
             [
                 ("action", action.to_owned()),
@@ -164,8 +164,10 @@ impl PyGraftSession {
         if let Some(code) = refresh_error_code {
             unavailable.push(("refresh_error_code", code));
         }
-        let mut status = self.emit_graft_event("ATM_GRAFT_DAEMON_UNAVAILABLE", unavailable);
-        status.merge(self.emit_graft_event(
+        let mut status = self
+            .fallback_logger
+            .record("ATM_GRAFT_DAEMON_UNAVAILABLE", unavailable);
+        status.merge(self.fallback_logger.record(
             "ATM_GRAFT_RECOVERY_RESULT",
             [
                 ("action", action.to_owned()),

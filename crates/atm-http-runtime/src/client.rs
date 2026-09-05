@@ -184,15 +184,79 @@ pub fn loopback_tcp_client(
 }
 
 /// Fetch one bounded JSON projection from the capability-authenticated
-/// loopback daemon.  This is deliberately a read-only escape hatch for
-/// runtime-owned auxiliary routes; consumers must not assemble daemon storage
-/// in-process to read those projections.
-pub async fn loopback_tcp_get_json(
+/// loopback daemon. Kept private to the crate: the one production consumer
+/// is [`diagnostics_query`], which owns the single typed route contract this
+/// primitive serves. Do not add a second untyped call site; add a typed
+/// method beside `diagnostics_query` instead.
+pub(crate) async fn loopback_tcp_get_json(
     endpoint_record_path: impl AsRef<Path>,
     path: String,
     request_timeout: Duration,
 ) -> Result<Vec<u8>, AtmError> {
     crate::loopback_read::get_json(endpoint_record_path.as_ref(), path, request_timeout).await
+}
+
+/// Typed client for the bounded, read-only `/v1/diagnostics` route.
+///
+/// This is the sole production entry point for querying the retained
+/// diagnostic timeline over the authenticated loopback connection; it owns
+/// query-string encoding and response decoding so callers (currently `atm
+/// log --source timeline`) never hand-assemble the route's path or parse its
+/// JSON body themselves.
+pub async fn diagnostics_query(
+    endpoint_record_path: impl AsRef<Path>,
+    query: atm_core::observability_counters::DiagnosticTimelineQuery,
+    request_timeout: Duration,
+) -> Result<atm_core::observability_counters::DiagnosticTimelineResponse, AtmError> {
+    let mut params = vec![format!(
+        "limit={}",
+        query
+            .limit
+            .unwrap_or(atm_core::observability_counters::DIAGNOSTIC_QUERY_MAX_LIMIT)
+    )];
+    if let Some(since) = query.since_unix_ms {
+        params.push(format!("since={since}"));
+    }
+    if let Some(until) = query.until_unix_ms {
+        params.push(format!("until={until}"));
+    }
+    if let Some(level) = query.level_at_least.as_deref() {
+        params.push(format!("level={}", percent_encode_query_value(level)));
+    }
+    if let Some(component) = query.component_prefix.as_deref() {
+        params.push(format!(
+            "component={}",
+            percent_encode_query_value(component)
+        ));
+    }
+    if let Some(cursor) = query.cursor.as_deref() {
+        params.push(format!("cursor={}", percent_encode_query_value(cursor)));
+    }
+    let body = loopback_tcp_get_json(
+        endpoint_record_path,
+        format!("/v1/diagnostics?{}", params.join("&")),
+        request_timeout,
+    )
+    .await?;
+    serde_json::from_slice(&body).map_err(|error| {
+        AtmError::daemon_unavailable("daemon returned an invalid diagnostic timeline response")
+            .with_cause(error)
+    })
+}
+
+/// Percent-encodes one query-string value using the unreserved set from
+/// RFC 3986 section 2.3; every other byte is escaped, which is always safe
+/// even though it is stricter than required for values that never carry
+/// `&`, `=`, or `%` (component names, cursor tokens, level names).
+fn percent_encode_query_value(raw: &str) -> String {
+    raw.bytes()
+        .flat_map(|byte| match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                vec![char::from(byte)]
+            }
+            _ => format!("%{byte:02X}").chars().collect(),
+        })
+        .collect()
 }
 
 /// Builds the shared typed client for one explicitly configured direct peer.

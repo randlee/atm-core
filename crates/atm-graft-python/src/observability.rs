@@ -2,17 +2,16 @@
 //!
 //! This module deliberately owns a satellite file. It never opens the
 //! daemon's canonical `atm.log.jsonl` file and it only serializes the fields
-//! named by `atm-observability`'s retained allowlist.
+//! named by `atm-core`'s retained allowlist.
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use atm_observability::{RETAINED_FIELD_ALLOWLIST, graft_fallback_log_path};
+use atm_core::observability::RETAINED_FIELD_ALLOWLIST;
 
 pub const GRAFT_FALLBACK_MAX_BYTES: u64 = 2 * 1024 * 1024;
 pub const GRAFT_FALLBACK_KEEP_FILES: usize = 3;
@@ -192,18 +191,10 @@ fn unix_millis() -> u128 {
         .as_millis()
 }
 
-pub(crate) fn fallback_path(log_dir: &Path) -> PathBuf {
-    graft_fallback_log_path(log_dir)
-}
-
 pub(crate) fn correlation_id() -> u64 {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT_ID: AtomicU64 = AtomicU64::new(1);
     NEXT_ID.fetch_add(1, Ordering::Relaxed)
-}
-
-pub(crate) fn new_logger(log_dir: &Path) -> Arc<GraftFallbackLogger> {
-    Arc::new(GraftFallbackLogger::new(fallback_path(log_dir)))
 }
 
 #[cfg(test)]
@@ -222,7 +213,7 @@ mod tests {
             "ATM_GRAFT_DAEMON_UNAVAILABLE",
             [
                 ("code", "ATM_GRAFT_DAEMON_UNAVAILABLE".to_owned()),
-                ("detail", "safe \"detail\"".to_owned()),
+                ("command", "safe \"command\"".to_owned()),
                 ("body", "must not appear".to_owned()),
             ],
         );
@@ -230,7 +221,7 @@ mod tests {
         let text =
             fs::read_to_string(tempdir.path().join("atm-graft-fallback.jsonl")).expect("log");
         assert!(text.contains("\"origin\":\"graft\""));
-        assert!(text.contains("safe \\\"detail\\\""));
+        assert!(text.contains("safe \\\"command\\\""));
         assert!(!text.contains("must not appear"));
     }
 
@@ -241,7 +232,7 @@ mod tests {
         let logger = GraftFallbackLogger::new(path.clone());
         let detail = "x".repeat(GRAFT_FALLBACK_MAX_BYTES as usize / 2);
         for _ in 0..8 {
-            let _ = logger.record("TEST", [("detail", detail.clone())]);
+            let _ = logger.record("TEST", [("command", detail.clone())]);
         }
         let files = (0..GRAFT_FALLBACK_KEEP_FILES)
             .map(|index| {

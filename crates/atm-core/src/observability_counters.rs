@@ -2,6 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 
+// Re-exported so every consumer of the wire-level diagnostic timeline types
+// (the HTTP route, the typed client, and the CLI) shares one definition of
+// the effective page-size cap instead of each layer hard-coding its own.
+pub use atm_storage::{DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT};
+
 /// Copyable retained-diagnostic counter snapshot. Timeline values remain zero
 /// until AW.2 installs its timeline adapter.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -100,7 +105,34 @@ pub struct DiagnosticTimelineRecord {
 }
 
 /// Dedicated read-only response contract for `/v1/diagnostics`.
+///
+/// `truncated` and `next_cursor` are additive fields: a client that only
+/// reads `records` (as `atm log` did before cursor pagination existed)
+/// continues to work unchanged, and an older client deserializing a newer
+/// response tolerates them via `#[serde(default)]`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DiagnosticTimelineResponse {
     pub records: Vec<DiagnosticTimelineRecord>,
+    /// `true` when more rows exist beyond this page; page further with
+    /// `next_cursor`.
+    #[serde(default)]
+    pub truncated: bool,
+    /// Opaque cursor identifying the last record on this page. Present
+    /// whenever `truncated` is `true`.
+    #[serde(default)]
+    pub next_cursor: Option<String>,
+}
+
+/// Typed request parameters for the bounded `/v1/diagnostics` timeline
+/// query, shared by the typed client and the HTTP route so the query-string
+/// encoding lives in exactly one place.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DiagnosticTimelineQuery {
+    pub since_unix_ms: Option<i64>,
+    pub until_unix_ms: Option<i64>,
+    pub level_at_least: Option<String>,
+    pub component_prefix: Option<String>,
+    pub limit: Option<usize>,
+    /// Opaque cursor returned as `next_cursor` by a previous page.
+    pub cursor: Option<String>,
 }

@@ -1011,6 +1011,7 @@ mod tests {
                     origin: "tracing".to_owned(),
                     message: "diagnostic".to_owned(),
                     detail: None,
+                    id: 0,
                 }]))
                 .expect("diagnostic queue capacity is exactly eight batches");
         }
@@ -1063,6 +1064,7 @@ mod tests {
                     origin: "tracing".to_owned(),
                     message: "diagnostic".to_owned(),
                     detail: None,
+                    id: 0,
                 }]))
                 .expect("fill the real bounded diagnostic channel");
         }
@@ -1103,6 +1105,69 @@ mod tests {
     }
 
     #[test]
+    fn primary_write_latency_stays_bounded_under_a_full_prune_backlog() {
+        const PRIMARY_WRITE_DEADLINE: Duration = Duration::from_millis(100);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("test runtime");
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:writer-primary-over-prune-backlog-{}?mode=memory&cache=shared",
+                NEXT_TEST_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_writer_connection_for_target(&target).expect("writer connection");
+        ensure_schema(&mut connection, &target).expect("schema");
+        let mut cache = stmt_cache::WriterStatementCache;
+
+        let (primary_sender, mut primary_receiver) = tokio::sync::mpsc::channel(1);
+        let (diagnostic_sender, mut diagnostic_receiver) =
+            tokio::sync::mpsc::channel(DIAGNOSTIC_QUEUE_BATCHES);
+        for _ in 0..DIAGNOSTIC_QUEUE_BATCHES {
+            let (reply, _receiver) = mpsc::sync_channel(1);
+            diagnostic_sender
+                .try_send(DiagnosticWriterMessage::Prune {
+                    now_unix_ms: i64::MAX,
+                    reply,
+                })
+                .expect("fill the lower-priority prune backlog");
+        }
+        assert!(matches!(
+            diagnostic_sender.try_send(DiagnosticWriterMessage::Prune {
+                now_unix_ms: i64::MAX,
+                reply: mpsc::sync_channel(1).0,
+            }),
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_))
+        ));
+
+        let (primary, reply) = queued_upsert(message("atm:primary-over-prune-backlog"));
+        primary_sender
+            .try_send(WriterMessage::Submit {
+                op: primary.op,
+                reply: primary.reply,
+            })
+            .expect("admit primary write while prune lane is saturated");
+
+        let started = Instant::now();
+        let Some(WriterWork::Primary(primary)) = runtime.block_on(receive_next_work(
+            &mut primary_receiver,
+            &mut diagnostic_receiver,
+            false,
+        )) else {
+            panic!("a full prune backlog must not prevent primary selection");
+        };
+        process_batch(&target, &mut connection, &mut cache, vec![primary]);
+        assert!(
+            started.elapsed() <= PRIMARY_WRITE_DEADLINE,
+            "primary write must complete within its hard bound while prune work is queued"
+        );
+        assert!(matches!(
+            reply.recv().expect("primary mailbox reply"),
+            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+        ));
+    }
+
+    #[test]
     fn ac7_real_diagnostic_channel_saturation_persists_a_bridged_row_after_drain() {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .build()
@@ -1131,6 +1196,7 @@ mod tests {
             origin: "tracing".to_owned(),
             message: "bridged diagnostic".to_owned(),
             detail: None,
+            id: 0,
         };
         diagnostic_sender
             .try_send(DiagnosticWriterMessage::Records(vec![bridged.clone()]))

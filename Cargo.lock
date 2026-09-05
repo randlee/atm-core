@@ -216,7 +216,6 @@ dependencies = [
  "chrono",
  "fs4",
  "peer-tls",
- "sc-observability-types",
  "serde_json",
  "serial_test",
  "tempfile",
@@ -269,7 +268,6 @@ version = "1.5.1"
 dependencies = [
  "agent-team-mail-core",
  "atm-graft",
- "atm-observability",
  "pyo3",
  "serde_json",
  "tempfile",

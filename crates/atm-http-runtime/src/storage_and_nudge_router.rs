@@ -808,15 +808,14 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
             let mut committed = self.commit_write(request, deadline).await?;
-            if ingress == AuthenticatedIngress::Local
-                && committed.newly_persisted
+            let is_remote_recipient = ingress == AuthenticatedIngress::Local
                 && committed
                     .canonical_request
                     .to
                     .as_ref()
                     .and_then(|recipient| recipient.host())
-                    .is_some()
-            {
+                    .is_some();
+            if committed.newly_persisted && is_remote_recipient {
                 self.dispatch_resolved_peer_write(
                     &committed.canonical_request,
                     committed.message_id,
@@ -826,7 +825,10 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                 )
                 .await?;
             }
-            if committed.newly_persisted {
+            if committed.newly_persisted && !is_remote_recipient {
+                // A host-qualified local admission has already been handed to
+                // its peer above. Its receiver hook belongs to that peer's
+                // ingress, not to this sender's local roster.
                 let hook = self.clone();
                 let hook_task = async move {
                     hook.emit_received_hook(committed.received_hook_dispatches, deadline)
@@ -4219,7 +4221,9 @@ mod tests {
             .expect("ephemeral remote direct peer listener is bound")
             .port();
 
-        let mut local = fixture(true, None, None);
+        // The sender need not carry a local roster entry for a recipient
+        // resolved to a remote host. That peer owns receiver-hook selection.
+        let mut local = fixture(false, None, None);
         local.router = local
             .router
             .clone()
@@ -4242,10 +4246,23 @@ mod tests {
             )
             .await
             .expect("local daemon owns host-qualified delivery");
-        assert!(matches!(
-            response.into_inner(),
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
-        ));
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+        else {
+            panic!("local daemon must own host-qualified delivery");
+        };
+        assert!(
+            outcome.warnings.is_empty(),
+            "a sender-local missing roster entry is not a failed remote receiver hook"
+        );
+        assert!(
+            local
+                .received_hook
+                .emitted_ids
+                .lock()
+                .expect("inspect local hook emissions")
+                .is_empty(),
+            "the sender must not run a receiver hook for a remote recipient"
+        );
         assert_eq!(
             remote
                 .message_store
@@ -4266,6 +4283,16 @@ mod tests {
             .finish()
             .await
             .expect("remote runtime drains");
+        assert_eq!(
+            remote
+                .received_hook
+                .emitted_ids
+                .lock()
+                .expect("inspect remote hook emissions")
+                .len(),
+            1,
+            "the peer ingress owns exactly one receiver hook"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

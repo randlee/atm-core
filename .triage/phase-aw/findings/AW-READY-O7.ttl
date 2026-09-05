@@ -100,3 +100,101 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:orderIndex 1 .
+
+# Developer follow-up on fix/aw-readiness-easy, PR #1215, 2026-09-05:
+# C9 resolves to the registered peer-dial-seam runner and C15's two pure
+# observability wrappers are removed, both in d9fa67fcc. The auxiliary-route
+# admission-layer portion (C12/C14) remains open and is owned by
+# fix/aw-readiness-api; C10 remains open and is owned by
+# fix/aw-readiness-contracts. This branch deliberately does not take those
+# owned items. QA owns closure for the fixed occurrences.
+#
+# quality-mgr correction, 2026-09-05, qa-pr1215-r2: three independent
+# reviewers (req-qa, arch-qa, ruthless-boundary-qa) confirm C9 is genuinely
+# fixed -- closed below. C15 is NOT fixed: this dev note's cited evidence
+# (crates/atm-graft-python/src/observability.rs:195, fallback_path/new_logger)
+# is a real but unrelated wrapper removal. The two thin one-line wrappers the
+# O7 finding's item (9) actually names are crates/atm/src/main.rs:333-335
+# (logger_root_for_log_dir) and :361-363 (logger_level_override), pure
+# pass-throughs over the shared_-aliased atm_observability imports at
+# main.rs:32-34 -- both unmodified at d9fa67fcc. Reopened against the correct
+# file/line below; the graft-python occurrence is retained as a valid but
+# separate closed item, not a substitute for C15.
+<urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-d9fa67fcc-c9>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-http-runtime/http-runtime.toml" ;
+  triage:line 48 ;
+  triage:snippet "lint_rules = [\"LINT-BOUNDARY-HTTP-RUNTIME-DEPENDENCIES\", \"peer-dial-seam\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
+
+<urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-d9fa67fcc-graftpy-wrappers>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/observability.rs" ;
+  triage:line 195 ;
+  triage:snippet "thin fallback_path/new_logger wrappers removed; callers construct the logger directly" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
+
+<urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-c15-mainrs>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/main.rs" ;
+  triage:line 333 ;
+  triage:snippet "fn logger_root_for_log_dir(log_dir: &Path) -> Result<PathBuf, AtmError> { shared_logger_root_for_log_dir(log_dir) }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:orderIndex 2 .
+
+# Developer follow-up for corrected C15 target, qa-pr1215-r2, 2026-09-05:
+# the two authoritative main.rs passthroughs are removed; call sites now use
+# atm_observability directly. The unrelated graft-python wrapper occurrence
+# above remains separately fixed. QA owns closure.
+#
+# quality-mgr, 2026-09-05, qa-pr1215-r3: independently confirmed via direct
+# diff (d9fa67fcc..f3345fa70) -- both wrapper functions removed from
+# crates/atm/src/main.rs, no shared_logger_* aliasing remains, call sites at
+# main.rs:303-304,344 use atm_observability::{logger_root_for_log_dir,
+# logger_level_override} directly. C15 genuinely closed. Closing below.
+<urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-c15-mainrs-qa-r3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/main.rs" ;
+  triage:line 303 ;
+  triage:snippet "LoggerConfig::default_for(service_name.clone(), logger_root_for_log_dir(log_dir)?)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "f3345fa70" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/f3345fa70> .
+
+<urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-c15-mainrs-level-qa-r3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/main.rs" ;
+  triage:line 344 ;
+  triage:snippet "with_max_level(atm_observability::logger_level_override()?.unwrap_or(SharedLevelFilter::Info))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "f3345fa70" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/f3345fa70> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/f3345fa70>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "f3345fa70" ;
+  triage:orderIndex 3 .

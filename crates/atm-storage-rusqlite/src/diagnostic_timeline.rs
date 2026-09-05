@@ -9,7 +9,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use atm_storage::{
-    AtmError, DiagnosticEvent, DiagnosticQuery, DiagnosticRecordError, DiagnosticTimelineStore,
+    AtmError, DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticEvent,
+    DiagnosticQuery, DiagnosticRecordError, DiagnosticTimelineStore,
 };
 use rusqlite::params;
 
@@ -23,6 +24,24 @@ pub const DIAGNOSTIC_MAX_ROWS: usize = 20_000;
 pub const DIAGNOSTIC_MAX_AGE_DAYS: i64 = 7;
 pub const DIAGNOSTIC_PRUNE_BATCH: usize = 1000;
 pub const DIAGNOSTIC_PRUNE_CHECK_EVERY: usize = 500;
+
+fn diagnostic_level_rank(level: &str) -> Option<i64> {
+    match level.to_ascii_lowercase().as_str() {
+        "trace" => Some(0),
+        "debug" => Some(1),
+        "info" => Some(2),
+        "warn" => Some(3),
+        "error" => Some(4),
+        _ => None,
+    }
+}
+
+fn escape_like_prefix(prefix: &str) -> String {
+    prefix
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
 
 #[derive(Clone)]
 pub struct SqliteDiagnosticTimeline {
@@ -84,27 +103,63 @@ impl DiagnosticTimelineStore for SqliteDiagnosticTimeline {
 
     fn query(&self, query: &DiagnosticQuery) -> Result<Vec<DiagnosticEvent>, AtmError> {
         self.db.with_connection(|connection| {
-            let limit = query.limit.unwrap_or(100).min(1_000) as i64;
-            let mut statement = connection.prepare("SELECT ts_unix_ms, level, component, code, correlation_id, origin, message, detail FROM diagnostic_events WHERE (?1 IS NULL OR ts_unix_ms >= ?1) AND (?2 IS NULL OR ts_unix_ms <= ?2) AND (?3 IS NULL OR level >= ?3) AND (?4 IS NULL OR component LIKE (?4 || '%')) ORDER BY ts_unix_ms DESC LIMIT ?5").map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+            // The route layer requests up to `DIAGNOSTIC_QUERY_MAX_LIMIT + 1`
+            // rows (one extra "peek" row) to detect truncation without a
+            // second query; clamp the ceiling here to match so a caller can
+            // never bypass the shared cap by asking for more directly.
+            let limit = query
+                .limit
+                .unwrap_or(DIAGNOSTIC_QUERY_DEFAULT_LIMIT)
+                .min(DIAGNOSTIC_QUERY_MAX_LIMIT + 1) as i64;
+            let (cursor_ts, cursor_id) = query
+                .cursor
+                .map(|cursor| (Some(cursor.ts_unix_ms), Some(cursor.id)))
+                .unwrap_or((None, None));
+            let level_at_least = query
+                .level_at_least
+                .as_deref()
+                .map(|level| {
+                    diagnostic_level_rank(level)
+                        .ok_or_else(|| AtmError::mailbox_read("unknown diagnostic level filter"))
+                })
+                .transpose()?;
+            let component_prefix = query.component_prefix.as_deref().map(escape_like_prefix);
+            let mut statement = connection
+                .prepare(
+                    "SELECT id, ts_unix_ms, level, component, code, correlation_id, origin, \
+                     message, detail FROM diagnostic_events \
+                     WHERE (?1 IS NULL OR ts_unix_ms >= ?1) \
+                     AND (?2 IS NULL OR ts_unix_ms <= ?2) \
+                     AND (?3 IS NULL OR CASE lower(level) \
+                         WHEN 'trace' THEN 0 WHEN 'debug' THEN 1 WHEN 'info' THEN 2 \
+                         WHEN 'warn' THEN 3 WHEN 'error' THEN 4 ELSE -1 END >= ?3) \
+                     AND (?4 IS NULL OR component LIKE (?4 || '%') ESCAPE '\\') \
+                     AND (?5 IS NULL OR ts_unix_ms < ?5 OR (ts_unix_ms = ?5 AND id < ?6)) \
+                     ORDER BY ts_unix_ms DESC, id DESC LIMIT ?7",
+                )
+                .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
             statement
                 .query_map(
                     params![
                         query.since,
                         query.until,
-                        query.level_at_least,
-                        query.component_prefix,
+                        level_at_least,
+                        component_prefix,
+                        cursor_ts,
+                        cursor_id,
                         limit
                     ],
                     |row| {
                         Ok(DiagnosticEvent {
-                            ts_unix_ms: row.get(0)?,
-                            level: row.get(1)?,
-                            component: row.get(2)?,
-                            code: row.get(3)?,
-                            correlation_id: row.get(4)?,
-                            origin: row.get(5)?,
-                            message: row.get(6)?,
-                            detail: row.get(7)?,
+                            id: row.get(0)?,
+                            ts_unix_ms: row.get(1)?,
+                            level: row.get(2)?,
+                            component: row.get(3)?,
+                            code: row.get(4)?,
+                            correlation_id: row.get(5)?,
+                            origin: row.get(6)?,
+                            message: row.get(7)?,
+                            detail: row.get(8)?,
                         })
                     },
                 )
@@ -166,6 +221,7 @@ mod tests {
                 origin: "tracing".to_owned(),
                 message: "bounded diagnostic".to_owned(),
                 detail: None,
+                id: 0,
             }])
             .expect("non-blocking diagnostic offer");
         // The diagnostic writer lane is a single FIFO channel: `prune()`
@@ -207,19 +263,208 @@ mod tests {
             })
             .expect("seed diagnostic fixture");
 
-        let deleted = timeline.prune(FIXTURE_ROWS as i64).expect("prune fixture");
-        let retained: i64 = timeline
+        let mut deleted = 0;
+        while deleted < (FIXTURE_ROWS - DIAGNOSTIC_MAX_ROWS) as u64 {
+            let pass = timeline.prune(FIXTURE_ROWS as i64).expect("prune fixture");
+            assert!(pass > 0, "each retention pass must make progress");
+            assert!(
+                pass <= crate::DIAGNOSTIC_PRUNE_BATCH as u64,
+                "one writer-lane maintenance pass must remain bounded"
+            );
+            deleted += pass;
+        }
+        let (retained, oldest_ts, newest_ts): (i64, i64, i64) = timeline
             .db
             .with_connection(|connection| {
                 connection
-                    .query_row("SELECT COUNT(*) FROM diagnostic_events", [], |row| {
-                        row.get(0)
-                    })
+                    .query_row(
+                        "SELECT COUNT(*), MIN(ts_unix_ms), MAX(ts_unix_ms) FROM diagnostic_events",
+                        [],
+                        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                    )
                     .map_err(|error| AtmError::mailbox_read(error.to_string()))
             })
             .expect("count retained diagnostics");
 
         assert_eq!(deleted, (FIXTURE_ROWS - DIAGNOSTIC_MAX_ROWS) as u64);
         assert_eq!(retained, DIAGNOSTIC_MAX_ROWS as i64);
+        assert_eq!(oldest_ts, (FIXTURE_ROWS - DIAGNOSTIC_MAX_ROWS) as i64);
+        assert_eq!(newest_ts, (FIXTURE_ROWS - 1) as i64);
+    }
+
+    #[test]
+    fn query_clamps_a_requested_limit_above_the_shared_max_plus_peek_row() {
+        let directory = tempdir().expect("temporary database directory");
+        let timeline = SqliteDiagnosticTimeline::open(directory.path().join("mail.db"))
+            .expect("timeline opens and migrates");
+        timeline
+            .db
+            .with_connection(|connection| {
+                for index in 0..10 {
+                    connection
+                        .execute(
+                            "INSERT INTO diagnostic_events (ts_unix_ms, level, component, origin, message) VALUES (?1, 'info', 'fixture', 'test', 'fixture')",
+                            params![index as i64],
+                        )
+                        .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                }
+                Ok(())
+            })
+            .expect("seed diagnostic fixture");
+
+        let rows = timeline
+            .query(&DiagnosticQuery {
+                limit: Some(50_000),
+                ..DiagnosticQuery::default()
+            })
+            .expect("query with an out-of-range limit");
+        assert_eq!(rows.len(), 10, "clamp must never drop in-range rows");
+    }
+
+    #[test]
+    fn cursor_pagination_visits_every_row_exactly_once_in_stable_order() {
+        use atm_storage::DiagnosticCursor;
+
+        const FIXTURE_ROWS: i64 = 25;
+        const PAGE_SIZE: usize = 4;
+        let directory = tempdir().expect("temporary database directory");
+        let timeline = SqliteDiagnosticTimeline::open(directory.path().join("mail.db"))
+            .expect("timeline opens and migrates");
+        timeline
+            .db
+            .with_connection(|connection| {
+                for index in 0..FIXTURE_ROWS {
+                    // Two rows deliberately share one timestamp to exercise
+                    // the `(ts_unix_ms, id)` tie-break.
+                    let ts = index / 2;
+                    connection
+                        .execute(
+                            "INSERT INTO diagnostic_events (ts_unix_ms, level, component, origin, message) VALUES (?1, 'info', 'fixture', 'test', 'fixture')",
+                            params![ts],
+                        )
+                        .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                }
+                Ok(())
+            })
+            .expect("seed diagnostic fixture");
+
+        let mut seen_ids = Vec::new();
+        let mut cursor: Option<DiagnosticCursor> = None;
+        loop {
+            let rows = timeline
+                .query(&DiagnosticQuery {
+                    limit: Some(PAGE_SIZE),
+                    cursor,
+                    ..DiagnosticQuery::default()
+                })
+                .expect("paginated query");
+            if rows.is_empty() {
+                break;
+            }
+            assert!(
+                rows.len() <= PAGE_SIZE,
+                "a page must never exceed its requested size"
+            );
+            seen_ids.extend(rows.iter().map(|row| row.id));
+            let last = rows.last().expect("non-empty page has a last row");
+            cursor = Some(DiagnosticCursor {
+                ts_unix_ms: last.ts_unix_ms,
+                id: last.id,
+            });
+            if rows.len() < PAGE_SIZE {
+                break;
+            }
+        }
+
+        seen_ids.sort_unstable();
+        seen_ids.dedup();
+        assert_eq!(
+            seen_ids.len(),
+            FIXTURE_ROWS as usize,
+            "keyset pagination must visit every row exactly once, including same-timestamp ties"
+        );
+    }
+
+    #[test]
+    fn level_filter_uses_severity_rank_and_includes_higher_levels() {
+        let directory = tempdir().expect("temporary database directory");
+        let timeline = SqliteDiagnosticTimeline::open(directory.path().join("mail.db"))
+            .expect("timeline opens and migrates");
+        timeline
+            .db
+            .with_connection(|connection| {
+                for (timestamp, level) in [(1, "error"), (2, "warn"), (3, "info"), (4, "trace")] {
+                    connection
+                        .execute(
+                            "INSERT INTO diagnostic_events (ts_unix_ms, level, component, origin, message) VALUES (?1, ?2, 'level-test', 'test', 'fixture')",
+                            params![timestamp, level],
+                        )
+                        .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                }
+                Ok(())
+            })
+            .expect("seed level fixture");
+
+        let info = timeline
+            .query(&DiagnosticQuery {
+                level_at_least: Some("info".to_owned()),
+                limit: Some(10),
+                ..DiagnosticQuery::default()
+            })
+            .expect("query info threshold");
+        assert_eq!(
+            info.iter()
+                .map(|event| event.level.as_str())
+                .collect::<Vec<_>>(),
+            vec!["info", "warn", "error"]
+        );
+
+        let warn = timeline
+            .query(&DiagnosticQuery {
+                level_at_least: Some("warn".to_owned()),
+                limit: Some(10),
+                ..DiagnosticQuery::default()
+            })
+            .expect("query warn threshold");
+        assert_eq!(
+            warn.iter()
+                .map(|event| event.level.as_str())
+                .collect::<Vec<_>>(),
+            vec!["warn", "error"]
+        );
+    }
+
+    #[test]
+    fn component_prefix_escapes_like_wildcards() {
+        let directory = tempdir().expect("temporary database directory");
+        let timeline = SqliteDiagnosticTimeline::open(directory.path().join("mail.db"))
+            .expect("timeline opens and migrates");
+        timeline
+            .db
+            .with_connection(|connection| {
+                for (timestamp, component) in [
+                    (1, "component%literal_name"),
+                    (2, "componentXliteral_name"),
+                ] {
+                    connection
+                        .execute(
+                            "INSERT INTO diagnostic_events (ts_unix_ms, level, component, origin, message) VALUES (?1, 'info', ?2, 'test', 'fixture')",
+                            params![timestamp, component],
+                        )
+                        .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                }
+                Ok(())
+            })
+            .expect("seed component fixture");
+
+        let rows = timeline
+            .query(&DiagnosticQuery {
+                component_prefix: Some("component%literal_".to_owned()),
+                limit: Some(10),
+                ..DiagnosticQuery::default()
+            })
+            .expect("query escaped component prefix");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].component, "component%literal_name");
     }
 }

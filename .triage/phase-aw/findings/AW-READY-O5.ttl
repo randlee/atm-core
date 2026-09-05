@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T18:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T16:46:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW1 ;
@@ -25,13 +27,24 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O5/aw1-o3> ;
   triage:triageRecordVersion "1" .
 
+# quality-mgr, 2026-09-05, qa-pr1212-r2: RetainedEvent.level is now the
+# ATM-owned RetainedLevel facade enum (tracing_bridge.rs:70-104), no raw
+# sc_observability_types::Level on any public field; RULE-001
+# (.claude/agents/arch-qa.md:59-67) updated to name atm-observability as
+# current owner plus atm/src/main.rs as the sole binary-entry-point exception.
+# atm-graft-python's GraftFallbackLogger now routes through the shared
+# atm_observability::sanitize_retained_fields instead of a duplicated filter.
+# Workspace-wide grep swept by arch-qa/ruthless-boundary-qa/quality-mgr found
+# no other raw-type leak. Independently confirmed on fix/aw-readiness-arch at
+# 8af276eb3.
+
 <urn:atm:triage:occurrence/AW-READY-O5/aw1-o1>
   a triage:Occurrence ;
   triage:file "crates/atm-observability/src/lib.rs" ;
   triage:line 18 ;
   triage:snippet "pub struct RetainedLogger(sc_observability::Logger);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:occursIn <urn:atm:triage:worktree/aw-integrate/7e61ad87e> .
@@ -41,8 +54,8 @@
   triage:file "crates/atm-observability/src/tracing_bridge.rs" ;
   triage:line 32 ;
   triage:snippet "pub const RETAINED_FIELD_ALLOWLIST: &[&str] = &[" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:occursIn <urn:atm:triage:worktree/aw-integrate/7e61ad87e> .
@@ -52,8 +65,8 @@
   triage:file ".claude/agents/arch-qa.md" ;
   triage:line 59 ;
   triage:snippet "RULE-001: No direct `sc-observability` imports in library crates" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:occursIn <urn:atm:triage:worktree/aw-integrate/7e61ad87e> .

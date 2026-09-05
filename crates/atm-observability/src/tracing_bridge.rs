@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
+use atm_core::observability::RETAINED_FIELD_ALLOWLIST;
 use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
 use sc_observability_types::{
     ActionName, CorrelationId, Level, LogEvent, ProcessIdentity, SchemaVersion, ServiceName,
@@ -18,44 +19,49 @@ use tracing_subscriber::{Layer, Registry};
 
 use crate::{RetainedLogOffer, RetainedLogger};
 
-/// Canonical retained event file shared by daemon and CLI projections.
-pub const CANONICAL_LOG_FILE_NAME: &str = "atm.log.jsonl";
-/// AW.4's separate graft fallback satellite file.
-pub const GRAFT_FALLBACK_LOG_FILE_NAME: &str = "atm-graft-fallback.jsonl";
 /// INFO targets deliberately retained in addition to every WARN and ERROR.
 pub const RETAINED_INFO_TARGETS: &[&str] = &[
     "atm_daemon_bootstrap::lifecycle",
     "atm_http_runtime::listener",
     "atm_storage_rusqlite::maintenance",
 ];
-/// The redaction boundary: only these structured keys may leave `tracing`.
-pub const RETAINED_FIELD_ALLOWLIST: &[&str] = &[
-    "ts",
-    "level",
-    "component",
-    "code",
-    "action",
-    "correlation_id",
-    "outcome",
-    "elapsed_ms",
-    "attempt",
-    "strategy",
-    "endpoint_kind",
-    "failure_class",
-    "refresh_error_code",
-    "error_layer",
-    "origin",
-    "message",
-    "detail",
-];
-
 /// JSON-compatible value carried to the optional AW.2 diagnostic timeline.
 pub type FieldValue = Value;
+
+/// ATM-owned severity vocabulary for retained diagnostics.
+///
+/// This is intentionally distinct from the observability backend's `Level`:
+/// consumers of the facade should not need that backend crate to evaluate a
+/// retained event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RetainedLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl RetainedLevel {
+    pub const fn is_info(self) -> bool {
+        matches!(self, Self::Info)
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Trace => "trace",
+            Self::Debug => "debug",
+            Self::Info => "info",
+            Self::Warn => "warn",
+            Self::Error => "error",
+        }
+    }
+}
 
 /// One allowlisted, already-redacted event as the bridge saw it.
 pub struct RetainedEvent<'a> {
     pub ts_unix_ms: i64,
-    pub level: Level,
+    pub level: RetainedLevel,
     pub component: &'a str,
     pub code: Option<&'a str>,
     pub correlation_id: Option<&'a str>,
@@ -258,7 +264,7 @@ impl TracingBridgeLayer {
             let event = RetainedEvent {
                 ts_unix_ms: retained.timestamp.into_inner().unix_timestamp_nanos() as i64
                     / 1_000_000,
-                level: retained.level,
+                level: retained_level(retained.level),
                 component: &retained.component,
                 code,
                 correlation_id: correlation_id.as_ref().map(|value| value.as_str()),
@@ -290,7 +296,7 @@ impl RetainedTracingEvent {
         event.record(&mut visitor);
         let component = event.metadata().target().to_string();
         let origin = EventOrigin::from_field(visitor.take_string("origin"));
-        let message = visitor.message.take().unwrap_or_default();
+        let message = String::new();
         let fields = visitor.into_fields(&component, origin.as_str());
         Self {
             timestamp: Timestamp::now_utc(),
@@ -359,16 +365,23 @@ fn map_level(level: &TracingLevel) -> Level {
     }
 }
 
+fn retained_level(level: Level) -> RetainedLevel {
+    match level {
+        Level::Trace => RetainedLevel::Trace,
+        Level::Debug => RetainedLevel::Debug,
+        Level::Info => RetainedLevel::Info,
+        Level::Warn => RetainedLevel::Warn,
+        Level::Error => RetainedLevel::Error,
+    }
+}
+
 #[derive(Default)]
 struct RetainedVisitor {
-    message: Option<String>,
     fields: BTreeMap<&'static str, FieldValue>,
 }
 impl RetainedVisitor {
     fn keep(&mut self, field: &Field, value: FieldValue) {
-        if field.name() == "message" {
-            self.message = value.as_str().map(ToOwned::to_owned);
-        } else if let Some(key) = RETAINED_FIELD_ALLOWLIST
+        if let Some(key) = RETAINED_FIELD_ALLOWLIST
             .iter()
             .copied()
             .find(|key| *key == field.name())
@@ -416,6 +429,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
+    use serde_json::Value;
     use tempfile::TempDir;
     use tracing_subscriber::prelude::*;
 
@@ -425,7 +439,7 @@ mod tests {
     fn bridge() -> (TempDir, Arc<TracingBridgeLayer>) {
         let tempdir = TempDir::new().expect("tempdir");
         let logger = build_retained_logger(
-            sc_observability_types::ServiceName::new("atm").expect("service"),
+            "atm",
             &tempdir.path().join("logs"),
             RetainedLogPolicy {
                 rotation_max_bytes: 1024 * 1024,
@@ -567,6 +581,49 @@ mod tests {
         ] {
             assert!(!content.contains(secret), "secret leaked: {content}");
         }
+    }
+
+    #[test]
+    fn retained_jsonl_and_json_projection_exclude_secret_substrings() {
+        let (tempdir, bridge) = bridge();
+        with_bridge(
+            &bridge,
+            || tracing::warn!(target: "atm_http_runtime::delivery", command = "send", body = "body-secret", token = "token-secret", "free-text-secret"),
+        );
+
+        let jsonl = lines(&tempdir, &bridge, 1);
+        let retained: Value =
+            serde_json::from_str(jsonl.lines().next().expect("retained JSONL row"))
+                .expect("valid retained JSONL");
+        let cli_json = serde_json::to_string(&retained).expect("serialize JSON projection");
+
+        for secret in ["body-secret", "token-secret", "free-text-secret"] {
+            assert!(!jsonl.contains(secret), "secret leaked to JSONL: {jsonl}");
+            assert!(
+                !cli_json.contains(secret),
+                "secret leaked to JSON projection: {cli_json}"
+            );
+        }
+        assert!(cli_json.contains("send"), "allowlisted command is retained");
+    }
+
+    #[test]
+    fn retained_free_text_never_persists_even_when_it_contains_a_secret() {
+        let (tempdir, bridge) = bridge();
+        with_bridge(
+            &bridge,
+            || tracing::warn!(target: "atm_http_runtime::delivery", "delivery failed for token=free-text-secret"),
+        );
+
+        let content = lines(&tempdir, &bridge, 1);
+        assert!(
+            !content.contains("free-text-secret"),
+            "secret leaked: {content}"
+        );
+        assert!(
+            !content.contains("delivery failed"),
+            "message leaked: {content}"
+        );
     }
 
     #[test]

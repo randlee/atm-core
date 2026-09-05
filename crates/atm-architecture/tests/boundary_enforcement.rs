@@ -3351,7 +3351,7 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     );
     assert!(
         router.contains("let newly_persisted = prepared.is_newly_persisted();")
-            && router.contains("if committed.newly_persisted {"),
+            && router.contains("if committed.newly_persisted"),
         "the one hook-routing decision must state the new-versus-idempotent persistence disposition explicitly"
     );
     assert_eq!(
