@@ -42,3 +42,38 @@ triage:a4 a triage:Assignment ;
     triage:ofSprint triage:AW5 ;
     triage:assignedTo "cipher" ;
     triage:assignedAt "2026-09-05T02:56:43Z"^^xsd:dateTime .
+# AW.1 merged: PR #1176 -> integrate/phase-aw as 7a1346e16 (qa-pr1176-r4 PASS @ 846a2a6c9, CI 19/19).
+# AW.1 non-blocking findings: fixed on feature/aw1-tracing-bridge (quality-mgr closed all
+# records at integrate/phase-aw 08a39ef55, msg 01M1QPF2K3DHARNP0JJVAH004N; qa-pr1176-r4 PASS
+# at 846a2a6c9, msg 01M1QQ4FGGEJZGA8A94CYNZHCZ). Resolutions appended only after PR #1176
+# merged into integrate/phase-aw (7a1346e16), so every fix commit is an ancestor.
+triage:r1 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-RBP-F001> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+triage:r2 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-RBP-F002> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+triage:r3 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-RBQA-F002> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+triage:r4 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-RBP-F003> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+triage:r5 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-RBP-F004> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+triage:r6 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-QA-004> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+triage:r7 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-QA-005> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+# AW.2 dev completion: arch-ctm msgs 01M1QR37EK18V3KFKMCJ4CH0HT (1af79f210) + 01M1QR4SM1685RQDWJJTR0JEW5 (d3eee516b); bench-smoke requested from fenix@rand-m5, qa-pr1179-r4 in flight.
+triage:c3 a triage:Completion ;
+    triage:ofSprint triage:AW2 ;
+    triage:at "2026-09-05T03:00:12Z"^^xsd:dateTime .
+# AW.3 (must_follow AW.2, AW.4) dispatched on c3 to arch-ctm; branch cut from integrate/phase-aw with aw2 @ d3eee516b and aw4 @ 9f4d3170e merged.
+triage:a5 a triage:Assignment ;
+    triage:ofSprint triage:AW3 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
