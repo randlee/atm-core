@@ -367,6 +367,7 @@ fn direct_storage_message(target: &DirectStorageTarget, run_id: &str, sequence: 
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            task_complete: None,
             extra: serde_json::Map::new(),
         },
     }
