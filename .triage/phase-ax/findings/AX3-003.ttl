@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-003>
+  a triage:Finding ;
+  triage:findingId "AX3-003" ;
+  triage:title "Required end-to-end test file crates/atm-core/tests/task_state.rs (D8) does not exist" ;
+  triage:description "Sprint AX.3 D8 names crates/atm-core/tests/task_state.rs as a nudge_mode.rs-style end-to-end test through write_mail_with_runtime (sync and async prepare paths) and ack_mail_with_runtime, covering AC1-AC4 for both a tmux-backed and a Herdr-backed member. The file is absent at 88c579a18." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:07:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T06:06:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-003/ax3-003-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-003/ax3-003-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-003/ax3-003-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
+  triage:line 760 ;
+  triage:snippet "crates/atm-core/tests/task_state.rs (new, nudge_mode.rs style): end-to-end through write_mail_with_runtime" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/ax3-88c579a18/2> .
+
+<urn:atm:triage:occurrence/AX3-003/ax3-003-2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
+  triage:line 760 ;
+  triage:snippet "crates/atm-core/tests/task_state.rs (new, nudge_mode.rs style): end-to-end through write_mail_with_runtime" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-88c579a18/4> .
+
+<urn:atm:triage:worktree/ax3-88c579a18/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/ax4-88c579a18/4>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 4 .

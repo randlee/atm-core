@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX1-QA2-001>
+  a triage:Finding ;
+  triage:findingId "AX1-QA2-001" ;
+  triage:title "AX.1 QA-2 re-assessment: Herdr-backed end-to-end AC4 coverage still missing in crates/atm-core/tests/nudge_mode.rs (ATM-QA-001 not resolved by the fix pass)" ;
+  triage:description "Follow-up after cipher's fix pass. quality-mgr QA-3 (PR #1185 comment 5550091028) verified fixed at 7e677de09: commit 5c1a61c73 adds a dispatch-matrix test driving a real Herdr roster member through build_built_in_dispatch with the six per-backend assertions, tmux/Herdr target-type assertion and sync/async graft NudgeKind::Queue assertion; cargo test -p agent-team-mail-core --test nudge_mode 13/13. Confirm at HEAD that nudge_mode.rs contains a RosterHarness::Herdr (or equivalent Herdr-backed) roster member exercised through the dispatch pipeline, and record the finding as fixed on feature/ax1-queue-template-class at 7e677de09." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T06:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX1 ;
+  triage:foundAt "2026-09-05T06:13:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX1-QA2-001/AX1-1-fixed> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX1-QA2-001/AX1-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX1-QA2-001/AX1-1-fixed>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/nudge_mode.rs" ;
+  triage:line 249 ;
+  triage:snippet "fn herdr_roster_member(team: &TeamName, agent: &str)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "7e677de09afea55469889ec3946054488a5d69ac" ;
+  triage:occursIn <urn:atm:triage:worktree/ax1/7e677de09> .
+
+<urn:atm:triage:occurrence/AX1-QA2-001/AX1-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/nudge_mode.rs" ;
+  triage:line 668 ;
+  triage:snippet "fn assert_local_matrix(herdr: bool)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "7e677de09afea55469889ec3946054488a5d69ac" ;
+  triage:occursIn <urn:atm:triage:worktree/ax1/7e677de09> .
+
+<urn:atm:triage:worktree/ax1/7e677de09>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax1-queue-template-class" ;
+  triage:branch "feature/ax1-queue-template-class" ;
+  triage:headSha "7e677de09afea55469889ec3946054488a5d69ac" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX2-QA-009>
+  a triage:Finding ;
+  triage:findingId "AX2-QA-009" ;
+  triage:title "No mechanical boundary test guards the Herdr .prompt() call site against a future direct call from HerdrQueueWakePump" ;
+  triage:description "crates/atm-architecture/tests/boundary_enforcement.rs has a precedent for this class of check (herdr_constructors_have_one_composition_root_call_site) but does not cover .prompt( calls; nothing enforces that HerdrQueueWakePump reaches .prompt() only via the selector/emitter routing. Current code is correct; this is a lint-gap. Fix: add a boundary_enforcement.rs test asserting the production .prompt( call sites are limited to the received_hook_selector emitter (and the adapter impls). Reported by ruthless-boundary-qa RBQA-F002 (minor) on PR #1186 QA-1 (head 4f77d2fff)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX2 ;
+  triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-009/AX2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-009/AX2-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX2-QA-009/AX2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 685 ;
+  triage:snippet ".prompt(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2/4f77d2fff0b384b60d5297e1dbfa0981a0192419> .
+
+<urn:atm:triage:occurrence/AX2-QA-009/AX2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
+  triage:line 421 ;
+  triage:snippet ".prompt(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2/4f77d2fff0b384b60d5297e1dbfa0981a0192419> .
+
+<urn:atm:triage:worktree/ax2/4f77d2fff0b384b60d5297e1dbfa0981a0192419>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:orderIndex 3 .

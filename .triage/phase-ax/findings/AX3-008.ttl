@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-008>
+  a triage:Finding ;
+  triage:findingId "AX3-008" ;
+  triage:title "TaskEventKind::Rejected audit path is never constructed; rejections return Err without writing an audit row" ;
+  triage:description "The schema and enum surface for recording rejections exists (TaskEventKind::Rejected, TaskEventRow.detail) but at 88c579a18 no call site constructs it; every rejection returns Err directly, contradicting the sprint's Audit invariant that every rejection is one row written in the same transaction. Either wire the audit row or correct the doc claim. Found by arch-qa ARCH-003 and ruthless-boundary-qa RBQA-F005 on PR #1191 QA-1." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:10:41Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T06:06:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-008/AX3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-008/AX4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-008/AX3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_state.rs" ;
+  triage:line 140 ;
+  triage:snippet "pub enum TaskEventKind { Assigned, Acked, Completed, Rejected, Reminded, LeadNotified, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/ax3-task-state-machine/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-008/AX4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_state.rs" ;
+  triage:line 140 ;
+  triage:snippet "pub enum TaskEventKind { Assigned, Acked, Completed, Rejected, Reminded, LeadNotified, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/ax4-task-cli-and-docs/88c579a18> .
+
+<urn:atm:triage:worktree/feature/ax3-task-state-machine/88c579a18>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature/ax4-task-cli-and-docs/88c579a18>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18" ;
+  triage:orderIndex 4 .

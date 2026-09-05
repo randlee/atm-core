@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-004>
+  a triage:Finding ;
+  triage:findingId "AX3-004" ;
+  triage:title "Missing rusqlite-runtime test coverage for the task ack path and the other D8 scenarios" ;
+  triage:description "Exactly one integration test exists workspace-wide for the task feature (crates/atm-storage-rusqlite/src/lib.rs ~3469: assign, resend, complete-from-Assigned, one sync Peer no-op). Missing per D8: the Acked path (G1 guard, one ack -> one Acked row), G2 third-party rejection, rejected completion writes nothing, gapless seq verification, fan-out (one row per recipient), async Peer no-op, the AC5 replay claim, and LocalServiceRuntime::task_store() composition tests (happy path and not-installed error; both blocked by AX3-006). Found by rust-qa-agent QA-004/005/007/008/009, ruthless-boundary-qa RBQA-F004, req-qa ATM-QA-005 on PR #1191 QA-1 (commit 88c579a18)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T06:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T06:06:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-004/AX3-2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-004/AX3-4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-004/AX3-2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 3469 ;
+  triage:snippet "fn task_messages_transition_locally_and_peer_receipts_do_not_create_rows()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-004/AX3-4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 3469 ;
+  triage:snippet "fn task_messages_transition_locally_and_peer_receipts_do_not_create_rows()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/AX4/88c579a18> .
+
+<urn:atm:triage:worktree/AX3/88c579a18>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AX4/88c579a18>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 4 .

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX2-QA-004>
+  a triage:Finding ;
+  triage:findingId "AX2-QA-004" ;
+  triage:title "Sprint AX.2 doc frontmatter is status: draft with D1-D8 unchecked, and the project-plan AX.2 row is planned" ;
+  triage:description "docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md:8 reads status: draft and all D1-D8 checkboxes are unchecked; docs/project-plan.md ~1620 AX.2 row reads planned, at 4f77d2fff. Flip both to complete (and tick the deliverables) as the last edit of the fix pass, after the blocking findings close." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:33:38Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX2 ;
+  triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-004/AX2-QA-004-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-004/AX2-QA-004-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX2-QA-004/AX2-QA-004-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md" ;
+  triage:line 8 ;
+  triage:snippet "status: draft" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/ax2-herdr-template-rendering/4f77d2fff> .
+
+<urn:atm:triage:occurrence/AX2-QA-004/AX2-QA-004-2>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1620 ;
+  triage:snippet "| `AX.2` | A | after AX.1; parallel with AX.3/AX.4 | `planned` |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/ax2-herdr-template-rendering/4f77d2fff> .
+
+<urn:atm:triage:worktree/feature/ax2-herdr-template-rendering/4f77d2fff>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:orderIndex 3 .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-005>
+  a triage:Finding ;
+  triage:findingId "AX3-005" ;
+  triage:title "C7 mark_source_acknowledged helper never extracted; completion-from-Assigned bypasses the message-store path with a raw SQL UPDATE" ;
+  triage:description "Code contract C7 requires extracting mark_source_acknowledged(source: &mut Message, now) from execute_acknowledgement's inline mutation and reusing it in the completion-from-Assigned path. The function does not exist anywhere at 88c579a18; the completion path issues a raw UPDATE mail_message_states directly, bypassing execute_upsert_message and its side effects, so two independent mutation mechanisms exist for the same semantic. Found by ruthless-boundary-qa RBQA-F002 and req-qa ATM-QA-002 on PR #1191 QA-1." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:07:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T06:06:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-005/AX4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-005/AX4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 828 ;
+  triage:snippet "UPDATE mail_message_states SET read = 1, pending_ack_at = NULL, acknowledged_at = ?4, updated_at = ?4" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4/88c579a18> .
+
+<urn:atm:triage:worktree/ax4/88c579a18>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18" ;
+  triage:orderIndex 4 .
