@@ -322,10 +322,12 @@ Deliverables:
    `HERDR_SOCKET_PATH` set (daemon in a pane) the `herdr` CLI uses it;
    with it unset (daemon under launchd or a Windows service) the CLI
    uses the default session socket in its config dir
-   (src/session.rs). atm computes no path and manages no variable: it
-   passes its environment to `herdr` children unchanged, and with the
-   backend enabled probes with `List` at startup and exits with one
-   diagnostic naming the socket if that fails. A process not launched by Herdr has no pane id and
+   (src/session.rs). atm never starts or supervises Herdr; it only
+   runs `herdr agent prompt|wait|get|list` client commands against the
+   already-running server, as a user would, with its environment
+   passed through unchanged. With the backend enabled it runs one
+   `herdr agent list` at startup and exits with one diagnostic naming
+   the socket if that fails. A process not launched by Herdr has no pane id and
    gets no nudges, by design. W2's socket transport connects to
    `HERDR_SOCKET_PATH` as given. Doctor herdr section reports transport
    kind, resolved binary, resolved endpoint (the `\\.\pipe\` form on
