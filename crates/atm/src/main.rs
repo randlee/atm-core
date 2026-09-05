@@ -638,7 +638,7 @@ fn build_command_event_fields(event: &CommandEvent) -> Map<String, serde_json::V
             serde_json::Value::String(error_code.to_string()),
         );
     }
-    atm_observability::sanitize_retained_fields(fields)
+    atm_core::observability::sanitize_retained_fields(fields)
 }
 
 fn map_command_event(

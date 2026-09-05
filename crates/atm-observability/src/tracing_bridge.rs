@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
+use atm_core::observability::RETAINED_FIELD_ALLOWLIST;
 use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
 use sc_observability_types::{
     ActionName, CorrelationId, Level, LogEvent, ProcessIdentity, SchemaVersion, ServiceName,
@@ -18,46 +19,12 @@ use tracing_subscriber::{Layer, Registry};
 
 use crate::{RetainedLogOffer, RetainedLogger};
 
-/// Canonical retained event file shared by daemon and CLI projections.
-pub const CANONICAL_LOG_FILE_NAME: &str = "atm.log.jsonl";
-/// AW.4's separate graft fallback satellite file.
-pub const GRAFT_FALLBACK_LOG_FILE_NAME: &str = "atm-graft-fallback.jsonl";
 /// INFO targets deliberately retained in addition to every WARN and ERROR.
 pub const RETAINED_INFO_TARGETS: &[&str] = &[
     "atm_daemon_bootstrap::lifecycle",
     "atm_http_runtime::listener",
     "atm_storage_rusqlite::maintenance",
 ];
-/// The redaction boundary: only these structured keys may leave `tracing`.
-pub const RETAINED_FIELD_ALLOWLIST: &[&str] = &[
-    "ts",
-    "level",
-    "component",
-    "code",
-    "command",
-    "action",
-    "correlation_id",
-    "outcome",
-    "elapsed_ms",
-    "attempt",
-    "strategy",
-    "endpoint_kind",
-    "failure_class",
-    "refresh_error_code",
-    "error_layer",
-    "origin",
-];
-
-/// Applies the one retained-data policy to a structured event payload.
-///
-/// Free-form text is deliberately not a retained field.  Callers keep stable
-/// codes and enum-like context here; request data and interpolated diagnostics
-/// must remain on the live stderr/tracing path only.
-pub fn sanitize_retained_fields(mut fields: Map<String, FieldValue>) -> Map<String, FieldValue> {
-    fields.retain(|key, _| RETAINED_FIELD_ALLOWLIST.contains(&key.as_str()));
-    fields
-}
-
 /// JSON-compatible value carried to the optional AW.2 diagnostic timeline.
 pub type FieldValue = Value;
 

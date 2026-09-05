@@ -18,15 +18,16 @@ parallel_safe: [AW.2]
    `#[pyfunction] observability_paths() -> PyObservabilityPaths { log_dir,
    canonical_log_path, fallback_log_path, log_dir_source:
    "env:ATM_LOG_DIR"|"env:ATM_HOME"|"default" }` derived from the same
-   resolver the daemon uses (`atm-observability` path helpers +
-   `graft_fallback_log_path` from AW.1). hermes-atm never computes a path.
+   resolver the daemon uses (`atm-core` path helpers, including
+   `graft_fallback_log_path`). hermes-atm never computes a path.
 2. **`GraftFallbackLogger`** (Rust, `atm-graft-python`): appends redacted
    JSONL to `atm-graft-fallback.jsonl`; own rotation
    (`GRAFT_FALLBACK_MAX_BYTES = 2 MiB`, `GRAFT_FALLBACK_KEEP_FILES = 3`)
    isolated from the daemon's `atm.log.jsonl` rotation; bounded in-process
    queue `GRAFT_FALLBACK_QUEUE = 256` with `try_send`; write failures are
    captured into the call's envelope (deliverable 4) and never raise.
-   Records carry `origin = "graft"` and only `RETAINED_FIELD_ALLOWLIST`
+   Records carry `origin = "graft"` and only the `atm-core`-owned
+   `RETAINED_FIELD_ALLOWLIST`
    fields.
 3a. **`atm_ack` native tool** (required because #904-2 names it). It is a
    thin tool over the acknowledgement path that already exists in the
@@ -73,18 +74,13 @@ parallel_safe: [AW.2]
    `{ fallback_write_failed: bool, code?: str }`; hermes-atm passes it
    through untouched; the operation `outcome` is never altered by a logging
    failure.
-5. **Boundary (definite)**: exactly one new Cargo edge,
-   `atm-graft-python -> atm-observability`. Changes:
+5. **Boundary**: the binding consumes the retained-diagnostics contract from
+   `atm-core`; it does not depend on the tracing bridge. Changes:
    `boundaries/atm-graft-python/hermes-graft-binding.toml`
    `allowed_dependencies` becomes `["atm-core", "atm-graft",
-   "atm-observability", "pydantic"]`; `response_types` gains
+   "pydantic"]`; `response_types` gains
    `AtmAckResult` and `PyObservabilityPaths`; `request_types` gains
-   `AtmAckRequest` (final lists are stated verbatim in AW.5 D4);
-   `.just/lint-config.toml` line 160 allowlist for
-   `crates/atm-graft-python/Cargo.toml` gains `"atm-observability"`;
-   `boundaries/atm-observability/tracing-bridge.toml` `allowed_dependents`
-   gains `"atm-graft-python"` (this sprint, not AW.1, per the phase-plan
-   invariant that grants land with the edge). `atm-graft` gains the
+   `AtmAckRequest` (final lists are stated verbatim in AW.5 D4). `atm-graft` gains the
    `local_transport_label()` accessor within its existing
    `atm-daemon-client` dependency. hermes-atm (Python) gains no new
    dependency.
@@ -115,9 +111,9 @@ parallel_safe: [AW.2]
   interleaved/corrupt fallback lines.
 - AC8 (904-8): binding tests green on Python 3.11, 3.12, 3.13, 3.14 (CI
   matrix).
-- AC9: boundary lint passes with the deliverable-5 changes and the PR
-  diff adds no Cargo dependency other than `atm-observability` to
-  `crates/atm-graft-python/Cargo.toml`; no `crates/atm-daemon/` change.
+- AC9: boundary lint passes with the deliverable-5 changes and the binding
+  keeps its dependency edge limited to `atm-core`/`atm-graft`; no
+  `crates/atm-daemon/` change.
 - AC10 (atm_ack happy path): against a running daemon, `atm_ack` on a
   message that requires an ack returns a typed success, the message no
   longer appears under `atm_list(selection="pending_ack")`, and the

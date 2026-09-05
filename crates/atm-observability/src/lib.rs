@@ -13,6 +13,7 @@ use atm_core::error::AtmError;
 use atm_core::observability::{
     AtmMaintenanceHealthReport, AtmMaintenanceWorkerState, AtmObservabilityDiagnostic,
     AtmObservabilityHealth, AtmObservabilityHealthState, RetainedSinkFaultMode, diagnostic_code,
+    sanitize_retained_fields,
 };
 use atm_core::types::IsoTimestamp;
 use atm_core::{EnvSource, ProcessEnvSource};
@@ -286,19 +287,17 @@ fn try_log_error_code(error: &sc_observability::TryLogError) -> &str {
 
 pub mod tracing_bridge;
 
+pub use atm_core::observability::{
+    CANONICAL_LOG_FILE_NAME, GRAFT_FALLBACK_LOG_FILE_NAME, RETAINED_FIELD_ALLOWLIST,
+    graft_fallback_log_path,
+};
 pub use tracing_bridge::{
-    BridgeError, CANONICAL_LOG_FILE_NAME, DiagnosticSink, DropReason, FieldValue,
-    GRAFT_FALLBACK_LOG_FILE_NAME, RETAINED_FIELD_ALLOWLIST, RETAINED_INFO_TARGETS, RetainedEvent,
-    RetainedLevel, SinkOffer, TracingBridgeLayer, TracingBridgeStats, sanitize_retained_fields,
+    BridgeError, DiagnosticSink, DropReason, FieldValue, RETAINED_INFO_TARGETS, RetainedEvent,
+    RetainedLevel, SinkOffer, TracingBridgeLayer, TracingBridgeStats,
 };
 
 pub const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
 pub const ATM_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
-
-/// Returns AW.4's dedicated, bounded graft fallback satellite path.
-pub fn graft_fallback_log_path(log_dir: &Path) -> PathBuf {
-    log_dir.join(GRAFT_FALLBACK_LOG_FILE_NAME)
-}
 
 /// Validates a retained-log directory and its active log file before logger
 /// construction. The returned path is the exact file checked for append access.

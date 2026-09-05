@@ -2,7 +2,7 @@
 //!
 //! This module deliberately owns a satellite file. It never opens the
 //! daemon's canonical `atm.log.jsonl` file and it only serializes the fields
-//! named by `atm-observability`'s retained allowlist.
+//! named by `atm-core`'s retained allowlist.
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -12,10 +12,7 @@ use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use atm_observability::{
-    RETAINED_FIELD_ALLOWLIST, graft_fallback_log_path, sanitize_retained_fields,
-};
-use serde_json::{Map, Value};
+use atm_core::observability::{RETAINED_FIELD_ALLOWLIST, graft_fallback_log_path};
 
 pub const GRAFT_FALLBACK_MAX_BYTES: u64 = 2 * 1024 * 1024;
 pub const GRAFT_FALLBACK_KEEP_FILES: usize = 3;
@@ -75,20 +72,9 @@ impl GraftFallbackLogger {
         code: &'static str,
         fields: impl IntoIterator<Item = (&'static str, String)>,
     ) -> ObservabilityStatus {
-        let mut retained = sanitize_retained_fields(
-            fields
-                .into_iter()
-                .map(|(key, value)| (key.to_owned(), Value::String(value)))
-                .collect::<Map<_, _>>(),
-        );
-        let mut fields: Vec<_> = RETAINED_FIELD_ALLOWLIST
-            .iter()
-            .filter_map(|key| {
-                (*key != "code")
-                    .then(|| retained.remove(*key))
-                    .flatten()
-                    .and_then(|value| value.as_str().map(|value| (*key, value.to_owned())))
-            })
+        let mut fields: Vec<_> = fields
+            .into_iter()
+            .filter(|(key, _)| *key != "code" && RETAINED_FIELD_ALLOWLIST.contains(key))
             .collect();
         fields.insert(0, ("code", code.to_owned()));
         let (result, response) = mpsc::sync_channel(0);

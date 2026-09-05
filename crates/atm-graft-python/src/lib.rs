@@ -407,7 +407,7 @@ fn observability_paths() -> PyResult<PyObservabilityPaths> {
     let (log_dir, source) = observability_log_dir()?;
     Ok(PyObservabilityPaths {
         canonical_log_path: log_dir
-            .join(atm_observability::CANONICAL_LOG_FILE_NAME)
+            .join(atm_core::observability::CANONICAL_LOG_FILE_NAME)
             .display()
             .to_string(),
         fallback_log_path: observability::fallback_path(&log_dir).display().to_string(),
