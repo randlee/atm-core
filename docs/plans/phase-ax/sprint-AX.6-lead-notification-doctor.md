@@ -68,17 +68,21 @@ for member in blocked:
 
 ```
 escalate(body):
-    recipients := {the single Lead of the team} ∪ tasks.list_escalation_recipients(team)     # configured ATM addresses, D8
+    configured := tasks.list_escalation_recipients(Team(team)); if empty: tasks.list_escalation_recipients(Daemon)   # D8 fallback
+    recipients := {the single Lead of the team} ∪ configured                                # configured ATM addresses
     for r in recipients: write queued message from DAEMON_ACTOR_NAME to r, body, requires_ack = false   # per-recipient; failure logged
     herdr_process.notify(title = first line of body, body = remaining lines, deadline)                   # C4; failure logged
     log herdr_queue_poll_outcome outcome = "lead_notified" | "blocked_escalated", member, recipients count, notify ok?
 ```
 
 Three layers, all pushed. **Lead**: the coordinating agent on the team.
-**Escalation recipients**: a per-team list of ATM addresses (D8), each
-any resolvable form ADR-040 accepts (`agent`, `agent@team`,
-`agent@team.host`), so the human's chosen relay may live on another team
-or another host. Each escalation is ordinary queued mail to each address
+**Escalation recipients**: one daemon-wide oversight list of ATM
+addresses, optionally overridden per team (D8); a team with no list of
+its own falls back to the daemon list, so one configured inbox covers
+every team the daemon hosts. Each address is any resolvable form ADR-040
+accepts (`agent`, `agent@team`, `agent@team.host`), so the human's chosen
+relay may live on another team or another host. Each escalation is
+ordinary queued mail to each address
 through the same write path `atm send` uses; how that recipient reaches
 a human, if at all, is outside ATM. **Screen**: the Herdr notification,
 which fires even when the team has neither lead nor recipients. Nothing
@@ -160,22 +164,28 @@ shape-only completion fails the sprint.
   gains `HR-CORE-004` (notification verb, fixed argv shape, fail-soft).
 - [ ] D8 — escalation recipients (code contract C5): `TaskStore` gains
   `list_escalation_recipients`, `add_escalation_recipient`,
-  `remove_escalation_recipient` (trait in
+  `remove_escalation_recipient`, each keyed by `EscalationScope::Daemon`
+  or `EscalationScope::Team(name)` (trait in
   `crates/atm-storage/src/task_store.rs`, rusqlite implementation in
-  `task_store.rs`, table in `shared_db.rs`); CLI
-  `atm teams add-escalation <team> <address>`,
-  `atm teams remove-escalation <team> <address>`, and
-  `atm teams escalations <team>` in `crates/atm/src/commands/teams.rs`
-  through new `team_admin` functions beside
+  `task_store.rs`, table in `shared_db.rs`). Resolution: a team's own
+  list when non-empty, else the daemon list; the daemon list is the
+  oversight inbox Rand configures once per host. CLI: new top-level
+  `atm escalation add <address> [--team <team>]`,
+  `atm escalation remove <address> [--team <team>]`,
+  `atm escalation list [--team <team>]` in
+  `crates/atm/src/commands/escalation.rs`; without `--team` the verbs
+  act on the daemon scope. Admin functions live in a new
+  `crates/atm-core/src/escalation_admin.rs` modelled on
   `set_nudge_template_override_with_store`
   (`crates/atm-core/src/team_admin.rs` line 365). The address is parsed
   at add time with the recipient parser `atm send` uses (ADR-040 forms;
   malformed → `ATM_MESSAGE_VALIDATION_FAILED`, exit 3) and resolved at
   send time like any send; an unresolvable or failed recipient is logged,
   counted in `escalation_writes_failed`, and does not stop the other
-  recipients. Doctor's per-team info line (D3) lists the recipients; no
-  new warning code, since recipients are optional and the Herdr
-  notification is the floor. `boundaries/atm-storage/task-store.toml`
+  recipients. Doctor prints the daemon list once and, per team, the
+  effective list with its source (`team` or `daemon default`); no new
+  warning code, since recipients are optional and the Herdr notification
+  is the floor. `boundaries/atm-storage/task-store.toml`
   and the sqlite companion gain the three methods in `request_types` /
   notes. `docs/team-protocol.md` and `docs/user-documents/tasks.md`
   describe the three layers and the commands.
@@ -212,18 +222,24 @@ Attach to its Herdr agent and answer the prompt. Run: atm members --team <team>
 
 ```rust
 // crates/atm-storage/src/task_store.rs (TaskStore additions)
-/// Team-scoped ATM addresses that receive every escalation, verbatim as configured.
-fn list_escalation_recipients(&self, team: &TeamName) -> Result<Vec<String>, AtmError>;
-fn add_escalation_recipient(&self, team: &TeamName, address: &str, at: IsoTimestamp) -> Result<bool, AtmError>;    // false if present
-fn remove_escalation_recipient(&self, team: &TeamName, address: &str) -> Result<bool, AtmError>;                    // false if absent
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EscalationScope { Daemon, Team(TeamName) }   // stored as scope_key "daemon" | "team:<name>"
+
+/// ATM addresses that receive every escalation, verbatim as configured, for one scope.
+fn list_escalation_recipients(&self, scope: &EscalationScope) -> Result<Vec<String>, AtmError>;
+fn add_escalation_recipient(&self, scope: &EscalationScope, address: &str, at: IsoTimestamp) -> Result<bool, AtmError>;   // false if present
+fn remove_escalation_recipient(&self, scope: &EscalationScope, address: &str) -> Result<bool, AtmError>;                   // false if absent
+
+/// Provided method: the team's own list when non-empty, else the daemon list.
+fn effective_escalation_recipients(&self, team: &TeamName) -> Result<Vec<String>, AtmError> { ... }
 ```
 
 ```sql
-CREATE TABLE IF NOT EXISTS team_escalation_recipients (
-    team_name TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS escalation_recipients (
+    scope_key TEXT NOT NULL,      -- 'daemon' or 'team:<team_name>'
     address TEXT NOT NULL,        -- ADR-040 form as typed; resolved at send time
     added_at TEXT NOT NULL,
-    PRIMARY KEY (team_name, address)
+    PRIMARY KEY (scope_key, address)
 );
 ```
 
@@ -289,13 +305,15 @@ the task step, which AX.5 property 6 already permits); roster schema;
 6. Every task lead notification (AC 1) is accompanied by one `notify`
    call; a failing `notify` is counted in `notifications_failed` and does
    not affect the mail or the `LeadNotified` row.
-7. With one lead and one configured recipient `ops@hermes.rand-m4`, each
+7. With one lead and a daemon-scope recipient `ops@hermes.rand-m4`, each
    escalation writes two queued messages, the second addressed through
-   the normal cross-host path; with recipients and no lead, one message
-   per recipient and doctor still warns `ATM_ROSTER_NO_LEAD`; a failed
-   write to one recipient does not stop the others and increments
-   `escalation_writes_failed`; `atm teams add-escalation atm-dev 'not an
-   address'` exits 3; add/remove/list round-trip.
+   the normal cross-host path; a team-scope recipient replaces (not
+   augments) the daemon list for that team and other teams keep the
+   daemon list; with recipients and no lead, one message per recipient
+   and doctor still warns `ATM_ROSTER_NO_LEAD`; a failed write to one
+   recipient does not stop the others and increments
+   `escalation_writes_failed`; `atm escalation add 'not an address'`
+   exits 3; add/remove/list round-trip in both scopes.
 
 ## Required validation
 
@@ -313,9 +331,12 @@ the task step, which AX.5 property 6 already permits); roster schema;
 - `crates/atm-herdr` tests: `notify` argv matches the fixture row
   verbatim; a non-zero exit maps to `HerdrError`.
 - `crates/atm-storage-rusqlite/src/task_store.rs` tests: recipient
-  add/remove/list, duplicate add returns false.
-- `crates/atm-core/src/team_admin.rs` tests: malformed address rejected,
-  ADR-040 forms accepted verbatim.
+  add/remove/list per scope, duplicate add returns false,
+  `effective_escalation_recipients` falls back to daemon only when the
+  team list is empty.
+- `crates/atm-core/src/escalation_admin.rs` tests: malformed address
+  rejected, ADR-040 forms accepted verbatim, `--team` absent means
+  daemon scope.
 - `crates/atm-http-runtime/src/herdr_queue_wake.rs` tests (`ax6_03_*`):
   AC 7 recipient fan-out with a recording write path.
 - `crates/atm-core/src/doctor/mod.rs` tests: the five codes and the
