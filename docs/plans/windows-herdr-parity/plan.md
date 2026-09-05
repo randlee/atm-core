@@ -56,14 +56,45 @@ The real gaps:
 
 ## Facts still to be read from Herdr source before dev starts
 
-Herdr's full source is available (ADR-058 pinned
-`/Users/randlee/Documents/github/herdr` at d79fd746 / v0.8.2; current
-location to be confirmed with Rand). Required reads, cited in the sprint
-doc before dispatch:
+Herdr's full source is available at `/Volumes/Extreme Pro/github/herdr`
+(confirmed by Rand 2026-09-05). Facts read from that checkout on
+2026-09-05, replacing the ADR-058 pin (`/Users/randlee/Documents/github/herdr`
+at d79fd746, PROTOCOL_VERSION 21):
 
-Step 0 of AY.1 (blocking, before any code): locate the checkout, record
-its path and revision in the sprint doc, and note any drift from the ADR
-pin. Audit output is a new `docs/atm-herdr/windows-process-audit.md`,
+- Checkout HEAD 6c52aad5 (`git describe`
+  preview-2026-08-31-b1ff4582e968-43-g6c52aad5), 43 commits past the
+  newest release tag. Tags present: v0.8.0 (2026-08-03) and v0.8.2
+  (2026-08-19).
+- Target release: **v0.8.2**, PROTOCOL_VERSION 20 (`src/protocol/wire.rs:16`).
+  Rand's rule: target 0.8.0+ unless a needed change landed after 0.8.0.
+  One did: v0.8.0 is Windows beta (PROTOCOL_VERSION 19, no Windows job
+  in `release.yml`); commit 9fac5172 "feat: make Windows generally
+  available" (2026-08-18) adds `x86_64-pc-windows-msvc` to `release.yml`,
+  plus `windows-arm64.yml`, and ships in v0.8.2. So `herdr.exe` is a
+  released artifact from v0.8.2 onward; AY.1 is not an upstream request.
+- The ADR pin (d79fd746, PROTOCOL_VERSION 21) is a post-release preview
+  commit, not a release, and HEAD is already at PROTOCOL_VERSION 22
+  (99c23cd1, 2026-09-01). The installed rand-m4 binary reported 20, which
+  matches v0.8.2. Fixture and doctor expectations pin to v0.8.2 /
+  PROTOCOL_VERSION 20; the audit must diff `v0.8.2..HEAD` on the paths
+  below only to note pending drift (e.g. cc88b3b8 "add stable client
+  endpoint compatibility" 2026-09-02), never to adopt preview behaviour.
+- Windows IPC lives in `src/ipc.rs` (`cfg(windows)` named-pipe accept,
+  same-user ACL test, closed-peer detection at 238-290) and
+  `src/api/client.rs:117`; endpoint env vars are `HERDR_SOCKET_PATH`
+  (`src/api/mod.rs:20`) and `HERDR_SESSION` (`src/session.rs:10`).
+  Platform branches in the CLI itself are limited to `src/cli/agent.rs:658-700`
+  and `src/main.rs:810-820`; CLI output uses `println!`/`eprintln!`
+  (`src/cli.rs`), so stdout is LF on both platforms.
+- Post-0.8.0 commits relevant to the audit: 2863b715 "support remote
+  attach to unix hosts" (Windows), e3c3d443 "exit quietly when output
+  pipes close" (CLI, in v0.8.2).
+
+Required reads, cited in the sprint doc before dispatch:
+
+Step 0 of AY.1 (blocking, before any code): check out tag v0.8.2 in the
+Herdr checkout above (the default HEAD is a preview), record that in
+the sprint doc, and note drift from the ADR pin. Audit output is a new `docs/atm-herdr/windows-process-audit.md`,
 one row per item (expected behaviour, Herdr file:line consulted, observed
 on Windows, verdict: no action / production fix / upstream request).
 Unanswerable rows escalate upstream; nothing is inferred.
@@ -80,9 +111,9 @@ workflow (does `herdr.exe` build and ship at all); plus a grep for
 
 | Question | Needed by |
 |---|---|
-| Does `herdr.exe` build and ship for Windows at all (if not, AY.1 becomes an upstream request) | W1, first |
+| Does `herdr.exe` build and ship for Windows at all | Answered: yes, since v0.8.2 (`release.yml`, 9fac5172) |
 | CRLF vs LF on stdout/stderr JSON; exit codes and `server_not_running` identical on Windows | W1 |
-| Does `herdr.exe` ship for Windows, and does it resolve the pipe from `HERDR_SESSION` the same way it resolves the socket path on Unix? | W1 |
+| Does `herdr.exe` resolve the pipe from `HERDR_SESSION` the same way it resolves the socket path on Unix? (`src/session.rs`, `src/api/mod.rs`, `src/ipc.rs`) | W1 |
 | Windows pipe name convention | W1 (doctor reporting), W2 |
 | Framing on the pipe (same NDJSON as the socket?) and PROTOCOL_VERSION behaviour | W2 |
 | Pipe ACL / impersonation model | W2 |
@@ -196,7 +227,10 @@ daemon/runtime crates).
 ## PROTOCOL_VERSION pinning
 
 Herdr's client compares PROTOCOL_VERSION with the server on every
-command and any inequality is fatal (ADR-058:245-253). Under W1 that
+command and any inequality is fatal (ADR-058:245-253). The supported
+Herdr release for this plan is v0.8.2 (PROTOCOL_VERSION 20); ADR-058's
+pin of 21 is a preview commit and must be corrected when the ADR is
+revised. Under W1 that
 risk stays inside Herdr's own binary (client and server are one
 release); atm only maps the `protocol_mismatch` code, and doctor makes
 it legible. W2 would transfer that liability to atm's release cadence,
