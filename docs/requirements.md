@@ -904,7 +904,7 @@ Required integration rules:
 - `atm-core` must keep the shared crates behind an ATM-owned injected boundary
 - `atm` owns the concrete shared-crate bootstrap and dependency wiring
 - the active release baseline uses the published
-  `sc-observability = "1.0.0"` crates.io dependency
+  `sc-observability = "=1.2.0"` crates.io dependency
 - the same pinned Rust toolchain must be used locally and in CI across ATM and
   `sc-*` repos
 - the concrete integration work is planned in Phase K of

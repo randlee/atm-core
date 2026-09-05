@@ -90,6 +90,7 @@ pub async fn bootstrap_replacement_observability()
                     "daemon observability bootstrap worker did not complete: {source}"
                 ))
             })??;
+    observability.install_tracing_bridge()?;
     Ok(Arc::new(observability))
 }
 
@@ -360,7 +361,7 @@ fn record_peer_wire_mode_selection(
     peer_wire_mode: PeerWireMode,
     peer_stream_adapter: &Option<Arc<dyn PeerStreamAdapter>>,
 ) {
-    tracing::info!(
+    tracing::info!(target: "atm_daemon_bootstrap::lifecycle",
         peer_wire_security = peer_wire_mode.security().as_launch_value(),
         mtls_ready = peer_stream_adapter.is_some(),
         "replacement daemon selected peer-wire mode"
@@ -517,11 +518,11 @@ async fn await_runtime_or_shutdown(
     tokio::select! {
         signal = wait_for_shutdown_signal() => {
             let signal = signal?;
-            eprintln!("replacement ATM daemon received {}; starting graceful shutdown", signal.as_str());
+            tracing::info!(target: "atm_daemon_bootstrap::lifecycle", signal = signal.as_str(), "replacement ATM daemon received shutdown signal; starting graceful shutdown");
             false
         }
         _ = running.wait_for_server_stop() => {
-            eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
+            tracing::error!(target: "atm_daemon_bootstrap::lifecycle", code = "ATM_RUNTIME_UNEXPECTED_STOP", "replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
             let result = shutdown_replacement_daemon(
                 running,
                 handler,

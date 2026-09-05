@@ -36,6 +36,7 @@ PYTHON_LINT_ORDER = (
     "manifests",
     "daemon-signing-coupling",
     "silent-emit",
+    "runtime-stderr",
     "function-length",
     "legacy-mailbox-paths",
     "nudge-taxonomy",
@@ -66,6 +67,7 @@ FAST_LINT_ORDER = (
     "daemon-signing-coupling",
     "shear",
     "silent-emit",
+    "runtime-stderr",
     "function-length",
     "legacy-mailbox-paths",
     "nudge-taxonomy",
@@ -156,6 +158,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "silent-emit": LintTask(
             "silent-emit", [*python_command, str(repo_root / "scripts/check-silent-emit.py")]
+        ),
+        "runtime-stderr": LintTask(
+            "runtime-stderr", [*python_command, str(repo_root / "scripts/check-runtime-stderr.py")]
         ),
         "function-length": LintTask(
             "function-length", [*python_command, str(repo_root / "scripts/check-function-length.py")]

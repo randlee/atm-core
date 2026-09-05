@@ -134,6 +134,11 @@ owner_manifest_path = "crates/atm-core/Cargo.toml"
 allowed_dependencies = ["async-trait", "atm-error", "atm-runtime-test-support", "atm-storage", "base64", "chrono", "fs4", "interprocess", "libc", "parking_lot", "sc-lint-attributes", "semver", "serde", "serde_json", "serial_test", "tempfile", "toml", "tracing", "tracing-subscriber", "ulid", "windows-sys"]
 
 [[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-observability/Cargo.toml"
+boundary_record_path = "boundaries/atm-observability/tracing-bridge.toml"
+allowed_dependencies = ["atm-core", "sc-observability", "sc-observability-types", "serde_json", "tempfile", "tracing", "tracing-subscriber"]
+
+[[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-error/Cargo.toml"
 boundary_record_path = "boundaries/atm-error/error-codes.toml"
 allowed_dependencies = ["serde", "serde_json"]
@@ -141,7 +146,7 @@ allowed_dependencies = ["serde", "serde_json"]
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-bootstrap/Cargo.toml"
 boundary_record_path = "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"
-allowed_dependencies = ["atm-core", "atm-observability", "atm-herdr", "atm-http-runtime", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "chrono", "fs4", "peer-tls", "sc-observability", "sc-observability-types", "serial_test", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
+allowed_dependencies = ["atm-core", "atm-observability", "atm-herdr", "atm-http-runtime", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "chrono", "fs4", "peer-tls", "sc-observability-types", "serial_test", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-client/Cargo.toml"

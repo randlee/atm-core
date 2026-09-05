@@ -1560,6 +1560,18 @@ The authoritative plan is
 critical review round 1 folded in); phase-au sprint docs are being cut from
 it under `docs/plans/phase-au/` on branch `plan/boundary-regression`.
 
+## 55. Phase AW — Unified Retained Runtime Logging [IN PROGRESS]
+
+Phase AW makes replacement-runtime tracing retained and safely observable:
+AW.1 installs the allowlisted non-blocking tracing bridge, AW.2 persists the
+SQLite diagnostic timeline, AW.3 exposes health and log queries, AW.4 adds
+graft fallback observability, and AW.5 aligns native tool projections.
+The authoritative plan is [phase-aw-plan](./plans/phase-aw/phase-aw-plan.md).
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AW.1` | `complete` | `feature/aw1-tracing-bridge` | `docs/plans/phase-aw/sprint-AW.1-tracing-bridge.md` |
+
 ## 54. Phase AV — Async Mailbox-Read Cutover Completion [COMPLETE — INTEGRATION PR #1120]
 
 Phase AV fixes the mailbox-read serialization regression: every core job —
