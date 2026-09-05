@@ -40,6 +40,23 @@ class _Model:
         return {"type": "object"}
 
 
+class _AckModel:
+    def __init__(self, **values):
+        self.__dict__.update(values)
+
+    @classmethod
+    def model_validate(cls, value):
+        allowed = {"message_id", "reply"}
+        unknown = set(value) - allowed
+        if unknown or not value.get("message_id") or not value.get("reply"):
+            raise _ValidationError()
+        return cls(message_id=value["message_id"], reply=value["reply"])
+
+    @classmethod
+    def model_json_schema(cls):
+        return {"type": "object"}
+
+
 class _ValidationError(Exception):
     def errors(self):
         return [{"type": "extra_forbidden", "loc": ["unexpected"]}]
@@ -54,6 +71,9 @@ class _FakeSession:
         return types.SimpleNamespace(
             message_id="test", requires_ack=requires_ack, outcome="sent"
         )
+
+    def ack_tool(self, message_id, reply):
+        return self.send_tool(None, reply, False, message_id)
 
 
 class _TypedToolError:
@@ -77,6 +97,7 @@ class NativeToolsTests(unittest.TestCase):
             AtmSendRequest = _Model
             AtmReadRequest = _Model
             AtmListRequest = _Model
+            AtmAckRequest = _AckModel
             AtmToolError = _TypedToolError
             PyAgentAddress = _FakeAddress
 
@@ -146,6 +167,19 @@ class NativeToolsTests(unittest.TestCase):
             [(None, "received", False, "01KZSSREKYM7G39237P0YQ3CW3")],
         )
 
+    def test_ack_uses_the_canonical_acknowledgement_path(self):
+        tools = native_tools.AtmNativeTools(
+            identity=TEST_IDENTITY, team=TEST_TEAM, chat_id=TEST_CHAT_ID
+        )
+        result = json.loads(
+            tools.atm_ack({"message_id": "01KZSSREKYM7G39237P0YQ3CW3", "reply": "received"})
+        )
+        self.assertEqual(result["kind"], "success")
+        self.assertEqual(
+            self.session.calls,
+            [(None, "received", False, "01KZSSREKYM7G39237P0YQ3CW3")],
+        )
+
     def test_registration_uses_public_plugin_context(self):
         calls = []
 
@@ -156,7 +190,10 @@ class NativeToolsTests(unittest.TestCase):
         native_tools.register_tools(
             Context(), identity=TEST_IDENTITY, team=TEST_TEAM, chat_id=TEST_CHAT_ID
         )
-        self.assertEqual([call["name"] for call in calls], ["atm_send", "atm_read", "atm_list"])
+        self.assertEqual(
+            [call["name"] for call in calls],
+            ["atm_send", "atm_read", "atm_list", "atm_ack"],
+        )
         self.assertTrue(all(call["toolset"] == "atm" for call in calls))
         for call in calls:
             outcome = call["handler"]({})

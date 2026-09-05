@@ -16,6 +16,7 @@ use sc_observability_types::DiagnosticInfo;
 /// confined to this facade.
 pub struct RetainedLogger(RetainedLoggerBackend);
 
+#[allow(clippy::large_enum_variant)]
 enum RetainedLoggerBackend {
     Logger(sc_observability::Logger),
     #[cfg(test)]

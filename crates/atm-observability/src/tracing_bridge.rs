@@ -42,6 +42,7 @@ pub const RETAINED_FIELD_ALLOWLIST: &[&str] = &[
     "strategy",
     "endpoint_kind",
     "failure_class",
+    "refresh_error_code",
     "error_layer",
     "origin",
     "message",
@@ -454,7 +455,7 @@ mod tests {
             if content.lines().count() >= expected || Instant::now() >= deadline {
                 return content;
             }
-            std::thread::sleep(Duration::from_millis(10));
+            std::thread::yield_now();
         }
     }
 
@@ -560,10 +561,14 @@ mod tests {
     #[test]
     fn ac7_second_global_install_is_rejected() {
         let (_tempdir, first) = bridge();
-        assert!(TracingBridgeLayer::install(Arc::clone(&first.logger)).is_ok());
+        assert!(
+            TracingBridgeLayer::new(Arc::clone(&first.logger))
+                .install_inner()
+                .is_ok()
+        );
         let (_tempdir, second) = bridge();
         assert!(matches!(
-            TracingBridgeLayer::install(Arc::clone(&second.logger)),
+            TracingBridgeLayer::new(Arc::clone(&second.logger)).install_inner(),
             Err(super::BridgeError::AlreadyInstalled)
         ));
     }

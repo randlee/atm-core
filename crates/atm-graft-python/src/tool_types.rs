@@ -7,6 +7,32 @@ use atm_core::send::WriteOutcome;
 use pyo3::prelude::*;
 
 use super::PyMessage;
+use crate::observability::ObservabilityStatus;
+
+/// Diagnostic information attached when the fallback writer could not retain
+/// an event. It is intentionally optional so successful calls remain compact.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone, Debug)]
+pub struct PyObservability {
+    #[pyo3(get)]
+    pub(crate) fallback_write_failed: bool,
+    #[pyo3(get)]
+    pub(crate) code: Option<String>,
+}
+
+/// Rust-resolved retained-log locations exposed to embedded hosts.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone, Debug)]
+pub struct PyObservabilityPaths {
+    #[pyo3(get)]
+    pub(crate) log_dir: String,
+    #[pyo3(get)]
+    pub(crate) canonical_log_path: String,
+    #[pyo3(get)]
+    pub(crate) fallback_log_path: String,
+    #[pyo3(get)]
+    pub(crate) log_dir_source: String,
+}
 
 /// Typed, JSON-compatible projection of the canonical send outcome.
 #[pyclass(skip_from_py_object)]
@@ -18,6 +44,22 @@ pub struct AtmSendResult {
     pub(crate) requires_ack: bool,
     #[pyo3(get)]
     pub(crate) outcome: String,
+    #[pyo3(get)]
+    pub(crate) observability: Option<PyObservability>,
+}
+
+fn py_observability(status: ObservabilityStatus) -> Option<PyObservability> {
+    status.fallback_write_failed.then_some(PyObservability {
+        fallback_write_failed: true,
+        code: status.code,
+    })
+}
+
+impl AtmSendResult {
+    pub(crate) fn with_observability(mut self, status: ObservabilityStatus) -> Self {
+        self.observability = py_observability(status);
+        self
+    }
 }
 
 impl From<WriteOutcome> for AtmSendResult {
@@ -27,6 +69,7 @@ impl From<WriteOutcome> for AtmSendResult {
                 message_id: outcome.message_id.to_string(),
                 requires_ack: outcome.requires_ack,
                 outcome: outcome.outcome.as_str().to_owned(),
+                observability: None,
             },
             WriteOutcome::Acknowledged(outcome) => Self {
                 message_id: match outcome.reply_disposition {
@@ -36,6 +79,7 @@ impl From<WriteOutcome> for AtmSendResult {
                 },
                 requires_ack: false,
                 outcome: "acknowledged".to_owned(),
+                observability: None,
             },
         }
     }
@@ -55,9 +99,16 @@ pub struct AtmReadResult {
     pub(crate) mutation_applied: bool,
     #[pyo3(get)]
     pub(crate) message: Option<PyMessage>,
+    #[pyo3(get)]
+    pub(crate) observability: Option<PyObservability>,
 }
 
 impl AtmReadResult {
+    pub(crate) fn with_observability(mut self, status: ObservabilityStatus) -> Self {
+        self.observability = py_observability(status);
+        self
+    }
+
     pub(crate) fn from_outcome(outcome: ReadOutcome) -> PyResult<Self> {
         let count = outcome.count;
         let match_count = outcome.match_count;
@@ -70,6 +121,7 @@ impl AtmReadResult {
             additional_match_count,
             mutation_applied,
             message,
+            observability: None,
         })
     }
 }
@@ -116,6 +168,8 @@ pub struct AtmListResult {
     pub(crate) count: usize,
     #[pyo3(get)]
     pub(crate) rows: Vec<AtmListRow>,
+    #[pyo3(get)]
+    pub(crate) observability: Option<PyObservability>,
 }
 
 impl From<ListOutcome> for AtmListResult {
@@ -123,7 +177,15 @@ impl From<ListOutcome> for AtmListResult {
         Self {
             count: outcome.count,
             rows: outcome.rows.into_iter().map(AtmListRow::from).collect(),
+            observability: None,
         }
+    }
+}
+
+impl AtmListResult {
+    pub(crate) fn with_observability(mut self, status: ObservabilityStatus) -> Self {
+        self.observability = py_observability(status);
+        self
     }
 }
 
@@ -139,9 +201,16 @@ pub struct AtmToolError {
     pub(crate) recovery: String,
     #[pyo3(get)]
     pub(crate) layer: String,
+    #[pyo3(get)]
+    pub(crate) observability: Option<PyObservability>,
 }
 
 impl AtmToolError {
+    pub(crate) fn with_observability(mut self, status: ObservabilityStatus) -> Self {
+        self.observability = py_observability(status);
+        self
+    }
+
     pub(crate) fn from_native_error(py: Python<'_>, error: &PyErr) -> Self {
         let value = error.value(py);
         let attribute = |name: &str| {
@@ -162,6 +231,7 @@ impl AtmToolError {
             message: attribute("message").unwrap_or_else(|| error.to_string()),
             recovery: recovery.to_owned(),
             layer: "native_client".to_owned(),
+            observability: None,
         }
     }
 
@@ -238,6 +308,7 @@ mod tests {
             message: "HTTP client could not connect to the configured daemon endpoint".to_owned(),
             recovery: String::new(),
             layer: "native_client".to_owned(),
+            observability: None,
         };
         assert!(daemon_unavailable.is_daemon_unavailable());
 
@@ -246,6 +317,7 @@ mod tests {
             message: "HTTP client request exceeded its absolute request budget".to_owned(),
             recovery: String::new(),
             layer: "native_client".to_owned(),
+            observability: None,
         };
         assert!(
             !wait_timeout.is_daemon_unavailable(),
@@ -259,6 +331,7 @@ mod tests {
             recovery: "inspect mailbox or service-side effects before attempting it again"
                 .to_owned(),
             layer: "native_client".to_owned(),
+            observability: None,
         };
         assert!(!uncertain_write.is_daemon_unavailable());
 
@@ -271,6 +344,7 @@ mod tests {
                 message: "request outcome is uncertain".to_owned(),
                 recovery: String::new(),
                 layer: "native_client".to_owned(),
+                observability: None,
             };
             assert!(!error.is_daemon_unavailable());
         }
