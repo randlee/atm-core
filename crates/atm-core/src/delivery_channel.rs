@@ -134,7 +134,7 @@ pub fn classify_delivery_channel(
 /// duplicating that literal outside its two owning modules
 /// (`scripts/check-nudge-taxonomy.py` enforces the containment). Callers
 /// that also need `herdrSession` should insert it into the returned map.
-#[cfg(any(test, feature = "test-utils"))]
+#[doc(hidden)]
 #[must_use]
 pub fn test_backend_type_metadata(backend: &str) -> serde_json::Map<String, Value> {
     let mut metadata = serde_json::Map::new();

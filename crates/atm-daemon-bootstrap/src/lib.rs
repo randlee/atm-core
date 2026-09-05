@@ -1205,8 +1205,8 @@ mod replacement_runtime_tests {
             .for_daemon();
         let runtime = assembly.service_runtime.clone();
         let team: TeamName = "bootstrap-herdr".parse().expect("team");
-        let mut recipient_metadata = serde_json::Map::new();
-        recipient_metadata.insert("backendType".to_owned(), serde_json::json!("herdr"));
+        let mut recipient_metadata =
+            atm_core::delivery_channel::test_backend_type_metadata("herdr");
         recipient_metadata.insert("herdrSession".to_owned(), serde_json::json!("bootstrap"));
         runtime
             .shared_roster_store_arc()
@@ -1232,8 +1232,8 @@ mod replacement_runtime_tests {
                         model: ModelName::default(),
                         recipient_pane_id: None,
                         metadata_json: {
-                            let mut metadata = serde_json::Map::new();
-                            metadata.insert("backendType".to_owned(), serde_json::json!("herdr"));
+                            let mut metadata =
+                                atm_core::delivery_channel::test_backend_type_metadata("herdr");
                             metadata
                                 .insert("herdrSession".to_owned(), serde_json::json!("bootstrap"));
                             metadata

@@ -7,8 +7,8 @@ use std::time::Duration;
 use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
-    DurableRosterStore, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
-    ReadDeadline, ReminderOutcome, TaskRow, TaskState,
+    AsyncTaskLedgerReader, DurableRosterStore, MemberKey, MessageReceivedHookSelector, NudgeKind,
+    PendingNudgeStore, ReadDeadline, ReminderOutcome, TaskRow, TaskState,
 };
 use atm_core::delivery_channel::{
     DeliveryChannel, GraftLeaseState, HerdrSession, classify_delivery_channel,
@@ -391,103 +391,134 @@ impl HerdrQueueWakePump {
                 self.stamp_task_attempt(&candidate.member.key, now);
                 continue;
             }
-            let rows = match reader
-                .list_tasks(
-                    candidate.member.key.team().clone(),
-                    Some(candidate.member.key.agent().clone()),
-                    ReadDeadline::new(HERDR_REQUEST_DEADLINE)
-                        .expect("positive Herdr task reminder deadline"),
+            let Some(row) = self.read_due_task(reader.as_ref(), &candidate, now).await else {
+                continue;
+            };
+            self.emit_task_reminder(&task_store, candidate, row, now, stats)
+                .await;
+        }
+    }
+
+    async fn read_due_task(
+        &self,
+        reader: &dyn AsyncTaskLedgerReader,
+        candidate: &TaskCandidate,
+        now: IsoTimestamp,
+    ) -> Option<TaskRow> {
+        let rows = match reader
+            .list_tasks(
+                candidate.member.key.team().clone(),
+                Some(candidate.member.key.agent().clone()),
+                ReadDeadline::new(HERDR_REQUEST_DEADLINE)
+                    .expect("positive Herdr task reminder deadline"),
+            )
+            .await
+        {
+            Ok(rows) => rows,
+            Err(error) => {
+                tracing::warn!(error = %error, member = %candidate.member.key, "Herdr task reminder read failed");
+                return None;
+            }
+        };
+        let row = select_open_task(rows)?;
+        self.reminder_due(&candidate.member.key, &row, now)
+            .then_some(row)
+    }
+
+    async fn emit_task_reminder(
+        &self,
+        task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+        candidate: TaskCandidate,
+        row: TaskRow,
+        now: IsoTimestamp,
+        stats: &mut HerdrQueueWakeStats,
+    ) {
+        if candidate.blocked {
+            self.record_task_outcome(
+                task_store,
+                &candidate.member.key,
+                &row,
+                now,
+                ReminderOutcome::Blocked,
+                stats,
+            )
+            .await;
+            return;
+        }
+        if stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
+            return;
+        }
+        let runtime = self.service_runtime.clone();
+        let member = candidate.member.key.clone();
+        let row_for_dispatch = row.clone();
+        let dispatch = run_blocking(move || {
+            build_task_reminder_dispatch(&runtime, &member, &row_for_dispatch)
+        })
+        .await;
+        let dispatch = match dispatch {
+            Ok(Some(dispatch)) => dispatch,
+            Ok(None) => return,
+            Err(_) => {
+                self.record_task_outcome(
+                    task_store,
+                    &candidate.member.key,
+                    &row,
+                    now,
+                    ReminderOutcome::Unrenderable,
+                    stats,
+                )
+                .await;
+                return;
+            }
+        };
+        let Some(emitter) = self.selector.select_emitter(&dispatch) else {
+            tracing::info!(event = "herdr_queue_poll_outcome", member = %candidate.member.key, outcome = "reminder_target_not_present", "Herdr task reminder selector returned no emitter");
+            return;
+        };
+        match emitter
+            .emit_received_message(dispatch, RequestDeadline::after(HERDR_REQUEST_DEADLINE))
+            .await
+        {
+            Ok(_) => {
+                self.record_task_outcome(
+                    task_store,
+                    &candidate.member.key,
+                    &row,
+                    now,
+                    ReminderOutcome::Emitted,
+                    stats,
                 )
                 .await
-            {
-                Ok(rows) => rows,
-                Err(error) => {
-                    tracing::warn!(error = %error, member = %candidate.member.key, "Herdr task reminder read failed");
-                    continue;
-                }
-            };
-            let Some(row) = select_open_task(rows) else {
-                continue;
-            };
-            if !self.reminder_due(&candidate.member.key, &row, now) {
-                continue;
             }
-            if candidate.blocked {
-                if self
-                    .record_task_reminder(
-                        &task_store,
-                        &candidate.member.key,
-                        &row,
-                        now,
-                        ReminderOutcome::Blocked,
-                    )
-                    .await
-                {
-                    stats.task_reminders_blocked += 1;
-                    self.stamp_task_attempt(&candidate.member.key, now);
-                }
-                continue;
-            }
-            if stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
-                break;
-            }
-            let runtime = self.service_runtime.clone();
-            let member = candidate.member.key.clone();
-            let row_for_dispatch = row.clone();
-            let dispatch = run_blocking(move || {
-                build_task_reminder_dispatch(&runtime, &member, &row_for_dispatch)
-            })
-            .await;
-            let dispatch = match dispatch {
-                Ok(Some(dispatch)) => dispatch,
-                Ok(None) => continue,
-                Err(_) => {
-                    if self
-                        .record_task_reminder(
-                            &task_store,
-                            &candidate.member.key,
-                            &row,
-                            now,
-                            ReminderOutcome::Unrenderable,
-                        )
-                        .await
-                    {
-                        stats.task_reminders_unrenderable += 1;
-                        self.stamp_task_attempt(&candidate.member.key, now);
-                    }
-                    continue;
-                }
-            };
-            let Some(emitter) = self.selector.select_emitter(&dispatch) else {
-                continue;
-            };
-            match emitter
-                .emit_received_message(dispatch, RequestDeadline::after(HERDR_REQUEST_DEADLINE))
-                .await
-            {
-                Ok(_) => {
-                    if self
-                        .record_task_reminder(
-                            &task_store,
-                            &candidate.member.key,
-                            &row,
-                            now,
-                            ReminderOutcome::Emitted,
-                        )
-                        .await
-                    {
-                        stats.prompted += 1;
-                        stats.task_reminders += 1;
-                        self.stamp_task_attempt(&candidate.member.key, now);
-                    }
-                }
-                Err(error) => {
-                    if error.code() == AtmErrorCode::HerdrUnavailable {
-                        stats.breaker_open += 1;
-                    }
-                }
-            }
+            Err(error) if error.code() == AtmErrorCode::HerdrUnavailable => stats.breaker_open += 1,
+            Err(_) => {}
         }
+    }
+
+    async fn record_task_outcome(
+        &self,
+        task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+        member: &MemberKey,
+        row: &TaskRow,
+        now: IsoTimestamp,
+        outcome: ReminderOutcome,
+        stats: &mut HerdrQueueWakeStats,
+    ) {
+        if !self
+            .record_task_reminder(task_store, member, row, now, outcome)
+            .await
+        {
+            return;
+        }
+        match outcome {
+            ReminderOutcome::Emitted => {
+                stats.prompted += 1;
+                stats.task_reminders += 1;
+            }
+            ReminderOutcome::Unrenderable => stats.task_reminders_unrenderable += 1,
+            ReminderOutcome::Blocked => stats.task_reminders_blocked += 1,
+        }
+        self.stamp_task_attempt(member, now);
     }
 
     async fn record_task_reminder(
