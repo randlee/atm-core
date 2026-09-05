@@ -521,6 +521,12 @@ def provision_windows_task(args: argparse.Namespace) -> None:
     require_windows_task_selector(args)
 
 
+def systemd_unit_missing(detail: str) -> bool:
+    """Recognize only systemd's absent-unit diagnostics so an optional stop never hides a denial."""
+    lowered = detail.lower()
+    return "not loaded" in lowered or "not found" in lowered
+
+
 def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = False) -> None:
     if platform.system() == "Windows":
         if not args.service:
@@ -546,9 +552,11 @@ def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = F
     command = service_commands(args, action)
     if platform.system() != "Darwin":
         result = run(command, timeout=20.0)
-        if result.returncode == 0 or (allow_absent and action == "stop"):
+        if result.returncode == 0:
             return
         detail = (result.stderr or result.stdout).strip()
+        if allow_absent and action == "stop" and systemd_unit_missing(detail):
+            return
         raise SwitchError(f"service {action} failed: {' '.join(command)}: {detail}")
 
     domain = f"gui/{os.getuid()}"

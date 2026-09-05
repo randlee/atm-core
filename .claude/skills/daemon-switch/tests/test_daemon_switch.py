@@ -154,6 +154,36 @@ class WindowsScheduledTaskTests(unittest.TestCase):
         with mock.patch.object(DAEMON_SWITCH, "run", return_value=missing):
             self.assertEqual(DAEMON_SWITCH.windows_task_status("atm-daemon")["state"], "absent")
 
+    def test_optional_stop_does_not_hide_a_denied_task_query(self) -> None:
+        denied = subprocess.CompletedProcess(["schtasks.exe"], 1, "", "ERROR: Access is denied.")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            mock.patch.object(DAEMON_SWITCH, "run", return_value=denied),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "Access is denied"):
+                DAEMON_SWITCH.run_service(self.args, "stop", allow_absent=True)
+
+    def test_optional_stop_skips_only_an_absent_task(self) -> None:
+        missing = subprocess.CompletedProcess(
+            ["schtasks.exe"], 1, "", "ERROR: The system cannot find the file specified."
+        )
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            mock.patch.object(DAEMON_SWITCH, "run", return_value=missing),
+        ):
+            DAEMON_SWITCH.run_service(self.args, "stop", allow_absent=True)
+
+    def test_linux_optional_stop_does_not_hide_a_denied_unit(self) -> None:
+        args = argparse.Namespace(service="atm-daemon")
+        denied = subprocess.CompletedProcess(["systemctl"], 1, "", "Failed to stop atm-daemon.service: Access denied")
+        missing = subprocess.CompletedProcess(["systemctl"], 5, "", "Failed to stop atm-daemon.service: Unit atm-daemon.service not loaded.")
+        with mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Linux"):
+            with mock.patch.object(DAEMON_SWITCH, "run", return_value=denied):
+                with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "Access denied"):
+                    DAEMON_SWITCH.run_service(args, "stop", allow_absent=True)
+            with mock.patch.object(DAEMON_SWITCH, "run", return_value=missing):
+                DAEMON_SWITCH.run_service(args, "stop", allow_absent=True)
+
     def test_start_requires_the_task_to_launch_the_daemon_selector(self) -> None:
         with (
             mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
