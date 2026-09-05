@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-PHASEGATE-003>
+  a triage:Finding ;
+  triage:findingId "AW-PHASEGATE-003" ;
+  triage:title "boundaries/atm-observability/tracing-bridge.toml is unswept by the Rust boundary mirror-guard" ;
+  triage:description "req-qa (qa-pr1199-r1 phase-end review), independently confirmed by quality-mgr via direct read of crates/atm-architecture/tests/boundary_enforcement.rs and boundaries/atm-observability/tracing-bridge.toml: tracing-bridge.toml:25-30 declares forbidden_edges including 'atm-daemon -> atm-observability', 'atm-observability -> atm-daemon-bootstrap', 'atm-observability -> atm-http-runtime', and 'atm-observability -> atm-storage-rusqlite'. None of these pairs appear in EXPECTED_FORBIDDEN_EDGES (boundary_enforcement.rs:19-54), and guarded_boundary_files() (boundary_enforcement.rs:3849-3860) does not list boundaries/atm-observability/tracing-bridge.toml at all -- confirmed by direct grep, zero matches for 'atm-observability' anywhere in boundary_enforcement.rs. This means boundary_toml_forbidden_edges_match_rust_guard_catalog (the TOML<->Rust mirror-check test) never sweeps this boundary record: a future PR that reintroduces one of these forbidden edges in code would not be caught by this specific mirror-check gate. Not a live violation today (no such edge currently exists in the dependency graph) -- a coverage gap in the guard catalog itself. This is the same defect class previously recorded in a different phase: .triage/phase-an/findings/QA-001-AN2.ttl (a boundary TOML record omitted from the same Rust mirror-guard structures) -- recommend a systemic fix (e.g. guarded_boundary_files() auto-discovering all boundaries/*/*.toml rather than an explicit allowlist) rather than a one-off patch, to prevent a third recurrence in a future phase. Fix (minimal): add the four tracing-bridge.toml forbidden_edges pairs to EXPECTED_FORBIDDEN_EDGES and add boundaries/atm-observability/tracing-bridge.toml to guarded_boundary_files()." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "integration_review" ;
+  triage:category "boundary-enforcement" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "boundary_enforcement.rs - recurring defect class, see .triage/phase-an/findings/QA-001-AN2.ttl" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T10:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW-PHASE-GATE-REVIEW ;
+  triage:foundAt "2026-09-05T10:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-PHASEGATE-003/PR1199-1> .
+
+<urn:atm:triage:occurrence/AW-PHASEGATE-003/PR1199-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 19 ;
+  triage:snippet "EXPECTED_FORBIDDEN_EDGES and guarded_boundary_files() omit boundaries/atm-observability/tracing-bridge.toml entirely -- mirror-guard coverage gap" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "3b0b05f21" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-PHASEGATE/3b0b05f21-003> .
+
+<urn:atm:triage:worktree/AW-PHASEGATE/3b0b05f21-003>
+  a triage:WorktreeSnapshot ;
+  triage:path "verify-pr1199" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "3b0b05f21" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-PHASEGATE-002>
+  a triage:Finding ;
+  triage:findingId "AW-PHASEGATE-002" ;
+  triage:title "docs/project-plan.md section 55 header still reads '[IN PROGRESS]' on the phase's own closeout PR" ;
+  triage:description "req-qa (qa-pr1199-r1 phase-end review), independently confirmed by quality-mgr via direct read: docs/project-plan.md:1563 reads '## 55. Phase AW -- Unified Retained Runtime Logging [IN PROGRESS]' while the sprint table immediately below it (lines 1573-1577) marks all five sprints AW.1-AW.5 as `complete`, and this PR (#1199, integrate/phase-aw -> develop) is itself the phase's closeout PR. Docs-only inconsistency, no functional impact, but misleading for anyone reading the plan doc post-merge. Fix: change the section-55 header bracket tag to [COMPLETE -- INTEGRATION PR #1199] (matching the convention used for phase 54's header at project-plan.md) as part of the docs closeout commit." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "integration_review" ;
+  triage:category "doc-ci-mismatch" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T10:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW-PHASE-GATE-REVIEW ;
+  triage:foundAt "2026-09-05T10:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-PHASEGATE-002/PR1199-1> .
+
+<urn:atm:triage:occurrence/AW-PHASEGATE-002/PR1199-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1563 ;
+  triage:snippet "## 55. Phase AW -- Unified Retained Runtime Logging [IN PROGRESS] -- stale against all-complete sprint table and this PR being the phase closeout" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "3b0b05f21" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-PHASEGATE/3b0b05f21-002> .
+
+<urn:atm:triage:worktree/AW-PHASEGATE/3b0b05f21-002>
+  a triage:WorktreeSnapshot ;
+  triage:path "verify-pr1199" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "3b0b05f21" ;
+  triage:orderIndex 1 .
