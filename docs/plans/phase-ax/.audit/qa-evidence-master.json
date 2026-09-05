@@ -3,7 +3,7 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-05T05:00:31Z",
-    "end": "2026-09-05T15:36:11Z"
+    "end": "2026-09-05T16:56:30Z"
   },
   "scope": "phase-ax sprints AX.1-AX.7 (graph-orchestration cursor over .sprints/AX; sprint PRs #1185 AX.1, #1186 AX.2, #1191 AX.3, #1194 AX.4, #1201 AX.5 all merged into integrate/phase-ax). Every QA round quality-mgr reported for AX.1-AX.5 is listed; the latest run_type qa per sprint is the authoritative verdict. AX.6 (feature/ax6-lead-notification-doctor, cipher, Assignment a21) is in development with no QA run yet; AX.7 has not started. This master is extended with each authoritative verdict message as quality-mgr reports it.",
   "count_basis": "headline/reviewer",
@@ -508,12 +508,38 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "Sprint AX.5 QA-4: PASS (0 blocking / 0 important / 0 minor), PR #1201 @ 4e9f6602f. Final Quality Report: https://github.com/randlee/atm-core/pull/1201#issuecomment-5552870450. 0/0/0 merge gate met, unanimous req-qa/arch-qa/rust-qa-agent. Resolutions r59/r60. rust-qa-agent's non-defect duplication observation recorded by fenix as AX5-QA4-001 (minor) and carried to AX.6. PR #1201 merged into integrate/phase-ax at d21656934."
+    },
+    {
+      "run_id": "AX6-QA1",
+      "aich_sprint": "AX6",
+      "phase_sprint": "AX.6",
+      "pass": "QA-1",
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-05T16:40:19Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M1S737B31VJBC1BFXX49K4Z2",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "QA-AX6-R1-1788626395 dispatched by fenix via qa-template.xml.j2 for PR #1204 at head 490a6c42a (full QA-1 reviewer set)",
+      "result_time_utc": "2026-09-05T16:56:30Z",
+      "result_time_pst": null,
+      "result_message_id": "01M1S803QW23J30R5Y0B8FBFAF",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 9,
+      "important": 10,
+      "minor": 4,
+      "count_basis": "headline/reviewer (1 critical counted as blocking)",
+      "evidence": "Sprint AX.6 QA-1: FAIL (1 critical + 8 blocking / 10 important / 4 minor), PR #1204 @ 490a6c42a. Final Quality Report: https://github.com/randlee/atm-core/pull/1204#issuecomment-5553344183. 0/9 deliverables at 100%; critical AX6-QA1-001 notify() forwards escalation body halves into Herdr argv (HR-SAFE-003); required ax6_01/02/03 test suites largely absent; D9 three-file split disputed (req-qa blocking vs arch-qa reconciliation) pending fenix ruling."
     }
   ],
   "coverage_gaps": [
-    "AX.6: dev in progress (GO-AX6-1788623000, cipher, a21 2026-09-05T15:49Z); no QA run until the dev completion and PR exist.",
     "AX.7: not started (must_follow AX.6).",
     "AX2-QA2 head SHA not carried by the verdict message excerpt; PR #1186 is the authoritative reference.",
-    "AX5-QA1 headline counts (4/8/7) differ from the deduplicated triage records (4/8/5); the triage records are the lifecycle source."
+    "AX5-QA1 headline counts (4/8/7) differ from the deduplicated triage records (4/8/5); the triage records are the lifecycle source.",
+    "AX.6: QA-1 FAIL at 490a6c42a; fix pass pending, later QA runs appended as they occur.",
+    "AX.7: stacked on the AX.6 branch (feature/ax7-herdr-dogfood-evidence, PR #1206, stack #1207); fenix-operated proof sprint, starts when AX.6 has no open blocking findings."
   ]
 }
