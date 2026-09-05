@@ -15,23 +15,51 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T10:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW-PHASE-GATE-REVIEW ;
   triage:foundAt "2026-09-05T10:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AW-PHASEGATE-001/PR1199-1> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-PHASEGATE-001/PR1199-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-PHASEGATE-001/PR1200-1> ;
+  triage:closedAt "2026-09-05T11:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+# CLOSURE (qa-pr1200-r1, quality-mgr): PR #1200 (fix/phase-aw-phasegate @
+# db19fd9572385ec7c488976294a54c3f2e93fa4e) adds the missing `status:` and
+# `worktree:` frontmatter fields to
+# docs/plans/phase-aw/sprint-AW.2-sqlite-diagnostic-timeline.md, now reading
+# `branch: feature/aw2-sqlite-diagnostic-timeline`,
+# `worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aw2-sqlite-diagnostic-timeline`,
+# `status: complete` -- matching the sibling AW.1/AW.3/AW.4/AW.5 sprint docs.
+# quality-mgr independently confirmed via direct read of the fixed file in
+# /tmp/verify-pr1200. req-qa, arch-qa, rust-qa-agent, and ruthless-boundary-qa
+# all independently returned PASS on this fix in the qa-pr1200-r1 round with
+# zero remaining findings. Doc-hygiene only, no functional/test impact. This
+# closes the frontmatter gap this finding was filed for.
 
 <urn:atm:triage:occurrence/AW-PHASEGATE-001/PR1199-1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-aw/sprint-AW.2-sqlite-diagnostic-timeline.md" ;
   triage:line 1 ;
   triage:snippet "missing status:/worktree: frontmatter fields present on AW.1/AW.3/AW.4/AW.5 sprint docs" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "3b0b05f21" ;
   triage:occursIn <urn:atm:triage:worktree/AW-PHASEGATE/3b0b05f21> .
+
+<urn:atm:triage:occurrence/AW-PHASEGATE-001/PR1200-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-aw/sprint-AW.2-sqlite-diagnostic-timeline.md" ;
+  triage:line 1 ;
+  triage:snippet "adds status: complete / worktree: <path> frontmatter matching sibling sprint docs" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/phase-aw-phasegate" ;
+  triage:headSha "db19fd9572385ec7c488976294a54c3f2e93fa4e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-PHASEGATE/db19fd957-001> .
 
 <urn:atm:triage:worktree/AW-PHASEGATE/3b0b05f21>
   a triage:WorktreeSnapshot ;
@@ -39,3 +67,10 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "3b0b05f21" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AW-PHASEGATE/db19fd957-001>
+  a triage:WorktreeSnapshot ;
+  triage:path "verify-pr1200" ;
+  triage:branch "fix/phase-aw-phasegate" ;
+  triage:headSha "db19fd9572385ec7c488976294a54c3f2e93fa4e" ;
+  triage:orderIndex 2 .

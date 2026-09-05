@@ -15,23 +15,64 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "boundary_enforcement.rs - recurring defect class, see .triage/phase-an/findings/QA-001-AN2.ttl" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T10:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW-PHASE-GATE-REVIEW ;
   triage:foundAt "2026-09-05T10:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AW-PHASEGATE-003/PR1199-1> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-PHASEGATE-003/PR1199-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-PHASEGATE-003/PR1200-1> ;
+  triage:closedAt "2026-09-05T11:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+# CLOSURE (qa-pr1200-r1, quality-mgr): PR #1200 (fix/phase-aw-phasegate @
+# db19fd9572385ec7c488976294a54c3f2e93fa4e) implements the systemic fix this
+# finding recommended rather than the minimal patch: guarded_boundary_files()
+# (boundary_enforcement.rs:3884) is now a one-line delegate to a new
+# all_boundary_files() (boundary_enforcement.rs:3888-3910), which walks
+# boundaries/*/*.toml via fs::read_dir across every boundary subdirectory
+# instead of an explicit allowlist. A new self-check test
+# guarded_boundaries_include_every_boundary_record
+# (boundary_enforcement.rs:3911-3920) asserts guarded_boundary_files() ==
+# all_boundary_files(), proving the discovery is exhaustive. The four
+# tracing-bridge.toml forbidden_edges pairs are now present in
+# EXPECTED_FORBIDDEN_EDGES (boundary_enforcement.rs lines 31, 38-40):
+# ("atm-daemon","atm-observability"), ("atm-observability","atm-daemon-bootstrap"),
+# ("atm-observability","atm-http-runtime"), ("atm-observability","atm-storage-rusqlite").
+# quality-mgr independently confirmed all of this by direct source read in
+# /tmp/verify-pr1200 and ran `cargo test -p atm-architecture --test
+# boundary_enforcement` directly: 93 passed, 0 failed. All four reviewers
+# (req-qa, arch-qa, rust-qa-agent, ruthless-boundary-qa) independently
+# confirmed no previously-guarded boundary edge was dropped or relaxed by the
+# guarded_boundary_files() -> all_boundary_files() refactor, and all endorsed
+# the auto-discovery approach as correctly foreclosing this defect class
+# after its second recurrence (see .triage/phase-an/findings/QA-001-AN2.ttl
+# for the first). No crates/atm-daemon/ (legacy synchronous daemon) files
+# touched. This closes the mirror-guard coverage gap this finding was filed
+# for.
 
 <urn:atm:triage:occurrence/AW-PHASEGATE-003/PR1199-1>
   a triage:Occurrence ;
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 19 ;
   triage:snippet "EXPECTED_FORBIDDEN_EDGES and guarded_boundary_files() omit boundaries/atm-observability/tracing-bridge.toml entirely -- mirror-guard coverage gap" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "3b0b05f21" ;
   triage:occursIn <urn:atm:triage:worktree/AW-PHASEGATE/3b0b05f21-003> .
+
+<urn:atm:triage:occurrence/AW-PHASEGATE-003/PR1200-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3884 ;
+  triage:snippet "guarded_boundary_files() delegates to all_boundary_files(), an fs::read_dir walk of boundaries/*/*.toml; EXPECTED_FORBIDDEN_EDGES now includes all four tracing-bridge.toml edges; guarded_boundaries_include_every_boundary_record proves exhaustiveness" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/phase-aw-phasegate" ;
+  triage:headSha "db19fd9572385ec7c488976294a54c3f2e93fa4e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-PHASEGATE/db19fd957-003> .
 
 <urn:atm:triage:worktree/AW-PHASEGATE/3b0b05f21-003>
   a triage:WorktreeSnapshot ;
@@ -39,3 +80,10 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "3b0b05f21" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AW-PHASEGATE/db19fd957-003>
+  a triage:WorktreeSnapshot ;
+  triage:path "verify-pr1200" ;
+  triage:branch "fix/phase-aw-phasegate" ;
+  triage:headSha "db19fd9572385ec7c488976294a54c3f2e93fa4e" ;
+  triage:orderIndex 2 .
