@@ -36,15 +36,11 @@ fn diagnostic_level_rank(level: &str) -> Option<i64> {
     }
 }
 
-fn diagnostic_level_rank(level: &str) -> Option<i64> {
-    match level.to_ascii_lowercase().as_str() {
-        "trace" => Some(0),
-        "debug" => Some(1),
-        "info" => Some(2),
-        "warn" => Some(3),
-        "error" => Some(4),
-        _ => None,
-    }
+fn escape_like_prefix(prefix: &str) -> String {
+    prefix
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
 }
 
 #[derive(Clone)]
@@ -127,6 +123,7 @@ impl DiagnosticTimelineStore for SqliteDiagnosticTimeline {
                         .ok_or_else(|| AtmError::mailbox_read("unknown diagnostic level filter"))
                 })
                 .transpose()?;
+            let component_prefix = query.component_prefix.as_deref().map(escape_like_prefix);
             let mut statement = connection
                 .prepare(
                     "SELECT id, ts_unix_ms, level, component, code, correlation_id, origin, \
@@ -147,7 +144,7 @@ impl DiagnosticTimelineStore for SqliteDiagnosticTimeline {
                         query.since,
                         query.until,
                         level_at_least,
-                        query.component_prefix,
+                        component_prefix,
                         cursor_ts,
                         cursor_id,
                         limit
@@ -431,5 +428,39 @@ mod tests {
             warn.iter().map(|event| event.level.as_str()).collect::<Vec<_>>(),
             vec!["warn", "error"]
         );
+    }
+
+    #[test]
+    fn component_prefix_escapes_like_wildcards() {
+        let directory = tempdir().expect("temporary database directory");
+        let timeline = SqliteDiagnosticTimeline::open(directory.path().join("mail.db"))
+            .expect("timeline opens and migrates");
+        timeline
+            .db
+            .with_connection(|connection| {
+                for (timestamp, component) in [
+                    (1, "component%literal_name"),
+                    (2, "componentXliteral_name"),
+                ] {
+                    connection
+                        .execute(
+                            "INSERT INTO diagnostic_events (ts_unix_ms, level, component, origin, message) VALUES (?1, 'info', ?2, 'test', 'fixture')",
+                            params![timestamp, component],
+                        )
+                        .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                }
+                Ok(())
+            })
+            .expect("seed component fixture");
+
+        let rows = timeline
+            .query(&DiagnosticQuery {
+                component_prefix: Some("component%literal_".to_owned()),
+                limit: Some(10),
+                ..DiagnosticQuery::default()
+            })
+            .expect("query escaped component prefix");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].component, "component%literal_name");
     }
 }

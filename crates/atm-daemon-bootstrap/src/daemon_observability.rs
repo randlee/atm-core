@@ -63,6 +63,10 @@ impl DaemonObservability {
     }
 
     pub(crate) fn install_tracing_bridge(&self) -> Result<(), AtmError> {
+        // The replacement daemon deliberately owns this process-global
+        // subscriber. A pre-installed subscriber is a bootstrap configuration
+        // error, so fail closed instead of silently dropping retained events
+        // into an unknown logging pipeline.
         let logger = self.logger.lock().map_err(|_| {
             AtmError::observability_bootstrap(
                 "failed to install tracing bridge because the logger lock was poisoned",
