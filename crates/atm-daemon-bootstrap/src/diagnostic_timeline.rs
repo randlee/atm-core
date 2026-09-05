@@ -539,9 +539,20 @@ mod tests {
             let mut sinks = monitor.sinks.lock().expect("monitor state");
             let state = sinks.get_mut("timeline").expect("degraded state");
             assert!(state.degraded_since.is_some());
+            // `Instant::now() - Duration` panics on arithmetic underflow if
+            // the process monotonic clock has less uptime than the offset
+            // (possible on a just-booted VM). Use `checked_sub` and fail with
+            // a clear diagnostic instead of an opaque subtraction panic.
             state.degraded_since = Some(
                 std::time::Instant::now()
-                    - std::time::Duration::from_secs(DEGRADATION_RECOVERY_WINDOW_SECS + 1),
+                    .checked_sub(std::time::Duration::from_secs(
+                        DEGRADATION_RECOVERY_WINDOW_SECS + 1,
+                    ))
+                    .expect(
+                        "process monotonic clock must have at least \
+                         DEGRADATION_RECOVERY_WINDOW_SECS + 1s of uptime to exercise \
+                         the recovery-window transition",
+                    ),
             );
             state.last_transition = None;
         }
