@@ -1115,62 +1115,7 @@ class MacosTemporaryLaunchAdapterTests(unittest.TestCase):
         self.assertIsNone(journal.load())
 
 
-class WindowsTemporaryLaunchAdapterTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
-        self.cli = self.root / "atm.exe"
-        self.daemon = self.root / "atm-daemon.exe"
-        for binary in (self.cli, self.daemon):
-            binary.write_bytes(binary.name.encode("utf-8"))
-            binary.chmod(0o700)
-        self.args = argparse.Namespace(
-            yes=True,
-            service="atm-daemon-test",
-            peer_wire_security=DAEMON_SWITCH.PeerWireSecurity.PLAINTEXT_TEST,
-            repair_orphan=False,
-        )
-        self.current = DAEMON_SWITCH.quote_windows_command_line(
-            [str(self.daemon), "--log-format", "json"]
-        )
-        self.commands: list[list[str]] = []
-        self.before_config: object | None = None
-        self.adapter = DAEMON_SWITCH.WindowsScmAdapter(self.run_sc)
-
-    def tearDown(self) -> None:
-        self.temporary.cleanup()
-
-    def run_sc(self, command: object, _timeout: float) -> object:
-        values = list(command)
-        self.commands.append(values)
-        if values[1] == "qc":
-            return subprocess.CompletedProcess(values, 0, f"BINARY_PATH_NAME   : {self.current}\n", "")
-        if values[1] == "config":
-            if callable(self.before_config):
-                self.before_config()
-            self.current = values[4]
-            return subprocess.CompletedProcess(values, 0, "SUCCESS\n", "")
-        raise AssertionError(f"unexpected SCM command: {values}")
-
-    def captured_session(self) -> object:
-        captured = self.adapter.capture(
-            self.args,
-            self.cli,
-            self.daemon,
-            self.args.peer_wire_security,
-        )
-        return DAEMON_SWITCH.TemporaryLaunchSession.captured(
-            peer_wire_security=self.args.peer_wire_security,
-            platform="Windows",
-            account_id="user:benchmark",
-            service=self.args.service,
-            cli_path=self.cli,
-            cli_digest=DAEMON_SWITCH.sha256_file(self.cli),
-            daemon_path=self.daemon,
-            daemon_digest=DAEMON_SWITCH.sha256_file(self.daemon),
-            launch_spec=captured,
-        )
-
+class WindowsCommandLineCodecTests(unittest.TestCase):
     def test_windows_argv_codec_round_trips_quoted_arguments(self) -> None:
         argv = [
             r"C:\\Program Files\\ATM\\atm-daemon.exe",
@@ -1180,72 +1125,12 @@ class WindowsTemporaryLaunchAdapterTests(unittest.TestCase):
             'quote " and trailing slash\\',
             "",
         ]
-
-        self.assertEqual(DAEMON_SWITCH.parse_windows_command_line(DAEMON_SWITCH.quote_windows_command_line(argv)), argv)
-
-    def test_overlay_is_journaled_before_exact_scm_mutation_then_restored(self) -> None:
-        session = self.captured_session().transition(DAEMON_SWITCH.TemporaryLaunchPhase.STOPPED)
-        overlay_spec = self.adapter.apply_overlay(self.args, session)
-        session = session.with_overlay(overlay_spec)
-        original = self.current
-
-        self.assertEqual(self.current, original)
-        self.adapter.activate_overlay(self.args, session)
-        self.assertEqual(self.current, overlay_spec.overlay_reference)
         self.assertEqual(
-            DAEMON_SWITCH.parse_windows_command_line(self.current)[-2:],
-            ["--peer-wire-security", "plaintext-test"],
+            DAEMON_SWITCH.parse_windows_command_line(
+                DAEMON_SWITCH.quote_windows_command_line(argv)
+            ),
+            argv,
         )
-
-        self.adapter.restore_exact(self.args, session)
-        self.adapter.restore_exact(self.args, session)
-
-        self.assertEqual(self.current, original)
-
-    def test_begin_persists_overlay_before_scm_config_at_fake_service_boundary(self) -> None:
-        journal = DAEMON_SWITCH.TemporaryLaunchJournal(self.root / "state" / "temporary-launch.json")
-
-        def assert_durable_overlay() -> None:
-            active = journal.load()
-            assert active is not None
-            self.assertEqual(active.phase, DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_APPLIED)
-            self.assertIsNotNone(active.overlay_reference)
-            self.assertIsNotNone(active.overlay_digest)
-
-        self.before_config = assert_durable_overlay
-        with (
-            mock.patch.object(DAEMON_SWITCH, "temporary_launch_journal", return_value=journal),
-            mock.patch.object(DAEMON_SWITCH, "selected_matched_pair", return_value=(self.cli, self.daemon)),
-            mock.patch.object(DAEMON_SWITCH, "temporary_launch_adapter", return_value=self.adapter),
-            mock.patch.object(DAEMON_SWITCH, "account_identifier", return_value="user:benchmark"),
-            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
-            mock.patch.object(DAEMON_SWITCH, "run_service"),
-            mock.patch.object(DAEMON_SWITCH, "require_stopped_daemon"),
-            mock.patch.object(DAEMON_SWITCH, "wait_for_temporary_launch", return_value=(True, "ready")),
-            redirect_stdout(io.StringIO()),
-        ):
-            DAEMON_SWITCH.begin_temporary_launch(self.args)
-
-        active = journal.load()
-        assert active is not None
-        self.assertEqual(active.phase, DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_STARTED)
-
-    def test_capture_rejects_preexisting_peer_wire_security(self) -> None:
-        self.current = DAEMON_SWITCH.quote_windows_command_line(
-            [str(self.daemon), "--peer-wire-security", "mutual-tls"]
-        )
-
-        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "already selects"):
-            self.adapter.capture(self.args, self.cli, self.daemon, self.args.peer_wire_security)
-
-    def test_restore_refuses_operator_changed_binary_path(self) -> None:
-        session = self.captured_session().transition(DAEMON_SWITCH.TemporaryLaunchPhase.STOPPED)
-        session = session.with_overlay(self.adapter.apply_overlay(self.args, session))
-        self.adapter.activate_overlay(self.args, session)
-        self.current = DAEMON_SWITCH.quote_windows_command_line([str(self.daemon), "--operator-change"])
-
-        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "changed; refusing restore"):
-            self.adapter.restore_exact(self.args, session)
 
 
 @POSIX_ONLY
@@ -1406,6 +1291,120 @@ class LinuxTemporaryLaunchAdapterTests(unittest.TestCase):
         active = journal.load()
         assert active is not None
         self.assertEqual(active.phase, DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_STARTED)
+
+
+class SwitchModeTests(unittest.TestCase):
+    def test_latest_release_uses_the_github_release_api(self) -> None:
+        releases = [{"draft": False, "prerelease": False, "tag_name": "v1.5.1"}]
+        with mock.patch.object(DAEMON_SWITCH, "github_json", return_value=releases) as request:
+            self.assertEqual(DAEMON_SWITCH.latest_published_release_version(), "1.5.1")
+        request.assert_called_once_with("")
+
+    def test_release_resolution_uses_platform_owned_pair_and_verifies_both_versions(self) -> None:
+        cli = Path("/release/bin/atm")
+        daemon = Path("/release/bin/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            mock.patch.object(DAEMON_SWITCH, "release_install_roots", return_value=[Path("/release")]),
+            mock.patch.object(DAEMON_SWITCH, "pair_from_root", return_value=(cli, daemon)),
+            mock.patch.object(DAEMON_SWITCH, "require_pair_version") as versions,
+        ):
+            self.assertEqual(
+                DAEMON_SWITCH.resolve_release_pair("1.5.1"),
+                (cli, daemon, "1.5.1"),
+            )
+        versions.assert_called_once_with(cli, daemon, "1.5.1")
+
+    def test_macos_release_resolution_uses_the_homebrew_pair(self) -> None:
+        cli = Path("/opt/homebrew/opt/atm/bin/atm")
+        daemon = Path("/opt/homebrew/opt/atm/bin/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "release_install_roots", return_value=[cli.parent]),
+            mock.patch.object(DAEMON_SWITCH, "pair_from_root", return_value=(cli, daemon)),
+            mock.patch.object(DAEMON_SWITCH, "require_pair_version"),
+        ):
+            self.assertEqual(
+                DAEMON_SWITCH.resolve_release_pair("1.5.1"),
+                (cli, daemon, "1.5.1"),
+            )
+
+    def test_linux_release_resolution_downloads_only_after_package_roots_miss(self) -> None:
+        cli = Path("/cache/bin/atm")
+        daemon = Path("/cache/bin/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Linux"),
+            mock.patch.object(DAEMON_SWITCH, "release_install_roots", return_value=[Path("/usr/bin")]),
+            mock.patch.object(DAEMON_SWITCH, "pair_from_root", return_value=None),
+            mock.patch.object(DAEMON_SWITCH, "extract_linux_release_archive", return_value=(cli, daemon)) as download,
+            mock.patch.object(DAEMON_SWITCH, "require_pair_version") as versions,
+        ):
+            self.assertEqual(
+                DAEMON_SWITCH.resolve_release_pair("1.5.1"),
+                (cli, daemon, "1.5.1"),
+            )
+        download.assert_called_once_with("1.5.1")
+        versions.assert_called_once_with(cli, daemon, "1.5.1")
+
+    def test_pair_version_refuses_a_mismatch_before_selector_mutation(self) -> None:
+        cli = Path("/candidate/atm")
+        daemon = Path("/candidate/atm-daemon")
+        with mock.patch.object(DAEMON_SWITCH, "binary_release_version", side_effect=["1.5.1", "1.5.0"]):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "both equal 1.5.1"):
+                DAEMON_SWITCH.require_pair_version(cli, daemon, "1.5.1")
+
+    def test_worktree_requires_exact_prerelease_tag_at_head_with_remedy(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            worktree = Path(temporary)
+            (worktree / "Cargo.toml").write_text(
+                '[workspace.package]\nversion = "1.5.1"\n', encoding="utf-8"
+            )
+            with mock.patch.object(
+                DAEMON_SWITCH,
+                "run",
+                return_value=subprocess.CompletedProcess([], 0, "prerelease/v1.5.0\n", ""),
+            ):
+                with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "prerelease_tag.py"):
+                    DAEMON_SWITCH.exact_prerelease_tag(worktree)
+
+    def test_worktree_pair_requires_tag_and_binary_versions_before_switch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            worktree = Path(temporary)
+            (worktree / ".git").write_text("gitdir: elsewhere\n", encoding="utf-8")
+            release = worktree / "target" / "release"
+            release.mkdir(parents=True)
+            cli = release / "atm"
+            daemon = release / "atm-daemon"
+            for binary in (cli, daemon):
+                binary.write_text("fixture", encoding="utf-8")
+                binary.chmod(0o700)
+            with (
+                mock.patch.object(DAEMON_SWITCH, "exact_prerelease_tag", return_value="1.5.1"),
+                mock.patch.object(DAEMON_SWITCH, "require_pair_version") as versions,
+            ):
+                self.assertEqual(
+                    DAEMON_SWITCH.prepare_worktree_pair(worktree, False),
+                    (cli.resolve(), daemon.resolve(), "1.5.1"),
+                )
+            versions.assert_called_once_with(cli.resolve(), daemon.resolve(), "1.5.1")
+
+    def test_raw_path_rejects_published_version_outside_release_root_without_opt_out(self) -> None:
+        cli = Path("/worktree/target/release/atm")
+        daemon = Path("/worktree/target/release/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH, "binary_release_version", side_effect=["1.5.0", "1.5.0"]),
+            mock.patch.object(DAEMON_SWITCH, "pair_is_in_release_install_root", return_value=False),
+            mock.patch.object(DAEMON_SWITCH, "release_is_published", return_value=True),
+            redirect_stdout(io.StringIO()),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "--allow-release-version"):
+                DAEMON_SWITCH.validate_raw_pair_mode(cli, daemon, allow_release_version=False)
+
+    def test_switch_parser_exposes_only_the_three_supported_modes(self) -> None:
+        parsed = DAEMON_SWITCH.parser().parse_args(["switch", "--release", "latest", "--yes"])
+        self.assertEqual(parsed.release, "latest")
+        self.assertIsNone(parsed.worktree)
+        self.assertFalse(parsed.bump)
 
 
 if __name__ == "__main__":

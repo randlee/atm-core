@@ -14,9 +14,13 @@ import signal
 import stat
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
+import tomllib
 from typing import Protocol, Sequence
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
 
@@ -49,15 +53,17 @@ from temporary_launch import (  # noqa: E402
 )
 from temporary_launch_macos import MacosLaunchAgentAdapter  # noqa: E402
 from temporary_launch_windows import (  # noqa: E402
-    WindowsScmAdapter,  # noqa: F401 - adapter contract tests import this through the tool module.
-    parse_windows_command_line,
-    quote_windows_command_line,
+    parse_windows_command_line,  # noqa: F401 - tested compatibility codec re-export.
+    quote_windows_command_line,  # noqa: F401 - tested compatibility codec re-export.
 )
 from temporary_launch_linux import LinuxSystemdUserAdapter  # noqa: E402
 
 
 LIVE_PAIR_READINESS_ATTEMPTS = 200
 MACOS_LAUNCH_AGENT_PATH = re.compile(r"^path = (.+)$")
+STABLE_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
+PRERELEASE_TAG_PREFIX = "prerelease/v"
+GITHUB_RELEASES_API = "https://api.github.com/repos/randlee/atm-core/releases"
 # [cass: helpful starter-rust-logging] - retains the bounded readiness state
 # as one named operational contract rather than an unexplained retry literal.
 """Bounded 20-second readiness window for a managed replacement daemon.
@@ -375,6 +381,230 @@ def homebrew_pair() -> tuple[Path, Path] | None:
     if cli.is_file() and daemon.is_file():
         return cli.resolve(), daemon.resolve()
     return None
+
+
+def binary_release_version(binary: Path, label: str) -> str:
+    """Read one binary's declared release version without accepting arbitrary output."""
+    reported = version(binary)
+    if not reported:
+        raise SwitchError(f"cannot determine {label} version: {binary}")
+    candidate = reported.rsplit(maxsplit=1)[-1]
+    if STABLE_VERSION.fullmatch(candidate) is None:
+        raise SwitchError(f"cannot determine {label} version from {reported!r}: {binary}")
+    return candidate
+
+
+def require_pair_version(cli: Path, daemon: Path, expected: str) -> None:
+    """Prove both inactive targets identify one requested release before switching."""
+    cli_version = binary_release_version(cli, "ATM CLI")
+    daemon_version = binary_release_version(daemon, "ATM daemon")
+    if cli_version != expected or daemon_version != expected:
+        raise SwitchError(
+            "target CLI/daemon versions must both equal "
+            f"{expected}; found cli={cli_version}, daemon={daemon_version}"
+        )
+
+
+def github_json(path: str) -> object:
+    """Fetch a small GitHub release payload with an explicit offline failure."""
+    request = Request(
+        f"{GITHUB_RELEASES_API}{path}",
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "atm-daemon-switch"},
+    )
+    try:
+        with urlopen(request, timeout=10) as response:  # noqa: S310 - fixed GitHub API origin.
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        if error.code == 404:
+            return None
+        raise SwitchError(f"cannot resolve GitHub release: HTTP {error.code}") from error
+    except (OSError, URLError, TimeoutError, json.JSONDecodeError) as error:
+        raise SwitchError(
+            "cannot resolve GitHub release while offline or unavailable; connect to the network and retry"
+        ) from error
+
+
+def latest_published_release_version() -> str:
+    """Resolve latest from GitHub rather than silently treating an installed build as latest."""
+    payload = github_json("")
+    if not isinstance(payload, list):
+        raise SwitchError("cannot resolve latest published release: GitHub returned an invalid release list")
+    for release in payload:
+        if not isinstance(release, dict) or release.get("draft") or release.get("prerelease"):
+            continue
+        tag = release.get("tag_name")
+        if isinstance(tag, str) and tag.startswith("v") and STABLE_VERSION.fullmatch(tag[1:]):
+            return tag[1:]
+    raise SwitchError("cannot resolve latest published release: no stable GitHub release exists")
+
+
+def release_is_published(version_value: str) -> bool:
+    """Return whether a stable version has a published GitHub release tag."""
+    payload = github_json(f"/tags/v{version_value}")
+    return isinstance(payload, dict) and not payload.get("draft") and not payload.get("prerelease")
+
+
+def release_archive_triple() -> tuple[str, str]:
+    """Map the host to the manifest's archive target and container extension."""
+    system = platform.system()
+    machine = platform.machine().lower()
+    if system == "Linux":
+        if machine in {"x86_64", "amd64"}:
+            return "x86_64-unknown-linux-gnu", "tar.gz"
+        if machine in {"aarch64", "arm64"}:
+            return "aarch64-unknown-linux-gnu", "tar.gz"
+    if system == "Darwin":
+        if machine in {"x86_64", "amd64"}:
+            return "x86_64-apple-darwin", "tar.gz"
+        if machine in {"aarch64", "arm64"}:
+            return "aarch64-apple-darwin", "tar.gz"
+    if system == "Windows" and machine in {"x86_64", "amd64"}:
+        return "x86_64-pc-windows-msvc", "zip"
+    raise SwitchError(f"no published ATM archive is available for {system} {machine}")
+
+
+def release_install_roots() -> list[Path]:
+    """Return only platform-owned published-install roots, never caller worktrees."""
+    system = platform.system()
+    if system == "Darwin":
+        pair = homebrew_pair()
+        return [pair[0].parent] if pair is not None else []
+    if system == "Windows":
+        local = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+        profile = Path(os.environ.get("USERPROFILE", Path.home()))
+        roots = [local / "Programs" / "ATM", local / "Programs" / "atm", profile / "scoop" / "apps" / "atm" / "current"]
+        packages = local / "Microsoft" / "WinGet" / "Packages"
+        if packages.is_dir():
+            roots.extend(path for path in packages.glob("*ATM*") if path.is_dir())
+        return roots
+    return [Path("/usr/bin"), Path("/usr/local/bin"), Path.home() / ".local" / "bin"]
+
+
+def pair_from_root(root: Path) -> tuple[Path, Path] | None:
+    """Find the conventional matched release pair under one platform-owned root."""
+    cli = root / executable_name("atm")
+    daemon = root / executable_name("atm-daemon")
+    if cli.is_file() and daemon.is_file():
+        return cli.resolve(), daemon.resolve()
+    bin_directory = root / "bin"
+    cli = bin_directory / executable_name("atm")
+    daemon = bin_directory / executable_name("atm-daemon")
+    if cli.is_file() and daemon.is_file():
+        return cli.resolve(), daemon.resolve()
+    return None
+
+
+def extract_linux_release_archive(version_value: str) -> tuple[Path, Path]:
+    """Download a host archive only when no Linux package pair is installed."""
+    triple, extension = release_archive_triple()
+    archive_name = f"atm_{version_value}_{triple}.{extension}"
+    destination = state_path().with_name("released-pairs") / version_value / triple
+    cli = destination / "bin" / executable_name("atm")
+    daemon = destination / "bin" / executable_name("atm-daemon")
+    if cli.is_file() and daemon.is_file():
+        return cli, daemon
+    request = Request(
+        f"https://github.com/randlee/atm-core/releases/download/v{version_value}/{archive_name}",
+        headers={"User-Agent": "atm-daemon-switch"},
+    )
+    try:
+        with urlopen(request, timeout=30) as response:  # noqa: S310 - fixed release origin.
+            archive = response.read()
+    except (OSError, URLError, TimeoutError) as error:
+        raise SwitchError(
+            f"cannot download ATM {version_value} for Linux; install the package or reconnect and retry"
+        ) from error
+    destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    staging = destination.with_name(f".{destination.name}.download")
+    if extension != "tar.gz":
+        raise SwitchError(f"unexpected Linux archive format: {extension}")
+    import io
+
+    with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as bundle:
+        members = bundle.getmembers()
+        for member in members:
+            target = (staging / member.name).resolve()
+            if not target.is_relative_to(staging.resolve()):
+                raise SwitchError("published release archive contains an unsafe path")
+        bundle.extractall(staging, members=members, filter="data")
+    roots = [path for path in staging.iterdir() if path.is_dir()]
+    if len(roots) != 1:
+        raise SwitchError("published release archive has an unexpected layout")
+    extracted = roots[0]
+    os.replace(extracted, destination)
+    shutil.rmtree(staging, ignore_errors=True)
+    return require_executable(cli, "downloaded ATM CLI"), require_executable(daemon, "downloaded ATM daemon")
+
+
+def resolve_release_pair(requested: str) -> tuple[Path, Path, str]:
+    """Resolve one installed (or Linux-downloaded) published pair with no caller paths."""
+    expected = latest_published_release_version() if requested == "latest" else requested
+    if STABLE_VERSION.fullmatch(expected) is None:
+        raise SwitchError("--release must be a stable X.Y.Z version or 'latest'")
+    for root in release_install_roots():
+        pair = pair_from_root(root)
+        if pair is None:
+            continue
+        try:
+            require_pair_version(*pair, expected)
+        except SwitchError:
+            continue
+        return *pair, expected
+    if platform.system() == "Linux":
+        cli, daemon = extract_linux_release_archive(expected)
+        require_pair_version(cli, daemon, expected)
+        return cli, daemon, expected
+    raise SwitchError(
+        f"cannot find installed ATM {expected} on this platform; install the published release and retry"
+    )
+
+
+def workspace_version(worktree: Path) -> str:
+    """Read the worktree package version used for the prerelease tag contract."""
+    try:
+        manifest = tomllib.loads((worktree / "Cargo.toml").read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        raise SwitchError(f"cannot read worktree Cargo.toml: {error}") from error
+    value = manifest.get("workspace", {}).get("package", {}).get("version")
+    if not isinstance(value, str) or STABLE_VERSION.fullmatch(value) is None:
+        raise SwitchError("worktree workspace.package.version must be stable X.Y.Z")
+    return value
+
+
+def exact_prerelease_tag(worktree: Path) -> str:
+    """Require the exact tag to be on HEAD, not merely somewhere in history."""
+    result = run(["git", "-C", str(worktree), "tag", "--points-at", "HEAD"], timeout=10)
+    if result.returncode != 0:
+        raise SwitchError(f"cannot inspect worktree HEAD tags: {(result.stderr or result.stdout).strip()}")
+    expected = f"{PRERELEASE_TAG_PREFIX}{workspace_version(worktree)}"
+    if expected not in result.stdout.splitlines():
+        raise SwitchError(
+            f"worktree HEAD requires exact tag {expected}; run `python3 .just/prerelease_tag.py` on that branch, then rebuild"
+        )
+    return expected[len(PRERELEASE_TAG_PREFIX) :]
+
+
+def prepare_worktree_pair(worktree: Path, bump: bool) -> tuple[Path, Path, str]:
+    """Validate, or explicitly tag/build, a dogfooding worktree before selector mutation."""
+    root = worktree.expanduser().resolve()
+    if not root.is_dir() or not (root / ".git").exists():
+        raise SwitchError(f"--worktree must name a git worktree: {worktree}")
+    if bump:
+        result = run([sys.executable, str(root / ".just" / "prerelease_tag.py")], cwd=root, timeout=180)
+        if result.returncode != 0:
+            raise SwitchError(f"prerelease tagging failed: {(result.stderr or result.stdout).strip()}")
+        result = run(
+            ["cargo", "build", "--release", "-p", "agent-team-mail", "-p", "atm-daemon"],
+            cwd=root,
+            timeout=600,
+        )
+        if result.returncode != 0:
+            raise SwitchError(f"release build after prerelease tag failed: {(result.stderr or result.stdout).strip()}")
+    expected = exact_prerelease_tag(root)
+    cli = require_executable(root / "target" / "release" / executable_name("atm"), "worktree ATM CLI")
+    daemon = require_executable(root / "target" / "release" / executable_name("atm-daemon"), "worktree ATM daemon")
+    require_pair_version(cli, daemon, expected)
+    return cli, daemon, expected
 
 
 def state_path() -> Path:
@@ -1151,10 +1381,37 @@ def context_version(payload: object, context: str) -> str | None:
 
 
 def selected_release_version(cli: Path) -> str:
-    value = version(cli)
-    if not value:
-        raise SwitchError(f"cannot determine selected ATM CLI version: {cli}")
-    return value.rsplit(maxsplit=1)[-1]
+    return binary_release_version(cli, "selected ATM CLI")
+
+
+def pair_is_in_release_install_root(cli: Path, daemon: Path) -> bool:
+    """Recognize only platform-owned release directories as safe stable-version targets."""
+    for root in release_install_roots():
+        try:
+            cli.resolve().relative_to(root.resolve())
+            daemon.resolve().relative_to(root.resolve())
+        except ValueError:
+            continue
+        return True
+    return False
+
+
+def validate_raw_pair_mode(cli: Path, daemon: Path, *, allow_release_version: bool) -> None:
+    """Keep raw paths useful for fixtures while preventing an untagged release-looking build."""
+    cli_version = binary_release_version(cli, "raw-path ATM CLI")
+    daemon_version = binary_release_version(daemon, "raw-path ATM daemon")
+    print(json.dumps({"raw_path_pair": {"cli_version": cli_version, "daemon_version": daemon_version}}))
+    if cli_version != daemon_version:
+        raise SwitchError(
+            f"raw-path CLI/daemon versions must match; found cli={cli_version}, daemon={daemon_version}"
+        )
+    if allow_release_version or pair_is_in_release_install_root(cli, daemon):
+        return
+    if release_is_published(cli_version):
+        raise SwitchError(
+            f"raw-path targets outside the platform release install root report published version {cli_version}; "
+            "use --worktree with an exact prerelease tag or pass --allow-release-version explicitly"
+        )
 
 
 def macos_daemon_executable(pid: int) -> Path | None:
@@ -1262,8 +1519,16 @@ def parser() -> argparse.ArgumentParser:
     status_parser = sub.add_parser("status", parents=[selectors])
     status_parser.add_argument("--doctor", action="store_true", help="query the live daemon through the selected CLI")
     switch = sub.add_parser("switch", parents=[selectors])
-    switch.add_argument("--cli", required=True, help="branch/release atm binary")
-    switch.add_argument("--daemon", required=True, help="matching branch/release atm-daemon binary")
+    switch.add_argument("--cli", help="raw-path ATM binary (fixture escape hatch)")
+    switch.add_argument("--daemon", help="matching raw-path ATM daemon (fixture escape hatch)")
+    switch.add_argument("--release", metavar="VERSION|latest", help="switch to a published release without paths")
+    switch.add_argument("--worktree", help="switch to a prerelease-tagged git worktree build")
+    switch.add_argument("--bump", action="store_true", help="tag and build --worktree before switching")
+    switch.add_argument(
+        "--allow-release-version",
+        action="store_true",
+        help="allow raw paths outside a release root that report a published version",
+    )
     switch.add_argument("--yes", action="store_true")
     switch.add_argument("--dry-run", action="store_true")
     restore = sub.add_parser("restore", parents=[selectors])
@@ -1300,7 +1565,24 @@ def main() -> int:
         if args.command == "status":
             status(args)
         elif args.command == "switch":
-            switch_pair(args, Path(args.cli), Path(args.daemon))
+            modes = sum((args.release is not None, args.worktree is not None, args.cli is not None or args.daemon is not None))
+            if modes != 1:
+                raise SwitchError("switch requires exactly one mode: --release, --worktree, or paired --cli/--daemon")
+            if args.release is not None:
+                if args.bump:
+                    raise SwitchError("--bump is valid only with --worktree")
+                cli, daemon, _expected = resolve_release_pair(args.release)
+                require_macos_restore_provenance(cli, daemon)
+                switch_pair(args, cli, daemon, require_development_signature=False)
+            elif args.worktree is not None:
+                cli, daemon, _expected = prepare_worktree_pair(Path(args.worktree), args.bump)
+                switch_pair(args, cli, daemon)
+            else:
+                if not args.cli or not args.daemon:
+                    raise SwitchError("raw-path switch requires both --cli and --daemon")
+                cli, daemon = Path(args.cli), Path(args.daemon)
+                validate_raw_pair_mode(cli, daemon, allow_release_version=args.allow_release_version)
+                switch_pair(args, cli, daemon)
         elif args.command == "restore":
             cli, daemon = restore_pair(args)
             require_macos_restore_provenance(cli, daemon)

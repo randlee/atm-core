@@ -1,12 +1,14 @@
 ---
 name: daemon-switch
-description: Safely inspect or switch the system-wide ATM CLI and daemon as one matched release pair. Use before daemon smoke testing, after daemon incompatibility or missing-daemon failures, and to restore the installed release afterward.
+description: Safely switch the system-wide ATM CLI and daemon as one matched pair: either a published release or an exactly prerelease-tagged worktree build.
 ---
 
 # Daemon Switch
 
 Use `scripts/daemon-switch.py`; never point a system LaunchAgent/service at a
-worktree binary directly.
+worktree binary directly. The tool has two ordinary situations: return to a
+published release, or dogfood one tagged worktree build. Raw binary paths are
+only the fixture/Colima escape hatch.
 
 ## Rules
 
@@ -14,8 +16,8 @@ worktree binary directly.
 2. Switch `atm` and `atm-daemon` together, then restart exactly one managed
    service. The script refuses an unpaired or unmanaged switch.
 3. Verify native `atm doctor --json` after every switch.
-4. After smoke completes or aborts, run `restore` to select the latest installed
-   release and repeat the doctor check.
+4. After smoke completes or aborts, run `switch --release latest` to select the
+   latest published release and repeat the doctor check.
 5. If recovery fixes a missing or incompatible daemon, notify the team after it
    is healthy again.
 6. When peer-interface or trust configuration changes, use `restart` to reload
@@ -45,9 +47,29 @@ python3 .claude/skills/daemon-switch/scripts/daemon-switch.py status --doctor
 launchctl list | rg 'com\.atm\.daemon'
 find ~/Library/LaunchAgents -maxdepth 1 -name 'com.atm.daemon*.plist' -print
 
-# Switch both Homebrew links to a branch build, controlled-restart one daemon.
+# Switch to the latest published release without supplying binary paths. The
+# command resolves `latest` through GitHub Releases, proves the installed pair
+# has exactly that version, then switches/restarts/proves the managed pair.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --release latest --yes \
+  --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
+
+# Switch to a specific published release already installed for this platform.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --release 1.5.1 --yes \
+  --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
+
+# Dogfood an exact prerelease-tagged worktree build. HEAD must carry
+# `prerelease/vX.Y.Z`, the workspace version must be X.Y.Z, and both release
+# binaries must report X.Y.Z. Use --bump to run prerelease_tag.py and build the
+# release pair when that worktree is intentionally ready to be tagged.
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch \
-  --cli target/release/atm --daemon target/release/atm-daemon --yes \
+  --worktree ../atm-core-worktrees/feature-example --yes \
+  --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
+
+# Raw paths remain only for fixtures/Colima. A raw pair which reports a
+# published version outside the platform release root is refused by default;
+# the opt-out is intentionally explicit.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch \
+  --cli target/release/atm --daemon target/release/atm-daemon --allow-release-version --yes \
   --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
 
 # If the checked label was unloaded but `status --doctor` still reaches an old
@@ -55,10 +77,6 @@ python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch \
 # a split pair. After verifying the label/plist above, rerun the same command
 # with `--repair-orphan`; it SIGTERMs exactly one proven `atm-daemon` owner of
 # the ATM socket, then starts the selected managed service.
-
-# Restore the latest Homebrew formula targets, not a Cellar path.
-python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restore --yes \
-  --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
 
 # Reload changed peer configuration without switching the selected pair.
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restart --yes \
