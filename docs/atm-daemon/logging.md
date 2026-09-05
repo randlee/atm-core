@@ -25,9 +25,12 @@ The JSONL logger and SQLite timeline are independently bounded, non-blocking
 sinks. `dropped_queue_full_total`, `dropped_reentrant_total`, and
 `dropped_persist_error_total` are durable degradation evidence. Timeline
 transitions use `ATM_LOG_SINK_DEGRADED` and `ATM_LOG_SINK_RECOVERED`; its
-batch maximum is `DIAGNOSTIC_BATCH_MAX = 128`. A merged view is therefore not
-lossless under overload. See [graft observability](../graft-observability.md)
-for the fallback satellite contract.
+batch maximum is `DIAGNOSTIC_BATCH_MAX = 128`, its flush interval is
+`DIAGNOSTIC_FLUSH_INTERVAL_MS = 250`, and the degradation recovery and
+transition rate-limit windows are `DEGRADATION_RECOVERY_WINDOW_SECS = 60` and
+`DEGRADATION_RATE_LIMIT_SECS = 60`. A merged view is therefore not lossless
+under overload. See [graft observability](../graft-observability.md) for the
+fallback satellite contract.
 
 ## Default Retained Log Path
 

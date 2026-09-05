@@ -501,6 +501,31 @@ mod tests {
     }
 
     #[test]
+    fn ac6_logging_contract_constants_match_the_timeline_source() {
+        let logging_contract = include_str!("../../../docs/atm-daemon/logging.md");
+        for (name, value) in [
+            ("DIAGNOSTIC_BATCH_MAX", super::DIAGNOSTIC_BATCH_MAX),
+            (
+                "DIAGNOSTIC_FLUSH_INTERVAL_MS",
+                super::DIAGNOSTIC_FLUSH_INTERVAL_MS as usize,
+            ),
+            (
+                "DEGRADATION_RECOVERY_WINDOW_SECS",
+                super::DEGRADATION_RECOVERY_WINDOW_SECS as usize,
+            ),
+            (
+                "DEGRADATION_RATE_LIMIT_SECS",
+                super::DEGRADATION_RATE_LIMIT_SECS as usize,
+            ),
+        ] {
+            assert!(
+                logging_contract.contains(&format!("`{name} = {value}`")),
+                "docs/atm-daemon/logging.md must document {name} from diagnostic_timeline.rs"
+            );
+        }
+    }
+
+    #[test]
     fn ac7_saturation_state_transitions_from_degraded_to_recovered_after_quiet_window() {
         let monitor = DegradationMonitor::default();
         monitor.observe("timeline", 1);
