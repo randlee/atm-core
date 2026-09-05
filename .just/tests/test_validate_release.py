@@ -338,3 +338,138 @@ class ValidateReleaseContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ManifestDependencyCoverageTests(unittest.TestCase):
+    """Consumer-owned check: published crates must not depend on unpublished workspace crates."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        (self.root / "release").mkdir()
+        (self.root / "Cargo.toml").write_text(
+            textwrap.dedent(
+                """
+                [workspace]
+                members = ["crates/*"]
+                resolver = "2"
+
+                [workspace.package]
+                version = "1.5.0"
+
+                [workspace.dependencies]
+                atm-leaf = { path = "crates/atm-leaf", version = "1.5.0" }
+                """
+            ).strip()
+            + "\n",
+            encoding="utf-8",
+        )
+        self.write_crate("atm-leaf", "")
+        self.write_crate("atm-mid", 'atm-leaf = { workspace = true }\n')
+        self.write_crate(
+            "atm-top",
+            'atm-mid = { path = "../atm-mid", version = "1.5.0" }\nserde = "1"\n',
+            build_dependencies='atm-leaf = { workspace = true }\n',
+        )
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def write_crate(
+        self,
+        name: str,
+        dependencies: str,
+        *,
+        build_dependencies: str = "",
+        publish: str = "",
+    ) -> None:
+        crate_dir = self.root / "crates" / name
+        crate_dir.mkdir(parents=True, exist_ok=True)
+        (crate_dir / "Cargo.toml").write_text(
+            f'[package]\nname = "{name}"\nversion.workspace = true\n{publish}\n'
+            f"[dependencies]\n{dependencies}\n[build-dependencies]\n{build_dependencies}",
+            encoding="utf-8",
+        )
+
+    def write_manifest(self, *packages: str, unpublished: tuple[str, ...] = ()) -> None:
+        blocks = []
+        for order, package in enumerate((*packages, *unpublished), start=1):
+            blocks.append(
+                textwrap.dedent(
+                    f"""
+                    [[crates]]
+                    artifact = "{package}"
+                    package = "{package}"
+                    cargo_toml = "crates/{package}/Cargo.toml"
+                    publish = {"false" if package in unpublished else "true"}
+                    publish_order = {order}
+                    """
+                ).strip()
+            )
+        (self.root / "release" / "publish-artifacts.toml").write_text(
+            "schema_version = 1\n\n" + "\n\n".join(blocks) + "\n",
+            encoding="utf-8",
+        )
+
+    def coverage_findings(self) -> list[VALIDATE_RELEASE.Finding]:
+        findings: list[VALIDATE_RELEASE.Finding] = []
+        VALIDATE_RELEASE.validate_manifest_dependency_coverage(self.root, findings)
+        return findings
+
+    def test_complete_manifest_passes(self) -> None:
+        self.write_manifest("atm-leaf", "atm-mid", "atm-top")
+
+        self.assertEqual(self.coverage_findings(), [])
+
+    def test_transitive_and_build_dependencies_missing_from_manifest_block(self) -> None:
+        self.write_manifest("atm-top")
+
+        findings = self.coverage_findings()
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].check, "manifest-dependency-coverage")
+        self.assertTrue(findings[0].blocks)
+        self.assertEqual(
+            findings[0].detail.splitlines(),
+            [
+                "atm-top depends on workspace crate atm-leaf which the manifest does not publish",
+                "atm-top depends on workspace crate atm-mid which the manifest does not publish",
+            ],
+        )
+
+    def test_manifest_entry_with_publish_false_still_blocks(self) -> None:
+        self.write_manifest("atm-mid", "atm-top", unpublished=("atm-leaf",))
+
+        findings = self.coverage_findings()
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn("atm-leaf which the manifest does not publish", findings[0].detail)
+
+    def test_dependency_whose_cargo_toml_opts_out_of_publishing_blocks(self) -> None:
+        self.write_crate("atm-leaf", "", publish="publish = false\n")
+        self.write_manifest("atm-leaf", "atm-mid", "atm-top")
+
+        findings = self.coverage_findings()
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(
+            findings[0].detail.splitlines(),
+            [
+                "atm-mid depends on workspace crate atm-leaf which sets publish = false",
+                "atm-top depends on workspace crate atm-leaf which sets publish = false",
+            ],
+        )
+
+    def test_unpublished_crates_outside_the_manifest_are_ignored(self) -> None:
+        self.write_crate("atm-tool", 'atm-leaf = { workspace = true }\n', publish="publish = false\n")
+        self.write_manifest("atm-leaf", "atm-mid", "atm-top")
+
+        self.assertEqual(self.coverage_findings(), [])
+
+    def test_missing_cargo_toml_is_reported(self) -> None:
+        self.write_manifest("atm-leaf", "atm-mid", "atm-top", "atm-ghost")
+
+        findings = self.coverage_findings()
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn("atm-ghost: cargo_toml", findings[0].detail)
