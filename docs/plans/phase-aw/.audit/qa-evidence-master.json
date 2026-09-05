@@ -1,0 +1,38 @@
+{
+  "format": "qa-evidence-master/v1",
+  "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
+  "audit_window": {
+    "start": "2026-09-05T00:19:30Z",
+    "end": "2026-09-05T01:10:00Z"
+  },
+  "scope": "phase-aw sprints AW.1-AW.5 (each cut from integrate/phase-aw; no gh stack). Only sprints with a dev Completion event have QA runs: AW.1 (tracing bridge, PR #1176; round-1 FAIL at 3427357ac, fix-aw1-r1 in progress: B1 closed by quality-mgr at 014ed4c14, B2/B3 and the important/minor set still open). AW.2/AW.4 are cut only after #1176 merges; AW.3/AW.5 follow. This master is extended with each authoritative verdict message as quality-mgr reports it.",
+  "count_basis": "headline/reviewer",
+  "path_notes": "Built directly from ATM messages read this session (fenix mailbox, team atm-dev). Every assignment_message_id is a real ATM message_id located via `atm list --team atm-dev quality-mgr --all --json`; every result_message_id via `atm list --team atm-dev fenix --all --json`. No verdict, run, or message id was fabricated; null means the value is not carried by the source message.",
+  "runs": [
+    {
+      "run_id": "QA-AW1-R1",
+      "aich_sprint": "AW1",
+      "phase_sprint": "AW.1",
+      "pass": false,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-05T00:27:14.700120Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M1QFCQCCBGMFTX20FYP8S5J5",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "Round-1 QA for AW.1 tracing bridge (atm-observability tracing_bridge, atm-daemon-bootstrap observability wiring, check-runtime-stderr gate), PR #1176, feature/aw1-tracing-bridge @ 1e2e9c702 then pinned by quality-mgr to 3427357ac (task qa-pr1176-r1; accepted 01M1QFD4FFJWNSWFCD661F8WRQ)",
+      "result_time_utc": "2026-09-05T00:43:44.659434Z",
+      "result_time_pst": null,
+      "result_message_id": "01M1QGAY4KDHBDSGT84H6T987F",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 3,
+      "important": 3,
+      "minor": 4,
+      "count_basis": "headline/reviewer",
+      "evidence": "QA-AW1-R1 dispatched 2026-09-05T00:27:14Z (msg 01M1QFCQCCBGMFTX20FYP8S5J5); interim trending-FAIL 01M1QG8478P7E9Q4A2PPEXQ52T. Verdict FAIL @ 3427357ac at 00:43:44Z (msg 01M1QGAY4KDHBDSGT84H6T987F): 3 blocking (AW1-QA-B1 check-runtime-stderr splits on first #[cfg(test)] and lacks scripts/tests self-test; AW1-QA-B2 atm-daemon-bootstrap imports sc_observability directly, arch-qa RULE-001; AW1-QA-B3 tracing_bridge.rs has no acceptance-criteria tests), 3 important (AW1-RBP-F001, AW1-RBP-F002, AW1-RBQA-F002), 4 minor (AW1-RBP-F003, AW1-RBP-F004, AW1-QA-004, AW1-QA-005); QA-003/QA-004 duplicates resolved, ATM-QA-003 rejected by quality-mgr. All 10 triaged to .triage/phase-aw/findings/AW1-*.ttl (integrate/phase-aw @ a1e4b11a8). Team-lead ruled B2 = facade (msg 01M1QGCF4G56PE3B4S4W7XTFGS). Fix-aw1-r1 dispatched to arch-ctm (msg 01M1QGVQXZM4XZ9SEWJZBXS2JY, re-sent after idle as 01M1QH0TBXDW7WTSESZPFHRS14); B1 fix pushed as 014ed4c14 and verified CLOSED by quality-mgr (msg 01M1QGZ8V9P35ABPMYVB98G4PF); record refreshed at a6946bd9d. Round-2 pending the remaining pushes."
+    }
+  ]
+}
