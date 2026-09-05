@@ -121,3 +121,27 @@ triage:r11 a triage:Resolution ;
 triage:r12 a triage:Resolution ;
     triage:resolves <urn:atm:triage:finding/AX2-QA-009> ;
     triage:resolvedAt "2026-09-05T07:37:02Z"^^xsd:dateTime .
+
+triage:r13 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX3-008> ;
+    triage:resolvedAt "2026-09-05T07:40:19Z"^^xsd:dateTime .
+
+triage:r14 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX3-009> ;
+    triage:resolvedAt "2026-09-05T07:40:19Z"^^xsd:dateTime .
+
+triage:r15 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX3-010> ;
+    triage:resolvedAt "2026-09-05T07:40:19Z"^^xsd:dateTime .
+
+triage:r16 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX3-011> ;
+    triage:resolvedAt "2026-09-05T07:40:19Z"^^xsd:dateTime .
+
+triage:r17 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX3-012> ;
+    triage:resolvedAt "2026-09-05T07:40:19Z"^^xsd:dateTime .
+
+triage:r18 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/ARCH-001> ;
+    triage:resolvedAt "2026-09-05T07:40:19Z"^^xsd:dateTime .
