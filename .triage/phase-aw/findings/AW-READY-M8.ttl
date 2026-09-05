@@ -34,6 +34,16 @@
   triage:headSha "7e61ad87e" ;
   triage:occursIn <urn:atm:triage:worktree/aw-integrate-7e61ad87e> .
 
+# PR #1210 (fix/aw-readiness-contracts) status, quality-mgr 2026-09-05: item
+# (c)'s silent-discard half is fixed (attach_timeline now has an explicit
+# early-return guard instead of a bare `let _ = X.set(...)`). The
+# flush-thread stop-signal half of (c), named explicitly in this record's own
+# fix directive, was NOT implemented: start_flush_worker's loop still has no
+# shutdown channel/atomic flag and its only nominal exit condition
+# (ACTIVE_TIMELINE.get() returning None) is unreachable once the OnceLock is
+# set (confirmed by direct read of crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs:85-106
+# on fix/aw-readiness-contracts). Keep open pending a real stop signal.
+
 <urn:atm:triage:worktree/aw-integrate-7e61ad87e>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/aw-integrate" ;

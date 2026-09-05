@@ -397,6 +397,23 @@ Rand's own observation: **"I don't think I have ever seen AW.2/AW.3 CI green"** 
 
 ---
 
+## Explicit Assessment: Windows Herdr Parity Scope Narrowed Inside an ADR Footnote (W1)
+
+Rand's own objection, relayed by fenix (01M1S8QK5V67Y2YTRR1E9XA0T2): Windows nudge parity via Herdr was the stated purpose of the Herdr integration and of the 1.5.0 release, but 1.5.0 shipped without a live Windows Herdr backend — the tmux/WSL path is still what Windows actually uses today. This was never surfaced to Rand as a scope decision.
+
+**Evidence:** `docs/adr/ADR-058-herdr-local-steer-backend-contract.md:576` (commit `3228036bb`, 2026-08-26) narrows the release's stated Windows-parity purpose down to backend-selection/command-construction only, in one footnote line: "Herdr on Windows (named-pipe transport exists but is out of AQ scope)." `docs/atm-herdr/requirements.md:368` independently restates the same deferral with no additional justification. No corresponding edit exists in the Phase AQ plan's acceptance criteria, and no later phase plan reopens or reconfirms the scope: `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md` (Herdr nudge-template rendering) never mentions Windows, CI matrix, or platform scope anywhere in the document, and `docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md` goes further, explicitly listing under "## Out of scope": *"Windows or Linux Herdr runs; hermes graft members; tmux members."* Both AX.2 and AX.7 inherit the ADR-058 narrowing as an unstated assumption, without either sprint doc cross-referencing it as a known, accepted gap against the release's original stated purpose.
+
+**Assessment:** This is not a code defect — the shipped code matches its (undisclosed) footnoted scope, and Windows CI does correctly exercise backend-selection/command-construction. The defect is procedural: an ADR is the wrong place to narrow a plan's stated release purpose, because ADRs are not gated through the same plan/AC-review and user-sign-off path that a scope change to a stated release goal deserves. A one-line footnote silently became load-bearing across two phases (AQ and AX) with no mechanism that would have surfaced it to Rand as a decision point before either phase's plan was approved.
+
+**Classification:** `planning_process_improvement` (primary) + `qa_process_improvement` (a phase-ending or plan-review pass should diff each phase's shipped scope against its own plan's stated purpose/goals section, not just against its own acceptance criteria).
+
+**Target artifacts:**
+- Plan-authoring guidance (`.claude/skills/phase-orchestration/SKILL.md` or wherever plan hardening/review is defined) — an ADR that narrows a scope item traceable to a plan's stated purpose/goals must be flagged for explicit user sign-off and a corresponding plan/AC edit, not just an ADR footnote.
+- `.claude/agents/quality-mgr.md` and/or `critical-plan-reviewer` — plan-review and phase-ending readiness checks should include an explicit "does the shipped/planned scope still match the plan's own stated purpose?" pass, not only "does the code match its acceptance criteria?"
+- `docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md` and `sprint-AX.2-herdr-template-rendering.md` — should cross-reference AW-READY-W1 and the ADR-058 deferral explicitly rather than silently inheriting it.
+
+---
+
 ## Integration Review Summary
 
 | Condition | Result |
@@ -407,7 +424,7 @@ Rand's own observation: **"I don't think I have ever seen AW.2/AW.3 CI green"** 
 | All 70 sprint-scoped triage records fixed | YES (70/70, independently enumerated at f546c0c5a) |
 | Waived findings | NONE |
 | Deferred findings | NONE |
-| **No new blocking findings on a full phase-ending readiness review** | **NO — 4 new blocking (Family M) found by arch-ctm + fenix-a after ledger closure** |
+| **No new blocking findings on a full phase-ending readiness review** | **NO — 4 new blocking (Family M) found by arch-ctm + fenix-a after ledger closure, plus 1 new blocking (W1) relayed directly by Rand via fenix — Windows Herdr parity scope narrowed inside ADR-058 without plan/AC change or sign-off** |
 | Zero-regression benchmark evidence | YES (sqlite +25.0%, uds +18.2%, tcp +7.3%, tcp-tls +19.0% vs floor; `durability_after_restart` parity all four targets) — unaffected by Families M/N/O, none of which touch the benchmarked hot paths |
 | No legacy synchronous daemon files touched by any phase-aw fix | YES (confirmed by direct diff at every review round, including fenix-c's architecture review) |
 | No boundary or Cargo-edge violation | YES (fenix-c: 93/93 boundary tests pass, legacy-daemon diff empty, no forbidden edge) |
@@ -450,6 +467,7 @@ Rand's own observation: **"I don't think I have ever seen AW.2/AW.3 CI green"** 
 | 26 | Stale ADR/rule text after import relocation (O5) | `architecture_update` | arch-ctm | New/updated ADR naming `atm-observability` as sole `sc-observability` owner; update RULE-001 text |
 | 27 | Non-idempotent `attach_timeline` (O6) | `test_hardening` | arch-ctm | Idempotency guard + regression test |
 | 28 | Duplicate shapes / dev-prod allowlist conflation / dead surface (O7-O16) | `new_lint` + `boundary_update` | arch-ctm | Duplicate-struct scanner; per-section manifest allowlist comparison; `lint_rules` existence check |
+| 29 | Windows Herdr parity scope narrowed inside ADR-058 footnote, never surfaced as a plan/AC decision (W1) | `planning_process_improvement` + `qa_process_improvement` | team-lead / quality-mgr | Plan-authoring guidance requiring sign-off + plan/AC edit before an ADR narrows a stated release purpose; phase-ending scope-vs-purpose check |
 
 ---
 
