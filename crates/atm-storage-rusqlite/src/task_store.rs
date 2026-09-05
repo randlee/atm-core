@@ -384,7 +384,7 @@ impl TaskStore for SqliteTaskStore {
         at: atm_storage::types::IsoTimestamp,
     ) -> Result<bool, AtmError> {
         let scope_key = scope.key();
-        self.db.with_connection(|connection| {
+        self.db.with_transaction(|connection| {
             let already_present: bool = connection
                 .query_row(
                     "SELECT EXISTS(SELECT 1 FROM escalation_recipients
@@ -591,5 +591,50 @@ mod tests {
             .add_escalation_recipient(&daemon, "overflow@atm-dev", now)
             .expect_err("scope cap");
         assert!(error.message().contains("maximum"));
+    }
+
+    #[test]
+    fn concurrent_recipient_adds_do_not_exceed_scope_cap() {
+        use std::sync::{Arc, Barrier};
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.task_store();
+        let scope = EscalationScope::Daemon;
+        let now = IsoTimestamp::now();
+        for index in 0..MAX_ESCALATION_RECIPIENTS.saturating_sub(1) {
+            store
+                .add_escalation_recipient(&scope, &format!("seed-{index}@ax6-test"), now)
+                .expect("seed recipient");
+        }
+        let start = Arc::new(Barrier::new(2));
+        let handles: Vec<_> = ["first@ax6-test", "second@ax6-test"]
+            .into_iter()
+            .map(|address| {
+                let store = Arc::clone(&store);
+                let start = Arc::clone(&start);
+                let scope = scope.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    store.add_escalation_recipient(&scope, address, now)
+                })
+            })
+            .collect();
+        let outcomes: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("add thread"))
+            .collect();
+
+        assert_eq!(
+            outcomes.iter().filter(|outcome| outcome.is_ok()).count(),
+            1,
+            "exactly one interleaved add can claim the final slot"
+        );
+        assert_eq!(
+            store
+                .list_escalation_recipients(&scope)
+                .expect("recipient list")
+                .len(),
+            MAX_ESCALATION_RECIPIENTS
+        );
     }
 }

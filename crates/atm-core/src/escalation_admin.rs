@@ -67,6 +67,8 @@ mod tests {
     use super::{add, list, remove, scope, validate_address};
     use atm_storage::{DummyTaskStore, EscalationScope};
 
+    const TEST_RECIPIENT: &str = "ops@ax6-escalation-test";
+
     #[test]
     fn scope_defaults_to_daemon() {
         assert_eq!(scope(None).expect("scope"), EscalationScope::Daemon);
@@ -93,12 +95,14 @@ mod tests {
         let store = DummyTaskStore::default();
         let target = EscalationScope::Daemon;
         let timestamp = crate::types::IsoTimestamp::now();
-        assert!(add(&store, &target, " ops@atm-dev ", timestamp).expect("add recipient"));
+        assert!(
+            add(&store, &target, " ops@ax6-escalation-test ", timestamp).expect("add recipient")
+        );
         assert_eq!(
             list(&store, &target).expect("list recipients"),
-            vec!["ops@atm-dev"]
+            vec![TEST_RECIPIENT]
         );
-        assert!(remove(&store, &target, " ops@atm-dev ").expect("remove recipient"));
+        assert!(remove(&store, &target, " ops@ax6-escalation-test ").expect("remove recipient"));
         assert!(list(&store, &target).expect("list recipients").is_empty());
     }
 }

@@ -1789,6 +1789,127 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn ax6_01_task_threshold_doubles_after_each_lead_notification() {
+        let (root, runtime, fake, pump, task_store, keys, now) =
+            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+        let team = keys[0].team().clone();
+        let mut roster = runtime
+            .shared_roster_store_arc()
+            .load_roster(&team)
+            .expect("roster");
+        let mut lead = herdr_member(&team, "ax6-lead");
+        lead.agent_type = atm_storage::AgentType::Lead;
+        roster.members.push(lead);
+        runtime
+            .shared_roster_store_arc()
+            .save_roster(&roster)
+            .expect("roster");
+        let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
+        let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
+        let pump = pump.with_daemon_home(root.path().join("home"));
+        let timestamp = *now.lock().expect("clock");
+        let mut stats = HerdrQueueWakeStats::default();
+
+        let mut tenth = task_store
+            .load_task(&keys[0], &task_id)
+            .expect("task")
+            .expect("row");
+        tenth.reminder_count = 10;
+        crate::herdr_queue_wake_escalation::maybe_escalate_task(
+            &pump,
+            &task_store,
+            &tenth,
+            timestamp,
+            &mut stats,
+        )
+        .await;
+
+        let mut nineteenth = tenth.clone();
+        nineteenth.reminder_count = 19;
+        nineteenth.lead_notified_count = 1;
+        crate::herdr_queue_wake_escalation::maybe_escalate_task(
+            &pump,
+            &task_store,
+            &nineteenth,
+            timestamp,
+            &mut stats,
+        )
+        .await;
+
+        let mut twentieth = nineteenth;
+        twentieth.reminder_count = 20;
+        crate::herdr_queue_wake_escalation::maybe_escalate_task(
+            &pump,
+            &task_store,
+            &twentieth,
+            timestamp,
+            &mut stats,
+        )
+        .await;
+
+        assert_eq!(stats.lead_notifications, 2);
+        assert_eq!(notifications(&fake), 2);
+    }
+
+    #[tokio::test]
+    async fn ax6_01_failed_lead_write_retries_at_next_reminder() {
+        let (root, runtime, fake, pump, task_store, keys, now) =
+            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+        let team = keys[0].team().clone();
+        let mut roster = runtime
+            .shared_roster_store_arc()
+            .load_roster(&team)
+            .expect("roster");
+        let mut lead = herdr_member(&team, "ax6-lead");
+        lead.agent_type = atm_storage::AgentType::Lead;
+        roster.members.push(lead);
+        runtime
+            .shared_roster_store_arc()
+            .save_roster(&roster)
+            .expect("roster");
+        let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
+        let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
+        let timestamp = *now.lock().expect("clock");
+        let mut tenth = task_store
+            .load_task(&keys[0], &task_id)
+            .expect("task")
+            .expect("row");
+        tenth.reminder_count = 10;
+        let mut failed_stats = HerdrQueueWakeStats::default();
+
+        crate::herdr_escalation::fail_next_escalation_mail_write();
+
+        crate::herdr_queue_wake_escalation::maybe_escalate_task(
+            &pump.clone().with_daemon_home(root.path().join("home")),
+            &task_store,
+            &tenth,
+            timestamp,
+            &mut failed_stats,
+        )
+        .await;
+        assert_eq!(failed_stats.lead_notifications, 0);
+
+        let mut eleventh = tenth;
+        eleventh.reminder_count = 11;
+        let mut retry_stats = HerdrQueueWakeStats::default();
+        crate::herdr_queue_wake_escalation::maybe_escalate_task(
+            &pump.with_daemon_home(root.path().join("home")),
+            &task_store,
+            &eleventh,
+            timestamp,
+            &mut retry_stats,
+        )
+        .await;
+
+        assert_eq!(retry_stats.lead_notifications, 1);
+        assert_eq!(
+            notifications(&fake),
+            2,
+            "Herdr still notifies on both attempts"
+        );
+    }
+
+    #[tokio::test]
     async fn ax6_01_no_lead_or_multiple_leads_still_notify_herdr() {
         let (root, runtime, fake, pump, task_store, keys, now) =
             build_task_only_pump(vec![HerdrAgentStatus::Idle], false);

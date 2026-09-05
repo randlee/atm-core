@@ -2293,6 +2293,39 @@ mod tests {
     }
 
     #[test]
+    fn ax6_doctor_reports_one_no_lead_warning_for_a_herdr_team() {
+        let team: TeamName = "ax6-herdr-no-lead".parse().expect("team");
+        let roster = RosterSnapshot {
+            team_name: team.clone(),
+            members: ["worker-one", "worker-two"]
+                .into_iter()
+                .map(|agent| atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: agent.parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Worker,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                })
+                .collect(),
+            refreshed_at: None,
+        };
+        let mut findings = Vec::new();
+
+        super::ax6_team_findings(&team, &roster, &[], &mut findings);
+
+        let no_lead: Vec<_> = findings
+            .iter()
+            .filter(|finding| finding.code == AtmErrorCode::RosterNoLead)
+            .collect();
+        assert_eq!(no_lead.len(), 1, "one aggregated warning per team");
+        assert_eq!(no_lead[0].severity, DoctorSeverity::Warning);
+        assert!(no_lead[0].message.contains("ax6-herdr-no-lead"));
+    }
+
+    #[test]
     fn ax6_doctor_projects_blocked_runtime_code_with_age() {
         let now = crate::types::IsoTimestamp::now();
         let snapshot = crate::protocol::RuntimeStatusSnapshot {

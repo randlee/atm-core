@@ -3958,6 +3958,8 @@ fn guarded_boundaries_include_every_atm_storage_record() {
 fn ax6_herdr_notification_does_not_reuse_mail_body() {
     let root = workspace_root();
     let source = read_source(&root.join("crates/atm-http-runtime/src/herdr_escalation.rs"));
+    let construction =
+        read_source(&root.join("crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs"));
     let notify = extract_fn_body(&source, "notify");
     let escalate = extract_fn_body(&source, "escalate");
     assert!(
@@ -3971,6 +3973,17 @@ fn ax6_herdr_notification_does_not_reuse_mail_body() {
     assert!(
         !source.contains("notify(herdr_process, body)"),
         "HR-SAFE-003 forbids forwarding the queued mail body as Herdr argv"
+    );
+    assert!(
+        construction.contains("let body = task_escalation_body")
+            && construction.contains("let notification = task_escalation_notification"),
+        "task escalation must construct distinct queued-mail and Herdr payload bindings"
+    );
+    assert!(
+        !construction.contains("body: body")
+            && !construction.contains("body: task_escalation_body")
+            && !construction.contains("SendMessageSource::Inline"),
+        "HR-SAFE-003 forbids routing a task mail body or inline mail source into Herdr notification construction"
     );
     let boundary = read_source(&root.join("boundaries/atm-herdr/herdr-process-adapter.toml"));
     assert!(boundary.contains("HR-SAFE-003"));
