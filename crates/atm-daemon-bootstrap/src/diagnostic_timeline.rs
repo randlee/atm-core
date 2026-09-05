@@ -3,7 +3,9 @@
 use std::collections::{BTreeSet, HashMap};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
@@ -25,6 +27,12 @@ static INSTALLED_BRIDGE: OnceLock<Arc<atm_observability::TracingBridgeLayer>> = 
 static ACTIVE_TIMELINE: OnceLock<Arc<DiagnosticTimelineWriter>> = OnceLock::new();
 static ACTIVE_COUNTERS: OnceLock<Arc<CombinedDiagnosticCounters>> = OnceLock::new();
 static DEGRADATION_MONITOR: OnceLock<DegradationMonitor> = OnceLock::new();
+static FLUSH_WORKER: Mutex<Option<FlushWorker>> = Mutex::new(None);
+
+struct FlushWorker {
+    stop_tx: Sender<()>,
+    join: JoinHandle<()>,
+}
 
 pub(crate) fn register_bridge(bridge: Arc<atm_observability::TracingBridgeLayer>) {
     let _ = INSTALLED_BRIDGE.set(bridge);
@@ -72,7 +80,7 @@ pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticT
         counters.snapshot().timeline_dropped_queue_full_total,
     );
     monitor.observe("jsonl", counters.snapshot().jsonl_dropped_queue_full_total);
-    if ACTIVE_TIMELINE.set(Arc::clone(&writer)).is_err() {
+    if !claim_once(&ACTIVE_TIMELINE, Arc::clone(&writer)) {
         // Lost a race with a concurrent attach call; the winner already owns
         // the bridge sink and flush worker, so leave both untouched.
         return;
@@ -83,26 +91,60 @@ pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticT
 }
 
 fn start_flush_worker() {
-    let _ = std::thread::Builder::new()
+    let Ok(mut worker_slot) = FLUSH_WORKER.lock() else {
+        return;
+    };
+    if worker_slot.is_some() {
+        return;
+    }
+    let (stop_tx, stop_rx) = std::sync::mpsc::channel();
+    let Ok(join) = std::thread::Builder::new()
         .name("atm-diagnostic-timeline-flush".to_owned())
-        .spawn(|| {
-            loop {
-                std::thread::park_timeout(Duration::from_millis(DIAGNOSTIC_FLUSH_INTERVAL_MS));
-                let Some(writer) = ACTIVE_TIMELINE.get() else {
-                    return;
-                };
-                writer.flush_due();
-                if let Some(counters) = ACTIVE_COUNTERS.get()
-                    && let Some(monitor) = DEGRADATION_MONITOR.get()
-                {
-                    monitor.observe(
-                        "timeline",
-                        counters.snapshot().timeline_dropped_queue_full_total,
-                    );
-                    monitor.observe("jsonl", counters.snapshot().jsonl_dropped_queue_full_total);
-                }
-            }
-        });
+        .spawn(move || run_flush_worker(stop_rx))
+    else {
+        return;
+    };
+    *worker_slot = Some(FlushWorker { stop_tx, join });
+}
+
+/// Stops and joins the bootstrap-owned flush worker during daemon shutdown.
+/// The worker receives an explicit signal instead of relying on process exit.
+pub(crate) fn stop_flush_worker() {
+    let Some(worker) = FLUSH_WORKER
+        .lock()
+        .ok()
+        .and_then(|mut worker_slot| worker_slot.take())
+    else {
+        return;
+    };
+    let _ = worker.stop_tx.send(());
+    let _ = worker.join.join();
+}
+
+fn run_flush_worker(stop_rx: Receiver<()>) {
+    loop {
+        match stop_rx.recv_timeout(Duration::from_millis(DIAGNOSTIC_FLUSH_INTERVAL_MS)) {
+            Ok(()) | Err(RecvTimeoutError::Disconnected) => return,
+            Err(RecvTimeoutError::Timeout) => {}
+        }
+        let Some(writer) = ACTIVE_TIMELINE.get() else {
+            return;
+        };
+        writer.flush_due();
+        if let Some(counters) = ACTIVE_COUNTERS.get()
+            && let Some(monitor) = DEGRADATION_MONITOR.get()
+        {
+            monitor.observe(
+                "timeline",
+                counters.snapshot().timeline_dropped_queue_full_total,
+            );
+            monitor.observe("jsonl", counters.snapshot().jsonl_dropped_queue_full_total);
+        }
+    }
+}
+
+fn claim_once<T>(slot: &OnceLock<T>, value: T) -> bool {
+    slot.set(value).is_ok()
 }
 
 /// Explicit selection policy for retained INFO diagnostics. WARN and ERROR
@@ -758,5 +800,42 @@ mod tests {
             std::sync::Arc::ptr_eq(&first, &second),
             "a second attach_timeline call must not replace the active writer or its flush cadence"
         );
+    }
+
+    /// O6: the production claim helper must cover the losing `OnceLock::set`
+    /// path under concurrent bootstrap attempts, not merely a later sequential
+    /// no-op call.
+    #[test]
+    fn concurrent_timeline_claim_has_exactly_one_winner() {
+        let slot = std::sync::Arc::new(std::sync::OnceLock::new());
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let contender_slot = std::sync::Arc::clone(&slot);
+        let contender_barrier = std::sync::Arc::clone(&barrier);
+        let contender = std::thread::spawn(move || {
+            contender_barrier.wait();
+            super::claim_once(&contender_slot, "contender")
+        });
+
+        barrier.wait();
+        let primary_won = super::claim_once(&slot, "primary");
+        let contender_won = contender.join().expect("contender finishes");
+
+        assert_ne!(
+            primary_won, contender_won,
+            "concurrent OnceLock::set claims must take exactly one winner path"
+        );
+        assert!(
+            slot.get().is_some(),
+            "the winning claim installs the timeline"
+        );
+    }
+
+    #[test]
+    fn flush_worker_exits_when_it_receives_its_stop_signal() {
+        let (stop_tx, stop_rx) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || super::run_flush_worker(stop_rx));
+
+        stop_tx.send(()).expect("stop signal delivered");
+        worker.join().expect("flush worker exits after stop signal");
     }
 }

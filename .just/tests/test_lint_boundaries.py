@@ -1138,6 +1138,65 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
                 rendered,
             )
 
+    def test_atm_http_runtime_test_fixture_dependencies_are_rejected_in_production(self) -> None:
+        """C10: each AW.3 runtime fixture edge is forbidden outside dev-dependencies."""
+        section_rules = "\n".join(
+            f'''[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
+dependency_package = "{package}"
+allowed_sections = ["dev-dependencies"]
+message = "{message}"
+'''
+            for package, message in (
+                ("atm-storage", "atm-http-runtime must not depend on atm-storage in production; it is a test-only fixture dependency"),
+                ("atm-runtime-test-support", "atm-http-runtime must not depend on atm-runtime-test-support in production; it is a test-only fixture dependency"),
+                ("serde_yaml", "atm-http-runtime must not depend on serde_yaml in production; it is a test-only fixture dependency"),
+                ("tempfile", "atm-http-runtime must not depend on tempfile in production; it is a test-only fixture dependency"),
+            )
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / ".just").mkdir()
+            (repo_root / "Cargo.toml").write_text(
+                "[workspace]\nmembers = [\"crates/atm-http-runtime\"]\nresolver = \"2\"\n",
+                encoding="utf-8",
+            )
+            (repo_root / ".just/lint-config.toml").write_text(
+                "[boundaries]\ndoc_glob = \"docs/*/boundaries.md\"\ntoml_glob = \"boundaries/*/*.toml\"\n\n"
+                + section_rules,
+                encoding="utf-8",
+            )
+            runtime_dir = repo_root / "crates/atm-http-runtime"
+            runtime_dir.mkdir(parents=True)
+            (runtime_dir / "Cargo.toml").write_text(
+                """\
+[package]
+name = "atm-http-runtime"
+version = "0.1.0"
+
+[dependencies]
+atm-storage = { path = "../atm-storage" }
+atm-runtime-test-support = { path = "../atm-runtime-test-support" }
+serde_yaml = "0.9"
+tempfile = "3"
+""",
+                encoding="utf-8",
+            )
+            self.write_scb_config_support(repo_root)
+            self.write_scb_retained_support(repo_root)
+            self.write_scb_workspace_support(repo_root)
+            self.write_scb_singleton_support(repo_root)
+            self.write_scb_observability_support(repo_root)
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            for message in (
+                "atm-http-runtime must not depend on atm-storage in production; it is a test-only fixture dependency",
+                "atm-http-runtime must not depend on atm-runtime-test-support in production; it is a test-only fixture dependency",
+                "atm-http-runtime must not depend on serde_yaml in production; it is a test-only fixture dependency",
+                "atm-http-runtime must not depend on tempfile in production; it is a test-only fixture dependency",
+            ):
+                self.assertIn(f"crates/atm-http-runtime/Cargo.toml [dependencies]: {message}", rendered)
+
     def test_collect_boundary_violations_flags_forbidden_reference_outside_owner(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
