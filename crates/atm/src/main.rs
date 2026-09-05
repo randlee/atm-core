@@ -45,9 +45,9 @@ use sc_observability::{ConsoleSink, Logger, LoggerConfig, SinkRegistration};
 #[cfg(any(test, feature = "fault-injection"))]
 use sc_observability::{JsonlFileSink, RetentionPolicy, RotationPolicy};
 use sc_observability_types::{
-    ActionName, CorrelationId, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent,
-    LogQuery, OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName,
-    TargetCategory, Timestamp,
+    ActionName, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent, LogQuery,
+    OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName, TargetCategory,
+    Timestamp,
 };
 #[cfg(any(test, feature = "fault-injection"))]
 use sc_observability_types::{SinkHealth, SinkHealthState};
