@@ -1591,6 +1591,33 @@ Phase AV sprint status:
 | `AV.3` | `complete` (PR #1113 merged) | `feature/av3-read-concurrency-gates` | `docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md` |
 | `AV.4` | `complete` (PR #1114 merged) | `feature/av4-read-query-benchmarks` | `docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md` |
 
+## 55. Phase AX — Nudge Templates On Every Backend And Task-State Tracking [PLANNING — PLAN HARDENING]
+
+Phase AX closes three delivery defects found in the 2026-09-04 Herdr
+dogfood run (issue #1173): the Herdr sink bypasses the built-in nudge
+templates and injects fixed wake text; `atm queue` has no template class
+of its own; and task-tagged mail has no state, so a second task can be
+acked while the first is in progress and an idle assignee is never
+reminded. Five sprints: `AX.1` queue template class and default-body
+fixes, `AX.2` Herdr template rendering, `AX.4a` task state machine and
+`--task-complete`, `AX.4b` task nudge cycle with lead notification and
+doctor codes, `AX.3` live Herdr evidence. Dependency graph:
+AX.1 → {AX.2 ∥ AX.4a} → AX.4b → AX.3.
+
+The authoritative plan is
+[phase-ax-plan](./plans/phase-ax/phase-ax-plan.md) with per-sprint docs
+under `docs/plans/phase-ax/`, authored on branch `integrate/phase-ax`.
+
+Phase AX sprint status:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AX.1` | `planned` | `feature/ax1-queue-template-class` | `docs/plans/phase-ax/sprint-AX.1-queue-template-class.md` |
+| `AX.2` | `planned` | `feature/ax2-herdr-template-rendering` | `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md`, `docs/adr/ADR-058-herdr-local-steer-backend-contract.md` |
+| `AX.4a` | `planned` | `feature/ax4a-task-state-machine` | `docs/plans/phase-ax/sprint-AX.4a-task-state-machine.md`, `docs/adr/ADR-061-task-state-machine.md`, `boundaries/atm-storage/task-store.toml` |
+| `AX.4b` | `planned` | `feature/ax4b-task-nudge-cycle` | `docs/plans/phase-ax/sprint-AX.4b-task-nudge-cycle.md` |
+| `AX.3` | `planned` | none (proof on `integrate/phase-ax`) | `docs/plans/phase-ax/ax3-live-proof.md` |
+
 ## Publishing Improvements
 
 Implementation Branches:
