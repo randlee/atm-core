@@ -313,42 +313,21 @@ Deliverables:
    Herdr runs one server per user per session on a machine, so the
    daemon binds to exactly one session.
 
-   Launch contract (Rand, 2026-09-05: the environment comes from
-   Herdr; Herdr must be running with `HERDR_SOCKET_PATH` set before the
-   daemon launches, and the order must be deterministic):
+   Launch contract (Rand, 2026-09-05): the daemon is launched inside
+   the Herdr session like any other Herdr child and inherits
+   `HERDR_SOCKET_PATH` and `HERDR_BIN_PATH` from Herdr. atm owns
+   nothing about how Herdr or the daemon is started or restarted.
 
-   - The atm daemon is a Herdr-launched process. Herdr injects
-     `HERDR_SOCKET_PATH` and `HERDR_BIN_PATH` into every process it
-     starts (src/integration/env.rs), so the daemon consumes its own
-     environment and resolves nothing. No daemon config for session or
-     socket path; no Herdr-specific entries in launchd plists,
-     daemon-switch, or the Windows service definition.
-   - Supervision: launchd (macOS) or the Windows service/autostart
-     supervises the Herdr server; Herdr's session config starts the
-     atm daemon. Ordering is deterministic because Herdr is the
-     launcher. W1 ships the reference Herdr session definition and
-     the launchd plist for the Herdr server under `docs/atm-herdr/`,
-     and daemon-switch learns to install the daemon as a Herdr-launched
-     process instead of a launchd job when the backend is enabled.
-   - Startup gate: with the backend enabled the daemon requires both
-     variables present, then executes `List` with a bounded deadline
-     before it starts serving. Missing variable or unreachable server
-     means the daemon exits with a distinct non-zero status and one
-     structured diagnostic (which variable, binary, herdr
-     version/protocol if any, the `HerdrError`); Herdr's own restart
-     policy re-launches it. The daemon never serves ahead of Herdr.
-   - Children: each `herdr` child receives `HERDR_SOCKET_PATH` and
-     `HERDR_BIN_PATH` forwarded verbatim from the daemon's environment;
-     `HERDR_ENV` and `HERDR_CLIENT_SOCKET_PATH` are stripped (they mark
-     the daemon as nested and would block Herdr's own launch paths).
-   - Doctor reports both variables as seen by the daemon (path only,
-     never other environment contents) and the probe result.
-   - Backend disabled: no requirement, no probe, no exit, mail
-     unaffected; a daemon started outside Herdr with the backend
-     enabled fails the gate with the actionable diagnostic.
-   - W2's direct socket transport connects to `HERDR_SOCKET_PATH` as
-     given (unix path or Windows pipe name), the same variable, no
-     path computation in atm. Doctor herdr section reports transport
+   - Backend enabled: at startup the daemon requires `HERDR_SOCKET_PATH`
+     and executes `List` with a bounded deadline before serving. Missing
+     variable or no answer: exit non-zero with one diagnostic naming
+     the variable or the `HerdrError`. Whoever launched it restarts it.
+   - Children get the inherited `HERDR_SOCKET_PATH` and
+     `HERDR_BIN_PATH` as-is; `HERDR_ENV` is stripped so Herdr does not
+     treat them as nested.
+   - Doctor shows the two paths and the probe result.
+   - Backend disabled: nothing above applies.
+   - W2's socket transport connects to `HERDR_SOCKET_PATH` as given. Doctor herdr section reports transport
    kind, resolved binary, resolved endpoint (the `\\.\pipe\` form on
    Windows), and the launch-probe result. Architecture tests: single
    construction site; single endpoint-resolution site; no
