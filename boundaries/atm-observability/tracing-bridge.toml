@@ -1,0 +1,27 @@
+boundary_id = "BOUNDARY-TracingBridge"
+owner_package = "atm-observability"
+owner_crate_path = "atm_observability"
+name = "TracingBridge"
+
+[public]
+facade = "TracingBridgeLayer"
+
+[implementation]
+type = "TracingBridgeLayer"
+module = "atm_observability::tracing_bridge"
+visibility = "public"
+constructor = "public"
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm"]
+allowed_dependencies = ["atm-core", "sc-observability", "sc-observability-types", "tracing", "tracing-subscriber"]
+forbidden_edges = [
+  "atm-daemon -> atm-observability",
+  "atm-observability -> atm-daemon-bootstrap",
+  "atm-observability -> atm-http-runtime",
+  "atm-observability -> atm-storage-rusqlite",
+]
+
+[status]
+state = "active"
+notes = ["Only atm-daemon-bootstrap installs the process-global tracing bridge; source scan enforces this module-level rule."]

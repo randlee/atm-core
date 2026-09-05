@@ -10,13 +10,26 @@ use std::{fs, fs::OpenOptions};
 use atm_core::error::AtmError;
 use atm_core::observability::RetainedSinkFaultMode;
 
+pub mod tracing_bridge;
+
+pub use tracing_bridge::{
+    BridgeError, CANONICAL_LOG_FILE_NAME, DiagnosticSink, DropReason, FieldValue,
+    GRAFT_FALLBACK_LOG_FILE_NAME, RETAINED_FIELD_ALLOWLIST, RETAINED_INFO_TARGETS, RetainedEvent,
+    SinkOffer, TracingBridgeLayer, TracingBridgeStats,
+};
+
 pub const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
 pub const ATM_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
+
+/// Returns AW.4's dedicated, bounded graft fallback satellite path.
+pub fn graft_fallback_log_path(log_dir: &Path) -> PathBuf {
+    log_dir.join(GRAFT_FALLBACK_LOG_FILE_NAME)
+}
 
 /// Validates a retained-log directory and its active log file before logger
 /// construction. The returned path is the exact file checked for append access.
 pub fn prepare_retained_log(log_dir: &Path) -> Result<PathBuf, AtmError> {
-    let active_log_path = log_dir.join("atm.log.jsonl");
+    let active_log_path = log_dir.join(CANONICAL_LOG_FILE_NAME);
     fs::create_dir_all(log_dir).map_err(|source| {
         AtmError::observability_bootstrap(format!(
             "failed to create retained log directory {}: {source}",

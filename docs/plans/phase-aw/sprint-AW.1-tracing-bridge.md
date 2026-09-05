@@ -2,6 +2,8 @@
 sprint: AW.1
 title: "Tracing bridge into sc-observability and runtime stderr retirement"
 branch: feature/aw1-tracing-bridge
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aw1-tracing-bridge
+status: complete
 base: integrate/phase-aw
 issues: "#905 ids 905-1, 905-2, 905-8 (fields/filtering/recursion/non-interference/redaction), 905-9 (allowlist doc)"
 must_follow: []

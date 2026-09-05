@@ -48,7 +48,7 @@ const RETAINED_LOG_MAINTENANCE_CADENCE: Duration = Duration::from_secs(60);
 // daemon stop window by itself.
 const RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
 
-struct LoggerLifecycle(sc_observability::Logger);
+struct LoggerLifecycle(Arc<sc_observability::Logger>);
 
 impl LoggerLifecycle {
     fn health(&self) -> sc_observability_types::LoggingHealthReport {
@@ -91,6 +91,23 @@ impl DaemonObservability {
         Self::bootstrap_at_log_dir(home::host_log_dir()?)
     }
 
+    pub(crate) fn install_tracing_bridge(&self) -> Result<(), AtmError> {
+        let logger = self.logger.lock().map_err(|_| {
+            AtmError::observability_bootstrap(
+                "failed to install tracing bridge because the logger lock was poisoned",
+            )
+        })?;
+        atm_observability::TracingBridgeLayer::install(Arc::clone(&logger.0))
+            .map(|_| ())
+            .map_err(|error| match error {
+                atm_observability::BridgeError::AlreadyInstalled => {
+                    AtmError::observability_bootstrap(
+                        "tracing bridge is already installed for this process",
+                    )
+                }
+            })
+    }
+
     fn bootstrap_at_log_dir(log_dir: PathBuf) -> Result<Self, AtmError> {
         Self::bootstrap_at_log_dir_with_rotation(log_dir, RETAINED_LOG_ROTATION_MAX_BYTES)
     }
@@ -113,7 +130,7 @@ impl DaemonObservability {
             retained_log_policy(rotation_max_bytes),
         )?;
         Ok(Self {
-            logger: Arc::new(Mutex::new(LoggerLifecycle(logger))),
+            logger: Arc::new(Mutex::new(LoggerLifecycle(Arc::new(logger)))),
             active_log_path,
             service_name,
             target_category,
@@ -134,7 +151,7 @@ impl DaemonObservability {
         let (logger, active_log_path) =
             build_logger(&log_dir, None, &service_name, retained_log_policy)?;
         Ok(Self {
-            logger: Arc::new(Mutex::new(LoggerLifecycle(logger))),
+            logger: Arc::new(Mutex::new(LoggerLifecycle(Arc::new(logger)))),
             active_log_path,
             service_name,
             target_category,

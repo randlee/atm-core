@@ -36,15 +36,29 @@ Examples:
 
 ## Default Retained Event Set
 
-Without extra operator tuning, retained logging must include at least:
+Without extra operator tuning, the replacement Tokio/Axum daemon retains:
 
 - daemon start requested
 - daemon startup completed / ready
 - daemon shutdown requested
 - daemon shutdown completed
 - daemon degraded / abnormal-exit signals
-- every `warn!` event emitted by ATM subsystems
-- every `error!` event emitted by ATM subsystems
+- every `warn!` and `error!` event emitted by ATM subsystems
+- `info!` from `atm_daemon_bootstrap::lifecycle`,
+  `atm_http_runtime::listener`, and `atm_storage_rusqlite::maintenance`
+
+The tracing bridge retains only the allowlisted structured fields: `ts`,
+`level`, `component`, `code`, `action`, `correlation_id`, `outcome`,
+`elapsed_ms`, `attempt`, `strategy`, `endpoint_kind`, `failure_class`,
+`error_layer`, `origin`, `message`, and `detail`. It drops every other field,
+including message bodies, recipients, tokens, raw environment/configuration,
+and absolute user paths. Admission is non-blocking: a full logger queue drops
+the record and increments the retained diagnostic drop counter. Events emitted
+while the bridge is writing are dropped to prevent recursion.
+
+No post-bootstrap runtime path writes directly to stderr. The documented
+`PRE_BOOTSTRAP_STDERR_ALLOWLIST` is currently empty; a future exception must
+be a named pre-logger `file:function` entry here and in the lint gate.
 
 Degraded-state and abnormal-exit signals live in the default `warn!` /
 `error!` baseline rather than in a second info-only lifecycle family.
@@ -115,7 +129,7 @@ ADR-011 forbids retained-log writes from blocking async executor threads.
 internal sink worker thread:
 
 - the daemon does not route retained-log writes through an async executor
-- `sc-observability 1.0.0` `JsonlFileSink` performs synchronous local-file
+- `sc-observability =1.2.0` `JsonlFileSink` performs synchronous local-file
   writes on the daemon's ordinary OS threads
 - shutdown flush runs on a dedicated bounded finalizer thread
 

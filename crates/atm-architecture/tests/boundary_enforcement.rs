@@ -3928,6 +3928,37 @@ fn read_source(path: &Path) -> String {
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
 }
 
+#[test]
+fn tracing_bridge_is_installed_only_by_daemon_bootstrap() {
+    let root = workspace_root();
+    let mut offenders = Vec::new();
+    for entry in fs::read_dir(root.join("crates")).expect("crates directory") {
+        let crate_root = entry.expect("crate entry").path();
+        let source_root = crate_root.join("src");
+        if !source_root.is_dir() {
+            continue;
+        }
+        let mut files = Vec::new();
+        collect_rust_files(&source_root, &mut files);
+        for file in files {
+            if read_source(&file).contains("TracingBridgeLayer::install")
+                && !file.starts_with(root.join("crates/atm-daemon-bootstrap/src"))
+            {
+                offenders.push(file.display().to_string());
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "only daemon bootstrap may install tracing bridge: {offenders:?}"
+    );
+    assert!(
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/daemon_observability.rs"))
+            .contains("TracingBridgeLayer::install"),
+        "daemon bootstrap must own tracing bridge installation"
+    );
+}
+
 /// AV.3 source-scanner primitives deliberately operate on function bodies,
 /// rather than the whole router file. The residual control-path bridge stays
 /// in that file after AV.1b, so file-wide token checks would either reject an
