@@ -5,7 +5,7 @@ title: Task completion and inspection CLI
 branch: feature/ax4-task-cli-and-docs
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ax4-task-cli-and-docs
 integration_branch: integrate/phase-ax
-status: draft
+status: complete
 recommended_agent: Cipher-311d
 recommended_model: fast
 execution_track: B
