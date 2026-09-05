@@ -172,8 +172,9 @@ impl FromStr for AckTransition {
 pub enum BuiltInNudgeTemplateKind {
     Delivery,
     DeliveryAck,
-    DeliveryTask,
-    DeliveryTaskAck,
+    Queue,
+    QueueAck,
+    Task,
     Acknowledge,
     AcknowledgeTask,
 }
@@ -183,8 +184,9 @@ impl BuiltInNudgeTemplateKind {
         match self {
             Self::Delivery => "delivery",
             Self::DeliveryAck => "delivery_ack",
-            Self::DeliveryTask => "delivery_task",
-            Self::DeliveryTaskAck => "delivery_task_ack",
+            Self::Queue => "queue",
+            Self::QueueAck => "queue_ack",
+            Self::Task => "task",
             Self::Acknowledge => "acknowledge",
             Self::AcknowledgeTask => "acknowledge_task",
         }
@@ -204,10 +206,14 @@ impl FromStr for BuiltInNudgeTemplateKind {
         match value {
             "delivery" => Ok(Self::Delivery),
             "delivery_ack" => Ok(Self::DeliveryAck),
-            "delivery_task" => Ok(Self::DeliveryTask),
-            "delivery_task_ack" => Ok(Self::DeliveryTaskAck),
+            "queue" => Ok(Self::Queue),
+            "queue_ack" => Ok(Self::QueueAck),
+            "task" => Ok(Self::Task),
             "acknowledge" => Ok(Self::Acknowledge),
             "acknowledge_task" => Ok(Self::AcknowledgeTask),
+            "delivery_task" | "delivery_task_ack" => Err(AtmError::validation(format!(
+                "template kind `{value}` was retired; use \"task\""
+            ))),
             other => Err(AtmError::validation(format!(
                 "unsupported built-in nudge template kind `{other}`"
             ))),
@@ -1498,6 +1504,32 @@ mod tests {
         graft_receiver_endpoint_store
             .unregister(&registration.team, &registration.agent, &generation)
             .expect("unregister");
+    }
+
+    #[test]
+    fn built_in_nudge_template_kind_round_trips_seven_kinds() {
+        let kinds = [
+            BuiltInNudgeTemplateKind::Delivery,
+            BuiltInNudgeTemplateKind::DeliveryAck,
+            BuiltInNudgeTemplateKind::Queue,
+            BuiltInNudgeTemplateKind::QueueAck,
+            BuiltInNudgeTemplateKind::Task,
+            BuiltInNudgeTemplateKind::Acknowledge,
+            BuiltInNudgeTemplateKind::AcknowledgeTask,
+        ];
+        for kind in kinds {
+            assert_eq!(kind.as_str().parse::<BuiltInNudgeTemplateKind>(), Ok(kind));
+        }
+    }
+
+    #[test]
+    fn built_in_nudge_template_kind_rejects_retired_task_kinds() {
+        for retired in ["delivery_task", "delivery_task_ack"] {
+            let error = retired
+                .parse::<BuiltInNudgeTemplateKind>()
+                .expect_err("retired kind");
+            assert!(error.message().contains("was retired; use \"task\""));
+        }
     }
 
     #[test]

@@ -18,19 +18,22 @@ attention.
 This document covers supported template usage and override behavior. It does
 not authorize direct database edits or unsupported template engines.
 
-## Six Built-In Template Kinds
+## Seven Built-In Template Kinds
 
-ATM ships exactly six built-in template kinds:
+ATM ships exactly seven built-in template kinds:
 
 - `delivery`
 - `delivery_ack`
-- `delivery_task`
-- `delivery_task_ack`
+- `queue`
+- `queue_ack`
+- `task`
 - `acknowledge`
 - `acknowledge_task`
 
-The `delivery*` forms are for delivered work notifications. The
-`acknowledge*` forms are intentionally compact acknowledgement nudges.
+`NudgeKind` selects the delivery (`delivery`, `delivery_ack`) or queue
+(`queue`, `queue_ack`) family. Task-tagged messages always use `task` and are
+always queued. The `acknowledge*` forms are intentionally compact
+acknowledgement nudges.
 
 ## Supported Placeholders
 
@@ -66,7 +69,7 @@ Empty-string template bodies are invalid. Use the explicit team-admin commands
 instead:
 
 ```bash
-atm teams set-nudge-template --team atm-dev --kind delivery_ack --template-body '<atm from="{{from}}" message-id="{{message_id}}"><action>read atm --team {{team}}</action><action>ack the message</action><description>{{description}}</description><action>execute the assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>'
+atm teams set-nudge-template --team atm-dev --kind delivery_ack --template-body '<atm from="{{from}}" message-id="{{message_id}}"><action>atm read --message-id {{message_id}}</action><action>ack the message</action><description>{{description}}</description><action>execute the assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>'
 atm teams disable-nudge-template --team atm-dev --kind delivery_ack
 atm teams clear-nudge-template --team atm-dev --kind delivery_ack
 ```
@@ -77,7 +80,7 @@ Delivery without required acknowledgement:
 
 ```xml
 <atm from="{{from}}" message-id="{{message_id}}">
-  <action>read atm --team {{team}}</action>
+  <action>atm read --message-id {{message_id}}</action>
   <description>{{description}}</description>
   <action>execute the assigned task</action>
   <when idle="immediate" busy="after-current-task"/>
@@ -89,7 +92,7 @@ Delivery with required acknowledgement:
 
 ```xml
 <atm from="{{from}}" message-id="{{message_id}}">
-  <action>read atm --team {{team}}</action>
+  <action>atm read --message-id {{message_id}}</action>
   <action>ack the message</action>
   <description>{{description}}</description>
   <action>execute the assigned task</action>
@@ -98,30 +101,48 @@ Delivery with required acknowledgement:
 </atm>
 ```
 
-Task delivery without required acknowledgement:
+Queue without required acknowledgement:
 
 ```xml
 <atm from="{{from}}" message-id="{{message_id}}">
-  <action>read atm --team {{team}}</action>
-  <task id="{{task_id}}">{{description}}</task>
+  <action>atm read --message-id {{message_id}}</action>
+  <description>{{description}}</description>
   <action>execute the assigned task</action>
-  <when idle="immediate" busy="after-current-task"/>
   <console announce="concise" pause="false"/>
 </atm>
 ```
 
-Task delivery with required acknowledgement:
+Queue with required acknowledgement:
 
 ```xml
 <atm from="{{from}}" message-id="{{message_id}}">
-  <action>read atm --team {{team}}</action>
+  <action>atm read --message-id {{message_id}}</action>
+  <action>ack the message</action>
+  <description>{{description}}</description>
+  <action>execute the assigned task</action>
+  <console announce="concise" pause="false"/>
+</atm>
+```
+
+Task messages are always queued and require acknowledgement:
+
+```xml
+<atm from="{{from}}" message-id="{{message_id}}">
+  <action>atm read --message-id {{message_id}}</action>
   <action>ack the message</action>
   <task id="{{task_id}}">{{description}}</task>
   <action>execute the assigned task</action>
-  <when idle="immediate" busy="after-current-task"/>
   <console announce="concise" pause="false"/>
 </atm>
 ```
+
+Two former task steer kinds were retired in phase AX and are rejected on
+input; see the ADR-019 amendment for their names and the migration.
+
+On database open, ATM upgrades the override table to the seven-kind constraint,
+preserves every supported row, and removes only retired rows. The migration is
+idempotent and accepts new `queue`, `queue_ack`, and `task` overrides after the
+upgrade.
 
 Compact acknowledgement defaults:
 

@@ -5,7 +5,7 @@ title: Queue template class and default template fixes
 branch: feature/ax1-queue-template-class
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ax1-queue-template-class
 integration_branch: integrate/phase-ax
-status: draft
+status: complete
 recommended_agent: Cipher-311d
 recommended_model: fast
 execution_track: A
@@ -35,9 +35,9 @@ This is the authoritative deliverable checklist. Every listed deliverable
 lands production-ready for the scope this sprint claims; partial or
 shape-only completion fails the sprint.
 
-- [ ] D1 — `BuiltInNudgeTemplateKind` becomes seven kinds
+- [x] D1 — `BuiltInNudgeTemplateKind` becomes seven kinds
   (`crates/atm-storage/src/contract.rs`). Code contract C1.
-- [ ] D2 — override-table migration
+- [x] D2 — override-table migration
   (`crates/atm-storage-rusqlite/src/shared_db.rs`): new function
   `migrate_template_override_kinds_to_seven(conn)` called from the
   existing schema-ensure path that runs on every database open (CLI and
@@ -54,7 +54,7 @@ shape-only completion fails the sprint.
   rows. Idempotent: a database already on the seven-value `CHECK` is
   left untouched. The `CREATE TABLE IF NOT EXISTS` at line 77 also
   carries the seven-value `CHECK` for fresh databases.
-- [ ] D3 — kind selection takes the nudge mode. Code contract C2.
+- [x] D3 — kind selection takes the nudge mode. Code contract C2.
   `built_in_nudge_template_kind_from_post_send_event` gains the
   `NudgeKind` parameter (`crates/atm-core/src/boundary/mod.rs`);
   `render_built_in_nudge_for_dispatch` in
@@ -68,16 +68,16 @@ shape-only completion fails the sprint.
   `built_in_template_kind_selection_covers_seven_paths` and asserts every
   row of the C2 table; fixtures that name `DeliveryTask` /
   `DeliveryTaskAck` are changed to `Task`.
-- [ ] D4 — default bodies (`crates/atm-core/src/send/nudge_template.rs`
+- [x] D4 — default bodies (`crates/atm-core/src/send/nudge_template.rs`
   `default_template`). Code contract C3.
-- [ ] D5 — CLI: `crates/atm/src/commands/teams.rs` `set-nudge-template`,
+- [x] D5 — CLI: `crates/atm/src/commands/teams.rs` `set-nudge-template`,
   `disable-nudge-template`, `clear-nudge-template` accept `queue`,
   `queue_ack`, `task`; a retired string is rejected with
   `ATM_MESSAGE_VALIDATION_FAILED` and the hint `use "task"`; help text
   lists all seven kinds. `crates/atm-core/src/team_admin.rs` request
   types carry the kind unchanged (verify by test that a `queue_ack`
   override round-trips through `set_nudge_template_override_with_store`).
-- [ ] D6 — normative docs lose the six-kind bound:
+- [x] D6 — normative docs lose the six-kind bound:
   `docs/requirements.md` line 1094 ("exactly six named template cases"),
   line 1105 ("those six built-in template bodies"), and line 4496 ("the
   six built-in nudge template bodies"); each must read "seven";
@@ -93,7 +93,7 @@ shape-only completion fails the sprint.
   seven-kind inventory, the retirement, the migration in D2, and the
   `NudgeKind` rule; `docs/adr/INDEX.md` entry text updated if the ADR
   status line changes.
-- [ ] D7 — user docs and examples: `docs/user-documents/nudge-templates.md`
+- [x] D7 — user docs and examples: `docs/user-documents/nudge-templates.md`
   documents the seven kinds (line 23 "exactly six" becomes "seven"), the
   C2 mapping, the migration, and the corrected read action, and records
   the retirement with the sentence "Two former task steer kinds were
@@ -104,12 +104,12 @@ shape-only completion fails the sprint.
   `delivery.xml`, `delivery_ack.xml`, `manage-templates.sh`; delete
   `delivery_task.xml` and `delivery_task_ack.xml`; add `queue.xml`,
   `queue_ack.xml`, `task.xml` matching C3.
-- [ ] D8 — live nudge-text producers outside the crates:
+- [x] D8 — live nudge-text producers outside the crates:
   `scripts/atm-nudge.py` line 266, `scripts/atm-nudge.sh` line 50,
   `scripts/test_atm_nudge.py` lines 281 and 287, and
   `.claude/skills/restore-team-communications/SKILL.md` line 76 replace
   `read atm --team <team>` / `read atm` with the targeted read action.
-- [ ] D9 — task-tagged mail is always deferred (phase plan §2 "tasks are
+- [x] D9 — task-tagged mail is always deferred (phase plan §2 "tasks are
   always queued"): new `pub(crate) fn send_mode_for_task_request(request:
   &SendRequest, task_id: &Option<TaskId>) -> NudgeMode` beside
   `request_requires_ack` in `crates/atm-core/src/send/mod.rs` returning
@@ -128,7 +128,7 @@ shape-only completion fails the sprint.
   natively until idle, the same way it distinguishes steer from queue
   today); a Herdr recipient gets the marker and the pump. (AX.5 removes
   the marker for Herdr recipients only.) Code contract C5.
-- [ ] D10 — tests listed under Required validation.
+- [x] D10 — tests listed under Required validation.
 
 ### Paths to delete
 

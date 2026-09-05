@@ -233,6 +233,29 @@ mod tests {
     }
 
     #[test]
+    fn sqlite_override_store_round_trips_queue_family_and_task_kinds() {
+        let backend = crate::SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let team = "test-team".parse().expect("team");
+        for (kind, body) in [
+            (BuiltInNudgeTemplateKind::Queue, "<queue/>"),
+            (BuiltInNudgeTemplateKind::QueueAck, "<queue-ack/>"),
+            (BuiltInNudgeTemplateKind::Task, "<task/>"),
+        ] {
+            backend
+                .nudge_template_override_store()
+                .save_template_override(&team, kind, body)
+                .expect("save");
+            let row = backend
+                .nudge_template_override_store()
+                .load_template_override(&team, kind)
+                .expect("lookup")
+                .expect("row");
+            assert_eq!(row.kind, kind);
+            assert_eq!(row.template_body(), Some(body));
+        }
+    }
+
+    #[test]
     fn sqlite_override_store_returns_none_for_missing_row() {
         let backend = crate::SqliteStorageBackend::in_memory_for_test().expect("backend");
 
@@ -244,6 +267,43 @@ mod tests {
             )
             .expect("lookup");
 
+        assert!(row.is_none());
+    }
+
+    #[test]
+    fn sqlite_override_store_returns_none_for_retired_kind_after_migration() {
+        let backend = crate::SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let db = backend.shared_db_for_test();
+        db.with_connection(|connection| {
+            connection
+                .execute_batch(
+                    "DROP TABLE team_nudge_template_overrides;
+                     CREATE TABLE team_nudge_template_overrides (
+                         team_name TEXT NOT NULL,
+                         template_kind TEXT NOT NULL CHECK(template_kind IN (
+                             'delivery', 'delivery_ack', 'delivery_task', 'delivery_task_ack',
+                             'acknowledge', 'acknowledge_task'
+                         )),
+                         template_body TEXT NOT NULL,
+                         updated_at TEXT NOT NULL,
+                         PRIMARY KEY (team_name, template_kind)
+                     );
+                     INSERT INTO team_nudge_template_overrides
+                         (team_name, template_kind, template_body, updated_at)
+                     VALUES ('test-team', 'delivery_task', '<retired/>', '2026-09-05T00:00:00Z');",
+                )
+                .map_err(|error| db.error("failed to seed retired override row", error))?;
+            crate::shared_db::ensure_schema(connection, db.target())
+        })
+        .expect("migrate retired override row");
+
+        let row = backend
+            .nudge_template_override_store()
+            .load_template_override(
+                &"test-team".parse().expect("team"),
+                BuiltInNudgeTemplateKind::Task,
+            )
+            .expect("lookup");
         assert!(row.is_none());
     }
 
