@@ -10,7 +10,7 @@ use std::sync::Arc;
 use atm_storage::{AtmError, DiagnosticEvent, DiagnosticQuery, DiagnosticTimelineStore};
 use rusqlite::params;
 
-use crate::NullSqliteObservability;
+use crate::observability::PassiveSqliteObservability;
 use crate::shared_db::SharedDb;
 use crate::writer::{DIAGNOSTIC_BATCH_MAX, DiagnosticBatchOffer};
 
@@ -41,7 +41,7 @@ impl SqliteDiagnosticTimeline {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_with_observability(
             path,
-            Arc::new(NullSqliteObservability),
+            Arc::new(PassiveSqliteObservability),
         )?);
         Ok(Self { db })
     }

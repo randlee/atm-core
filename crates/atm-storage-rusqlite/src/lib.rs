@@ -44,9 +44,10 @@ pub use crate::analyst_query::{
 };
 #[cfg(test)]
 use crate::mailbox_metadata::query_mailbox_metadata_rows;
+#[cfg(test)]
+pub use crate::observability::NullSqliteObservability;
 pub use crate::observability::{
-    NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
-    SqliteObservabilityOutcome,
+    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMailboxReader,
@@ -701,7 +702,7 @@ impl Default for SqliteStorageFactory {
         Self {
             database_path: None,
             reader_lanes: reader_pool::ReaderLanesConfig::default(),
-            observability: Arc::new(NullSqliteObservability),
+            observability: Arc::new(observability::PassiveSqliteObservability),
             timeline_observer: None,
         }
     }
@@ -817,7 +818,7 @@ impl StorageFactory for SqliteStorageFactory {
 
 impl SqliteStorageBackend {
     pub fn new(path: impl AsRef<Path>) -> Result<Self, AtmError> {
-        Self::new_with_observability(path, Arc::new(NullSqliteObservability))
+        Self::new_with_observability(path, Arc::new(observability::PassiveSqliteObservability))
     }
 
     pub fn new_with_observability(

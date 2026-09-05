@@ -64,3 +64,15 @@ impl SqliteObservability for NullSqliteObservability {
         Ok(())
     }
 }
+
+/// Deliberately passive adapter for library-only construction paths. The
+/// daemon composition root injects its retained tracing adapter instead; this
+/// distinct name makes a missing production injection mechanically visible.
+#[derive(Debug, Default)]
+pub(crate) struct PassiveSqliteObservability;
+
+impl SqliteObservability for PassiveSqliteObservability {
+    fn emit(&self, _event: SqliteObservabilityEvent) -> Result<(), AtmError> {
+        Ok(())
+    }
+}
