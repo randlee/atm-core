@@ -12,15 +12,39 @@ module = "atm_observability::tracing_bridge"
 visibility = "public"
 constructor = "public"
 
+[composition]
+roots = ["atm_daemon_bootstrap::daemon_observability::DaemonObservability::install_tracing_bridge"]
+
+[ownership]
+io_owns = ["retained_jsonl_queue_admission"]
+io_forbidden = ["daemon_lifecycle", "database_io"]
+
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap", "atm"]
-allowed_dependencies = ["atm-core", "sc-observability", "sc-observability-types", "tracing", "tracing-subscriber"]
+allowed_dependencies = ["atm-core", "sc-observability", "sc-observability-types", "serde_json", "tempfile", "tracing", "tracing-subscriber"]
 forbidden_edges = [
   "atm-daemon -> atm-observability",
   "atm-observability -> atm-daemon-bootstrap",
   "atm-observability -> atm-http-runtime",
   "atm-observability -> atm-storage-rusqlite",
 ]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["tracing::Event", "RetainedEvent"]
+response_types = ["SinkOffer", "DiagnosticCounters"]
+error_types = ["BridgeError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TRACING-BRIDGE-DEPENDENCIES"]
+review_gates = ["allowlist_redaction", "single_global_install", "non_blocking_queue_admission"]
 
 [status]
 state = "active"
