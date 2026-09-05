@@ -1550,6 +1550,52 @@ mod tests {
     }
 
     #[test]
+    fn ack_tool_preserves_cli_code_for_a_non_pending_message() {
+        Python::initialize();
+        let message_id = "01KZSSREKYM7G39237P0YQ3CW3".to_owned();
+        let expected_id = message_id.parse().expect("message id");
+        let session = test_session(
+            Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                let RequestEnvelope::Write(request) = request else {
+                    panic!("ack must use the canonical write path")
+                };
+                assert_eq!(request.acknowledges_message_id, Some(expected_id));
+                Err(AtmError::validation(
+                    "acknowledgement source is not pending acknowledgement",
+                ))
+            }))),
+            Arc::new(FakeClientTransport::new(Box::new(|_| {
+                panic!("validation failure must not refresh the session")
+            }))),
+        );
+
+        Python::attach(|py| {
+            let result = session
+                .ack_tool(py, message_id, "already handled".to_owned())
+                .expect("ack returns a typed error result");
+            let result = result.bind(py);
+            assert!(result.is_instance_of::<AtmToolError>());
+            assert_eq!(
+                result
+                    .getattr("code")
+                    .expect("error code")
+                    .extract::<String>()
+                    .expect("string error code"),
+                AtmErrorCode::MessageValidationFailed.as_str()
+            );
+            assert!(
+                result
+                    .getattr("message")
+                    .expect("error message")
+                    .extract::<String>()
+                    .expect("string error message")
+                    .contains("not pending acknowledgement")
+            );
+        });
+        assert_eq!(session.reconnect_attempts.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
     fn send_tool_refreshes_once_without_replaying_a_failed_write() {
         Python::initialize();
         let initial_calls = Arc::new(AtomicUsize::new(0));
