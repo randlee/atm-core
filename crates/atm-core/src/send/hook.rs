@@ -45,10 +45,12 @@ where
         });
     }
     if delivery_snapshot.local_herdr_post_send {
+        let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event, kind)?;
         return Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
                 session: delivery_snapshot.herdr_session.clone(),
+                rendered_nudge,
             })),
             kind,
         });
@@ -95,7 +97,7 @@ const fn nudge_kind_for_mode(nudge_mode: NudgeMode) -> NudgeKind {
 }
 
 /// Render the database-resolved built-in nudge once for every first-party
-/// delivery sink. Tmux and graft therefore receive identical XML text.
+/// delivery sink. Tmux, Herdr, and graft therefore receive identical XML text.
 fn render_built_in_nudge_for_dispatch<R>(
     runtime: &R,
     event: &PostSendHookEvent,

@@ -110,11 +110,10 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
   only cross-crate contract point; no consumer constructs `herdr` argv
   itself.
 - `HR-CORE-002` `HerdrProcessInvoker::prompt` emits exactly
-  `herdr agent prompt <AgentName> "You have unread ATM messages. Run: atm
-  read"` (ADR-058 D2) with no `--wait` and no other flag. The prompt text is
-  a crate-level constant; it is never interpolated with caller-supplied
-  content, and the sender's original message body is never passed to
-  Herdr.
+  `herdr agent prompt <AgentName> <text>` (ADR-058 D2) with no `--wait` and
+  no other flag. `<text>` is the caller-supplied rendered built-in nudge
+  template; the adapter never composes or alters it, and whitespace-only
+  text is rejected before spawning.
 - `HR-CORE-003` `HerdrProcessInvoker::wait` emits exactly
   `herdr agent wait <AgentName> --until idle --until done --until blocked
   --timeout <ms>` (ADR-058 D2) with an explicit, caller-supplied timeout on
@@ -206,10 +205,14 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
   caller, so its own external-bound question does not arise in this
   phase.)
 - `HR-SAFE-003` The sender's original message body is never passed to
-  Herdr on any code path. The only text this crate ever writes into a
-  Herdr child's argv is the fixed mailbox-read prompt (`HR-CORE-002`);
-  untrusted message content cannot become terminal input through this
-  crate.
+  Herdr on any code path. The only text this crate writes into a Herdr
+  child's argv is the rendered built-in nudge template produced by
+  atm-core's renderer for the recipient team and kind — the same text the
+  tmux and graft sinks inject. The crate never reads message content itself.
+  The template's `description` placeholder resolves to the message summary,
+  or to the message text when no summary was given, exactly as on the other
+  backends; no additional length bound is imposed beyond the operating
+  system's single-argument limit.
 - `HR-SAFE-004` `atm-herdr` holds no durable or long-lived state about
   ATM mail, roster membership, or delivery/queue status. The crate's only
   runtime state is the per-host `HerdrSpawnBreaker`'s failure counter and

@@ -21,6 +21,9 @@ use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrProcessAdapter};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
+#[cfg(test)]
+use tokio::sync::Notify;
+
 use crate::runtime_health::RuntimeHealth;
 
 /// Poll cadence required by AQ2.7.
@@ -30,6 +33,9 @@ pub const HERDR_MAX_PROMPTS_PER_TICK: usize = 16;
 /// Consecutive no-input releases before one retry-budget attempt is spent.
 pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
 const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
+
+#[cfg(test)]
+type HandoffCleanupTestGate = (Arc<Notify>, Arc<Notify>);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HerdrQueueWakeStats {
@@ -52,6 +58,8 @@ pub struct HerdrQueueWakePump {
     cursor: Arc<Mutex<usize>>,
     release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
+    #[cfg(test)]
+    handoff_cleanup_test_gate: Arc<Mutex<Option<HandoffCleanupTestGate>>>,
 }
 
 impl HerdrQueueWakePump {
@@ -70,7 +78,43 @@ impl HerdrQueueWakePump {
             cursor: Arc::new(Mutex::new(0)),
             release_streaks: Arc::new(Mutex::new(HashMap::new())),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
+            #[cfg(test)]
+            handoff_cleanup_test_gate: Arc::new(Mutex::new(None)),
         }
+    }
+
+    #[cfg(test)]
+    fn install_handoff_cleanup_test_gate(&self) -> (Arc<Notify>, Arc<Notify>) {
+        let entered = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        self.handoff_cleanup_test_gate
+            .lock()
+            .expect("handoff cleanup gate lock")
+            .replace((Arc::clone(&entered), Arc::clone(&release)));
+        (entered, release)
+    }
+
+    #[cfg(test)]
+    fn clear_handoff_cleanup_test_gate(&self) {
+        self.handoff_cleanup_test_gate
+            .lock()
+            .expect("handoff cleanup gate lock")
+            .take();
+    }
+
+    #[cfg(test)]
+    async fn await_handoff_cleanup_test_gate(&self) {
+        let Some((entered, release)) = self
+            .handoff_cleanup_test_gate
+            .lock()
+            .expect("handoff cleanup gate lock")
+            .as_ref()
+            .cloned()
+        else {
+            return;
+        };
+        entered.notify_one();
+        release.notified().await;
     }
 
     /// Starts the single polling task. The task owns no per-member workers.
@@ -352,31 +396,8 @@ impl HerdrQueueWakePump {
             .await
         {
             Ok(_) => {
-                let runtime = self.service_runtime.clone();
-                let member_key = member.key.clone();
-                let message_id = claim.msg;
-                let health = self.runtime_health.clone();
-                let _ = run_blocking(move || {
-                    atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
-                        &runtime,
-                        &member_key,
-                        &message_id,
-                        || health.record_graft_queue_marker_clear_failure(),
-                    );
-                    Ok(())
-                })
-                .await;
-                self.reset_release_streak(&member.key);
-                release.disarm();
-                stats.prompted += 1;
-                tracing::info!(
-                    event = "herdr_queue_poll_outcome",
-                    member = %member.key,
-                    msg_id = %claim.msg,
-                    queue_kind = NudgeKind::Queue.as_str(),
-                    outcome = "prompted",
-                    "Herdr queue prompt accepted"
-                );
+                self.complete_successful_claim(member, claim, release, stats)
+                    .await;
             }
             Err(error) => {
                 if error.code() == AtmErrorCode::HerdrUnavailable {
@@ -412,6 +433,44 @@ impl HerdrQueueWakePump {
                 );
             }
         }
+    }
+
+    async fn complete_successful_claim(
+        &self,
+        member: &HerdrCandidate,
+        claim: atm_core::boundary::NudgeClaim,
+        release: &mut ReleasePendingOnDrop,
+        stats: &mut HerdrQueueWakeStats,
+    ) {
+        // Herdr has accepted the prompt. Disarm before any cleanup await so
+        // cancellation cannot re-release an already delivered claim.
+        release.disarm();
+        #[cfg(test)]
+        self.await_handoff_cleanup_test_gate().await;
+        let runtime = self.service_runtime.clone();
+        let member_key = member.key.clone();
+        let message_id = claim.msg;
+        let health = self.runtime_health.clone();
+        let _ = run_blocking(move || {
+            atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+                &runtime,
+                &member_key,
+                &message_id,
+                || health.record_graft_queue_marker_clear_failure(),
+            );
+            Ok(())
+        })
+        .await;
+        self.reset_release_streak(&member.key);
+        stats.prompted += 1;
+        tracing::info!(
+            event = "herdr_queue_poll_outcome",
+            member = %member.key,
+            msg_id = %claim.msg,
+            queue_kind = NudgeKind::Queue.as_str(),
+            outcome = "prompted",
+            "Herdr queue prompt accepted"
+        );
     }
 
     #[must_use]
@@ -682,7 +741,12 @@ mod tests {
                     }
                 };
                 process
-                    .prompt(&dispatch.event.recipient, target.session.as_ref(), deadline)
+                    .prompt(
+                        &dispatch.event.recipient,
+                        target.session.as_ref(),
+                        &target.rendered_nudge,
+                        deadline,
+                    )
                     .await
                     .map(|HerdrPromptOutcome::Accepted(_)| PostSendEmissionPath::LocalHerdr)
                     .map_err(Into::into)
@@ -888,7 +952,7 @@ mod tests {
         let prompt_gate = fake.block_next_prompt();
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let sender_clone = shutdown_tx.clone();
-        let task = pump.start(shutdown_rx);
+        let task = pump.clone().start(shutdown_rx);
         tokio::time::timeout(Duration::from_secs(1), async {
             loop {
                 if fake
@@ -938,13 +1002,25 @@ mod tests {
         queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
         pump.tick_once().await;
         assert_eq!(pump.stats().prompted, 1, "FIFO claims one message per tick");
-        assert!(fake.calls().iter().any(|call| matches!(
-            call,
-            atm_herdr::testing::FakeHerdrCall::Prompt {
-                agent,
-                session: Some(session),
-            } if agent == "aq27-agent" && session.as_str() == "aq27-test"
-        )));
+        let prompt_text = fake
+            .calls()
+            .into_iter()
+            .find_map(|call| match call {
+                atm_herdr::testing::FakeHerdrCall::Prompt { text, .. } => Some(text),
+                _ => None,
+            })
+            .expect("queue tick prompt");
+        let prompted_message_id = prompt_text
+            .split("message-id=\"")
+            .nth(1)
+            .and_then(|value| value.split('"').next())
+            .expect("message id in rendered prompt");
+        assert_eq!(
+            prompt_text,
+            format!(
+                "<atm from=\"sender@aq27-team\" message-id=\"{prompted_message_id}\">\n  <action>atm read --message-id {prompted_message_id}</action>\n  <description>AQ2.7 test message</description>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            )
+        );
         assert!(
             runtime
                 .pending_nudge_store()
@@ -1211,6 +1287,25 @@ mod tests {
     #[tokio::test]
     async fn ac08_dispatch_selector_is_used_by_tick_once() {
         let (_root, runtime, fake, key) = test_pump().await;
+        let prompt_text = fake
+            .calls()
+            .into_iter()
+            .find_map(|call| match call {
+                atm_herdr::testing::FakeHerdrCall::Prompt { text, .. } => Some(text),
+                _ => None,
+            })
+            .expect("queue tick prompt");
+        let message_id = prompt_text
+            .split("message-id=\"")
+            .nth(1)
+            .and_then(|value| value.split('\"').next())
+            .expect("message id in rendered prompt");
+        assert_eq!(
+            prompt_text,
+            format!(
+                "<atm from=\"sender@aq27-team\" message-id=\"{message_id}\">\n  <action>atm read --message-id {message_id}</action>\n  <description>AQ2.7 test message</description>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            )
+        );
         assert!(
             fake.calls()
                 .iter()
@@ -1281,6 +1376,63 @@ mod tests {
                 .attempt,
             0
         );
+    }
+
+    #[tokio::test]
+    async fn ac11_successful_prompt_cancellation_cannot_rerelease_claim() {
+        let (_root, runtime, fake, pump, _health, key) = build_test_pump();
+        let (clear_started, allow_clear) = pump.install_handoff_cleanup_test_gate();
+        let (shutdown_tx, shutdown_rx) = watch::channel(());
+        let task = pump.clone().start(shutdown_rx);
+        clear_started.notified().await;
+
+        shutdown_tx.send(()).expect("shutdown notification");
+        task.await.expect("poll task join");
+        assert!(
+            runtime
+                .pending_nudge_store()
+                .expect("pending store")
+                .claim_next_pending(&key)
+                .expect("claim while cleanup is gated")
+                .is_none(),
+            "a successful Herdr prompt must not be re-released while cleanup is pending"
+        );
+
+        allow_clear.notify_one();
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if runtime
+                    .pending_nudge_store()
+                    .expect("pending store")
+                    .list_pending_members()
+                    .expect("pending members")
+                    .is_empty()
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("marker cleanup completes");
+
+        fake.queue_list_result(Ok(HerdrListOutcome {
+            agents: vec![AgentSnapshot {
+                name: Some("aq27-agent".to_owned()),
+                status: HerdrAgentStatus::Idle,
+                workspace_id: None,
+            }],
+        }));
+        pump.tick_once().await;
+        assert_eq!(
+            fake.calls()
+                .iter()
+                .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
+                .count(),
+            1,
+            "the next tick must not prompt the already accepted message again"
+        );
+        pump.clear_handoff_cleanup_test_gate();
     }
 
     #[tokio::test]

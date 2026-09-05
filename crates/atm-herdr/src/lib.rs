@@ -12,9 +12,9 @@ use atm_core::{HerdrSession, RequestDeadline};
 use serde_json::Value;
 use tokio::io::AsyncReadExt;
 
-pub const HERDR_WAKE_TEXT: &str = "You have unread ATM messages. Run: atm read";
 const HERDR_PROCESS_CAP: Duration = Duration::from_secs(5);
 const BREAKER_MAX_BACKOFF: Duration = Duration::from_secs(30);
+const HERDR_MAX_OUTPUT_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HerdrAgentStatus {
@@ -180,6 +180,7 @@ pub trait HerdrProcessAdapter: Send + Sync {
         &'a self,
         agent: &'a AgentName,
         session: Option<&'a HerdrSession>,
+        text: &'a str,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>>;
 
@@ -377,10 +378,14 @@ impl HerdrProcessAdapter for HerdrProcessInvoker {
         &'a self,
         agent: &'a AgentName,
         session: Option<&'a HerdrSession>,
+        text: &'a str,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>> {
+        if let Err(error) = validate_prompt_text(text) {
+            return Box::pin(async move { Err(error) });
+        }
         Box::pin(async move {
-            let args = prompt_args(agent);
+            let args = prompt_args(agent, text);
             let output = run_command(
                 &self.breaker,
                 &args,
@@ -609,31 +614,71 @@ async fn run_command_with_binary(
             return Err(HerdrError::TimedOut);
         }
     };
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    if let Some(mut pipe) = child.stdout.take() {
-        let _ = pipe.read_to_end(&mut stdout).await;
-    }
-    if let Some(mut pipe) = child.stderr.take() {
-        let _ = pipe.read_to_end(&mut stderr).await;
-    }
+    let (stdout, stderr) = capture_command_output(&mut child).await?;
     Ok(CommandOutput {
-        stdout: String::from_utf8_lossy(&stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&stderr).into_owned(),
+        stdout,
+        stderr,
         success: status.success(),
     })
+}
+
+async fn capture_command_output(
+    child: &mut tokio::process::Child,
+) -> Result<(String, String), HerdrError> {
+    let (stdout, stdout_truncated) = if let Some(pipe) = child.stdout.take() {
+        read_capped(pipe).await
+    } else {
+        (Vec::new(), false)
+    };
+    let (stderr, stderr_truncated) = if let Some(pipe) = child.stderr.take() {
+        read_capped(pipe).await
+    } else {
+        (Vec::new(), false)
+    };
+    if stdout_truncated || stderr_truncated {
+        return Err(HerdrError::Advisory {
+            code: format!(
+                "output_truncated: stdout={stdout_truncated}, stderr={stderr_truncated}, limit={HERDR_MAX_OUTPUT_BYTES}"
+            ),
+        });
+    }
+    Ok((
+        String::from_utf8_lossy(&stdout).into_owned(),
+        String::from_utf8_lossy(&stderr).into_owned(),
+    ))
+}
+
+async fn read_capped(reader: impl tokio::io::AsyncRead + Unpin) -> (Vec<u8>, bool) {
+    let mut output = Vec::new();
+    let _ = reader
+        .take((HERDR_MAX_OUTPUT_BYTES as u64).saturating_add(1))
+        .read_to_end(&mut output)
+        .await;
+    let truncated = output.len() > HERDR_MAX_OUTPUT_BYTES;
+    if truncated {
+        output.truncate(HERDR_MAX_OUTPUT_BYTES);
+    }
+    (output, truncated)
 }
 
 fn session_environment(session: Option<&HerdrSession>) -> Option<(&'static str, &str)> {
     session.map(|session| ("HERDR_SESSION", session.as_str()))
 }
 
-fn prompt_args(agent: &AgentName) -> Vec<String> {
+fn validate_prompt_text(text: &str) -> Result<(), HerdrError> {
+    if text.trim().is_empty() {
+        Err(HerdrError::EmptyAgentPrompt)
+    } else {
+        Ok(())
+    }
+}
+
+fn prompt_args(agent: &AgentName, text: &str) -> Vec<String> {
     vec![
         "agent".to_owned(),
         "prompt".to_owned(),
         agent.to_string(),
-        HERDR_WAKE_TEXT.to_owned(),
+        text.to_owned(),
     ]
 }
 
@@ -779,6 +824,7 @@ pub mod testing {
         Prompt {
             agent: String,
             session: Option<HerdrSession>,
+            text: String,
         },
         Wait {
             agent: String,
@@ -877,6 +923,7 @@ pub mod testing {
             &'a self,
             agent: &'a AgentName,
             session: Option<&'a HerdrSession>,
+            text: &'a str,
             _deadline: RequestDeadline,
         ) -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>>
         {
@@ -887,6 +934,7 @@ pub mod testing {
                     state.calls.push(FakeHerdrCall::Prompt {
                         agent: agent.to_string(),
                         session: session.cloned(),
+                        text: text.to_owned(),
                     });
                     (state.prompt_gate.take(), state.prompt_results.pop_front())
                 })
@@ -1022,14 +1070,6 @@ mod tests {
     }
 
     #[test]
-    fn prompt_text_is_fixed_and_non_empty() {
-        assert_eq!(
-            HERDR_WAKE_TEXT,
-            "You have unread ATM messages. Run: atm read"
-        );
-    }
-
-    #[test]
     fn parses_prompt_snapshot_and_structured_errors() {
         let outcome =
             parse_prompt(r#"{"result":{"agent":{"name":"alice","agent_status":"working"}}}"#)
@@ -1051,14 +1091,13 @@ mod tests {
     #[test]
     fn every_adapter_argv_matches_the_herdr_contract() {
         let agent: AgentName = "alice".parse().expect("agent");
+        let text = "line one\nline two\nline three\nline four\nline five\nline six";
+        let args = prompt_args(&agent, text);
+        assert_eq!(args.len(), 4);
+        assert_eq!(args, vec!["agent", "prompt", "alice", text]);
         assert_eq!(
-            prompt_args(&agent),
-            vec![
-                "agent",
-                "prompt",
-                "alice",
-                "You have unread ATM messages. Run: atm read"
-            ]
+            validate_prompt_text("  \n"),
+            Err(HerdrError::EmptyAgentPrompt)
         );
         assert_eq!(
             wait_args(
@@ -1080,6 +1119,33 @@ mod tests {
         );
         assert_eq!(get_args(&agent), vec!["agent", "get", "alice"]);
         assert_eq!(list_args(), vec!["agent", "list"]);
+    }
+
+    #[tokio::test]
+    async fn capped_output_reports_truncation_without_retaining_extra_bytes() {
+        let input = vec![b'x'; HERDR_MAX_OUTPUT_BYTES + 1];
+        let (output, truncated) = read_capped(std::io::Cursor::new(input)).await;
+        assert!(truncated);
+        assert_eq!(output.len(), HERDR_MAX_OUTPUT_BYTES);
+    }
+
+    #[tokio::test]
+    async fn empty_prompt_is_rejected_before_process_spawn() {
+        let agent: AgentName = "alice".parse().expect("agent");
+        let invoker = HerdrProcessInvoker {
+            breaker: Arc::new(HerdrSpawnBreaker::default()),
+        };
+        assert_eq!(
+            invoker
+                .prompt(
+                    &agent,
+                    None,
+                    " \n",
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await,
+            Err(HerdrError::EmptyAgentPrompt)
+        );
     }
 
     #[test]

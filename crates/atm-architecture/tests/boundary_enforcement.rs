@@ -3763,6 +3763,78 @@ fn herdr_constructors_have_one_composition_root_call_site() {
 }
 
 #[test]
+fn herdr_prompt_calls_stay_behind_the_selector_emitter_boundary() {
+    let root = workspace_root();
+    let mut rust_files = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut rust_files);
+    rust_files.retain(|path| !path.starts_with(root.join("crates/atm-architecture/tests")));
+
+    let mut calls = Vec::new();
+    for path in rust_files {
+        let source = read_source(&path);
+        let syntax = syn::parse_file(&source)
+            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+        let mut visitor = HerdrPromptCallVisitor::default();
+        visitor.visit_file(&syntax);
+        calls.extend(visitor.calls.into_iter().map(|function| {
+            format!(
+                "{}::{function}",
+                path.display().to_string().replace('\\', "/")
+            )
+        }));
+    }
+
+    assert_eq!(
+        calls.len(),
+        1,
+        "the selector emitter must own the only production Herdr prompt call: {calls:?}"
+    );
+    assert!(
+        calls[0].contains("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"),
+        "Herdr prompt must cross the selector emitter boundary: {calls:?}"
+    );
+}
+
+#[derive(Default)]
+struct HerdrPromptCallVisitor {
+    calls: Vec<String>,
+    current_function: Option<String>,
+    in_test_module: bool,
+}
+
+impl<'ast> Visit<'ast> for HerdrPromptCallVisitor {
+    fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
+        let previous = self.current_function.replace(node.sig.ident.to_string());
+        syn::visit::visit_item_fn(self, node);
+        self.current_function = previous;
+    }
+
+    fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
+        let previous = self.current_function.replace(node.sig.ident.to_string());
+        syn::visit::visit_impl_item_fn(self, node);
+        self.current_function = previous;
+    }
+
+    fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
+        let previous = self.in_test_module;
+        self.in_test_module = previous || node.attrs.iter().any(is_cfg_test_attribute);
+        syn::visit::visit_item_mod(self, node);
+        self.in_test_module = previous;
+    }
+
+    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
+        if node.method == "prompt" && !self.in_test_module {
+            self.calls.push(
+                self.current_function
+                    .clone()
+                    .unwrap_or_else(|| "<module-level expression>".to_owned()),
+            );
+        }
+        syn::visit::visit_expr_method_call(self, node);
+    }
+}
+
+#[test]
 fn herdr_test_utils_are_dev_dependencies_only() {
     let root = workspace_root();
     for crate_name in ["atm-daemon-bootstrap", "atm-http-runtime"] {

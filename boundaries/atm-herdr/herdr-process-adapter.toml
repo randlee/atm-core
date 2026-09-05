@@ -50,7 +50,7 @@ forbidden = [
 ]
 
 [contracts]
-request_types = ["HerdrPromptOutcome", "HerdrWaitOutcome", "HerdrGetOutcome", "HerdrListOutcome"]
+request_types = ["HerdrPromptOutcome", "HerdrWaitOutcome", "HerdrGetOutcome", "HerdrListOutcome", "rendered built-in nudge text"]
 response_types = ["AgentSnapshot", "HerdrAgentStatus"]
 error_types = ["HerdrError"]
 
@@ -71,4 +71,5 @@ state = "active"
 notes = [
   "AQ2.6 owns the immediate steer adapter contract; AQ2.7 reuses the same adapter for wait/get queue wake behavior",
   "HerdrSession remains owned by AQ1 delivery_channel.rs; this crate consumes the session string only for child HERDR_SESSION",
+  "Phase AX.2: prompt text is caller-supplied rendered built-in nudge template text; the adapter never composes or alters it (2026-09-05)",
 ]

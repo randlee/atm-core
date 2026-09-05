@@ -162,6 +162,7 @@ impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {
         &'a self,
         agent: &'a atm_core::types::AgentName,
         _session: Option<&'a HerdrSession>,
+        _text: &'a str,
         _deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>> {
         let snapshot = AgentSnapshot {
@@ -417,7 +418,12 @@ impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
                 ));
             };
             let result = process
-                .prompt(&dispatch.event.recipient, target.session.as_ref(), deadline)
+                .prompt(
+                    &dispatch.event.recipient,
+                    target.session.as_ref(),
+                    &target.rendered_nudge,
+                    deadline,
+                )
                 .await;
             match result {
                 Ok(HerdrPromptOutcome::Accepted(_)) => {
@@ -716,6 +722,7 @@ mod tests {
         dispatch.target =
             PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
                 session: Some(atm_core::HerdrSession::new("team-a").expect("session")),
+                rendered_nudge: "test".to_owned(),
             }));
         dispatch
     }
@@ -1482,8 +1489,10 @@ mod tests {
             call,
             atm_herdr::testing::FakeHerdrCall::Prompt {
                 session: Some(_),
+                text,
                 ..
             }
+                if text == "test"
         )));
     }
 
