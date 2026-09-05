@@ -381,3 +381,148 @@ impl DegradationMonitor {
         state.last_dropped = dropped_total;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use super::{
+        BufferedEvents, DEGRADATION_RECOVERY_WINDOW_SECS, DegradationMonitor, DiagnosticPolicy,
+        DiagnosticTimelineStats, DiagnosticTimelineWriter,
+    };
+    use atm_observability::{DiagnosticSink, DropReason, RetainedEvent, SinkOffer};
+    use atm_storage::{AtmError, DiagnosticEvent, DiagnosticQuery, DiagnosticTimelineStore};
+
+    #[derive(Default)]
+    struct FixtureTimeline {
+        batches: std::sync::Mutex<Vec<Vec<DiagnosticEvent>>>,
+        fail: AtomicBool,
+    }
+
+    impl DiagnosticTimelineStore for FixtureTimeline {
+        fn record_batch(&self, events: &[DiagnosticEvent]) -> Result<(), AtmError> {
+            if self.fail.load(Ordering::Relaxed) {
+                return Err(AtmError::daemon_unavailable("fixture persistence failure"));
+            }
+            self.batches
+                .lock()
+                .expect("fixture batches")
+                .push(events.to_vec());
+            Ok(())
+        }
+
+        fn query(&self, _query: &DiagnosticQuery) -> Result<Vec<DiagnosticEvent>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn prune(&self, _now_unix_ms: i64) -> Result<u64, AtmError> {
+            Ok(0)
+        }
+    }
+
+    fn fixture_writer(store: std::sync::Arc<FixtureTimeline>) -> DiagnosticTimelineWriter {
+        DiagnosticTimelineWriter {
+            store,
+            policy: DiagnosticPolicy::default(),
+            stats: std::sync::Arc::new(DiagnosticTimelineStats::default()),
+            persistence_stats: None,
+            buffered: std::sync::Mutex::new(BufferedEvents {
+                events: Vec::new(),
+                last_flush: std::time::Instant::now(),
+            }),
+        }
+    }
+
+    fn info_event(component: &'static str) -> RetainedEvent<'static> {
+        RetainedEvent {
+            ts_unix_ms: 42,
+            level: sc_observability_types::Level::Info,
+            component,
+            code: Some("ATM_FIXTURE"),
+            correlation_id: None,
+            origin: "tracing",
+            message: "fixture diagnostic",
+            fields: &[],
+        }
+    }
+
+    #[test]
+    fn ac2_policy_selected_info_rows_reach_the_timeline() {
+        let store = std::sync::Arc::new(FixtureTimeline::default());
+        let writer = fixture_writer(std::sync::Arc::clone(&store));
+        let selected = info_event(atm_observability::RETAINED_INFO_TARGETS[0]);
+        let unselected = info_event("fixture.unselected");
+
+        assert_eq!(
+            writer.offer(&unselected),
+            SinkOffer::Dropped(DropReason::Disabled)
+        );
+        for _ in 0..super::DIAGNOSTIC_BATCH_MAX {
+            assert_eq!(writer.offer(&selected), SinkOffer::Accepted);
+        }
+
+        let batches = store.batches.lock().expect("fixture batches");
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].len(), super::DIAGNOSTIC_BATCH_MAX);
+        assert!(
+            batches[0]
+                .iter()
+                .all(|event| event.component == selected.component && event.level == "info")
+        );
+    }
+
+    #[test]
+    fn ac3_diagnostic_persistence_failure_does_not_poison_later_offers() {
+        let store = std::sync::Arc::new(FixtureTimeline::default());
+        store.fail.store(true, Ordering::Relaxed);
+        let writer = fixture_writer(std::sync::Arc::clone(&store));
+        let event = info_event(atm_observability::RETAINED_INFO_TARGETS[0]);
+
+        for _ in 1..super::DIAGNOSTIC_BATCH_MAX {
+            assert_eq!(writer.offer(&event), SinkOffer::Accepted);
+        }
+        assert_eq!(
+            writer.offer(&event),
+            SinkOffer::Dropped(DropReason::PersistFailed)
+        );
+        assert_eq!(
+            writer
+                .stats()
+                .timeline_dropped_persist_error_total
+                .load(Ordering::Relaxed),
+            super::DIAGNOSTIC_BATCH_MAX as u64
+        );
+
+        store.fail.store(false, Ordering::Relaxed);
+        for _ in 0..super::DIAGNOSTIC_BATCH_MAX {
+            assert_eq!(writer.offer(&event), SinkOffer::Accepted);
+        }
+        assert_eq!(store.batches.lock().expect("fixture batches").len(), 1);
+    }
+
+    #[test]
+    fn ac7_saturation_state_transitions_from_degraded_to_recovered_after_quiet_window() {
+        let monitor = DegradationMonitor::default();
+        monitor.observe("timeline", 1);
+        {
+            let mut sinks = monitor.sinks.lock().expect("monitor state");
+            let state = sinks.get_mut("timeline").expect("degraded state");
+            assert!(state.degraded_since.is_some());
+            state.degraded_since = Some(
+                std::time::Instant::now()
+                    - std::time::Duration::from_secs(DEGRADATION_RECOVERY_WINDOW_SECS + 1),
+            );
+            state.last_transition = None;
+        }
+
+        monitor.observe("timeline", 1);
+        let sinks = monitor.sinks.lock().expect("monitor state");
+        assert!(
+            sinks
+                .get("timeline")
+                .expect("recovered state")
+                .degraded_since
+                .is_none()
+        );
+    }
+}

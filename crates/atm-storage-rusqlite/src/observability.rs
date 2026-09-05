@@ -78,3 +78,17 @@ impl SqliteObservability for PassiveSqliteObservability {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn ac8_null_sqlite_observability_is_test_only_in_the_source_contract() {
+        let source = include_str!("observability.rs");
+        assert!(source.contains(
+            "#[cfg(test)]\n#[derive(Debug, Default)]\npub struct NullSqliteObservability;"
+        ));
+        assert!(
+            source.contains("#[cfg(test)]\nimpl SqliteObservability for NullSqliteObservability")
+        );
+    }
+}

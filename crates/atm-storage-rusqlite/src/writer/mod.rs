@@ -1,8 +1,13 @@
 mod ops;
 mod ops_envelope;
+mod shutdown_support;
 mod stmt_cache;
 
 pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
+use shutdown_support::{
+    checkpoint_writer_connection, drain_submit_replies, writer_channel_closed_error,
+    writer_queue_timeout_error, writer_reply_channel_closed_error, writer_reply_timeout_error,
+};
 
 use crate::DIAGNOSTIC_PRUNE_CHECK_EVERY;
 use crate::observability::{
@@ -502,77 +507,6 @@ impl SqliteWriter {
                 detail,
                 Some(AtmErrorCode::DaemonUnavailable),
             ));
-    }
-}
-
-fn writer_channel_closed_error() -> AtmError {
-    AtmError::daemon_unavailable("sqlite writer submission channel closed")
-}
-
-fn writer_queue_timeout_error(deadline: Duration) -> AtmError {
-    AtmError::daemon_unavailable(format!(
-        "sqlite writer submission queue did not accept a write within {:?}",
-        deadline
-    ))
-}
-
-fn writer_reply_timeout_error(deadline: Duration) -> AtmError {
-    AtmError::daemon_unavailable(format!(
-        "sqlite writer reply did not arrive within {:?}",
-        deadline
-    ))
-}
-
-fn writer_reply_channel_closed_error() -> AtmError {
-    AtmError::daemon_unavailable("sqlite writer reply channel closed")
-}
-
-fn writer_unavailable_reply_error() -> AtmError {
-    AtmError::daemon_unavailable("sqlite writer is unavailable during shutdown")
-}
-
-fn drain_submit_replies(receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>) {
-    loop {
-        match receiver.try_recv() {
-            Ok(WriterMessage::Submit { reply, .. }) => {
-                reply.send(Err(writer_unavailable_reply_error()));
-            }
-            Ok(WriterMessage::Shutdown) => continue,
-            Err(
-                tokio::sync::mpsc::error::TryRecvError::Empty
-                | tokio::sync::mpsc::error::TryRecvError::Disconnected,
-            ) => break,
-        }
-    }
-}
-
-fn checkpoint_writer_connection(
-    target: &SharedDbTarget,
-    connection: &mut SqliteConnection,
-    observability: &dyn SqliteObservability,
-) {
-    #[cfg(test)]
-    if matches!(target, SharedDbTarget::InMemory { .. }) {
-        return;
-    }
-
-    if let Err(error) = connection.query_row("PRAGMA wal_checkpoint(PASSIVE);", [], |_row| Ok(())) {
-        let error = sqlite_error(
-            target,
-            "sqlite writer final wal checkpoint failed after draining the write lane",
-            error,
-        );
-        tracing::warn!(
-            path = %target.display(),
-            %error,
-            "sqlite writer final wal checkpoint failed after draining the write lane"
-        );
-        observability.emit_or_warn(SqliteObservabilityEvent::new(
-            "writer_shutdown_checkpoint",
-            SqliteObservabilityOutcome::Failed,
-            error.message().to_owned(),
-            Some(error.code()),
-        ));
     }
 }
 

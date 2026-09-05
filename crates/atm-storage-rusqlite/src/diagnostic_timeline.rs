@@ -142,8 +142,11 @@ pub(crate) fn truncate_detail(detail: &str) -> String {
 mod tests {
     use std::time::{Duration, Instant};
 
-    use super::{DIAGNOSTIC_DETAIL_MAX_BYTES, SqliteDiagnosticTimeline, truncate_detail};
-    use atm_storage::{DiagnosticEvent, DiagnosticQuery, DiagnosticTimelineStore};
+    use super::{
+        DIAGNOSTIC_DETAIL_MAX_BYTES, DIAGNOSTIC_MAX_ROWS, SqliteDiagnosticTimeline, truncate_detail,
+    };
+    use atm_storage::{AtmError, DiagnosticEvent, DiagnosticQuery, DiagnosticTimelineStore};
+    use rusqlite::params;
     use tempfile::tempdir;
 
     #[test]
@@ -185,5 +188,42 @@ mod tests {
             assert!(Instant::now() < deadline, "diagnostic writer did not drain");
             std::thread::yield_now();
         }
+    }
+
+    #[test]
+    fn ac4_prune_reduces_a_25k_fixture_to_the_documented_row_bound() {
+        const FIXTURE_ROWS: usize = 25_000;
+        let directory = tempdir().expect("temporary database directory");
+        let timeline = SqliteDiagnosticTimeline::open(directory.path().join("mail.db"))
+            .expect("timeline opens and migrates");
+        timeline
+            .db
+            .with_connection(|connection| {
+                for index in 0..FIXTURE_ROWS {
+                    connection
+                        .execute(
+                            "INSERT INTO diagnostic_events (ts_unix_ms, level, component, origin, message) VALUES (?1, 'info', 'fixture', 'test', 'fixture')",
+                            params![index as i64],
+                        )
+                        .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                }
+                Ok(())
+            })
+            .expect("seed diagnostic fixture");
+
+        let deleted = timeline.prune(FIXTURE_ROWS as i64).expect("prune fixture");
+        let retained: i64 = timeline
+            .db
+            .with_connection(|connection| {
+                connection
+                    .query_row("SELECT COUNT(*) FROM diagnostic_events", [], |row| {
+                        row.get(0)
+                    })
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))
+            })
+            .expect("count retained diagnostics");
+
+        assert_eq!(deleted, (FIXTURE_ROWS - DIAGNOSTIC_MAX_ROWS) as u64);
+        assert_eq!(retained, DIAGNOSTIC_MAX_ROWS as i64);
     }
 }

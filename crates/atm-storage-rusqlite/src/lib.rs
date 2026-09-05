@@ -15,6 +15,8 @@ mod graft_receiver_endpoint_store;
 mod mail_messages_schema;
 #[cfg(test)]
 mod mailbox_metadata;
+#[cfg(test)]
+mod mailbox_metadata_types;
 mod mailbox_reader;
 mod nudge_template_override_store;
 mod observability;
@@ -29,6 +31,7 @@ mod search_store;
 mod shared_db;
 mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
+mod storage_types;
 mod team_roster_schema;
 mod template_catalog_schema;
 mod template_catalog_store;
@@ -55,8 +58,6 @@ use atm_storage::contract::{
     MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 use atm_storage::schema::MessageEnvelope;
-#[cfg(test)]
-use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TemplateCatalogStore};
 use atm_storage::{
@@ -74,6 +75,10 @@ use search_store::{async_search_store, search_store};
 use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use storage_types::{
+    SqliteMessageStore, SqliteNudgeTemplateOverrideStore, SqlitePeerConfigStore,
+    SqlitePendingNudgeStore, SqliteRosterStore, StoredMailMessageState,
+};
 use template_catalog_store::template_catalog_store;
 pub use writer::DiagnosticTimelinePersistenceStats;
 
@@ -240,61 +245,7 @@ pub fn install_message_write_failure_for_test(path: impl AsRef<Path>) -> Result<
 }
 
 #[cfg(test)]
-#[allow(
-    dead_code,
-    reason = "metadata positive-path fields are owned by the query DTO while current tests exercise malformed-row validation"
-)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SqliteMailboxMetadataRow {
-    pub message_key: MessageKey,
-    pub message_id: Option<AtmMessageId>,
-    pub parent_message_id: Option<AtmMessageId>,
-    pub thread_mode: Option<ThreadMode>,
-    pub from_agent: AgentName,
-    pub source_chat_id: Option<atm_storage::types::ChatId>,
-    pub destination_chat_id: Option<atm_storage::types::ChatId>,
-    pub summary: Option<String>,
-    pub message_at: IsoTimestamp,
-    pub read: bool,
-    pub requires_ack: bool,
-    pub pending_ack: bool,
-    pub acknowledged_at: Option<IsoTimestamp>,
-    pub expires_at: Option<IsoTimestamp>,
-    pub task_id: Option<atm_storage::types::TaskId>,
-}
-
-#[derive(Debug)]
-struct SqliteMessageStore {
-    db: Arc<SharedDb>,
-}
-
-#[derive(Debug)]
-struct SqliteRosterStore {
-    db: Arc<SharedDb>,
-}
-
-#[derive(Debug)]
-struct SqliteNudgeTemplateOverrideStore {
-    db: Arc<SharedDb>,
-}
-
-#[derive(Debug)]
-struct SqlitePendingNudgeStore {
-    db: Arc<SharedDb>,
-}
-
-#[derive(Debug)]
-struct SqlitePeerConfigStore {
-    db: Arc<SharedDb>,
-}
-
-#[derive(Debug, Clone)]
-struct StoredMailMessageState {
-    read: bool,
-    pending_ack_at: Option<IsoTimestamp>,
-    acknowledged_at: Option<IsoTimestamp>,
-    expires_at: Option<IsoTimestamp>,
-}
+pub(crate) use mailbox_metadata_types::SqliteMailboxMetadataRow;
 
 impl SqliteMessageStore {
     fn new(db: Arc<SharedDb>) -> Self {
