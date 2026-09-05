@@ -7,7 +7,7 @@ use atm_core::observability::{
     AtmJsonNumber, AtmLogQuery, LogFieldKey, LogFieldMatch, LogFieldValue, LogLevelFilter, LogMode,
     LogOrder, ObservabilityPort,
 };
-use atm_core::observability_counters::{DiagnosticTimelineRecord, DiagnosticTimelineResponse};
+use atm_core::observability_counters::DiagnosticTimelineRecord;
 use atm_core::types::IsoTimestamp;
 use clap::{Args, Subcommand, ValueEnum};
 use serde::Serialize;
@@ -205,27 +205,29 @@ impl QueryArgs {
     }
 
     async fn timeline_records_from_endpoint(&self, endpoint: &Path) -> Result<Vec<TimelineRecord>> {
-        let mut query = vec![format!(
-            "limit={}",
-            self.limit.unwrap_or(DEFAULT_SNAPSHOT_LIMIT).min(5_000)
-        )];
-        if let Some(since) = self.since.as_deref() {
-            query.push(format!("since={}", parse_since_millis(since)?));
-        }
-        if let Some(until) = self.until.as_deref() {
-            query.push(format!("until={}", parse_since_millis(until)?));
-        }
-        if let Some(component) = self.component.as_deref() {
-            query.push(format!("component={}", percent_encode(component)));
-        }
-        let body = atm_http_runtime::loopback_tcp_get_json(
+        let since_unix_ms = self.since.as_deref().map(parse_since_millis).transpose()?;
+        let until_unix_ms = self.until.as_deref().map(parse_since_millis).transpose()?;
+        let limit = self
+            .limit
+            .unwrap_or(DEFAULT_SNAPSHOT_LIMIT)
+            .min(atm_core::observability_counters::DIAGNOSTIC_QUERY_MAX_LIMIT);
+        let response = atm_http_runtime::diagnostics_query(
             endpoint,
-            format!("/v1/diagnostics?{}", query.join("&")),
+            atm_core::observability_counters::DiagnosticTimelineQuery {
+                since_unix_ms,
+                until_unix_ms,
+                // The server-side `level_at_least` filter is a lexicographic
+                // string comparison and is not level-order-correct (tracked
+                // separately); the CLI deliberately fetches unfiltered and
+                // applies level filtering client-side below instead.
+                level_at_least: None,
+                component_prefix: self.component.clone(),
+                limit: Some(limit),
+                cursor: None,
+            },
             Duration::from_secs(10),
         )
         .await?;
-        let response: DiagnosticTimelineResponse = serde_json::from_slice(&body)
-            .context("daemon returned an invalid diagnostic timeline response")?;
         Ok(response
             .records
             .into_iter()
@@ -423,17 +425,6 @@ fn level_name(level: CliLogLevel) -> &'static str {
         CliLogLevel::Warn => "warn",
         CliLogLevel::Error => "error",
     }
-}
-
-fn percent_encode(raw: &str) -> String {
-    raw.bytes()
-        .flat_map(|byte| match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                vec![char::from(byte)]
-            }
-            _ => format!("%{byte:02X}").chars().collect(),
-        })
-        .collect()
 }
 
 #[derive(Debug, Args)]
@@ -861,6 +852,8 @@ mod tests {
                 message: "timeline fixture".to_owned(),
                 detail: None,
             }],
+            truncated: false,
+            next_cursor: None,
         })
         .await;
         let args = QueryArgs {
