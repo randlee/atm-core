@@ -333,6 +333,8 @@ struct SinkState {
     last_dropped: u64,
     degraded_since: Option<Instant>,
     last_transition: Option<Instant>,
+    #[cfg(test)]
+    emitted_codes: Vec<&'static str>,
 }
 
 impl DegradationMonitor {
@@ -348,6 +350,8 @@ impl DegradationMonitor {
         if dropped_total > state.last_dropped && state.degraded_since.is_none() && !rate_limited {
             state.degraded_since = Some(now);
             state.last_transition = Some(now);
+            #[cfg(test)]
+            state.emitted_codes.push("ATM_LOG_SINK_DEGRADED");
             tracing::warn!(
                 origin = "timeline",
                 code = "ATM_LOG_SINK_DEGRADED",
@@ -362,6 +366,8 @@ impl DegradationMonitor {
         {
             state.degraded_since = None;
             state.last_transition = Some(now);
+            #[cfg(test)]
+            state.emitted_codes.push("ATM_LOG_SINK_RECOVERED");
             tracing::warn!(
                 origin = "timeline",
                 code = "ATM_LOG_SINK_RECOVERED",
@@ -376,7 +382,7 @@ impl DegradationMonitor {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     use super::{
         BufferedEvents, DEGRADATION_RECOVERY_WINDOW_SECS, DegradationMonitor, DiagnosticPolicy,
@@ -401,6 +407,35 @@ mod tests {
                 .expect("fixture batches")
                 .push(events.to_vec());
             Ok(())
+        }
+
+        fn query(&self, _query: &DiagnosticQuery) -> Result<Vec<DiagnosticEvent>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn prune(&self, _now_unix_ms: i64) -> Result<u64, AtmError> {
+            Ok(0)
+        }
+    }
+
+    /// Models the real lower-priority lane while its worker is paused in the
+    /// first batch: one batch is in flight and the bounded queue holds the
+    /// remaining `DIAGNOSTIC_QUEUE_BATCHES` batches.
+    #[derive(Default)]
+    struct PausedTimeline {
+        accepted_batches: AtomicUsize,
+    }
+
+    impl DiagnosticTimelineStore for PausedTimeline {
+        fn record_batch(&self, _events: &[DiagnosticEvent]) -> Result<(), AtmError> {
+            let accepted = self.accepted_batches.fetch_add(1, Ordering::Relaxed);
+            if accepted < atm_runtime_test_support::diagnostic_queue_batches_for_test() + 1 {
+                Ok(())
+            } else {
+                Err(AtmError::daemon_unavailable(
+                    "diagnostic timeline queue is full; batch dropped",
+                ))
+            }
         }
 
         fn query(&self, _query: &DiagnosticQuery) -> Result<Vec<DiagnosticEvent>, AtmError> {
@@ -515,6 +550,70 @@ mod tests {
                 .expect("recovered state")
                 .degraded_since
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn ac7_offer_overflow_counts_the_paused_writer_excess() {
+        let store = std::sync::Arc::new(PausedTimeline::default());
+        let writer = DiagnosticTimelineWriter {
+            store,
+            policy: DiagnosticPolicy::default(),
+            stats: std::sync::Arc::new(DiagnosticTimelineStats::default()),
+            persistence_stats: None,
+            buffered: std::sync::Mutex::new(BufferedEvents {
+                events: Vec::new(),
+                last_flush: std::time::Instant::now(),
+            }),
+        };
+        let event = info_event(atm_observability::RETAINED_INFO_TARGETS[0]);
+        let accepted_events = (atm_runtime_test_support::diagnostic_queue_batches_for_test() + 1)
+            * super::DIAGNOSTIC_BATCH_MAX;
+        for _ in 0..accepted_events {
+            assert_eq!(writer.offer(&event), SinkOffer::Accepted);
+        }
+
+        for _ in 1..super::DIAGNOSTIC_BATCH_MAX {
+            assert_eq!(writer.offer(&event), SinkOffer::Accepted);
+        }
+        assert_eq!(
+            writer.offer(&event),
+            SinkOffer::Dropped(DropReason::QueueFull)
+        );
+        assert_eq!(
+            writer
+                .stats()
+                .timeline_dropped_queue_full_total
+                .load(Ordering::Relaxed),
+            super::DIAGNOSTIC_BATCH_MAX as u64,
+            "the only excess beyond the one in-flight and bounded queued batches is dropped"
+        );
+
+        let monitor = DegradationMonitor::default();
+        let dropped_total = writer
+            .stats()
+            .timeline_dropped_queue_full_total
+            .load(Ordering::Relaxed);
+        monitor.observe("timeline", dropped_total);
+        monitor.observe("timeline", dropped_total);
+        {
+            let mut sinks = monitor.sinks.lock().expect("monitor state");
+            let state = sinks.get_mut("timeline").expect("degraded state");
+            assert_eq!(state.emitted_codes, ["ATM_LOG_SINK_DEGRADED"]);
+            state.degraded_since = Some(
+                std::time::Instant::now()
+                    - std::time::Duration::from_secs(DEGRADATION_RECOVERY_WINDOW_SECS + 1),
+            );
+            state.last_transition = None;
+        }
+        monitor.observe("timeline", dropped_total);
+        let sinks = monitor.sinks.lock().expect("monitor state");
+        assert_eq!(
+            sinks
+                .get("timeline")
+                .expect("recovered state")
+                .emitted_codes,
+            ["ATM_LOG_SINK_DEGRADED", "ATM_LOG_SINK_RECOVERED"]
         );
     }
 }

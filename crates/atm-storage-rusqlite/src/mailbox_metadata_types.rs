@@ -1,4 +1,4 @@
-//! Test-only mailbox metadata query shape.
+//! SQLite mailbox metadata query shape shared by production query paths.
 
 use atm_storage::contract::MessageKey;
 use atm_storage::schema::{AtmMessageId, ThreadMode};

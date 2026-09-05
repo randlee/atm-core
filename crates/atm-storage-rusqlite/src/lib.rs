@@ -79,7 +79,8 @@ use std::sync::Arc;
 use template_catalog_store::template_catalog_store;
 #[cfg(any(test, feature = "test-support"))]
 pub use test_support::{
-    TemplateAdmissionMessage, TemplateAdmissionSnapshot, inspect_template_admission_for_test,
+    TemplateAdmissionMessage, TemplateAdmissionSnapshot, diagnostic_queue_batches_for_test,
+    inspect_template_admission_for_test,
 };
 pub use writer::DiagnosticTimelinePersistenceStats;
 

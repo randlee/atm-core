@@ -81,14 +81,64 @@ impl SqliteObservability for PassiveSqliteObservability {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::path::Path;
+
+    fn rust_sources(root: &Path, sources: &mut Vec<std::path::PathBuf>) {
+        for entry in fs::read_dir(root).expect("storage source directory is readable") {
+            let path = entry.expect("source entry").path();
+            if path.is_dir() {
+                rust_sources(&path, sources);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                sources.push(path);
+            }
+        }
+    }
+
     #[test]
     fn ac8_null_sqlite_observability_is_test_only_in_the_source_contract() {
-        let source = include_str!("observability.rs");
-        assert!(source.contains(
-            "#[cfg(test)]\n#[derive(Debug, Default)]\npub struct NullSqliteObservability;"
-        ));
-        assert!(
-            source.contains("#[cfg(test)]\nimpl SqliteObservability for NullSqliteObservability")
-        );
+        let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut sources = Vec::new();
+        rust_sources(&source_root, &mut sources);
+
+        for path in sources {
+            let source = fs::read_to_string(&path).expect("Rust source is UTF-8");
+            let test_module = source.find("#[cfg(test)]\nmod tests {");
+            let lines = source.lines().collect::<Vec<_>>();
+            for (index, line) in lines.iter().enumerate() {
+                if !line.contains("NullSqliteObservability") {
+                    continue;
+                }
+                let prior = lines[..index]
+                    .iter()
+                    .rev()
+                    .find(|prior| !prior.trim().is_empty())
+                    .map(|prior| prior.trim());
+                let in_test_module =
+                    test_module.is_some_and(|start| source[..start].lines().count() <= index);
+                let nearby_test_gate = lines[..index]
+                    .iter()
+                    .rev()
+                    .take(4)
+                    .any(|prior| prior.trim() == "#[cfg(test)]");
+                let is_definition = path
+                    .file_name()
+                    .is_some_and(|name| name == "observability.rs")
+                    && (line.contains("struct NullSqliteObservability")
+                        || line.contains("impl SqliteObservability for NullSqliteObservability")
+                        || in_test_module);
+                assert!(
+                    is_definition
+                        || in_test_module
+                        || prior == Some("#[cfg(test)]")
+                        || nearby_test_gate,
+                    "non-test NullSqliteObservability reference in {}:{}",
+                    path.strip_prefix(&source_root)
+                        .expect("source remains below source root")
+                        .display(),
+                    index + 1
+                );
+            }
+        }
     }
 }
