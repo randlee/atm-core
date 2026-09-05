@@ -1644,7 +1644,7 @@ AY.7+AY.8 code join. AY.10 starts only after AY.9 merges and captures
 live macOS/Windows proof from that merged integration head.
 
 The authoritative umbrella is
-[windows-herdr-parity](./plans/windows-herdr-parity/plan.md), with one
+[Phase AY plan](./plans/phase-ay/phase-ay-plan.md), with one
 authoritative sprint file per sprint under `docs/plans/phase-ay/`.
 
 Phase AY sprint status:

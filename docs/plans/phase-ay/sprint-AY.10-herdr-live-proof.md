@@ -77,7 +77,7 @@ or shape-only completion fails the sprint.
   evidence fails the sprint; there is no `not run` allowance for a required
   D4 case on either host.
 - [ ] D7 — after D1–D6 pass, Rand records exactly one dated phase disposition
-  in `docs/plans/windows-herdr-parity/plan.md` and `docs/project-plan.md` using
+  in `docs/plans/phase-ay/phase-ay-plan.md` and `docs/project-plan.md` using
   C2. `Ship` closes AY.10. `Defer` or `Cancel` follows the phase-plan cleanup and
   supersession rules and does not falsely mark live socket parity shipped.
 
@@ -114,7 +114,7 @@ The same decision and date are reflected in `docs/project-plan.md`. Mechanical
 gate:
 
 ```sh
-grep -E '^Decision \(Rand, [0-9]{4}-[0-9]{2}-[0-9]{2}\): (Ship|Defer [A-Z]+|Cancel)$' docs/plans/windows-herdr-parity/plan.md
+grep -E '^Decision \(Rand, [0-9]{4}-[0-9]{2}-[0-9]{2}\): (Ship|Defer [A-Z]+|Cancel)$' docs/plans/phase-ay/phase-ay-plan.md
 ```
 
 ## Required work

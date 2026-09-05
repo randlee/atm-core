@@ -1,6 +1,7 @@
 ---
 phase: AY
 title: Phase AY, Windows Herdr parity and UDS/named-pipe transport (same command set, same feature set on macOS, Linux, Windows)
+canonical_path: docs/plans/phase-ay/phase-ay-plan.md
 integration_branch: develop (plan) / integrate/phase-ay (dev)
 status: draft, not approved (Rand, 2026-09-05)
 owner: fenix (fenix@atm-dev on rand-m5, from 2026-09-05T18:51Z)
@@ -977,16 +978,16 @@ deliverables, acceptance criteria, paths to delete, required validation,
 and explicit non-closure. QA reviews from these files, not from the
 umbrella:
 
-- [`sprint-AY.1-herdr-audit-docs.md`](../phase-ay/sprint-AY.1-herdr-audit-docs.md)
-- [`sprint-AY.2-herdr-transport-seam.md`](../phase-ay/sprint-AY.2-herdr-transport-seam.md)
-- [`sprint-AY.3-herdr-endpoint-doctor-config.md`](../phase-ay/sprint-AY.3-herdr-endpoint-doctor-config.md)
-- [`sprint-AY.4-herdr-breaker-lifecycle.md`](../phase-ay/sprint-AY.4-herdr-breaker-lifecycle.md)
-- [`sprint-AY.5-herdr-entry-control-plane.md`](../phase-ay/sprint-AY.5-herdr-entry-control-plane.md)
-- [`sprint-AY.6-herdr-restart-coordination.md`](../phase-ay/sprint-AY.6-herdr-restart-coordination.md)
-- [`sprint-AY.7-windows-herdr-process-installer.md`](../phase-ay/sprint-AY.7-windows-herdr-process-installer.md)
-- [`sprint-AY.8-herdr-socket-transport.md`](../phase-ay/sprint-AY.8-herdr-socket-transport.md)
-- [`sprint-AY.9-herdr-socket-cutover.md`](../phase-ay/sprint-AY.9-herdr-socket-cutover.md)
-- [`sprint-AY.10-herdr-live-proof.md`](../phase-ay/sprint-AY.10-herdr-live-proof.md)
+- [`sprint-AY.1-herdr-audit-docs.md`](./sprint-AY.1-herdr-audit-docs.md)
+- [`sprint-AY.2-herdr-transport-seam.md`](./sprint-AY.2-herdr-transport-seam.md)
+- [`sprint-AY.3-herdr-endpoint-doctor-config.md`](./sprint-AY.3-herdr-endpoint-doctor-config.md)
+- [`sprint-AY.4-herdr-breaker-lifecycle.md`](./sprint-AY.4-herdr-breaker-lifecycle.md)
+- [`sprint-AY.5-herdr-entry-control-plane.md`](./sprint-AY.5-herdr-entry-control-plane.md)
+- [`sprint-AY.6-herdr-restart-coordination.md`](./sprint-AY.6-herdr-restart-coordination.md)
+- [`sprint-AY.7-windows-herdr-process-installer.md`](./sprint-AY.7-windows-herdr-process-installer.md)
+- [`sprint-AY.8-herdr-socket-transport.md`](./sprint-AY.8-herdr-socket-transport.md)
+- [`sprint-AY.9-herdr-socket-cutover.md`](./sprint-AY.9-herdr-socket-cutover.md)
+- [`sprint-AY.10-herdr-live-proof.md`](./sprint-AY.10-herdr-live-proof.md)
 
 Common preconditions:
 
