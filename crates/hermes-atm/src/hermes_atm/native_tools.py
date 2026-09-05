@@ -82,63 +82,16 @@ def _native_error(error: Any) -> ToolEnvelope:
     return envelope
 
 
-def _message_result(message: Any | None) -> dict[str, Any] | None:
-    if message is None:
-        return None
-    return {
-        "message_id": message.message_id,
-        "source": {
-            "agent": message.source.agent,
-            "team": message.source.team,
-            "chat_id": message.source.chat_id,
-        },
-        "body": message.body,
-    }
-
-
 def _send_result(result: Any) -> dict[str, Any]:
-    projected = {
-        "message_id": result.message_id,
-        "requires_ack": result.requires_ack,
-        "outcome": result.outcome,
-    }
-    if (observability := _observability(result)) is not None:
-        projected["observability"] = observability
-    return projected
+    return json.loads(result.to_json())
 
 
 def _read_result(result: Any) -> dict[str, Any]:
-    projected = {
-        "count": result.count,
-        "match_count": result.match_count,
-        "additional_match_count": result.additional_match_count,
-        "mutation_applied": result.mutation_applied,
-        "message": _message_result(result.message),
-    }
-    if (observability := _observability(result)) is not None:
-        projected["observability"] = observability
-    return projected
+    return json.loads(result.to_json())
 
 
 def _list_result(result: Any) -> dict[str, Any]:
-    projected = {
-        "count": result.count,
-        "rows": [
-            {
-                "message_id": row.message_id,
-                "summary": row.summary,
-                "from_agent": row.from_agent,
-                "timestamp": row.timestamp,
-                "read": row.read,
-                "pending_ack": row.pending_ack,
-                "task_id": row.task_id,
-            }
-            for row in result.rows
-        ],
-    }
-    if (observability := _observability(result)) is not None:
-        projected["observability"] = observability
-    return projected
+    return json.loads(result.to_json())
 
 
 def _invoke(call: Callable[[], Any], project: Callable[[Any], dict[str, Any]]) -> ToolEnvelope:

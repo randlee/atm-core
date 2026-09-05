@@ -24,11 +24,13 @@ use atm_core::types::{AgentName, ChatId, IsoTimestamp, ReadSelection, TeamName};
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 
+mod message;
 mod observability;
 mod query;
 mod recovery;
 mod tool_types;
 
+use message::PyMessage;
 pub use tool_types::AtmSendResult as AtmAckResult;
 pub use tool_types::{
     AtmListResult, AtmListRow, AtmReadResult, AtmSendResult, AtmToolError, PyObservability,
@@ -205,17 +207,6 @@ impl PyAgentAddress {
     }
 }
 
-#[pyclass(skip_from_py_object)]
-#[derive(Clone, Debug)]
-pub struct PyMessage {
-    #[pyo3(get)]
-    message_id: Option<String>,
-    #[pyo3(get)]
-    source: PyAgentAddress,
-    #[pyo3(get)]
-    body: String,
-}
-
 #[derive(Clone, Copy)]
 enum DaemonRecoveryPolicy {
     /// Refresh the client but do not replay a possibly accepted write.
@@ -232,42 +223,6 @@ enum DaemonRecovery<T> {
         refresh_error: Option<PyErr>,
         observability: observability::ObservabilityStatus,
     },
-}
-
-impl PyMessage {
-    fn from_read(outcome: ReadOutcome) -> PyResult<Vec<Self>> {
-        outcome
-            .message
-            .map(|message| {
-                PyAgentAddress::from_typed(
-                    AgentAddress::new(
-                        message.envelope.from,
-                        message.envelope.source_chat_id,
-                        message.envelope.source_team,
-                        None,
-                    )
-                    .map_err(atm_error)?,
-                )
-                .map(|source| Self {
-                    message_id: message.envelope.message_id.map(|id| id.to_string()),
-                    source,
-                    body: message.envelope.text,
-                })
-            })
-            .transpose()
-            .map(Option::into_iter)
-            .map(Iterator::collect)
-    }
-}
-
-#[pymethods]
-impl PyMessage {
-    fn __repr__(&self) -> String {
-        format!(
-            "PyMessage(message_id={:?}, source={})",
-            self.message_id, self.source.agent
-        )
-    }
 }
 
 #[pyclass(skip_from_py_object)]
@@ -708,7 +663,7 @@ impl PyGraftSession {
         let query = self.build_list_query("actionable", None, None, None, None, None)?;
         match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, "list", || {
             self.list_outcome(query.clone())
-                .map(|outcome| outcome.count)
+                .map(|outcome| outcome.count_value())
         }) {
             DaemonRecovery::Completed(count, _) => Ok(count),
             DaemonRecovery::Failed { error, .. } => Err(error),
@@ -995,6 +950,13 @@ mod tests {
                 pending_ack: 3,
                 history: 5,
             },
+        }
+    }
+
+    fn peek_outcome() -> ReadOutcome {
+        ReadOutcome {
+            action: CommandAction::Peek,
+            ..read_outcome()
         }
     }
 
@@ -1843,7 +1805,7 @@ mod tests {
     fn native_read_and_list_retry_once_on_the_refreshed_fake_transport() {
         Python::initialize();
         for (operation, replacement_response) in [
-            ("read", ResponseEnvelope::Peek(Box::new(read_outcome()))),
+            ("read", ResponseEnvelope::Peek(Box::new(peek_outcome()))),
             ("list", ResponseEnvelope::List(list_outcome())),
         ] {
             let initial_calls = Arc::new(AtomicUsize::new(0));
@@ -1881,6 +1843,18 @@ mod tests {
                     !result.bind(py).is_instance_of::<AtmToolError>(),
                     "{operation} returns its success projection after one retry"
                 );
+                if operation == "read" {
+                    let json = result
+                        .bind(py)
+                        .call_method0("to_json")
+                        .expect("native read exposes canonical JSON")
+                        .extract::<String>()
+                        .expect("native read JSON is a string");
+                    let value: serde_json::Value =
+                        serde_json::from_str(&json).expect("native read JSON is valid");
+                    assert_eq!(value["action"], "read");
+                    assert!(value.get("additional_match_count").is_some());
+                }
             });
             assert_eq!(initial_calls.load(Ordering::SeqCst), 1, "{operation}");
             assert_eq!(

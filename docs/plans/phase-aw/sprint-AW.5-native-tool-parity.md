@@ -2,6 +2,8 @@
 sprint: AW.5
 title: "hermes-atm native tool parity with atm CLI (#952)"
 branch: feature/aw5-native-tool-parity
+worktree: ../atm-core-worktrees/feature/aw5-native-tool-parity
+status: complete
 base: integrate/phase-aw
 issues: "#952 ids 952-E1, 952-E2, 952-E3, evidence items 1–3"
 must_follow: [AW.4]
@@ -37,7 +39,7 @@ selected (`PyMessage::from_read` → `_message_result`). The real gaps are:
    serialised field via pyo3 getters, plus `to_json() -> str` produced by
    the same `serde_json` path `output.rs` uses (so timestamp formatting,
    key names and enum spellings are shared by construction). Rows expose
-   `from` (`#[pyo3(name = "from")]`) and keep `from_agent` as a
+   `from` (`#[getter(from)]`) and keep `from_agent` as a
    deprecated alias emitting `DeprecationWarning` once per process.
 2. **hermes-atm pass-through**: `_send_result/_read_result/_list_result`
    become `json.loads(result.to_json())`; the `kind/success` wrapper is
@@ -58,13 +60,15 @@ selected (`PyMessage::from_read` → `_message_result`). The real gaps are:
    a twin message. The test
    lives in `crates/atm-graft-python/tests/test_cli_parity.py` and is in the
    3.11–3.14 matrix.
-4. **Boundary (definite)**: no new crate edge. The baseline this sprint
-   diffs against is the post-AW.4 record (`must_follow: [AW.4]`):
+4. **Boundary (definite)**: the binding adds its explicitly allowlisted
+   `serde_json` dependency so each `to_json()` method uses the canonical
+   serializer directly. The baseline this sprint diffs against is the
+   post-AW.4 record (`must_follow: [AW.4]`):
    `boundaries/atm-graft-python/hermes-graft-binding.toml`
    `allowed_dependencies = ["atm-core", "atm-graft", "atm-observability",
-   "pydantic"]`, unchanged here; `atm-core` is already listed there and in
-   the `.just/lint-config.toml` manifest allowlist for
-   `crates/atm-graft-python/Cargo.toml`. The record's
+   "pydantic", "serde_json"]`; the matching `.just/lint-config.toml`
+   manifest allowlist is updated for `crates/atm-graft-python/Cargo.toml`.
+   The record's
    `[contracts].response_types` becomes exactly
    `["PyMessage", "PyMailboxWorkCounts", "PyNudge", "AtmSendResult",
    "AtmAckResult", "AtmReadResult", "AtmListRow", "AtmListResult",

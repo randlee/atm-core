@@ -271,6 +271,7 @@ dependencies = [
  "atm-graft",
  "atm-observability",
  "pyo3",
+ "serde_json",
  "tempfile",
  "tokio",
 ]

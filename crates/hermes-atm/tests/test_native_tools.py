@@ -68,9 +68,20 @@ class _FakeSession:
 
     def send_tool(self, to, body, requires_ack, acknowledges_message_id):
         self.calls.append((to, body, requires_ack, acknowledges_message_id))
-        return types.SimpleNamespace(
-            message_id="test", requires_ack=requires_ack, outcome="sent"
-        )
+        class _Result:
+            message_id = "test"
+            outcome = "sent"
+
+            def to_json(self):
+                return json.dumps(
+                    {
+                        "message_id": self.message_id,
+                        "requires_ack": requires_ack,
+                        "outcome": self.outcome,
+                    }
+                )
+
+        return _Result()
 
     def ack_tool(self, message_id, reply):
         return self.send_tool(None, reply, False, message_id)
