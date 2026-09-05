@@ -48,8 +48,11 @@ Conventions:
 argv:
 
 ```text
-["herdr","agent","prompt","agent-a","You have unread ATM messages. Run: atm read"]
+["herdr","agent","prompt","agent-a","<rendered built-in nudge template>"]
 ```
+
+The fourth element is the rendered built-in nudge template supplied by
+atm-core; it is passed byte-for-byte, including embedded newlines.
 
 Request id: `cli:agent:prompt` (`src/cli/agent.rs:833`).
 

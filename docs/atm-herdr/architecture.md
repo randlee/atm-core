@@ -187,6 +187,7 @@ pub trait HerdrProcessAdapter: Send + Sync {
         &'a self,
         agent: &'a atm_core::types::AgentName,
         session: Option<&'a atm_core::HerdrSession>,
+        text: &'a str,
         deadline: atm_core::RequestDeadline,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>>;
 
@@ -308,13 +309,13 @@ HerdrReceivedHook::emit(event)
   |  LocalMessageReceivedBackend::Herdr,
   |  already resolved before this call)
   v
-HerdrProcessInvoker::prompt(agent, session, deadline)
+HerdrProcessInvoker::prompt(agent, session, rendered_nudge, deadline)
                                                  | breaker.permits_spawn()?
                                                  |   no -> return HerdrError::Unavailable (no spawn)
                                                  |   yes
                                                  v
                                                  Command::new("herdr")
-                                                   .args(["agent","prompt",<agent>,WAKE_TEXT])
+                                                   .args(["agent","prompt",<agent>,<rendered_nudge>])
                                                    .env("HERDR_SESSION", s)?  <- only if Some
                                                  | spawn, external 5s deadline (HR-SAFE-002)
                                                  v
@@ -374,7 +375,7 @@ HerdrProcessInvoker::list(session, deadline)        (once per distinct session)
   |     claim_next_pending(member)  [atm-storage, oldest first: FIFO]
   |     rebuild_received_hook_dispatch(.., NudgeKind::Queue)  [atm-core]
   |     -> HerdrReceivedHook (atm-daemon-bootstrap, AQ2.6)
-  |          -> HerdrProcessInvoker::prompt(agent, session, deadline)
+  |          -> HerdrProcessInvoker::prompt(agent, session, rendered_nudge, deadline)
   |               (identical call/diagram to §5)
   |
   |   at most one prompt per member per tick;
