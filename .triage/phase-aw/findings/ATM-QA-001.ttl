@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001" ;
+  triage:title "AC6 doc-test-greps-constants enforcement missing for docs/atm-daemon/logging.md" ;
+  triage:description "qa-pr1182-r4 (feature/aw3-health-and-log-query @ 52cd886bd): req-qa: AC6 requires an automated test/lint that greps docs/atm-daemon/logging.md's documented constant values (e.g. DIAGNOSTIC_BATCH_MAX=128) against their source-of-truth definitions in crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs, so future drift between the doc and the code is caught. No such test or lint script exists anywhere in the repo. The doc's content is accurate today (values match the code as of this commit), but nothing guards against a future edit to the constants going unreflected in the doc, or vice versa." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T06:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/AW3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-001/AW3-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/logging.md" ;
+  triage:line 6 ;
+  triage:snippet "DIAGNOSTIC_BATCH_MAX=128" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "52cd886bd" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/52cd886bd> .
+
+<urn:atm:triage:worktree/AW3/52cd886bd>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "52cd886bd" ;
+  triage:orderIndex 5 .

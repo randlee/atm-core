@@ -15,21 +15,36 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T06:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW3 ;
   triage:foundAt "2026-09-05T05:55:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-B6/AW3-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T06:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+# CLOSURE (qa-pr1182-r4, quality-mgr): client.rs split into client.rs (902
+# non-test / ~671-721 code lines depending on metric) + client_tail.rs (new
+# file, 337-384 lines), both well under the 1000-line RULE-003 cap by every
+# counting method checked. req-qa additionally confirmed the authoritative
+# gate (.just/check_line_counts.py, max_production_lines=1000) via
+# .just/lint-config.toml:89-92 -- the original finding's raw
+# wc-l/#[cfg(test)]-boundary count of 1297 conflated a different (and
+# non-enforced) methodology with the actual gate; noting this so the next
+# file-size sweep uses the authoritative script, not manual wc -l. Split
+# verified behavior-preserving with correct ownership markers by
+# quality-mgr, arch-qa, and req-qa; rust-qa-agent found no infallible
+# Result<T,E>/Ok(x)-only shapes in the new client_tail.rs.
 
 <urn:atm:triage:occurrence/AW3-QA-B6/AW3-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/client.rs" ;
   triage:line 1 ;
   triage:snippet "non-test lines 1297 > 1000" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "db47e09c9" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/db47e09c9> .
