@@ -414,7 +414,7 @@ impl Visit for RetainedVisitor {
 mod tests {
     use std::fs;
     use std::sync::Arc;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     use tempfile::TempDir;
     use tracing_subscriber::prelude::*;
@@ -448,16 +448,20 @@ mod tests {
         );
     }
 
-    fn lines(tempdir: &TempDir, expected: usize) -> String {
+    /// Reads the retained log file after a synchronous flush. The writer
+    /// runtime's own `flush()` (sc-observability runtime.rs) blocks until the
+    /// async writer has drained its queue, so there is no clock or poll loop
+    /// here: once `flush()` returns, every event offered before it is on
+    /// disk.
+    fn lines(tempdir: &TempDir, bridge: &TracingBridgeLayer, expected: usize) -> String {
+        bridge.logger.flush().expect("flush retained logger");
         let path = tempdir.path().join("logs/atm.log.jsonl");
-        let deadline = Instant::now() + Duration::from_secs(2);
-        loop {
-            let content = fs::read_to_string(&path).unwrap_or_default();
-            if content.lines().count() >= expected || Instant::now() >= deadline {
-                return content;
-            }
-            std::thread::yield_now();
-        }
+        let content = fs::read_to_string(&path).unwrap_or_default();
+        assert!(
+            content.lines().count() >= expected,
+            "expected >= {expected} lines after synchronous flush, got: {content}"
+        );
+        content
     }
 
     #[test]
@@ -468,7 +472,7 @@ mod tests {
             tracing::error!(target: "atm_runtime::dispatch", code = "ATM_RUNTIME_ERROR", correlation_id = "c-runtime", "runtime error");
             tracing::warn!(target: "atm_storage_rusqlite::maintenance", code = "ATM_STORAGE_WARN", correlation_id = "c-storage", "storage warning");
         });
-        let content = lines(&tempdir, 3);
+        let content = lines(&tempdir, &bridge, 3);
         for expected in [
             "atm_http_runtime::delivery",
             "atm_runtime::dispatch",
@@ -492,7 +496,7 @@ mod tests {
             tracing::info!(target: "atm_http_runtime::listener", "listener");
             tracing::info!(target: "atm_storage_rusqlite::maintenance", "maintenance");
         });
-        let content = lines(&tempdir, 3);
+        let content = lines(&tempdir, &bridge, 3);
         assert!(!content.contains("excluded"), "{content}");
         for target in [
             "atm_daemon_bootstrap::lifecycle",
@@ -525,15 +529,19 @@ mod tests {
 
     #[test]
     fn ac4_queue_full_offer_is_non_blocking() {
+        // `force_queue_full_for_test` makes `try_log` return `QueueFull`
+        // synchronously, before any real queue is touched, so the offer path
+        // cannot block on writer backpressure by construction: there is no
+        // wall-clock window to race, so we assert the outcome directly
+        // (dropped-queue-full counter incremented, no panic/recursion)
+        // instead of timing the call.
         let (_tempdir, bridge) = bridge();
-        let start = Instant::now();
         RetainedLogger::force_queue_full_for_test(|| {
             tracing::subscriber::with_default(
                 tracing_subscriber::Registry::default().with((*bridge).clone()),
                 || tracing::warn!(target: "atm_http_runtime::listener", "queue pressure"),
             );
         });
-        assert!(start.elapsed() < Duration::from_secs(1));
         assert_eq!(
             bridge
                 .stats()
@@ -550,7 +558,7 @@ mod tests {
             &bridge,
             || tracing::warn!(target: "atm_http_runtime::delivery", body = "body-secret", recipient = "recipient-secret", token = "token-secret", env = "env-secret", code = "ATM_REDACTION", "redact"),
         );
-        let content = lines(&tempdir, 1);
+        let content = lines(&tempdir, &bridge, 1);
         for secret in [
             "body-secret",
             "recipient-secret",
@@ -562,6 +570,12 @@ mod tests {
     }
 
     #[test]
+    // `tracing::subscriber::set_global_default` is genuinely process-global
+    // (once-per-process, no reset hook), so this is the one test in this
+    // binary allowed to touch it. `#[serial]` makes that exclusivity an
+    // enforced contract rather than an implicit fact that silently breaks if
+    // another test starts installing a global subscriber.
+    #[serial_test::serial(global_tracing_subscriber_install)]
     fn ac7_second_global_install_is_rejected() {
         let (_tempdir, first) = bridge();
         assert!(

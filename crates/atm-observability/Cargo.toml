@@ -19,4 +19,5 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 atm-core = { workspace = true, features = ["test-utils"] }
+serial_test = "3"
 tempfile = "3"

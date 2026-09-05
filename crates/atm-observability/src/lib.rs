@@ -41,6 +41,18 @@ impl RetainedLogger {
         self.0.health()
     }
 
+    /// Synchronously flushes all registered sinks through the writer-owned
+    /// runtime. Test-only: production callers rely on the writer's own
+    /// maintenance cadence and must not force a flush on the hot path.
+    ///
+    /// # Errors
+    /// Returns the underlying [`sc_observability_types::FlushError`] when a
+    /// sink fails to flush.
+    #[cfg(test)]
+    pub(crate) fn flush(&self) -> Result<(), sc_observability_types::FlushError> {
+        self.0.flush()
+    }
+
     pub fn try_log(&self, event: sc_observability_types::LogEvent) -> RetainedLogOffer {
         #[cfg(test)]
         if queue_full_for_test() {
