@@ -29,9 +29,11 @@ mod shared_db;
 mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
 mod task_store;
+mod shared_db_support;
 mod team_roster_schema;
 mod template_catalog_schema;
 mod template_catalog_store;
+mod template_override_migration;
 mod writer;
 
 pub use reader_pool::{ReaderLaneMetricsSnapshot, ReaderLanesMetricsSnapshot};

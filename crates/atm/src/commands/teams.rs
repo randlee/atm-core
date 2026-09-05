@@ -863,6 +863,30 @@ mod tests {
     }
 
     #[test]
+    fn set_nudge_template_rejects_retired_task_steer_kind_with_task_hint_and_cli_exit_three() {
+        let command = SetNudgeTemplateCommand {
+            team: TEST_TEAM.to_string(),
+            kind: "delivery_task".to_string(),
+            template_body: "<atm/>".to_string(),
+            json: false,
+        };
+
+        let error = command
+            .build_request(CallerContext {
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_chat_id: None,
+                caller_team: TEST_TEAM.parse().expect("team"),
+                activity_observation: None,
+            })
+            .expect_err("retired kind");
+
+        let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
+        assert_eq!(atm_error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(atm_error.message().contains("use \"task\""), "{atm_error}");
+        assert_eq!(crate::exit_code_for_atm_error(atm_error), 3);
+    }
+
+    #[test]
     fn set_nudge_template_build_request_rejects_empty_template_body_before_core() {
         let command = SetNudgeTemplateCommand {
             team: TEST_TEAM.to_string(),

@@ -65,14 +65,16 @@ struct InternalNudgeInput {
 
 impl InternalNudgeInput {
     fn from_env() -> Result<Self> {
-        let raw_payload = std::env::var(INTERNAL_NUDGE_ENV).map_err(|_| {
+        let raw_payload = std::env::var(INTERNAL_NUDGE_ENV).map_err(|source| {
             AtmError::validation("missing ATM_INTERNAL_NUDGE payload for built-in post-send nudge")
+                .with_cause(source)
         })?;
         let payload: InternalNudgeEnvelope =
-            serde_json::from_str(&raw_payload).map_err(|_source| {
+            serde_json::from_str(&raw_payload).map_err(|source| {
                 AtmError::validation(
                     "failed to decode ATM_INTERNAL_NUDGE payload for built-in nudge",
                 )
+                .with_cause(source)
             })?;
         Ok(Self {
             event: payload.event,
