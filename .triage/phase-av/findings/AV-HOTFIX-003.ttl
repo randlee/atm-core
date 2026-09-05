@@ -46,6 +46,16 @@
 # comment on issue #1217): an optional parameter added to a command is a
 # MINOR bump of the HTTP schema version (must be tolerated by older peers).
 # Only removal or a semantic change of an existing field is a MAJOR bump.
+#
+# STANDING RULE ADDENDUM (Rand, relayed via fenix, 2026-09-05T19:11Z),
+# effective immediately, applies to every PR gate (not just this finding):
+# the real risk is agents making a breaking wire change without Rand's
+# approval. Any change to the wire shape of the HTTP or peer schema requires
+# the matching version bump; a MAJOR (breaking) bump additionally requires
+# Rand's explicit recorded approval before merge -- quality-mgr must treat an
+# unapproved breaking wire change as blocking. The eventual plan (#1217) must
+# turn this into a mechanical CI gate; until then it is an explicit manual
+# quality-mgr review rule.
 
 <urn:atm:triage:occurrence/AV-HOTFIX-003/AV4-1>
   a triage:Occurrence ;
