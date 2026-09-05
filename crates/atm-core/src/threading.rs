@@ -210,6 +210,7 @@ mod tests {
             thread_mode,
             expires_at: None,
             task_id: None,
+            task_complete: None,
             extra: Map::new(),
         }
     }

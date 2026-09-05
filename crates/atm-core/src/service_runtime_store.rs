@@ -144,6 +144,17 @@ pub(crate) trait RetainedMailboxRuntime {
         self.persist_message_record(record)?;
         Ok(None)
     }
+    /// Provenance-aware admission. Compatibility runtimes retain their
+    /// existing behavior; SQLite overrides this through its message store.
+    fn admit_message_record_with_provenance(
+        &self,
+        home_dir: &Path,
+        record: boundary::Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<Option<boundary::Message>, AtmError> {
+        let _ = provenance;
+        self.admit_message_record(home_dir, record)
+    }
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError>;
     fn persist_message_records_atomically(
         &self,
@@ -243,6 +254,16 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
                 envelope: record.envelope,
             })
             .map(|existing| existing.map(shared_message_to_record))
+    }
+
+    fn admit_message_record_with_provenance(
+        &self,
+        _home_dir: &Path,
+        record: boundary::Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<Option<boundary::Message>, AtmError> {
+        self.message_store
+            .save_message_if_absent_with_provenance(&record, provenance)
     }
 
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError> {

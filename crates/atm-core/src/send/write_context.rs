@@ -43,6 +43,7 @@ pub(super) fn build_send_outcome(
         message_id,
         requires_ack,
         task_id,
+        task_complete: request.task_complete.clone(),
         summary: Some(summary.to_string()),
         message: request.dry_run.then_some(body.to_string()),
         warnings: context.warnings.clone(),

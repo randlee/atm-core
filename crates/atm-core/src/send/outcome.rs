@@ -23,6 +23,8 @@ pub struct SendOutcome {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_complete: Option<TaskId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,

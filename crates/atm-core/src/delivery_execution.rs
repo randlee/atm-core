@@ -203,6 +203,7 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                task_complete: None,
                 extra: Map::new(),
             },
             false,

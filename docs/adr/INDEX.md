@@ -67,6 +67,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-058 — Herdr Local Steer Backend Contract](./ADR-058-herdr-local-steer-backend-contract.md)
 - [ADR-059 — Async Mailbox-Read Concurrency And State Handoff](./ADR-059-async-mailbox-read-concurrency.md)
 - [ADR-060 — Peer Dial Order And Address Cache](./ADR-060-peer-dial-and-address-cache.md)
+- [ADR-061 — Task State Machine](./ADR-061-task-state-machine.md)
 
 ## Extracted Crate-Local ADRs
 

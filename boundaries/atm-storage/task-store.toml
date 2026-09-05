@@ -1,0 +1,52 @@
+boundary_id = "BOUNDARY-TaskStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "TaskStore"
+
+[public]
+trait = "TaskStore"
+notes = "storage-neutral task ledger: read rows and events, append reminder and lead-notification audit rows; state transitions are applied only inside the backend's message-writer transaction, never through this trait"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["task_event_audit_append", "task_row_read"]
+io_forbidden = ["direct_sqlite_io", "message_delivery", "process_spawn", "task_state_transition"]
+
+[dependencies]
+allowed_dependents = ["atm", "atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite", "atm-storage -> atm-daemon"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
+
+[contracts]
+request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "MessageWriteOrigin"]
+response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>"]
+error_types = ["AtmError"]
+notes = [
+  "state change: only the message writer transaction applies Assigned/Acked/Completed; no TaskStore method changes tasks.state",
+  "audit: task_events is append-only; every accepted transition, rejection, reminder, and lead notification is one row in the acting transaction",
+  "replay: per (team, task_id, assignee) the Assigned/Acked/Completed rows replayed through transition reproduce tasks.state; latest Assigned.message_id == assignment_message_id; count(Reminded) == reminder_count; max(Reminded.at) == last_reminded_at; count(LeadNotified) == lead_notified_count; description is not replayable",
+  "provenance: transitions apply only to MessageWriteOrigin::Local inserts and to the acknowledgement op",
+  "CLI (atm) reads TaskRow/TaskEventRow through atm_storage::contract; daemon crates import through atm_core::boundary",
+]
+
+[testing]
+allowed_test_double_paths = ["crate::contract::DummyTaskStore"]
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TASK-STORE-REFERENCES"]
+review_gates = ["no_cli_sqlite_lookup", "no_backend_to_core_edge_for_task_store", "no_task_state_write_outside_writer_transaction"]
+
+[status]
+state = "planned"
+notes = ["AX.3 introduces the trait, the rusqlite implementation and the schema in one sprint", "AX.4 (atm list), AX.5 (record_reminder) and AX.6 (record_lead_notified, doctor) consume it"]

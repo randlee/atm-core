@@ -157,6 +157,8 @@ pub struct WriteRequest {
     pub summary_override: Option<String>,
     pub requires_ack: bool,
     pub task_id: Option<TaskId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_complete: Option<TaskId>,
     pub parent_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
     pub expires_at: Option<crate::types::IsoTimestamp>,
@@ -202,6 +204,7 @@ impl WriteRequest {
             summary_override,
             requires_ack,
             task_id,
+            task_complete: None,
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
@@ -214,6 +217,13 @@ impl WriteRequest {
     #[must_use]
     pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
         self.caller_chat_id = caller_chat_id;
+        self
+    }
+
+    /// Marks this message as a request to complete a previously assigned task.
+    #[must_use]
+    pub fn with_task_complete(mut self, task_id: TaskId) -> Self {
+        self.task_complete = Some(task_id);
         self
     }
 
@@ -300,6 +310,15 @@ pub(crate) fn request_requires_ack(request: &SendRequest, task_id: &Option<TaskI
             &request.message_source,
             SendMessageSource::File { path, .. } if file_policy::is_task_envelope(path)
         )
+}
+
+pub(crate) fn validate_task_request(request: &SendRequest) -> Result<(), AtmError> {
+    if request.task_id.is_some() && request.task_complete.is_some() {
+        return Err(AtmError::validation(
+            "a message cannot assign and complete a task at the same time",
+        ));
+    }
+    Ok(())
 }
 
 #[expect(
@@ -510,6 +529,11 @@ pub(crate) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRu
                     .map(|destination_host| (source_host, destination_host))
             }),
         acknowledgement_source_update,
+        if crate::write::has_authenticated_peer_provenance(request) {
+            atm_storage::MessageWriteOrigin::Peer
+        } else {
+            atm_storage::MessageWriteOrigin::Local
+        },
     )
 }
 
@@ -549,6 +573,7 @@ fn build_send_envelope(
         thread_mode: request.thread_mode,
         expires_at: request.expires_at,
         task_id: task_id.clone(),
+        task_complete: request.task_complete.clone(),
         extra: Map::new(),
     };
     insert_classification_metadata(&mut envelope, &request.classification);

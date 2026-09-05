@@ -28,6 +28,7 @@ mod search_store;
 mod shared_db;
 mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
+mod task_store;
 mod team_roster_schema;
 mod template_catalog_schema;
 mod template_catalog_store;
@@ -56,7 +57,7 @@ use atm_storage::schema::MessageEnvelope;
 #[cfg(test)]
 use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TemplateCatalogStore};
+use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TaskStore, TemplateCatalogStore};
 use atm_storage::{
     AtmError, EffectiveReaderLane, EffectiveReaderLanes, IsoTimestamp, StorageFactory,
     StorageHandleParts, StorageHandles,
@@ -277,6 +278,11 @@ struct SqlitePendingNudgeStore {
 }
 
 #[derive(Debug)]
+struct SqliteTaskStore {
+    db: Arc<SharedDb>,
+}
+
+#[derive(Debug)]
 struct SqlitePeerConfigStore {
     db: Arc<SharedDb>,
 }
@@ -388,6 +394,22 @@ impl MessageStore for SqliteMessageStore {
                 "sqlite writer reported an existing message key but the retained record could not be loaded",
             )
         }).map(Some)
+    }
+
+    fn save_message_if_absent_with_provenance(
+        &self,
+        message: &Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<Option<Message>, AtmError> {
+        if self
+            .db
+            .submit_upsert_message_with_provenance(message.clone(), provenance)?
+        {
+            return Ok(None);
+        }
+        self.load_message(&message.message_key)?.ok_or_else(|| AtmError::daemon_unavailable(
+            "sqlite writer reported an existing message key but the retained record could not be loaded",
+        )).map(Some)
     }
 
     fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError> {
@@ -641,6 +663,16 @@ impl AsyncMessageStore for SqliteMessageStore {
         self.db.submit_upsert_message_async(message).await
     }
 
+    async fn save_message_if_absent_with_provenance_async(
+        &self,
+        message: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<Option<Message>, AtmError> {
+        self.db
+            .submit_upsert_message_with_provenance_async(message, provenance)
+            .await
+    }
+
     async fn admit_template_message_async(
         &self,
         admission: atm_storage::TemplateMessageAdmission,
@@ -665,6 +697,7 @@ pub struct SqliteStorageBackend {
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     pending_nudge_store: Arc<SqlitePendingNudgeStore>,
+    task_store: Arc<SqliteTaskStore>,
     graft_receiver_endpoint_store: Arc<SqliteGraftReceiverEndpointStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
     template_catalog_store: Arc<dyn TemplateCatalogStore>,
@@ -744,6 +777,7 @@ impl StorageFactory for SqliteStorageFactory {
             roster_store: backend.roster_store(),
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
+            task_store: backend.task_store(),
             graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),
             peer_config_store: backend.peer_config_store(),
             template_catalog_store: backend.template_catalog_store(),
@@ -798,6 +832,7 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
+            task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -819,6 +854,7 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
+            task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -869,6 +905,10 @@ impl SqliteStorageBackend {
 
     pub fn pending_nudge_store(&self) -> Arc<dyn atm_storage::PendingNudgeStore + Send + Sync> {
         self.pending_nudge_store.clone()
+    }
+
+    pub fn task_store(&self) -> Arc<dyn TaskStore + Send + Sync> {
+        self.task_store.clone()
     }
 
     pub fn graft_receiver_endpoint_store(
@@ -1182,6 +1222,7 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                task_complete: None,
                 extra: Map::new(),
             },
         }
@@ -2538,6 +2579,7 @@ mod tests {
         let template = template_registration('b');
         let admission = TemplateMessageAdmission {
             record: message.clone(),
+            provenance: atm_storage::MessageWriteOrigin::Local,
             decomposition: DecomposedMessageAdmission {
                 template: template.clone(),
                 message: DecomposedMessageRecord {

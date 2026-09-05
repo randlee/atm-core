@@ -309,6 +309,7 @@ pub(crate) fn build_atomic_acknowledgement(
         thread_mode: None,
         expires_at: None,
         task_id: None,
+        task_complete: None,
         extra: serde_json::Map::new(),
     };
     persist_direct_peer_target(&canonical_request, destination, &mut envelope);
@@ -423,6 +424,7 @@ pub(crate) fn canonical_ack_write_request(
         summary_override: None,
         requires_ack: false,
         task_id: None,
+        task_complete: None,
         parent_message_id: None,
         thread_mode: None,
         expires_at: None,

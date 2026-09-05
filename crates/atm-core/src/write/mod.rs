@@ -6,6 +6,8 @@
 //! `ack` re-exports the acknowledgement request/outcome types, so external
 //! paths (including serde/persisted shapes) are unchanged.
 
+pub(crate) use pipeline::has_authenticated_peer_provenance;
+
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -69,6 +71,7 @@ impl AckRequest {
             summary_override: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,

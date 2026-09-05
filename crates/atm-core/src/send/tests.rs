@@ -58,6 +58,7 @@ pub(crate) fn message(
         thread_mode,
         expires_at: None,
         task_id: None,
+        task_complete: None,
         extra: Map::new(),
     }
 }
@@ -358,6 +359,7 @@ pub(super) fn outbound_message() -> InboxMessage {
         thread_mode: None,
         expires_at: None,
         task_id: Some("task-123".parse().expect("task id")),
+        task_complete: None,
         extra: Map::new(),
     }
 }
@@ -429,6 +431,7 @@ fn path_body_detection_emits_structured_warning_event() {
         message_id: AtmMessageId::new(),
         requires_ack: false,
         task_id: None,
+        task_complete: None,
         summary: Some("path reference".to_owned()),
         message: None,
         warnings: Vec::new(),

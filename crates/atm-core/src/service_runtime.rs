@@ -12,7 +12,8 @@ use std::time::{Duration, Instant};
 use atm_storage::{
     AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore, GraftEndpointStoreError,
     GraftReceiverEndpointStore, GraftReceiverLease, MessageStore as SharedMessageStore,
-    OwnerGeneration, PendingNudgeStore, RosterStore as SharedRosterStore, TemplateCatalogStore,
+    OwnerGeneration, PendingNudgeStore, RosterStore as SharedRosterStore, TaskStore,
+    TemplateCatalogStore,
 };
 
 use crate::boundary::TemplateComposer;
@@ -323,6 +324,7 @@ pub struct LocalServiceRuntime {
     /// (`atm queue`) nudges. Unset in runtimes that never enqueue a deferred
     /// nudge, e.g. plain-text mailbox tests.
     pending_nudge_store: Option<std::sync::Arc<dyn PendingNudgeStore + Send + Sync>>,
+    task_store: Option<std::sync::Arc<dyn TaskStore + Send + Sync>>,
     graft_receiver_endpoint_store:
         Option<std::sync::Arc<dyn GraftReceiverEndpointStore + Send + Sync>>,
     /// Optional renderer selected by the bootstrap composition root. Core send
@@ -363,6 +365,7 @@ impl LocalServiceRuntime {
             nudge_template_override_store,
             non_claude_outbound,
             pending_nudge_store: None,
+            task_store: None,
             graft_receiver_endpoint_store: None,
             template_composer: None,
             template_catalog_store: None,
@@ -469,6 +472,23 @@ impl LocalServiceRuntime {
         })
     }
 
+    /// Attaches the durable task-ledger capability selected by composition.
+    #[must_use]
+    pub fn with_task_store(
+        mut self,
+        task_store: std::sync::Arc<dyn TaskStore + Send + Sync>,
+    ) -> Self {
+        self.task_store = Some(task_store);
+        self
+    }
+
+    /// Returns the runtime-selected task ledger capability.
+    pub fn task_store(&self) -> Result<std::sync::Arc<dyn TaskStore + Send + Sync>, AtmError> {
+        self.task_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable("the task store was not installed in this runtime")
+        })
+    }
+
     /// Attaches the durable graft receiver endpoint registry for local-only
     /// registration, refresh, unregistration, and lookup requests.
     #[must_use]
@@ -545,6 +565,21 @@ impl LocalServiceRuntime {
             )
         })?;
         store.save_message_if_absent_async(message).await
+    }
+
+    pub async fn save_message_if_absent_with_provenance_async(
+        &self,
+        message: crate::boundary::Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<Option<crate::boundary::Message>, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio durable message admission was not installed in this runtime",
+            )
+        })?;
+        store
+            .save_message_if_absent_with_provenance_async(message, provenance)
+            .await
     }
 
     /// One durable Tokio admission for a decomposed template message.
@@ -981,6 +1016,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            task_complete: None,
             extra: serde_json::Map::new(),
         }
     }

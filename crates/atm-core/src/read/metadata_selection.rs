@@ -56,6 +56,7 @@ fn metadata_candidate(row: &boundary::MailStoreMailboxMetadataRow) -> MailboxSel
             thread_mode: row.thread_mode,
             expires_at: row.expires_at,
             task_id: row.task_id.clone(),
+            task_complete: None,
             extra: serde_json::Map::new(),
         },
     }

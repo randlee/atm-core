@@ -8,9 +8,12 @@ mod error_catalog;
 pub mod error_codes;
 pub mod factory;
 pub mod peer_catalog_audit;
+mod peer_contract;
 pub mod request_budget;
 pub mod schema;
 pub mod search;
+pub mod task_state;
+pub mod task_store;
 pub mod template_catalog;
 pub mod template_workflow;
 /// Shared no-op test doubles for storage contract traits (RBQA-F002/F003).
@@ -39,7 +42,7 @@ pub use contract::{
     Message, MessageFingerprint, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore,
     NudgeClaim, NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, PrivateKeyRef,
     ReadDeadline, ReadLaneError, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
-    RosterSnapshot, RosterStore, StorageNotifier, TaskState, TeamNudgeTemplateOverrideMode,
+    RosterSnapshot, RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode,
     TeamNudgeTemplateOverrideRow, TrustedPeer, derive_ack_requirement,
 };
 pub use error::AtmError;
@@ -58,6 +61,11 @@ pub use search::{
     SearchTimestampField, SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch,
     StoredWorkflowMetadata, TimeRange,
 };
+pub use task_state::{
+    DAEMON_ACTOR_NAME, TaskActor, TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow,
+    TaskRejected, TaskRow, TaskState, Transition, admit, transition,
+};
+pub use task_store::{DummyTaskStore, MessageWriteOrigin, ReminderOutcome, TaskStore};
 pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,
     MergedVarsJson, MessageBody, StoredTemplate, TemplateCatalogStore, TemplateFirstSeen,

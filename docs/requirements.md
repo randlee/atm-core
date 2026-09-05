@@ -63,6 +63,22 @@ Phase-AC supersession note:
   names; a later approved task-storage phase would reintroduce a fresh
   canonical design instead of reviving speculative transition scaffolding
 
+Phase-AX amendment (2026-09-04): superseded. Task storage is approved in
+Phase AX (phase plan §2). Its canonical model is ADR-061's daemon-owned,
+message-derived Rust state machine in `atm-storage` and
+`atm-storage-rusqlite`; the Claude-code-schema-plus-Pydantic direction is
+withdrawn because task state derives from messages already persisted by the
+daemon, the write path has no Python, and a Claude Code task list is a
+per-session harness artifact rather than a cross-host record. The AC.6
+deletion stands: ADR-061 revives none of that scaffolding.
+
+#### Task storage
+
+`TaskStore` is the sealed, backend-neutral task-ledger capability. SQLite owns
+the `tasks` and append-only `task_events` tables; `MessageWriteOrigin`
+distinguishes local task-bearing messages from peer receipts so only local
+writer admission and acknowledgements apply task transitions.
+
 The retained product surface is:
 - `atm send`
 - `atm list`
