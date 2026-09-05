@@ -158,7 +158,8 @@ have zero commits after v0.8.2, so these hold at HEAD too.
   private remote-attach listener (`src/ipc.rs:143-168`). W2 must treat
   the Windows API pipe as reachable by any local user and record that in
   the boundary revision; W1 doctor should report it.
-- Child env: every pane gets `HERDR_SOCKET_PATH` and `HERDR_BIN_PATH`
+- Child env: every pane gets `HERDR_SOCKET_PATH`, `HERDR_BIN_PATH`,
+  `HERDR_PANE_ID`, `HERDR_TAB_ID`, `HERDR_WORKSPACE_ID`
   (`src/integration/env.rs:28-33`); `HERDR_SESSION` is NOT propagated to
   panes, and `HERDR_SOCKET_PATH` outranks `HERDR_SESSION`
   (`src/session.rs:82-83`). Also `HERDR_ENV=1` blocks nested launches
@@ -325,7 +326,16 @@ Deliverables:
    - Children get the inherited `HERDR_SOCKET_PATH` and
      `HERDR_BIN_PATH` as-is; `HERDR_ENV` is stripped so Herdr does not
      treat them as nested.
-   - Doctor shows the two paths and the probe result.
+   - Pane identity (Rand, 2026-09-05): every process Herdr launches in
+     a pane receives `HERDR_PANE_ID`, `HERDR_TAB_ID` and
+     `HERDR_WORKSPACE_ID` (src/integration/env.rs:8-10). atm agents and
+     any atm process running in a pane MUST take their pane, tab and
+     workspace identity from those variables, never from config,
+     argv, or name matching; the CLI exposes them (`atm doctor`, roster
+     registration) so the daemon targets the right pane. Missing
+     variables in a pane-launched process is an error, not a fallback.
+   - Doctor shows the two paths, the three ids when present, and the
+     probe result.
    - Backend disabled: nothing above applies.
    - W2's socket transport connects to `HERDR_SOCKET_PATH` as given. Doctor herdr section reports transport
    kind, resolved binary, resolved endpoint (the `\\.\pipe\` form on
