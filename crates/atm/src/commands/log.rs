@@ -374,7 +374,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        CliLogLevel, LogCommand, LogModeCommand, QueryArgs, parse_match_expression,
+        CliLogLevel, LogCommand, LogModeCommand, LogSource, QueryArgs, parse_match_expression,
         parse_relative_duration,
     };
     use crate::observability::{CliObservability, CliObservabilityOptions};
@@ -443,9 +443,12 @@ mod tests {
     #[test]
     fn snapshot_query_defaults_limit_and_orders_newest_first() {
         let args = QueryArgs {
+            source: LogSource::Jsonl,
             levels: vec![CliLogLevel::Info],
             matches: vec!["command=send".to_string()],
             since: None,
+            until: None,
+            component: None,
             limit: None,
             json: true,
         };
@@ -462,9 +465,12 @@ mod tests {
     #[test]
     fn tail_query_preserves_explicit_limit_without_defaulting() {
         let args = QueryArgs {
+            source: LogSource::Jsonl,
             levels: vec![],
             matches: vec!["success=true".to_string()],
             since: Some("15m".to_string()),
+            until: None,
+            component: None,
             limit: Some(3),
             json: false,
         };
@@ -480,9 +486,12 @@ mod tests {
     #[test]
     fn filter_mode_requires_at_least_one_predicate() {
         let args = QueryArgs {
+            source: LogSource::Jsonl,
             levels: vec![],
             matches: vec![],
             since: None,
+            until: None,
+            component: None,
             limit: None,
             json: false,
         };
@@ -516,9 +525,12 @@ mod tests {
         let _caller = caller_context_env();
         let command = LogCommand {
             mode: LogModeCommand::Snapshot(QueryArgs {
+                source: LogSource::Jsonl,
                 levels: vec![],
                 matches: vec![],
                 since: None,
+                until: None,
+                component: None,
                 limit: Some(1),
                 json: true,
             }),
@@ -548,9 +560,12 @@ mod tests {
         let _caller = caller_context_env();
         let command = LogCommand {
             mode: LogModeCommand::Snapshot(QueryArgs {
+                source: LogSource::Jsonl,
                 levels: vec![],
                 matches: vec![],
                 since: None,
+                until: None,
+                component: None,
                 limit: None,
                 json: false,
             }),
@@ -600,9 +615,12 @@ mod tests {
 
         let command = LogCommand {
             mode: LogModeCommand::Snapshot(QueryArgs {
+                source: LogSource::Jsonl,
                 levels: vec![CliLogLevel::Info],
                 matches: vec!["command=send".to_string()],
                 since: None,
+                until: None,
+                component: None,
                 limit: Some(5),
                 json: true,
             }),
@@ -625,9 +643,12 @@ mod tests {
                 .expect("observability");
         let command = LogCommand {
             mode: LogModeCommand::Snapshot(QueryArgs {
+                source: LogSource::Jsonl,
                 levels: vec![CliLogLevel::Info],
                 matches: vec!["command=send".to_string()],
                 since: None,
+                until: None,
+                component: None,
                 limit: Some(5),
                 json: true,
             }),
