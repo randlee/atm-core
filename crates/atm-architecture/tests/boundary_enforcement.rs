@@ -195,12 +195,14 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
     let root = workspace_root();
     let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let runtime_listener =
+        read_source(&root.join("crates/atm-http-runtime/src/runtime_listener.rs"));
     let runtime_setup = read_source(&root.join("crates/atm-http-runtime/src/runtime_setup.rs"));
-    let runtime_sources = format!("{runtime}\n{runtime_setup}");
+    let runtime_sources = format!("{runtime}\n{runtime_listener}\n{runtime_setup}");
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
     let policy = read_source(&root.join("crates/atm-core/src/peer_wire.rs"));
 
-    let direct_listener = runtime
+    let direct_listener = runtime_listener
         .split("async fn bind_configured_direct_peer_listener")
         .nth(1)
         .and_then(|source| source.split("async fn bind_loopback_listener").next())
@@ -2760,11 +2762,14 @@ fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
 fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
     let root = workspace_root();
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let runtime_listener =
+        read_source(&root.join("crates/atm-http-runtime/src/runtime_listener.rs"));
     let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
     let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
     let unix_socket = read_source(&root.join("crates/atm-http-runtime/src/unix_socket.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
-    let combined = format!("{runtime}\n{unix_socket}\n{http1_server}\n{client}");
+    let combined =
+        format!("{runtime}\n{runtime_listener}\n{unix_socket}\n{http1_server}\n{client}");
 
     assert!(
         combined.contains("UnixListener")
