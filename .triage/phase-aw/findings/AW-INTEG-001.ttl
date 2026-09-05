@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-INTEG-001>
+  a triage:Finding ;
+  triage:findingId "AW-INTEG-001" ;
+  triage:title "Phase AW diagnostics composition path (atm-daemon-bootstrap -> atm-http-runtime -> atm-storage-rusqlite) has zero boundary_enforcement.rs coverage" ;
+  triage:description "phase-aw integration review (arch-qa, at integrate/phase-aw 7845164e5): the new diagnostic-timeline/doctor-observability subsystem is currently correctly layered (crates/atm-http-runtime/src/diagnostics_route.rs:39-75 only calls Arc<dyn atm_runtime::DiagnosticTimelineStore>; doctor_observability.rs only touches atm_core::observability_counters types; the concrete SqliteDiagnosticTimeline impl is confined to atm-storage-rusqlite and reuses the existing single-writer SharedDb topology per its own header comment) but crates/atm-architecture/tests/boundary_enforcement.rs (4508 lines, grepped in full for 'diagnostic' case-insensitive and for SqliteDiagnosticTimeline/attach_timeline/register_bridge/diagnostics_route.rs) has no test pinning this composition path. The nearest gate, av3_read_handler_allowed_types() (boundary_enforcement.rs:4140-4168), is scoped only to list_messages/receive_mailbox in storage_and_nudge_router.rs, not to query_diagnostics in diagnostics_route.rs. No sprint round (AW.1 scoped to tracing-bridge/atm-observability; AW.2/AW.3 scoped to the SQLite timeline and doctor/log-query surfaces) added a corresponding boundary_enforcement.rs assertion for the diagnostics path itself -- this is a merge-gate coverage gap that fell between per-sprint reviewer scopes, not a live structural violation today. A future regression (e.g. a handler bypassing the trait, or a second independent SQLite writer for diagnostics contending with mailbox durability) would not be caught by any existing gate. Recommendation: add a boundary_enforcement.rs test analogous to canonical_write_router_has_one_host_routing_decision (line 470) asserting (a) diagnostics_route.rs only references Arc<dyn DiagnosticTimelineStore>/DiagnosticQuery/DiagnosticTimelineRecord and never a concrete SQLite type, and (b) SqliteDiagnosticTimeline::from_shared_db is the sole non-test construction path." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "integration_review" ;
+  triage:category "arch-gate" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T08:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW-INTEGRATION-REVIEW ;
+  triage:foundAt "2026-09-05T08:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-INTEG-001/INTEG-1> .
+
+<urn:atm:triage:occurrence/AW-INTEG-001/INTEG-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 4508 ;
+  triage:snippet "no test pins the atm-daemon-bootstrap -> atm-http-runtime -> atm-storage-rusqlite diagnostics composition path" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7845164e5" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-INTEG/7845164e5> .
+
+<urn:atm:triage:worktree/AW-INTEG/7845164e5>
+  a triage:WorktreeSnapshot ;
+  triage:path "verify-aw-integration" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7845164e5" ;
+  triage:orderIndex 1 .
