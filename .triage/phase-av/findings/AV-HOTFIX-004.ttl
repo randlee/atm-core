@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-HOTFIX-004>
+  a triage:Finding ;
+  triage:findingId "AV-HOTFIX-004" ;
+  triage:title "Peer write rejected by remote daemon surfaces as InternalError with real error stripped; rejecting daemon logs nothing" ;
+  triage:description "Cross-host peer-write error handling in storage_and_nudge_router.rs dispatch_resolved_peer_write strips the real response detail (nonexistent team, auth failure, etc.) when crossing the transport boundary back to the CLI. The cause is attached via with_cause(...) but lost during HTTP response serialization. Separately, the receiving daemon has no log record of the rejected inbound peer write -- the rejection is silent on both sender and receiver, combining into complete diagnosability blackout for real, actionable conditions (e.g., recipient team does not exist on target host)." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-gate" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T18:26:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-05T18:20:23Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-HOTFIX-004/AV4-DispatchResolvedPeerWrite-417> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-HOTFIX-004/AV4-DispatchResolvedPeerWrite-417>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 417 ;
+  triage:snippet "Err(AtmError::new(...).with_cause(...))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "4f4c283c4" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/4f4c283c4> .
+
+<urn:atm:triage:worktree/integrate-phase-av/4f4c283c4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "4f4c283c4" ;
+  triage:orderIndex 1 .
