@@ -343,6 +343,19 @@ def test_phase_scoped_worktree_resolution_is_case_insensitive(
     assert triage_report.discover_integration_root(root, requested) == av
 
 
+@pytest.mark.parametrize("requested", ["aw", "AW", "phase-aw"])
+def test_phase_directory_resolution_is_case_insensitive(tmp_path, requested):
+    root = tmp_path / "repo"
+    structure_dir = root / ".sprints" / "AW"
+    structure_dir.mkdir(parents=True)
+    (structure_dir / "structure.ttl").write_text(PREFIX)
+
+    phase_name, phase_path = triage_report._phase_dir(root, requested)
+
+    assert phase_name == "AW"
+    assert phase_path == structure_dir
+
+
 def test_explicit_integration_root_skips_worktree_discovery(tmp_path, monkeypatch, capsys):
     root, qa = _inputs(tmp_path)
     monkeypatch.setattr(

@@ -139,10 +139,19 @@ def _phase_dir(root: Path, requested: str | None) -> tuple[str, Path]:
     sprints = root / ".sprints"
     if requested:
         phase = requested.removeprefix("phase-")
-        path = sprints / phase
-        if not (path / "structure.ttl").is_file():
-            raise ReportError(f"missing phase structure: {path / 'structure.ttl'}")
-        return phase, path
+        matches = []
+        if sprints.is_dir():
+            matches = [
+                path
+                for path in sprints.iterdir()
+                if path.is_dir()
+                and path.name.casefold() == phase.casefold()
+                and (path / "structure.ttl").is_file()
+            ]
+        if len(matches) != 1:
+            raise ReportError(f"missing phase structure: {sprints / phase / 'structure.ttl'}")
+        path = matches[0]
+        return path.name, path
     candidates = sorted(p.parent for p in sprints.glob("*/structure.ttl"))
     if len(candidates) != 1:
         raise ReportError(
