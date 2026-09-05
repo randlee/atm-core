@@ -104,7 +104,6 @@ pub fn rebuild_received_hook_dispatch(
         member.team(),
         member.agent(),
     )?;
-
     // Mapping mirrors `send::hook::post_send_event_from_message`
     // (write-time), adapted to the persisted `Message` shape returned by a
     // reload instead of the in-memory `LogicalMessage` retained across a
@@ -161,6 +160,12 @@ pub fn build_task_reminder_dispatch(
         member.team(),
         member.agent(),
     )?;
+    // The reminder pump is deliberately Herdr-only. A recipient may have
+    // changed backends since the task was assigned; leave that case to its
+    // normal delivery path rather than synthesizing a different local nudge.
+    if !delivery_snapshot.local_herdr_post_send {
+        return Ok(None);
+    }
     let sender_host = runtime
         .message_store
         .load_message(&MessageKey::from(row.assignment_message_id))?

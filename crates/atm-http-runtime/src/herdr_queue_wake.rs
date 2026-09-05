@@ -8,13 +8,14 @@ use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     DurableRosterStore, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
+    ReadDeadline, ReminderOutcome, TaskRow, TaskState,
 };
 use atm_core::delivery_channel::{
     DeliveryChannel, GraftLeaseState, HerdrSession, classify_delivery_channel,
     local_message_received_backend,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::nudge_dispatch::rebuild_received_hook_dispatch;
+use atm_core::nudge_dispatch::{build_task_reminder_dispatch, rebuild_received_hook_dispatch};
 use atm_core::protocol::RuntimeMemberState;
 use atm_core::types::IsoTimestamp;
 use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrProcessAdapter};
@@ -48,6 +49,10 @@ pub struct HerdrQueueWakeStats {
     pub released: usize,
     pub breaker_open: usize,
     pub not_present: usize,
+    pub task_reminders: usize,
+    pub task_reminders_unrenderable: usize,
+    pub task_reminders_blocked: usize,
+    pub task_step_skipped: bool,
     pub last_tick_at: Option<IsoTimestamp>,
 }
 
@@ -60,6 +65,8 @@ pub struct HerdrQueueWakePump {
     cursor: Arc<Mutex<usize>>,
     release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
     clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>,
+    last_task_attempt: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
+    task_step_available: Arc<Mutex<Option<bool>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
     #[cfg(test)]
     handoff_cleanup_test_gate: Arc<Mutex<Option<HandoffCleanupTestGate>>>,
@@ -81,6 +88,8 @@ impl HerdrQueueWakePump {
             cursor: Arc::new(Mutex::new(0)),
             release_streaks: Arc::new(Mutex::new(HashMap::new())),
             clock: Arc::new(IsoTimestamp::now),
+            last_task_attempt: Arc::new(Mutex::new(HashMap::new())),
+            task_step_available: Arc::new(Mutex::new(None)),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
             #[cfg(test)]
             handoff_cleanup_test_gate: Arc::new(Mutex::new(None)),
@@ -195,8 +204,11 @@ impl HerdrQueueWakePump {
             }
         };
 
-        let eligible = self.list_eligible(candidates, &mut stats).await;
-        self.drain_eligible(pending_store, eligible, &mut stats)
+        let (eligible, task_candidates) = self.list_eligible(candidates, &mut stats).await;
+        let prompted_by_drain = self
+            .drain_eligible(pending_store, eligible, &mut stats)
+            .await;
+        self.remind_open_tasks(task_candidates, &prompted_by_drain, &mut stats)
             .await;
         self.save_stats(stats.clone());
         tracing::info!(
@@ -207,6 +219,10 @@ impl HerdrQueueWakePump {
             prompted = stats.prompted,
             released = stats.released,
             breaker_open = stats.breaker_open,
+            task_reminders = stats.task_reminders,
+            task_reminders_unrenderable = stats.task_reminders_unrenderable,
+            task_reminders_blocked = stats.task_reminders_blocked,
+            task_step_skipped = stats.task_step_skipped,
             "Herdr queue wake poll tick"
         );
     }
@@ -215,7 +231,7 @@ impl HerdrQueueWakePump {
         &self,
         candidates: Vec<HerdrCandidate>,
         stats: &mut HerdrQueueWakeStats,
-    ) -> Vec<HerdrCandidate> {
+    ) -> (Vec<HerdrCandidate>, Vec<TaskCandidate>) {
         let mut by_session: HashMap<Option<HerdrSession>, Vec<HerdrCandidate>> = HashMap::new();
         for candidate in candidates {
             by_session
@@ -224,6 +240,7 @@ impl HerdrQueueWakePump {
                 .push(candidate);
         }
         let mut eligible = Vec::new();
+        let mut task_candidates = Vec::new();
         for (session, members) in by_session {
             stats.listed_sessions += 1;
             match self
@@ -234,9 +251,13 @@ impl HerdrQueueWakePump {
                 )
                 .await
             {
-                Ok(outcome) => {
-                    self.collect_idle_members(outcome.agents, members, stats, &mut eligible)
-                }
+                Ok(outcome) => self.collect_idle_members(
+                    outcome.agents,
+                    members,
+                    stats,
+                    &mut eligible,
+                    &mut task_candidates,
+                ),
                 Err(error) => {
                     if error.is_infrastructure() {
                         stats.breaker_open += 1;
@@ -246,7 +267,8 @@ impl HerdrQueueWakePump {
             }
         }
         eligible.sort_by(|left, right| member_order(&left.key, &right.key));
-        eligible
+        task_candidates.sort_by(|left, right| member_order(&left.member.key, &right.member.key));
+        (eligible, task_candidates)
     }
 
     fn collect_idle_members(
@@ -255,6 +277,7 @@ impl HerdrQueueWakePump {
         members: Vec<HerdrCandidate>,
         stats: &mut HerdrQueueWakeStats,
         eligible: &mut Vec<HerdrCandidate>,
+        task_candidates: &mut Vec<TaskCandidate>,
     ) {
         let snapshots: HashMap<&str, &AgentSnapshot> = agents
             .iter()
@@ -279,6 +302,15 @@ impl HerdrQueueWakePump {
             }
             self.runtime_health
                 .record_herdr_poll_state(&member.key, runtime_state(snapshot.status));
+            if matches!(
+                snapshot.status,
+                HerdrAgentStatus::Idle | HerdrAgentStatus::Done | HerdrAgentStatus::Blocked
+            ) {
+                task_candidates.push(TaskCandidate {
+                    member: member.clone(),
+                    blocked: snapshot.status == HerdrAgentStatus::Blocked,
+                });
+            }
             if member.pending
                 && matches!(
                     snapshot.status,
@@ -296,9 +328,10 @@ impl HerdrQueueWakePump {
         pending_store: Arc<dyn PendingNudgeStore + Send + Sync>,
         eligible: Vec<HerdrCandidate>,
         stats: &mut HerdrQueueWakeStats,
-    ) {
+    ) -> HashSet<MemberKey> {
+        let mut prompted = HashSet::new();
         if eligible.is_empty() {
-            return;
+            return prompted;
         }
         let start = *self
             .cursor
@@ -311,17 +344,206 @@ impl HerdrQueueWakePump {
                 break;
             }
             visited += 1;
-            self.process_candidate(
-                &pending_store,
-                &eligible[(start + offset) % eligible.len()],
-                stats,
-            )
-            .await;
+            if self
+                .process_candidate(
+                    &pending_store,
+                    &eligible[(start + offset) % eligible.len()],
+                    stats,
+                )
+                .await
+            {
+                prompted.insert(eligible[(start + offset) % eligible.len()].key.clone());
+            }
         }
         *self
             .cursor
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = (start + visited) % eligible.len();
+        prompted
+    }
+
+    async fn remind_open_tasks(
+        &self,
+        candidates: Vec<TaskCandidate>,
+        prompted_by_drain: &HashSet<MemberKey>,
+        stats: &mut HerdrQueueWakeStats,
+    ) {
+        let reader = match self.service_runtime.async_task_ledger_reader() {
+            Ok(reader) => reader,
+            Err(error) => {
+                stats.task_step_skipped = true;
+                self.note_task_step_availability(false, Some(&error));
+                return;
+            }
+        };
+        let task_store = match self.service_runtime.task_store() {
+            Ok(store) => store,
+            Err(error) => {
+                stats.task_step_skipped = true;
+                self.note_task_step_availability(false, Some(&error));
+                return;
+            }
+        };
+        self.note_task_step_availability(true, None);
+        let now = (self.clock)();
+        for candidate in candidates {
+            if prompted_by_drain.contains(&candidate.member.key) {
+                self.stamp_task_attempt(&candidate.member.key, now);
+                continue;
+            }
+            let rows = match reader
+                .list_tasks(
+                    candidate.member.key.team().clone(),
+                    Some(candidate.member.key.agent().clone()),
+                    ReadDeadline::new(HERDR_REQUEST_DEADLINE)
+                        .expect("positive Herdr task reminder deadline"),
+                )
+                .await
+            {
+                Ok(rows) => rows,
+                Err(error) => {
+                    tracing::warn!(error = %error, member = %candidate.member.key, "Herdr task reminder read failed");
+                    continue;
+                }
+            };
+            let Some(row) = select_open_task(rows) else {
+                continue;
+            };
+            if !self.reminder_due(&candidate.member.key, &row, now) {
+                continue;
+            }
+            if candidate.blocked {
+                if self
+                    .record_task_reminder(
+                        &task_store,
+                        &candidate.member.key,
+                        &row,
+                        now,
+                        ReminderOutcome::Blocked,
+                    )
+                    .await
+                {
+                    stats.task_reminders_blocked += 1;
+                    self.stamp_task_attempt(&candidate.member.key, now);
+                }
+                continue;
+            }
+            if stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
+                break;
+            }
+            let runtime = self.service_runtime.clone();
+            let member = candidate.member.key.clone();
+            let row_for_dispatch = row.clone();
+            let dispatch = run_blocking(move || {
+                build_task_reminder_dispatch(&runtime, &member, &row_for_dispatch)
+            })
+            .await;
+            let dispatch = match dispatch {
+                Ok(Some(dispatch)) => dispatch,
+                Ok(None) => continue,
+                Err(_) => {
+                    if self
+                        .record_task_reminder(
+                            &task_store,
+                            &candidate.member.key,
+                            &row,
+                            now,
+                            ReminderOutcome::Unrenderable,
+                        )
+                        .await
+                    {
+                        stats.task_reminders_unrenderable += 1;
+                        self.stamp_task_attempt(&candidate.member.key, now);
+                    }
+                    continue;
+                }
+            };
+            let Some(emitter) = self.selector.select_emitter(&dispatch) else {
+                continue;
+            };
+            match emitter
+                .emit_received_message(dispatch, RequestDeadline::after(HERDR_REQUEST_DEADLINE))
+                .await
+            {
+                Ok(_) => {
+                    if self
+                        .record_task_reminder(
+                            &task_store,
+                            &candidate.member.key,
+                            &row,
+                            now,
+                            ReminderOutcome::Emitted,
+                        )
+                        .await
+                    {
+                        stats.prompted += 1;
+                        stats.task_reminders += 1;
+                        self.stamp_task_attempt(&candidate.member.key, now);
+                    }
+                }
+                Err(error) => {
+                    if error.code() == AtmErrorCode::HerdrUnavailable {
+                        stats.breaker_open += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    async fn record_task_reminder(
+        &self,
+        store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+        member: &MemberKey,
+        row: &TaskRow,
+        now: IsoTimestamp,
+        outcome: ReminderOutcome,
+    ) -> bool {
+        let store = Arc::clone(store);
+        let member = member.clone();
+        let task_id = row.task_id.clone();
+        run_blocking(move || store.record_reminder(&member, &task_id, now, outcome))
+            .await
+            .is_ok()
+    }
+
+    fn reminder_due(&self, member: &MemberKey, row: &TaskRow, now: IsoTimestamp) -> bool {
+        let due = |then: IsoTimestamp| {
+            now.into_inner()
+                .signed_duration_since(then.into_inner())
+                .num_milliseconds()
+                >= i64::try_from(TASK_REMINDER_INTERVAL_MS).unwrap_or(i64::MAX)
+        };
+        row.last_reminded_at.is_none_or(due)
+            && self
+                .last_task_attempt
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .get(member)
+                .copied()
+                .is_none_or(due)
+    }
+
+    fn stamp_task_attempt(&self, member: &MemberKey, now: IsoTimestamp) {
+        self.last_task_attempt
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(member.clone(), now);
+    }
+
+    fn note_task_step_availability(&self, available: bool, error: Option<&AtmError>) {
+        let mut previous = self
+            .task_step_available
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if *previous == Some(available) {
+            return;
+        }
+        *previous = Some(available);
+        if available {
+            tracing::info!("Herdr task reminder step available");
+        } else {
+            tracing::warn!(error = ?error, "Herdr task reminder step skipped: task store unavailable");
+        }
     }
 
     async fn process_candidate(
@@ -329,7 +551,7 @@ impl HerdrQueueWakePump {
         pending_store: &Arc<dyn PendingNudgeStore + Send + Sync>,
         member: &HerdrCandidate,
         stats: &mut HerdrQueueWakeStats,
-    ) {
+    ) -> bool {
         let claim = match run_blocking({
             let pending_store = Arc::clone(pending_store);
             let member = member.key.clone();
@@ -338,7 +560,7 @@ impl HerdrQueueWakePump {
         .await
         {
             Ok(Some(claim)) => claim,
-            Ok(None) | Err(_) => return,
+            Ok(None) | Err(_) => return false,
         };
         let mut release = ReleasePendingOnDrop::new(
             Arc::clone(pending_store),
@@ -359,7 +581,7 @@ impl HerdrQueueWakePump {
                     outcome = "dispatch_failed_released",
                     "Herdr queue dispatch could not be rebuilt"
                 );
-                return;
+                return false;
             }
         };
         let Some(emitter) = self.selector.select_emitter(&dispatch) else {
@@ -373,10 +595,10 @@ impl HerdrQueueWakePump {
                 outcome = "held_target_not_present",
                 "Herdr queue selector returned no emitter"
             );
-            return;
+            return false;
         };
         self.emit_claim(emitter, dispatch, member, claim, &mut release, stats)
-            .await;
+            .await
     }
 
     async fn rebuild_dispatch(
@@ -400,7 +622,7 @@ impl HerdrQueueWakePump {
         claim: atm_core::boundary::NudgeClaim,
         release: &mut ReleasePendingOnDrop,
         stats: &mut HerdrQueueWakeStats,
-    ) {
+    ) -> bool {
         match emitter
             .emit_received_message(dispatch, RequestDeadline::after(HERDR_REQUEST_DEADLINE))
             .await
@@ -408,6 +630,7 @@ impl HerdrQueueWakePump {
             Ok(_) => {
                 self.complete_successful_claim(member, claim, release, stats)
                     .await;
+                true
             }
             Err(error) => {
                 if error.code() == AtmErrorCode::HerdrUnavailable {
@@ -441,6 +664,7 @@ impl HerdrQueueWakePump {
                     error_code = ?error.code(),
                     "Herdr queue prompt failed"
                 );
+                false
             }
         }
     }
@@ -537,6 +761,25 @@ struct HerdrCandidate {
     key: MemberKey,
     session: Option<HerdrSession>,
     pending: bool,
+}
+
+#[derive(Clone)]
+struct TaskCandidate {
+    member: HerdrCandidate,
+    blocked: bool,
+}
+
+fn select_open_task(mut rows: Vec<TaskRow>) -> Option<TaskRow> {
+    rows.retain(|row| row.state != TaskState::Complete);
+    rows.sort_by(|left, right| {
+        left.assigned_at
+            .cmp(&right.assigned_at)
+            .then_with(|| left.task_id.as_str().cmp(right.task_id.as_str()))
+    });
+    rows.iter()
+        .find(|row| row.state == TaskState::Active)
+        .or_else(|| rows.iter().find(|row| row.state == TaskState::Assigned))
+        .cloned()
 }
 
 fn herdr_candidates(
@@ -699,7 +942,7 @@ mod tests {
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
     use atm_core::test_support as atm_storage;
-    use atm_core::types::{ModelName, TeamName};
+    use atm_core::types::{IsoTimestamp, ModelName, TaskId, TeamName};
     use atm_herdr::{
         AgentSnapshot, HerdrAgentStatus, HerdrListOutcome, HerdrProcessAdapter, HerdrPromptOutcome,
     };
@@ -708,7 +951,8 @@ mod tests {
     use serde_json::json;
     use std::future::Future;
     use std::pin::Pin;
-    use std::sync::Arc;
+    use std::str::FromStr;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::watch;
 
@@ -816,6 +1060,34 @@ mod tests {
         )
         .expect("queue write")
         .persisted_message_id()
+    }
+
+    fn queue_task_message(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        team: &TeamName,
+        agent: &str,
+        task_id: TaskId,
+    ) {
+        let home = root.join("home");
+        std::fs::create_dir_all(&home).expect("home");
+        let recipient = format!("{agent}@{team}");
+        let mut request = WriteRequest::new(
+            home.clone(),
+            home,
+            "sender".parse().expect("sender"),
+            &recipient,
+            team.clone(),
+            SendMessageSource::Inline("AX5 reminder task".to_owned()),
+            None,
+            true,
+            None,
+            false,
+        )
+        .expect("task write request")
+        .with_nudge_mode(NudgeMode::Deferred);
+        request.task_id = Some(task_id);
+        write_mail_with_runtime(request, &NullObservability, runtime).expect("queue task write");
     }
 
     fn build_test_pump_with_agents(
@@ -1005,6 +1277,113 @@ mod tests {
     fn poll_contract_uses_fixed_cadence_and_cap() {
         assert_eq!(HERDR_POLL_INTERVAL_MS, 5_000);
         assert_eq!(HERDR_MAX_PROMPTS_PER_TICK, 16);
+    }
+
+    #[tokio::test]
+    async fn ax5_01_drain_precedes_task_reminder_and_clock_controls_cadence() {
+        let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+        let task_id: TaskId = "AX5-REMINDER".parse().expect("task id");
+        queue_task_message(
+            root.path(),
+            &runtime,
+            key.team(),
+            key.agent().as_str(),
+            task_id.clone(),
+        );
+        let now = Arc::new(Mutex::new(IsoTimestamp::now()));
+        let clock_now = Arc::clone(&now);
+        let selector = Arc::new(FakeSelector {
+            emitter: FakeEmitter {
+                process: Arc::clone(&fake),
+            },
+        });
+        let process: Arc<dyn HerdrProcessAdapter> = fake.clone();
+        let pump = HerdrQueueWakePump::new(runtime.clone(), selector, health, process).with_clock(
+            Arc::new(move || *clock_now.lock().expect("test clock lock")),
+        );
+
+        // The pre-existing queue entry and then the task's own deferred
+        // marker consume the first two ticks. Neither may produce a second
+        // prompt from the reminder step in the same tick.
+        pump.tick_once().await;
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("future timestamp");
+        fake.queue_list_result(Ok(HerdrListOutcome {
+            agents: vec![AgentSnapshot {
+                name: Some(key.agent().to_string()),
+                status: HerdrAgentStatus::Idle,
+                workspace_id: None,
+            }],
+        }));
+        pump.tick_once().await;
+        assert_eq!(pump.stats().task_reminders, 0, "drain consumes this tick");
+
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str("2030-01-01T00:01:05Z").expect("future timestamp");
+        fake.queue_list_result(Ok(HerdrListOutcome {
+            agents: vec![AgentSnapshot {
+                name: Some(key.agent().to_string()),
+                status: HerdrAgentStatus::Idle,
+                workspace_id: None,
+            }],
+        }));
+        pump.tick_once().await;
+
+        let row = runtime
+            .task_store()
+            .expect("task store")
+            .load_task(&key, &task_id)
+            .expect("load task")
+            .expect("task row");
+        assert_eq!(row.reminder_count, 1);
+        assert_eq!(pump.stats().task_reminders, 1);
+        assert_eq!(
+            fake.calls()
+                .iter()
+                .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
+                .count(),
+            3,
+            "two queue drains plus exactly one cadence-controlled reminder"
+        );
+    }
+
+    #[tokio::test]
+    async fn ax5_06_blocked_tasks_are_audited_without_a_prompt() {
+        let (root, runtime, fake, pump, health, key) =
+            build_test_pump_with_agents(vec![AgentSnapshot {
+                name: Some("aq27-agent".to_owned()),
+                status: HerdrAgentStatus::Blocked,
+                workspace_id: None,
+            }]);
+        let task_id: TaskId = "AX5-BLOCKED".parse().expect("task id");
+        queue_task_message(
+            root.path(),
+            &runtime,
+            key.team(),
+            key.agent().as_str(),
+            task_id.clone(),
+        );
+
+        pump.tick_once().await;
+
+        let row = runtime
+            .task_store()
+            .expect("task store")
+            .load_task(&key, &task_id)
+            .expect("load task")
+            .expect("task row");
+        assert_eq!(row.reminder_count, 1);
+        assert_eq!(pump.stats().task_reminders_blocked, 1);
+        assert!(
+            fake.calls()
+                .iter()
+                .all(|call| !matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. })),
+            "blocked task reminders never prompt Herdr"
+        );
+        assert_eq!(
+            health.snapshot().members[0].state,
+            RuntimeMemberState::Blocked,
+        );
     }
 
     #[tokio::test]
