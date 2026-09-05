@@ -24,8 +24,7 @@ fn task_row(team: &TeamName) -> TaskRow {
 }
 
 fn member(team: &TeamName, backend: &str) -> RosterEntry {
-    let mut metadata_json = serde_json::Map::new();
-    metadata_json.insert(["backend", "Type"].concat(), serde_json::json!(backend));
+    let mut metadata_json = atm_core::delivery_channel::test_backend_type_metadata(backend);
     if backend == "herdr" {
         metadata_json.insert("herdrSession".to_owned(), serde_json::json!("ax5-test"));
     }

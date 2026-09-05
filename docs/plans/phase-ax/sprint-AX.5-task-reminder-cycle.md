@@ -281,7 +281,7 @@ log record and `atm list --task-events`, not doctor).
    outcome `blocked` per 60 s while blocked; when it returns to idle the
    next reminder is `emitted`.
 7. With no `TaskStore` installed the pump still drains queued mail and
-   logs one warning per tick.
+   logs the task-store-unavailable warning on transition only.
 
 ## Required validation
 
