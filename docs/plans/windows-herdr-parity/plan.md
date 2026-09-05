@@ -330,7 +330,9 @@ Deliverables:
      process `HERDR_PANE_ID`, `HERDR_TAB_ID` and `HERDR_WORKSPACE_ID`
      (src/integration/env.rs:8-10). Agents get pane and workspace
      identity from the environment; atm adds nothing and never
-     substitutes config or name matching for it.
+     substitutes config or name matching for it. A process without
+     `HERDR_PANE_ID` is not in a Herdr pane and gets no nudges; that
+     is the expected outcome, not a case for a fallback.
    - Doctor shows the two paths and the probe result.
    - Backend disabled: nothing above applies.
    - W2's socket transport connects to `HERDR_SOCKET_PATH` as given. Doctor herdr section reports transport
