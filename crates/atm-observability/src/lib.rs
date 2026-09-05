@@ -10,6 +10,7 @@ use std::{fs, fs::OpenOptions};
 
 use atm_core::error::AtmError;
 use atm_core::observability::RetainedSinkFaultMode;
+use atm_core::{EnvSource, ProcessEnvSource};
 use sc_observability_types::DiagnosticInfo;
 
 /// Opaque shared retained logger handle. Its concrete backend is deliberately
@@ -66,17 +67,28 @@ impl RetainedLogger {
 }
 
 /// Builds the daemon's one retained JSONL logger after the log path was checked.
+///
+/// `level_override` is the already-resolved `ATM_LOG` override: the builder
+/// never reads the process environment itself, so tests can construct loggers
+/// concurrently without racing on process-global state. `None` selects the
+/// default `info` threshold. Bootstrap callers should use
+/// [`build_retained_logger_from_env`] instead.
+///
+/// # Errors
+/// Returns [`AtmError::observability_bootstrap`] when the retained log
+/// directory cannot be prepared or the backing logger cannot be built.
 pub fn build_retained_logger(
     service_name: sc_observability_types::ServiceName,
     log_dir: &Path,
     retained_log_policy: RetainedLogPolicy,
+    level_override: Option<sc_observability_types::LevelFilter>,
 ) -> Result<RetainedLogger, AtmError> {
     prepare_retained_log(log_dir)?;
     let mut config = sc_observability::LoggerConfig::default_for(
         service_name,
         logger_root_for_log_dir(log_dir)?,
     );
-    config.level = logger_level_override()?.unwrap_or(sc_observability_types::LevelFilter::Info);
+    config.level = level_override.unwrap_or(sc_observability_types::LevelFilter::Info);
     config.retained_log_policy = sc_observability::RetainedLogPolicy {
         rotation_max_bytes: sc_observability::ByteCount::from_bytes(
             retained_log_policy.rotation_max_bytes,
@@ -103,6 +115,25 @@ pub fn build_retained_logger(
                 "failed to initialize shared daemon observability logger",
             )
         })
+}
+
+/// Builds the retained JSONL logger, resolving `ATM_LOG` from the process
+/// environment.
+///
+/// This is the bootstrap edge: it is the only retained-logger entry point that
+/// touches process-global state and must only be called from real daemon or
+/// CLI startup, never from tests running alongside other tests.
+///
+/// # Errors
+/// Returns [`AtmError::observability_bootstrap`] when `ATM_LOG` holds an
+/// unsupported value, or for any error reported by [`build_retained_logger`].
+pub fn build_retained_logger_from_env(
+    service_name: sc_observability_types::ServiceName,
+    log_dir: &Path,
+    retained_log_policy: RetainedLogPolicy,
+) -> Result<RetainedLogger, AtmError> {
+    let level_override = logger_level_override()?;
+    build_retained_logger(service_name, log_dir, retained_log_policy, level_override)
 }
 
 #[cfg(test)]
@@ -175,15 +206,49 @@ pub fn logger_root_for_log_dir(log_dir: &Path) -> Result<PathBuf, AtmError> {
     })
 }
 
-/// Parses the process-start `ATM_LOG` override once for a concrete logger.
+/// Resolves the process-start `ATM_LOG` override once, at the bootstrap edge.
+///
+/// This is the only `ATM_LOG` reader that touches the process environment; it
+/// must only be called from real daemon or CLI startup. Tests should call
+/// [`parse_logger_level`] or [`logger_level_override_from`] instead so they
+/// never mutate process-global state.
+///
+/// # Errors
+/// Returns [`AtmError::observability_bootstrap`] when `ATM_LOG` holds an
+/// unsupported value.
 pub fn logger_level_override() -> Result<Option<sc_observability_types::LevelFilter>, AtmError> {
-    let Some(raw_value) = std::env::var(ATM_LOG_LEVEL_ENV)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-    else {
+    logger_level_override_from(&ProcessEnvSource)
+}
+
+/// Resolves the `ATM_LOG` override from an explicit environment source.
+///
+/// # Errors
+/// Returns [`AtmError::observability_bootstrap`] when `ATM_LOG` holds an
+/// unsupported value.
+pub fn logger_level_override_from(
+    env: &dyn EnvSource,
+) -> Result<Option<sc_observability_types::LevelFilter>, AtmError> {
+    match env.var(ATM_LOG_LEVEL_ENV) {
+        Some(raw_value) => parse_logger_level(&raw_value),
+        None => Ok(None),
+    }
+}
+
+/// Parses an already-resolved `ATM_LOG` override value.
+///
+/// Values are matched case-insensitively after trimming; a blank value means
+/// "no override" and yields `Ok(None)`.
+///
+/// # Errors
+/// Returns [`AtmError::observability_bootstrap`] for any value other than
+/// `trace`, `debug`, `info`, `warn`, `error`, or `off`.
+pub fn parse_logger_level(
+    value: &str,
+) -> Result<Option<sc_observability_types::LevelFilter>, AtmError> {
+    let raw_value = value.trim();
+    if raw_value.is_empty() {
         return Ok(None);
-    };
+    }
 
     match raw_value.to_ascii_lowercase().as_str() {
         "trace" => Ok(Some(sc_observability_types::LevelFilter::Trace)),
@@ -219,10 +284,12 @@ pub fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmEr
 
 #[cfg(test)]
 mod tests {
-    use atm_core::test_support::EnvGuard;
+    use atm_core::test_support::FakeEnvSource;
     use tempfile::TempDir;
 
-    use super::{ATM_LOG_LEVEL_ENV, logger_level_override, prepare_retained_log};
+    use super::{
+        ATM_LOG_LEVEL_ENV, logger_level_override_from, parse_logger_level, prepare_retained_log,
+    };
 
     #[test]
     fn prepares_the_active_log_file() {
@@ -237,11 +304,48 @@ mod tests {
 
     #[test]
     fn rejects_invalid_log_levels_with_the_exact_override_name() {
-        let _env = EnvGuard::set_many([(ATM_LOG_LEVEL_ENV, Some("loud"))]);
-
-        let error = logger_level_override().expect_err("invalid level");
+        let error = parse_logger_level("loud").expect_err("invalid level");
 
         assert!(error.is_observability_bootstrap());
         assert!(error.message().contains("invalid ATM_LOG value `loud`"));
+    }
+
+    #[test]
+    fn parses_every_supported_level_case_insensitively() {
+        let cases = [
+            ("TRACE", sc_observability_types::LevelFilter::Trace),
+            ("debug", sc_observability_types::LevelFilter::Debug),
+            (" info ", sc_observability_types::LevelFilter::Info),
+            ("Warn", sc_observability_types::LevelFilter::Warn),
+            ("error", sc_observability_types::LevelFilter::Error),
+            ("off", sc_observability_types::LevelFilter::Off),
+        ];
+
+        for (value, expected) in cases {
+            assert_eq!(
+                parse_logger_level(value).expect("supported level"),
+                Some(expected),
+                "value={value}"
+            );
+        }
+    }
+
+    #[test]
+    fn treats_blank_overrides_as_absent() {
+        assert_eq!(parse_logger_level("   ").expect("blank override"), None);
+    }
+
+    #[test]
+    fn reads_the_override_from_the_supplied_environment() {
+        let env = FakeEnvSource::new([(ATM_LOG_LEVEL_ENV, Some("debug"))]);
+
+        assert_eq!(
+            logger_level_override_from(&env).expect("override"),
+            Some(sc_observability_types::LevelFilter::Debug)
+        );
+        assert_eq!(
+            logger_level_override_from(&FakeEnvSource::empty()).expect("no override"),
+            None
+        );
     }
 }

@@ -1,9 +1,15 @@
 mod ops;
 mod ops_envelope;
+mod shutdown_support;
 mod stmt_cache;
 
 pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
+use shutdown_support::{
+    checkpoint_writer_connection, drain_submit_replies, writer_channel_closed_error,
+    writer_queue_timeout_error, writer_reply_channel_closed_error, writer_reply_timeout_error,
+};
 
+use crate::DIAGNOSTIC_PRUNE_CHECK_EVERY;
 use crate::observability::{
     SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
@@ -11,15 +17,20 @@ use crate::shared_db::{
     SharedDbTarget, SqliteConnection, ensure_schema, open_writer_connection_for_target,
     sqlite_error,
 };
-use atm_storage::{AtmError, AtmErrorCode};
+use atm_storage::{AtmError, AtmErrorCode, DiagnosticEvent};
 use rusqlite::TransactionBehavior;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 pub(crate) const CHANNEL_CAPACITY: usize = 256;
+/// A diagnostic producer owns at most one bounded batch at a time.
+pub(crate) const DIAGNOSTIC_BATCH_MAX: usize = 128;
+/// The diagnostic lane never holds more than eight batches behind the writer.
+pub(crate) const DIAGNOSTIC_QUEUE_BATCHES: usize = 8;
 // Coalesce writes that arrive immediately after the first admission so one
 // SQLite commit can durably acknowledge the concurrent burst. This is private
 // to the sole writer ingress: callers, HTTP, TLS, and benchmark modes cannot
@@ -56,6 +67,42 @@ enum WriterMessage {
     Shutdown,
 }
 
+enum DiagnosticWriterMessage {
+    Records(Vec<DiagnosticEvent>),
+    Prune {
+        now_unix_ms: i64,
+        reply: SyncSender<Result<u64, AtmError>>,
+    },
+}
+
+/// Result of a non-blocking diagnostic-lane offer.  Diagnostic events must
+/// never backpressure or fail a primary durable-state operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DiagnosticBatchOffer {
+    Accepted,
+    QueueFull,
+    WriterClosed,
+    InvalidBatch,
+}
+
+/// Persist-side counters are separate from producer queue-full accounting so
+/// the health projection never treats a merely accepted batch as durable.
+#[derive(Debug, Default)]
+pub struct DiagnosticTimelinePersistenceStats {
+    written_total: AtomicU64,
+    persist_error_total: AtomicU64,
+}
+
+impl DiagnosticTimelinePersistenceStats {
+    pub fn written_total(&self) -> u64 {
+        self.written_total.load(Ordering::Relaxed)
+    }
+
+    pub fn persist_error_total(&self) -> u64 {
+        self.persist_error_total.load(Ordering::Relaxed)
+    }
+}
+
 struct QueuedWrite {
     op: Box<WriteOp>,
     reply: ReplyTx,
@@ -63,6 +110,8 @@ struct QueuedWrite {
 
 pub(crate) struct SqliteWriter {
     sender: Option<tokio::sync::mpsc::Sender<WriterMessage>>,
+    diagnostic_sender: Option<tokio::sync::mpsc::Sender<DiagnosticWriterMessage>>,
+    diagnostic_stats: Arc<DiagnosticTimelinePersistenceStats>,
     worker: Option<JoinHandle<()>>,
     observability: Arc<dyn SqliteObservability>,
     write_op_deadline: Duration,
@@ -73,6 +122,10 @@ impl std::fmt::Debug for SqliteWriter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SqliteWriter")
             .field("sender_present", &self.sender.is_some())
+            .field(
+                "diagnostic_sender_present",
+                &self.diagnostic_sender.is_some(),
+            )
             .field("worker_present", &self.worker.is_some())
             .field("write_op_deadline", &self.write_op_deadline)
             .field("shutdown_join_deadline", &self.shutdown_join_deadline)
@@ -130,6 +183,9 @@ impl SqliteWriter {
         ensure_schema(&mut connection, target.as_ref())?;
 
         let (sender, receiver) = tokio::sync::mpsc::channel(channel_capacity);
+        let (diagnostic_sender, diagnostic_receiver) =
+            tokio::sync::mpsc::channel(DIAGNOSTIC_QUEUE_BATCHES);
+        let diagnostic_stats = Arc::new(DiagnosticTimelinePersistenceStats::default());
         let worker_runtime = build_runtime().map_err(|error| {
             let error = AtmError::daemon_unavailable(format!(
                 "failed to initialize sqlite writer timer: {error}"
@@ -143,6 +199,7 @@ impl SqliteWriter {
             error
         })?;
         let worker_observability = Arc::clone(&observability);
+        let worker_diagnostic_stats = Arc::clone(&diagnostic_stats);
         let worker = thread::Builder::new()
             .name("atm-sqlite-writer".to_string())
             .spawn(move || {
@@ -150,6 +207,8 @@ impl SqliteWriter {
                     target,
                     connection,
                     receiver,
+                    diagnostic_receiver,
+                    worker_diagnostic_stats,
                     worker_observability,
                     worker_runtime,
                 )
@@ -168,6 +227,8 @@ impl SqliteWriter {
             })?;
         Ok(Self {
             sender: Some(sender),
+            diagnostic_sender: Some(diagnostic_sender),
+            diagnostic_stats,
             worker: Some(worker),
             observability,
             write_op_deadline,
@@ -320,11 +381,60 @@ impl SqliteWriter {
                 error
             })?
     }
+
+    /// Offers a complete diagnostic batch without ever waiting for the SQLite
+    /// worker.  The caller owns queue-full accounting; persist errors are
+    /// deliberately isolated on the lower-priority worker lane.
+    pub(crate) fn try_record_diagnostics(
+        &self,
+        batch: Vec<DiagnosticEvent>,
+    ) -> DiagnosticBatchOffer {
+        if batch.is_empty() || batch.len() > DIAGNOSTIC_BATCH_MAX {
+            return DiagnosticBatchOffer::InvalidBatch;
+        }
+        let Some(sender) = self.diagnostic_sender.as_ref() else {
+            return DiagnosticBatchOffer::WriterClosed;
+        };
+        match sender.try_send(DiagnosticWriterMessage::Records(batch)) {
+            Ok(()) => DiagnosticBatchOffer::Accepted,
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => DiagnosticBatchOffer::QueueFull,
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                DiagnosticBatchOffer::WriterClosed
+            }
+        }
+    }
+
+    pub(crate) fn diagnostic_stats(&self) -> Arc<DiagnosticTimelinePersistenceStats> {
+        Arc::clone(&self.diagnostic_stats)
+    }
+
+    pub(crate) fn prune_diagnostics(&self, now_unix_ms: i64) -> Result<u64, AtmError> {
+        let sender = self
+            .diagnostic_sender
+            .as_ref()
+            .ok_or_else(writer_channel_closed_error)?;
+        let (reply, receiver) = mpsc::sync_channel(1);
+        sender
+            .try_send(DiagnosticWriterMessage::Prune { now_unix_ms, reply })
+            .map_err(|error| match error {
+                tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                    writer_queue_timeout_error(self.write_op_deadline)
+                }
+                tokio::sync::mpsc::error::TrySendError::Closed(_) => writer_channel_closed_error(),
+            })?;
+        receiver
+            .recv_timeout(self.write_op_deadline)
+            .map_err(|error| match error {
+                RecvTimeoutError::Timeout => writer_reply_timeout_error(self.write_op_deadline),
+                RecvTimeoutError::Disconnected => writer_reply_channel_closed_error(),
+            })?
+    }
 }
 
 impl Drop for SqliteWriter {
     fn drop(&mut self) {
         let sender = self.sender.take();
+        let diagnostic_sender = self.diagnostic_sender.take();
         let worker = self.worker.take();
 
         if let Some(sender) = sender {
@@ -347,131 +457,56 @@ impl Drop for SqliteWriter {
             }
             drop(sender);
         }
+        drop(diagnostic_sender);
 
-        if let Some(handle) = worker {
-            let (result_tx, result_rx) = mpsc::sync_channel(1);
-            let join_helper = thread::spawn(move || {
-                let _ = result_tx.send(handle.join());
-            });
-            match result_rx.recv_timeout(self.shutdown_join_deadline) {
-                Ok(Ok(())) => {
-                    let _ = join_helper.join();
-                }
-                Ok(Err(_)) => {
-                    let _ = join_helper.join();
-                    let detail = "sqlite writer thread panicked while shutting down; the durable write lane may have exited mid-drain";
-                    tracing::warn!("{detail}");
-                    self.observability
-                        .emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_shutdown_join",
-                            SqliteObservabilityOutcome::Failed,
-                            detail,
-                            Some(AtmErrorCode::DaemonUnavailable),
-                        ));
-                }
-                Err(RecvTimeoutError::Timeout) => {
-                    drop(join_helper);
-                    let detail = format!(
-                        "sqlite writer shutdown exceeded the bounded join deadline ({:?}); detaching join helper",
-                        self.shutdown_join_deadline
-                    );
-                    tracing::warn!(
-                        timeout_ms = self.shutdown_join_deadline.as_millis(),
-                        "{detail}"
-                    );
-                    self.observability
-                        .emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_shutdown_join",
-                            SqliteObservabilityOutcome::Timeout,
-                            detail,
-                            Some(AtmErrorCode::DaemonUnavailable),
-                        ));
-                }
-                Err(RecvTimeoutError::Disconnected) => {
-                    let _ = join_helper.join();
-                    let detail = "sqlite writer join helper disconnected before reporting the worker shutdown result";
-                    tracing::warn!("{detail}");
-                    self.observability
-                        .emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_shutdown_join",
-                            SqliteObservabilityOutcome::Failed,
-                            detail,
-                            Some(AtmErrorCode::DaemonUnavailable),
-                        ));
-                }
-            }
+        self.join_worker(worker);
+    }
+}
+
+impl SqliteWriter {
+    fn join_worker(&self, worker: Option<thread::JoinHandle<()>>) {
+        let Some(handle) = worker else { return };
+        let (result_tx, result_rx) = mpsc::sync_channel(1);
+        let join_helper = thread::spawn(move || {
+            let _ = result_tx.send(handle.join());
+        });
+        match result_rx.recv_timeout(self.shutdown_join_deadline) {
+            Ok(Ok(())) => { let _ = join_helper.join(); }
+            Ok(Err(_)) => self.finish_failed_join(join_helper, "sqlite writer thread panicked while shutting down; the durable write lane may have exited mid-drain"),
+            Err(RecvTimeoutError::Timeout) => self.finish_timed_out_join(join_helper),
+            Err(RecvTimeoutError::Disconnected) => self.finish_failed_join(join_helper, "sqlite writer join helper disconnected before reporting the worker shutdown result"),
         }
     }
-}
 
-fn writer_channel_closed_error() -> AtmError {
-    AtmError::daemon_unavailable("sqlite writer submission channel closed")
-}
-
-fn writer_queue_timeout_error(deadline: Duration) -> AtmError {
-    AtmError::daemon_unavailable(format!(
-        "sqlite writer submission queue did not accept a write within {:?}",
-        deadline
-    ))
-}
-
-fn writer_reply_timeout_error(deadline: Duration) -> AtmError {
-    AtmError::daemon_unavailable(format!(
-        "sqlite writer reply did not arrive within {:?}",
-        deadline
-    ))
-}
-
-fn writer_reply_channel_closed_error() -> AtmError {
-    AtmError::daemon_unavailable("sqlite writer reply channel closed")
-}
-
-fn writer_unavailable_reply_error() -> AtmError {
-    AtmError::daemon_unavailable("sqlite writer is unavailable during shutdown")
-}
-
-fn drain_submit_replies(receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>) {
-    loop {
-        match receiver.try_recv() {
-            Ok(WriterMessage::Submit { reply, .. }) => {
-                reply.send(Err(writer_unavailable_reply_error()));
-            }
-            Ok(WriterMessage::Shutdown) => continue,
-            Err(
-                tokio::sync::mpsc::error::TryRecvError::Empty
-                | tokio::sync::mpsc::error::TryRecvError::Disconnected,
-            ) => break,
-        }
-    }
-}
-
-fn checkpoint_writer_connection(
-    target: &SharedDbTarget,
-    connection: &mut SqliteConnection,
-    observability: &dyn SqliteObservability,
-) {
-    #[cfg(test)]
-    if matches!(target, SharedDbTarget::InMemory { .. }) {
-        return;
+    fn finish_failed_join(&self, join_helper: thread::JoinHandle<()>, detail: &'static str) {
+        let _ = join_helper.join();
+        tracing::warn!("{detail}");
+        self.observability
+            .emit_or_warn(SqliteObservabilityEvent::new(
+                "writer_shutdown_join",
+                SqliteObservabilityOutcome::Failed,
+                detail,
+                Some(AtmErrorCode::DaemonUnavailable),
+            ));
     }
 
-    if let Err(error) = connection.query_row("PRAGMA wal_checkpoint(PASSIVE);", [], |_row| Ok(())) {
-        let error = sqlite_error(
-            target,
-            "sqlite writer final wal checkpoint failed after draining the write lane",
-            error,
+    fn finish_timed_out_join(&self, join_helper: thread::JoinHandle<()>) {
+        drop(join_helper);
+        let detail = format!(
+            "sqlite writer shutdown exceeded the bounded join deadline ({:?}); detaching join helper",
+            self.shutdown_join_deadline
         );
         tracing::warn!(
-            path = %target.display(),
-            %error,
-            "sqlite writer final wal checkpoint failed after draining the write lane"
+            timeout_ms = self.shutdown_join_deadline.as_millis(),
+            "{detail}"
         );
-        observability.emit_or_warn(SqliteObservabilityEvent::new(
-            "writer_shutdown_checkpoint",
-            SqliteObservabilityOutcome::Failed,
-            error.message().to_owned(),
-            Some(error.code()),
-        ));
+        self.observability
+            .emit_or_warn(SqliteObservabilityEvent::new(
+                "writer_shutdown_join",
+                SqliteObservabilityOutcome::Timeout,
+                detail,
+                Some(AtmErrorCode::DaemonUnavailable),
+            ));
     }
 }
 
@@ -479,30 +514,63 @@ fn writer_loop(
     target: Arc<SharedDbTarget>,
     mut connection: SqliteConnection,
     mut receiver: tokio::sync::mpsc::Receiver<WriterMessage>,
+    mut diagnostic_receiver: tokio::sync::mpsc::Receiver<DiagnosticWriterMessage>,
+    diagnostic_stats: Arc<DiagnosticTimelinePersistenceStats>,
     observability: Arc<dyn SqliteObservability>,
     runtime: tokio::runtime::Runtime,
 ) {
     let mut cache = stmt_cache::WriterStatementCache;
     let mut shutting_down = false;
+    let mut diagnostic_rows_since_prune = 0_usize;
     loop {
-        let Some(first) = runtime.block_on(receive_first_message(&mut receiver, shutting_down))
-        else {
+        let Some(work) = runtime.block_on(receive_next_work(
+            &mut receiver,
+            &mut diagnostic_receiver,
+            shutting_down,
+        )) else {
             break;
         };
-        let mut batch = vec![first];
-        runtime.block_on(collect_batch(&mut receiver, &mut batch, &mut shutting_down));
-        process_batch(&target, &mut connection, &mut cache, batch);
+        match work {
+            WriterWork::Primary(first) => {
+                let mut batch = vec![first];
+                runtime.block_on(collect_batch(&mut receiver, &mut batch, &mut shutting_down));
+                process_batch(&target, &mut connection, &mut cache, batch);
+            }
+            WriterWork::Diagnostics(message) => match message {
+                DiagnosticWriterMessage::Records(batch) => process_diagnostic_batch(
+                    &target,
+                    &mut connection,
+                    &mut cache,
+                    batch,
+                    &mut diagnostic_rows_since_prune,
+                    diagnostic_stats.as_ref(),
+                ),
+                DiagnosticWriterMessage::Prune { now_unix_ms, reply } => {
+                    let result =
+                        process_diagnostic_prune(&target, &mut connection, &mut cache, now_unix_ms);
+                    let _ = reply.send(result);
+                }
+            },
+        }
     }
     checkpoint_writer_connection(target.as_ref(), &mut connection, observability.as_ref());
 }
 
-async fn receive_first_message(
+enum WriterWork {
+    Primary(QueuedWrite),
+    Diagnostics(DiagnosticWriterMessage),
+}
+
+async fn receive_next_work(
     receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
+    diagnostic_receiver: &mut tokio::sync::mpsc::Receiver<DiagnosticWriterMessage>,
     shutting_down: bool,
-) -> Option<QueuedWrite> {
+) -> Option<WriterWork> {
     if shutting_down {
         match receiver.try_recv() {
-            Ok(WriterMessage::Submit { op, reply }) => Some(QueuedWrite { op, reply }),
+            Ok(WriterMessage::Submit { op, reply }) => {
+                Some(WriterWork::Primary(QueuedWrite { op, reply }))
+            }
             Ok(WriterMessage::Shutdown) => {
                 drain_submit_replies(receiver);
                 None
@@ -513,14 +581,118 @@ async fn receive_first_message(
             ) => None,
         }
     } else {
-        match receiver.recv().await {
-            Some(WriterMessage::Submit { op, reply }) => Some(QueuedWrite { op, reply }),
-            Some(WriterMessage::Shutdown) => {
+        match receiver.try_recv() {
+            Ok(WriterMessage::Submit { op, reply }) => {
+                Some(WriterWork::Primary(QueuedWrite { op, reply }))
+            }
+            Ok(WriterMessage::Shutdown) => {
                 drain_submit_replies(receiver);
                 None
             }
-            None => None,
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => None,
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                tokio::select! {
+                    biased;
+                    message = receiver.recv() => match message {
+                        Some(WriterMessage::Submit { op, reply }) => Some(WriterWork::Primary(QueuedWrite { op, reply })),
+                        Some(WriterMessage::Shutdown) => {
+                            drain_submit_replies(receiver);
+                            None
+                        }
+                        None => None,
+                    },
+                    batch = diagnostic_receiver.recv(), if receiver.is_empty() => batch.map(WriterWork::Diagnostics),
+                }
+            }
         }
+    }
+}
+
+fn process_diagnostic_batch(
+    target: &SharedDbTarget,
+    connection: &mut SqliteConnection,
+    cache: &mut stmt_cache::WriterStatementCache,
+    batch: Vec<DiagnosticEvent>,
+    diagnostic_rows_since_prune: &mut usize,
+    diagnostic_stats: &DiagnosticTimelinePersistenceStats,
+) {
+    let batch_len = batch.len();
+    let should_prune =
+        diagnostic_rows_since_prune.saturating_add(batch_len) >= DIAGNOSTIC_PRUNE_CHECK_EVERY;
+    let operation = WriteOp::RecordDiagnostics(batch);
+    let result = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to open diagnostic timeline transaction",
+                error,
+            )
+        })
+        .and_then(|transaction| {
+            let result = ops::execute(&operation, &transaction, cache, target);
+            match result {
+                Ok(_) => {
+                    if should_prune {
+                        let _ = ops::execute(
+                            &WriteOp::PruneDiagnostics {
+                                now_unix_ms: chrono::Utc::now().timestamp_millis(),
+                            },
+                            &transaction,
+                            cache,
+                            target,
+                        )?;
+                    }
+                    transaction.commit().map_err(|error| {
+                        sqlite_error(target, "failed to commit diagnostic timeline batch", error)
+                    })
+                }
+                Err(error) => Err(error),
+            }
+        });
+    if let Err(error) = result {
+        diagnostic_stats
+            .persist_error_total
+            .fetch_add(batch_len as u64, Ordering::Relaxed);
+        tracing::warn!(origin = "timeline", code = "ATM_DIAGNOSTIC_PERSIST_FAILED", error = %error, "diagnostic timeline batch dropped");
+    } else if should_prune {
+        diagnostic_stats
+            .written_total
+            .fetch_add(batch_len as u64, Ordering::Relaxed);
+        *diagnostic_rows_since_prune = 0;
+    } else {
+        diagnostic_stats
+            .written_total
+            .fetch_add(batch_len as u64, Ordering::Relaxed);
+        *diagnostic_rows_since_prune += batch_len;
+    }
+}
+
+fn process_diagnostic_prune(
+    target: &SharedDbTarget,
+    connection: &mut SqliteConnection,
+    cache: &mut stmt_cache::WriterStatementCache,
+    now_unix_ms: i64,
+) -> Result<u64, AtmError> {
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            sqlite_error(target, "failed to open diagnostic prune transaction", error)
+        })?;
+    let result = ops::execute(
+        &WriteOp::PruneDiagnostics { now_unix_ms },
+        &transaction,
+        cache,
+        target,
+    )?;
+    transaction
+        .commit()
+        .map_err(|error| sqlite_error(target, "failed to commit diagnostic prune", error))?;
+    match result {
+        WriteOpResult::DiagnosticsPruned(deleted) => Ok(deleted),
+        other => Err(AtmError::daemon_unavailable(format!(
+            "sqlite writer returned the wrong result for diagnostic prune: {other:?}"
+        ))),
     }
 }
 
@@ -801,6 +973,126 @@ mod tests {
     use rusqlite::params;
     use serde_json::Map;
     use std::sync::atomic::{AtomicU64, Ordering};
+
+    #[test]
+    fn queued_primary_work_drains_before_a_full_diagnostic_lane() {
+        const PRIMARY_OPS: usize = 10_000;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("test runtime");
+        let (primary_tx, mut primary_rx) = tokio::sync::mpsc::channel(PRIMARY_OPS);
+        let (diagnostic_tx, mut diagnostic_rx) =
+            tokio::sync::mpsc::channel(DIAGNOSTIC_QUEUE_BATCHES);
+        for _ in 0..PRIMARY_OPS {
+            let (reply, _receiver) = mpsc::sync_channel(1);
+            primary_tx
+                .try_send(WriterMessage::Submit {
+                    op: Box::new(WriteOp::UpsertMessages(Vec::new())),
+                    reply: ReplyTx::Sync(reply),
+                })
+                .expect("primary queue capacity is sized for the test");
+        }
+        for _ in 0..DIAGNOSTIC_QUEUE_BATCHES {
+            diagnostic_tx
+                .try_send(DiagnosticWriterMessage::Records(vec![DiagnosticEvent {
+                    ts_unix_ms: 0,
+                    level: "warn".to_owned(),
+                    component: "writer-priority-test".to_owned(),
+                    code: None,
+                    correlation_id: None,
+                    origin: "tracing".to_owned(),
+                    message: "diagnostic".to_owned(),
+                    detail: None,
+                }]))
+                .expect("diagnostic queue capacity is exactly eight batches");
+        }
+        for _ in 0..PRIMARY_OPS {
+            assert!(matches!(
+                runtime.block_on(receive_next_work(
+                    &mut primary_rx,
+                    &mut diagnostic_rx,
+                    false
+                )),
+                Some(WriterWork::Primary(_))
+            ));
+        }
+        assert!(matches!(
+            runtime.block_on(receive_next_work(
+                &mut primary_rx,
+                &mut diagnostic_rx,
+                false
+            )),
+            Some(WriterWork::Diagnostics(DiagnosticWriterMessage::Records(_)))
+        ));
+    }
+
+    #[test]
+    fn ac3_primary_mailbox_insert_completes_while_diagnostic_lane_is_full() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("test runtime");
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:writer-ac3-non-interference-{}?mode=memory&cache=shared",
+                NEXT_TEST_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_writer_connection_for_target(&target).expect("writer connection");
+        ensure_schema(&mut connection, &target).expect("schema");
+        let mut cache = stmt_cache::WriterStatementCache;
+
+        let (primary_sender, mut primary_receiver) = tokio::sync::mpsc::channel(1);
+        let (diagnostic_sender, mut diagnostic_receiver) =
+            tokio::sync::mpsc::channel(DIAGNOSTIC_QUEUE_BATCHES);
+        for _ in 0..DIAGNOSTIC_QUEUE_BATCHES {
+            diagnostic_sender
+                .try_send(DiagnosticWriterMessage::Records(vec![DiagnosticEvent {
+                    ts_unix_ms: 0,
+                    level: "warn".to_owned(),
+                    component: "writer-ac3-non-interference".to_owned(),
+                    code: None,
+                    correlation_id: None,
+                    origin: "tracing".to_owned(),
+                    message: "diagnostic".to_owned(),
+                    detail: None,
+                }]))
+                .expect("fill the real bounded diagnostic channel");
+        }
+        assert!(matches!(
+            diagnostic_sender.try_send(DiagnosticWriterMessage::Records(Vec::new())),
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_))
+        ));
+
+        let (primary, reply) = queued_upsert(message("atm:ac3-primary"));
+        primary_sender
+            .try_send(WriterMessage::Submit {
+                op: primary.op,
+                reply: primary.reply,
+            })
+            .expect("admit primary write while diagnostics are saturated");
+
+        let Some(WriterWork::Primary(primary)) = runtime.block_on(receive_next_work(
+            &mut primary_receiver,
+            &mut diagnostic_receiver,
+            false,
+        )) else {
+            panic!("a saturated diagnostic lane must not prevent primary selection");
+        };
+        process_batch(&target, &mut connection, &mut cache, vec![primary]);
+
+        assert!(matches!(
+            reply.recv().expect("primary mailbox reply"),
+            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+        ));
+        let persisted: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM mail_messages WHERE message_key = ?1",
+                params!["atm:ac3-primary"],
+                |row| row.get(0),
+            )
+            .expect("count persisted primary mailbox row");
+        assert_eq!(persisted, 1);
+    }
 
     static NEXT_TEST_DB_ID: AtomicU64 = AtomicU64::new(1);
 

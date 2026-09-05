@@ -44,11 +44,13 @@ mod atm_temp_config;
 mod atm_temp_sweeper_runtime;
 mod bare_cli_runtime;
 mod daemon_observability;
+mod diagnostic_timeline;
 mod owner_gate;
 mod peer_launch_config;
 mod queue_drain;
 mod received_hook_selector;
 mod replacement_handler;
+mod sqlite_observability;
 
 use atm_temp_config::daemon_atm_config;
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
@@ -180,9 +182,23 @@ pub fn assemble_host_runtime_with_template_composer(
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
     template_composer: Option<Arc<dyn TemplateComposer>>,
 ) -> Result<RuntimeAssembly, AtmError> {
+    assemble_host_runtime_with_storage_factory(
+        config_current_dir,
+        non_claude_outbound,
+        template_composer,
+        SqliteStorageFactory::host_scoped(),
+    )
+}
+
+fn assemble_host_runtime_with_storage_factory(
+    config_current_dir: PathBuf,
+    non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
+    template_composer: Option<Arc<dyn TemplateComposer>>,
+    storage_factory: SqliteStorageFactory,
+) -> Result<RuntimeAssembly, AtmError> {
     assemble_runtime(RuntimeAssemblyInputs {
         host_runtime_scope: current_host_runtime_scope()?,
-        storage_factory: Arc::new(SqliteStorageFactory::host_scoped()),
+        storage_factory: Arc::new(storage_factory),
         config_current_dir,
         non_claude_outbound,
         template_composer,
@@ -208,8 +224,16 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 /// must not depend on that directory: [`RuntimeAssembly::for_daemon`] removes
 /// the workspace-backed config doctor before requests can be served.
 pub fn assemble_daemon_runtime() -> Result<RuntimeAssembly, AtmError> {
-    assemble_host_runtime(PathBuf::new(), Arc::new(LocalFileNonClaudeOutbound::new()))
-        .map(RuntimeAssembly::for_daemon)
+    let storage_factory = SqliteStorageFactory::host_scoped()
+        .with_observability(Arc::new(sqlite_observability::DaemonSqliteObservability))
+        .with_timeline_observer(Arc::new(diagnostic_timeline::attach_timeline));
+    assemble_host_runtime_with_storage_factory(
+        PathBuf::new(),
+        Arc::new(LocalFileNonClaudeOutbound::new()),
+        Some(template_composer()),
+        storage_factory,
+    )
+    .map(RuntimeAssembly::for_daemon)
 }
 
 /// Starts the replacement Tokio/Axum daemon as the only active serving path.

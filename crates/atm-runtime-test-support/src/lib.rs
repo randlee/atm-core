@@ -286,6 +286,12 @@ pub fn hold_sqlite_writer_lock(path: impl AsRef<Path>) -> Result<SqliteWriterLoc
         .map(|inner| SqliteWriterLockGuard { _inner: inner })
 }
 
+/// Returns the concrete lower-priority SQLite diagnostic queue bound for
+/// cross-crate saturation fixtures.
+pub fn diagnostic_queue_batches_for_test() -> usize {
+    atm_storage_rusqlite::diagnostic_queue_batches_for_test()
+}
+
 /// Configure the isolated SQLite fixture to reject every mailbox insert.
 ///
 /// This is a deterministic durable-write failure probe for adapter tests. It

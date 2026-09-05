@@ -9,11 +9,14 @@
 
 mod analyst_query;
 mod control_path_pool;
+mod diagnostic_timeline;
 mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;
 mod mail_messages_schema;
 #[cfg(test)]
 mod mailbox_metadata;
+#[cfg(test)]
+mod mailbox_metadata_types;
 mod mailbox_reader;
 mod nudge_template_override_store;
 mod observability;
@@ -31,6 +34,8 @@ mod shared_db_reader_lanes;
 mod team_roster_schema;
 mod template_catalog_schema;
 mod template_catalog_store;
+#[cfg(any(test, feature = "test-support"))]
+mod test_support;
 mod writer;
 
 pub use reader_pool::{ReaderLaneMetricsSnapshot, ReaderLanesMetricsSnapshot};
@@ -43,9 +48,10 @@ pub use crate::analyst_query::{
 };
 #[cfg(test)]
 use crate::mailbox_metadata::query_mailbox_metadata_rows;
+#[cfg(test)]
+pub use crate::observability::NullSqliteObservability;
 pub use crate::observability::{
-    NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
-    SqliteObservabilityOutcome,
+    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMailboxReader,
@@ -53,13 +59,15 @@ use atm_storage::contract::{
     MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 use atm_storage::schema::MessageEnvelope;
-#[cfg(test)]
-use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TemplateCatalogStore};
 use atm_storage::{
     AtmError, EffectiveReaderLane, EffectiveReaderLanes, IsoTimestamp, StorageFactory,
     StorageHandleParts, StorageHandles,
+};
+pub use diagnostic_timeline::{
+    DIAGNOSTIC_DETAIL_MAX_BYTES, DIAGNOSTIC_MAX_AGE_DAYS, DIAGNOSTIC_MAX_ROWS,
+    DIAGNOSTIC_PRUNE_BATCH, DIAGNOSTIC_PRUNE_CHECK_EVERY, SqliteDiagnosticTimeline,
 };
 use graft_receiver_endpoint_store::SqliteGraftReceiverEndpointStore;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -69,6 +77,12 @@ use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use template_catalog_store::template_catalog_store;
+#[cfg(any(test, feature = "test-support"))]
+pub use test_support::{
+    TemplateAdmissionMessage, TemplateAdmissionSnapshot, diagnostic_queue_batches_for_test,
+    inspect_template_admission_for_test,
+};
+pub use writer::DiagnosticTimelinePersistenceStats;
 
 #[cfg(any(test, feature = "test-support"))]
 #[derive(Debug)]
@@ -87,33 +101,6 @@ impl Drop for SqliteWriterLockGuard {
 #[cfg(any(test, feature = "test-support"))]
 pub struct TestOnlySqliteWriterLockGuard {
     _guard: SqliteWriterLockGuard,
-}
-
-/// Test-only projection of template-admission state.
-///
-/// Keeping this probe in SQLite test support lets the replacement HTTP runtime
-/// prove durable rows without importing SQLite or opening a database itself.
-#[doc(hidden)]
-#[cfg(any(test, feature = "test-support"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TemplateAdmissionSnapshot {
-    pub template_count: usize,
-    pub decomposed_count: usize,
-    pub messages: Vec<TemplateAdmissionMessage>,
-}
-
-/// One durable message projection returned by [`TemplateAdmissionSnapshot`].
-#[doc(hidden)]
-#[cfg(any(test, feature = "test-support"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TemplateAdmissionMessage {
-    pub message_key: String,
-    pub template_sha: Option<String>,
-    pub vars_json: Option<String>,
-    pub category: Option<String>,
-    pub content_format: Option<String>,
-    pub tags_json: String,
-    pub message_text: Option<String>,
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -137,73 +124,6 @@ pub fn hold_sqlite_writer_lock_for_test(
     path: impl AsRef<Path>,
 ) -> Result<TestOnlySqliteWriterLockGuard, AtmError> {
     hold_sqlite_writer_lock(path).map(|guard| TestOnlySqliteWriterLockGuard { _guard: guard })
-}
-
-/// Reads only durable template-admission projections for black-box tests.
-///
-/// Production code must use the sealed storage contracts. This helper is
-/// test-support-only so the Tokio HTTP runtime never owns a database handle.
-#[doc(hidden)]
-#[cfg(any(test, feature = "test-support"))]
-pub fn inspect_template_admission_for_test(
-    path: impl AsRef<Path>,
-    message_keys: &[String],
-) -> Result<TemplateAdmissionSnapshot, AtmError> {
-    let connection = Connection::open(path.as_ref()).map_err(|error| {
-        AtmError::mailbox_read(format!(
-            "failed to inspect template-admission fixture: {error}"
-        ))
-    })?;
-    let (template_count, decomposed_count): (i64, i64) = connection
-        .query_row(
-            "SELECT
-                (SELECT COUNT(*) FROM message_templates),
-                (SELECT COUNT(*) FROM decomposed_messages)",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .map_err(|error| {
-            AtmError::mailbox_read(format!(
-                "failed to count template-admission fixture rows: {error}"
-            ))
-        })?;
-    let messages = message_keys
-        .iter()
-        .map(|message_key| {
-            connection
-                .query_row(
-                    "SELECT message_key, template_sha, vars_json, category, content_format,
-                            tags_json, message_text
-                     FROM mail_messages WHERE message_key = ?1",
-                    params![message_key],
-                    |row| {
-                        Ok(TemplateAdmissionMessage {
-                            message_key: row.get(0)?,
-                            template_sha: row.get(1)?,
-                            vars_json: row.get(2)?,
-                            category: row.get(3)?,
-                            content_format: row.get(4)?,
-                            tags_json: row.get(5)?,
-                            message_text: row.get(6)?,
-                        })
-                    },
-                )
-                .map_err(|error| {
-                    AtmError::mailbox_read(format!(
-                        "failed to inspect template-admission message '{message_key}': {error}"
-                    ))
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(TemplateAdmissionSnapshot {
-        template_count: usize::try_from(template_count).map_err(|_| {
-            AtmError::mailbox_read("template-admission fixture count exceeds usize range")
-        })?,
-        decomposed_count: usize::try_from(decomposed_count).map_err(|_| {
-            AtmError::mailbox_read("template-admission fixture count exceeds usize range")
-        })?,
-        messages,
-    })
 }
 
 /// Installs a test-only SQLite trigger that deterministically rejects mailbox
@@ -233,28 +153,7 @@ pub fn install_message_write_failure_for_test(path: impl AsRef<Path>) -> Result<
 }
 
 #[cfg(test)]
-#[allow(
-    dead_code,
-    reason = "metadata positive-path fields are owned by the query DTO while current tests exercise malformed-row validation"
-)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SqliteMailboxMetadataRow {
-    pub message_key: MessageKey,
-    pub message_id: Option<AtmMessageId>,
-    pub parent_message_id: Option<AtmMessageId>,
-    pub thread_mode: Option<ThreadMode>,
-    pub from_agent: AgentName,
-    pub source_chat_id: Option<atm_storage::types::ChatId>,
-    pub destination_chat_id: Option<atm_storage::types::ChatId>,
-    pub summary: Option<String>,
-    pub message_at: IsoTimestamp,
-    pub read: bool,
-    pub requires_ack: bool,
-    pub pending_ack: bool,
-    pub acknowledged_at: Option<IsoTimestamp>,
-    pub expires_at: Option<IsoTimestamp>,
-    pub task_id: Option<atm_storage::types::TaskId>,
-}
+pub(crate) use mailbox_metadata_types::SqliteMailboxMetadataRow;
 
 #[derive(Debug)]
 struct SqliteMessageStore {
@@ -671,6 +570,7 @@ pub struct SqliteStorageBackend {
     message_search_store: Arc<dyn MessageSearchStore>,
     async_message_search_store: Arc<dyn AsyncMessageSearchStore>,
     async_mailbox_reader: Arc<dyn AsyncMailboxReader>,
+    diagnostic_timeline: Arc<SqliteDiagnosticTimeline>,
 }
 
 impl std::fmt::Debug for SqliteStorageBackend {
@@ -683,10 +583,44 @@ impl std::fmt::Debug for SqliteStorageBackend {
 
 /// Concrete SQLite selection owned by the SQLite backend and consumed only at
 /// an executable composition root through [`StorageFactory`].
-#[derive(Debug, Clone, Default)]
 pub struct SqliteStorageFactory {
     database_path: Option<PathBuf>,
     reader_lanes: reader_pool::ReaderLanesConfig,
+    observability: Arc<dyn SqliteObservability>,
+    timeline_observer: Option<Arc<dyn Fn(Arc<SqliteDiagnosticTimeline>) + Send + Sync>>,
+}
+
+impl Default for SqliteStorageFactory {
+    fn default() -> Self {
+        Self {
+            database_path: None,
+            reader_lanes: reader_pool::ReaderLanesConfig::default(),
+            observability: Arc::new(observability::PassiveSqliteObservability),
+            timeline_observer: None,
+        }
+    }
+}
+
+impl Clone for SqliteStorageFactory {
+    fn clone(&self) -> Self {
+        Self {
+            database_path: self.database_path.clone(),
+            reader_lanes: self.reader_lanes,
+            observability: Arc::clone(&self.observability),
+            timeline_observer: self.timeline_observer.as_ref().map(Arc::clone),
+        }
+    }
+}
+
+impl std::fmt::Debug for SqliteStorageFactory {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SqliteStorageFactory")
+            .field("database_path", &self.database_path)
+            .field("reader_lanes", &self.reader_lanes)
+            .field("timeline_observer", &self.timeline_observer.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 impl SqliteStorageFactory {
@@ -698,8 +632,25 @@ impl SqliteStorageFactory {
     pub fn at_path(path: impl Into<PathBuf>) -> Self {
         Self {
             database_path: Some(path.into()),
-            reader_lanes: reader_pool::ReaderLanesConfig::default(),
+            ..Self::default()
         }
+    }
+
+    /// Bootstrap supplies the retained JSONL adapter at the concrete storage
+    /// composition root. Tests retain the null adapter by default.
+    pub fn with_observability(mut self, observability: Arc<dyn SqliteObservability>) -> Self {
+        self.observability = observability;
+        self
+    }
+
+    /// Called after the backend opens so the bridge sink uses its existing
+    /// writer worker rather than creating a competing SQLite connection.
+    pub fn with_timeline_observer(
+        mut self,
+        observer: Arc<dyn Fn(Arc<SqliteDiagnosticTimeline>) + Send + Sync>,
+    ) -> Self {
+        self.timeline_observer = Some(observer);
+        self
     }
 
     #[allow(
@@ -733,10 +684,14 @@ impl StorageFactory for SqliteStorageFactory {
                 queue_depth: self.reader_lanes.search.queue_depth.get(),
             },
         };
-        let backend = SqliteStorageBackend::new_with_reader_lanes(
+        let backend = SqliteStorageBackend::new_with_observability_and_reader_lanes(
             self.database_path(durable_state_root),
+            Arc::clone(&self.observability),
             self.reader_lanes,
         )?;
+        if let Some(observer) = &self.timeline_observer {
+            observer(backend.diagnostic_timeline());
+        }
         Ok(StorageHandles::from_parts(StorageHandleParts {
             message_store: backend.message_store(),
             async_message_store: backend.async_message_store(),
@@ -756,18 +711,7 @@ impl StorageFactory for SqliteStorageFactory {
 
 impl SqliteStorageBackend {
     pub fn new(path: impl AsRef<Path>) -> Result<Self, AtmError> {
-        Self::new_with_observability(path, Arc::new(NullSqliteObservability))
-    }
-
-    pub(crate) fn new_with_reader_lanes(
-        path: impl AsRef<Path>,
-        reader_lanes: reader_pool::ReaderLanesConfig,
-    ) -> Result<Self, AtmError> {
-        Self::new_with_observability_and_reader_lanes(
-            path,
-            Arc::new(NullSqliteObservability),
-            reader_lanes,
-        )
+        Self::new_with_observability(path, Arc::new(observability::PassiveSqliteObservability))
     }
 
     pub fn new_with_observability(
@@ -781,7 +725,7 @@ impl SqliteStorageBackend {
         )
     }
 
-    fn new_with_observability_and_reader_lanes(
+    pub(crate) fn new_with_observability_and_reader_lanes(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
         reader_lanes: reader_pool::ReaderLanesConfig,
@@ -792,6 +736,9 @@ impl SqliteStorageBackend {
             reader_lanes,
         )?);
         Ok(Self {
+            diagnostic_timeline: Arc::new(SqliteDiagnosticTimeline::from_shared_db(Arc::clone(
+                &db,
+            ))),
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
             nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
@@ -813,6 +760,9 @@ impl SqliteStorageBackend {
     pub(crate) fn in_memory_for_test() -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_in_memory_for_test()?);
         Ok(Self {
+            diagnostic_timeline: Arc::new(SqliteDiagnosticTimeline::from_shared_db(Arc::clone(
+                &db,
+            ))),
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
             nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
@@ -840,6 +790,11 @@ impl SqliteStorageBackend {
 
     pub fn async_mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
         self.async_mailbox_reader.clone()
+    }
+
+    /// Best-effort diagnostic timeline sharing this backend's sole writer.
+    pub fn diagnostic_timeline(&self) -> Arc<SqliteDiagnosticTimeline> {
+        Arc::clone(&self.diagnostic_timeline)
     }
 
     pub fn save_message_record(
