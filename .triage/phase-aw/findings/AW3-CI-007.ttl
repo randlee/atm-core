@@ -18,7 +18,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T06:55:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AW2 ;
+  triage:foundIn triage:AW3 ;
   triage:foundAt "2026-09-05T06:48:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-007/AW3-1> ;
   triage:triageRecordVersion "1" .
