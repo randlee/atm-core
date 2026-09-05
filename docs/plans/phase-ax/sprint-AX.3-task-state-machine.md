@@ -196,7 +196,14 @@ shape-only completion fails the sprint.
   line 461 and `persist_send_message_async` in
   `crates/atm-core/src/send/async_persistence.rs` line 51) carry it. A request
   with both `task_id` and `task_complete` is rejected at validation.
-- [ ] D5 — write provenance carrier, code contract C6:
+- [ ] D5 — write provenance carrier, code contract C6. Merge-forward first:
+  AX.1 (landed on `feature/ax1-queue-template-class` at 1452df008) already
+  edits `prepare_persisted_write` and `prepare_persisted_write_async`
+  (`request.nudge_mode = send_mode_for_task_request(...)`, lines 526/595)
+  and `crates/atm-core/src/boundary/mod.rs`; merge that branch into this
+  worktree before touching either file, keep AX.1's lines verbatim, and
+  place the provenance edits after them (phase plan dependency
+  rationale AX.1→AX.3).
   `MessageWriteOrigin` in `crates/atm-storage/src/contract.rs`; two new
   defaulted methods, one per insert path:
   `MessageStore::save_message_if_absent_with_provenance` (sync trait,
