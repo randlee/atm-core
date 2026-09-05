@@ -293,7 +293,6 @@ dependencies = [
  "atm-herdr",
  "atm-runtime",
  "atm-runtime-test-support",
- "atm-storage",
  "axum",
  "base64",
  "fs4",

@@ -6,15 +6,18 @@
 //! `atm_storage::task_state` defines the pure, backend-neutral transition
 //! table this module's SQL mirrors; nothing here changes that table's rules.
 
-use super::ops::{execute_upsert_message, load_existing_message, mark_source_acknowledged};
+use super::ops::{
+    WriteOp, execute_upsert_message, load_existing_message, load_pending_ack_source,
+    mark_source_acknowledged,
+};
 use super::stmt_cache::WriterStatementCache;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
-use atm_storage::MessageWriteOrigin;
 use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
 use atm_storage::schema::AtmMessageId;
 use atm_storage::task_state::{TaskEvent, TaskRow, TaskState, Transition, admit, transition};
 use atm_storage::types::{AgentName, TaskId, TeamName};
+use atm_storage::{AtmErrorCode, MessageWriteOrigin};
 use rusqlite::{Connection, OptionalExtension, params};
 
 const TASK_RECOVERY: &str = "Run: atm list --task-events <task_id> --member <assignee>";
@@ -75,6 +78,74 @@ fn transition_for(
 ) -> Result<Transition, AtmError> {
     admit(row, open, event, actor).map_err(|error| error.into_atm_error())?;
     transition(row.map(|task| task.state), event).map_err(|error| error.into_atm_error())
+}
+
+/// Writes the durable rejection audit after the failed operation's savepoint
+/// has rolled back its tentative message/reply mutations. The outer writer
+/// transaction remains open, so the audit row commits atomically with no
+/// rejected message becoming visible to callers.
+pub(super) fn append_rejected_task_event(
+    op: &WriteOp,
+    connection: &Connection,
+    target: &SharedDbTarget,
+    error: &AtmError,
+) -> Result<(), AtmError> {
+    if error.code() != AtmErrorCode::MessageValidationFailed {
+        return Ok(());
+    }
+    let (team, task_id, assignee, actor, message_id) = match op {
+        WriteOp::UpsertMessage { record, provenance }
+            if *provenance == MessageWriteOrigin::Local =>
+        {
+            let Some(task_id) = record
+                .envelope
+                .task_id
+                .as_ref()
+                .or(record.envelope.task_complete.as_ref())
+            else {
+                return Ok(());
+            };
+            (
+                record.team.clone(),
+                task_id.clone(),
+                record.agent.clone(),
+                record.envelope.from.clone(),
+                record.envelope.message_id,
+            )
+        }
+        WriteOp::Acknowledge { source, .. } => {
+            let source = load_pending_ack_source(source, connection, target)?;
+            let Some(task_id) = source.envelope.task_id.clone() else {
+                return Ok(());
+            };
+            (
+                source.team,
+                task_id,
+                source.agent.clone(),
+                source.agent,
+                source.envelope.message_id,
+            )
+        }
+        _ => return Ok(()),
+    };
+    let row = load_task_row(connection, target, &team, &task_id, &assignee)?;
+    let at = atm_storage::types::IsoTimestamp::now().to_string();
+    append_task_event(
+        connection,
+        target,
+        team.as_str(),
+        task_id.as_str(),
+        assignee.as_str(),
+        &at,
+        "rejected",
+        row.as_ref().map(|row| state_name(row.state)),
+        row.as_ref().map(|row| state_name(row.state)),
+        actor.as_str(),
+        message_id,
+        None,
+        None,
+        Some(error.message()),
+    )
 }
 
 /// Applies the only local message-insert task transitions. This function runs

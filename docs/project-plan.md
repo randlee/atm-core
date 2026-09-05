@@ -1618,7 +1618,7 @@ Phase AX sprint status:
 | --- | --- | --- | --- | --- | --- |
 | `AX.1` | A | parallel with AX.3/AX.4 | `planned` | `feature/ax1-queue-template-class` | `docs/plans/phase-ax/sprint-AX.1-queue-template-class.md`, ADR-019 amendment |
 | `AX.2` | A | after AX.1; parallel with AX.3/AX.4 | `planned` | `feature/ax2-herdr-template-rendering` | `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md`, ADR-058 amendment, `boundaries/atm-herdr/herdr-process-adapter.toml`, `docs/atm-herdr/requirements.md` |
-| `AX.3` | B | parallel with AX.1/AX.2 | `planned` | `feature/ax3-task-state-machine` | `docs/plans/phase-ax/sprint-AX.3-task-state-machine.md`, `docs/adr/ADR-061-task-state-machine.md`, ADR-054 amendment, `boundaries/atm-storage/task-store.toml`, `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` |
+| `AX.3` | B | parallel with AX.1/AX.2 | `complete` | `feature/ax3-task-state-machine` | `docs/plans/phase-ax/sprint-AX.3-task-state-machine.md`, `docs/adr/ADR-061-task-state-machine.md`, ADR-054 amendment, `boundaries/atm-storage/task-store.toml`, `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` |
 | `AX.4` | B | after AX.3; parallel with AX.1/AX.2 | `planned` | `feature/ax4-task-cli-and-docs` | `docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md`, `docs/user-documents/tasks.md` |
 | `AX.5` | C | after A and B merge | `planned` | `feature/ax5-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md`, ADR-061 reminder-cycle section |
 | `AX.6` | C | after AX.5 | `planned` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |

@@ -464,7 +464,7 @@ pub(super) fn mark_source_acknowledged(source: &mut Message, now: IsoTimestamp) 
     source.envelope.acknowledged_at = Some(now);
 }
 
-fn load_pending_ack_source(
+pub(super) fn load_pending_ack_source(
     source: &AcknowledgementSource,
     connection: &Connection,
     target: &SharedDbTarget,

@@ -5,7 +5,7 @@ title: Task state machine and storage
 branch: feature/ax3-task-state-machine
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ax3-task-state-machine
 integration_branch: integrate/phase-ax
-status: draft
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: B

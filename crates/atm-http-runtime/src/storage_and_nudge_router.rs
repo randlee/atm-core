@@ -1130,6 +1130,7 @@ mod tests {
     use atm_core::send::{
         MessageClassification, NudgeMode, SendMessageSource, TemplateSendSource, WriteRequest,
     };
+    use atm_core::test_support as atm_storage;
     use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime::{
@@ -1564,6 +1565,19 @@ mod tests {
             home_dir,
             current_dir,
         }
+    }
+
+    #[test]
+    fn router_fixture_retains_the_composed_task_store() {
+        let fixture = fixture(false, None, None);
+        let team: TeamName = "test-team".parse().expect("team");
+        assert!(
+            fixture
+                .task_store
+                .list_tasks(&team, None)
+                .expect("task-store list")
+                .is_empty()
+        );
     }
 
     fn pending_store_with_failures(
