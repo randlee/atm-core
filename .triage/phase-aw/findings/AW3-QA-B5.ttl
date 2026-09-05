@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW3-QA-B5>
+  a triage:Finding ;
+  triage:findingId "AW3-QA-B5" ;
+  triage:title "RULE-003 file-size ceiling exceeded in two in-diff files: atm-http-runtime lib.rs (1041 non-test lines) and storage_and_nudge_router.rs (1167)" ;
+  triage:description "qa-pr1182-r1 (msg 01M1QSQWFKBENPSW4ZP83SKMYS) at 199a3bfeb: req-qa ATM-QA-202/203 and arch-qa ARCH-001/002 independently corroborated: crates/atm-http-runtime/src/lib.rs is at 1041 non-test lines and storage_and_nudge_router.rs at 1167 against the 1000-line RULE-003 cap. The overage is pre-existing but this sprint's diagnostic/health wiring landed inside both files rather than in new modules; both are in-diff so the zero-tolerance policy applies. Fix: extract the AW.3 diagnostics/health wiring (and enough adjacent content) into new modules so both files are under the cap; behavior-preserving move only." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint-file-size" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T03:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T03:25:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-B5/AW3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-B5/AW3-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW3-QA-B5/AW3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "non-test lines 1041 > 1000" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "199a3bfeb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .
+
+<urn:atm:triage:occurrence/AW3-QA-B5/AW3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 1 ;
+  triage:snippet "non-test lines 1167 > 1000" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "199a3bfeb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .
+
+<urn:atm:triage:worktree/AW3/199a3bfeb>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "199a3bfeb" ;
+  triage:orderIndex 4 .
