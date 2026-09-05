@@ -1019,9 +1019,10 @@ mod tests {
     use atm_storage::types::{AgentName, IsoTimestamp, ModelName, TeamName};
     use atm_storage::{
         AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
-        DecomposedMessageRecord, InstanceTag, MergedVarsJson, MessageSearchQuery, SearchAtom,
-        SearchDeadline, SearchExpression, SearchGroupBy, SearchGroupField, SearchKey, SearchLimit,
-        SearchMetadataMatch, SearchValue, SimpleAggregate, StorageFactory, TemplateFirstSeen,
+        DecomposedMessageRecord, InstanceTag, MemberKey, MergedVarsJson, MessageSearchQuery,
+        MessageWriteOrigin, SearchAtom, SearchDeadline, SearchExpression, SearchGroupBy,
+        SearchGroupField, SearchKey, SearchLimit, SearchMetadataMatch, SearchValue,
+        SimpleAggregate, StorageFactory, TaskEventKind, TaskState, TemplateFirstSeen,
         TemplateFrontmatter, TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
         TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
     };
@@ -3459,6 +3460,86 @@ mod tests {
                 .expect("load reply"),
             Some(committed.reply),
             "the reply derived from the transaction-loaded source is durable"
+        );
+    }
+
+    #[test]
+    fn task_messages_transition_locally_and_peer_receipts_do_not_create_rows() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let tasks = backend.task_store();
+        let task_id: atm_storage::TaskId = "AX.3".parse().expect("task id");
+        let lead: AgentName = "lead".parse().expect("lead");
+        let member = MemberKey::new(team(), agent());
+
+        let assignment_id = AtmMessageId::new();
+        let mut assignment = message(&format!("atm:{assignment_id}"), "first assignment");
+        assignment.envelope.message_id = Some(assignment_id);
+        assignment.envelope.from = lead.clone();
+        assignment.envelope.task_id = Some(task_id.clone());
+        assignment.envelope.requires_ack = true;
+        assignment.envelope.pending_ack_at = Some(IsoTimestamp::now());
+        store.save_message(&assignment).expect("assign task");
+
+        let assigned = tasks
+            .load_task(&member, &task_id)
+            .expect("load assigned task")
+            .expect("task row");
+        assert_eq!(assigned.state, TaskState::Assigned);
+        assert_eq!(assigned.assignment_message_id, assignment_id);
+
+        let resend_id = AtmMessageId::new();
+        let mut resend = message(&format!("atm:{resend_id}"), "refreshed assignment");
+        resend.envelope.message_id = Some(resend_id);
+        resend.envelope.from = lead.clone();
+        resend.envelope.task_id = Some(task_id.clone());
+        store.save_message(&resend).expect("resend task");
+        let refreshed = tasks
+            .load_task(&member, &task_id)
+            .expect("load refreshed task")
+            .expect("task row");
+        assert_eq!(refreshed.state, TaskState::Assigned);
+        assert_eq!(refreshed.assignment_message_id, resend_id);
+        assert_eq!(refreshed.description, "refreshed assignment");
+
+        let mut completion = message("atm:complete-task", "completed");
+        completion.envelope.from = lead;
+        completion.envelope.task_complete = Some(task_id.clone());
+        store
+            .save_message(&completion)
+            .expect("complete task as assigner");
+        let completed = tasks
+            .load_task(&member, &task_id)
+            .expect("load completed task")
+            .expect("task row");
+        assert_eq!(completed.state, TaskState::Complete);
+        assert!(
+            store
+                .load_message(&resend.message_key)
+                .expect("load refreshed assignment")
+                .expect("assignment")
+                .envelope
+                .acknowledged_at
+                .is_some()
+        );
+        let events = tasks
+            .list_task_events(&team(), &task_id, Some(&agent()))
+            .expect("task events");
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[1].event, TaskEventKind::Assigned);
+        assert_eq!(events[2].event, TaskEventKind::Completed);
+
+        let peer_task: atm_storage::TaskId = "AX.3-peer".parse().expect("peer task");
+        let mut peer = message("atm:peer-task", "peer receipt");
+        peer.envelope.task_id = Some(peer_task.clone());
+        store
+            .save_message_if_absent_with_provenance(&peer, MessageWriteOrigin::Peer)
+            .expect("persist peer receipt");
+        assert!(
+            tasks
+                .load_task(&member, &peer_task)
+                .expect("load peer task")
+                .is_none()
         );
     }
 
