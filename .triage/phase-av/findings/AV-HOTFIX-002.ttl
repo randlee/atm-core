@@ -54,17 +54,23 @@
 #    test/smoke path that wrote 'peer.example.test' into the real ~/.atm
 #    store and add a guard so a fixture host can never land in the real
 #    store again.
-# 3. OUT OF SCOPE (for now): a doctor warning when advertise_host is a bare
-#    IP is not yet ruled on; leave out of scope unless Rand adds it later.
+# 3. SUPERSEDED by addendum below (2026-09-05T19:07Z) -- a doctor warning
+#    for bare-IP advertise_host is now approved scope; see item 5.
 # 4. Manual live cleanup on rand-m4 (revoke peer.example.test trust entry;
 #    change advertise_host from 192.168.128.82 to rand-m4.local) was
 #    assigned by Rand to team-lead@rand-m5, not this (rand-m4) session --
 #    tracked there, not duplicated here. Do NOT touch either host's
 #    localhost trust entry; it carries that host's own cert and is required
 #    for loopback.
-# Items 1-2 above are approved fix scope for code changes (fingerprint
-# validation + test isolation guard); dispatch remains held pending
-# consolidation onto one fix branch with other approved cross-host items.
+# 5. ADDENDUM (Rand, relayed via fenix, 2026-09-05T19:07Z), approved fix
+#    scope: a bare-IP advertise_host is APPROVED as a doctor WARNING only --
+#    flag it for cleanup and suggest a host name -- and must NOT be
+#    prohibited or rejected anywhere else (config load, peer interface add,
+#    and the send path must all keep accepting a bare-IP advertise_host).
+# Items 1, 2, and 5 above are approved fix scope for code changes
+# (fingerprint validation + test isolation guard + bare-IP advertise_host
+# doctor warning); dispatch remains held pending consolidation onto one fix
+# branch with other approved cross-host items.
 
 <urn:atm:triage:occurrence/AV-HOTFIX-002/AV-HOTFIX-002-1>
   a triage:Occurrence ;
