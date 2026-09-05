@@ -34,7 +34,7 @@ use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
 use crate::RuntimeHealth;
 use crate::bare_cli_fifo::{BareCliFifo, BareCliQueueFullDrops, drain_bare_cli_messages};
-use crate::doctor_observability::append_counter_finding;
+use crate::doctor_observability::{append_counter_finding, degraded_sources};
 
 fn retry_deferred_marker<F>(health: &RuntimeHealth, mut mark: F) -> Result<(), AtmError>
 where
@@ -727,6 +727,17 @@ impl StorageAndNudgeRouter {
             .expect("projection retains runtime status");
         report.herdr_queue_pump.last_tick_at = runtime_status.herdr_queue_last_tick_at;
         report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
+        report.observability.jsonl.forwarded_total = diagnostic_counters.jsonl_forwarded_total;
+        report.observability.jsonl.dropped_queue_full_total =
+            diagnostic_counters.jsonl_dropped_queue_full_total;
+        report.observability.jsonl.dropped_reentrant_total =
+            diagnostic_counters.jsonl_dropped_reentrant_total;
+        report.observability.timeline.written_total = diagnostic_counters.timeline_written_total;
+        report.observability.timeline.dropped_queue_full_total =
+            diagnostic_counters.timeline_dropped_queue_full_total;
+        report.observability.timeline.dropped_persist_error_total =
+            diagnostic_counters.timeline_dropped_persist_error_total;
+        report.observability.degraded = degraded_sources(diagnostic_counters);
         append_counter_finding(&mut report.findings, diagnostic_counters);
         Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
@@ -1149,6 +1160,7 @@ mod tests {
         PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
+    use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
     use atm_core::protocol::{
         GraftReceiverRegistration, GraftReceiverUnregistration, HeartbeatActivity, OwnerGeneration,
         QueueGetNextRequest, QueuedNudgeMessage, RequestEnvelope, ResponseEnvelope,
@@ -1200,6 +1212,14 @@ mod tests {
         saw_durable_record: AtomicBool,
         failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
+    }
+
+    struct CounterFixture(DiagnosticCounters);
+
+    impl DiagnosticCountersSource for CounterFixture {
+        fn snapshot(&self) -> DiagnosticCounters {
+            self.0
+        }
     }
 
     struct CancellationMarker(Arc<AtomicBool>);
@@ -2376,6 +2396,13 @@ mod tests {
             .clone()
             .with_doctor_projection(Arc::new(doctor_projection))
             .with_daemon_context(daemon_context.clone())
+            .with_diagnostic_counters(Arc::new(CounterFixture(DiagnosticCounters {
+                jsonl_forwarded_total: 13,
+                jsonl_dropped_reentrant_total: 1,
+                timeline_written_total: 11,
+                timeline_dropped_persist_error_total: 1,
+                ..DiagnosticCounters::default()
+            })))
             .dispatch(
                 ApiRequest::new(atm_core::protocol::RequestEnvelope::Doctor(
                     atm_core::doctor::DoctorQuery::default(),
@@ -2390,6 +2417,11 @@ mod tests {
                 assert_eq!(report.daemon_context, Some(daemon_context));
                 assert_eq!(report.herdr_queue_pump.last_tick_at, None);
                 assert_eq!(report.herdr_queue_pump.breaker, report.herdr_breaker);
+                assert_eq!(report.observability.jsonl.forwarded_total, 13);
+                assert_eq!(report.observability.jsonl.dropped_reentrant_total, 1);
+                assert_eq!(report.observability.timeline.written_total, 11);
+                assert_eq!(report.observability.timeline.dropped_persist_error_total, 1);
+                assert_eq!(report.observability.degraded, ["jsonl", "timeline"]);
             }
             other => panic!("expected doctor report, got {other:?}"),
         }

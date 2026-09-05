@@ -383,8 +383,12 @@ fn print_doctor_summary(report: &DoctorReport) {
 }
 
 fn print_doctor_observability(report: &DoctorReport) {
-    println!(
-        "Active log path: {}",
+    print!("{}", render_doctor_observability(report));
+}
+
+fn render_doctor_observability(report: &DoctorReport) -> String {
+    let mut output = format!(
+        "Active log path: {}\n",
         report
             .observability
             .active_log_path
@@ -393,7 +397,7 @@ fn print_doctor_observability(report: &DoctorReport) {
             .unwrap_or_else(|| "<unavailable>".to_string())
     );
     if let Some(maintenance) = &report.observability.maintenance {
-        println!(
+        output.push_str(&format!(
             "Maintenance: {} | Rotated: {} | Pruned: {} | Last pass: {}",
             render_maintenance_state(maintenance.state),
             maintenance.rotated_files_total,
@@ -402,8 +406,16 @@ fn print_doctor_observability(report: &DoctorReport) {
                 .last_pass_at
                 .map(|timestamp| timestamp.into_inner().to_string())
                 .unwrap_or_else(|| "never".to_string())
-        );
+        ));
+        output.push('\n');
     }
+    if !report.observability.degraded.is_empty() {
+        output.push_str(&format!(
+            "WARN: Retained observability degraded: {}\n",
+            report.observability.degraded.join(", ")
+        ));
+    }
+    output
 }
 
 fn print_doctor_environment(report: &DoctorReport) {

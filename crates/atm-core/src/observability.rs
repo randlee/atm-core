@@ -562,6 +562,22 @@ pub struct AtmObservabilityDiagnostic {
     pub message: String,
 }
 
+/// Process-owned JSONL retained-log counters projected by daemon doctor.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AtmJsonlObservabilityCounters {
+    pub forwarded_total: u64,
+    pub dropped_queue_full_total: u64,
+    pub dropped_reentrant_total: u64,
+}
+
+/// Process-owned timeline counters projected by daemon doctor.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AtmTimelineObservabilityCounters {
+    pub written_total: u64,
+    pub dropped_queue_full_total: u64,
+    pub dropped_persist_error_total: u64,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AtmMaintenanceWorkerState {
@@ -591,6 +607,12 @@ pub struct AtmObservabilityHealth {
     pub query_state: Option<AtmObservabilityHealthState>,
     pub maintenance: Option<AtmMaintenanceHealthReport>,
     pub diagnostic: Option<AtmObservabilityDiagnostic>,
+    #[serde(default)]
+    pub jsonl: AtmJsonlObservabilityCounters,
+    #[serde(default)]
+    pub timeline: AtmTimelineObservabilityCounters,
+    #[serde(default)]
+    pub degraded: Vec<String>,
     pub detail: Option<String>,
 }
 
@@ -707,6 +729,9 @@ impl ObservabilityPort for NullObservability {
             query_state: Some(AtmObservabilityHealthState::Unavailable),
             maintenance: None,
             diagnostic: None,
+            jsonl: Default::default(),
+            timeline: Default::default(),
+            degraded: Vec::new(),
             detail: Some("observability adapter is not configured".to_string()),
         })
     }

@@ -182,6 +182,8 @@ impl QueryArgs {
     }
 
     fn graft_fallback_records(&self) -> Result<Vec<TimelineRecord>> {
+        let since = self.since.as_deref().map(parse_since_millis).transpose()?;
+        let until = self.until.as_deref().map(parse_since_millis).transpose()?;
         let path = atm_observability::graft_fallback_log_path(&atm_core::home::host_log_dir()?);
         let contents = match std::fs::read_to_string(path) {
             Ok(contents) => contents,
@@ -196,7 +198,7 @@ impl QueryArgs {
                     .ok()
                     .and_then(|value| TimelineRecord::from_graft_value(value, seq))
             })
-            .filter(|record| self.record_matches(record))
+            .filter(|record| self.record_matches(record, since, until))
             .take(self.limit.unwrap_or(DEFAULT_SNAPSHOT_LIMIT).min(5_000))
             .collect())
     }
@@ -239,7 +241,12 @@ impl QueryArgs {
             .collect())
     }
 
-    fn record_matches(&self, record: &TimelineRecord) -> bool {
+    fn record_matches(
+        &self,
+        record: &TimelineRecord,
+        since: Option<i64>,
+        until: Option<i64>,
+    ) -> bool {
         self.component
             .as_ref()
             .is_none_or(|component| record.component.starts_with(component))
@@ -248,6 +255,8 @@ impl QueryArgs {
                     .levels
                     .iter()
                     .any(|level| level_name(*level) == record.level))
+            && since.is_none_or(|timestamp| record.ts_unix_ms >= timestamp)
+            && until.is_none_or(|timestamp| record.ts_unix_ms <= timestamp)
     }
 
     fn build_query(&self, mode: LogMode) -> Result<AtmLogQuery> {
@@ -610,6 +619,9 @@ mod tests {
                 query_state: Some(AtmObservabilityHealthState::Healthy),
                 maintenance: None,
                 diagnostic: None,
+                jsonl: Default::default(),
+                timeline: Default::default(),
+                degraded: Vec::new(),
                 detail: None,
             })
         }
@@ -697,6 +709,34 @@ mod tests {
         .expect("valid graft event");
         assert_eq!(record.source, "graft");
         assert_eq!(record.seq, 3);
+    }
+
+    #[test]
+    fn merged_graft_records_honor_shared_time_bounds() {
+        let args = QueryArgs {
+            source: LogSource::Merged,
+            levels: Vec::new(),
+            matches: Vec::new(),
+            since: None,
+            until: None,
+            component: None,
+            limit: None,
+            json: false,
+        };
+        let record = TimelineRecord::from_graft_value(
+            serde_json::json!({
+                "ts_unix_ms": 42,
+                "level": "info",
+                "component": "atm_graft",
+                "message": "bounded fallback",
+            }),
+            0,
+        )
+        .expect("valid graft event");
+
+        assert!(args.record_matches(&record, Some(42), Some(42)));
+        assert!(!args.record_matches(&record, Some(43), None));
+        assert!(!args.record_matches(&record, None, Some(41)));
     }
 
     #[test]
