@@ -147,8 +147,8 @@
   triage:file "crates/atm/src/main.rs" ;
   triage:line 333 ;
   triage:snippet "fn logger_root_for_log_dir(log_dir: &Path) -> Result<PathBuf, AtmError> { shared_logger_root_for_log_dir(log_dir) }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "d9fa67fcc" ;
   triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
@@ -164,13 +164,19 @@
 # the two authoritative main.rs passthroughs are removed; call sites now use
 # atm_observability directly. The unrelated graft-python wrapper occurrence
 # above remains separately fixed. QA owns closure.
+#
+# quality-mgr, 2026-09-05, qa-pr1215-r3: independently confirmed via direct
+# diff (d9fa67fcc..f3345fa70) -- both wrapper functions removed from
+# crates/atm/src/main.rs, no shared_logger_* aliasing remains, call sites at
+# main.rs:303-304,344 use atm_observability::{logger_root_for_log_dir,
+# logger_level_override} directly. C15 genuinely closed. Closing below.
 <urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-c15-mainrs-qa-r3>
   a triage:Occurrence ;
   triage:file "crates/atm/src/main.rs" ;
   triage:line 303 ;
   triage:snippet "LoggerConfig::default_for(service_name.clone(), logger_root_for_log_dir(log_dir)?)" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "f3345fa70" ;
   triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/f3345fa70> .
@@ -181,7 +187,7 @@
   triage:line 344 ;
   triage:snippet "with_max_level(atm_observability::logger_level_override()?.unwrap_or(SharedLevelFilter::Info))" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "f3345fa70" ;
   triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/f3345fa70> .
