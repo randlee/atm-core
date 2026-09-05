@@ -22,7 +22,7 @@ io_forbidden = ["daemon_request_dispatch", "daemon_transport", "direct_sqlite_io
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core", "atm-observability", "atm-herdr", "atm-http-runtime", "atm-runtime", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "chrono", "fs4", "peer-tls", "sc-observability", "sc-observability-types", "serial_test", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
+allowed_dependencies = ["atm-core", "atm-observability", "atm-herdr", "atm-http-runtime", "atm-runtime", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "chrono", "fs4", "peer-tls", "sc-observability-types", "serial_test", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
 forbidden_edges = ["atm-daemon-bootstrap -> atm-graft"]
 
 [references]
