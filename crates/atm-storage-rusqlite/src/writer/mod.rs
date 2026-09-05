@@ -1045,6 +1045,58 @@ mod tests {
     use serde_json::Map;
     use std::sync::atomic::{AtomicU64, Ordering};
 
+    #[test]
+    fn queued_primary_work_drains_before_a_full_diagnostic_lane() {
+        const PRIMARY_OPS: usize = 10_000;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("test runtime");
+        let (primary_tx, mut primary_rx) = tokio::sync::mpsc::channel(PRIMARY_OPS);
+        let (diagnostic_tx, mut diagnostic_rx) =
+            tokio::sync::mpsc::channel(DIAGNOSTIC_QUEUE_BATCHES);
+        for _ in 0..PRIMARY_OPS {
+            let (reply, _receiver) = mpsc::sync_channel(1);
+            primary_tx
+                .try_send(WriterMessage::Submit {
+                    op: Box::new(WriteOp::UpsertMessages(Vec::new())),
+                    reply: ReplyTx::Sync(reply),
+                })
+                .expect("primary queue capacity is sized for the test");
+        }
+        for _ in 0..DIAGNOSTIC_QUEUE_BATCHES {
+            diagnostic_tx
+                .try_send(DiagnosticWriterMessage::Records(vec![DiagnosticEvent {
+                    ts_unix_ms: 0,
+                    level: "warn".to_owned(),
+                    component: "writer-priority-test".to_owned(),
+                    code: None,
+                    correlation_id: None,
+                    origin: "tracing".to_owned(),
+                    message: "diagnostic".to_owned(),
+                    detail: None,
+                }]))
+                .expect("diagnostic queue capacity is exactly eight batches");
+        }
+        for _ in 0..PRIMARY_OPS {
+            assert!(matches!(
+                runtime.block_on(receive_next_work(
+                    &mut primary_rx,
+                    &mut diagnostic_rx,
+                    false
+                )),
+                Some(WriterWork::Primary(_))
+            ));
+        }
+        assert!(matches!(
+            runtime.block_on(receive_next_work(
+                &mut primary_rx,
+                &mut diagnostic_rx,
+                false
+            )),
+            Some(WriterWork::Diagnostics(DiagnosticWriterMessage::Records(_)))
+        ));
+    }
+
     static NEXT_TEST_DB_ID: AtomicU64 = AtomicU64::new(1);
 
     fn message(key: &str) -> Message {
