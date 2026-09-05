@@ -157,51 +157,53 @@ Today `crates/atm-herdr` has no version constant and a mismatch surfaces
 only as `HerdrError::ProtocolMismatch`. AY.1 lands rules 1 to 5 for the
 CLI transport; AY.3 extends the same matrix to the direct socket client.
 
-### Mechanism: versioned protocol adapters, selected per call (Rand's question, 2026-09-05)
+### Mechanism: low-code by design (Rand, 2026-09-05)
 
-Version handling is a second seam next to the transport, not a set of
-`if version >= x` branches scattered through the client:
+Rand's constraint: "complicated logic managing change that will rarely
+occur is maintenance we do not want to be involved with." The drift
+review supports a minimal design: across v0.8.0, v0.8.2 and master
+3a822e81 the five commands atm uses have identical argv, JSON shapes,
+exit codes and error codes; the only behaviour change is when a
+`--wait` ends in `timeout` versus `agent_prompt_stalled`. So the
+mechanism is:
 
-- **Two traits.** `HerdrTransport` moves bytes (CLI child process today,
-  socket/pipe in AY.3). `HerdrProtocolAdapter` gives those bytes their
-  meaning for one Herdr behaviour epoch: request -> argv/NDJSON,
-  response -> `AgentSnapshot`/`HerdrError`, and the `--wait` outcome
-  rules. One adapter per epoch, not per patch release: `v0_8_0` (0.8.0
-  through 0.8.2 semantics) and `v0_8_3` (master after 8633a398/7916be16)
-  today; a new adapter is added only when the drift check finds a
-  behaviour atm must absorb. Adapters are ordinary injectable
-  implementations, so a test can inject a fake adapter or a fake
-  transport independently.
-- **All supported adapters are compiled into one daemon build** (rule 1)
-  and registered in a `HerdrAdapterRegistry` at composition time. What is
-  injected at startup is the registry and a `HerdrVersionResolver`, not
-  a chosen version.
-- **Selection is per call, from the live Herdr.** Every call already
-  spawns a fresh `herdr` process (or, in AY.3, opens a fresh connection
-  and pings), so there is no session state that would pin a version.
-  CLI transport: the version is the resolved binary's `herdr --version`,
-  which equals the server's whenever a call can succeed at all (Herdr's
-  own CLI/server equality check, see "PROTOCOL_VERSION and
-  compatibility"); it is re-read whenever the resolved binary path or
-  its mtime changes, after any `protocol_mismatch`, and on every breaker
-  half-open transition, otherwise cached. Socket transport: `ping.version`
-  on each connection. The resolver maps the version to the newest
-  adapter whose epoch floor it meets; a version below
-  `HERDR_MINIMUM_VERSION` is a `ServerUnavailable`-class failure with the
-  version in the cause and a doctor finding.
-- **Consequence for upgrades:** Herdr upgrading, or downgrading, while
-  the daemon runs requires **no daemon restart**. The next call after the
-  change selects the matching adapter; the only visible effect is the
-  transient `protocol_mismatch` window Herdr itself creates when the CLI
-  binary and the still-running old server differ, which the breaker and
-  doctor already cover. A Herdr release newer than every known epoch is
-  served by the newest adapter (additive adoption, rule 3); the drift
-  check, not the daemon, decides whether a new epoch is needed.
-- **Tests (AY.1):** the conformance suite runs every adapter against its
-  per-version fake (rule 4); a lifecycle test switches the fake Herdr's
-  reported version between two calls with the daemon running and asserts
-  the adapter changes with no restart and no breaker trip; a
-  below-minimum fake asserts the doctor finding and the failure class.
+1. **One implementation, version-agnostic by construction.** No adapter
+   registry, no per-version code paths, no version chosen at startup and
+   none negotiated per call. The single Herdr client keys on error
+   *codes* (never message text), ignores unknown JSON fields (serde
+   default), and treats `timeout` and `agent_prompt_stalled` as the same
+   atm outcome ("prompt produced no activity", already the case for the
+   queue pump and reminder cadence, which re-nudge pending mail). That
+   one collapse absorbs the only known behaviour drift with zero
+   version logic. Herdr upgrading or downgrading while the daemon runs
+   therefore needs **no daemon restart and no code**: the next call is a
+   fresh process against whatever Herdr is there.
+2. **`HERDR_MINIMUM_VERSION` is a doctor check, not a runtime branch.**
+   Doctor runs `herdr --version` (CLI transport) or reads `ping.version`
+   (AY.3) and reports below-minimum as a finding with the remedy. The
+   daemon does not gate calls on it: a too-old Herdr fails on its own
+   terms (unknown flag, exit 2) and the breaker/doctor already surface
+   that.
+3. **Drift is managed as process and data, not code.** Rule 4's
+   `docs/atm-herdr/herdr-versions.md` records, per Herdr release, the
+   observed argv and JSON for the five commands; the fake-herdr fixture
+   replays those recordings, so the conformance suite is data-driven and
+   adding a Herdr version is adding a recording, not code. Rule 5's
+   sprint-start drift check is a `git diff` on the client-facing paths
+   plus a reviewer reading it.
+4. **Escalation path when drift is not absorbable.** If a future Herdr
+   changes something the single implementation cannot tolerate (a
+   renamed command, a removed field atm relies on, a new exit-code
+   meaning), that is the moment to decide with Rand between raising
+   `HERDR_MINIMUM_VERSION` (rule 2) and introducing a second
+   implementation behind the existing transport seam. The seam exists
+   for the transport (CLI vs socket); a version seam is added only when
+   a second implementation actually exists, never speculatively.
+5. **Tests (AY.1):** conformance replay of each recorded Herdr version
+   through the one implementation; a lifecycle test where the fake
+   Herdr switches its recorded version between two calls with the
+   daemon running and both calls succeed with no restart; a
+   below-minimum fake asserting the doctor finding.
 
 Windows note: 0.8.0 is the minimum for macOS and Linux. `herdr.exe` is a
 released artifact from v0.8.2 onward (9fac5172 "make Windows generally
@@ -421,11 +423,11 @@ installed, doctor prints one line "herdr: not configured".
 
 - The daemon builds the Herdr traits from configuration and roster data
   at composition time (the single `HerdrProcessInvoker::new` site in
-  `atm-daemon-bootstrap/src/replacement_handler.rs` today), including the
-  adapter registry for every supported Herdr epoch. No probe, no wait, no
-  launch, and no version is chosen at startup: the adapter is selected
-  per call from the live Herdr, so a Herdr upgrade while the daemon runs
-  needs no daemon restart. Readiness does not depend on Herdr in any way.
+  `atm-daemon-bootstrap/src/replacement_handler.rs` today). No probe, no
+  wait, no launch, and no Herdr version is chosen at startup: every call
+  is a fresh process against whatever Herdr is there, so a Herdr upgrade
+  while the daemon runs needs no daemon restart. Readiness does not
+  depend on Herdr in any way.
 - Normal case: Herdr started at login and owns the default session
   socket; the daemon starts under launchd afterwards in the same user
   session with no Herdr variables in its environment; the `herdr` client
@@ -497,6 +499,85 @@ started on a named session while atm is configured for the default, or a
 different account on Windows). Doctor is where that shows up, as a
 `server_not_running` probe result next to the configured values.
 
+## Upgrade and restart coordination (normative)
+
+Rand, 2026-09-05: "This needs to be well understood so other users have a
+good user experience." Herdr facts this section rests on (master
+3a822e81; `docs/next/website/src/content/docs/session-state.mdx:14-15,91-103`,
+`troubleshooting.mdx:62-71`, `src/update.rs:835-1220`,
+`src/cli/server.rs:196-259`):
+
+- `herdr update` without `--handoff` keeps a compatible running server
+  and, for a restart-required server, needs a stop/restart. **Stopping a
+  Herdr server exits every pane process**, i.e. every agent in that
+  session; session restore then rebuilds panes and resumes agents that
+  have official session references.
+- `herdr update --handoff` (experimental, opt-in) performs a live
+  handoff: pane PTYs and processes, agent identity and durable metadata
+  survive the server replacement. In-flight CLI/API requests and waits
+  may be interrupted; "clients should reconnect and retry". The running
+  server advertises `capabilities.live_handoff`.
+- After an update without a restart, the updated `herdr` binary rejects
+  every command against the old server with `protocol_mismatch` (see
+  "PROTOCOL_VERSION and compatibility").
+
+What atm does in each case. None requires an atm daemon restart and none
+is initiated by the daemon; every row reuses behaviour that already
+exists (breaker, queue pump, reminder cadence, AX.6 escalation notify,
+doctor).
+
+| Event | atm daemon | Agents in panes | Operator experience |
+|---|---|---|---|
+| Herdr updated, old compatible server kept running | Herdr nudges fail `ProtocolMismatch`; breaker opens; mail stays queued | Unaffected | `atm doctor`: "Herdr binary X, running server Y: run `herdr update --handoff` or restart Herdr"; one lead notification (HR-CORE-010 channel, no mail body) when the breaker opens; nudges resume within one backoff window after the restart |
+| `herdr update --handoff` | A call in flight fails with an infrastructure-class error; **a prompt whose submission is unknown is never retried automatically** (prompts are not idempotent); the queue pump and reminder cadence re-nudge pending mail, which is idempotent | Survive | Nothing to do; at most one reminder cadence of delay |
+| Herdr server stopped and restarted without handoff | `ServerNotRunning` during the stop, then `AgentNotFound`/`AgentNotRunning` for panes that did not come back; mail stays queued; the AX.5 reminder threshold and AX.6 escalation notify the lead about members that stay unreachable | Exit; restored only as far as Herdr's session restore reaches | `atm doctor` lists Herdr members with no live pane; the lead is escalated through the existing channel |
+| System restart | Started by the atm service entry | Restarted by Herdr's start-at-login entry and session restore | Order between the two entries does not matter |
+| atm daemon upgrade (`daemon-switch`) | Restarted by `daemon-switch` as today; queued mail persists in SQLite; the pump drains it after startup | Unaffected (atm is a client) | Herdr is never restarted for an atm upgrade |
+| Both upgraded together | Coordinated restart below | | |
+
+Coordinated restart (Rand's suggestion; operator-invoked, thin wrapper,
+no daemon logic). When atm is Herdr-configured, `daemon-switch` gains an
+explicit `--restart-herdr` step, run before the atm daemon restart:
+
+1. If the running Herdr advertises `live_handoff`, run `herdr update
+   --handoff` (or `herdr server live-handoff` when the binary is already
+   updated) so agent panes survive; report Herdr's own result and stop
+   on failure (Herdr's rollback owns the socket state).
+2. Otherwise print that stopping the server exits every agent pane and
+   require an explicit `--stop-herdr-panes` acknowledgement before
+   stopping the server (`herdr server stop`, or `herdr session stop
+   <name>` for a configured session) and relaunching it through the
+   installed start-at-login entry (`launchctl kickstart` on macOS, the
+   user unit on Linux, `schtasks /Run` on Windows).
+3. Restart the atm daemon as today. The daemon knows nothing about
+   steps 1 and 2; it finds a working Herdr on its first call.
+
+`daemon-switch` never does this implicitly, the daemon never does it at
+all, and the flag is rejected when atm is not Herdr-configured. This
+keeps ruling 1 (atm is a client) and gives operators one command for the
+"update both" case. Implementation budget: shell-level sequencing of
+existing Herdr commands plus string output; no new state, no polling
+loops beyond Herdr's own completion.
+
+User-experience contract (AY.1 acceptance, verified by req-qa):
+
+- `atm doctor` herdr section always ends in exactly one of these states,
+  each with the remedy on the same line: OK (version, transport); not
+  configured; binary not found (searched paths); below
+  `HERDR_MINIMUM_VERSION` (version, minimum); Herdr not running (`herdr
+  server` or the start-at-login entry); Herdr updated but the running
+  server is old (`herdr update --handoff` or restart Herdr); configured
+  session/socket not reachable (values, provenance).
+- The lead notification on breaker-open carries the same state text,
+  once per open, never the mail body (HR-SAFE-003).
+- Lifecycle tests: fake Herdr enters the mismatch state mid-run (breaker
+  opens, doctor text, one notification, recovery on the next half-open);
+  fake Herdr resets the connection during a `wait` (no duplicate prompt,
+  pending mail re-nudged by the pump); daemon restarted with queued mail
+  (backlog drains); `daemon-switch --restart-herdr` rejected on a
+  not-configured host and refused without `--stop-herdr-panes` when the
+  fake Herdr lacks `live_handoff`.
+
 ## Sprint AY.1: transport seam, portable fixtures, startup/failure model (size M, no Windows machine)
 
 Branch `feature/ay1-herdr-transport-seam` off `integrate/phase-ay`.
@@ -549,17 +630,9 @@ Deliverables:
        fn kind(&self) -> HerdrTransportKind;            // Cli | Socket
        fn config(&self) -> &HerdrClientConfig;
        async fn execute(&self, request: &HerdrRequest, deadline: Deadline) -> Result<HerdrRawResponse, HerdrError>;
-       async fn observed_version(&self) -> Result<HerdrVersion, HerdrError>; // `herdr --version` (Cli) / ping.version (Socket)
+       async fn observed_version(&self) -> Result<HerdrVersion, HerdrError>; // doctor only: `herdr --version` (Cli) / ping.version (Socket)
    }
-   /// One implementation per Herdr behaviour epoch; all compiled in, selected per call.
-   pub trait HerdrProtocolAdapter: Send + Sync {
-       fn epoch_floor(&self) -> HerdrVersion;           // v0_8_0: 0.8.0, v0_8_3: first release after 8633a398
-       fn encode(&self, request: &HerdrRequest) -> HerdrEncodedRequest;      // argv or NDJSON line
-       fn decode_snapshot(&self, raw: &HerdrRawResponse) -> Result<AgentSnapshot, HerdrError>;
-       fn decode_wait(&self, raw: &HerdrRawResponse) -> Result<WaitOutcome, HerdrError>; // epoch-specific --wait rules
-   }
-   pub struct HerdrAdapterRegistry { adapters: Vec<Box<dyn HerdrProtocolAdapter>> } // newest epoch whose floor <= version
-   pub const HERDR_MINIMUM_VERSION: HerdrVersion = HerdrVersion::new(0, 8, 0);
+   pub const HERDR_MINIMUM_VERSION: HerdrVersion = HerdrVersion::new(0, 8, 0); // doctor check, not a runtime branch
    // HerdrError: the existing closed enum in lib.rs, unchanged
    // (AgentBlocked, AgentNotFound, AgentNotReady, AgentTargetAmbiguous, AgentNotRunning,
    //  AgentPromptStalled, ServerNotRunning, ProtocolMismatch, Timeout, InvalidAgentName,
@@ -568,9 +641,8 @@ Deliverables:
 
    `HerdrRequest -> argv` (today's builders at lib.rs:631-657) and
    `HerdrRawResponse -> AgentSnapshot / HerdrError` (parsers at 675-770)
-   move into the `v0_8_0` adapter unchanged (pure motion) and stay
-   transport-independent; the `v0_8_3` adapter differs only in
-   `decode_wait`. The io::Error to `HerdrError`
+   stay in lib.rs unchanged (pure motion) and transport-independent;
+   `timeout` and `agent_prompt_stalled` map to the same atm outcome. The io::Error to `HerdrError`
    translation lives in the transport. Notify has no sound field: the
    argv stays exactly `notification show <title> --body <body> --sound
    request` (HR-CORE-010, boundary note). Shape mirrors `Http1Acceptor`
@@ -599,15 +671,16 @@ Deliverables:
    a trailing `\r`. HR-TEST-006 ("CI never depends on Herdr being
    installed") still holds. No-flaky rule: deterministic fake, injected
    deadlines, hard bounds, nothing may block forever.
-4. **Startup/failure model.** Implements the normative section: one
+4. **Startup/failure model.** Implements the normative sections: one
    `HerdrCliTransport` construction site in `build_replacement_handler`
-   fed by `HerdrClientConfig`, alongside the `HerdrAdapterRegistry` and
-   `HerdrVersionResolver` (all epochs registered; selection per call, no
-   restart on Herdr upgrade); `daemon-switch` Herdr start-at-login
-   entry (install/remove, per-user only, refuse session-0/service on
-   Windows); doctor `herdr` section as specified; lifecycle tests (a)-(d)
-   as real-startup integration tests with negative proof, per the
-   daemon-composed-feature rule.
+   fed by `HerdrClientConfig` (no version chosen at startup; no restart
+   on Herdr upgrade); `daemon-switch` Herdr start-at-login entry
+   (install/remove, per-user only, refuse session-0/service on Windows)
+   and the `--restart-herdr` step; doctor `herdr` section with the seven
+   terminal states; one lead notification per breaker-open through the
+   AX.6 HR-CORE-010 path; lifecycle tests (a)-(d) plus the
+   upgrade/restart tests as real-startup integration tests with negative
+   proof, per the daemon-composed-feature rule.
 5. **Docs.** Delete the three scope-out statements; add HR-PLAT-001
    (identical command set, error table and breaker semantics on all
    platforms; transport differences never surface as feature
@@ -859,7 +932,12 @@ AX does not wait on any AY sprint.
    the user opens): the entry has no KeepAlive, the loser exits 1 once,
    the GUI attaches as a client to whichever server won, and the daemon
    is indifferent to which one it was. Doctor shows the probe result.
-10. Herdr not running for a long stretch: nudges on the Herdr harness
+10. Herdr update leaves an old server running (Herdr's default since
+    cc88b3b8): every nudge fails until someone restarts Herdr. Controls:
+    doctor state text, one lead notification per breaker-open,
+    `daemon-switch --restart-herdr` preferring live handoff so agent panes
+    survive.
+11. Herdr not running for a long stretch: nudges on the Herdr harness
     fail fast under the open breaker while mail still queues; the
     reminder cycle drains the backlog when Herdr returns. Operators see
     it in doctor, not in a dead daemon.
@@ -913,10 +991,16 @@ AX does not wait on any AY sprint.
   conformance fixture per supported version; `schema-reviewer` (PR #1218)
   checks this at plan and phase-end review. Landed in AY.1 (rules 1-5),
   extended by AY.3.
-- Rand, 2026-09-05 (questions on API change management): answered by
-  "Mechanism: versioned protocol adapters, selected per call": registry
-  of epoch adapters injected at composition, version observed per call,
-  no daemon restart on Herdr upgrade.
+- Rand, 2026-09-05 (API change management; then "low-code solution"):
+  r4 proposed per-epoch adapters with a registry; r5 replaces that with
+  the low-code mechanism (one version-agnostic implementation, doctor-only
+  minimum check, data-driven conformance recordings, seam added only when
+  a second implementation exists). No daemon restart on Herdr upgrade.
+- Rand, 2026-09-05 (restart coordination, user experience, low-code):
+  "Upgrade and restart coordination" added: no atm restart on Herdr
+  upgrade; operator-invoked `daemon-switch --restart-herdr` preferring
+  Herdr live handoff; seven doctor states; one lead notification per
+  breaker-open; lifecycle tests.
 - Rand, 2026-09-05: plan not approved yet; startup and environment
   concerns; atm must not own Herdr; no hard gate; launchd installs Herdr
   entry only when configured, mirrored in daemon-switch; late Herdr
