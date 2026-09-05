@@ -658,11 +658,14 @@ Common preconditions:
   round-trip report to rand-m4 or rand-m5. Owner: Rand. Target date: set
   by Rand in this line when known.
 - P-D: the Windows dev agent is named here (ATM identity on the FastPC4
-  team, agent kind) by Rand. Dispatch path (Rand, 2026-09-05): ssh into
-  FastPC4 over the VPN, run by Rand, available today; `herdr` runs over
-  that ssh session. fenix hands Rand the rendered j2 assignment; ATM
-  cross-host delivery to `<agent>@atm-dev.fastpc4` is used when the link
-  is up and the reporter relays the last assignment id when it is not.
+  team, agent kind) by Rand. Dispatch path (Rand, 2026-09-05): Rand
+  establishes the VPN connection; fenix (the atm team on rand-m5) then
+  sshes into FastPC4 without a password and manages a remote Herdr pane
+  there directly (`herdr agent ...` over ssh), so the FastPC4 dev agent
+  is driven by fenix, not relayed through Rand. j2 assignments still go
+  over ATM to `<agent>@atm-dev.fastpc4` when the cross-host link is up;
+  the ssh path is the fallback and the pane-management channel. The
+  parked reporter agent remains the source of truth for evidence.
 
 Common acceptance for every sprint: merge gate 0 blocking / 0 important /
 0 minor in scope, quality-mgr PASS posted on the PR, CI green at merge
@@ -1211,8 +1214,9 @@ AX does not wait on any AY sprint.
   gh-stack stacking rule (link only; merge commits; never rebase/sync),
   recommended agents, and per-sprint deliverables/acceptance/validation
   lists.
-- Rand, 2026-09-05 (relayed by team-lead): FastPC4 dispatch is ssh over
-  VPN run by Rand (P-D updated); the LaunchAgent/user-unit start-at-login
+- Rand, 2026-09-05 (relayed by team-lead, then corrected directly):
+  FastPC4 dispatch is ssh over VPN run by fenix (Rand brings up the VPN,
+  passwordless ssh, fenix manages the remote Herdr pane) (P-D updated); the LaunchAgent/user-unit start-at-login
   entry (RunAtLoad, no KeepAlive) is the decided mechanism, "leave it to
   the user" rejected. Decisions go to Rand directly from now on.
 - Rand, 2026-09-05: plan not approved yet; startup and environment
