@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA4-001>
+  a triage:Finding ;
+  triage:findingId "AX5-QA4-001" ;
+  triage:title "record_task_outcome duplicates the outcome stats match block and cooldown stamp verbatim in its write-failure and write-success paths" ;
+  triage:description "AX.5 QA-4 (quality-mgr ax5-qa-r4, PR #1201 Final Quality Report 2026-09-05T15:36Z) at head 4e9f6602fd8c37340cced7e4c7725aae48434ea9; rust-qa-agent observation, recorded by fenix per the no-dismissal rule at minor severity. After the AX5-QA3-005 fix, record_task_outcome (crates/atm-http-runtime/src/herdr_queue_wake.rs:555-578) contains two byte-for-byte identical match outcome blocks followed by self.stamp_task_attempt(member, now), one inside the if !record_task_reminder(..) early-return branch and one after it. Behaviour is correct and covered by ax5_10, but the duplication is exactly the drift surface that produced AX5-QA3-005. Fix: collapse to a single shared block (compute the write result, then run one match+stamp), keeping the 32 herdr_queue_wake tests green. Consolidated-cleanup default applies: fix on the highest open sprint branch (AX.6) or in the CLEANUP pass, not by reopening AX.5." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RUST-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T15:36:11Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T15:36:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA4-001/AX5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA4-001/AX5-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA4-001/AX5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 564 ;
+  triage:snippet "ReminderOutcome::Unrenderable => stats.task_reminders_unrenderable += 1," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "4e9f6602fd8c37340cced7e4c7725aae48434ea9" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5/4e9f660> .
+
+<urn:atm:triage:occurrence/AX5-QA4-001/AX5-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 575 ;
+  triage:snippet "ReminderOutcome::Unrenderable => stats.task_reminders_unrenderable += 1," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "4e9f6602fd8c37340cced7e4c7725aae48434ea9" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5/4e9f660> .
+
+<urn:atm:triage:worktree/AX5/4e9f660>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX5" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "4e9f6602fd8c37340cced7e4c7725aae48434ea9" ;
+  triage:orderIndex 5 .
