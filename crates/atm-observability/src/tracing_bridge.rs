@@ -77,6 +77,19 @@ pub enum DropReason {
 
 /// AW.2's bounded diagnostic timeline hook.
 pub trait DiagnosticSink: Send + Sync {
+    /// ```
+    /// use std::sync::Arc;
+    /// use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
+    /// use atm_observability::{DiagnosticSink, DropReason, RetainedEvent, SinkOffer};
+    /// struct Timeline;
+    /// impl DiagnosticSink for Timeline {
+    ///     fn offer(&self, _: &RetainedEvent<'_>) -> SinkOffer {
+    ///         SinkOffer::Dropped(DropReason::Disabled)
+    ///     }
+    /// }
+    /// fn snapshot(source: &dyn DiagnosticCountersSource) -> DiagnosticCounters { source.snapshot() }
+    /// let _: Arc<dyn DiagnosticSink> = Arc::new(Timeline);
+    /// ```
     fn offer(&self, event: &RetainedEvent<'_>) -> SinkOffer;
 }
 
@@ -85,7 +98,42 @@ pub struct TracingBridgeStats {
     pub forwarded_total: AtomicU64,
     pub dropped_queue_full_total: AtomicU64,
     pub dropped_reentrant_total: AtomicU64,
+    /// Invalid IDs are not silently discarded when a tracing field cannot
+    /// satisfy the shared correlation-ID contract.
+    pub dropped_invalid_correlation_id_total: AtomicU64,
     pub sink_dropped_total: AtomicU64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum EventOrigin {
+    Tracing,
+    Sqlite,
+    Timeline,
+    Other(String),
+}
+
+impl EventOrigin {
+    fn from_field(value: Option<String>) -> Self {
+        match value.as_deref() {
+            None | Some("tracing") => Self::Tracing,
+            Some("sqlite") => Self::Sqlite,
+            Some("timeline") => Self::Timeline,
+            Some(value) => Self::Other(value.to_owned()),
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Tracing => "tracing",
+            Self::Sqlite => "sqlite",
+            Self::Timeline => "timeline",
+            Self::Other(value) => value,
+        }
+    }
+
+    fn skips_diagnostic_sink(&self) -> bool {
+        matches!(self, Self::Sqlite | Self::Timeline)
+    }
 }
 
 impl DiagnosticCountersSource for TracingBridgeStats {
@@ -179,7 +227,17 @@ impl TracingBridgeLayer {
     fn forward_retained(&self, retained: RetainedTracingEvent) {
         let code = retained.field_string("code");
         let correlation_id = retained.field_string("correlation_id");
-        let log_event = retained.log_event(correlation_id);
+        let correlation_id =
+            correlation_id.and_then(|value| match CorrelationId::new(value.to_owned()) {
+                Ok(value) => Some(value),
+                Err(_) => {
+                    self.stats
+                        .dropped_invalid_correlation_id_total
+                        .fetch_add(1, Ordering::Relaxed);
+                    None
+                }
+            });
+        let log_event = retained.log_event(correlation_id.clone());
         match self.logger.try_log(log_event) {
             RetainedLogOffer::Accepted => {
                 self.stats.forwarded_total.fetch_add(1, Ordering::Relaxed)
@@ -192,8 +250,7 @@ impl TracingBridgeLayer {
             }
             RetainedLogOffer::Rejected { .. } => return,
         };
-        if retained.origin != "sqlite"
-            && retained.origin != "timeline"
+        if !retained.origin.skips_diagnostic_sink()
             && let Ok(slot) = self.sink.read()
             && let Some(sink) = slot.as_ref()
         {
@@ -203,8 +260,8 @@ impl TracingBridgeLayer {
                 level: retained.level,
                 component: &retained.component,
                 code,
-                correlation_id,
-                origin: &retained.origin,
+                correlation_id: correlation_id.as_ref().map(|value| value.as_str()),
+                origin: retained.origin.as_str(),
                 message: &retained.message,
                 fields: &retained.fields,
             };
@@ -221,7 +278,7 @@ struct RetainedTracingEvent {
     timestamp: Timestamp,
     level: Level,
     component: String,
-    origin: String,
+    origin: EventOrigin,
     message: String,
     fields: Vec<(&'static str, FieldValue)>,
 }
@@ -231,11 +288,9 @@ impl RetainedTracingEvent {
         let mut visitor = RetainedVisitor::default();
         event.record(&mut visitor);
         let component = event.metadata().target().to_string();
-        let origin = visitor
-            .take_string("origin")
-            .unwrap_or_else(|| "tracing".to_string());
+        let origin = EventOrigin::from_field(visitor.take_string("origin"));
         let message = visitor.message.take().unwrap_or_default();
-        let fields = visitor.into_fields(&component, &origin);
+        let fields = visitor.into_fields(&component, origin.as_str());
         Self {
             timestamp: Timestamp::now_utc(),
             level: map_level(event.metadata().level()),
@@ -251,7 +306,7 @@ impl RetainedTracingEvent {
             .find(|(key, _)| *key == name)
             .and_then(|(_, value)| value.as_str())
     }
-    fn log_event(&self, correlation_id: Option<&str>) -> LogEvent {
+    fn log_event(&self, correlation_id: Option<CorrelationId>) -> LogEvent {
         let mut json_fields = Map::new();
         for (key, value) in &self.fields {
             json_fields.insert((*key).to_string(), value.clone());
@@ -268,8 +323,7 @@ impl RetainedTracingEvent {
             identity: ProcessIdentity::default(),
             trace: None,
             request_id: None,
-            correlation_id: correlation_id
-                .and_then(|value| CorrelationId::new(value.to_owned()).ok()),
+            correlation_id,
             outcome: None,
             diagnostic: None,
             state_transition: None,
@@ -352,5 +406,185 @@ impl Visit for RetainedVisitor {
     }
     fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
         self.keep(field, Value::String(format!("{value:?}")));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    use tempfile::TempDir;
+    use tracing_subscriber::prelude::*;
+
+    use super::{EMITTING, EventOrigin, RetainedVisitor, TracingBridgeLayer, should_retain};
+    use crate::{RetainedLogPolicy, RetainedLogger, build_retained_logger};
+
+    fn bridge() -> (TempDir, Arc<TracingBridgeLayer>) {
+        let tempdir = TempDir::new().expect("tempdir");
+        let logger = build_retained_logger(
+            sc_observability_types::ServiceName::new("atm").expect("service"),
+            &tempdir.path().join("logs"),
+            RetainedLogPolicy {
+                rotation_max_bytes: 1024 * 1024,
+                rotation_max_files: 2,
+                retention_max_age: Duration::from_secs(60),
+                maintenance_cadence: Duration::from_secs(60),
+                writer_shutdown_timeout: Duration::from_secs(1),
+                maintenance_max_work_per_pass: Some(2),
+            },
+        )
+        .expect("logger");
+        (tempdir, Arc::new(TracingBridgeLayer::new(Arc::new(logger))))
+    }
+
+    fn with_bridge(bridge: &Arc<TracingBridgeLayer>, f: impl FnOnce()) {
+        tracing::subscriber::with_default(
+            tracing_subscriber::Registry::default().with((**bridge).clone()),
+            f,
+        );
+    }
+
+    fn lines(tempdir: &TempDir, expected: usize) -> String {
+        let path = tempdir.path().join("logs/atm.log.jsonl");
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let content = fs::read_to_string(&path).unwrap_or_default();
+            if content.lines().count() >= expected || Instant::now() >= deadline {
+                return content;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn ac1_warn_and_error_runtime_events_retain_contract_fields() {
+        let (tempdir, bridge) = bridge();
+        with_bridge(&bridge, || {
+            tracing::warn!(target: "atm_http_runtime::delivery", code = "ATM_HTTP_WARN", correlation_id = "c-http", "http warning");
+            tracing::error!(target: "atm_runtime::dispatch", code = "ATM_RUNTIME_ERROR", correlation_id = "c-runtime", "runtime error");
+            tracing::warn!(target: "atm_storage_rusqlite::maintenance", code = "ATM_STORAGE_WARN", correlation_id = "c-storage", "storage warning");
+        });
+        let content = lines(&tempdir, 3);
+        for expected in [
+            "atm_http_runtime::delivery",
+            "atm_runtime::dispatch",
+            "atm_storage_rusqlite::maintenance",
+            "\"origin\":\"tracing\"",
+            "\"correlation_id\":\"c-http\"",
+        ] {
+            assert!(
+                content.contains(expected),
+                "missing {expected} in {content}"
+            );
+        }
+    }
+
+    #[test]
+    fn ac2_filters_unlisted_info_and_retains_all_configured_targets() {
+        let (tempdir, bridge) = bridge();
+        with_bridge(&bridge, || {
+            tracing::info!(target: "outside::allowlist", "excluded");
+            tracing::info!(target: "atm_daemon_bootstrap::lifecycle", "daemon");
+            tracing::info!(target: "atm_http_runtime::listener", "listener");
+            tracing::info!(target: "atm_storage_rusqlite::maintenance", "maintenance");
+        });
+        let content = lines(&tempdir, 3);
+        assert!(!content.contains("excluded"), "{content}");
+        for target in [
+            "atm_daemon_bootstrap::lifecycle",
+            "atm_http_runtime::listener",
+            "atm_storage_rusqlite::maintenance",
+        ] {
+            assert!(content.contains(target), "missing {target} in {content}");
+        }
+    }
+
+    #[test]
+    fn ac3_reentrancy_guard_counts_nested_event_without_recursion() {
+        let (_tempdir, bridge) = bridge();
+        EMITTING.with(|flag| {
+            assert!(!flag.replace(true));
+            with_bridge(
+                &bridge,
+                || tracing::warn!(target: "atm_http_runtime::listener", "nested"),
+            );
+            flag.set(false);
+        });
+        assert_eq!(
+            bridge
+                .stats()
+                .dropped_reentrant_total
+                .load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
+    }
+
+    #[test]
+    fn ac4_queue_full_offer_is_non_blocking() {
+        let bridge = TracingBridgeLayer::new(Arc::new(RetainedLogger::queue_full_for_test()));
+        let start = Instant::now();
+        tracing::subscriber::with_default(
+            tracing_subscriber::Registry::default().with(bridge.clone()),
+            || tracing::warn!(target: "atm_http_runtime::listener", "queue pressure"),
+        );
+        assert!(start.elapsed() < Duration::from_secs(1));
+        assert_eq!(
+            bridge
+                .stats()
+                .dropped_queue_full_total
+                .load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
+    }
+
+    #[test]
+    fn ac5_removes_sensitive_fields_and_values() {
+        let (tempdir, bridge) = bridge();
+        with_bridge(
+            &bridge,
+            || tracing::warn!(target: "atm_http_runtime::delivery", body = "body-secret", recipient = "recipient-secret", token = "token-secret", env = "env-secret", code = "ATM_REDACTION", "redact"),
+        );
+        let content = lines(&tempdir, 1);
+        for secret in [
+            "body-secret",
+            "recipient-secret",
+            "token-secret",
+            "env-secret",
+        ] {
+            assert!(!content.contains(secret), "secret leaked: {content}");
+        }
+    }
+
+    #[test]
+    fn ac7_second_global_install_is_rejected() {
+        let (_tempdir, first) = bridge();
+        assert!(TracingBridgeLayer::install(Arc::clone(&first.logger)).is_ok());
+        let (_tempdir, second) = bridge();
+        assert!(matches!(
+            TracingBridgeLayer::install(Arc::clone(&second.logger)),
+            Err(super::BridgeError::AlreadyInstalled)
+        ));
+    }
+
+    #[test]
+    fn typed_origins_and_invalid_correlation_ids_are_explicit() {
+        assert!(EventOrigin::from_field(Some("sqlite".to_string())).skips_diagnostic_sink());
+        assert!(!EventOrigin::from_field(Some("tracing".to_string())).skips_diagnostic_sink());
+        let (_tempdir, bridge) = bridge();
+        with_bridge(
+            &bridge,
+            || tracing::warn!(target: "atm_http_runtime::listener", correlation_id = "", "bad correlation"),
+        );
+        assert_eq!(
+            bridge
+                .stats()
+                .dropped_invalid_correlation_id_total
+                .load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
+        assert!(should_retain(&tracing::Level::WARN, "unlisted::target"));
+        let _visitor = RetainedVisitor::default();
     }
 }

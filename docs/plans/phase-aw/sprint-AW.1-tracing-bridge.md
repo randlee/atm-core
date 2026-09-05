@@ -83,7 +83,7 @@ parallel_safe: []
    - `[dependencies].allowed_dependencies` = the exact dependency set of
      `crates/atm-observability/Cargo.toml` after this sprint: today
      `atm-core`, `sc-observability-types` plus the additions
-     `sc-observability`, `tracing`, `tracing-subscriber` (the PR must show
+     `sc-observability`, `serde_json`, `tracing`, `tracing-subscriber` (the PR must show
      the TOML and the manifest agree; `lint_boundaries.py` fails otherwise);
    - `forbidden_edges = ["atm-daemon -> atm-observability",
      "atm-observability -> atm-daemon-bootstrap",

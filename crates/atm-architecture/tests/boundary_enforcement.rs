@@ -3959,6 +3959,30 @@ fn tracing_bridge_is_installed_only_by_daemon_bootstrap() {
     );
 }
 
+#[test]
+fn retained_info_targets_each_have_a_real_runtime_emitter() {
+    let root = workspace_root();
+    for (target, path) in [
+        (
+            "atm_daemon_bootstrap::lifecycle",
+            "crates/atm-daemon-bootstrap/src/lib.rs",
+        ),
+        (
+            "atm_http_runtime::listener",
+            "crates/atm-http-runtime/src/runtime_setup.rs",
+        ),
+        (
+            "atm_storage_rusqlite::maintenance",
+            "crates/atm-storage-rusqlite/src/mail_messages_schema.rs",
+        ),
+    ] {
+        assert!(
+            read_source(&root.join(path)).contains(&format!("tracing::info!(target: \"{target}\"")),
+            "{target} must have a real INFO emitter in {path}"
+        );
+    }
+}
+
 /// AV.3 source-scanner primitives deliberately operate on function bodies,
 /// rather than the whole router file. The residual control-path bridge stays
 /// in that file after AV.1b, so file-wide token checks would either reject an

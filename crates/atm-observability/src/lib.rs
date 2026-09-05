@@ -14,7 +14,13 @@ use sc_observability_types::DiagnosticInfo;
 
 /// Opaque shared retained logger handle. Its concrete backend is deliberately
 /// confined to this facade.
-pub struct RetainedLogger(sc_observability::Logger);
+pub struct RetainedLogger(RetainedLoggerBackend);
+
+enum RetainedLoggerBackend {
+    Logger(sc_observability::Logger),
+    #[cfg(test)]
+    QueueFull,
+}
 
 /// Process-neutral settings for ATM's retained JSONL logger.
 #[derive(Debug, Clone, Copy)]
@@ -37,17 +43,32 @@ pub enum RetainedLogOffer {
 
 impl RetainedLogger {
     pub fn health(&self) -> sc_observability_types::LoggingHealthReport {
-        self.0.health()
+        match &self.0 {
+            RetainedLoggerBackend::Logger(logger) => logger.health(),
+            #[cfg(test)]
+            RetainedLoggerBackend::QueueFull => {
+                panic!("test queue-full logger has no health report")
+            }
+        }
     }
 
     pub fn try_log(&self, event: sc_observability_types::LogEvent) -> RetainedLogOffer {
-        match self.0.try_log(event) {
-            Ok(()) => RetainedLogOffer::Accepted,
-            Err(sc_observability::TryLogError::QueueFull(_)) => RetainedLogOffer::QueueFull,
-            Err(error) => RetainedLogOffer::Rejected {
-                diagnostic_code: try_log_error_code(&error).to_string(),
+        match &self.0 {
+            RetainedLoggerBackend::Logger(logger) => match logger.try_log(event) {
+                Ok(()) => RetainedLogOffer::Accepted,
+                Err(sc_observability::TryLogError::QueueFull(_)) => RetainedLogOffer::QueueFull,
+                Err(error) => RetainedLogOffer::Rejected {
+                    diagnostic_code: try_log_error_code(&error).to_string(),
+                },
             },
+            #[cfg(test)]
+            RetainedLoggerBackend::QueueFull => RetainedLogOffer::QueueFull,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn queue_full_for_test() -> Self {
+        Self(RetainedLoggerBackend::QueueFull)
     }
 }
 
@@ -83,7 +104,7 @@ pub fn build_retained_logger(
     };
     config.enable_console_sink = false;
     sc_observability::Logger::builder(config)
-        .map(|builder| RetainedLogger(builder.build()))
+        .map(|builder| RetainedLogger(RetainedLoggerBackend::Logger(builder.build())))
         .map_err(|_| {
             AtmError::observability_bootstrap(
                 "failed to initialize shared daemon observability logger",
