@@ -23,9 +23,14 @@ dependency_relations:
 
 # AX.6 — Lead notification and doctor
 
-Tell the team's lead when a task stalls, reserve the sender name the
-daemon uses for that message, and make doctor report the roster and
-task conditions an operator needs to see.
+Tell the team's lead when a task stalls or a member is stuck at an
+interactive prompt, put the same alert on the human's screen through
+Herdr's notification surface, reserve the sender name the daemon uses,
+and make doctor report the roster and task conditions an operator needs
+to see. Doctor is a pull surface nobody is guaranteed to run (Rand,
+2026-09-05: "escalating to doctor is not sufficient to get noticed"), so
+every escalation in this sprint is pushed: queued mail to the lead plus a
+Herdr desktop notification.
 
 ## Rule
 
@@ -45,6 +50,38 @@ marker nudges it as today. The counters are not reset; the twentieth
 reminder produces the second message. Because "due" compares the two
 counters, a failed write at reminder ten is retried at reminder eleven
 rather than silently waiting for reminder twenty.
+
+### Blocked escalation
+
+Runs once per tick over the `blocked` set the AX.5 task step already
+computes, whether or not the member has a task:
+
+```
+for member in blocked:
+    since := blocked_since[member] or (blocked_since[member] := now)   # pump memory; entry removed when the member is no longer Blocked
+    if now − since < BLOCKED_NOTIFY_MS: continue                        # 60 s: a prompt answered quickly is not an incident
+    if last_blocked_notice[member] is Some and now − it < BLOCKED_RENOTIFY_MS: continue   # repeat every 10 min while still blocked
+    open := tasks.open_tasks(member) if the store is available else []
+    escalate(C3 body for member, since, open)
+    last_blocked_notice[member] := now; stats.blocked_escalations += 1
+```
+
+### Escalation channel (shared by both rules)
+
+```
+escalate(body):
+    lead := the single Lead of the team
+    if lead is some: write queued message from DAEMON_ACTOR_NAME to lead, body, requires_ack = false   # failure logged
+    herdr_process.notify(title = first line of body, body = remaining lines, deadline)                 # C4; failure logged
+    log herdr_queue_poll_outcome outcome = "lead_notified" | "blocked_escalated", member, lead present?, notify ok?
+```
+
+The Herdr notification fires even when the team has no lead, so a
+blocked agent or stalled task is visible on the human's screen without
+anyone running doctor or reading mail. `BLOCKED_NOTIFY_MS = 60_000`,
+`BLOCKED_RENOTIFY_MS = 600_000`, both constants beside
+`TASK_REMINDER_INTERVAL_MS`. Nothing is ever sent to the blocked agent
+itself.
 
 ## Deliverables
 
@@ -97,6 +134,26 @@ shape-only completion fails the sprint.
   `docs/user-documents/nudge-templates.md` and `docs/team-protocol.md`
   describe the lead message.
 - [ ] D5 — tests listed under Required validation.
+- [ ] D6 — blocked escalation in the pump
+  (`crates/atm-http-runtime/src/herdr_queue_wake.rs`) per the rule:
+  pump-private `blocked_since` and `last_blocked_notice` maps keyed by
+  `MemberKey`, cleared when a member leaves `Blocked`; the shared
+  `escalate` helper used by both rules; `HerdrQueueWakeStats` and the
+  `herdr_queue_poll_tick` record gain `blocked_escalations: usize` and
+  `notifications_failed: usize`.
+- [ ] D7 — Herdr desktop notification through the sealed adapter:
+  `HerdrProcessAdapter::notify` (code contract C4) in
+  `crates/atm-herdr/src/lib.rs` beside `list` (line 203) with the real
+  and fake implementations; new fixture section in
+  `docs/plans/phase-aq/fixtures/herdr-cli-contract-fixture.md` with the
+  argv row `["herdr","notification","show","<title>","--body","<body>","--sound","request"]`
+  and its success/failure rows; dated ADR-058 amendment (second entry
+  after AX.2's) adding the notification verb to the argv table and
+  recording that it never targets a pane; `boundaries/atm-herdr/herdr-process-adapter.toml`
+  `[contracts]` note that notification text is caller-composed and
+  contains member, task id, ages and a remediation command only, never a
+  message body (HR-SAFE-003 holds); `docs/atm-herdr/requirements.md`
+  gains `HR-CORE-004` (notification verb, fixed argv shape, fail-soft).
 
 ### Paths to delete
 
@@ -116,6 +173,26 @@ Run: atm list --task-events <task_id> --member <assignee>
 ```
 
 `first_reminded_at` is the `at` of the first `Reminded` row for the key.
+The first line doubles as the Herdr notification title.
+
+### C3 — blocked escalation body
+
+```
+<member> has been waiting for interactive input since <since> (<age>)
+open tasks: <task_id> (assigned by <assigner>, <reminder_count> reminders) | none
+Attach to its Herdr agent and answer the prompt. Run: atm members --team <team>
+```
+
+### C4 — adapter notification verb
+
+```rust
+// crates/atm-herdr/src/lib.rs, HerdrProcessAdapter (addition)
+/// Shows a Herdr desktop notification. argv is fixed:
+/// herdr notification show <title> --body <body> --sound request
+/// Never addresses a pane or agent; failure is HerdrError and the caller logs it.
+fn notify<'a>(&'a self, title: &'a str, body: &'a str, deadline: RequestDeadline)
+    -> Pin<Box<dyn Future<Output = Result<(), HerdrError>> + Send + 'a>>;
+```
 
 ### C2 — doctor codes and remediation
 
@@ -157,7 +234,16 @@ the task step, which AX.5 property 6 already permits); roster schema;
    `ATM_MEMBER_BLOCKED`; each with the C2 remediation text. Ten
    `blocked` reminders produce the lead message with `last outcome
    blocked`.
-4. `just validate` green; requirements §11.3/§12.3 and ADR-061 updated.
+4. `just validate` green; requirements §11.3/§12.3, ADR-061, ADR-058
+   amendment and `HR-CORE-004` updated.
+5. A member observed `blocked` for 60 s produces exactly one lead message
+   with the C3 body and one `notify` call with the C4 argv; still blocked
+   at 5 min produces nothing more; at 10 min a second pair; returning to
+   idle and blocking again starts a new episode. With no lead the
+   `notify` call still happens and the log records `lead present = false`.
+6. Every task lead notification (AC 1) is accompanied by one `notify`
+   call; a failing `notify` is counted in `notifications_failed` and does
+   not affect the mail or the `LeadNotified` row.
 
 ## Required validation
 
@@ -169,6 +255,11 @@ the task step, which AX.5 property 6 already permits); roster schema;
   (no message, warn log, no `LeadNotified` row).
 - `crates/atm-core/src/team_admin/member_mutation.rs` tests: AC 2 for
   add and update.
+- `crates/atm-http-runtime/src/herdr_queue_wake.rs` tests (`ax6_02_*`):
+  AC 5 and AC 6 with a fake adapter recording `notify` argv; a member
+  blocked 30 s then idle produces nothing.
+- `crates/atm-herdr` tests: `notify` argv matches the fixture row
+  verbatim; a non-zero exit maps to `HerdrError`.
 - `crates/atm-core/src/doctor/mod.rs` tests: the five codes and the
   info counts.
 - `crates/atm-storage/src/error.rs` catalog test extended.
@@ -176,5 +267,7 @@ the task step, which AX.5 property 6 already permits); roster schema;
 
 ## Out of scope
 
-Configurable threshold; lead escalation beyond one queued message; any
-change to the reminder cadence.
+Configurable thresholds; escalation channels beyond lead mail and the
+Herdr notification (no email, chat, or push); notifications for
+non-Herdr backends (they have no blocked signal); any change to the
+reminder cadence.
