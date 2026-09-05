@@ -314,28 +314,16 @@ Deliverables:
    Herdr runs one server per user per session on a machine, so the
    daemon binds to exactly one session.
 
-   Launch contract (Rand, 2026-09-05): the daemon is launched inside
-   the Herdr session like any other Herdr child and inherits
-   `HERDR_SOCKET_PATH` and `HERDR_BIN_PATH` from Herdr. atm owns
-   nothing about how Herdr or the daemon is started or restarted.
-
-   - Backend enabled: at startup the daemon requires `HERDR_SOCKET_PATH`
-     and executes `List` with a bounded deadline before serving. Missing
-     variable or no answer: exit non-zero with one diagnostic naming
-     the variable or the `HerdrError`. Whoever launched it restarts it.
-   - Children get the inherited `HERDR_SOCKET_PATH` and
-     `HERDR_BIN_PATH` as-is; `HERDR_ENV` is stripped so Herdr does not
-     treat them as nested.
-   - Pane identity (Rand, 2026-09-05): Herdr already gives every pane
-     process `HERDR_PANE_ID`, `HERDR_TAB_ID` and `HERDR_WORKSPACE_ID`
-     (src/integration/env.rs:8-10). Agents get pane and workspace
-     identity from the environment; atm adds nothing and never
-     substitutes config or name matching for it. A process without
-     `HERDR_PANE_ID` is not in a Herdr pane and gets no nudges; that
-     is the expected outcome, not a case for a fallback.
-   - Doctor shows the two paths and the probe result.
-   - Backend disabled: nothing above applies.
-   - W2's socket transport connects to `HERDR_SOCKET_PATH` as given. Doctor herdr section reports transport
+   Launch contract (Rand, 2026-09-05): the daemon and every atm agent
+   run inside a Herdr pane and inherit Herdr's complete environment
+   (socket path, binary path, pane/tab/workspace ids, everything else
+   Herdr sets). atm manages none of it: it reads `HERDR_SOCKET_PATH`
+   and `HERDR_BIN_PATH` the way any Herdr client does, passes its
+   environment to `herdr` children unchanged, and with the backend
+   enabled probes with `List` at startup and exits with one diagnostic
+   if that fails. A process not launched by Herdr has no pane id and
+   gets no nudges, by design. W2's socket transport connects to
+   `HERDR_SOCKET_PATH` as given. Doctor herdr section reports transport
    kind, resolved binary, resolved endpoint (the `\\.\pipe\` form on
    Windows), and the launch-probe result. Architecture tests: single
    construction site; single endpoint-resolution site; no
