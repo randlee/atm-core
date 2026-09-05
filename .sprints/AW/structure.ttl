@@ -1,0 +1,14 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAW a triage:Phase .
+
+# Branch model (docs/plans/phase-aw/phase-aw-plan.md frontmatter): every sprint
+# branch is cut from integrate/phase-aw and its PR targets integrate/phase-aw;
+# no gh stack. Order follows the dispatch order in plan §3:
+# AW.1 -> {AW.2 || AW.4} -> AW.3; AW.4 -> AW.5 (AW.5 || AW.3).
+triage:AW1 a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 1 ; triage:branch "feature/aw1-tracing-bridge" ; triage:criteria "docs/plans/phase-aw/sprint-AW.1-tracing-bridge.md" .
+triage:AW2 a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 2 ; triage:branch "feature/aw2-sqlite-diagnostic-timeline" ; triage:criteria "docs/plans/phase-aw/sprint-AW.2-sqlite-diagnostic-timeline.md" .
+triage:AW4 a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 3 ; triage:branch "feature/aw4-graft-fallback-observability" ; triage:criteria "docs/plans/phase-aw/sprint-AW.4-graft-fallback-observability.md" .
+triage:AW3 a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 4 ; triage:branch "feature/aw3-health-and-log-query" ; triage:criteria "docs/plans/phase-aw/sprint-AW.3-health-and-log-query.md" .
+triage:AW5 a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 5 ; triage:branch "feature/aw5-native-tool-parity" ; triage:criteria "docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md" .

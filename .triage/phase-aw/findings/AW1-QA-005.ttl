@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW1-QA-005>
+  a triage:Finding ;
+  triage:findingId "AW1-QA-005" ;
+  triage:title "Sprint doc D6 narrative omits serde_json from the atm-observability dependency list" ;
+  triage:description "req-qa ATM-QA-005: docs/plans/phase-aw/sprint-AW.1-tracing-bridge.md deliverable D6 lists the crate's allowed dependencies but omits serde_json, which crates/atm-observability/Cargo.toml and boundaries/atm-observability/tracing-bridge.toml now include. Minor doc drift; align the D6 text with the manifest/boundary allowlist." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AW1-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-04T00:50:07Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW1 ;
+  triage:foundAt "2026-09-05T00:43:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW1-QA-005/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW1-QA-005/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-aw/sprint-AW.1-tracing-bridge.md" ;
+  triage:line 85 ;
+  triage:snippet "D6 dependency list omits serde_json" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:occursIn <urn:atm:triage:worktree/aw1-tb/3427357a> .
+
+<urn:atm:triage:worktree/integrate-aw>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "4928f79527272827237a3b1a8d2b10f4b07ead86" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/aw1-tb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/aw1-tb" ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:orderIndex 1 .

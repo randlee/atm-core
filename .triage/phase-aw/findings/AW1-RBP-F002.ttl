@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW1-RBP-F002>
+  a triage:Finding ;
+  triage:findingId "AW1-RBP-F002" ;
+  triage:title "Invalid correlation_id silently dropped via CorrelationId::new(..).ok() with no diagnostic counter" ;
+  triage:description "rust-best-practices-agent RBP-F002: crates/atm-observability/src/tracing_bridge.rs:268-269 maps an invalid correlation_id to None via CorrelationId::new(value.to_owned()).ok() with no counter or retained diagnostic, so malformed ids vanish without trace. Add a counter (e.g. dropped_invalid_correlation_id_total on TracingBridgeStats) or retain the raw value under a distinct allowlisted field." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AW1-RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T00:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW1 ;
+  triage:foundAt "2026-09-05T00:43:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW1-RBP-F002/AW1-RBP-F002-AW1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW1-RBP-F002/AW1-RBP-F002-AW1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-observability/src/tracing_bridge.rs" ;
+  triage:line 269 ;
+  triage:snippet ".and_then(|value| CorrelationId::new(value.to_owned()).ok())," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:occursIn <urn:atm:triage:worktree/AW1-1/3427357a> .
+
+<urn:atm:triage:worktree/AW1-0/4928f795>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "4928f79527272827237a3b1a8d2b10f4b07ead86" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AW1-1/3427357a>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature-aw1-tracing-bridge" ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:orderIndex 1 .

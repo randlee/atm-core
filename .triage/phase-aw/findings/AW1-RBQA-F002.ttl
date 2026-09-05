@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW1-RBQA-F002>
+  a triage:Finding ;
+  triage:findingId "AW1-RBQA-F002" ;
+  triage:title "Missing source-scan test asserting each RETAINED_INFO_TARGETS entry has a real emitter" ;
+  triage:description "ruthless-boundary-qa RBQA-F002: sprint doc deliverable #1 promises a source-scan test asserting every RETAINED_INFO_TARGETS entry has at least one real tracing emitter in the runtime crates; crates/atm-architecture/tests/boundary_enforcement.rs only contains the install-site test. Not independently re-verified by quality-mgr; add alongside AW1-QA-B3 test work." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AW1-RBQA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW1 ;
+  triage:foundAt "2026-09-05T00:43:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW1-RBQA-F002/AW1-AW1T-B1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW1-RBQA-F002/AW1-AW1T-B1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-observability/src/tracing_bridge.rs" ;
+  triage:line 25 ;
+  triage:snippet "pub const RETAINED_INFO_TARGETS: &[&str]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-aw1-tracing-bridge/3427357a> .
+
+<urn:atm:triage:worktree/feature-aw1-tracing-bridge/3427357a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-aw1-tracing-bridge" ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:orderIndex 1 .
