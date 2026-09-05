@@ -1591,6 +1591,39 @@ Phase AV sprint status:
 | `AV.3` | `complete` (PR #1113 merged) | `feature/av3-read-concurrency-gates` | `docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md` |
 | `AV.4` | `complete` (PR #1114 merged) | `feature/av4-read-query-benchmarks` | `docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md` |
 
+## 55. Phase AX — Nudge Templates On Every Backend And Task-State Tracking [PLANNING — PLAN HARDENING]
+
+Phase AX closes three delivery defects found in the 2026-09-04 Herdr
+dogfood run (issue #1173): the Herdr sink bypasses the built-in nudge
+templates and injects fixed wake text; `atm queue` has no template class
+of its own; and task-tagged mail has no state, so a second task can be
+acked while the first is in progress and an idle assignee is never
+reminded. Seven sprints in four tracks: A = `AX.1` queue template class
+→ `AX.2` Herdr template rendering; B = `AX.3` task state machine and
+storage → `AX.4` task CLI and docs, **running in parallel with A**
+(`parallel_safe`: AX.1∥AX.3, AX.2∥AX.3); C = `AX.5` reminder cycle →
+`AX.6` lead notification and doctor, after A and B merge; D = `AX.7`
+live Herdr evidence. `must_follow` edges: AX.1→AX.2, AX.3→AX.4,
+AX.2→AX.5, AX.4→AX.5, AX.5→AX.6, AX.6→AX.7. Branches are worktrees via
+`sc-git-worktree`; PR bases and merges via `gh stack` (sequence in the
+phase plan §6).
+
+The authoritative plan is
+[phase-ax-plan](./plans/phase-ax/phase-ax-plan.md) with per-sprint docs
+under `docs/plans/phase-ax/`, authored on branch `integrate/phase-ax`.
+
+Phase AX sprint status:
+
+| Sprint | Track | Execute | Status | Branch | Artifacts |
+| --- | --- | --- | --- | --- | --- |
+| `AX.1` | A | parallel with AX.3/AX.4 | `planned` | `feature/ax1-queue-template-class` | `docs/plans/phase-ax/sprint-AX.1-queue-template-class.md`, ADR-019 amendment |
+| `AX.2` | A | after AX.1; parallel with AX.3/AX.4 | `planned` | `feature/ax2-herdr-template-rendering` | `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md`, ADR-058 amendment, `boundaries/atm-herdr/herdr-process-adapter.toml`, `docs/atm-herdr/requirements.md` |
+| `AX.3` | B | parallel with AX.1/AX.2 | `planned` | `feature/ax3-task-state-machine` | `docs/plans/phase-ax/sprint-AX.3-task-state-machine.md`, `docs/adr/ADR-061-task-state-machine.md`, ADR-054 amendment, `boundaries/atm-storage/task-store.toml`, `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` |
+| `AX.4` | B | after AX.3; parallel with AX.1/AX.2 | `planned` | `feature/ax4-task-cli-and-docs` | `docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md`, `docs/user-documents/tasks.md` |
+| `AX.5` | C | after A and B merge | `planned` | `feature/ax5-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md`, ADR-061 reminder-cycle section |
+| `AX.6` | C | after AX.5 | `planned` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
+| `AX.7` | D | after AX.6 merges | `planned` | none (proof on `integrate/phase-ax`) | `docs/plans/phase-ax/ax7-live-proof.md` |
+
 ## Publishing Improvements
 
 Implementation Branches:
