@@ -95,8 +95,8 @@ pub use bare_cli_fifo::{
 #[cfg(unix)]
 pub use client::unix_socket_client;
 pub use client::{
-    DIRECT_PEER_TCP_PORT, SAME_HOST_REQUEST_DEADLINE, direct_peer_port, direct_peer_tcp_client,
-    loopback_tcp_client, loopback_tcp_get_json, preferred_local_client, selected_write_transport,
+    DIRECT_PEER_TCP_PORT, SAME_HOST_REQUEST_DEADLINE, diagnostics_query, direct_peer_port,
+    direct_peer_tcp_client, loopback_tcp_client, preferred_local_client, selected_write_transport,
     shared_direct_peer_client,
 };
 pub use herdr_queue_wake::{
@@ -590,19 +590,36 @@ impl HttpRuntime<Configured> {
 
 impl HttpRuntime<Configured> {
     fn canonical_router(&self) -> axum::Router {
+        // The read-only auxiliary routes (`/v1/health`, `/v1/diagnostics`)
+        // are merged after `canonical_api_router`'s own `route_layer`, so
+        // without an admission layer of their own they would bypass the
+        // load-shed/concurrency bound applied to every canonical write
+        // route. Build an equivalent bound here, sized from the same
+        // configured limits, so a saturated auxiliary reader is rejected
+        // the same way a saturated canonical route is.
+        let auxiliary_admission = tower::ServiceBuilder::new()
+            .layer(axum::error_handling::HandleErrorLayer::new(
+                message_handler::overload_response,
+            ))
+            .layer(tower::load_shed::LoadShedLayer::new())
+            .layer(tower::limit::ConcurrencyLimitLayer::new(
+                self.config.limits.max_connections,
+            ));
+        let auxiliary_routes =
+            health_route::health_router(self.health.clone(), self.diagnostic_counters.clone())
+                .merge(diagnostics_route::diagnostics_router(
+                    self.diagnostic_timeline.clone(),
+                    self.config.timeouts.request,
+                ))
+                .route_layer(auxiliary_admission);
+
         canonical_api_router(
             Arc::clone(&self.handler),
             AuthenticatedConnector::local(),
             self.config.limits,
             self.config.timeouts,
         )
-        .merge(health_route::health_router(
-            self.health.clone(),
-            self.diagnostic_counters.clone(),
-        ))
-        .merge(diagnostics_route::diagnostics_router(
-            self.diagnostic_timeline.clone(),
-        ))
+        .merge(auxiliary_routes)
     }
 }
 

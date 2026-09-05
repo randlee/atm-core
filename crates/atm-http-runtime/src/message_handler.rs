@@ -627,7 +627,11 @@ fn request_id_from_headers(headers: &HeaderMap) -> Option<RequestId> {
         .and_then(|value| RequestId::new(value).ok())
 }
 
-async fn overload_response(_: BoxError) -> Response {
+/// Shared overload handler for every bounded admission layer (canonical
+/// write routes and the read-only auxiliary routes alike), so a saturated
+/// in-flight capacity always reports the same error shape regardless of
+/// which router rejected the request.
+pub(crate) async fn overload_response(_: BoxError) -> Response {
     warn!("HTTP message ingress rejected because its in-flight capacity is saturated");
     error_response(AtmError::daemon_connection_saturated(
         "HTTP message ingress is at its configured in-flight capacity",
