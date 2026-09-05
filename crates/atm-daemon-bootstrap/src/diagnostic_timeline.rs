@@ -131,6 +131,7 @@ fn run_flush_worker(stop_rx: Receiver<()>) {
             return;
         };
         writer.flush_due();
+        writer.prune_for_maintenance(chrono::Utc::now().timestamp_millis());
         if let Some(counters) = ACTIVE_COUNTERS.get()
             && let Some(monitor) = DEGRADATION_MONITOR.get()
         {
@@ -276,6 +277,24 @@ impl DiagnosticTimelineWriter {
             && buffered.last_flush.elapsed() >= Duration::from_millis(DIAGNOSTIC_FLUSH_INTERVAL_MS)
         {
             self.flush_locked(&mut buffered);
+        }
+        self.refresh_persisted_stats();
+    }
+
+    /// Runs one lower-priority retention pass from bootstrap's maintenance
+    /// cadence.  This is intentionally independent of incoming diagnostic
+    /// volume so a quiet daemon still removes expired rows.
+    pub fn prune_for_maintenance(&self, now_unix_ms: i64) {
+        if let Err(error) = self.store.prune(now_unix_ms) {
+            self.stats
+                .timeline_dropped_persist_error_total
+                .fetch_add(1, Ordering::Relaxed);
+            tracing::warn!(
+                origin = "timeline",
+                code = "ATM_DIAGNOSTIC_PRUNE_FAILED",
+                error = %error,
+                "diagnostic timeline retention pass failed"
+            );
         }
         self.refresh_persisted_stats();
     }
@@ -495,6 +514,7 @@ mod tests {
     #[derive(Default)]
     struct FixtureTimeline {
         batches: std::sync::Mutex<Vec<Vec<DiagnosticEvent>>>,
+        prunes: std::sync::Mutex<Vec<i64>>,
         fail: AtomicBool,
         fail_queue_full: AtomicBool,
     }
@@ -520,7 +540,11 @@ mod tests {
             Ok(Vec::new())
         }
 
-        fn prune(&self, _now_unix_ms: i64) -> Result<u64, AtmError> {
+        fn prune(&self, now_unix_ms: i64) -> Result<u64, AtmError> {
+            self.prunes
+                .lock()
+                .expect("fixture prunes")
+                .push(now_unix_ms);
             Ok(0)
         }
     }
@@ -696,6 +720,19 @@ mod tests {
                 .timeline_dropped_persist_error_total
                 .load(Ordering::Relaxed),
             super::DIAGNOSTIC_BATCH_MAX as u64 + 2
+        );
+    }
+
+    #[test]
+    fn ac4_quiet_daemon_prunes_on_the_maintenance_clock() {
+        let store = std::sync::Arc::new(FixtureTimeline::default());
+        let writer = fixture_writer(std::sync::Arc::clone(&store));
+
+        writer.prune_for_maintenance(1_700_000_000_000);
+
+        assert_eq!(
+            *store.prunes.lock().expect("fixture prunes"),
+            vec![1_700_000_000_000]
         );
     }
 

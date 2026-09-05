@@ -236,7 +236,16 @@ mod tests {
             })
             .expect("seed diagnostic fixture");
 
-        let deleted = timeline.prune(FIXTURE_ROWS as i64).expect("prune fixture");
+        let mut deleted = 0;
+        while deleted < (FIXTURE_ROWS - DIAGNOSTIC_MAX_ROWS) as u64 {
+            let pass = timeline.prune(FIXTURE_ROWS as i64).expect("prune fixture");
+            assert!(pass > 0, "each retention pass must make progress");
+            assert!(
+                pass <= crate::DIAGNOSTIC_PRUNE_BATCH as u64,
+                "one writer-lane maintenance pass must remain bounded"
+            );
+            deleted += pass;
+        }
         let retained: i64 = timeline
             .db
             .with_connection(|connection| {
