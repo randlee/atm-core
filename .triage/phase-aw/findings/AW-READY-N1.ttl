@@ -15,21 +15,23 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T16:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW1 ;
   triage:foundAt "2026-09-05T16:40:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N1/AW1-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "1" ;
+  triage:closedAt "2026-09-05T18:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
 
 <urn:atm:triage:occurrence/AW-READY-N1/AW1-1>
   a triage:Occurrence ;
   triage:file "crates/atm-observability/src/tracing_bridge.rs" ;
   triage:line 453 ;
   triage:snippet "let deadline = Instant::now() + Duration::from_secs(2);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:occursIn <urn:atm:triage:worktree/AW/7e61ad87e> .
