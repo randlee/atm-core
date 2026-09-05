@@ -11,6 +11,21 @@ from scripts.smoke import benchmark_account as ACCOUNT
 
 
 class BenchmarkAccountTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Windows profile resolution only")
+    def test_windows_account_home_ignores_userprofile_override(self):
+        actual_profile = Path("C:/token-owned-profile")
+        with (
+            mock.patch.dict(os.environ, {"USERPROFILE": "C:/spoofed-profile"}),
+            mock.patch.object(ACCOUNT, "_windows_profile_home", return_value=actual_profile),
+        ):
+            self.assertEqual(ACCOUNT.account_home(), actual_profile)
+
+    @unittest.skipUnless(os.name == "nt", "Windows profile resolution only")
+    def test_windows_token_profile_home_is_an_existing_absolute_directory(self):
+        profile = ACCOUNT._windows_profile_home()
+        self.assertTrue(profile.is_absolute())
+        self.assertTrue(profile.is_dir())
+
     def _bootstrap(self, home: Path) -> ACCOUNT.BenchmarkAccount:
         with (
             mock.patch.object(ACCOUNT, "account_home", return_value=home),

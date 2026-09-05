@@ -43,13 +43,39 @@ class BenchmarkAccount:
 def account_home() -> Path:
     """Return the account home from OS identity, never a shell HOME override."""
     if os.name == "nt":
-        profile = os.environ.get("USERPROFILE", "").strip()
-        if not profile:
-            raise BenchmarkAccountError("could not resolve the Windows benchmark-account profile")
-        return Path(profile).resolve()
+        return _windows_profile_home()
     import pwd
 
     return Path(pwd.getpwuid(os.geteuid()).pw_dir).resolve()
+
+
+def _windows_profile_home() -> Path:
+    """Resolve the active token's profile, not a caller-controlled environment variable."""
+    import ctypes
+    from ctypes import wintypes
+
+    token = wintypes.HANDLE()
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    userenv = ctypes.WinDLL("userenv", use_last_error=True)
+    open_process_token = advapi32.OpenProcessToken
+    open_process_token.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    open_process_token.restype = wintypes.BOOL
+    if not open_process_token(kernel32.GetCurrentProcess(), 0x0008, ctypes.byref(token)):
+        raise BenchmarkAccountError(f"could not resolve the Windows benchmark-account token: {ctypes.WinError()}")
+    try:
+        size = wintypes.DWORD()
+        get_profile = userenv.GetUserProfileDirectoryW
+        get_profile.argtypes = [wintypes.HANDLE, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+        get_profile.restype = wintypes.BOOL
+        if get_profile(token, None, ctypes.byref(size)) or ctypes.get_last_error() != 122 or not size.value:
+            raise BenchmarkAccountError(f"could not resolve the Windows benchmark-account profile: {ctypes.WinError()}")
+        profile = ctypes.create_unicode_buffer(size.value)
+        if not get_profile(token, profile, ctypes.byref(size)):
+            raise BenchmarkAccountError(f"could not resolve the Windows benchmark-account profile: {ctypes.WinError()}")
+        return Path(profile.value).resolve()
+    finally:
+        kernel32.CloseHandle(token)
 
 
 def canonical_durable_state_root(home: Path | None = None) -> Path:
