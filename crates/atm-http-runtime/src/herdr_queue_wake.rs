@@ -37,46 +37,6 @@ const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
 #[cfg(test)]
 type HandoffCleanupTestGate = (Arc<Notify>, Arc<Notify>);
 
-#[cfg(test)]
-static HANDOFF_CLEANUP_TEST_GATE: std::sync::OnceLock<Mutex<Option<HandoffCleanupTestGate>>> =
-    std::sync::OnceLock::new();
-
-#[cfg(test)]
-fn install_handoff_cleanup_test_gate() -> (Arc<Notify>, Arc<Notify>) {
-    let entered = Arc::new(Notify::new());
-    let release = Arc::new(Notify::new());
-    HANDOFF_CLEANUP_TEST_GATE
-        .get_or_init(|| Mutex::new(None))
-        .lock()
-        .expect("handoff cleanup gate lock")
-        .replace((Arc::clone(&entered), Arc::clone(&release)));
-    (entered, release)
-}
-
-#[cfg(test)]
-fn clear_handoff_cleanup_test_gate() {
-    HANDOFF_CLEANUP_TEST_GATE
-        .get_or_init(|| Mutex::new(None))
-        .lock()
-        .expect("handoff cleanup gate lock")
-        .take();
-}
-
-#[cfg(test)]
-async fn await_handoff_cleanup_test_gate() {
-    let Some((entered, release)) = HANDOFF_CLEANUP_TEST_GATE
-        .get_or_init(|| Mutex::new(None))
-        .lock()
-        .expect("handoff cleanup gate lock")
-        .as_ref()
-        .cloned()
-    else {
-        return;
-    };
-    entered.notify_one();
-    release.notified().await;
-}
-
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HerdrQueueWakeStats {
     pub listed_sessions: usize,
@@ -98,6 +58,8 @@ pub struct HerdrQueueWakePump {
     cursor: Arc<Mutex<usize>>,
     release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
+    #[cfg(test)]
+    handoff_cleanup_test_gate: Arc<Mutex<Option<HandoffCleanupTestGate>>>,
 }
 
 impl HerdrQueueWakePump {
@@ -116,7 +78,43 @@ impl HerdrQueueWakePump {
             cursor: Arc::new(Mutex::new(0)),
             release_streaks: Arc::new(Mutex::new(HashMap::new())),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
+            #[cfg(test)]
+            handoff_cleanup_test_gate: Arc::new(Mutex::new(None)),
         }
+    }
+
+    #[cfg(test)]
+    fn install_handoff_cleanup_test_gate(&self) -> (Arc<Notify>, Arc<Notify>) {
+        let entered = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        self.handoff_cleanup_test_gate
+            .lock()
+            .expect("handoff cleanup gate lock")
+            .replace((Arc::clone(&entered), Arc::clone(&release)));
+        (entered, release)
+    }
+
+    #[cfg(test)]
+    fn clear_handoff_cleanup_test_gate(&self) {
+        self.handoff_cleanup_test_gate
+            .lock()
+            .expect("handoff cleanup gate lock")
+            .take();
+    }
+
+    #[cfg(test)]
+    async fn await_handoff_cleanup_test_gate(&self) {
+        let Some((entered, release)) = self
+            .handoff_cleanup_test_gate
+            .lock()
+            .expect("handoff cleanup gate lock")
+            .as_ref()
+            .cloned()
+        else {
+            return;
+        };
+        entered.notify_one();
+        release.notified().await;
     }
 
     /// Starts the single polling task. The task owns no per-member workers.
@@ -448,7 +446,7 @@ impl HerdrQueueWakePump {
         // cancellation cannot re-release an already delivered claim.
         release.disarm();
         #[cfg(test)]
-        await_handoff_cleanup_test_gate().await;
+        self.await_handoff_cleanup_test_gate().await;
         let runtime = self.service_runtime.clone();
         let member_key = member.key.clone();
         let message_id = claim.msg;
@@ -1383,7 +1381,7 @@ mod tests {
     #[tokio::test]
     async fn ac11_successful_prompt_cancellation_cannot_rerelease_claim() {
         let (_root, runtime, fake, pump, _health, key) = build_test_pump();
-        let (clear_started, allow_clear) = super::install_handoff_cleanup_test_gate();
+        let (clear_started, allow_clear) = pump.install_handoff_cleanup_test_gate();
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let task = pump.clone().start(shutdown_rx);
         clear_started.notified().await;
@@ -1434,7 +1432,7 @@ mod tests {
             1,
             "the next tick must not prompt the already accepted message again"
         );
-        super::clear_handoff_cleanup_test_gate();
+        pump.clear_handoff_cleanup_test_gate();
     }
 
     #[tokio::test]
