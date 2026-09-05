@@ -580,5 +580,3 @@ Show the stored schema/frontmatter for one exact immutable SHA
 | `<sha>` |  | yes |  |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
-
-
