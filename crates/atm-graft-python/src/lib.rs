@@ -564,14 +564,6 @@ impl PyGraftSession {
             .map_err(atm_error)
     }
 
-    fn emit_graft_event(
-        &self,
-        code: &'static str,
-        fields: impl IntoIterator<Item = (&'static str, String)>,
-    ) -> observability::ObservabilityStatus {
-        self.fallback_logger.record(code, fields)
-    }
-
     #[allow(clippy::result_large_err)]
     fn tool_error_from_recovery<T>(
         py: Python<'_>,
