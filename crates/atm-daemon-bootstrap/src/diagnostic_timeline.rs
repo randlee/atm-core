@@ -53,6 +53,7 @@ pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticT
         "timeline",
         counters.snapshot().timeline_dropped_queue_full_total,
     );
+    monitor.observe("jsonl", counters.snapshot().jsonl_dropped_queue_full_total);
     let _ = ACTIVE_COUNTERS.set(counters);
     let _ = ACTIVE_TIMELINE.set(Arc::clone(&writer));
     bridge.set_diagnostic_sink(writer);
@@ -76,6 +77,7 @@ fn start_flush_worker() {
                         "timeline",
                         counters.snapshot().timeline_dropped_queue_full_total,
                     );
+                    monitor.observe("jsonl", counters.snapshot().jsonl_dropped_queue_full_total);
                 }
             }
         });
