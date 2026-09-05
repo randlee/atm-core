@@ -435,6 +435,7 @@ mod tests {
                 writer_shutdown_timeout: Duration::from_secs(1),
                 maintenance_max_work_per_pass: Some(2),
             },
+            None,
         )
         .expect("logger");
         (tempdir, Arc::new(TracingBridgeLayer::new(Arc::new(logger))))
