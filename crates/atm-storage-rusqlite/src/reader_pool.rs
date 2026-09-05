@@ -236,10 +236,9 @@ impl ReaderLaneMetrics {
 pub(crate) struct ReaderPool {
     inner: Arc<PoolInner>,
     // This Arc is owned only by public ReaderPool handles, unlike `inner`,
-    // which short-lived watchdogs may retain. That lets the last external
-    // owner synchronously close the reader workers even while a watchdog is
-    // winding down.
-    ownership: Arc<()>,
+    // which short-lived watchdogs may retain. Its Drop runs with Arc's atomic
+    // last-owner semantics, so it shuts down readers exactly once.
+    _ownership: Arc<PoolShutdownGuard>,
 }
 
 /// Bounded knobs for one independent read lane. AV.1b adds the doctor lane to
@@ -371,6 +370,12 @@ struct PoolInner {
     lifecycle_events: Mutex<Option<tokio::sync::mpsc::UnboundedSender<WorkerLifecycleEvent>>>,
     #[cfg(test)]
     worker_exit_count: Arc<AtomicUsize>,
+    #[cfg(test)]
+    shutdown_count: AtomicUsize,
+}
+
+struct PoolShutdownGuard {
+    inner: Arc<PoolInner>,
 }
 
 #[cfg(test)]
@@ -465,10 +470,14 @@ impl ReaderPool {
             lifecycle_events: Mutex::new(None),
             #[cfg(test)]
             worker_exit_count: Arc::new(AtomicUsize::new(0)),
+            #[cfg(test)]
+            shutdown_count: AtomicUsize::new(0),
         });
         let pool = Self {
+            _ownership: Arc::new(PoolShutdownGuard {
+                inner: Arc::clone(&inner),
+            }),
             inner,
-            ownership: Arc::new(()),
         };
         for worker_id in 0..config.pool_size.get() {
             pool.inner.spawn_worker(worker_id)?;
@@ -691,11 +700,9 @@ impl ReaderPool {
     }
 }
 
-impl Drop for ReaderPool {
+impl Drop for PoolShutdownGuard {
     fn drop(&mut self) {
-        if Arc::strong_count(&self.ownership) == 1 {
-            self.inner.shutdown_and_join();
-        }
+        self.inner.shutdown_and_join();
     }
 }
 
@@ -908,6 +915,8 @@ impl PoolInner {
         if self.shutting_down.swap(true, Ordering::AcqRel) {
             return;
         }
+        #[cfg(test)]
+        self.shutdown_count.fetch_add(1, Ordering::Relaxed);
         let (active, mut handles) = {
             let mut workers = self.workers.lock().expect("reader pool lock");
             (
@@ -991,6 +1000,11 @@ impl PoolInner {
     fn worker_exit_count(&self) -> Arc<AtomicUsize> {
         Arc::clone(&self.worker_exit_count)
     }
+
+    #[cfg(test)]
+    fn shutdown_count(&self) -> usize {
+        self.shutdown_count.load(Ordering::Acquire)
+    }
 }
 
 fn run_worker(
@@ -1064,7 +1078,7 @@ mod tests {
     use crate::shared_db::SharedDbTarget;
     use std::num::NonZeroUsize;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, mpsc};
+    use std::sync::{Arc, Barrier, mpsc};
     use std::time::{Duration, Instant};
 
     static NEXT_TEST_POOL_ID: AtomicUsize = AtomicUsize::new(1);
@@ -1134,6 +1148,64 @@ mod tests {
             exited.load(Ordering::Acquire),
             2,
             "pool drop must return only after every reader worker has exited"
+        );
+    }
+
+    #[test]
+    fn dropping_one_reader_pool_owner_keeps_workers_serving_until_the_last_owner_drops() {
+        let pool = test_pool(test_config(2, 2, Duration::from_millis(20), 2));
+        let surviving_owner = pool.clone();
+        let exited = pool.inner.worker_exit_count();
+        drop(pool);
+
+        assert_eq!(
+            exited.load(Ordering::Acquire),
+            0,
+            "dropping one owner must not begin worker shutdown"
+        );
+        assert_eq!(
+            surviving_owner
+                .submit_blocking(Duration::from_secs(1), |_, _| {
+                    Ok::<_, atm_storage::ReadLaneError>("still-serving")
+                })
+                .expect("remaining owner keeps reader workers available"),
+            "still-serving"
+        );
+
+        drop(surviving_owner);
+        assert_eq!(
+            exited.load(Ordering::Acquire),
+            2,
+            "dropping the final owner must join every reader worker"
+        );
+    }
+
+    #[test]
+    fn concurrent_last_reader_pool_drops_trigger_exactly_one_shutdown() {
+        let pool = test_pool(test_config(2, 2, Duration::from_millis(20), 2));
+        let other_owner = pool.clone();
+        let exited = pool.inner.worker_exit_count();
+        let shutdowns = Arc::clone(&pool.inner);
+        let barrier = Arc::new(Barrier::new(2));
+
+        std::thread::scope(|scope| {
+            let first_barrier = Arc::clone(&barrier);
+            scope.spawn(move || {
+                first_barrier.wait();
+                drop(pool);
+            });
+            let second_barrier = Arc::clone(&barrier);
+            scope.spawn(move || {
+                second_barrier.wait();
+                drop(other_owner);
+            });
+        });
+
+        assert_eq!(shutdowns.shutdown_count(), 1);
+        assert_eq!(
+            exited.load(Ordering::Acquire),
+            2,
+            "the atomic last-owner guard must join every worker after concurrent drops"
         );
     }
 
@@ -1379,12 +1451,30 @@ mod tests {
         assert_eq!(metrics.quarantined, 1);
         assert_eq!(metrics.interrupted_while_active, 1);
         assert_eq!(metrics.quarantine_exhausted_rejections, 1);
+        let pool = Arc::try_unwrap(pool).expect("completed task releases its pool owner");
+        let surviving_owner = pool.clone();
         let exited = pool.inner.worker_exit_count();
+        let inner = Arc::clone(&pool.inner);
         drop(pool);
+        assert_eq!(
+            inner.shutdown_count(),
+            0,
+            "a remaining owner must keep the replacement reader alive"
+        );
+        assert_eq!(
+            surviving_owner
+                .submit_blocking(Duration::from_secs(1), |_, _| {
+                    Ok::<_, atm_storage::ReadLaneError>("replacement-still-serving")
+                })
+                .expect("replacement remains available until the final owner drops"),
+            "replacement-still-serving"
+        );
+        drop(surviving_owner);
+        assert_eq!(inner.shutdown_count(), 1);
         assert_eq!(
             exited.load(Ordering::Acquire),
             2,
-            "pool drop must also join a quarantined worker's retired handle and its replacement"
+            "final drop must join a quarantined worker's retired handle and its replacement"
         );
     }
 

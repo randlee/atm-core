@@ -132,6 +132,19 @@ This is the authoritative deliverable checklist. Every listed deliverable
 lands production-ready for the scope this sprint claims; partial or
 shape-only completion fails the sprint.
 
+### Carried fixes outside sprint scope
+
+AX3-QA3-001, AX3-QA4-001, and AX3-QA5-001/002/004 carry a Phase AV.1a
+reader-lane lifecycle correction on this branch: `reader_pool.rs` now
+retains reader worker and replacement handles and performs one bounded,
+last-owner Drop/join. Deterministic pool tests prove single-owner,
+multi-owner, replacement, and concurrent-last-owner shutdown paths.
+AX3-QA5-003 also evicts a test-support cached SQLite runtime when its
+last `SqliteRuntimeGuard` drops, so test-owned paths do not retain SQLite
+handles through teardown; its cache-eviction test proves that lifecycle.
+These corrective changes are traceability carries, not AX.3 task-state
+deliverables.
+
 - [x] D1 — retire the unused newtype `pub struct TaskState(String)` in
   `crates/atm-storage/src/contract.rs` and its three re-exports
   (`crates/atm-storage/src/lib.rs`, `crates/atm-core/src/boundary/mod.rs`,

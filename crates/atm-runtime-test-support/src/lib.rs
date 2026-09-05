@@ -192,12 +192,18 @@ impl AsyncMessageStore for RecordingWriter {
 }
 
 // Mutex required because sqlite retained runtimes are cached across concurrent
-// tests; bulk clear() is safe because entries are deterministic per path and
-// are rebuilt lazily on the next access.
-static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime>>> =
+// tests. Guards keep their path registered until the final guard drops, at
+// which point the cache entry is removed and its SQLite handles are released.
+static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, CachedSqliteRuntime>>> =
     OnceLock::new();
 const MAX_SQLITE_RUNTIME_CACHE_ENTRIES: usize = 16;
 pub const SQLITE_RUNTIME_PATH_ENV: &str = "ATM_TEST_SQLITE_RUNTIME_PATH";
+
+#[derive(Default)]
+struct CachedSqliteRuntime {
+    runtime: Option<LocalServiceRuntime>,
+    guard_count: usize,
+}
 
 pub fn install_sqlite_retained_runtime_factory() {
     // The test runtime provider is process-global and production-style
@@ -210,21 +216,30 @@ pub fn install_sqlite_retained_runtime_factory() {
 
 pub struct SqliteRuntimeGuard {
     previous: Option<PathBuf>,
+    path: PathBuf,
 }
 
 impl SqliteRuntimeGuard {
     pub fn install(path: impl Into<PathBuf>) -> Self {
         install_sqlite_retained_runtime_factory();
         let _env_lock = lock_env();
+        let path = path.into();
         let previous = std::env::var_os(SQLITE_RUNTIME_PATH_ENV).map(PathBuf::from);
-        set_env_var(SQLITE_RUNTIME_PATH_ENV, path.into().into_os_string());
-        Self { previous }
+        sqlite_runtime_cache()
+            .lock()
+            .expect("sqlite runtime cache")
+            .entry(path.clone())
+            .or_default()
+            .guard_count += 1;
+        set_env_var(SQLITE_RUNTIME_PATH_ENV, path.clone().into_os_string());
+        Self { previous, path }
     }
 }
 
 impl Drop for SqliteRuntimeGuard {
     fn drop(&mut self) {
         let _env_lock = lock_env();
+        release_sqlite_runtime(&self.path);
         match self.previous.take() {
             Some(previous) => set_env_var(SQLITE_RUNTIME_PATH_ENV, previous.into_os_string()),
             None => remove_env_var(SQLITE_RUNTIME_PATH_ENV),
@@ -314,17 +329,88 @@ fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
 
         })?;
 
-    let runtime_cache = SQLITE_RUNTIME_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut runtime_cache = runtime_cache.lock().expect("sqlite runtime cache");
-    if let Some(runtime) = runtime_cache.get(&path) {
+    let mut runtime_cache = sqlite_runtime_cache().lock().expect("sqlite runtime cache");
+    let entry = runtime_cache.entry(path.clone()).or_default();
+    if let Some(runtime) = entry.runtime.as_ref() {
         return Ok(runtime.clone());
     }
 
     let assembly = open_sqlite_boundary(&path)?;
     let runtime = assembly.service_runtime.clone();
     if runtime_cache.len() >= MAX_SQLITE_RUNTIME_CACHE_ENTRIES {
-        runtime_cache.clear();
+        runtime_cache.retain(|_, entry| entry.guard_count > 0);
     }
-    runtime_cache.insert(path, runtime.clone());
+    runtime_cache.entry(path).or_default().runtime = Some(runtime.clone());
     Ok(runtime)
+}
+
+fn sqlite_runtime_cache() -> &'static Mutex<HashMap<PathBuf, CachedSqliteRuntime>> {
+    SQLITE_RUNTIME_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn release_sqlite_runtime(path: &Path) {
+    let removed = {
+        let mut runtime_cache = sqlite_runtime_cache().lock().expect("sqlite runtime cache");
+        let Some(entry) = runtime_cache.get_mut(path) else {
+            return;
+        };
+        entry.guard_count = entry
+            .guard_count
+            .checked_sub(1)
+            .expect("sqlite runtime guard count must be positive");
+        if entry.guard_count == 0 {
+            runtime_cache.remove(path)
+        } else {
+            None
+        }
+    };
+    drop(removed);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SqliteRuntimeGuard, sqlite_retained_runtime, sqlite_runtime_cache};
+    use atm_core::test_support::EnvGuard;
+
+    #[test]
+    fn sqlite_runtime_cache_evicts_a_path_only_after_its_last_guard_drops() {
+        let root = std::env::temp_dir().join(format!(
+            "atm-runtime-test-support-cache-{}",
+            atm_storage::AtmMessageId::new()
+        ));
+        std::fs::create_dir_all(&root).expect("test runtime root");
+        let env_guard = EnvGuard::set_raw("ATM_HOME", root.to_str().expect("utf-8 test root"));
+        let path = root.join("runtime").join("mail.sqlite3");
+        let outer = SqliteRuntimeGuard::install(path.clone());
+        let inner = SqliteRuntimeGuard::install(path.clone());
+        let runtime = sqlite_retained_runtime().expect("cached sqlite runtime");
+        drop(runtime);
+
+        assert!(
+            sqlite_runtime_cache()
+                .lock()
+                .expect("sqlite runtime cache")
+                .get(&path)
+                .is_some_and(|entry| entry.runtime.is_some()),
+            "the retained runtime is cached while guards own its backing path"
+        );
+        drop(inner);
+        assert!(
+            sqlite_runtime_cache()
+                .lock()
+                .expect("sqlite runtime cache")
+                .contains_key(&path),
+            "an outer guard keeps the cached runtime path alive"
+        );
+        drop(outer);
+        assert!(
+            !sqlite_runtime_cache()
+                .lock()
+                .expect("sqlite runtime cache")
+                .contains_key(&path),
+            "the final guard drop evicts and drops the cached runtime entry"
+        );
+        drop(env_guard);
+        std::fs::remove_dir_all(root).expect("evicted runtime releases the test root");
+    }
 }
