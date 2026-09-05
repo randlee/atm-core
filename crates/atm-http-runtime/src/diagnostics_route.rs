@@ -238,7 +238,10 @@ mod tests {
     }
 
     impl DiagnosticTimelineStore for FixtureStore {
-        fn record_batch(&self, _events: &[DiagnosticEvent]) -> Result<(), AtmError> {
+        fn record_batch(
+            &self,
+            _events: &[DiagnosticEvent],
+        ) -> Result<(), atm_storage::DiagnosticRecordError> {
             unimplemented!("the diagnostics route never writes")
         }
 
