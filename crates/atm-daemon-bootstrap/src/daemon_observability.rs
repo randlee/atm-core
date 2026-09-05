@@ -88,7 +88,9 @@ impl DaemonObservability {
             )
         })?;
         atm_observability::TracingBridgeLayer::install(Arc::clone(&logger.0))
-            .map(|_| ())
+            .map(|bridge| {
+                crate::diagnostic_timeline::register_bridge(bridge);
+            })
             .map_err(|error| match error {
                 atm_observability::BridgeError::AlreadyInstalled => {
                     AtmError::observability_bootstrap(

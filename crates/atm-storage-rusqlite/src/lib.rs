@@ -689,10 +689,44 @@ impl std::fmt::Debug for SqliteStorageBackend {
 
 /// Concrete SQLite selection owned by the SQLite backend and consumed only at
 /// an executable composition root through [`StorageFactory`].
-#[derive(Debug, Clone, Default)]
 pub struct SqliteStorageFactory {
     database_path: Option<PathBuf>,
     reader_lanes: reader_pool::ReaderLanesConfig,
+    observability: Arc<dyn SqliteObservability>,
+    timeline_observer: Option<Arc<dyn Fn(Arc<SqliteDiagnosticTimeline>) + Send + Sync>>,
+}
+
+impl Default for SqliteStorageFactory {
+    fn default() -> Self {
+        Self {
+            database_path: None,
+            reader_lanes: reader_pool::ReaderLanesConfig::default(),
+            observability: Arc::new(NullSqliteObservability),
+            timeline_observer: None,
+        }
+    }
+}
+
+impl Clone for SqliteStorageFactory {
+    fn clone(&self) -> Self {
+        Self {
+            database_path: self.database_path.clone(),
+            reader_lanes: self.reader_lanes,
+            observability: Arc::clone(&self.observability),
+            timeline_observer: self.timeline_observer.as_ref().map(Arc::clone),
+        }
+    }
+}
+
+impl std::fmt::Debug for SqliteStorageFactory {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SqliteStorageFactory")
+            .field("database_path", &self.database_path)
+            .field("reader_lanes", &self.reader_lanes)
+            .field("timeline_observer", &self.timeline_observer.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 impl SqliteStorageFactory {
@@ -704,8 +738,25 @@ impl SqliteStorageFactory {
     pub fn at_path(path: impl Into<PathBuf>) -> Self {
         Self {
             database_path: Some(path.into()),
-            reader_lanes: reader_pool::ReaderLanesConfig::default(),
+            ..Self::default()
         }
+    }
+
+    /// Bootstrap supplies the retained JSONL adapter at the concrete storage
+    /// composition root. Tests retain the null adapter by default.
+    pub fn with_observability(mut self, observability: Arc<dyn SqliteObservability>) -> Self {
+        self.observability = observability;
+        self
+    }
+
+    /// Called after the backend opens so the bridge sink uses its existing
+    /// writer worker rather than creating a competing SQLite connection.
+    pub fn with_timeline_observer(
+        mut self,
+        observer: Arc<dyn Fn(Arc<SqliteDiagnosticTimeline>) + Send + Sync>,
+    ) -> Self {
+        self.timeline_observer = Some(observer);
+        self
     }
 
     #[allow(
@@ -739,10 +790,14 @@ impl StorageFactory for SqliteStorageFactory {
                 queue_depth: self.reader_lanes.search.queue_depth.get(),
             },
         };
-        let backend = SqliteStorageBackend::new_with_reader_lanes(
+        let backend = SqliteStorageBackend::new_with_observability_and_reader_lanes(
             self.database_path(durable_state_root),
+            Arc::clone(&self.observability),
             self.reader_lanes,
         )?;
+        if let Some(observer) = &self.timeline_observer {
+            observer(backend.diagnostic_timeline());
+        }
         Ok(StorageHandles::from_parts(StorageHandleParts {
             message_store: backend.message_store(),
             async_message_store: backend.async_message_store(),
@@ -765,17 +820,6 @@ impl SqliteStorageBackend {
         Self::new_with_observability(path, Arc::new(NullSqliteObservability))
     }
 
-    pub(crate) fn new_with_reader_lanes(
-        path: impl AsRef<Path>,
-        reader_lanes: reader_pool::ReaderLanesConfig,
-    ) -> Result<Self, AtmError> {
-        Self::new_with_observability_and_reader_lanes(
-            path,
-            Arc::new(NullSqliteObservability),
-            reader_lanes,
-        )
-    }
-
     pub fn new_with_observability(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
@@ -787,7 +831,7 @@ impl SqliteStorageBackend {
         )
     }
 
-    fn new_with_observability_and_reader_lanes(
+    pub(crate) fn new_with_observability_and_reader_lanes(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
         reader_lanes: reader_pool::ReaderLanesConfig,
