@@ -9,21 +9,19 @@ status: draft
 recommended_agent: Cipher-311d
 recommended_model: fast
 dependency_relations:
-  - related: AX.2
+  - prerequisite: AX.1
+    dependent: AX.2
     relation: must_follow
-    rationale: AX.2 renders Queue-family templates on the Herdr pump path and edits send/hook.rs; the kinds and corrected defaults must exist first.
-  - related: AX.4a
-    relation: must_follow
-    rationale: both edit crates/atm-storage/src/contract.rs and docs/user-documents; AX.4a's completion message relies on the kind mapping delivered here.
+    rationale: AX.2 renders Queue-family templates on the Herdr pump path and both sprints edit crates/atm-core/src/send/hook.rs (this sprint changes render_built_in_nudge_for_dispatch; AX.2 changes the Herdr branch of build_built_in_dispatch).
 ---
 
 # AX.1 — Queue template class and default template fixes
 
 Add a queue class to the built-in nudge templates so `atm queue` renders
-its own family, retire the two unreachable task-steer kinds, and apply
-the agreed fixes to every default body. No new placeholders, no renderer
-changes, no new XML attributes. Backend-agnostic: the change is in kind
-selection and bodies only.
+its own family, retire the two unreachable task-steer kinds, migrate the
+override table's kind constraint, and apply the agreed fixes to every
+default body and every published copy of it. No new placeholders, no
+renderer changes, no new XML attributes.
 
 ## Deliverables
 
@@ -32,36 +30,65 @@ lands production-ready for the scope this sprint claims; partial or
 shape-only completion fails the sprint.
 
 - [ ] D1 — `BuiltInNudgeTemplateKind` becomes seven kinds
-  (`crates/atm-storage/src/contract.rs`). Code contract C1. Stored
-  override rows whose `template_kind` is `delivery_task` or
-  `delivery_task_ack` are deleted at daemon startup in
-  `atm-storage-rusqlite` with one info log line each naming the team and
-  kind.
-- [ ] D2 — kind selection takes the nudge mode
-  (`crates/atm-core/src/boundary/mod.rs`
-  `built_in_nudge_template_kind_from_post_send_event`). Code contract C2.
-  Callers in `crates/atm-core/src/send/hook.rs` pass the `NudgeKind`
-  they already compute via `nudge_kind_for_mode`;
-  `crates/atm-core/src/nudge_dispatch.rs` `rebuild_received_hook_dispatch`
-  passes its `NudgeKind` argument through.
-- [ ] D3 — default bodies (`crates/atm-core/src/send/nudge_template.rs`
+  (`crates/atm-storage/src/contract.rs`). Code contract C1.
+- [ ] D2 — override-table migration
+  (`crates/atm-storage-rusqlite/src/shared_db.rs`): new function
+  `migrate_template_override_kinds_to_seven(conn)` called from the
+  existing schema-ensure path that runs on every database open (CLI and
+  daemon alike). It rebuilds `team_nudge_template_overrides` with the
+  seven-value `CHECK` in code contract C4, copies every row whose kind is
+  one of the seven, and drops each row whose kind is `delivery_task` or
+  `delivery_task_ack` with one `tracing::warn!` line naming team and kind
+  (retained by REQ-P-OBS-003). Idempotent: a database already on the
+  seven-value `CHECK` is left untouched.
+- [ ] D3 — kind selection takes the nudge mode. Code contract C2.
+  `built_in_nudge_template_kind_from_post_send_event` gains the
+  `NudgeKind` parameter (`crates/atm-core/src/boundary/mod.rs`);
+  `render_built_in_nudge_for_dispatch` in
+  `crates/atm-core/src/send/hook.rs` gains `nudge_kind: NudgeKind` and
+  its two call sites inside `build_built_in_dispatch` (tmux and graft
+  branches) pass the `kind` that function already derives via
+  `nudge_kind_for_mode`. `crates/atm-core/src/nudge_dispatch.rs` is
+  unchanged: it already supplies `NudgeMode` to `build_built_in_dispatch`.
+  `crates/atm/src/commands/internal_nudge.rs`: the test
+  `built_in_template_kind_selection_covers_six_paths` becomes
+  `built_in_template_kind_selection_covers_seven_paths` and asserts every
+  row of the C2 table; fixtures that name `DeliveryTask` /
+  `DeliveryTaskAck` are changed to `Task`.
+- [ ] D4 — default bodies (`crates/atm-core/src/send/nudge_template.rs`
   `default_template`). Code contract C3.
-- [ ] D4 — CLI: `crates/atm/src/commands/teams.rs` `set-nudge-template`,
+- [ ] D5 — CLI: `crates/atm/src/commands/teams.rs` `set-nudge-template`,
   `disable-nudge-template`, `clear-nudge-template` accept `queue`,
   `queue_ack`, `task`; a retired string is rejected with
   `ATM_MESSAGE_VALIDATION_FAILED` and the hint `use "task"`; help text
-  lists all seven kinds.
-- [ ] D5 — docs: `docs/user-documents/nudge-templates.md` documents the
-  seven kinds, the C2 mapping, the retirement, and the corrected read
-  action; `docs/user-documents/examples/nudge-templates/`: fix `read atm`
-  in `delivery.xml`, `delivery_ack.xml`, `manage-templates.sh`; delete
+  lists all seven kinds. `crates/atm-core/src/team_admin.rs` request
+  types carry the kind unchanged (verify by test that a `queue_ack`
+  override round-trips through `set_nudge_template_override_with_store`).
+- [ ] D6 — normative docs lose the six-kind bound:
+  `docs/requirements.md` post-send hook block ("exactly six named template
+  cases", near line 1093), the "six built-in template bodies" statement
+  near line 1105, and the emitter-seam statement near line 4496;
+  `docs/architecture.md` lines 2736–2738; `docs/atm/requirements.md`
+  lines 143–144. Each states the seven kinds and the rule that
+  `NudgeKind` selects the delivery or queue family.
+  `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md` gains
+  a dated amendment section (original body unchanged) recording the
+  seven-kind inventory, the retirement, the migration in D2, and the
+  `NudgeKind` rule; `docs/adr/INDEX.md` entry text updated if the ADR
+  status line changes.
+- [ ] D7 — user docs and examples: `docs/user-documents/nudge-templates.md`
+  documents the seven kinds, the C2 mapping, the retirement, the
+  migration, and the corrected read action;
+  `docs/user-documents/examples/nudge-templates/`: fix `read atm` in
+  `delivery.xml`, `delivery_ack.xml`, `manage-templates.sh`; delete
   `delivery_task.xml` and `delivery_task_ack.xml`; add `queue.xml`,
-  `queue_ack.xml`, `task.xml` matching C3; `docs/requirements.md`:
-  replace the two "exactly six named template cases" / "six built-in
-  nudge template bodies" statements (post-send hook block near line 1093
-  and the emitter seam block near line 4496) with the seven kinds and the
-  rule that `NudgeKind` selects the delivery/queue family.
-- [ ] D6 — tests listed under Required validation.
+  `queue_ack.xml`, `task.xml` matching C3.
+- [ ] D8 — live nudge-text producers outside the crates:
+  `scripts/atm-nudge.py` line 266, `scripts/atm-nudge.sh` line 50,
+  `scripts/test_atm_nudge.py` lines 281 and 287, and
+  `.claude/skills/restore-team-communications/SKILL.md` line 76 replace
+  `read atm --team <team>` / `read atm` with the targeted read action.
+- [ ] D9 — tests listed under Required validation.
 
 ### Paths to delete
 
@@ -70,9 +97,15 @@ shape-only completion fails the sprint.
 
 ### Paths that must not change
 
-- `docs/plans/phase-aq/evidence/**` (committed CI evidence records that
-  contain `read atm`; never edited).
-- `docs/plans/phase-AD/sprint-AD21.md` (historical).
+- `docs/plans/phase-aq/evidence/**` (committed CI evidence records).
+- `docs/plans/phase-AD/sprint-AD21.md`,
+  `reports/smoke/phase-AE-installed-docs-proof.md` (historical records).
+- The original decision body of ADR-019 (amended by appended section only).
+- `crates/atm-graft/src/nudge_sink.rs`, `crates/atm-graft-python/src/lib.rs`,
+  `crates/hermes-atm/tests/test_runtime.py`: their `read atm` strings are
+  fixture bodies for their own injectors, not built-in defaults.
+- `crates/atm-architecture/tests/pending_nudge_store_boundary.rs`: its
+  `read atm-storage types source` strings are unrelated prose.
 
 ## Code contracts
 
@@ -117,6 +150,15 @@ pub fn built_in_nudge_template_kind_from_post_send_event(
         (false, false, true,  NudgeKind::Queue) => K::QueueAck,
     }
 }
+
+// crates/atm-core/src/send/hook.rs
+fn render_built_in_nudge_for_dispatch<R>(
+    runtime: &R,
+    event: &PostSendHookEvent,
+    nudge_kind: NudgeKind,
+) -> Option<String>
+where
+    R: RetainedServiceRuntime + ?Sized;
 ```
 
 A task-tagged event resolves to `Task` in either mode. `requires_ack` is
@@ -157,23 +199,48 @@ Task:
 
 Acknowledge and AcknowledgeTask: unchanged.
 
+### C4 — override table after migration
+
+```sql
+CREATE TABLE IF NOT EXISTS team_nudge_template_overrides (
+    team_name TEXT NOT NULL,
+    template_kind TEXT NOT NULL
+        CHECK(template_kind IN (
+            'delivery', 'delivery_ack', 'queue', 'queue_ack', 'task',
+            'acknowledge', 'acknowledge_task'
+        )),
+    -- remaining columns unchanged
+);
+```
+
+Migration detection: read `sql` from `sqlite_master` for the table; if it
+lacks `'queue'`, rebuild (create `_new`, copy accepted rows, drop old,
+rename). Retired rows are dropped because the new `CHECK` cannot hold
+them.
+
 ### Unchanged surfaces
 
 `nudge_template::render_built_in_nudge` signature; `PostSendHookEvent`;
 placeholder set; renderer conditional rejection; `NudgeTemplateOverrideStore`
-trait.
+trait; `crates/atm-core/src/nudge_dispatch.rs`.
 
 ## Acceptance criteria
 
-1. `atm teams set-nudge-template atm-dev queue_ack --file x.xml` succeeds
-   and `atm queue --requires-ack` to a member of that team renders the
-   override; `atm teams set-nudge-template atm-dev delivery_task_ack
-   --file x.xml` exits 3 with the `use "task"` hint.
-2. `grep -rn 'read atm' crates docs/user-documents` returns nothing.
-3. A daemon started against a database holding a `delivery_task`
-   override row deletes it and logs one info line; the row is absent on
-   the next `atm teams show-nudge-template` (or equivalent list).
-4. All Required validation tests pass; `just validate` green.
+1. On a database created before this sprint holding one `delivery_task`
+   override row and one `delivery_ack` row: after open, the
+   `delivery_task` row is gone with one warning logged, the `delivery_ack`
+   row is intact, and `atm teams set-nudge-template atm-dev queue_ack
+   --file x.xml` succeeds; `atm queue --requires-ack` to a member of that
+   team renders the override; `atm teams set-nudge-template atm-dev
+   delivery_task_ack --file x.xml` exits 3 with the `use "task"` hint.
+2. Gates: `grep -rn 'read atm --team' crates/atm-core/src/send/nudge_template.rs docs/user-documents scripts .claude/skills/restore-team-communications`
+   returns nothing; `grep -rln 'delivery_task_ack' docs/requirements.md docs/architecture.md docs/atm/requirements.md docs/user-documents`
+   returns nothing; `default_template(kind)` for all seven kinds contains
+   no `read atm ` (unit assertion).
+3. All Required validation tests pass; `just validate` green, including
+   `scripts/check-nudge-taxonomy.py` with an unchanged allowlist (no new
+   identifier in this sprint contains `nudge`; the migration function is
+   named without it).
 
 ## Required validation
 
@@ -182,20 +249,30 @@ trait.
   `atm queue` resolves Queue / QueueAck, and a `--task-id` send resolves
   Task in both modes (six assertions per backend).
 - `crates/atm-core/src/send/nudge_template.rs` unit tests: every default
-  body renders without error; no default body contains `read atm`;
+  body renders without error; no default body contains `read atm `;
   Queue, QueueAck, Task bodies lack `<when`; Delivery, DeliveryAck
   contain `<when`; every non-ack body contains `execute the assigned
-  task`; every non-ack body contains `atm read --message-id`.
+  task` and `atm read --message-id`.
+- `crates/atm/src/commands/internal_nudge.rs`:
+  `built_in_template_kind_selection_covers_seven_paths`.
 - `crates/atm-storage/src/contract.rs` tests: seven-kind `FromStr` /
   `as_str` round trip; `delivery_task` and `delivery_task_ack` parse to
   the retirement error.
+- `crates/atm-storage-rusqlite/src/shared_db.rs` tests: AC 1 migration
+  scenario (old six-value `CHECK` database → rebuilt, retired rows
+  dropped, others retained, `queue_ack` insert accepted); second open is
+  a no-op.
 - `crates/atm-storage-rusqlite/src/nudge_template_override_store.rs`
-  tests: round trip for `queue`, `queue_ack`, `task`; startup deletes
-  retired-kind rows and leaves the other kinds untouched.
+  tests: round trip for `queue`, `queue_ack`, `task`;
+  `load_template_override` returns `None` for a retired kind after
+  migration.
+- `scripts/test_atm_nudge.py` updated assertions pass.
 - `just validate` on the sprint branch; quality-mgr Final Quality Report
-  posted on the PR before merge.
+  posted on the PR before merge; `arch-qa` review of the ADR-019
+  amendment.
 
 ## Out of scope
 
-Herdr rendering (AX.2); task state (AX.4a); any change to the renderer's
-placeholder set or conditional handling; watermark or re-nudge behaviour.
+Herdr rendering (AX.2); task state (AX.3); any change to the renderer's
+placeholder set or conditional handling; watermark or re-nudge behaviour;
+a `show-nudge-template` command.

@@ -1598,11 +1598,12 @@ dogfood run (issue #1173): the Herdr sink bypasses the built-in nudge
 templates and injects fixed wake text; `atm queue` has no template class
 of its own; and task-tagged mail has no state, so a second task can be
 acked while the first is in progress and an idle assignee is never
-reminded. Five sprints: `AX.1` queue template class and default-body
-fixes, `AX.2` Herdr template rendering, `AX.4a` task state machine and
-`--task-complete`, `AX.4b` task nudge cycle with lead notification and
-doctor codes, `AX.3` live Herdr evidence. Dependency graph:
-AX.1 → {AX.2 ∥ AX.4a} → AX.4b → AX.3.
+reminded. Six sequential sprints: `AX.1` queue template class and
+default-body fixes, `AX.2` Herdr template rendering, `AX.3` task state
+machine and `--task-complete`, `AX.4` task reminder cycle in the Herdr
+pump, `AX.5` lead notification and doctor codes, `AX.6` live Herdr
+evidence. Dependency graph (all `must_follow`):
+AX.1 → AX.2 → AX.3 → AX.4 → AX.5 → AX.6.
 
 The authoritative plan is
 [phase-ax-plan](./plans/phase-ax/phase-ax-plan.md) with per-sprint docs
@@ -1612,11 +1613,12 @@ Phase AX sprint status:
 
 | Sprint | Status | Branch | Artifacts |
 | --- | --- | --- | --- |
-| `AX.1` | `planned` | `feature/ax1-queue-template-class` | `docs/plans/phase-ax/sprint-AX.1-queue-template-class.md` |
-| `AX.2` | `planned` | `feature/ax2-herdr-template-rendering` | `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md`, `docs/adr/ADR-058-herdr-local-steer-backend-contract.md` |
-| `AX.4a` | `planned` | `feature/ax4a-task-state-machine` | `docs/plans/phase-ax/sprint-AX.4a-task-state-machine.md`, `docs/adr/ADR-061-task-state-machine.md`, `boundaries/atm-storage/task-store.toml` |
-| `AX.4b` | `planned` | `feature/ax4b-task-nudge-cycle` | `docs/plans/phase-ax/sprint-AX.4b-task-nudge-cycle.md` |
-| `AX.3` | `planned` | none (proof on `integrate/phase-ax`) | `docs/plans/phase-ax/ax3-live-proof.md` |
+| `AX.1` | `planned` | `feature/ax1-queue-template-class` | `docs/plans/phase-ax/sprint-AX.1-queue-template-class.md`, ADR-019 amendment |
+| `AX.2` | `planned` | `feature/ax2-herdr-template-rendering` | `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md`, ADR-058 amendment, `boundaries/atm-herdr/herdr-process-adapter.toml` |
+| `AX.3` | `planned` | `feature/ax3-task-state-machine` | `docs/plans/phase-ax/sprint-AX.3-task-state-machine.md`, `docs/adr/ADR-061-task-state-machine.md`, ADR-054 amendment, `boundaries/atm-storage/task-store.toml` |
+| `AX.4` | `planned` | `feature/ax4-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.4-task-reminder-cycle.md`, ADR-054 amendment (marker exception) |
+| `AX.5` | `planned` | `feature/ax5-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.5-lead-notification-doctor.md` |
+| `AX.6` | `planned` | none (proof on `integrate/phase-ax`) | `docs/plans/phase-ax/ax6-live-proof.md` |
 
 ## Publishing Improvements
 

@@ -9,21 +9,23 @@ status: draft
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 dependency_relations:
-  - related: AX.1
+  - prerequisite: AX.1
+    dependent: AX.2
     relation: must_follow
-    rationale: needs the Queue-family kinds for the pump path and shares send/hook.rs edits.
-  - related: AX.4a
-    relation: parallel_safe
-    rationale: this sprint owns hook.rs, HerdrNudgeTarget, atm-herdr, the bootstrap selector, and herdr_queue_wake.rs; AX.4a owns the write pipeline, ack path, task storage, and CLI flags. No shared files, contracts, or artifacts.
-  - related: AX.4b
+    rationale: needs the Queue-family kinds for the pump path and shares crates/atm-core/src/send/hook.rs edits.
+  - prerequisite: AX.2
+    dependent: AX.3
     relation: must_follow
-    rationale: AX.4b extends the pump tick this sprint changes to pass rendered text.
+    rationale: both edit the re-export surface in crates/atm-core/src/boundary/mod.rs; AX.3 merges this sprint forward before every round.
 ---
 
 # AX.2 — Herdr renders the built-in nudge template
 
 Make the Herdr sink consume the same rendered template the tmux and graft
-sinks consume, and retire the fixed wake text.
+sinks consume, and retire the fixed wake text. Evidence base for the
+multi-line prompt: live check on rand-m5 with herdr 0.8.2 on 2026-09-05,
+where a `codex` agent and a `claude-code` agent each received the
+six-line Delivery body as one submission.
 
 ## Deliverables
 
@@ -34,32 +36,43 @@ shape-only completion fails the sprint.
 - [ ] D1 — `HerdrNudgeTarget` carries `rendered_nudge: String`
   (`crates/atm-core/src/boundary/mod.rs`, code contract C1). The Herdr
   branch of `build_built_in_dispatch` in `crates/atm-core/src/send/hook.rs`
-  calls `render_built_in_nudge_for_dispatch` exactly as the tmux branch
-  does and returns `None` on render failure the same way.
-- [ ] D2 — Herdr emitter takes the text (`crates/atm-herdr/src/lib.rs`,
-  code contract C2). `HERDR_WAKE_TEXT` and the test
-  `prompt_text_is_fixed_and_non_empty` are deleted. Empty rendered text is
-  rejected before spawning (ADR-058 D8 `empty_agent_prompt` stays an
-  atm-core defect signal).
-- [ ] D3 — callers pass the text through:
-  `crates/atm-daemon-bootstrap/src/received_hook_selector.rs` (immediate
-  steer, `HerdrNudgeTarget` arm);
-  `crates/atm-http-runtime/src/herdr_queue_wake.rs` `emit_claim` (the
-  pump rebuilds dispatch with `NudgeKind::Queue`, which after AX.1
-  resolves a Queue-family or Task template);
-  `crates/atm-http-runtime/src/storage_and_nudge_router.rs`
-  `HerdrNudgeTarget` arm.
+  calls `render_built_in_nudge_for_dispatch(runtime, event, kind)` exactly
+  as the tmux branch does and returns `None` on render failure the same
+  way.
+- [ ] D2 — `HerdrProcessAdapter::prompt` gains the text parameter
+  (`crates/atm-herdr/src/lib.rs`, code contract C2). Implementations
+  updated: `HerdrProcessInvoker` (lib.rs, `impl HerdrProcessAdapter for
+  HerdrProcessInvoker`), `atm_herdr::testing::FakeHerdrProcessAdapter`,
+  and `BenchmarkNoopHerdrProcessAdapter` in
+  `crates/atm-daemon-bootstrap/src/received_hook_selector.rs`.
+  `prompt_args` gains the text; `HERDR_WAKE_TEXT` and the test
+  `prompt_text_is_fixed_and_non_empty` are deleted. Empty or
+  whitespace-only text is rejected before spawning with the existing
+  `empty_agent_prompt` error (ADR-058 D8).
+- [ ] D3 — callers pass the text through: the single production call
+  site in `crates/atm-daemon-bootstrap/src/received_hook_selector.rs`
+  (Herdr emitter, currently around line 420) reads
+  `target.rendered_nudge`. The pump in
+  `crates/atm-http-runtime/src/herdr_queue_wake.rs` builds no
+  `HerdrNudgeTarget` of its own: it inherits the rendered text through
+  `rebuild_received_hook_dispatch` → `build_built_in_dispatch` and passes
+  the dispatch to the same emitter. No change to
+  `crates/atm-http-runtime/src/storage_and_nudge_router.rs`.
 - [ ] D4 — PTY line-safety fixture test in `atm-herdr` asserting the
   emitter passes multi-line text through unmodified (no newline stripping
-  or joining). Basis: live check on rand-m5 with herdr 0.8.2 on
-  2026-09-05, a `codex` agent and a `claude-code` agent each received the
-  six-line Delivery body as one submission.
+  or joining) and that argv has exactly four elements.
 - [ ] D5 — ADR-058 amendment
   (`docs/adr/ADR-058-herdr-local-steer-backend-contract.md`): D2 and D4
   replace "fixed prompt text" with "the rendered built-in nudge template
-  resolved for the recipient team and kind"; argv shape unchanged; the
-  line-safety rule from D4 recorded; dated history entry.
-- [ ] D6 — tests listed under Required validation.
+  resolved for the recipient team and kind"; argv shape unchanged
+  (`agent prompt <name> <text>`); session still travels via
+  `HERDR_SESSION` in the child environment; the line-safety rule from D4
+  recorded; dated history entry.
+- [ ] D6 — `boundaries/atm-herdr/herdr-process-adapter.toml`:
+  `[contracts]` notes record that prompt text is caller-supplied rendered
+  template text and that the adapter never composes text; `[status]`
+  note dated.
+- [ ] D7 — tests listed under Required validation.
 
 ### Paths to delete
 
@@ -78,22 +91,38 @@ pub struct HerdrNudgeTarget {
 }
 ```
 
-### C2 — emitter signature
+`rendered_nudge` is already an accepted identifier in
+`scripts/check-nudge-taxonomy.py`; no allowlist change.
+
+### C2 — adapter contract
 
 ```rust
 // crates/atm-herdr/src/lib.rs
-fn prompt_args(agent: &AgentName, session: Option<&HerdrSession>, text: &str) -> Vec<String>;
-// ["agent", "prompt", <agent>, <text>]  plus ["--session", <s>] when session is Some.
-// text.trim().is_empty() => Err(empty_agent_prompt) before spawn.
+pub trait HerdrProcessAdapter: Send + Sync {
+    fn prompt<'a>(
+        &'a self,
+        agent: &'a AgentName,
+        session: Option<&'a HerdrSession>,
+        text: &'a str,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>>;
+    // wait, get, list: unchanged
+}
+
+fn prompt_args(agent: &AgentName, text: &str) -> Vec<String>;
+// exactly ["agent", "prompt", <agent>, <text>]; session is NOT an argv
+// element — session_environment(session) sets HERDR_SESSION as today.
+// text.trim().is_empty() => Err(HerdrError::EmptyAgentPrompt) before spawn.
 ```
 
-The public emitter entry point (`emit_received_message` or its current
-name) gains the same `text: &str` parameter; no other argv change.
+argv[3] changes from the fixed wake text to the rendered template; no
+argv element is added or removed for `session: Some` or `session: None`.
 
 ### Unchanged surfaces
 
-`LocalTmuxNudgeTarget`; `render_built_in_nudge_for_dispatch`; ADR-058
-D1, D3, D5–D8; the `herdr agent rename` identity rule.
+`LocalTmuxNudgeTarget`; `session_environment`; ADR-058 D1, D3, D5–D8;
+the `herdr agent rename` identity rule; `HerdrProcessAdapter::{wait, get,
+list}`; `crates/atm-http-runtime/src/storage_and_nudge_router.rs`.
 
 ## Acceptance criteria
 
@@ -101,7 +130,10 @@ D1, D3, D5–D8; the `herdr agent rename` identity rule.
 2. A Herdr-backed member's prompt text equals the tmux-backed render for
    the same `PostSendHookEvent`.
 3. Pump nudges carry a Queue-family or Task body (no `<when>`).
-4. ADR-058 amended with a dated history entry; `just validate` green.
+4. `prompt_args` output has exactly four elements for `session: Some` and
+   `session: None`, and argv[3] is byte-identical to a six-line input.
+5. ADR-058 amended with a dated history entry; `boundary-guard` review of
+   `herdr-process-adapter.toml` passes; `just validate` green.
 
 ## Required validation
 
@@ -111,13 +143,16 @@ D1, D3, D5–D8; the `herdr agent rename` identity rule.
 - `crates/atm-core/tests/nudge_mode.rs`: Herdr member, `atm send` then
   `atm queue`; assert the emitted prompt text for each equals the expected
   Delivery / Queue default render.
-- `crates/atm-herdr` process tests updated for the parameterised prompt;
-  the D4 fixture test passes a six-line body and asserts argv[3] is
-  byte-identical.
-- `crates/atm-http-runtime/src/herdr_queue_wake.rs` tests: `ac01`–`ac06`
-  still pass with the recording emitter asserting the rendered text.
+- `crates/atm-herdr` tests updated for the parameterised prompt; the D4
+  fixture test (AC 4); `FakeHerdrProcessAdapter` records the text.
+- `crates/atm-http-runtime/src/herdr_queue_wake.rs`: the full
+  `ac01`–`ac12` set still passes, with
+  `ac08_dispatch_selector_is_used_by_tick_once` updated to assert the
+  rendered text carried on the Herdr target.
+- `crates/atm-daemon-bootstrap` selector tests updated for the call site.
 - `just validate`; quality-mgr Final Quality Report on the PR; `arch-qa`
-  review of the ADR amendment.
+  review of the ADR-058 amendment; `boundary-guard` on the Herdr boundary
+  record.
 
 ## Out of scope
 

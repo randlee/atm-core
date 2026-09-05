@@ -11,27 +11,23 @@ dependency_relations:
   - prerequisite: AX.1
     dependent: AX.2
     relation: must_follow
-    rationale: AX.2 renders Queue-family templates on the Herdr pump path; the kinds must exist first, and both edit send/hook.rs.
-  - prerequisite: AX.1
-    dependent: AX.4a
-    relation: must_follow
-    rationale: both edit crates/atm-storage/src/contract.rs and docs/user-documents; AX.4a's completion message relies on the AX.1 kind mapping.
+    rationale: AX.2 renders Queue-family templates on the Herdr pump path and both edit send/hook.rs (AX.1 changes render_built_in_nudge_for_dispatch, AX.2 changes the Herdr branch of build_built_in_dispatch).
   - prerequisite: AX.2
-    dependent: AX.4a
-    relation: parallel_safe
-    rationale: AX.2 owns hook.rs, HerdrNudgeTarget, atm-herdr, the bootstrap selector, and the pump; AX.4a owns the write pipeline, ack path, storage task tables, and CLI list/send/ack flags. No shared files, contracts, or artifacts.
-  - prerequisite: AX.2
-    dependent: AX.4b
-    relation: must_follow
-    rationale: AX.4b extends the pump tick that AX.2 changes to pass rendered text.
-  - prerequisite: AX.4a
-    dependent: AX.4b
-    relation: must_follow
-    rationale: the pump reads the tasks table and the write-path steer suppression AX.4b adds depends on the task rows AX.4a persists.
-  - prerequisite: AX.4b
     dependent: AX.3
     relation: must_follow
-    rationale: AX.3 is a proof sprint on the merged integrate head.
+    rationale: both edit the re-export surface in crates/atm-core/src/boundary/mod.rs (AX.2 HerdrNudgeTarget; AX.3 TaskStore re-exports) and crates/atm-storage/src/contract.rs.
+  - prerequisite: AX.3
+    dependent: AX.4
+    relation: must_follow
+    rationale: the pump task step reads the tasks table and TaskStore delivered by AX.3, and the write-path marker suppression relies on the task rows existing.
+  - prerequisite: AX.4
+    dependent: AX.5
+    relation: must_follow
+    rationale: the lead notification is triggered from the reminder counter AX.4 maintains and doctor ATM_TASK_STALLED reads it.
+  - prerequisite: AX.5
+    dependent: AX.6
+    relation: must_follow
+    rationale: AX.6 is a proof sprint on the merged integrate head.
 ---
 
 # Phase AX — Nudge templates on every backend and task-state tracking
@@ -76,7 +72,7 @@ Minor defects in the default template bodies found in the same review:
 ## 2. Decisions (Rand, 2026-09-04 and 2026-09-05, binding)
 
 - No architecture change beyond **adding a queue template class** (AX.1)
-  and **task-state tracking** (AX.4a/AX.4b). The existing message model,
+  and **task-state tracking** (AX.3–AX.5). The existing message model,
   placeholders (`from`, `team`, `message_id`, `description`, `task_id`),
   renderer, and override store are reused.
 - Tasks are always queued and always require ack, so the template surface
@@ -96,36 +92,67 @@ Minor defects in the default template bodies found in the same review:
   that contain the old `read atm` text are **not** edited.
 - Task tracking: one ACTIVE task per assignee; the next ASSIGNED task is
   surfaced only after `--task-complete` on the current one; an idle
-  assignee with an open task is nudged at most once per 60 s; every
-  tenth nudge notifies the `lead`; doctor warns when a team has no lead.
+  assignee with an open task is reminded at most once per 60 s; every
+  tenth reminder notifies the `lead`; doctor warns when a team has no lead.
 - The rules are simple state machines: explicit states, explicit events,
-  one pure transition function, every transition and every nudge an
+  one pure transition function, every transition and every reminder an
   append-only event row. The pump never changes task state.
 
-### 2.1 Decisions to confirm at plan review
+Plan-author decisions recorded in the same list (2026-09-05, from the
+cycle-1 hardening findings; binding unless Rand objects at plan review):
 
-Defaults chosen so every sprint is implementable as written. Either
-confirmation or an alternative is a wording change, not a re-plan.
+- The `team_nudge_template_overrides` table has a six-value `CHECK` on
+  `template_kind`; SQLite cannot alter it, so AX.1 rebuilds the table
+  with the seven-value `CHECK`. Rows holding a retired kind cannot be
+  copied into the rebuilt table and are dropped by the migration with one
+  retained-log warning each. The migration runs on every database open.
+- The unused `atm_storage::contract::TaskState(String)` newtype (no
+  callers in the workspace beyond three `pub use` lines) is retired in
+  AX.3; the name is taken by the new state enum.
+- New task identifiers avoid the `nudge` word family (`reminder`,
+  `Reminded`, `last_reminded_at`) so the frozen inventory in
+  `scripts/check-nudge-taxonomy.py` does not grow.
+- Task-tagged mail to a Herdr-backed recipient carries **no** pending-nudge
+  marker and no immediate steer (AX.4); the durable `tasks` row is its
+  delivery record and the pump task step is its only nudge source. This is
+  a recorded exception to ADR-054's marker contract (dated ADR-054
+  amendment plus ADR-061). Daemon-down behaviour is identical to queued
+  mail today: nothing is nudged until the daemon pump runs.
+- `TaskStore` is the seventh optional storage capability trait under
+  ADR-018 §3 as re-counted by ADR-054; ADR-061 is the follow-up ADR that
+  rule requires.
+- Doctor gains three warning codes: `ATM_ROSTER_NO_LEAD` (Rand),
+  `ATM_ROSTER_MULTIPLE_LEADS`, and `ATM_TASK_STALLED` (open task with ten
+  or more reminders).
+- The reserved sender name `atm-daemon` is used for the lead notification
+  and is rejected by `add-member` / `update-member`.
 
-| Item | Default in this plan | Alternative |
+### 2.1 Binding defaults (alternatives recorded for the record)
+
+The sprint docs implement the default column. The alternatives are
+follow-up options on #1173, not open questions.
+
+| Item | Binding default | Alternative recorded |
 | --- | --- | --- |
-| Who may close a task that the assignee never completes | the **assigner** may also send `--task-complete <id>`; actor recorded in `task_events` | a distinct `--task-cancel` flag |
-| Sender identity on the lead notification | reserved sender name `atm-daemon`, never a roster member | notification is a doctor warning and log record only |
-| Re-sending an open task id to the same assignee | accepted as a re-send: state unchanged, assignment message id updated, `Resent` event | rejected as a duplicate |
+| Who may close a task the assignee never completes | the **assigner** may send `atm send <assignee> --task-complete <id>`; actor recorded in `task_events` | a distinct `--task-cancel` flag |
+| Sender identity on the lead notification | reserved sender name `atm-daemon`, never a roster member | doctor warning and log record only |
+| Re-sending an open task id to the same assignee | accepted: state unchanged, `assignment_message_id` and `description` updated, one `Resent` event row | rejected as a duplicate |
+| Completing a task that was never acked | accepted; the assignment message is marked acknowledged in the same transaction so it does not stay pending-ack forever | reject and require an ack first |
 
 ## 3. Sprints
 
 | Sprint | Title | Owns | Doc |
 | --- | --- | --- | --- |
-| AX.1 | Queue template class and default template fixes | `BuiltInNudgeTemplateKind`, kind selection, default bodies, CLI kind strings, user docs and examples | `sprint-AX.1-queue-template-class.md` |
-| AX.2 | Herdr renders the built-in template | `HerdrNudgeTarget`, `send/hook.rs` Herdr branch, `atm-herdr` prompt text, bootstrap selector, pump emit, ADR-058 amendment | `sprint-AX.2-herdr-template-rendering.md` |
-| AX.4a | Task state machine and completion | `atm-storage` task types and pure transition, `TaskStore`, rusqlite tables and in-transaction application, ack gate, `--task-complete`, `atm list --tasks`, ADR-061, requirements §15.4 | `sprint-AX.4a-task-state-machine.md` |
-| AX.4b | Task nudge cycle, lead notification, doctor | Herdr pump task step, Herdr task-send steer suppression, `atm-daemon` lead message, three doctor codes | `sprint-AX.4b-task-nudge-cycle.md` |
-| AX.3 | Live Herdr dogfood evidence | `docs/plans/phase-ax/ax3-live-proof.md` | `sprint-AX.3-herdr-dogfood-evidence.md` |
+| AX.1 | Queue template class and default template fixes | `BuiltInNudgeTemplateKind`, override-table migration, kind selection, default bodies, CLI kind strings, six-kind statements in docs and ADR-019 amendment, nudge scripts | `sprint-AX.1-queue-template-class.md` |
+| AX.2 | Herdr renders the built-in template | `HerdrNudgeTarget`, `send/hook.rs` Herdr branch, `HerdrProcessAdapter::prompt` and its three impls, bootstrap selector call site, ADR-058 amendment, Herdr boundary record | `sprint-AX.2-herdr-template-rendering.md` |
+| AX.3 | Task state machine and completion | `atm-storage` task types and pure transition, `TaskStore`, rusqlite tables and in-transaction application, ack gate, `--task-complete`, `atm list --tasks`, ADR-061, ADR-054 amendment, requirements §6.5/§7/§15.4 | `sprint-AX.3-task-state-machine.md` |
+| AX.4 | Task reminder cycle in the Herdr pump | pump task step and idle-set widening, task-row reminder rendering, Herdr task-mail steer and marker suppression, bootstrap composition | `sprint-AX.4-task-reminder-cycle.md` |
+| AX.5 | Lead notification and doctor | `atm-daemon` reserved sender, lead message, three doctor codes with catalog guidance | `sprint-AX.5-lead-notification-doctor.md` |
+| AX.6 | Live Herdr dogfood evidence | `docs/plans/phase-ax/ax6-live-proof.md` | `sprint-AX.6-herdr-dogfood-evidence.md` |
 
-Dependency graph: AX.1 → {AX.2 ∥ AX.4a} → AX.4b → AX.3. The AX.2/AX.4a
-pair is parallel-safe because their file sets, contracts, and artifacts do
-not intersect (see frontmatter rationale).
+Dependency chain: AX.1 → AX.2 → AX.3 → AX.4 → AX.5 → AX.6, all
+`must_follow` (see frontmatter rationale). No pair is parallel-safe: every
+adjacent pair shares a file or a public contract.
 
 ## 4. Acceptance contract for the phase
 
@@ -134,46 +161,61 @@ test or evidence gate.
 
 1. A Herdr-backed member receives the same rendered XML a tmux-backed
    member receives for the same send, byte-for-byte apart from transport.
-   (AX.2 unit test; AX.3 live evidence.)
+   (AX.2 unit test; AX.6 live evidence.)
 2. `atm send` to an idle Herdr member renders Delivery / DeliveryAck;
    `atm queue` renders Queue / QueueAck with no `<when>`; a task-tagged
    send renders Task. (AX.1 tests; AX.2 for the Herdr emitter.)
 3. `atm ack` renders the unchanged Acknowledge / AcknowledgeTask
    template. (AX.1.)
 4. `atm teams set-nudge-template` accepts `queue`, `queue_ack`, `task`,
-   rejects the retired kinds, and the override is honoured on tmux,
-   Herdr, and graft. (AX.1; AX.2 for Herdr.)
-5. No default template contains `read atm`; every delivery, queue, and
-   task read action is `atm read --message-id {{message_id}}`. (AX.1.)
+   rejects the retired kinds, the override table accepts the new kinds on
+   an upgraded database, and the override is honoured on tmux, Herdr, and
+   graft. (AX.1; AX.2 for Herdr.)
+5. No default template body and no published example contains
+   `read atm --team`; every delivery, queue, and task read action is
+   `atm read --message-id {{message_id}}`; no normative doc states a
+   six-kind bound. (AX.1, gates in its AC 2.)
 6. `HERDR_WAKE_TEXT` and `prompt_text_is_fixed_and_non_empty` are gone;
-   ADR-058 D2/D4 state the prompt text is the rendered template. (AX.2.)
+   `herdr agent prompt` argv keeps exactly four elements with the rendered
+   template as the fourth; ADR-058 D2/D4 state the prompt text is the
+   rendered template. (AX.2.)
 7. Task state is ASSIGNED → ACTIVE → COMPLETE with the transition table
-   in AX.4a; `atm ack` of a second task while one is ACTIVE is rejected
-   with exit 3; `--task-complete` naming a task not open for the caller
-   is rejected with exit 3; `task_events` replays to the `tasks` table.
-   (AX.4a.)
-8. An idle Herdr assignee with an open task receives one Task nudge
-   immediately and then at most one per 60 s; the second task is nudged
-   only after the first is COMPLETE; every tenth nudge sends one message
-   to the lead; doctor warns `ATM_ROSTER_NO_LEAD` on a team with no lead.
-   (AX.4b; AX.3 live evidence.)
-9. `just validate` green on the integrate head; `boundary-guard` review of
-   `boundaries/atm-storage/task-store.toml`. (AX.4a; phase PR.)
+   in AX.3; `atm ack` of a second task while one is ACTIVE is rejected
+   with exit 3; `--task-complete` that resolves to no open row for the
+   caller is rejected with exit 3; `task_events` replays to the `tasks`
+   table per (team, task_id, assignee). (AX.3.)
+8. An idle Herdr assignee with an open task receives one Task reminder on
+   the first idle tick after assignment and then at most one per 60 s;
+   the second task is reminded only after the first is COMPLETE; at most
+   one Herdr prompt per member per tick. (AX.4; AX.6 live evidence.)
+9. Every tenth reminder sends one queued message from `atm-daemon` to the
+   lead; doctor warns `ATM_ROSTER_NO_LEAD` on a team with no lead and
+   `ATM_TASK_STALLED` on an open task with ten or more reminders. (AX.5
+   tests; AX.6 case C14.)
+10. `just validate` green on the integrate head, including
+    `scripts/check-nudge-taxonomy.py` with an unchanged allowlist;
+    `boundary-guard` review of `boundaries/atm-storage/task-store.toml`
+    and `boundaries/atm-herdr/herdr-process-adapter.toml`. (AX.3, AX.2;
+    phase PR.)
 
 ## 5. Out of scope (tracked as follow-ups on #1173)
 
 - Seen watermark advancing past older unread messages on a one-shot read.
 - Re-nudge path for non-task immediate-mode sends after the steer is
   consumed.
-- Back-to-back Herdr steers coalescing inside Herdr's 300 ms Enter delay.
+- Back-to-back Herdr steers coalescing inside Herdr's 300 ms Enter delay
+  (AX.4 avoids triggering it by serialising one prompt per member per
+  tick; the underlying Herdr behaviour is unchanged).
 - `atm doctor` not emitting `ATM_ROSTER_MIXED_LOCAL_BACKEND` for a split
   team.
 - Herdr steer and failed tmux hook not recorded in the shared JSONL log.
 - New placeholders (unread count) or renderer conditionals.
-- Task re-nudge for tmux and graft members (state tracking applies to
-  them; only the Herdr pump re-nudges in this phase).
-- Cross-team task assignment; task priority, reassignment, expiry,
-  configurable intervals.
+- Task reminders for tmux and graft members (state tracking applies to
+  them; only the Herdr pump reminds in this phase).
+- Cross-host and cross-team task assignment: task transitions are applied
+  only to locally originated writes; peer receipts never create or reject
+  task state.
+- Task priority, reassignment, expiry, configurable intervals.
 
 ## 6. Execution notes
 
@@ -182,8 +224,9 @@ test or evidence gate.
 - team-lead dispatches via j2 template over `atm send --stdin`;
   quality-mgr gates each PR with a posted Final Quality Report.
 - `must_follow` merge-forward: merge the parent branch into the child
-  before every dev or fix round once the parent's development is pushed.
-- AX.3 runs on rand-m5 under fenix; the daemon is rebuilt from the
+  before every dev or fix round once the parent's development is pushed;
+  the parent PR merges first.
+- AX.6 runs on rand-m5 under fenix; the daemon is rebuilt from the
   integrate head into `~/.atm-builds/` (outside `~/Documents`) for the
   live proof.
 - `docs/project-plan.md` §55 (added with this plan) tracks sprint status.
