@@ -665,6 +665,32 @@ fn assert_local_target(dispatch: &atm_core::boundary::BuiltInPostSendDispatch, h
     }
 }
 
+fn assert_herdr_rendered_default(
+    dispatch: &atm_core::boundary::BuiltInPostSendDispatch,
+    expected_kind: atm_core::boundary::BuiltInNudgeTemplateKind,
+) {
+    let PostSendBuiltInTarget::LocalSteer(atm_core::boundary::LocalSteerTarget::Herdr(target)) =
+        &dispatch.target
+    else {
+        panic!("expected Herdr target");
+    };
+    let expected = atm_core::send::default_template(expected_kind)
+        .replace("{{from}}", &dispatch.event.source_address().to_string())
+        .replace("{{message_id}}", &dispatch.event.message_id.to_string())
+        .replace("{{description}}", &dispatch.event.description)
+        .replace(
+            "{{task_id}}",
+            dispatch
+                .event
+                .task_id
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_default()
+                .as_str(),
+        );
+    assert_eq!(target.rendered_nudge, expected);
+}
+
 fn assert_local_matrix(herdr: bool) {
     let team: TeamName = "test-team".parse().expect("team");
     let recipient = if herdr {
@@ -707,6 +733,9 @@ fn assert_local_matrix(herdr: bool) {
             .expect("build immediate dispatch");
         assert_eq!(dispatches.len(), 1);
         assert_local_target(&dispatches[0], herdr);
+        if herdr {
+            assert_herdr_rendered_default(&dispatches[0], expected_kind);
+        }
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(
                 &dispatches[0].event,
@@ -764,6 +793,9 @@ fn assert_local_matrix(herdr: bool) {
                 .expect("rebuild queued dispatch")
                 .expect("queued dispatch");
         assert_local_target(&dispatch, herdr);
+        if herdr {
+            assert_herdr_rendered_default(&dispatch, expected_kind);
+        }
         assert_eq!(dispatch.kind, NudgeKind::Queue);
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&dispatch.event, dispatch.kind),
