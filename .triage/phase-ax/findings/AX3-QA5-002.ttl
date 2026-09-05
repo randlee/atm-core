@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-QA5-002>
+  a triage:Finding ;
+  triage:findingId "AX3-QA5-002" ;
+  triage:title "ReaderPool::drop decides last-owner via Arc::strong_count(&self.ownership) == 1 before the field-drop decrement (TOCTOU): two of the last clones dropped concurrently can both observe count 2 and both skip shutdown_and_join, leaking every worker permanently" ;
+  triage:description "AX.3 QA-5 (quality-mgr ax3-qa-r5, PR #1191 Final Quality Report 2026-09-05T11:07Z; rust-qa-agent QA-001, confirmed by quality-mgr) at head c6525fd11. In crates/atm-storage-rusqlite/src/reader_pool.rs the new impl Drop for ReaderPool checks Arc::strong_count(&self.ownership) == 1 to decide whether it is the last owner, but the Arc's actual decrement happens after Drop::drop returns (compiler field-drop glue). std::sync::Arc::strong_count is documented as unreliable for this decision. If the last two ReaderPool clones are dropped concurrently on separate threads, both observe strong_count == 2, both skip shutdown_and_join, and the worker threads (and their SQLite connections) are never joined -- a silent permanent leak that reintroduces the AX3-QA3-001 race. Not hypothetical: SharedDb, which holds one such clone, derives Clone and is already cloned across std::thread::scope threads in the crate's own tests. Fix: remove the strong_count side-channel; put the shutdown/join logic in the Drop of a guard type owned by the Arc itself (Arc<PoolOwnerGuard> or equivalent), so Arc's own atomic last-owner semantics trigger exactly one shutdown_and_join. References: PR #1191 comment https://github.com/randlee/atm-core/pull/1191#issuecomment-5551352363; prior record .triage/phase-ax/findings/AX3-QA4-001.ttl (introduced the Drop impl this finding narrows). Repeatable crate sweep of crates/atm-storage-rusqlite for other strong_count-gated Drop uses found only this single occurrence (git grep strong_count HEAD -- crates/atm-storage-rusqlite at head c6525fd1168da1080ad4aa02e253d833b32c4fe9)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RUST-QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T11:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T11:07:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA5-002/AX3-2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-QA5-002/AX3-2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 696 ;
+  triage:snippet "if Arc::strong_count(&self.ownership) == 1 {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "c6525fd1168da1080ad4aa02e253d833b32c4fe9" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/c6525fd> .
+
+<urn:atm:triage:worktree/AX3/c6525fd>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "c6525fd1168da1080ad4aa02e253d833b32c4fe9" ;
+  triage:orderIndex 2 .

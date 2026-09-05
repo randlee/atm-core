@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-QA5-001>
+  a triage:Finding ;
+  triage:findingId "AX3-QA5-001" ;
+  triage:title "No test exercises the real multi-owner ReaderPool composition: the new drop/join tests drop a single un-cloned pool and never prove that dropping one of two clones leaves workers running while dropping the last clone triggers shutdown_and_join" ;
+  triage:description "AX.3 QA-5 (quality-mgr ax3-qa-r5, PR #1191 Final Quality Report 2026-09-05T11:07Z; req-qa ATM-QA-AX3R-001, confirmed by quality-mgr) at head c6525fd11. Re-assessment context: AX3-QA4-001 and AX3-QA3-001 stay open. The new ReaderPool Drop/join mechanism in crates/atm-storage-rusqlite/src/reader_pool.rs (Arc ownership gate, bounded shutdown_join_deadline, self-join guard) is correct by inspection for the production composition where SharedDb holds two clones of the same pool (mailbox_reader and mailbox_reader_metrics lanes), but the only tests added drop one un-cloned ReaderPool. Nothing proves the two-owner path: drop one clone -> no shutdown, workers still serve; drop the last clone -> shutdown fires and every worker is joined. This is the same 'daemon-composed feature lacks a lifecycle test with negative proof' pattern flagged in earlier phases. Fix: add a deterministic test that clones the pool, drops one clone and asserts workers are still alive/serving, then drops the last clone and asserts all workers exited (no sleep-based synchronization)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T11:09:52Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T11:07:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA5-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA5-001/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-QA5-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 694 ;
+  triage:snippet "impl Drop for ReaderPool {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "c6525fd1168da1080ad4aa02e253d833b32c4fe9" ;
+  triage:occursIn <urn:atm:triage:worktree/ax3-task-state-machine> .
+
+<urn:atm:triage:occurrence/AX3-QA5-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 907 ;
+  triage:snippet "fn shutdown_and_join(&self) {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "c6525fd1168da1080ad4aa02e253d833b32c4fe9" ;
+  triage:occursIn <urn:atm:triage:worktree/ax3-task-state-machine> .
+
+<urn:atm:triage:worktree/ax3-task-state-machine>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "c6525fd1168da1080ad4aa02e253d833b32c4fe9" ;
+  triage:orderIndex 2 .
