@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX4-QA2-001>
+  a triage:Finding ;
+  triage:findingId "AX4-QA2-001" ;
+  triage:title "New integration test crates/atm/tests/task_ledger_cli.rs hardcodes real active ATM agent identities (fenix, cipher) instead of the neutral test fixtures, violating RULE-009" ;
+  triage:description "AX.4 QA-2 (quality-mgr ax4-qa-r2, PR #1194 Final Quality Report 2026-09-05T10:24Z; found by arch-qa as 'ARCH-001', independently confirmed by quality-mgr; recorded here as AX4-QA2-001 because ARCH-001 is already an AX.1 record id) at head 193821c92. crates/atm/tests/task_ledger_cli.rs:18 (new file added to close AX4-QA-002) declares const ASSIGNER: &str = \"fenix\"; const ASSIGNEE: &str = \"cipher\"; -- real, currently active ATM agent identities -- instead of the established neutral fixtures atm_core::test_support::TEST_SENDER (\"sender-a\") / TEST_RECIPIENT (\"recipient\") used pervasively elsewhere (atm-core/src/home.rs, protocol.rs, list.rs, team_admin.rs). RULE-009: no production agent identity literals in test code (.claude/agents/arch-qa.md:134). Fix: replace the literals with TEST_SENDER/TEST_RECIPIENT, or add dedicated TEST_ASSIGNER/TEST_ASSIGNEE constants alongside them in atm_core::test_support and use those. Crate-scope repeatable sweep (git grep on crates/atm at HEAD) also surfaces pre-existing \"cipher\"/\"fenix\" literals in crates/atm/src/commands/list.rs (lines 287, 294, 301, 311, 317, 378, 379, 395) and crates/atm/src/commands/queue.rs:33, none of which were introduced in the AX.4 diff range (aaf2e04bf..193821c92); those files were untouched or only had unrelated lines changed by this range per git diff, so they are pre-existing debt, not counted as occurrences of this finding, and are not repeated as separate findings here." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T10:26:45Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX4 ;
+  triage:foundAt "2026-09-05T10:24:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA2-001/AX4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA2-001/AX4-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX4-QA2-001/AX4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/task_ledger_cli.rs" ;
+  triage:line 18 ;
+  triage:snippet "const ASSIGNER: &str = \"fenix\";" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "193821c92835986b45070f382b4aa00a0f6ee688" ;
+  triage:occursIn <urn:atm:triage:worktree/AX4/193821c9> .
+
+<urn:atm:triage:occurrence/AX4-QA2-001/AX4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/task_ledger_cli.rs" ;
+  triage:line 19 ;
+  triage:snippet "const ASSIGNEE: &str = \"cipher\";" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "193821c92835986b45070f382b4aa00a0f6ee688" ;
+  triage:occursIn <urn:atm:triage:worktree/AX4/193821c9> .
+
+<urn:atm:triage:worktree/AX4/193821c9>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "193821c92835986b45070f382b4aa00a0f6ee688" ;
+  triage:orderIndex 4 .

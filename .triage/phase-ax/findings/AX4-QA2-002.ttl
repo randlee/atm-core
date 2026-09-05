@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX4-QA2-002>
+  a triage:Finding ;
+  triage:findingId "AX4-QA2-002" ;
+  triage:title "Residual of AX4-QA-006: task_actor_name in task_ledger.rs still hardcodes the literal atm-daemon instead of atm_storage::DAEMON_ACTOR_NAME" ;
+  triage:description "AX.4 QA-2 (quality-mgr ax4-qa-r2, PR #1194 Final Quality Report 2026-09-05T10:24Z; arch-qa ARCH-002 and rust-qa-agent QA-013, confirmed by quality-mgr) at head 193821c92. Re-assessment of AX4-QA-006 (which stays open; this is the new record for the residual). Four of the five hand-rolled name functions in crates/atm/src/commands/task_ledger.rs were replaced with canonical as_str() calls on the atm-storage enums, but task_actor_name's TaskActor::Daemon arm still hardcodes atm-daemon instead of the canonical atm_storage::DAEMON_ACTOR_NAME constant that this same diff introduced and that atm-storage-rusqlite/src/task_store.rs:121,317 already consume. Fix: use DAEMON_ACTOR_NAME (or a TaskActor::as_str()/Display on the storage side) in task_ledger.rs." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T10:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX4 ;
+  triage:foundAt "2026-09-05T10:24:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA2-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX4-QA2-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task_ledger.rs" ;
+  triage:line 83 ;
+  triage:snippet "TaskActor::Daemon => \"atm-daemon\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "193821c92835986b45070f382b4aa00a0f6ee688" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-ax4-task-cli-and-docs/193821c9> .
+
+<urn:atm:triage:worktree/feature-ax4-task-cli-and-docs/193821c9>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "193821c92835986b45070f382b4aa00a0f6ee688" ;
+  triage:orderIndex 4 .
