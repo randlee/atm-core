@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-HOTFIX-002>
+  a triage:Finding ;
+  triage:findingId "AV-HOTFIX-002" ;
+  triage:title "rand-m4 production trust store carries duplicate/stale host entries and a fixture host, violating the single-hostname trust-key requirement" ;
+  triage:description "rand-m4's trust store contains stale and fixture host entries that violate the documented single-hostname-per-peer requirement. Specifically: 'Rands-MacBook-M5.local' (fingerprint C7E35D64) is a stale leftover from before the M5 host rename (2026-08-03); 'rand-m5' (fingerprint BFCA33B6) is the correct live entry; 'localhost' is a fixture entry (production trust stores must not contain localhost); 'peer.example.test' is a fixture host. Cross-checked against rand-m5's own trust config: rand-m5 advertises as 'rand-m5.local' with correct fingerprint BFCA33B6, confirming rand-m4's 'rand-m5' entry is correct. Remediation: remove C7E35D64 (stale), remove localhost, remove peer.example.test, retain BFCA33B6 rand-m5." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T19:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-05T18:10:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-HOTFIX-002/AV-HOTFIX-002-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-HOTFIX-002/AV-HOTFIX-002-1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-040-peer-authority-resolution.md" ;
+  triage:line 16 ;
+  triage:snippet "A cross-host peer is registered by a stable hostname, HTTPS port, and pinned certificate fingerprint. The durable record stores only that endpoint identity and pin; it never stores a resolved IP alias." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "9a810ab29743e0f11b71881d8c3d359ad8d1b9ca" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/phase-av/9a810ab29743e0f11b71881d8c3d359ad8d1b9ca> .
+
+<urn:atm:triage:worktree/integrate/phase-av/9a810ab29743e0f11b71881d8c3d359ad8d1b9ca>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "9a810ab29743e0f11b71881d8c3d359ad8d1b9ca" ;
+  triage:orderIndex 1 .
