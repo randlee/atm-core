@@ -15,7 +15,7 @@ dependency_relations:
   - prerequisite: AX.1
     dependent: AX.3
     relation: parallel_safe
-    rationale: AX.3 changes no nudge behaviour; the only overlap is additive edits in different regions of crates/atm-storage/src/contract.rs, resolved by merge-forward before the AX.3 PR.
+    rationale: AX.3 changes no nudge behaviour. Overlap (team-lead review, 2026-09-05): both edit prepare_persisted_write and prepare_persisted_write_async in crates/atm-core/src/write/pipeline.rs (AX.1 assigns request.nudge_mode = send_mode_for_task_request(...) there, landed at 1452df008 lines 526/595; AX.3 threads MessageWriteOrigin through the same two functions), both add lines to crates/atm-core/src/boundary/mod.rs, and both add to crates/atm-storage/src/contract.rs. Merge-forward order: AX.3 merges origin/feature/ax1-queue-template-class before editing pipeline.rs and again before its PR; AX.1's nudge_mode lines stay verbatim and AX.3's provenance edits go after them in each function.
   - prerequisite: AX.2
     dependent: AX.3
     relation: parallel_safe
