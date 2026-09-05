@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-QA2-002>
+  a triage:Finding ;
+  triage:findingId "AX3-QA2-002" ;
+  triage:title "AX.3 QA-2 re-assessment of AX3-003: the Herdr-backed test in crates/atm-core/tests/task_state.rs never exercises the Herdr backend (member() always sets recipient_pane_id, so the Tmux path runs)" ;
+  triage:description "AX.3 QA-2 (quality-mgr ax3-qa-r2, PR #1191 Final Quality Report 2026-09-05T07:37Z; confirmed directly by quality-mgr and independently by req-qa, overriding ruthless-boundary-qa and rust-qa-agent fixed dispositions) at head 116bd23b0. The test added for AX3-003 in crates/atm-core/tests/task_state.rs claims Herdr coverage via a RosterHarness value / test name, but its member() helper always sets recipient_pane_id: Some(..) and never populates metadata_json; local_message_received_backend() in delivery_channel.rs checks pane_id before metadata_json, so the test silently exercises the Tmux path regardless of harness. Confirmed at HEAD 116bd23b0c8ab2c406417f727e5e28753670bef6: member() (lines 33-43) unconditionally sets recipient_pane_id: Some(PaneId::from_cli('%9')) and metadata_json: serde_json::Map::new(), and local_message_received_backend (crates/atm-core/src/delivery_channel.rs lines 154-159) returns the Tmux backend whenever recipient_pane_id is Some, before any metadata_json/herdr check runs. deferred_herdr_prepare_persists_the_same_task_assignment (line 149) therefore never proves Herdr-path behavior despite RosterHarness::Hermes. Third occurrence of this pattern in Phase AX (AX.1 ATM-QA-001, AX.2 AX2-QA-002). Fix: rewrite the Herdr-path test to clear recipient_pane_id and populate metadata_json following AX.1's corrected nudge_mode.rs pattern, with an assertion that fails if the Tmux path is taken." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T09:05:13Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T07:37:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA2-002/AX3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA2-002/AX3-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA2-002/AX3-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-QA2-002/AX3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/task_state.rs" ;
+  triage:line 41 ;
+  triage:snippet "recipient_pane_id: Some(PaneId::from_cli('%9').expect('pane'))," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/116bd23b> .
+
+<urn:atm:triage:occurrence/AX3-QA2-002/AX3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/task_state.rs" ;
+  triage:line 42 ;
+  triage:snippet "metadata_json: serde_json::Map::new()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/116bd23b> .
+
+<urn:atm:triage:occurrence/AX3-QA2-002/AX3-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/task_state.rs" ;
+  triage:line 149 ;
+  triage:snippet "let (root, runtime, team) = setup(RosterHarness::Hermes);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/116bd23b> .
+
+<urn:atm:triage:worktree/AX3/116bd23b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:orderIndex 2 .

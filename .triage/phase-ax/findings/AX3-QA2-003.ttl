@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-QA2-003>
+  a triage:Finding ;
+  triage:findingId "AX3-QA2-003" ;
+  triage:title "AX.3 QA-2 re-assessment of AX3-004: composition-level task_store() coverage still absent (LocalServiceRuntime::task_store happy path and not-installed error untested in composition.rs / service_runtime.rs)" ;
+  triage:description "AX.3 QA-2 (quality-mgr ax3-qa-r2, PR #1191 Final Quality Report 2026-09-05T07:37Z; confirmed by quality-mgr and rust-qa-agent) at head 116bd23b0. The rusqlite-writer-level D8 scenarios from AX3-004 are now covered, but the composition half is not: neither the composition root (crates/atm-runtime/src/composition.rs) nor crates/atm-core/src/service_runtime.rs has a test that (a) composes the runtime and resolves LocalServiceRuntime::task_store() successfully and (b) asserts the not-installed error when no TaskStore is installed. Fix: add both tests at the composition/service-runtime level. Superseding record for the partial-fix state of AX3-004; AX3-004.ttl left unmodified." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T09:05:43Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T07:37:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA2-003/AX3-2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA2-003/AX3-2-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-QA2-003/AX3-2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 486 ;
+  triage:snippet "pub fn task_store(&self) -> Result<std::sync::Arc<dyn TaskStore + Send + Sync>, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/116bd23b0> .
+
+<urn:atm:triage:occurrence/AX3-QA2-003/AX3-2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 178 ;
+  triage:snippet "let task_store = storage.task_store();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/116bd23b0> .
+
+<urn:atm:triage:worktree/AX3/116bd23b0>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
+  triage:orderIndex 2 .

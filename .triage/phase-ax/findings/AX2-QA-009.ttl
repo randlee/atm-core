@@ -8,47 +8,59 @@
   a triage:Finding ;
   triage:findingId "AX2-QA-009" ;
   triage:title "No mechanical boundary test guards the Herdr .prompt() call site against a future direct call from HerdrQueueWakePump" ;
-  triage:description "crates/atm-architecture/tests/boundary_enforcement.rs has a precedent for this class of check (herdr_constructors_have_one_composition_root_call_site) but does not cover .prompt( calls; nothing enforces that HerdrQueueWakePump reaches .prompt() only via the selector/emitter routing. Current code is correct; this is a lint-gap. Fix: add a boundary_enforcement.rs test asserting the production .prompt( call sites are limited to the received_hook_selector emitter (and the adapter impls). Reported by ruthless-boundary-qa RBQA-F002 (minor) on PR #1186 QA-1 (head 4f77d2fff)." ;
+  triage:description "Follow-up after cipher's fix pass. quality-mgr QA-2 (PR #1186 Final Quality Report, 2026-09-05T07:36:04Z) verified fixed at e7d4d5453: crates/atm-architecture/tests/boundary_enforcement.rs gained an AST-based (syn::visit) test proving exactly one production .prompt() call site exists, outside test modules." ;
   triage:phaseId "phase-ax" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "RBQA" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T07:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX2 ;
   triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-009/AX2-1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-009/AX2-2> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-009/AX2-FIX-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-009/AX2-FIX-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-009/AX2-FIX-3> ;
+  triage:triageRecordVersion "2" .
 
-<urn:atm:triage:occurrence/AX2-QA-009/AX2-1>
+<urn:atm:triage:occurrence/AX2-QA-009/AX2-FIX-1>
   a triage:Occurrence ;
-  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
-  triage:line 685 ;
-  triage:snippet ".prompt(" ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 17 ;
+  triage:snippet "use syn::visit::Visit;" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
-  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
-  triage:occursIn <urn:atm:triage:worktree/ax2/4f77d2fff0b384b60d5297e1dbfa0981a0192419> .
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2/e7d4d54535669339ca184c3eec978f19412d4ec7> .
 
-<urn:atm:triage:occurrence/AX2-QA-009/AX2-2>
+<urn:atm:triage:occurrence/AX2-QA-009/AX2-FIX-2>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
-  triage:line 421 ;
-  triage:snippet ".prompt(" ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 561 ;
+  triage:snippet "syn::visit::visit_item_fn(self, node);" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
-  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
-  triage:occursIn <urn:atm:triage:worktree/ax2/4f77d2fff0b384b60d5297e1dbfa0981a0192419> .
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2/e7d4d54535669339ca184c3eec978f19412d4ec7> .
 
-<urn:atm:triage:worktree/ax2/4f77d2fff0b384b60d5297e1dbfa0981a0192419>
+<urn:atm:triage:occurrence/AX2-QA-009/AX2-FIX-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 578 ;
+  triage:snippet "syn::visit::visit_impl_item_fn(self, node);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2/e7d4d54535669339ca184c3eec978f19412d4ec7> .
+
+<urn:atm:triage:worktree/ax2/e7d4d54535669339ca184c3eec978f19412d4ec7>
   a triage:WorktreeSnapshot ;
   triage:path "feature/ax2-herdr-template-rendering" ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
-  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
-  triage:orderIndex 3 .
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:orderIndex 1 .
