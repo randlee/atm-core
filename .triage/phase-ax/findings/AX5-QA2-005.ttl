@@ -1,0 +1,114 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA2-005>
+  a triage:Finding ;
+  triage:findingId "AX5-QA2-005" ;
+  triage:title "Seven warn! sites in herdr_queue_wake.rs still lack subsystem/action/outcome structured fields (residual of AX5-QA1-014)" ;
+  triage:description "AX.5 QA-2 (quality-mgr ax5-qa-r2, PR #1201 Final Quality Report 2026-09-05T14:22Z) at head fbee74ba8a9abf0b3e04b01bc157b8a65f194119. rust-service-hardening-agent and rust-qa-agent independently: of the 8 sites recorded in AX5-QA1-014 only one was fixed; at head fbee74ba8 the bare warn! sites are crates/atm-http-runtime/src/herdr_queue_wake.rs:174, :188, :203, :268, :619 (the Property-8-critical note_task_step_availability transition warn), :972 and :981. Fix: add subsystem=herdr_queue_wake, action=..., outcome=... to each, matching the five already-structured sites (:417, :431, :474, :508, :562)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T14:26:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T14:22:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA2-005/AX5-W1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA2-005/AX5-W2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA2-005/AX5-W3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA2-005/AX5-W4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA2-005/AX5-W5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA2-005/AX5-W6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA2-005/AX5-W7> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA2-005/AX5-W1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 174 ;
+  triage:snippet "tracing::warn!(error = %error, Herdr queue wake skipped: pending store unavailable)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5/fbee74ba8> .
+
+<urn:atm:triage:occurrence/AX5-QA2-005/AX5-W2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 188 ;
+  triage:snippet "tracing::warn!(error = %error, Herdr queue wake skipped: pending roster unavailable)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5/fbee74ba8> .
+
+<urn:atm:triage:occurrence/AX5-QA2-005/AX5-W3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 203 ;
+  triage:snippet "tracing::warn!(error = %error, Herdr queue wake skipped: roster unavailable)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5/fbee74ba8> .
+
+<urn:atm:triage:occurrence/AX5-QA2-005/AX5-W4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 268 ;
+  triage:snippet "tracing::warn!(session = ?session, error = ?error, Herdr queue wake list failed)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5/fbee74ba8> .
+
+<urn:atm:triage:occurrence/AX5-QA2-005/AX5-W5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 619 ;
+  triage:snippet "tracing::warn!(error = ?error, Herdr task reminder step skipped: task store unavailable)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5/fbee74ba8> .
+
+<urn:atm:triage:occurrence/AX5-QA2-005/AX5-W6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 972 ;
+  triage:snippet "tracing::warn!(error = %error, member = %self.member, failed to resolve Herdr queue claim)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5/fbee74ba8> .
+
+<urn:atm:triage:occurrence/AX5-QA2-005/AX5-W7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 981 ;
+  triage:snippet "tracing::warn!(error = %error, member = %self.member, failed to requeue Herdr queue claim)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5/fbee74ba8> .
+
+<urn:atm:triage:worktree/AX5/fbee74ba8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ax5-task-reminder-cycle" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:orderIndex 5 .

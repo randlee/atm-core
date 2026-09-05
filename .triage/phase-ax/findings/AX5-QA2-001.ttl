@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA2-001>
+  a triage:Finding ;
+  triage:findingId "AX5-QA2-001" ;
+  triage:title "AC1, AC2 and AC4 acceptance-criteria tests still missing after the QA-1 fix pass (residual of AX5-QA1-002)" ;
+  triage:description "AX.5 QA-2 (quality-mgr ax5-qa-r2, PR #1201 Final Quality Report 2026-09-05T14:22Z) at head fbee74ba8a9abf0b3e04b01bc157b8a65f194119. req-qa ATM-QA-001/002/003: the sprint doc Required validation demands tests for AC1 (the ack/--task-complete leg advances the pump to the next task), AC2 (17-member reminder-only budget split: 16 prompted this tick, the 17th next tick) and AC4 (reminder-path breaker-open and select_emitter -> None: no Reminded row written while open, resumes when closed). None of ax5_01..ax5_08 or ac03_* exercise these paths; the closest (ac02, ax5_04) cover drain-budget and a non-breaker error instead. AX5-QA1-002 (foundAt 12:38Z) is superseded by this record for the AC1/AC2/AC4 legs; AC6/AC7 legs are closed. Fix: add one deterministic clock-seam test per AC1, AC2 and AC4 in the crates/atm-http-runtime/src/herdr_queue_wake.rs tests module (or a sibling tests file if RULE-003 line caps require), matching the AC wording literally." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T14:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T14:22:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA2-001/AX5-AC1AC2AC4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA2-001/AX5-AC1AC2AC4-001>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md" ;
+  triage:line 255 ;
+  triage:snippet "1. Two tasks to one idle Herdr member whose marker has already been drained: one reminder for the oldest on the first tick, none for the second..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5-AC1AC2AC4/fbee74ba8a9abf0b3e04b01bc157b8a65f194119> .
+
+<urn:atm:triage:worktree/AX5-AC1AC2AC4/fbee74ba8a9abf0b3e04b01bc157b8a65f194119>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX5-AC1AC2AC4" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:orderIndex 5 .

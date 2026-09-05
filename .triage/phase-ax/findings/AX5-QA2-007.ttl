@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA2-007>
+  a triage:Finding ;
+  triage:findingId "AX5-QA2-007" ;
+  triage:title "docs/project-plan.md AX.5 status row still reads planned while the sprint doc frontmatter is complete" ;
+  triage:description "AX.5 QA-2 (quality-mgr ax5-qa-r2, PR #1201 Final Quality Report 2026-09-05T14:22Z) at head fbee74ba8a9abf0b3e04b01bc157b8a65f194119. req-qa ATM-QA-007: docs/project-plan.md:1623 shows the AX.5 row with status `planned` although AX.1-AX.4 read `complete` and the AX.5 sprint doc frontmatter was flipped to complete for AX5-QA1-011. Fix: set the AX.5 row to `complete` (same convention the AX.3/AX.4 rows follow)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T14:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T14:22:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA2-007/AX5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA2-007/AX5-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1623 ;
+  triage:snippet "| `AX.5` | C | after A and B merge | `planned`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5-1/fbee74ba8> .
+
+<urn:atm:triage:worktree/AX5-1/fbee74ba8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ax5-task-reminder-cycle" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:orderIndex 5 .

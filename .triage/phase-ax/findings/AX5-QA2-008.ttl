@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA2-008>
+  a triage:Finding ;
+  triage:findingId "AX5-QA2-008" ;
+  triage:title "apply_task_completion relies on .expect() for a cross-module invariant enforced only by admit() in atm-storage" ;
+  triage:description "AX.5 QA-2 (quality-mgr ax5-qa-r2, PR #1201 Final Quality Report 2026-09-05T14:22Z) at head fbee74ba8a9abf0b3e04b01bc157b8a65f194119. rust-best-practices reviewer note carried by quality-mgr (AX5-QA2-N06): crates/atm-storage-rusqlite/src/writer/task_ops.rs:343 in apply_task_completion uses .expect() on a value whose validity is guaranteed only by admit() in atm-storage, an invariant not locally enforceable in this crate. Pre-existing (AX.3 commit 95f05b3f7, entered the PR via merge c5c7f1a5b); filed per the no-dismissal rule at minor severity. Fix: map the failure to an AtmError instead of panicking, or document and assert the invariant at the admit boundary." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T14:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T14:22:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA2-008/AX5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA2-008/AX5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 350 ;
+  triage:snippet "let row = row.expect(\"completion admission accepts only an existing task row\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5/fbee74ba8a9abf0b3e04b01bc157b8a65f194119> .
+
+<urn:atm:triage:worktree/AX5/fbee74ba8a9abf0b3e04b01bc157b8a65f194119>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ax5-task-reminder-cycle" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:orderIndex 5 .

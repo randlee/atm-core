@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA2-006>
+  a triage:Finding ;
+  triage:findingId "AX5-QA2-006" ;
+  triage:title "Sprint doc AC7 says the pump logs one warning per tick without a TaskStore, contradicting Property 8's transition-only wording in the same document" ;
+  triage:description "AX.5 QA-2 (quality-mgr ax5-qa-r2, PR #1201 Final Quality Report 2026-09-05T14:22Z) at head fbee74ba8a9abf0b3e04b01bc157b8a65f194119. req-qa (AX5-QA2-N04): docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md:283-284 (AC7: 'logs one warning per tick') contradicts docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md:129 (Property 8: 'The warning is logged on transition only'). The implementation follows Property 8. Ruling: Property 8 is the contract (avoids log spam); fix AC7's wording to 'logs the task-store-unavailable warning on transition only' and keep the AC7 test aligned." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T14:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T14:22:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA2-006/AX5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA2-006/AX5-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md" ;
+  triage:line 284 ;
+  triage:snippet "logs one warning per tick" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:occursIn <urn:atm:triage:worktree/ax5-1/fbee74ba8> .
+
+<urn:atm:triage:worktree/ax5-1/fbee74ba8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ax5-task-reminder-cycle" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:orderIndex 5 .
