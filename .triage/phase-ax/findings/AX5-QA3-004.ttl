@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA3-004>
+  a triage:Finding ;
+  triage:findingId "AX5-QA3-004" ;
+  triage:title "emit_task_reminder's generic Herdr emission-failure branch records no stats counter and does not stamp the per-member cooldown guard" ;
+  triage:description "AX.5 QA-3 (quality-mgr ax5-qa-r3, PR #1201 Final Quality Report 2026-09-05T15:09Z) at head c4b8e3f2acdc4e7b5e88f37a335df4c73255fdea; req-qa finding confirmed real by quality-mgr direct code read. In emit_task_reminder (crates/atm-http-runtime/src/herdr_queue_wake.rs:535-538) the match on emit_received_message has three arms: Ok -> record_task_outcome (counts and stamps), Err(HerdrUnavailable) -> stats.breaker_open += 1, and a generic Err(error) arm that only logs a structured warn!. The generic failure arm neither increments any HerdrQueueWakeStats counter nor calls stamp_task_attempt, so a member whose reminder emission fails for a non-breaker reason is retried on every tick with no cooldown and the failure is invisible to the stats surface used by the Property 5/6 assertions. Fix: add a dedicated failure counter (e.g. task_reminders_failed) and stamp the cooldown guard in that arm, mirroring the sibling arms; add a clock-seam test where the emitter returns a non-HerdrUnavailable error and assert the counter and the cooldown." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T15:09:40Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T15:09:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA3-004/AX5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA3-004/AX5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 536 ;
+  triage:snippet "Err(error) => {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "c4b8e3f2acdc4e7b5e88f37a335df4c73255fdea" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5-1> .
+
+<urn:atm:triage:worktree/AX5-1>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature-ax5-task-reminder-cycle" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "c4b8e3f2acdc4e7b5e88f37a335df4c73255fdea" ;
+  triage:orderIndex 5 .

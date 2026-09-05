@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA3-005>
+  a triage:Finding ;
+  triage:findingId "AX5-QA3-005" ;
+  triage:title "record_task_outcome's write-failure branch stamps the cooldown guard only for Emitted outcomes, leaving Blocked and Unrenderable outcomes unprotected when the durable reminder write fails" ;
+  triage:description "AX.5 QA-3 (quality-mgr ax5-qa-r3, PR #1201 Final Quality Report 2026-09-05T15:09Z) at head c4b8e3f2acdc4e7b5e88f37a335df4c73255fdea; req-qa finding confirmed real by quality-mgr direct code read. In record_task_outcome (crates/atm-http-runtime/src/herdr_queue_wake.rs:551-560) when record_task_reminder returns false the early-return branch does `if outcome == ReminderOutcome::Emitted { stats.prompted += 1; stats.task_reminders += 1; self.stamp_task_attempt(member, now); } return;` so for ReminderOutcome::Blocked and ReminderOutcome::Unrenderable a failed audit write skips both the stats increment (task_reminders_blocked / task_reminders_unrenderable) and the cooldown stamp, a narrower repeat of the AX5-QA1-005 / AX5-QA2-004 class for those two outcome arms: under a TaskStore outage a blocked or unrenderable task is re-evaluated (and re-read from the store) every tick. Fix: on write failure increment the outcome-specific counter and stamp the cooldown for every outcome, then return; extend the fault-injection DummyTaskStore test to cover Blocked and Unrenderable outcomes." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T15:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T15:09:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA3-005/AX5-555> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA3-005/AX5-555>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 555 ;
+  triage:snippet "if outcome == ReminderOutcome::Emitted {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "c4b8e3f2acdc4e7b5e88f37a335df4c73255fdea" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5/c4b8e3f2> .
+
+<urn:atm:triage:worktree/AX5/c4b8e3f2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ax5-task-reminder-cycle" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "c4b8e3f2acdc4e7b5e88f37a335df4c73255fdea" ;
+  triage:orderIndex 5 .
