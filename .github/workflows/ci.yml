@@ -41,7 +41,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            python: "3.14.7"
+          - os: macos-latest
+            python: "3.14.7"
+          - os: windows-latest
+            python: "3.12.10"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +63,7 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14.7"
+          python-version: ${{ matrix.python }}
 
       - name: Expose Cargo binaries on PATH
         run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
@@ -189,10 +195,13 @@ jobs:
         include:
           - os: ubuntu-latest
             release_artifact: linux-x86_64
+            python: "3.14.7"
           - os: macos-latest
             release_artifact: macos-aarch64
+            python: "3.14.7"
           - os: windows-latest
             release_artifact: windows-x86_64
+            python: "3.12.10"
     runs-on: ${{ matrix.os }}
     steps:
       - name: Documentation-only runtime skip
@@ -217,7 +226,7 @@ jobs:
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14.7"
+          python-version: ${{ matrix.python }}
 
       - name: Install just
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}

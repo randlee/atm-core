@@ -37,6 +37,7 @@ class BootstrapError(RuntimeError):
 class BootstrapManifest:
     rust: str
     python: str
+    windows_python: str
     just: str
     cargo_tools: tuple[tuple[str, str], ...]
     cargo_allowed_strategies: tuple[tuple[str, tuple[str, ...]], ...]
@@ -73,6 +74,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
     return BootstrapManifest(
         rust=toolchain["rust"],
         python=toolchain["python"],
+        windows_python=toolchain["python-windows"],
         just=toolchain["just"],
         cargo_tools=cargo_tools,
         cargo_allowed_strategies=tuple(
@@ -99,6 +101,11 @@ def require_version(label: str, actual: str, expected: str) -> None:
     """Reject a prefix, range, or unrelated version rather than guessing."""
     if re.search(rf"(?<![0-9.]){re.escape(expected)}(?![0-9.])", actual) is None:
         raise BootstrapError(f"{label} must be exactly {expected}; found {actual or 'no version output'}.")
+
+
+def seed_python_version(manifest: BootstrapManifest) -> str:
+    """Return the exact interpreter pin for the executing operating system."""
+    return manifest.windows_python if sys.platform == "win32" else manifest.python
 
 
 def homebrew_python_formula(manifest: BootstrapManifest) -> str:
@@ -165,7 +172,7 @@ def synchronize_macos_seed_tools(manifest: BootstrapManifest, *, dry_run: bool) 
 
 def verify_seed_tools(manifest: BootstrapManifest) -> None:
     """Verify the minimal tools that must exist before a Just recipe can run."""
-    require_version("Python", platform.python_version(), manifest.python)
+    require_version("Python", platform.python_version(), seed_python_version(manifest))
     require_version("Rust", command_output(["rustc", "--version"]), manifest.rust)
     require_version("just", command_output(["just", "--version"]), manifest.just)
 
@@ -250,15 +257,16 @@ def venv_python_path() -> Path:
 def ensure_bootstrap_venv(manifest: BootstrapManifest, *, dry_run: bool) -> Path:
     """Create or repair the isolated Python environment without mutating the OS Python."""
     python = venv_python_path()
+    expected_python = seed_python_version(manifest)
     if python.is_file():
         try:
-            require_version("bootstrap venv Python", command_output([str(python), "--version"]), manifest.python)
+            require_version("bootstrap venv Python", command_output([str(python), "--version"]), expected_python)
             return python
         except BootstrapError:
             pass
     run([sys.executable, "-m", "venv", "--clear", str(VENV_PATH)], dry_run=dry_run)
     if not dry_run:
-        require_version("bootstrap venv Python", command_output([str(python), "--version"]), manifest.python)
+        require_version("bootstrap venv Python", command_output([str(python), "--version"]), expected_python)
     return python
 
 

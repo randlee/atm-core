@@ -21,7 +21,7 @@ SPEC.loader.exec_module(bootstrap)
 class BootstrapTests(unittest.TestCase):
     def test_manifest_has_only_exact_tool_versions(self) -> None:
         manifest = bootstrap.load_manifest()
-        versions = [manifest.rust, manifest.python, manifest.just]
+        versions = [manifest.rust, manifest.python, manifest.windows_python, manifest.just]
         versions.extend(version for _, version in manifest.cargo_tools)
         versions.extend(version for _, version in manifest.python_packages)
         self.assertTrue(all("*" not in version and ">" not in version and "<" not in version for version in versions))
@@ -135,6 +135,7 @@ class BootstrapTests(unittest.TestCase):
     def test_manifest_uses_current_compatible_stable_releases(self) -> None:
         manifest = bootstrap.load_manifest()
         self.assertEqual(manifest.python, "3.14.7")
+        self.assertEqual(manifest.windows_python, "3.12.10")
         self.assertEqual(manifest.just, "1.58.0")
         self.assertEqual(dict(manifest.cargo_tools), {
             "cargo-deny": "0.20.2",
@@ -259,7 +260,9 @@ class BootstrapTests(unittest.TestCase):
 
     def test_ci_uses_the_shared_bootstrap_recipe(self) -> None:
         workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        self.assertIn('python-version: "3.14.7"', workflow)
+        self.assertIn('python: "3.14.7"', workflow)
+        self.assertIn('python: "3.12.10"', workflow)
+        self.assertIn("python-version: ${{ matrix.python }}", workflow)
         self.assertIn("tool: just@1.58.0", workflow)
         self.assertIn("cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c", workflow)
         self.assertGreaterEqual(workflow.count("run: just bootstrap"), 2)
@@ -286,9 +289,16 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn('PATH=\\"$PATH:/opt/homebrew/bin\\" python3.14', justfile)
         self.assertNotIn("PATH=/opt/homebrew/bin:$PATH python3.14", justfile)
 
-    def test_windows_seed_python_selects_the_pinned_major_minor(self) -> None:
+    def test_windows_seed_python_selects_the_stable_pinned_major_minor(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
-        self.assertIn('if os_family() == "windows" { "py -3.14" }', justfile)
+        self.assertIn('if os_family() == "windows" { "py -3.12" }', justfile)
+
+    def test_seed_python_version_preserves_unix_pin_and_selects_windows_pin(self) -> None:
+        manifest = bootstrap.load_manifest()
+        with mock.patch.object(bootstrap.sys, "platform", "win32"):
+            self.assertEqual(bootstrap.seed_python_version(manifest), "3.12.10")
+        with mock.patch.object(bootstrap.sys, "platform", "linux"):
+            self.assertEqual(bootstrap.seed_python_version(manifest), "3.14.7")
 
 
 if __name__ == "__main__":

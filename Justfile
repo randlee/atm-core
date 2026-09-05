@@ -4,9 +4,9 @@ set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 # standard location as a developer-account fallback, never ahead of the
 # interpreter selected by CI (for example actions/setup-python's 3.14.7).
 # The bootstrap script verifies the exact patch release before doing any work.
-# Windows PATH can prefer an unrelated system Python. Use the launcher to
-# select the pinned major/minor line; bootstrap verifies the exact patch.
-seed_python_cmd := if os_family() == "windows" { "py -3.14" } else { "env PATH=\"$PATH:/opt/homebrew/bin\" python3.14" }
+# Windows CPython 3.14.7 corrupts the lint scanner. The manifest pins a stable
+# Windows seed separately; Unix continues to use the 3.14.7 contract.
+seed_python_cmd := if os_family() == "windows" { "py -3.12" } else { "env PATH=\"$PATH:/opt/homebrew/bin\" python3.14" }
 # Keep the bootstrap venv first in PATH as well as executing its Python
 # directly. The path is absolute so helpers remain pinned after changing cwd;
 # PyO3 additionally receives its interpreter explicitly.

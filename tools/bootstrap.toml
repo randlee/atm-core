@@ -3,6 +3,9 @@
 [toolchain]
 rust = "1.94.1"
 python = "3.14.7"
+# CPython 3.14.7 corrupts lint-scanner state on Windows. Keep the Unix pin
+# above; Windows uses this separately exact, stable interpreter pin.
+python-windows = "3.12.10"
 just = "1.58.0"
 
 [cargo]
