@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-013>
+  a triage:Finding ;
+  triage:findingId "AX3-013" ;
+  triage:title "admit()/transition() rejection message omits the task id required by the spec" ;
+  triage:description "The sprint spec requires the rejection text \"no open task <id> for <actor>\"; at 88c579a18 both pure functions in crates/atm-storage/src/task_state.rs emit \"no open task for {actor}\" without the id, while the (currently dead, see AX3-001) writer path formats it correctly. Latent until AX3-001 wires the pure functions in, then a user-facing message mismatch. Found by rust-qa-agent QA-010 on PR #1191 QA-1." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:11:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T06:06:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-013/AX3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-013/AX3-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-013/AX3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_state.rs" ;
+  triage:line 83 ;
+  triage:snippet "(None, TaskEvent::Completed) => Err(TaskRejected::new(\"no open task for actor\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/88c579a18af28ff636452089a717425528f7157a> .
+
+<urn:atm:triage:occurrence/AX3-013/AX3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_state.rs" ;
+  triage:line 111 ;
+  triage:snippet "Err(TaskRejected::new(format!(\"no open task for {actor}\")))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/88c579a18af28ff636452089a717425528f7157a> .
+
+<urn:atm:triage:worktree/AX3/88c579a18af28ff636452089a717425528f7157a>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AX4/88c579a18af28ff636452089a717425528f7157a>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 4 .
