@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T20:21:05Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr AX.6 QA-5 recheck (QA-AX6-R5-1788639500) at head 5120e0800; fixed by arch-ctm fix pass GO-AX6-FIX4-1788639030 (Completion c24). Report: PR #1204 comment 5554531804. Sprint verdict PASS 0/0/0." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T20:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
@@ -29,8 +32,8 @@
   triage:file "crates/atm/tests/cli_surface.rs" ;
   triage:line 49 ;
   triage:snippet "live_surface_json() spawns with __dump-cli-surface --format json, no env isolation" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "ba19d6236559a65ad4a0b5e4b729fe7fd2f3541f" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/ba19d6236559a65ad4a0b5e4b729fe7fd2f3541f> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm/tests/cli_surface.rs" ;
   triage:line 49 ;
   triage:snippet "live_surface_json() spawns with __dump-cli-surface --format json, no env isolation" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-herdr-dogfood-evidence" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e249e2f2da915fc57cd5de0931c08f73> .

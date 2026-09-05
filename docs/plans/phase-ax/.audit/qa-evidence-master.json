@@ -608,6 +608,31 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "Sprint AX.6 QA-4: FAIL (1 blocking / 0 important / 0 minor), PR #1204 @ ba19d6236. Final Quality Report: https://github.com/randlee/atm-core/pull/1204#issuecomment-5554428957. AX6-QA3-001 CLOSED (0 atm-dev matches in crates/atm-storage-rusqlite/src); AX6-QA3-002 CLOSED (peer_cli.rs, compose_passthrough.rs isolated via tempdir+.env()). New: ARCH-101 RULE-011 crates/atm/tests/cli_surface.rs:49 live_surface_json() spawns atm __dump-cli-surface with no env isolation; init_observability runs before dispatch and host_log_dir falls back to the real home when ATM_LOG_DIR is unset (blocking). --version spawn at cli_surface.rs:67 checked, no finding. req-qa PASS (test-only changes; docs consistent). rust-qa-agent PASS (fmt/clippy/tests; RULE-003 997/1000; no tokio in atm-core; 8 ControlPathSyncBridge::run sites)."
+    },
+    {
+      "run_id": "AX6-QA5",
+      "aich_sprint": "AX6",
+      "phase_sprint": "AX.6",
+      "pass": "QA-5",
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-05T20:16:12Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M1SKE98PXESXX3N65DZDNWV8",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "QA-AX6-R5-1788639500 dispatched by fenix via qa-template.xml.j2 for PR #1204 at head 5120e0800 (QA-5 reviewer rule: core three in full; recheck of AX6-QA4-001)",
+      "result_time_utc": "2026-09-05T20:21:05Z",
+      "result_time_pst": null,
+      "result_message_id": "01M1SKPQMMWF4CT6DQDWJ5JZYB",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS",
+      "blockers": 0,
+      "important": 0,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "Sprint AX.6 QA-5: PASS (0/0/0), PR #1204 @ 5120e0800. Final Quality Report: https://github.com/randlee/atm-core/pull/1204#issuecomment-5554531804. AX6-QA4-001 CLOSED (cli_surface.rs live_surface_json isolated via tempdir+.env(); tempdir lifetime verified; test run 5x no flakes). --version spawn reconfirmed out of RULE-011 scope. Diff vs ba19d6236 is cli_surface.rs +5 lines plus the integrate merge. rust-qa-agent: fmt/clippy/tests pass; --all-features pyo3 link failure on macOS is a pre-existing environment gap. Invariants unchanged: 8 ControlPathSyncBridge::run sites, no raw spawn_blocking ledger reads, no tokio in atm-core, frozen files untouched. CI at check time IN_PROGRESS (merge gate only)."
     }
   ],
   "coverage_gaps": [
