@@ -527,7 +527,7 @@ def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = F
             raise SwitchError("--service is required; never switch an unmanaged daemon")
         task = windows_task_status(args.service)
         if not task.get("registered"):
-            if action == "stop" and allow_absent:
+            if action == "stop" and allow_absent and task.get("state") == "absent":
                 return
             detail = task.get("detail", "task is absent")
             raise SwitchError(f"Windows scheduled task {args.service!r} is not registered: {detail}")

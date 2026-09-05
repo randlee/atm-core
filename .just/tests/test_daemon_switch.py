@@ -289,33 +289,35 @@ class DaemonSwitchTests(unittest.TestCase):
         self.assertEqual(parsed.service, "atm-daemon")
         self.assertEqual(parsed.launch_agent_plist, "/tmp/atm-daemon.plist")
 
-    def test_windows_status_reports_absent_service(self) -> None:
+    def test_windows_status_reports_absent_task(self) -> None:
         missing = subprocess.CompletedProcess(
-            ["sc.exe", "query", "atm-daemon"],
-            self.module.WINDOWS_SERVICE_NOT_FOUND,
+            ["schtasks.exe", "/Query", "/TN", "atm-daemon", "/XML"],
+            1,
             "",
-            "[SC] OpenService FAILED 1060:\r\nThe specified service does not exist.\r\n",
+            "ERROR: The system cannot find the file specified.\r\n",
         )
         with (
             mock.patch.object(self.module.platform, "system", return_value="Windows"),
             mock.patch.object(self.module, "run", return_value=missing) as run,
         ):
             self.assertEqual(
-                self.module.windows_service_status("atm-daemon"),
+                self.module.windows_task_status("atm-daemon"),
                 {
-                    "installed": False,
+                    "registered": False,
                     "state": "absent",
-                    "detail": "[SC] OpenService FAILED 1060:\r\nThe specified service does not exist.",
+                    "detail": "ERROR: The system cannot find the file specified.",
                 },
             )
-        run.assert_called_once_with(["sc.exe", "query", "atm-daemon"], timeout=5.0)
+        run.assert_called_once_with(
+            ["schtasks.exe", "/Query", "/TN", "atm-daemon", "/XML"], timeout=5.0
+        )
 
     def test_windows_optional_stop_does_not_hide_access_denied(self) -> None:
         denied = subprocess.CompletedProcess(
-            ["sc.exe", "stop", "atm-daemon"],
-            5,
+            ["schtasks.exe", "/Query", "/TN", "atm-daemon", "/XML"],
+            1,
             "",
-            "[SC] OpenSCManager FAILED 5: Access is denied.",
+            "ERROR: Access is denied.",
         )
         args = argparse.Namespace(service="atm-daemon")
         with (
