@@ -938,7 +938,7 @@ mod tests {
     use super::{
         _atm_graft, AtmGraftError, AtmToolError, PyAgentAddress, PyGraftSession,
         PyGraftSessionOptions, PyMailboxWorkCounts, PyNudge, PythonNudgeInjector, atm_error,
-        observability,
+        observability, observability_paths,
     };
     use atm_core::boundary::{NudgeKind, PostSendHookEvent};
     use atm_core::error::{AtmError, AtmErrorCode};
@@ -946,6 +946,7 @@ mod tests {
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
     use atm_core::read::{BucketCounts, ReadOutcome};
     use atm_core::send::{SendCommandOutcome, SendOutcome};
+    use atm_core::test_support::EnvGuard;
     use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AgentName, ChatId, CommandAction, ReadSelection, TeamName};
     use atm_graft::{GraftClient, HostNudge, HostNudgeInjector, MailboxWorkCounts};
@@ -1139,6 +1140,51 @@ mod tests {
                 .count(),
             4
         );
+    }
+
+    #[test]
+    fn observability_paths_reports_each_log_directory_source() {
+        let tempdir = TempDir::new().expect("observability path fixtures");
+        let log_dir = tempdir.path().join("explicit-logs");
+        let atm_home = tempdir.path().join("atm-home");
+        let log_dir_text = log_dir.to_str().expect("utf8 log path");
+        let atm_home_text = atm_home.to_str().expect("utf8 ATM home");
+
+        {
+            let _env = EnvGuard::set_many([
+                ("ATM_LOG_DIR", Some(log_dir_text)),
+                ("ATM_HOME", Some(atm_home_text)),
+            ]);
+            let paths = observability_paths().expect("ATM_LOG_DIR paths");
+            assert_eq!(paths.log_dir, log_dir.display().to_string());
+            assert_eq!(paths.log_dir_source, "env:ATM_LOG_DIR");
+            assert!(paths.canonical_log_path.starts_with(&paths.log_dir));
+            assert!(paths.fallback_log_path.starts_with(&paths.log_dir));
+        }
+
+        {
+            let _env =
+                EnvGuard::set_many([("ATM_LOG_DIR", None), ("ATM_HOME", Some(atm_home_text))]);
+            let paths = observability_paths().expect("ATM_HOME paths");
+            let expected = atm_home.join(".atm").join("logs");
+            assert_eq!(paths.log_dir, expected.display().to_string());
+            assert_eq!(paths.log_dir_source, "env:ATM_HOME");
+            assert!(paths.canonical_log_path.starts_with(&paths.log_dir));
+            assert!(paths.fallback_log_path.starts_with(&paths.log_dir));
+        }
+
+        {
+            let _env = EnvGuard::set_many([("ATM_LOG_DIR", None), ("ATM_HOME", None)]);
+            let paths = observability_paths().expect("default paths");
+            let expected = atm_core::home::host_log_dir()
+                .expect("default host log directory")
+                .display()
+                .to_string();
+            assert_eq!(paths.log_dir, expected);
+            assert_eq!(paths.log_dir_source, "default");
+            assert!(paths.canonical_log_path.starts_with(&paths.log_dir));
+            assert!(paths.fallback_log_path.starts_with(&paths.log_dir));
+        }
     }
 
     #[test]
