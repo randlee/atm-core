@@ -11,6 +11,7 @@ use serde_json::{Map, Value};
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
+use crate::observability_counters::{JsonlDiagnosticCounters, TimelineDiagnosticCounters};
 use crate::protocol::RequestId;
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
@@ -562,21 +563,11 @@ pub struct AtmObservabilityDiagnostic {
     pub message: String,
 }
 
-/// Process-owned JSONL retained-log counters projected by daemon doctor.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct AtmJsonlObservabilityCounters {
-    pub forwarded_total: u64,
-    pub dropped_queue_full_total: u64,
-    pub dropped_reentrant_total: u64,
-}
+/// Backward-compatible name for the shared JSONL counter projection.
+pub type AtmJsonlObservabilityCounters = JsonlDiagnosticCounters;
 
-/// Process-owned timeline counters projected by daemon doctor.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct AtmTimelineObservabilityCounters {
-    pub written_total: u64,
-    pub dropped_queue_full_total: u64,
-    pub dropped_persist_error_total: u64,
-}
+/// Backward-compatible name for the shared timeline counter projection.
+pub type AtmTimelineObservabilityCounters = TimelineDiagnosticCounters;
 
 impl AtmObservabilityHealth {
     /// Projects the shared retained-diagnostics health contract onto the
@@ -585,16 +576,8 @@ impl AtmObservabilityHealth {
         &mut self,
         retained: crate::observability_counters::RetainedObservabilityHealth,
     ) {
-        self.jsonl = AtmJsonlObservabilityCounters {
-            forwarded_total: retained.jsonl.forwarded_total,
-            dropped_queue_full_total: retained.jsonl.dropped_queue_full_total,
-            dropped_reentrant_total: retained.jsonl.dropped_reentrant_total,
-        };
-        self.timeline = AtmTimelineObservabilityCounters {
-            written_total: retained.timeline.written_total,
-            dropped_queue_full_total: retained.timeline.dropped_queue_full_total,
-            dropped_persist_error_total: retained.timeline.dropped_persist_error_total,
-        };
+        self.jsonl = retained.jsonl;
+        self.timeline = retained.timeline;
         self.degraded = retained.degraded;
     }
 }
