@@ -316,19 +316,27 @@ Deliverables:
    client commands against the running server, as a user would, with
    its environment passed through unchanged.
 
-   Herdr mode startup (Rand, 2026-09-05): the daemon runs one
-   `herdr agent list`. If that reports `server_not_running`, the daemon
-   starts Herdr itself with `herdr server`, Herdr's documented headless
+   Herdr mode startup (Rand, 2026-09-05): Herdr is NOT a hard
+   dependency of atm. The daemon always starts and always serves
+   messaging, tmux and hermes nudges, and doctor, whether or not Herdr
+   is reachable, because atm is the tool used to diagnose and repair a
+   misconfigured machine (hermes agents are the go-to for that repair,
+   and tmux keeps working). At startup in herdr mode the daemon runs
+   one `herdr agent list`. If that reports `server_not_running`, the
+   daemon starts Herdr with `herdr server`, Herdr's documented headless
    entry point for supervised setups (cli-reference.mdx "Server";
    src/main.rs:579 -> server::headless::run_server), detached from the
    daemon's stdio and lifetime, then waits a bounded time for
-   `agent list` to answer. Still no answer, or any other probe error:
-   exit with one diagnostic naming the socket and the error; the
-   supervisor (launchd KeepAlive, Windows service recovery) retries.
-   Herdr is expected to autostart at login ahead of the daemon, so this
-   path is the power-cycle and crash fallback, not the normal case.
-   Herdr keeps ownership of its socket, session state and restart;
-   atm never stops it and never computes its paths. Audit rows for
+   `agent list` to answer. If Herdr still does not answer, the daemon
+   keeps running: every call behind `HerdrTransport` returns
+   `HerdrError::NotRunning` ("herdr not running", socket named) until a
+   later call succeeds, herdr-harness nudges fail with that error while
+   tmux and hermes nudges are unaffected, and doctor reports it. The
+   daemon never exits because of Herdr. Herdr is expected to autostart
+   at login ahead of the daemon, so the launch path is the power-cycle
+   and crash corner case, not the normal case. Herdr keeps ownership of
+   its socket, session state and restart; atm never stops it and never
+   computes its paths. Audit rows for
    deliverable 0: does `herdr server` refuse a duplicate cleanly when
    a server is already up; what the GUI does when it launches over an
    existing headless server; stdio handling of the detached child on
