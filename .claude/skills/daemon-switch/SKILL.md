@@ -90,22 +90,36 @@ binary identifier and certificate common name. A changed or mismatched leaf
 fails closed. Apple-issued `Apple Development` identities continue to use the
 team-identifier verification path.
 
-## Windows selector provisioning
+## Windows selector and task provisioning
 
-The script never replaces ordinary `.exe` files. Provision two user-writable
-selector symlinks named `atm.exe` and `atm-daemon.exe` in one directory placed
-before the installed release directory on `PATH`, then pass them explicitly:
+The script never replaces ordinary `.exe` files. Windows uses one
+**interactive-user Scheduled Task**, not an SCM service: SCM services commonly
+run as `LocalSystem` and would select a different `ATM_HOME` and durable store.
+Provision two user-writable selector symlinks named `atm.exe` and
+`atm-daemon.exe` in one directory placed before the installed release directory
+on `PATH`, then register the task to invoke the daemon selector:
 
 ```powershell
+python .claude/skills/daemon-switch/scripts/daemon-switch.py windows-provision `
+  --cli-link C:\\atm-active\\atm.exe --daemon-link C:\\atm-active\\atm-daemon.exe `
+  --service atm-daemon --yes
+
 python .claude/skills/daemon-switch/scripts/daemon-switch.py switch `
   --cli-link C:\\atm-active\\atm.exe --daemon-link C:\\atm-active\\atm-daemon.exe `
   --cli target\\release\\atm.exe --daemon target\\release\\atm-daemon.exe --yes `
   --service atm-daemon
 ```
 
-Creating those symlinks may require Developer Mode or an elevated shell. If
-they are unavailable, the script fails closed; do not replace installed
-executables or introduce a second daemon.
+`windows-provision` creates an on-logon, interactive-user task whose only
+executable action is `C:\\atm-active\\atm-daemon.exe`. `switch`, `restart`,
+and `quiesce` refuse a task whose action names a worktree or any other direct
+binary. Corporate policy may require running only `windows-provision` from an
+elevated terminal; do not work around that policy by registering an SCM service
+or launching a second daemon.
+
+The typed `temporary-launch` overlay is not supported by this task backend.
+It fails closed instead of modifying a task action outside its scoped
+pair-switch contract.
 
 ## Default scratch root (ADR-055)
 

@@ -17,6 +17,7 @@ import sys
 import tempfile
 import time
 from typing import Protocol, Sequence
+from xml.etree import ElementTree
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -48,14 +49,13 @@ from temporary_launch import (  # noqa: E402
 )
 from temporary_launch_macos import MacosLaunchAgentAdapter  # noqa: E402
 from temporary_launch_windows import (  # noqa: E402
-    WindowsScmAdapter,
+    WindowsScmAdapter,  # noqa: F401 - adapter contract tests import this through the tool module.
     parse_windows_command_line,
     quote_windows_command_line,
 )
 from temporary_launch_linux import LinuxSystemdUserAdapter  # noqa: E402
 
 
-WINDOWS_SERVICE_NOT_FOUND = 1060
 LIVE_PAIR_READINESS_ATTEMPTS = 200
 MACOS_LAUNCH_AGENT_PATH = re.compile(r"^path = (.+)$")
 # [cass: helpful starter-rust-logging] - retains the bounded readiness state
@@ -121,7 +121,10 @@ def temporary_launch_adapter(_args: argparse.Namespace) -> TemporaryLaunchAdapte
             temporary_launch_journal().path.parent / "temporary-launch-overlays"
         )
     if platform.system() == "Windows":
-        return WindowsScmAdapter(lambda command, timeout: run(command, timeout=timeout))
+        raise SwitchError(
+            "temporary-launch is not supported by the Windows per-user scheduled-task backend; "
+            "do not substitute an SCM service because it would run under a different account"
+        )
     if platform.system() == "Linux":
         return LinuxSystemdUserAdapter(
             systemd_user_config_directory(),
@@ -421,30 +424,129 @@ def service_commands(args: argparse.Namespace, action: str) -> list[str]:
         plist = str(Path(args.launch_agent_plist).expanduser())
         return ["launchctl", "bootstrap", domain, plist]
     if system == "Windows":
-        return ["sc.exe", action, args.service]
+        return ["schtasks.exe", "/End" if action == "stop" else "/Run", "/TN", args.service]
     return ["systemctl", "--user", action, args.service]
 
 
-def windows_service_missing(result: subprocess.CompletedProcess[str]) -> bool:
-    """Recognize only SCM's missing-service result for an optional stop."""
-    if result.returncode == WINDOWS_SERVICE_NOT_FOUND:
-        return True
+def windows_task_missing(result: subprocess.CompletedProcess[str]) -> bool:
+    """Recognize Task Scheduler's absent-task diagnostics without masking other failures."""
     output = f"{result.stdout}\n{result.stderr}".lower()
-    return "1060" in output and "openservice" in output
+    return "cannot find the file specified" in output or "does not exist" in output
+
+
+def windows_task_status(task: str) -> dict[str, object]:
+    """Return the registered task's state and one exact executable action."""
+    result = run(["schtasks.exe", "/Query", "/TN", task, "/XML"], timeout=5.0)
+    output = (result.stdout or "") + (result.stderr or "")
+    if result.returncode != 0:
+        return {
+            "registered": False,
+            "state": "absent" if windows_task_missing(result) else "unknown",
+            "detail": output.strip() or f"schtasks.exe exited with {result.returncode}",
+        }
+    try:
+        root = ElementTree.fromstring(result.stdout)
+    except ElementTree.ParseError:
+        return {"registered": True, "state": "unknown", "detail": "task XML was invalid"}
+    commands = [
+        command.text.strip()
+        for command in root.findall(".//{*}Actions/{*}Exec/{*}Command")
+        if command.text and command.text.strip()
+    ]
+    if len(commands) != 1:
+        return {
+            "registered": True,
+            "state": "unknown",
+            "detail": "task must define exactly one executable action",
+        }
+    state_result = run(["schtasks.exe", "/Query", "/TN", task, "/FO", "LIST", "/V"], timeout=5.0)
+    state_output = (state_result.stdout or "") + (state_result.stderr or "")
+    state = "unknown"
+    if state_result.returncode == 0:
+        for line in state_output.splitlines():
+            if line.lower().startswith("status:"):
+                state = line.split(":", 1)[1].strip().lower()
+                break
+    return {"registered": True, "state": state, "command": commands[0]}
+
+
+def require_windows_task_selector(args: argparse.Namespace) -> None:
+    """Ensure the scheduled task follows the selector rather than a mutable worktree build."""
+    assert args.service is not None
+    task = windows_task_status(args.service)
+    if not task.get("registered"):
+        detail = task.get("detail", "task is absent")
+        raise SwitchError(f"Windows scheduled task {args.service!r} is not registered: {detail}")
+    expected = str(selected_links(args)[1])
+    command = task.get("command")
+    if command != expected:
+        raise SwitchError(
+            f"Windows scheduled task {args.service!r} launches {command!r}, not the daemon selector {expected!r}"
+        )
+
+
+def provision_windows_task(args: argparse.Namespace) -> None:
+    """Register the current user's one managed daemon task with the daemon selector action."""
+    if platform.system() != "Windows":
+        raise SwitchError("windows-provision is only available on Windows")
+    if not args.yes:
+        raise SwitchError("windows-provision registers a logon task; re-run with --yes")
+    if not args.service:
+        raise SwitchError("--service is required; never create an unnamed daemon task")
+    _cli, daemon = selected_links(args)
+    require_executable(daemon, "selected atm daemon")
+    account = os.environ.get("USERDOMAIN", "") + "\\" + os.environ.get("USERNAME", "")
+    if account == "\\":
+        raise SwitchError("cannot identify the current Windows account for the daemon task")
+    command = [
+        "schtasks.exe",
+        "/Create",
+        "/TN",
+        args.service,
+        "/TR",
+        str(daemon),
+        "/SC",
+        "ONLOGON",
+        "/RU",
+        account,
+        "/IT",
+        "/RL",
+        "LIMITED",
+        "/F",
+    ]
+    result = run(command, timeout=20.0)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise SwitchError(f"Windows task provisioning failed: {' '.join(command)}: {detail}")
+    require_windows_task_selector(args)
 
 
 def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = False) -> None:
+    if platform.system() == "Windows":
+        if not args.service:
+            raise SwitchError("--service is required; never switch an unmanaged daemon")
+        task = windows_task_status(args.service)
+        if not task.get("registered"):
+            if action == "stop" and allow_absent:
+                return
+            detail = task.get("detail", "task is absent")
+            raise SwitchError(f"Windows scheduled task {args.service!r} is not registered: {detail}")
+        if action == "stop" and task.get("state") in {"ready", "disabled"}:
+            return
+        if action == "start":
+            require_windows_task_selector(args)
+        command = service_commands(args, action)
+        result = run(command, timeout=20.0)
+        if result.returncode == 0:
+            return
+        detail = (result.stderr or result.stdout).strip()
+        if action == "stop" and "not currently running" in detail.lower():
+            return
+        raise SwitchError(f"Windows task {action} failed: {' '.join(command)}: {detail}")
     command = service_commands(args, action)
     if platform.system() != "Darwin":
         result = run(command, timeout=20.0)
-        if result.returncode == 0 or (
-            allow_absent
-            and action == "stop"
-            and (
-                platform.system() != "Windows"
-                or windows_service_missing(result)
-            )
-        ):
+        if result.returncode == 0 or (allow_absent and action == "stop"):
             return
         detail = (result.stderr or result.stdout).strip()
         raise SwitchError(f"service {action} failed: {' '.join(command)}: {detail}")
@@ -1110,33 +1212,13 @@ def wait_for_live_pair(cli: Path, daemon: Path | None = None) -> tuple[bool, str
     return False, detail
 
 
-def windows_service_status(service: str) -> dict[str, object]:
-    """Expose SCM state so status cannot imply an absent service is managed."""
-    result = run(["sc.exe", "query", service], timeout=5.0)
-    output = (result.stdout or "") + (result.stderr or "")
-    if result.returncode != 0:
-        return {
-            "installed": False,
-            "state": "absent" if windows_service_missing(result) else "unknown",
-            "detail": output.strip() or f"sc.exe exited with {result.returncode}",
-        }
-
-    state = "unknown"
-    for line in output.splitlines():
-        if "STATE" not in line or ":" not in line:
-            continue
-        state = line.split(":", 1)[1].strip().split(maxsplit=1)[-1].lower()
-        break
-    return {"installed": True, "state": state}
-
-
 def status(args: argparse.Namespace) -> None:
     cli, daemon = selected_links(args)
     service = {"platform": platform.system(), "service": args.service}
     if platform.system() == "Darwin" and args.service:
         service["launch_agent_plist"] = args.launch_agent_plist
     if platform.system() == "Windows" and args.service:
-        service["windows"] = windows_service_status(args.service)
+        service["windows_task"] = windows_task_status(args.service)
     result: dict[str, object] = {
         "atm": {"selector": str(cli), "target": str(cli.resolve()), "version": version(cli)},
         "atm_daemon": {"selector": str(daemon), "target": str(daemon.resolve())},
@@ -1158,7 +1240,10 @@ def parser() -> argparse.ArgumentParser:
     selectors = argparse.ArgumentParser(add_help=False)
     selectors.add_argument("--cli-link", help="system selector symlink for atm")
     selectors.add_argument("--daemon-link", help="system selector symlink for atm-daemon")
-    selectors.add_argument("--service", help="LaunchAgent label or system service name")
+    selectors.add_argument(
+        "--service",
+        help="LaunchAgent label, systemd unit, or Windows scheduled-task name",
+    )
     selectors.add_argument("--launch-agent-plist", help="macOS LaunchAgent plist used to restart the singleton")
     selectors.add_argument(
         "--repair-orphan",
@@ -1196,6 +1281,8 @@ def parser() -> argparse.ArgumentParser:
         command = temporary_sub.add_parser(name)
         command.add_argument("--session", required=True)
         command.add_argument("--yes", action="store_true")
+    windows_provision = sub.add_parser("windows-provision", parents=[selectors])
+    windows_provision.add_argument("--yes", action="store_true")
     return result
 
 
@@ -1221,6 +1308,8 @@ def main() -> int:
                 restart_temporary_launch(args)
             else:
                 restore_temporary_launch(args, recovery=args.temporary_command == "recover")
+        elif args.command == "windows-provision":
+            provision_windows_task(args)
         else:
             quiesce(args)
     except SwitchError as error:

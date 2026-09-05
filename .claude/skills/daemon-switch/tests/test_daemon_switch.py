@@ -118,6 +118,79 @@ class QuiesceTests(unittest.TestCase):
                 DAEMON_SWITCH.run_service(args, "start")
 
 
+class WindowsScheduledTaskTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.args = argparse.Namespace(
+            service="atm-daemon",
+            cli_link=r"C:\atm-active\atm.exe",
+            daemon_link=r"C:\atm-active\atm-daemon.exe",
+            yes=True,
+        )
+        self.selector = Path(self.args.daemon_link)
+        self.xml = """<?xml version=\"1.0\"?><Task xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\"><Actions><Exec><Command>C:\\atm-active\\atm-daemon.exe</Command></Exec></Actions></Task>"""
+
+    def test_task_status_reads_one_executable_action_and_running_state(self) -> None:
+        with mock.patch.object(
+            DAEMON_SWITCH,
+            "run",
+            side_effect=[
+                subprocess.CompletedProcess(["schtasks.exe"], 0, self.xml, ""),
+                subprocess.CompletedProcess(["schtasks.exe"], 0, "Status: Running\n", ""),
+            ],
+        ):
+            self.assertEqual(
+                DAEMON_SWITCH.windows_task_status("atm-daemon"),
+                {
+                    "registered": True,
+                    "state": "running",
+                    "command": r"C:\atm-active\atm-daemon.exe",
+                },
+            )
+
+    def test_task_status_reports_absent_task(self) -> None:
+        missing = subprocess.CompletedProcess(
+            ["schtasks.exe"], 1, "", "ERROR: The system cannot find the file specified."
+        )
+        with mock.patch.object(DAEMON_SWITCH, "run", return_value=missing):
+            self.assertEqual(DAEMON_SWITCH.windows_task_status("atm-daemon")["state"], "absent")
+
+    def test_start_requires_the_task_to_launch_the_daemon_selector(self) -> None:
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            mock.patch.object(
+                DAEMON_SWITCH,
+                "windows_task_status",
+                return_value={"registered": True, "state": "ready", "command": r"C:\old\atm-daemon.exe"},
+            ),
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(Path(self.args.cli_link), self.selector)),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "not the daemon selector"):
+                DAEMON_SWITCH.run_service(self.args, "start")
+
+    def test_start_runs_only_after_task_selector_validation(self) -> None:
+        completed = subprocess.CompletedProcess(["schtasks.exe"], 0, "SUCCESS", "")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            mock.patch.object(
+                DAEMON_SWITCH,
+                "windows_task_status",
+                return_value={"registered": True, "state": "ready", "command": str(self.selector)},
+            ),
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(Path(self.args.cli_link), self.selector)),
+            mock.patch.object(DAEMON_SWITCH, "run", return_value=completed) as run,
+        ):
+            DAEMON_SWITCH.run_service(self.args, "start")
+
+        self.assertEqual(run.call_args.args[0], ["schtasks.exe", "/Run", "/TN", "atm-daemon"])
+
+    def test_temporary_launch_rejects_windows_scm_fallback(self) -> None:
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "scheduled-task backend"),
+        ):
+            DAEMON_SWITCH.temporary_launch_adapter(self.args)
+
+
 class MacosDevelopmentSigningTests(unittest.TestCase):
     def test_identity_discovery_uses_the_shared_apple_resolver(self) -> None:
         with (
