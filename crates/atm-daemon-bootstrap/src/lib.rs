@@ -911,7 +911,7 @@ mod replacement_runtime_tests {
         SelectedPeerAdapterSelection, ShutdownSignal, assemble_host_runtime_with_template_composer,
         build_replacement_handler, legacy_literal_ip_policy_from_value, parse_direct_peer_port,
         parse_peer_wire_mode, peer_stream_adapter_for_mode,
-        replacement_runtime_config_with_direct_peer, start_replacement_runtime,
+        replacement_runtime_config_with_direct_peer, start_replacement_runtime_for_test,
         write_ready_signal_if_requested,
     };
     use peer_tls::LegacyLiteralIpPolicy;

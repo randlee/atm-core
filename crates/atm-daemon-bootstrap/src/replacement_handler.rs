@@ -250,6 +250,38 @@ pub(crate) fn build_replacement_handler(
         runtime_health.clone(),
         queue_wake_process,
     ));
+    let handler = compose_storage_router(
+        assembly,
+        observability,
+        selector,
+        runtime_health,
+        diagnostic_counters,
+        bare_cli,
+        transition_sink,
+        queue_wake_pump,
+        daemon_launch_identity,
+        peer_wire_mode,
+        peer_adapter_selection,
+    )?;
+    Ok((Arc::new(handler), recovery_sweep))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compose_storage_router(
+    assembly: RuntimeAssembly,
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    selector: Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    runtime_health: RuntimeHealth,
+    diagnostic_counters: Option<
+        Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
+    >,
+    bare_cli: BareCliRuntime,
+    transition_sink: Arc<dyn atm_http_runtime::MemberStateTransitionSink>,
+    queue_wake_pump: Arc<HerdrQueueWakePump>,
+    daemon_launch_identity: DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
+    peer_adapter_selection: SelectedPeerAdapterSelection,
+) -> Result<StorageAndNudgeRouter, AtmError> {
     let async_mailbox_runtime = assembly
         .async_mailbox_runtime
         .clone()
@@ -285,8 +317,7 @@ pub(crate) fn build_replacement_handler(
         peer_wire_security: Some(peer_wire_mode.security().into()),
     })
     .with_shared_direct_peer_client(shared_direct_peer_client()?);
-    let handler = add_peer_connection_pool(handler, peer_adapter_selection);
-    Ok((Arc::new(handler), recovery_sweep))
+    Ok(add_peer_connection_pool(handler, peer_adapter_selection))
 }
 
 fn add_peer_connection_pool(

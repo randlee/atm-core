@@ -526,19 +526,7 @@ impl HttpRuntime<Configured> {
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let maintenance_shutdown_rx = shutdown_rx.clone();
         let (server_stopped_tx, server_stopped_rx) = watch::channel(false);
-        let canonical_router = canonical_api_router(
-            Arc::clone(&self.handler),
-            AuthenticatedConnector::local(),
-            self.config.limits,
-            self.config.timeouts,
-        )
-        .merge(health_route::health_router(
-            self.health.clone(),
-            self.diagnostic_counters.clone(),
-        ))
-        .merge(diagnostics_route::diagnostics_router(
-            self.diagnostic_timeline.clone(),
-        ));
+        let canonical_router = self.canonical_router();
         let loopback_router = authenticated_loopback_router(canonical_router.clone(), capability);
         let direct_peer = build_direct_peer_server(
             direct_peer_listener,
@@ -591,6 +579,24 @@ impl HttpRuntime<Configured> {
                 endpoint_record,
             },
         })
+    }
+}
+
+impl HttpRuntime<Configured> {
+    fn canonical_router(&self) -> axum::Router {
+        canonical_api_router(
+            Arc::clone(&self.handler),
+            AuthenticatedConnector::local(),
+            self.config.limits,
+            self.config.timeouts,
+        )
+        .merge(health_route::health_router(
+            self.health.clone(),
+            self.diagnostic_counters.clone(),
+        ))
+        .merge(diagnostics_route::diagnostics_router(
+            self.diagnostic_timeline.clone(),
+        ))
     }
 }
 

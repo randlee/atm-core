@@ -558,8 +558,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        CliLogLevel, LogCommand, LogModeCommand, LogSource, QueryArgs, parse_match_expression,
-        parse_relative_duration,
+        CliLogLevel, LogCommand, LogModeCommand, LogSource, QueryArgs, TimelineRecord,
+        parse_match_expression, parse_relative_duration,
     };
     use crate::observability::{CliObservability, CliObservabilityOptions};
 
@@ -622,6 +622,81 @@ mod tests {
             error.to_string().contains("supported units are s, m, h, d"),
             "error: {error}"
         );
+    }
+
+    #[test]
+    fn merged_records_sort_by_timestamp_source_then_sequence() {
+        let mut records = [
+            TimelineRecord {
+                source: "timeline",
+                ts_unix_ms: 100,
+                level: "info".to_owned(),
+                component: "daemon".to_owned(),
+                code: None,
+                correlation_id: None,
+                origin: "daemon".to_owned(),
+                message: "timeline".to_owned(),
+                seq: 0,
+            },
+            TimelineRecord {
+                source: "graft",
+                ts_unix_ms: 100,
+                level: "info".to_owned(),
+                component: "graft".to_owned(),
+                code: None,
+                correlation_id: None,
+                origin: "graft".to_owned(),
+                message: "graft".to_owned(),
+                seq: 0,
+            },
+            TimelineRecord {
+                source: "jsonl",
+                ts_unix_ms: 100,
+                level: "info".to_owned(),
+                component: "cli".to_owned(),
+                code: None,
+                correlation_id: None,
+                origin: "cli".to_owned(),
+                message: "jsonl".to_owned(),
+                seq: 0,
+            },
+            TimelineRecord {
+                source: "jsonl",
+                ts_unix_ms: 100,
+                level: "info".to_owned(),
+                component: "cli".to_owned(),
+                code: None,
+                correlation_id: None,
+                origin: "cli".to_owned(),
+                message: "later-jsonl".to_owned(),
+                seq: 1,
+            },
+        ];
+        records.sort_by_key(|record| (record.ts_unix_ms, record.source_rank(), record.seq));
+        assert_eq!(
+            records
+                .iter()
+                .map(|record| record.message.as_str())
+                .collect::<Vec<_>>(),
+            ["jsonl", "later-jsonl", "graft", "timeline"]
+        );
+    }
+
+    #[test]
+    fn graft_fallback_record_keeps_its_source_label() {
+        let record = TimelineRecord::from_graft_value(
+            serde_json::json!({
+                "ts_unix_ms": 42,
+                "level": "warn",
+                "component": "atm_graft",
+                "origin": "graft",
+                "message": "fallback retained",
+            }),
+            3,
+        )
+        .expect("valid graft event");
+        assert_eq!(record.source, "graft");
+        assert_eq!(record.seq, 3);
     }
 
     #[test]
