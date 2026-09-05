@@ -952,7 +952,8 @@ mod tests {
     use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Barrier, Mutex};
+    use std::thread;
     use tempfile::TempDir;
 
     const TEST_RECIPIENT: &str = "test-recipient";
@@ -1032,6 +1033,112 @@ mod tests {
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
         }
+    }
+
+    fn test_session_with_fallback_path(
+        initial: Arc<FakeClientTransport>,
+        replacement: Arc<FakeClientTransport>,
+        fallback_path: &std::path::Path,
+        sender: String,
+    ) -> PyGraftSession {
+        let caller = PyAgentAddress::new(sender, TEST_TEAM.to_string(), None).expect("caller");
+        PyGraftSession {
+            caller: caller.to_typed().expect("typed caller"),
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(initial))),
+            receiver: Mutex::new(None),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                fallback_path.to_owned(),
+            )),
+            reconnect_replacement: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
+                replacement,
+            ))),
+            reconnect_attempts: AtomicUsize::new(0),
+            reconnect_fallback_attempts: AtomicUsize::new(0),
+        }
+    }
+
+    #[test]
+    fn four_concurrent_sessions_survive_restart_without_corrupt_fallback_lines() {
+        Python::initialize();
+        let tempdir = TempDir::new().expect("fallback log directory");
+        let fallback_path = tempdir.path().join("atm-graft-fallback.jsonl");
+        let initial_calls = Arc::new(AtomicUsize::new(0));
+        let replacement_calls = Arc::new(AtomicUsize::new(0));
+        let start = Arc::new(Barrier::new(4));
+        let sessions = (0..4)
+            .map(|index| {
+                let initial_calls = Arc::clone(&initial_calls);
+                let replacement_calls = Arc::clone(&replacement_calls);
+                let initial = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                    assert!(matches!(request, RequestEnvelope::List(_)));
+                    initial_calls.fetch_add(1, Ordering::SeqCst);
+                    Err(AtmError::daemon_unavailable("induced daemon restart"))
+                })));
+                let replacement = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                    assert!(matches!(request, RequestEnvelope::List(_)));
+                    replacement_calls.fetch_add(1, Ordering::SeqCst);
+                    Ok(ResponseEnvelope::List(list_outcome()))
+                })));
+                test_session_with_fallback_path(
+                    initial,
+                    replacement,
+                    &fallback_path,
+                    format!("{TEST_SENDER}-{index}"),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let outcomes = thread::scope(|scope| {
+            sessions
+                .into_iter()
+                .map(|session| {
+                    let start = Arc::clone(&start);
+                    scope.spawn(move || {
+                        start.wait();
+                        Python::attach(|py| session.list(py).map_err(|error| error.to_string()))
+                    })
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|handle| handle.join().expect("concurrent graft session"))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .expect("all four primary outcomes survive the induced restart");
+
+        assert_eq!(outcomes, vec![0; 4]);
+        assert_eq!(initial_calls.load(Ordering::SeqCst), 4);
+        assert_eq!(replacement_calls.load(Ordering::SeqCst), 4);
+
+        let text = std::fs::read_to_string(&fallback_path).expect("fallback events");
+        let lines = text.lines().collect::<Vec<_>>();
+        assert_eq!(lines.len(), 12, "each recovered session emits three events");
+        for line in &lines {
+            assert!(line.starts_with("{\"origin\":\"graft\",\"ts\":\""));
+            assert!(line.ends_with('}'), "event line is complete: {line}");
+            assert!(line.contains("\"code\":\"ATM_GRAFT_"));
+            assert!(line.contains("\"correlation_id\":\"graft-"));
+        }
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("\"code\":\"ATM_GRAFT_RECOVERY_ATTEMPT\""))
+                .count(),
+            4
+        );
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("\"code\":\"ATM_GRAFT_DAEMON_UNAVAILABLE\""))
+                .count(),
+            4
+        );
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("\"code\":\"ATM_GRAFT_RECOVERY_RESULT\""))
+                .count(),
+            4
+        );
     }
 
     #[test]
