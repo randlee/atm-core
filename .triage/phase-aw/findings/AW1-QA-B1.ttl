@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW1-QA-B1>
+  a triage:Finding ;
+  triage:findingId "AW1-QA-B1" ;
+  triage:title "check-runtime-stderr gate splits on first #[cfg(test)] and has no scripts/tests self-test" ;
+  triage:description "scripts/check-runtime-stderr.py production_source() splits the file text on the FIRST '#[cfg(test)]' occurrence instead of isolating a trailing test module. crates/atm-daemon-bootstrap/src/daemon_observability.rs has an early #[cfg(test)] at line 13 of 771 lines, so the gate scans only 12 lines and silently exempts all production code after it. AC6 also requires a synthetic-violation self-test under scripts/tests/ which does not exist. Converged: rust-qa-agent QA-001, ruthless-boundary-qa RBQA-F001, arch-qa ARCH-002, req-qa ATM-QA-002." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AW1-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-04T20:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW1 ;
+  triage:foundAt "2026-09-05T00:43:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW1-QA-B1/AW1-QA-B1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW1-QA-B1/AW1-QA-B1-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW1-QA-B1/AW1-QA-B1-1>
+  a triage:Occurrence ;
+  triage:file "scripts/check-runtime-stderr.py" ;
+  triage:line 21 ;
+  triage:snippet "return text.split(\"#[cfg(test)]\", 1)[0]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:occursIn <urn:atm:triage:worktree/AW1-FB/3427357a> .
+
+<urn:atm:triage:occurrence/AW1-QA-B1/AW1-QA-B1-2>
+  a triage:Occurrence ;
+  triage:file "scripts/tests" ;
+  triage:line 0 ;
+  triage:snippet "AC6 synthetic-violation self-test missing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:occursIn <urn:atm:triage:worktree/AW1-FB/3427357a> .
+
+<urn:atm:triage:worktree/AW1-INT/4928f795>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "4928f79527272827237a3b1a8d2b10f4b07ead86" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AW1-FB/3427357a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-aw1" ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:orderIndex 1 .

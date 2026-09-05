@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW1-RBP-F004>
+  a triage:Finding ;
+  triage:findingId "AW1-RBP-F004" ;
+  triage:title "retained_sink_fault_mode returns Result with an unreachable Err path in production" ;
+  triage:description "rust-best-practices-agent RBP-F004: crates/atm-daemon-bootstrap/src/daemon_observability.rs:486 fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> is #[cfg(not(test))] Ok(None) unconditionally; the Err variant is unreachable in production and the Result wrapper exists only for the test cfg. Minor: simplify (Option, or keep the fallible shape only where it is used)." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AW1-RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW1 ;
+  triage:foundAt "2026-09-05T00:43:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW1-RBP-F004/AW0-469> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW1-RBP-F004/AW1-486> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW1-RBP-F004/AW0-469>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/daemon_observability.rs" ;
+  triage:line 469 ;
+  triage:snippet "fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "4928f79527272827237a3b1a8d2b10f4b07ead86" ;
+  triage:occursIn <urn:atm:triage:worktree/AW0/4928f79527272827237a3b1a8d2b10f4b07ead86> .
+
+<urn:atm:triage:occurrence/AW1-RBP-F004/AW1-486>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/daemon_observability.rs" ;
+  triage:line 486 ;
+  triage:snippet "fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:occursIn <urn:atm:triage:worktree/AW1/3427357acc6cf4a61914c6f3cd7980557993ae12> .
+
+<urn:atm:triage:worktree/AW0/4928f79527272827237a3b1a8d2b10f4b07ead86>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "4928f79527272827237a3b1a8d2b10f4b07ead86" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AW1/3427357acc6cf4a61914c6f3cd7980557993ae12>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-aw1-tracing-bridge" ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:orderIndex 1 .

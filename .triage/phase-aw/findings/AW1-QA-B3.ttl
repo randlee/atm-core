@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW1-QA-B3>
+  a triage:Finding ;
+  triage:findingId "AW1-QA-B3" ;
+  triage:title "No behavioral tests for AW.1 AC1-AC5 and AC7 (tracing_bridge.rs has zero #[test])" ;
+  triage:description "req-qa ATM-QA-001 / rust-qa-agent QA-002: no tests exist anywhere in the workspace for AC1 (retained warn/error fields), AC2 (RETAINED_INFO_TARGETS filtering), AC3 (LogSink reentrancy -> dropped_reentrant_total, 5 s bounded), AC4 (saturated queue non-interference -> dropped_queue_full_total, send unchanged), AC5 (redaction of body/recipient/token/env), AC7 (double-install -> BridgeError::AlreadyInstalled). crates/atm-observability/src/tracing_bridge.rs contains 0 #[test] items. Sprint doc names a test as the verification method for each AC." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AW1-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW1 ;
+  triage:foundAt "2026-09-05T00:43:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW1-QA-B3/AW1-O1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW1-QA-B3/AW1-O1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-observability/src/tracing_bridge.rs" ;
+  triage:line 110 ;
+  triage:snippet "pub struct TracingBridgeLayer { ... }; 0 #[test] items" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:occursIn <urn:atm:triage:worktree/AW1/3427357a> .
+
+<urn:atm:triage:worktree/AW1/3427357a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/aw1-tracing-bridge" ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AW0-absent>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "4928f79527272827237a3b1a8d2b10f4b07ead86" ;
+  triage:orderIndex 0 .

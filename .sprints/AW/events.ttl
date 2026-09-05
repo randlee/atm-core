@@ -1,0 +1,17 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Provenance: Phase AW dispatched by fenix (coordinator) on 2026-09-05 after
+# Rand lifted the post-release hold (team-lead msg 01M1QEQJFGN6JTVHFRWEJNSGPD)
+# and plan PR #1137 merged (develop@4928f7952). Assignment times are the ATM
+# dispatch times; completion times are the dev push-complete evidence message.
+
+triage:a1 a triage:Assignment ;
+    triage:ofSprint triage:AW1 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-05T00:19:30Z"^^xsd:dateTime .
+
+# AW.1 dev completion: arch-ctm msg 01M1QFBGGF807VSWQYCZ6SRYQ8 (PR #1176 @ 1e2e9c702)
+triage:c1 a triage:Completion ;
+    triage:ofSprint triage:AW1 ;
+    triage:at "2026-09-05T00:26:34Z"^^xsd:dateTime .

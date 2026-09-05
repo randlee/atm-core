@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW1-QA-004>
+  a triage:Finding ;
+  triage:findingId "AW1-QA-004" ;
+  triage:title "AC9 doc-test compiling DiagnosticSink/RetainedEvent/SinkOffer/DropReason/DiagnosticCounters signatures is missing" ;
+  triage:description "req-qa ATM-QA-004: AC9 requires a doc-test that compiles the phase-plan §2 signatures for DiagnosticSink, RetainedEvent, SinkOffer, DropReason, DiagnosticCounters/DiagnosticCountersSource. No such doc-test exists on crates/atm-observability/src/tracing_bridge.rs (the DiagnosticSink trait has no ``` example block). Minor." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AW1-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-04T22:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW1 ;
+  triage:foundAt "2026-09-05T00:43:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW1-QA-004/AW1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW1-QA-004/AW1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-observability/src/tracing_bridge.rs" ;
+  triage:line 78 ;
+  triage:snippet "no AC9 doc-test" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:occursIn <urn:atm:triage:worktree/aw1-tracing-bridge/3427357acc> .
+
+<urn:atm:triage:worktree/aw1-tracing-bridge/3427357acc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/aw1-tracing-bridge" ;
+  triage:branch "feature/aw1-tracing-bridge" ;
+  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-aw/4928f795>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "4928f79527272827237a3b1a8d2b10f4b07ead86" ;
+  triage:orderIndex 0 .
