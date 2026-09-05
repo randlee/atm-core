@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T11:00:50Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r33 in .sprints/AX/events.ttl; final sprint verdict AX4-QA4 PASS (PR #1194 comment 5551411069)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T09:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX4 ;
@@ -32,8 +35,8 @@
   triage:file "crates/atm/src/commands/task_ledger.rs" ;
   triage:line 75 ;
   triage:snippet "const fn task_state_name(state: TaskState) -> &'static str {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/feature-ax4-task-cli-and-docs/aaf2e04b> .
@@ -43,8 +46,8 @@
   triage:file "crates/atm/src/commands/task_ledger.rs" ;
   triage:line 83 ;
   triage:snippet "const fn task_event_name(event: TaskEventKind) -> &'static str {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/feature-ax4-task-cli-and-docs/aaf2e04b> .
@@ -54,8 +57,8 @@
   triage:file "crates/atm/src/commands/task_ledger.rs" ;
   triage:line 94 ;
   triage:snippet "fn task_actor_name(actor: &TaskActor) -> &str {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/feature-ax4-task-cli-and-docs/aaf2e04b> .
@@ -65,8 +68,8 @@
   triage:file "crates/atm/src/commands/task_ledger.rs" ;
   triage:line 111 ;
   triage:snippet "const fn task_event_marker_name(marker: TaskEventMarker) -> &'static str {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/feature-ax4-task-cli-and-docs/aaf2e04b> .
@@ -76,8 +79,8 @@
   triage:file "crates/atm/src/commands/task_ledger.rs" ;
   triage:line 118 ;
   triage:snippet "const fn reminder_outcome_name(outcome: ReminderOutcome) -> &'static str {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/feature-ax4-task-cli-and-docs/aaf2e04b> .

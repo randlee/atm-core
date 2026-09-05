@@ -16,6 +16,9 @@
   triage:repeatable true ;
   triage:sweepScope "crate" ;
   triage:status "fixed" ;
+  triage:closedAt "2026-09-05T07:37:02Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r11 in .sprints/AX/events.ttl; final sprint verdict AX2-QA2 PASS (PR #1186 comment 5550327947)." ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
   triage:foundIn triage:AX2 ;

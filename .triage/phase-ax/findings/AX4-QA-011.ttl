@@ -15,7 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T10:25:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r29 in .sprints/AX/events.ttl; final sprint verdict AX4-QA4 PASS (PR #1194 comment 5551411069)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T09:17:58Z"^^xsd:dateTime ;
   triage:foundIn triage:AX4 ;
@@ -31,8 +34,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
   triage:line 41 ;
   triage:snippet "- [ ] D1 — `atm send --task-complete <TASK_ID>`" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .
@@ -42,8 +45,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
   triage:line 47 ;
   triage:snippet "- [ ] D2 — `atm list --tasks [--member <name>]` and" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .
@@ -53,8 +56,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
   triage:line 56 ;
   triage:snippet "- [ ] D3 — docs: `docs/requirements.md` §6.5 (`atm send` flags) and §6.6" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .
@@ -64,8 +67,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
   triage:line 67 ;
   triage:snippet "- [ ] D4 — tests listed under Required validation." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .

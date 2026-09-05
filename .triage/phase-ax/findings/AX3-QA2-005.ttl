@@ -15,7 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T10:07:04Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r23 in .sprints/AX/events.ttl; final sprint verdict AX3-QA7 PASS (PR #1191 comment 5551705615)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX3 ;
@@ -37,8 +40,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
   triage:line 135 ;
   triage:snippet "- [ ] D1 — retire the unused newtype `pub struct TaskState(String)` in" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3-task-state-machine/116bd23b0> .
@@ -48,8 +51,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
   triage:line 152 ;
   triage:snippet "- [ ] D2 — `TaskStore` sealed trait (`crates/atm-storage/src/task_store.rs`," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3-task-state-machine/116bd23b0> .
@@ -59,8 +62,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
   triage:line 164 ;
   triage:snippet "- [ ] D3 — wiring, one site per file, mirroring `PendingNudgeStore`:" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3-task-state-machine/116bd23b0> .
@@ -70,8 +73,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
   triage:line 182 ;
   triage:snippet "- [ ] D4 — envelope and request fields. `MessageEnvelope` in" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3-task-state-machine/116bd23b0> .
@@ -81,8 +84,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
   triage:line 199 ;
   triage:snippet "- [ ] D5 — write provenance carrier, code contract C6. Merge-forward first:" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3-task-state-machine/116bd23b0> .
@@ -92,8 +95,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
   triage:line 243 ;
   triage:snippet "- [ ] D6 — rusqlite implementation" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3-task-state-machine/116bd23b0> .
@@ -103,8 +106,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
   triage:line 265 ;
   triage:snippet "- [ ] D7 — `docs/adr/ADR-061-task-state-machine.md` recording the" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3-task-state-machine/116bd23b0> .
@@ -114,8 +117,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
   triage:line 276 ;
   triage:snippet "- [ ] D8 — tests listed under Required validation." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3-task-state-machine/116bd23b0> .
@@ -125,8 +128,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
   triage:line 277 ;
   triage:snippet "- [ ] D10 — supersede the Phase-AC task-storage deferral. `docs/requirements.md`" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3-task-state-machine/116bd23b0> .
@@ -136,8 +139,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
   triage:line 294 ;
   triage:snippet "- [ ] D9 — `crates/atm-storage/src/contract.rs` decomposition (arch-qa" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3-task-state-machine/116bd23b0> .

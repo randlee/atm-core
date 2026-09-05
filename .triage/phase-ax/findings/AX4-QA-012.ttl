@@ -15,7 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T10:25:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r30 in .sprints/AX/events.ttl; final sprint verdict AX4-QA4 PASS (PR #1194 comment 5551411069)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T09:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX4 ;
@@ -31,8 +34,8 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 225 ;
   triage:snippet "pub fn with_task_complete(mut self, task_id: TaskId) -> Self { self.task_complete = Some(task_id); self }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs-aaf2e04b> .
@@ -42,8 +45,8 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 231 ;
   triage:snippet "pub fn with_task_complete_opt(mut self, task_id: Option<TaskId>) -> Self { self.task_complete = task_id; self }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs-aaf2e04b> .
@@ -53,8 +56,8 @@
   triage:file "crates/atm/src/commands/task_ledger.rs" ;
   triage:line 38 ;
   triage:snippet "fn render_tasks(rows: &[TaskRow]) -> Result<String> { ... Ok(rendered) }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs-aaf2e04b> .
@@ -64,8 +67,8 @@
   triage:file "crates/atm/src/commands/task_ledger.rs" ;
   triage:line 56 ;
   triage:snippet "fn render_task_events(rows: &[TaskEventRow]) -> Result<String> { ... }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs-aaf2e04b> .

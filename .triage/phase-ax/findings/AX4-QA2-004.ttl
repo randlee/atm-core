@@ -15,7 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T11:20:54Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r35 in .sprints/AX/events.ttl; final sprint verdict AX4-QA4 PASS (PR #1194 comment 5551411069)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T10:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX4 ;
@@ -28,8 +31,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
   triage:line 21 ;
   triage:snippet "rationale: no functional dependency; both edit docs/requirements.md (AX.1 lines 1094/1105/4496, AX.4 §6.5/§6.6/§15.4) and docs/user-documents/nudge-templates.md ..." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "193821c92835986b45070f382b4aa00a0f6ee688" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/193821c9> .

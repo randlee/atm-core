@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T10:07:04Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r22 in .sprints/AX/events.ttl; final sprint verdict AX3-QA7 PASS (PR #1191 comment 5551705615)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T09:06:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX3 ;
@@ -31,8 +34,8 @@
   triage:file "crates/atm-storage/src/task_state.rs" ;
   triage:line 83 ;
   triage:snippet "(None, TaskEvent::Completed) => Err(TaskRejected::new(\"no open task for actor\"))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3/116bd23b0> .
@@ -42,8 +45,8 @@
   triage:file "crates/atm-storage/src/task_state.rs" ;
   triage:line 111 ;
   triage:snippet "Err(TaskRejected::new(format!(\"no open task for {actor}\")))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3/116bd23b0> .
@@ -53,8 +56,8 @@
   triage:file "crates/atm-storage/src/task_state.rs" ;
   triage:line 255 ;
   triage:snippet "assert!(missing.detail.contains(\"no open task for assignee\"));" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3/116bd23b0> .
@@ -64,8 +67,8 @@
   triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
   triage:line 342 ;
   triage:snippet "no open task {task_id} for {} -- hand-rolled second application site in apply_task_completion, bypasses admit()/transition() called two lines later via transition_for()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/ax3/116bd23b0> .

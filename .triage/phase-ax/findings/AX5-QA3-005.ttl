@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T15:36:45Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r60 in .sprints/AX/events.ttl; final sprint verdict AX5-QA4 PASS (PR #1201 comment 5552870450)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T15:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX5 ;
@@ -28,8 +31,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 555 ;
   triage:snippet "if outcome == ReminderOutcome::Emitted {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "c4b8e3f2acdc4e7b5e88f37a335df4c73255fdea" ;
   triage:occursIn <urn:atm:triage:worktree/AX5/c4b8e3f2> .

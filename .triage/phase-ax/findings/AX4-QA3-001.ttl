@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T11:20:54Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r34 in .sprints/AX/events.ttl; final sprint verdict AX4-QA4 PASS (PR #1194 comment 5551411069)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T11:01:35Z"^^xsd:dateTime ;
   triage:foundIn triage:AX4 ;
@@ -28,8 +31,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
   triage:line 21 ;
   triage:snippet "rationale: no functional dependency; both edit docs/requirements.md (AX.1 lines 1094/1105/4496, AX.4 §6.5/§7.3/§7.12/§15.4) and docs/user-documents/nudge-templates.md (AX.1 rewrites the kind inventory, AX.4 adds one ADR-061 cross-reference) in different sections; resolved by AX.4 merging integrate/phase-ax forward after track A lands and before opening its PR, the same rule AX.3 follows." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "349b694a98bbffe5bc5d720384625d69199846c8" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/349b694a> .
