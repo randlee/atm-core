@@ -34,6 +34,7 @@ pub const RETAINED_FIELD_ALLOWLIST: &[&str] = &[
     "level",
     "component",
     "code",
+    "command",
     "action",
     "correlation_id",
     "outcome",

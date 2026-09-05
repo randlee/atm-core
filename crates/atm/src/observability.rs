@@ -193,7 +193,7 @@ fn command_emit_failure_message(command: &str, action: &str, emit_error: &AtmErr
 #[cfg(test)]
 mod tests {
     use super::retained_error_message;
-    use atm_core::error::AtmError;
+    use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::observability::{
         AtmLogQuery, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
         LogLevelFilter, LogMode, LogOrder, LogTailSession, ObservabilityPort,
@@ -355,25 +355,33 @@ mod tests {
                 ..query(LogOrder::OldestFirst)
             })
             .expect("follow");
-        observability
-            .emit(event(Some("01KRFK5QTF2R6NRS3Q0F8Z9K0T")))
-            .expect("emit followed");
+        let mut followed_event = event(Some("01KRFK5QTF2R6NRS3Q0F8Z9K0T"));
+        followed_event.error_code = Some(AtmErrorCode::MessageValidationFailed);
+        observability.emit(followed_event).expect("emit followed");
 
-        let followed_message_id = "01KRFK5QTF2R6NRS3Q0F8Z9K0T"
-            .parse::<atm_core::schema::AtmMessageId>()
-            .expect("message id")
-            .to_string();
         let followed = follow.poll().expect("follow poll");
         assert!(
             followed.records.iter().any(|record| {
                 record
                     .fields
-                    .get("message_id")
+                    .get("code")
                     .and_then(atm_core::observability::LogFieldValue::as_str)
-                    == Some(followed_message_id.as_str())
+                    == Some("ATM_MESSAGE_VALIDATION_FAILED")
             }),
-            "follow poll should include the newly emitted normalized message id even if the shared tail surface also returns the prior backlog entry"
+            "follow poll should include the newly emitted allowlisted code even if the shared tail surface also returns the prior backlog entry: {followed:?}"
         );
+        assert!(followed.records.iter().all(|record| {
+            [
+                "team",
+                "agent",
+                "sender",
+                "message_id",
+                "task_id",
+                "error_message",
+            ]
+            .iter()
+            .all(|key| record.fields.get(*key).is_none())
+        }));
     }
 
     #[test]

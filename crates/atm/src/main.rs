@@ -628,6 +628,10 @@ fn map_maintenance_report(
 
 fn build_command_event_fields(event: &CommandEvent) -> Map<String, serde_json::Value> {
     let mut fields = Map::new();
+    fields.insert(
+        "command".to_string(),
+        serde_json::Value::String(event.command.to_string()),
+    );
     if let Some(error_code) = event.error_code {
         fields.insert(
             "code".to_string(),
