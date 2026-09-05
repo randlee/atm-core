@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-N5-ENV-001>
+  a triage:Finding ;
+  triage:findingId "AW-N5-ENV-001" ;
+  triage:title "AW-READY-N5 test isolation does not apply disposable env vars to the test's own process before constructing native_tools.AtmNativeTools" ;
+  triage:description "crates/atm-graft-python/tests/test_cli_parity.py's isolation only applies the disposable HOME/ATM_HOME/ATM_TEST_RUNTIME_HOME env vars to CLI subprocess calls, never to the test's own process before constructing native_tools.AtmNativeTools in setUpClass. This means the native atm_list call resolves the real host home (empty/wrong team) instead of the isolated fixture, producing an error envelope with no 'result' key -- the observed KeyError: 'result' in test_list_read_send_and_ack_match_cli. Confirmed unchanged at rebased head 9e6383f0b17b459da176456bafba2a5fa6a1af04 on branch fix/aw-readiness-easy. Suggested fix direction: apply cls.environment to os.environ in setUpClass (with teardown restore), or give AtmNativeTools an explicit home override, before constructing native_tools." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-infra" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T22:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWReadinessReview ;
+  triage:foundAt "2026-09-05T22:01:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-N5-ENV-001/N5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-N5-ENV-001/N5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_cli_parity.py" ;
+  triage:line 306 ;
+  triage:snippet "cls.native_tools = native_tools.AtmNativeTools(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "9e6383f0b" ;
+  triage:occursIn <urn:atm:triage:worktree/N5-aw-fix/9e6383f0b> .
+
+<urn:atm:triage:worktree/N5-aw-fix/9e6383f0b>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/integrate/fix/aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "9e6383f0b" ;
+  triage:orderIndex 1 .
