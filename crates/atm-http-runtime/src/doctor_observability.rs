@@ -25,9 +25,9 @@ pub(crate) fn append_counter_finding(
         DoctorSeverity::Info
     };
     let code = if degraded {
-        AtmErrorCode::WarningObservabilityHealthDegraded
+        AtmErrorCode::WarningRetainedDiagnosticsDegraded
     } else {
-        AtmErrorCode::ObservabilityHealthOk
+        AtmErrorCode::RetainedDiagnosticsHealthOk
     };
     findings.push(DoctorFinding {
         severity,
@@ -46,4 +46,33 @@ pub(crate) fn append_counter_finding(
                 .to_owned()
         }),
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::append_counter_finding;
+    use atm_core::doctor::DoctorSeverity;
+    use atm_core::error::AtmErrorCode;
+    use atm_core::observability_counters::DiagnosticCounters;
+
+    #[test]
+    fn retained_diagnostics_finding_uses_its_own_error_codes() {
+        let mut findings = Vec::new();
+        append_counter_finding(&mut findings, DiagnosticCounters::default());
+        assert_eq!(findings[0].severity, DoctorSeverity::Info);
+        assert_eq!(findings[0].code, AtmErrorCode::RetainedDiagnosticsHealthOk);
+
+        append_counter_finding(
+            &mut findings,
+            DiagnosticCounters {
+                timeline_dropped_queue_full_total: 1,
+                ..DiagnosticCounters::default()
+            },
+        );
+        assert_eq!(findings[1].severity, DoctorSeverity::Warning);
+        assert_eq!(
+            findings[1].code,
+            AtmErrorCode::WarningRetainedDiagnosticsDegraded
+        );
+    }
 }

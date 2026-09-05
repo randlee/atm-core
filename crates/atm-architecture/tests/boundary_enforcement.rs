@@ -4177,14 +4177,12 @@ fn aw_diagnostics_composition_stays_behind_the_timeline_store_contract() {
     let doctor_observability =
         read_source(&root.join("crates/atm-http-runtime/src/doctor_observability.rs"));
     let sqlite_backend = read_source(&root.join("crates/atm-storage-rusqlite/src/lib.rs"));
-    let sqlite_backend_implementation = sqlite_backend
-        .split("impl SqliteStorageBackend {")
-        .nth(1)
-        .expect("SQLite storage backend implementation");
-    let sqlite_production = sqlite_backend_implementation
-        .split("\n    #[cfg(test)]")
-        .next()
-        .expect("storage backend production region");
+    let sqlite_production =
+        production_impl_function_source(&sqlite_backend, "SqliteStorageBackend");
+    let sqlite_production_compact = sqlite_production
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
 
     assert!(
         bootstrap.contains("let store: Arc<dyn DiagnosticTimelineStore> = store;")
@@ -4210,16 +4208,81 @@ fn aw_diagnostics_composition_stays_behind_the_timeline_store_contract() {
         );
     }
     assert_eq!(
-        sqlite_production
+        sqlite_production_compact
             .matches("SqliteDiagnosticTimeline::from_shared_db")
             .count(),
         1,
         "the storage backend must retain exactly one production construction path for its shared diagnostic timeline"
     );
     assert!(
-        !sqlite_production.contains("SqliteDiagnosticTimeline {"),
+        !sqlite_production_compact.contains("SqliteDiagnosticTimeline{"),
         "the storage backend must construct the diagnostic timeline only through from_shared_db"
     );
+}
+
+#[test]
+fn aw_diagnostics_gate_scans_production_functions_after_test_helpers() {
+    let source = r#"
+        impl SqliteStorageBackend {
+            fn production_constructor() {
+                SqliteDiagnosticTimeline::from_shared_db(db);
+            }
+
+            #[cfg(test)]
+            fn fixture_constructor() {
+                SqliteDiagnosticTimeline::from_shared_db(test_db);
+            }
+
+            fn later_production_constructor() {
+                SqliteDiagnosticTimeline::from_shared_db(later_db);
+            }
+        }
+    "#;
+    let production = production_impl_function_source(source, "SqliteStorageBackend");
+    let compact_production = production
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
+
+    assert!(production.contains("production_constructor"));
+    assert!(production.contains("later_production_constructor"));
+    assert!(!production.contains("fixture_constructor"));
+    assert_eq!(
+        compact_production
+            .matches("SqliteDiagnosticTimeline::from_shared_db")
+            .count(),
+        2,
+        "the diagnostics gate must retain production functions appearing after cfg(test) helpers"
+    );
+}
+
+fn production_impl_function_source(source: &str, self_type: &str) -> String {
+    let syntax = syn::parse_file(source).expect("production implementation source must parse");
+    syntax
+        .items
+        .into_iter()
+        .filter_map(|item| match item {
+            syn::Item::Impl(implementation)
+                if !implementation
+                    .attrs
+                    .iter()
+                    .any(is_test_configuration_attribute)
+                    && implementation.self_ty.to_token_stream().to_string() == self_type =>
+            {
+                Some(implementation)
+            }
+            _ => None,
+        })
+        .flat_map(|implementation| implementation.items)
+        .filter_map(|item| match item {
+            syn::ImplItem::Fn(function)
+                if !function.attrs.iter().any(is_test_configuration_attribute) =>
+            {
+                Some(function.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 fn av3_trait_signature_types(source: &str, trait_name: &str) -> BTreeSet<String> {

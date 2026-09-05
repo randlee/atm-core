@@ -2273,6 +2273,10 @@ mod tests {
                     expected_health.timeline.dropped_persist_error_total
                 );
                 assert_eq!(report.observability.degraded, expected_health.degraded);
+                assert!(report.findings.iter().any(|finding| {
+                    finding.code
+                        == atm_core::error::AtmErrorCode::WarningRetainedDiagnosticsDegraded
+                }));
             }
             other => panic!("expected doctor report, got {other:?}"),
         }
