@@ -272,7 +272,7 @@ impl PreparedWrite {
                 &event,
                 &message.envelope.text,
                 self.outbound_request.nudge_mode,
-            ) {
+            )? {
                 dispatches.push(dispatch);
             }
         }

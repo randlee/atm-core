@@ -39,6 +39,27 @@ latest assignment event supplies `assignment_message_id`; reminder and lead
 event counts reproduce their counters. Description is intentionally not
 replayable.
 
+## Reminder cycle
+
+The Tokio-owned Herdr queue wake pump polls every 5 seconds. After it drains
+ordinary deferred mail, it checks open tasks for Herdr-backed members reported
+as idle, done, or blocked. It selects the oldest active task (or the oldest
+assigned task when none is active) and re-sends the Task body at most once per
+member every 60 seconds. Drain comes first and shares the same per-tick prompt
+budget, so a queue prompt counts as that member's reminder attempt for the
+tick.
+
+This is Herdr-only. A member that has moved to another backend receives no
+reminder from this pump. `idle_members` retains its queue-dashboard meaning:
+it counts only members that are both idle and have pending deferred mail.
+
+Blocked members are recorded as runtime state `blocked`, receive no Herdr
+prompt, and append a `reminded` audit event with outcome `blocked` on the same
+cadence. Rendering failures append `unrenderable`; successful emissions append
+`emitted`. These events update reminder bookkeeping only and never transition
+task state. If the optional task store is unavailable, only the reminder step
+is skipped; deferred-mail draining continues.
+
 ## Consequences
 
 This is a fresh Phase AX design, not restoration of the AC.6 scaffolding. It

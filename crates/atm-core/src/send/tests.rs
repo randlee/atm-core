@@ -367,6 +367,7 @@ fn tmux_and_herdr_dispatches_share_the_rendered_template() {
         "message body",
         crate::send::NudgeMode::Immediate,
     )
+    .expect("tmux dispatch result")
     .expect("tmux dispatch");
     let mut herdr_snapshot = tmux_snapshot.clone();
     herdr_snapshot.local_tmux_post_send = false;
@@ -378,6 +379,7 @@ fn tmux_and_herdr_dispatches_share_the_rendered_template() {
         "message body",
         crate::send::NudgeMode::Immediate,
     )
+    .expect("Herdr dispatch result")
     .expect("Herdr dispatch");
     let PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(LocalTmuxNudgeTarget {
         rendered_nudge: tmux_text,

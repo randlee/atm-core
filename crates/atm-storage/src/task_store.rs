@@ -1,5 +1,8 @@
 //! Storage-neutral task ledger capability.
 
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use serde::{Deserialize, Serialize};
 
 use crate::contract::sealed;
@@ -68,31 +71,80 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
     ) -> Result<(), AtmError>;
 }
 
-/// Minimal no-op implementation for composition and contract tests.
+/// Minimal in-memory implementation for composition and contract tests.
 #[derive(Debug, Default)]
-pub struct DummyTaskStore;
+pub struct DummyTaskStore {
+    rows: Mutex<HashMap<(MemberKey, TaskId), TaskRow>>,
+    fail_reminders: bool,
+}
+
+impl DummyTaskStore {
+    #[must_use]
+    pub fn with_rows(rows: Vec<TaskRow>, fail_reminders: bool) -> Self {
+        let rows = rows
+            .into_iter()
+            .map(|row| {
+                (
+                    (
+                        MemberKey::new(row.team.clone(), row.assignee.clone()),
+                        row.task_id.clone(),
+                    ),
+                    row,
+                )
+            })
+            .collect();
+        Self {
+            rows: Mutex::new(rows),
+            fail_reminders,
+        }
+    }
+
+    pub fn row(&self, member: &MemberKey, task_id: &TaskId) -> TaskRow {
+        self.rows
+            .lock()
+            .expect("dummy task rows lock")
+            .get(&(member.clone(), task_id.clone()))
+            .expect("dummy task row")
+            .clone()
+    }
+}
 
 impl sealed::Sealed for DummyTaskStore {}
 
 impl TaskStore for DummyTaskStore {
-    fn load_task(
-        &self,
-        _member: &MemberKey,
-        _task_id: &TaskId,
-    ) -> Result<Option<TaskRow>, AtmError> {
-        Ok(None)
+    fn load_task(&self, member: &MemberKey, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError> {
+        Ok(self
+            .rows
+            .lock()
+            .expect("dummy task rows lock")
+            .get(&(member.clone(), task_id.clone()))
+            .cloned())
     }
 
-    fn open_tasks(&self, _member: &MemberKey) -> Result<Vec<TaskRow>, AtmError> {
-        Ok(Vec::new())
+    fn open_tasks(&self, member: &MemberKey) -> Result<Vec<TaskRow>, AtmError> {
+        Ok(self
+            .rows
+            .lock()
+            .expect("dummy task rows lock")
+            .iter()
+            .filter(|((row_member, _), _)| row_member == member)
+            .map(|(_, row)| row.clone())
+            .collect())
     }
 
     fn list_tasks(
         &self,
-        _team: &TeamName,
-        _member: Option<&AgentName>,
+        team: &TeamName,
+        member: Option<&AgentName>,
     ) -> Result<Vec<TaskRow>, AtmError> {
-        Ok(Vec::new())
+        Ok(self
+            .rows
+            .lock()
+            .expect("dummy task rows lock")
+            .values()
+            .filter(|row| &row.team == team && member.is_none_or(|agent| &row.assignee == agent))
+            .cloned()
+            .collect())
     }
 
     fn list_task_events(
@@ -106,14 +158,26 @@ impl TaskStore for DummyTaskStore {
 
     fn record_reminder(
         &self,
-        _member: &MemberKey,
-        _task_id: &TaskId,
-        _at: IsoTimestamp,
+        member: &MemberKey,
+        task_id: &TaskId,
+        at: IsoTimestamp,
         _outcome: ReminderOutcome,
     ) -> Result<TaskRow, AtmError> {
-        Err(AtmError::validation(
-            "task store test double has no task row",
-        ))
+        if self.fail_reminders {
+            return Err(AtmError::new(
+                crate::AtmErrorCode::InternalError,
+                "injected reminder bookkeeping failure",
+            ));
+        }
+        let mut rows = self.rows.lock().expect("dummy task rows lock");
+        let row = rows
+            .get_mut(&(member.clone(), task_id.clone()))
+            .ok_or_else(|| {
+                AtmError::new(crate::AtmErrorCode::InternalError, "dummy task row missing")
+            })?;
+        row.last_reminded_at = Some(at);
+        row.reminder_count = row.reminder_count.saturating_add(1);
+        Ok(row.clone())
     }
 
     fn record_lead_notified(

@@ -36,6 +36,11 @@ returns that task's append-only events in sequence order. An unknown task id
 prints the event header only (or `[]` as JSON) and succeeds. See ADR-061 for
 the task tables and audit/replay contract.
 
+For a Herdr-backed assignee, ATM re-sends the Task reminder body while an open
+task remains unattended: at most once per minute, after ordinary queued mail
+has had its turn. A blocked assignee is not prompted, but the task event log
+records the blocked reminder. Reminders stop as soon as the task is completed.
+
 Human task rows use this stable layout:
 
 ```

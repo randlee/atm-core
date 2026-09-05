@@ -375,7 +375,9 @@ impl RuntimeHealth {
                 RuntimeMemberState::Active => counts.active_members += 1,
                 RuntimeMemberState::Idle => counts.idle_members += 1,
                 RuntimeMemberState::Offline => counts.offline_members += 1,
-                RuntimeMemberState::Unknown | RuntimeMemberState::IdentityConflict => {
+                RuntimeMemberState::Unknown
+                | RuntimeMemberState::IdentityConflict
+                | RuntimeMemberState::Blocked => {
                     counts.unknown_members += 1;
                 }
             }

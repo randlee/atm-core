@@ -94,7 +94,7 @@ pub use client::{
 };
 pub use herdr_queue_wake::{
     HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-    HerdrQueueWakePump, HerdrQueueWakeStats,
+    HerdrQueueWakePump,
 };
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{

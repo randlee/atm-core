@@ -2662,6 +2662,10 @@ Required rules:
   pending acknowledgement
 - every transition, rejection, resend, and reminder is append-only audit data;
   the durable tables and replay contract are defined by ADR-061
+- the Tokio Herdr queue wake pump checks open tasks after draining deferred
+  mail: for an idle or done Herdr assignee it re-sends the Task body no more
+  than once per 60 seconds, sharing the drain prompt budget; a blocked assignee
+  receives no prompt but records a `blocked` reminder on the same cadence
 
 ## 16. Observability Requirements
 

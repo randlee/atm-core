@@ -347,7 +347,8 @@ fn apply_task_completion(
         &typed_task_id,
         &record.envelope.from,
     )?;
-    let row = row.expect("completion admission accepts only an existing task row");
+    let row =
+        row.ok_or_else(|| task_rejected("task completion admission found no existing task row"))?;
     let Transition::To(next_state) = next else {
         return Err(task_rejected("task completion did not produce a state"));
     };

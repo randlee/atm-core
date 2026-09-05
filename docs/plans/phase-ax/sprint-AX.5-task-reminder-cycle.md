@@ -5,7 +5,7 @@ title: Task reminder cycle in the Herdr pump
 branch: feature/ax5-task-reminder-cycle
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ax5-task-reminder-cycle
 integration_branch: integrate/phase-ax
-status: draft
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: C
@@ -140,7 +140,7 @@ This is the authoritative deliverable checklist. Every listed deliverable
 lands production-ready for the scope this sprint claims; partial or
 shape-only completion fails the sprint.
 
-- [ ] D1 — pump task step in
+- [x] D1 — pump task step in
   `crates/atm-http-runtime/src/herdr_queue_wake.rs` per the rule above:
   `tick_once` builds the idle set from the roster
   (`shared_roster_store_arc()`, `DurableRosterStore`) and Herdr status
@@ -159,14 +159,14 @@ shape-only completion fails the sprint.
   `atm members` shows `state=blocked age=…`; `Working` alone maps to
   `Active`. The CLI and daemon ship together, so the new wire value needs
   no compatibility shim. Code contract C2.
-- [ ] D2 — clock seam (code contract C2): `HerdrQueueWakePump` gains a
+- [x] D2 — clock seam (code contract C2): `HerdrQueueWakePump` gains a
   `clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>` field, defaulting
   to `IsoTimestamp::now` in `new`, settable with `with_clock` (test
   only in practice; production never calls it). Every `now` in
   `tick_once` and the task step reads the clock. The bootstrap call site
   `crates/atm-daemon-bootstrap/src/replacement_handler.rs` line 244 is
   unchanged: `new`'s four parameters stay as they are.
-- [ ] D3 — task reminder dispatch, code contract C1, in
+- [x] D3 — task reminder dispatch, code contract C1, in
   `crates/atm-core/src/nudge_dispatch.rs` beside
   `rebuild_received_hook_dispatch`: resolves the recipient snapshot with
   `DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(runtime,
@@ -179,7 +179,7 @@ shape-only completion fails the sprint.
   `build_built_in_dispatch` with `NudgeMode::Deferred` (Task body). The
   reminder does not depend on the mail row, so a task whose assignment
   message was already acknowledged or purged still renders.
-- [ ] D4 — no marker exception. Task mail to a Herdr member sets the
+- [x] D4 — no marker exception. Task mail to a Herdr member sets the
   pending marker like every `Deferred` send (AX.1 D9;
   `mark_pending_if_deferred`, pipeline.rs line 112, is unchanged). The
   drain's nudge for that marker already renders the Task body because
@@ -189,14 +189,14 @@ shape-only completion fails the sprint.
   by the tmux hook path, and an assignee moved after reading is an
   ordinary non-Herdr assignee (reminders out of scope, phase plan §5).
   `SendOutcome` is unchanged.
-- [ ] D5 — docs: ADR-061 gains a "Reminder cycle" section (rule,
+- [x] D5 — docs: ADR-061 gains a "Reminder cycle" section (rule,
   properties, 60 s, 5 s tick, drain-first ordering, shared prompt budget,
   Herdr only, `idle_members` semantics unchanged, Blocked handling);
   `docs/requirements.md` §15.4 gains the reminder rule;
   `docs/user-documents/tasks.md` (AX.4) describes when the `task` body is
   re-sent. No ADR-054 amendment from this sprint: the marker contract is
   unchanged.
-- [ ] D6 — tests listed under Required validation.
+- [x] D6 — tests listed under Required validation.
 
 ### Paths to delete
 
@@ -281,7 +281,7 @@ log record and `atm list --task-events`, not doctor).
    outcome `blocked` per 60 s while blocked; when it returns to idle the
    next reminder is `emitted`.
 7. With no `TaskStore` installed the pump still drains queued mail and
-   logs one warning per tick.
+   logs the task-store-unavailable warning on transition only.
 
 ## Required validation
 

@@ -816,14 +816,15 @@ mod replacement_runtime_tests {
     use atm_core::api::ApiRequest;
     use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
-        BuiltInPostSendDispatch, MessageReceivedHookSelector, RosterEntry, TemplateSource,
+        BuiltInPostSendDispatch, MemberKey, MessageReceivedHookSelector, RosterEntry,
+        TemplateSource,
     };
     use atm_core::doctor::{DoctorSeverity, HerdrPresenceDoctor};
     use atm_core::observability::NullObservability;
     use atm_core::peer_wire::PeerWireMode;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
-    use atm_core::send::{SendMessageSource, WriteRequest};
-    use atm_core::types::{AgentName, ModelName, TeamName};
+    use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
+    use atm_core::types::{AgentName, ModelName, TaskId, TeamName};
     use atm_http_runtime::{
         DirectPeerTcpConfig, HttpRuntimeBuilder, LoopbackTcpConfig, PeerPoolConfig, RuntimeHealth,
         direct_peer_tcp_client,
@@ -837,11 +838,11 @@ mod replacement_runtime_tests {
     use super::replacement_handler::{HerdrPresenceDoctorAdapter, herdr_presence_finding};
     use super::{
         DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ReplacementHandlerConfig,
-        SelectedPeerAdapterSelection, ShutdownSignal, assemble_host_runtime_with_template_composer,
-        build_replacement_handler, legacy_literal_ip_policy_from_value, parse_direct_peer_port,
-        parse_peer_wire_mode, peer_stream_adapter_for_mode,
-        replacement_runtime_config_with_direct_peer, start_replacement_runtime,
-        write_ready_signal_if_requested,
+        SelectedPeerAdapterSelection, ShutdownSignal, active_received_hook_selector_with_health,
+        assemble_host_runtime_with_template_composer, build_replacement_handler,
+        legacy_literal_ip_policy_from_value, parse_direct_peer_port, parse_peer_wire_mode,
+        peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
+        start_replacement_runtime, write_ready_signal_if_requested,
     };
     use peer_tls::LegacyLiteralIpPolicy;
 
@@ -1202,6 +1203,88 @@ mod replacement_runtime_tests {
         let assembly = open_isolated_sqlite_boundary(temporary_root.path())
             .expect("assemble isolated daemon runtime")
             .for_daemon();
+        let runtime = assembly.service_runtime.clone();
+        let team: TeamName = "bootstrap-herdr".parse().expect("team");
+        let mut recipient_metadata =
+            atm_core::delivery_channel::test_backend_type_metadata("herdr");
+        recipient_metadata.insert("herdrSession".to_owned(), serde_json::json!("bootstrap"));
+        runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![
+                    RosterEntry {
+                        team_name: team.clone(),
+                        agent_name: "recipient".parse().expect("recipient"),
+                        member_kind: RosterMemberKind::Permanent,
+                        harness: RosterHarness::CodexCli,
+                        agent_type: atm_core::schema::AgentType::default(),
+                        model: ModelName::default(),
+                        recipient_pane_id: None,
+                        metadata_json: recipient_metadata,
+                    },
+                    RosterEntry {
+                        team_name: team.clone(),
+                        agent_name: "no-task".parse().expect("no-task"),
+                        member_kind: RosterMemberKind::Permanent,
+                        harness: RosterHarness::CodexCli,
+                        agent_type: atm_core::schema::AgentType::default(),
+                        model: ModelName::default(),
+                        recipient_pane_id: None,
+                        metadata_json: {
+                            let mut metadata =
+                                atm_core::delivery_channel::test_backend_type_metadata("herdr");
+                            metadata
+                                .insert("herdrSession".to_owned(), serde_json::json!("bootstrap"));
+                            metadata
+                        },
+                    },
+                ],
+                refreshed_at: None,
+            })
+            .expect("seed Herdr roster");
+        let mut task_request = WriteRequest::new(
+            temporary_root.path().join("home"),
+            temporary_root.path().join("home"),
+            "sender".parse::<AgentName>().expect("sender"),
+            "recipient@bootstrap-herdr",
+            team.clone(),
+            SendMessageSource::Inline("bootstrap reminder task".to_owned()),
+            None,
+            true,
+            None,
+            false,
+        )
+        .expect("task request")
+        .with_nudge_mode(NudgeMode::Deferred);
+        task_request.task_id = Some("AX5-BOOTSTRAP".parse::<TaskId>().expect("task id"));
+        let task_message_id = write_mail_with_runtime(task_request, &NullObservability, &runtime)
+            .expect("persist task")
+            .persisted_message_id();
+        let recipient_key = MemberKey::new(
+            team.clone(),
+            "recipient".parse::<AgentName>().expect("recipient"),
+        );
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .clear_pending_on_handoff(&recipient_key, &task_message_id)
+            .expect("simulate the already-drained task marker");
+        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        fake.queue_list_result(Ok(atm_herdr::HerdrListOutcome {
+            agents: vec![
+                atm_herdr::AgentSnapshot {
+                    name: Some("recipient".to_owned()),
+                    status: atm_herdr::HerdrAgentStatus::Idle,
+                    workspace_id: None,
+                },
+                atm_herdr::AgentSnapshot {
+                    name: Some("no-task".to_owned()),
+                    status: atm_herdr::HerdrAgentStatus::Idle,
+                    workspace_id: None,
+                },
+            ],
+        }));
         let peer_stream_adapter =
             peer_stream_adapter_for_mode(PeerWireMode::plaintext_test(), || {
                 panic!("plaintext bootstrap must not inspect invalid TLS peer configuration")
@@ -1213,9 +1296,8 @@ mod replacement_runtime_tests {
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
-                selector_factory: |_, _, _, _| {
-                    Arc::new(NoReceivedHookSelector)
-                        as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
+                selector_factory: |runtime, herdr_process, health, _| {
+                    active_received_hook_selector_with_health(runtime, herdr_process, health)
                 },
                 daemon_launch_identity: DaemonLaunchIdentity::default(),
                 peer_wire_mode: PeerWireMode::plaintext_test(),
@@ -1225,7 +1307,7 @@ mod replacement_runtime_tests {
                 },
                 runtime_health: runtime_health.clone(),
                 bare_cli: Default::default(),
-                herdr_process: None,
+                herdr_process: Some(fake.clone()),
             },
         )
         .expect("compose the replacement daemon handler");
@@ -1258,6 +1340,19 @@ mod replacement_runtime_tests {
         })
         .await;
 
+        let observed_prompt =
+            tokio::time::timeout(Duration::from_secs(10), async {
+                loop {
+                    if fake.calls().iter().any(|call| {
+                        matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. })
+                    }) {
+                        return;
+                    }
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await;
+
         running
             .begin_shutdown()
             .finish()
@@ -1268,6 +1363,15 @@ mod replacement_runtime_tests {
             "HerdrQueueWakePump must actually run through the production \
              `start_replacement_runtime` path so its own `RuntimeHealth::record_herdr_queue_tick` \
              completion signal fires, without any fixed wall-clock sleep",
+        );
+        observed_prompt.expect("bootstrap-started pump emits the open task reminder");
+        assert_eq!(
+            fake.calls()
+                .iter()
+                .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
+                .count(),
+            1,
+            "the idle roster member without an open task receives no prompt"
         );
     }
 
