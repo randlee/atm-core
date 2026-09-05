@@ -155,3 +155,27 @@ triage:a10 a triage:Assignment ;
     triage:ofSprint triage:AX4 ;
     triage:assignedTo "cipher" ;
     triage:assignedAt "2026-09-05T09:24:00Z"^^xsd:dateTime .
+
+triage:c9 a triage:Completion ;
+    triage:ofSprint triage:AX3 ;
+    triage:at "2026-09-05T09:48:07Z"^^xsd:dateTime .
+
+triage:r19 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX3-013> ;
+    triage:resolvedAt "2026-09-05T10:07:04Z"^^xsd:dateTime .
+
+triage:r20 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX3-QA2-002> ;
+    triage:resolvedAt "2026-09-05T10:07:04Z"^^xsd:dateTime .
+
+triage:r21 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX3-QA2-003> ;
+    triage:resolvedAt "2026-09-05T10:07:04Z"^^xsd:dateTime .
+
+triage:r22 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX3-QA2-004> ;
+    triage:resolvedAt "2026-09-05T10:07:04Z"^^xsd:dateTime .
+
+triage:r23 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX3-QA2-005> ;
+    triage:resolvedAt "2026-09-05T10:07:04Z"^^xsd:dateTime .
