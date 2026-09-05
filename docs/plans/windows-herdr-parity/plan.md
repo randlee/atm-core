@@ -313,32 +313,41 @@ Deliverables:
    Herdr runs one server per user per session on a machine, so the
    daemon binds to exactly one session.
 
-   Launch contract (Rand, 2026-09-05: Herdr must be running and
-   `HERDR_SOCKET_PATH` plus the other required variables set before the
-   daemon is launched, and the launch order must be deterministic):
+   Launch contract (Rand, 2026-09-05: Herdr must be running before the
+   daemon serves, and the launch order must be deterministic; env
+   plumbing through the launch definition rejected as non-optimal):
 
-   - The daemon's launch environment, not a pane, carries
-     `HERDR_SOCKET_PATH`, `HERDR_SESSION`, and `HERDR_BIN_PATH`: on
-     macOS the launchd plist `EnvironmentVariables` block written by
-     daemon-switch; on Windows the service environment written by the
-     service installer. `[herdr]` config is the fallback only when the
-     environment is absent; environment wins and doctor says which was
-     used.
-   - Startup gate: with the Herdr backend enabled the daemon executes
-     `List` against the resolved endpoint with a bounded deadline
-     before it starts serving. Unreachable means the daemon exits with a
-     distinct non-zero status and one structured diagnostic (endpoint,
-     transport kind, herdr version/protocol if any, the `HerdrError`).
-     launchd `KeepAlive` and the Windows service recovery policy then
-     re-launch it; the daemon never serves ahead of Herdr, which is what
-     makes the order deterministic without relying on launchd job
-     ordering (launchd has none). Windows adds `depend=` on the Herdr
-     service where Herdr is installed as one.
-   - Herdr's own supervision (a `com.herdr.server` LaunchAgent / Windows
-     service or autostart) is a documented prerequisite of enabling the
-     backend; W1 ships the reference plist and service definition under
-     `docs/atm-herdr/` and daemon-switch gains the env keys.
-   - Backend disabled: no probe, no exit, mail unaffected. Doctor herdr section reports transport
+   - The only inputs are daemon config: `[herdr] session = "<name>"`
+     (Herdr's default session when absent) and an optional explicit
+     `socket_path` override. Nothing Herdr-specific goes into the
+     launchd plist, daemon-switch, or the Windows service definition.
+   - Herdr resolves its own endpoint. The daemon strips inherited
+     `HERDR_SOCKET_PATH`, `HERDR_CLIENT_SOCKET_PATH` and `HERDR_ENV`
+     from every child and sets only `HERDR_SESSION` when a named
+     session is configured; the spawned `herdr` CLI computes the socket
+     or pipe path with its own rules, so the daemon never hardcodes the
+     platform path. `HERDR_SOCKET_PATH` is set on children only when
+     the explicit override is configured.
+   - The `herdr` binary is resolved once at startup from config or
+     PATH and reported by doctor; no `HERDR_BIN_PATH` plumbing.
+   - Startup gate: with the backend enabled the daemon executes `List`
+     with a bounded deadline before it starts serving. Unreachable
+     means the daemon exits with a distinct non-zero status and one
+     structured diagnostic (session, binary, herdr version/protocol if
+     any, the `HerdrError`). launchd `KeepAlive` and the Windows
+     service recovery policy re-launch it; the daemon never serves
+     ahead of Herdr, which is what makes the order deterministic
+     without launchd job ordering (launchd has none). Windows adds
+     `depend=` on the Herdr service where Herdr is installed as one.
+   - Herdr's own supervision (LaunchAgent, Windows service, or
+     autostart) is a documented prerequisite of enabling the backend;
+     W1 ships reference definitions under `docs/atm-herdr/`.
+   - Doctor reports the endpoint Herdr actually resolved, taken from
+     the probe, not a path the daemon guessed.
+   - Backend disabled: no probe, no exit, mail unaffected.
+   - W2's direct socket transport is the one place atm must compute
+     the path itself; it reuses the single `HerdrEndpoint` resolution
+     site, tested against the audit facts. Doctor herdr section reports transport
    kind, resolved binary, resolved endpoint (the `\\.\pipe\` form on
    Windows), and the launch-probe result. Architecture tests: single
    construction site; single endpoint-resolution site; no
