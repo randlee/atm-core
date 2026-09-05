@@ -12,7 +12,8 @@ pub mod mailbox_runtime;
 pub mod workflow_telemetry;
 
 pub use atm_storage::{
-    DiagnosticEvent, DiagnosticQuery, DiagnosticTimelineStore, StorageFactory, StorageHandles,
+    DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
+    DiagnosticQuery, DiagnosticTimelineStore, StorageFactory, StorageHandles,
 };
 pub use composition::{
     RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime, validate_enabled_peer_configuration,
