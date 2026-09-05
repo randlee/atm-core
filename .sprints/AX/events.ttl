@@ -405,3 +405,7 @@ triage:a20 a triage:Assignment ;
     triage:ofSprint triage:AX5 ;
     triage:assignedTo "cipher" ;
     triage:assignedAt "2026-09-05T15:13:38Z"^^xsd:dateTime .
+
+triage:c19 a triage:Completion ;
+    triage:ofSprint triage:AX5 ;
+    triage:at "2026-09-05T15:27:13Z"^^xsd:dateTime .
