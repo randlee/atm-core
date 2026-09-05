@@ -56,6 +56,17 @@
 # unapproved breaking wire change as blocking. The eventual plan (#1217) must
 # turn this into a mechanical CI gate; until then it is an explicit manual
 # quality-mgr review rule.
+#
+# RULING (Rand, relayed via fenix, 2026-09-05T19:20Z), APPROVED fix scope --
+# folded into AV-HOTFIX-003's dispatch scope:
+# No 2.0 release. v1.0 is already in the wild and current code is compatible
+# with it. Set HTTP_API_VERSION to 1.1.0, defined as exactly today's schema
+# (all additive changes since 1.0.0 folded in as the 1.1.0 baseline); bump on
+# every future change from here per the semver rules above. Rand's own audit:
+# zero wire changes between v1.4.13 and 1.5.1; the PeerSync removal
+# (2026-08-03) is the only non-additive change since 1.0.0, and no fleet host
+# predates it, so 1.1.0 is safe to declare as the current baseline without a
+# major bump.
 
 <urn:atm:triage:occurrence/AV-HOTFIX-003/AV4-1>
   a triage:Occurrence ;
