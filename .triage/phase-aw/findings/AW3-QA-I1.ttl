@@ -7,48 +7,93 @@
 <urn:atm:triage:finding/AW3-QA-I1>
   a triage:Finding ;
   triage:findingId "AW3-QA-I1" ;
-  triage:title "atm doctor lacks the structured observability{jsonl,timeline,degraded} block mirroring /v1/health; only an unstructured DoctorFinding.message exists" ;
-  triage:description "qa-pr1182-r1 (msg 01M1QSQWFKBENPSW4ZP83SKMYS) at 199a3bfeb: req-qa ATM-QA-201 (important): sprint-AW.3 D1 requires atm doctor to expose a structured observability block with jsonl, timeline and degraded fields mirroring the /v1/health schema. Today only the unstructured DoctorFinding message string exists (WARN-on-degraded works, so AC1's narrower text is satisfied). Fix: add the structured block to the doctor report/JSON sourced from the same DiagnosticCountersSource, with a test asserting field parity with /v1/health." ;
+  triage:title "atm doctor lacks structured observability{jsonl,timeline,degraded} block" ;
+  triage:description "crates/atm-http-runtime/src/doctor_observability.rs lacks structured JSON output mirroring /v1/health observability schema (jsonl, timeline, degraded fields). Only unstructured DoctorFinding message string exists. Confirmed open by quality-mgr code review during phase-end integration on integrate/phase-aw @ 4b8726b59. Requires structured observability block equivalent to /v1/health response plus test asserting field parity." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
-  triage:category "doctor-projection" ;
+  triage:category "observability" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-09-05T03:30:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-09-05T08:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW3 ;
-  triage:foundAt "2026-09-05T03:25:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-I1/AW3-1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-I1/AW3-2> ;
+  triage:foundAt "2026-09-05T07:43:54Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-I1/AW3-QA-I1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-I1/AW3-QA-I1-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-I1/AW3-QA-I1-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-I1/AW3-QA-I1-4> ;
   triage:triageRecordVersion "1" .
 
-<urn:atm:triage:occurrence/AW3-QA-I1/AW3-1>
+<urn:atm:triage:occurrence/AW3-QA-I1/AW3-QA-I1-1>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/doctor/health.rs" ;
-  triage:line 79 ;
-  triage:snippet "logging health is degraded" ;
+  triage:file "crates/atm-http-runtime/src/doctor_observability.rs" ;
+  triage:line 7 ;
+  triage:snippet "append_counter_finding: unstructured message only" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/aw3-health-and-log-query" ;
-  triage:headSha "199a3bfeb" ;
-  triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .
+  triage:headSha "d9ef17ca3" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/d9ef17ca3> .
 
-<urn:atm:triage:occurrence/AW3-QA-I1/AW3-2>
+<urn:atm:triage:occurrence/AW3-QA-I1/AW3-QA-I1-2>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/doctor/mod.rs" ;
-  triage:line 1449 ;
-  triage:snippet "run_doctor_reports_degraded_observability_as_warning" ;
+  triage:file "crates/atm-http-runtime/src/doctor_observability.rs" ;
+  triage:line 7 ;
+  triage:snippet "append_counter_finding: unstructured message only" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/aw3-health-and-log-query" ;
-  triage:headSha "199a3bfeb" ;
-  triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .
+  triage:branch "feature/aw4-graft-fallback-observability" ;
+  triage:headSha "bf8252ebd" ;
+  triage:occursIn <urn:atm:triage:worktree/AW4/bf8252ebd> .
 
-<urn:atm:triage:worktree/AW3/199a3bfeb>
+<urn:atm:triage:occurrence/AW3-QA-I1/AW3-QA-I1-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/doctor_observability.rs" ;
+  triage:line 7 ;
+  triage:snippet "append_counter_finding: unstructured message only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "b7fbf54e6" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/b7fbf54e6> .
+
+<urn:atm:triage:occurrence/AW3-QA-I1/AW3-QA-I1-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/doctor_observability.rs" ;
+  triage:line 7 ;
+  triage:snippet "append_counter_finding: unstructured message only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "4b8726b59" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-INTEG/4b8726b59> .
+
+<urn:atm:triage:worktree/AW3/d9ef17ca3>
   a triage:WorktreeSnapshot ;
   triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
   triage:branch "feature/aw3-health-and-log-query" ;
-  triage:headSha "199a3bfeb" ;
+  triage:headSha "d9ef17ca3" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AW4/bf8252ebd>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw4-graft-fallback-observability" ;
+  triage:branch "feature/aw4-graft-fallback-observability" ;
+  triage:headSha "bf8252ebd" ;
   triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AW5/b7fbf54e6>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw5-native-tool-parity" ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "b7fbf54e6" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AW-INTEG/4b8726b59>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "4b8726b59" ;
+  triage:orderIndex 6 .
