@@ -149,13 +149,18 @@ shape-only completion fails the sprint.
   working and the daemon-runtime crates import through
   `atm_core::boundary` (same pattern as `PendingNudgeStore`). All new identifiers avoid the `nudge` word
   family so `scripts/check-nudge-taxonomy.py` needs no allowlist change.
-- [ ] D2 — `TaskStore` sealed trait (`crates/atm-storage/src/contract.rs`,
-  code contract C2), `DummyTaskStore` double beside
-  `DummyPendingNudgeStore`, boundary file
+- [ ] D2 — `TaskStore` sealed trait (`crates/atm-storage/src/task_store.rs`,
+  re-exported from `contract.rs` per D1; code contract C2),
+  `DummyTaskStore` double beside `DummyPendingNudgeStore`, boundary file
   `boundaries/atm-storage/task-store.toml` and its implementation
   companion `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` per
   code contract C5, and a `## TaskStore` section in
-  `docs/atm-storage/boundaries.md`.
+  `docs/atm-storage/boundaries.md`. Backend neutrality (phase plan §2):
+  the trait, the types, the pure transition function, the carrier and
+  the defaulted provenance methods are the whole contract and depend on
+  nothing in `atm-storage-rusqlite`; a SQL Server implementation adds a
+  `TaskStore` impl and the two provenance overrides in its own crate
+  with its own DDL and touches nothing above the trait.
 - [ ] D3 — wiring, one site per file, mirroring `PendingNudgeStore`:
   `crates/atm-storage/src/factory.rs` (`StorageHandleParts.task_store`
   field at line 50, `StorageHandles::task_store()` accessor beside
@@ -191,7 +196,14 @@ shape-only completion fails the sprint.
   line 461 and `persist_send_message_async` in
   `crates/atm-core/src/send/async_persistence.rs` line 51) carry it. A request
   with both `task_id` and `task_complete` is rejected at validation.
-- [ ] D5 — write provenance carrier, code contract C6:
+- [ ] D5 — write provenance carrier, code contract C6. Merge-forward first:
+  AX.1 (landed on `feature/ax1-queue-template-class` at 1452df008) already
+  edits `prepare_persisted_write` and `prepare_persisted_write_async`
+  (`request.nudge_mode = send_mode_for_task_request(...)`, lines 526/595)
+  and `crates/atm-core/src/boundary/mod.rs`; merge that branch into this
+  worktree before touching either file, keep AX.1's lines verbatim, and
+  place the provenance edits after them (phase plan dependency
+  rationale AX.1→AX.3).
   `MessageWriteOrigin` in `crates/atm-storage/src/contract.rs`; two new
   defaulted methods, one per insert path:
   `MessageStore::save_message_if_absent_with_provenance` (sync trait,
@@ -215,9 +227,10 @@ shape-only completion fails the sprint.
   (persistence.rs line 250) →
   `save_message_if_absent_with_provenance_async`. The sync path matters
   because `write/pipeline.rs` lines 433–435 route an authenticated-peer
-  ack receipt onto it. Only `SqliteMessageStore`
-  (`crates/atm-storage-rusqlite/src/lib.rs` line 625) overrides either
-  method. Every other `MessageStore` implementer keeps the sync default
+  ack receipt onto it. A backend that supports tasks overrides both
+  methods and implements `TaskStore`; in this sprint that is only
+  `SqliteMessageStore` (`crates/atm-storage-rusqlite/src/lib.rs` line
+  625). Every other `MessageStore` implementer keeps the sync default
   (`crates/atm-storage/src/contract.rs` `DummyStore`,
   `crates/atm-core/src/doctor/mod.rs` `UnusedMailStore`,
   `crates/atm-storage-sqlserver-proof/src/lib.rs`
@@ -423,6 +436,11 @@ writer inside its transaction (D6). `record_reminder` and
 and AX.6.
 
 ### C3 — schema
+
+Rusqlite backend DDL. Portable SQL apart from `IF NOT EXISTS`; the
+`CHECK` lists mirror the Rust enums and are the only place the enum
+strings appear in SQL. This schema is an implementation detail behind C2:
+another backend supplies its own DDL for the same rows.
 
 ```sql
 CREATE TABLE IF NOT EXISTS tasks (
@@ -717,7 +735,10 @@ paths; `atm read` / `atm ack` argument shapes; `DeliveryRecipientSnapshot`;
    and `task-store-sqlite.toml` passes; ADR-061, the ADR-054 amendment, and requirements §7 merged;
    `just validate` green; contract.rs size gate:
    `awk '/^#\[cfg\(test\)\]/{exit} {n++} END{exit n>1000}' crates/atm-storage/src/contract.rs`
-   succeeds (non-test lines ≤ 1000).
+   succeeds (non-test lines ≤ 1000); backend neutrality:
+   `cargo tree -p atm-storage -e normal | grep -c rusqlite` prints 0 and
+   `cargo check -p atm-storage-sqlserver-proof` passes with that crate
+   unchanged (it keeps the provenance defaults and `DummyTaskStore`).
 
 ## Required validation
 
@@ -758,4 +779,6 @@ paths; `atm read` / `atm ack` argument shapes; `DeliveryRecipientSnapshot`;
 CLI flags and user docs (AX.4); idle reminders, lead notification,
 doctor codes, Herdr marker exception (AX.5, AX.6); cross-host and
 cross-team tasks; task priority, reassignment, expiry; `--task-cancel`
-(phase plan §2.1 alternative).
+(phase plan §2.1 alternative); a second `TaskStore` backend (the SQL
+Server proof crate compiles unchanged on the defaults; implementing
+`TaskStore` there is a follow-up, made possible by the neutral contract).

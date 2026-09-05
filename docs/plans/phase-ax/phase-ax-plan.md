@@ -15,7 +15,7 @@ dependency_relations:
   - prerequisite: AX.1
     dependent: AX.3
     relation: parallel_safe
-    rationale: AX.3 changes no nudge behaviour; the only overlap is additive edits in different regions of crates/atm-storage/src/contract.rs, resolved by merge-forward before the AX.3 PR.
+    rationale: AX.3 changes no nudge behaviour. Overlap (team-lead review, 2026-09-05): both edit prepare_persisted_write and prepare_persisted_write_async in crates/atm-core/src/write/pipeline.rs (AX.1 assigns request.nudge_mode = send_mode_for_task_request(...) there, landed at 1452df008 lines 526/595; AX.3 threads MessageWriteOrigin through the same two functions), both add lines to crates/atm-core/src/boundary/mod.rs, and both add to crates/atm-storage/src/contract.rs. Merge-forward order: AX.3 merges origin/feature/ax1-queue-template-class before editing pipeline.rs and again before its PR; AX.1's nudge_mode lines stay verbatim and AX.3's provenance edits go after them in each function.
   - prerequisite: AX.2
     dependent: AX.3
     relation: parallel_safe
@@ -213,6 +213,17 @@ follow-up options on #1173, not open questions.
 | Re-sending an open task id to the same assignee | accepted: state unchanged, `assignment_message_id` and `description` updated, one `Assigned` event row with detail `resend` | rejected as a duplicate |
 | Completing a task that was never acked | accepted; the assignment message is marked acknowledged in the same transaction so it does not stay pending-ack forever | reject and require an ack first |
 
+- **The design is storage-backend neutral** (Rand, 2026-09-05: "the
+  design should not be dependent on sqlite, i.e. we can replace w/
+  sql"). Everything that defines a task lives in `atm-storage` with no
+  rusqlite dependency: the types, the pure transition function, the
+  `TaskStore` trait and its `DummyTaskStore`, the `MessageWriteOrigin`
+  carrier and the defaulted provenance methods on `MessageStore` /
+  `AsyncMessageStore`. The SQL in the sprint docs is the rusqlite
+  backend's DDL, written in portable SQL; a SQL Server backend
+  implements `TaskStore` and overrides the two provenance methods with
+  its own DDL and changes nothing above the trait. AX.3 AC 6 gates
+  `atm-storage` compiling with no `rusqlite` in its dependency tree.
 - **Task storage is approved; the Phase-AC deferral is superseded.**
   `docs/requirements.md` (Phase-AC supersession note) and
   `docs/architecture.md` ("Task Storage (Deferred)") still say a later
