@@ -500,6 +500,33 @@ impl StorageAndNudgeRouter {
         }
     }
 
+    /// Routes a raw local host-qualified write before local admission.
+    ///
+    /// Prepared ACK replies are different: they acquire their recipient only
+    /// after commit and are handled by the post-commit branch in
+    /// `write_with_request_id`.
+    async fn dispatch_raw_host_qualified_local_write(
+        &self,
+        request: &atm_core::send::WriteRequest,
+        ingress: &AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Result<Option<WriteOutcome>, AtmError> {
+        if *ingress != AuthenticatedIngress::Local
+            || request
+                .to
+                .as_ref()
+                .and_then(|recipient| recipient.host())
+                .is_none()
+        {
+            return Ok(None);
+        }
+        let (message_id, timestamp) = atm_core::schema::AtmMessageId::new_with_timestamp();
+        self.dispatch_resolved_peer_write(request, message_id, timestamp, deadline, request_id)
+            .await
+            .map(Some)
+    }
+
     async fn emit_received_hook(
         &self,
         dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
@@ -953,23 +980,10 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             // shared writer uses them for its state and file-policy paths.
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
-            if ingress == AuthenticatedIngress::Local
-                && request
-                    .to
-                    .as_ref()
-                    .and_then(|recipient| recipient.host())
-                    .is_some()
+            if let Some(outcome) = self
+                .dispatch_raw_host_qualified_local_write(&request, &ingress, deadline, request_id)
+                .await?
             {
-                let (message_id, timestamp) = atm_core::schema::AtmMessageId::new_with_timestamp();
-                let outcome = self
-                    .dispatch_resolved_peer_write(
-                        &request.with_origin_metadata(message_id, timestamp),
-                        message_id,
-                        timestamp,
-                        deadline,
-                        request_id,
-                    )
-                    .await?;
                 return Ok(ApiResponse::new(write_response(outcome)));
             }
             let mut committed = self.commit_write(request, deadline).await?;
