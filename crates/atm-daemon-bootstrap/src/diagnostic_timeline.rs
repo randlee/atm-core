@@ -505,9 +505,7 @@ mod tests {
         BufferedEvents, DEGRADATION_RECOVERY_WINDOW_SECS, DegradationMonitor, DiagnosticPolicy,
         DiagnosticTimelineStats, DiagnosticTimelineWriter,
     };
-    use atm_observability::{
-        DiagnosticSink, DropReason, RetainedEvent, RetainedLevel, SinkOffer,
-    };
+    use atm_observability::{DiagnosticSink, DropReason, RetainedEvent, RetainedLevel, SinkOffer};
     use atm_storage::{
         AtmError, DiagnosticEvent, DiagnosticQuery, DiagnosticRecordError, DiagnosticTimelineStore,
     };
