@@ -250,7 +250,9 @@ Deliverables:
 1. **Transport seam.** New `crates/atm-herdr/src/transport.rs`:
 
    ```rust
-   pub struct HerdrEndpoint { pub session: HerdrSession, pub socket_path: PathBuf }
+   /// `HERDR_SOCKET_PATH` as inherited, verbatim; `None` means the `herdr`
+   /// client uses its own default session socket. atm never computes it.
+   pub struct HerdrEndpoint { pub socket_path: Option<PathBuf> }
    pub enum HerdrRequest {
        Prompt { agent: AgentName, text: NudgeText },
        Wait { agent: AgentName, until: Vec<HerdrAgentStatus>, timeout: Duration },
