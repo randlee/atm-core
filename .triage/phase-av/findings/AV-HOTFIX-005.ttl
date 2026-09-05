@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-HOTFIX-005>
+  a triage:Finding ;
+  triage:findingId "AV-HOTFIX-005" ;
+  triage:title "Cross-host sends leave no sender-side observability of the peer dispatch outcome" ;
+  triage:description "fenix, relaying a direct finding from Rand (01M1SH7N8BGZ04E3TVHRG677BF): cross-host sends from rand-m4 leave no sender-side observability of the peer dispatch. Evidence: ~/.atm/logs/atm.log.jsonl entries for sends to fenix@rand-m5 (19:32:04Z, 19:33:22Z, 19:36:33Z) show only 'ATM daemon handled send with outcome sent' with fields {agent, message_id, sender, team}; no peer host, no dispatch attempt, no result. Contrast an earlier TCP connect failure (18:10:45Z) which did log a warn and CLI error. Delivery actually succeeded in all three cases (verified via ssh onto rand-m5: all three messages present and read), but nobody can tell that from the sending host. Same class as AV-HOTFIX-004 (peer rejection cause stripped): the cross-host path is silent about its own outcome, in both the failure and success directions." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-gate" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T21:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-05T19:37:54Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-HOTFIX-005/AV4-StorageAndNudgeRouter-416> ;
+  triage:triageRecordVersion "1" .
+
+# NOTE (2026-09-05T21:20Z, team-lead): dispatchReady stays false per fenix's
+# explicit instruction (01M1SH7N8BGZ04E3TVHRG677BF) -- no separate design was
+# approved for this finding as its own dispatch. fenix reports (01M1SQ09C40GBTABFA7KV2W289)
+# that cipher was instead told to implement only the error-surfacing half of
+# the already-approved AV-HOTFIX-001 interim rule ("there should be an error,
+# not add it to the local mailbox") on fix/cipher-easy-round, and separately
+# added peer-delivery success logging in the same scope; no outbox, queueing,
+# retry, or stale-by semantics (that is #1216, still design-gated). If that
+# commit stays inside the AV-HOTFIX-001 boundary it is covered by the existing
+# ruling; if it exceeds it, quality-mgr's qa-pr1221-r1 (PR #1221, pinned
+# e3c4b7d29) is checking exactly that boundary and will report a finding to
+# split out if needed. fenix is also relaying the question to Rand directly.
+# This record exists so QA has something to pin against; it does not itself
+# approve or authorize the fix on fix/cipher-easy-round.
+
+<urn:atm:triage:occurrence/AV-HOTFIX-005/AV4-StorageAndNudgeRouter-416>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 416 ;
+  triage:snippet "ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => Ok(())," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "d7e6b0040" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-av/d7e6b0040> .
+
+<urn:atm:triage:worktree/integrate-phase-av/d7e6b0040>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "d7e6b0040" ;
+  triage:orderIndex 1 .
