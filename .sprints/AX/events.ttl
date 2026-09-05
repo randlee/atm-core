@@ -230,3 +230,37 @@ triage:a13 a triage:Assignment ;
     triage:ofSprint triage:AX3 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-09-05T10:33:32Z"^^xsd:dateTime .
+
+triage:c12 a triage:Completion ;
+    triage:ofSprint triage:AX4 ;
+    triage:at "2026-09-05T10:43:31Z"^^xsd:dateTime .
+
+triage:c13 a triage:Completion ;
+    triage:ofSprint triage:AX3 ;
+    triage:at "2026-09-05T10:52:05Z"^^xsd:dateTime .
+
+triage:r31 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX4-QA2-002> ;
+    triage:resolvedAt "2026-09-05T11:00:50Z"^^xsd:dateTime .
+
+triage:r32 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX4-QA2-003> ;
+    triage:resolvedAt "2026-09-05T11:00:50Z"^^xsd:dateTime .
+
+triage:r33 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX4-QA-006> ;
+    triage:resolvedAt "2026-09-05T11:00:50Z"^^xsd:dateTime .
+
+triage:a14 a triage:Assignment ;
+    triage:ofSprint triage:AX4 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-05T11:02:45Z"^^xsd:dateTime .
+
+triage:c14 a triage:Completion ;
+    triage:ofSprint triage:AX4 ;
+    triage:at "2026-09-05T11:10:56Z"^^xsd:dateTime .
+
+triage:a15 a triage:Assignment ;
+    triage:ofSprint triage:AX3 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-05T11:11:32Z"^^xsd:dateTime .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-QA5-004>
+  a triage:Finding ;
+  triage:findingId "AX3-QA5-004" ;
+  triage:title "Sprint AX.3 doc has no traceability for the ReaderPool drop/join lifecycle change landed on its branch; the component belongs to the already-merged Phase AV (AV.1a) and the sprint doc does not record the fix as an AX.3 deliverable or out-of-scope carry" ;
+  triage:description "AX.3 QA-5 (quality-mgr ax3-qa-r5, PR #1191 Final Quality Report 2026-09-05T11:07Z; req-qa ATM-QA-AX3R-003, confirmed by quality-mgr) at head c6525fd11. The AX3-QA4-001 fix changes crates/atm-storage-rusqlite/src/reader_pool.rs (ReaderPool shutdown/join on last-owner drop), a component owned by Phase AV sprint AV.1a, but docs/plans/phase-ax/sprint-AX.3-task-state-machine.md contains no mention of ReaderPool, reader lanes, or the drop/join lifecycle, so a reader of the AX.3 sprint doc cannot trace why the change is on this branch. Fix: add a short 'Carried fixes outside sprint scope' (or equivalent) note to the AX.3 sprint doc naming AX3-QA3-001/AX3-QA4-001, the reader_pool.rs Drop/join change, its AV.1a origin, and the tests that prove it. HEAD confirmed via git grep -n -i -E 'ReaderPool|reader pool|reader_pool' HEAD -- docs/plans/phase-ax/sprint-AX.3-task-state-machine.md: no match (exit code 1), confirming the sprint doc has zero ReaderPool traceability at c6525fd1168da1080ad4aa02e253d833b32c4fe9. Occurrence is anchored on the doc's Deliverables section heading (line 129) as the expected-but-missing location for the carry-forward note. References: PR #1191 comment https://github.com/randlee/atm-core/pull/1191#issuecomment-5551352363; prior triage record .triage/phase-ax/findings/AX3-QA4-001.ttl (records the underlying AX3-QA4-001 reader_pool.rs Drop/join fix this doc gap fails to trace)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T11:10:21Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T11:07:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA5-004/AX3-2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-QA5-004/AX3-2-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
+  triage:line 129 ;
+  triage:snippet "## Deliverables" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "c6525fd1168da1080ad4aa02e253d833b32c4fe9" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/c6525fd> .
+
+<urn:atm:triage:worktree/AX3/c6525fd>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "c6525fd1168da1080ad4aa02e253d833b32c4fe9" ;
+  triage:orderIndex 2 .

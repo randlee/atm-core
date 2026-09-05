@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-QA5-003>
+  a triage:Finding ;
+  triage:findingId "AX3-QA5-003" ;
+  triage:title "atm-runtime test support's process-global SQLITE_RUNTIME_CACHE / SqliteRuntimeGuard never evicts a cached runtime on drop, leaving live SQLite handles behind test teardown (latent Windows remove_dir_all sharing-violation risk outside the AX3-QA3-001 sweep scope)" ;
+  triage:description "AX.3 QA-5 (quality-mgr ax3-qa-r5, PR #1191 Final Quality Report 2026-09-05T11:07Z; req-qa ATM-QA-AX3R-002, confirmed by quality-mgr) at head c6525fd11. The AX3-QA3-001 repeatable sweep was scoped to crates/atm-runtime and did not examine the test-support crate. There, a process-global SQLITE_RUNTIME_CACHE keyed runtime cache is handed out via SqliteRuntimeGuard, and the guard's drop never evicts the cached runtime, so SQLite connections owned by a cached runtime can outlive the test that created its temp directory. This is a related but distinct latent instance of the same Windows os-error-32 race class as AX3-QA3-001/AX3-QA4-001. Confirmed at HEAD c6525fd1168da1080ad4aa02e253d833b32c4fe9: crates/atm-runtime-test-support/src/lib.rs defines a process-global static SQLITE_RUNTIME_CACHE (OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime>>>, line 197) keyed by SQLite path, populated by sqlite_retained_runtime() (get_or_init/insert around lines 317-328), and consumed only via a bulk MAX_SQLITE_RUNTIME_CACHE_ENTRIES clear() when the cache grows past 16 entries -- there is no per-path eviction tied to guard lifetime. impl Drop for SqliteRuntimeGuard (line 225) only restores/removes the ATM_TEST_SQLITE_RUNTIME_PATH env var on drop; it does not look up or remove the corresponding entry from SQLITE_RUNTIME_CACHE, so a cached LocalServiceRuntime (and its owned SQLite handles) can remain live and reachable by path after the guard that installed it has been dropped and its backing temp directory is about to be removed by the caller. Fix: evict (and drop/shut down) the cached runtime when its last guard drops, or otherwise guarantee the cache never retains a runtime whose backing directory is about to be removed; add a deterministic test proving the eviction." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T11:10:15Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T11:07:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA5-003/AX3-2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA5-003/AX3-2-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-QA5-003/AX3-2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 197 ;
+  triage:snippet "static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime>>> =" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "c6525fd1168da1080ad4aa02e253d833b32c4fe9" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/c6525fd11> .
+
+<urn:atm:triage:occurrence/AX3-QA5-003/AX3-2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 225 ;
+  triage:snippet "impl Drop for SqliteRuntimeGuard {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "c6525fd1168da1080ad4aa02e253d833b32c4fe9" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/c6525fd11> .
+
+<urn:atm:triage:worktree/AX3/c6525fd11>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "c6525fd1168da1080ad4aa02e253d833b32c4fe9" ;
+  triage:orderIndex 2 .
