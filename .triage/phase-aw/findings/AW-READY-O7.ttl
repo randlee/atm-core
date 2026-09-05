@@ -108,23 +108,46 @@
 # fix/aw-readiness-api; C10 remains open and is owned by
 # fix/aw-readiness-contracts. This branch deliberately does not take those
 # owned items. QA owns closure for the fixed occurrences.
+#
+# quality-mgr correction, 2026-09-05, qa-pr1215-r2: three independent
+# reviewers (req-qa, arch-qa, ruthless-boundary-qa) confirm C9 is genuinely
+# fixed -- closed below. C15 is NOT fixed: this dev note's cited evidence
+# (crates/atm-graft-python/src/observability.rs:195, fallback_path/new_logger)
+# is a real but unrelated wrapper removal. The two thin one-line wrappers the
+# O7 finding's item (9) actually names are crates/atm/src/main.rs:333-335
+# (logger_root_for_log_dir) and :361-363 (logger_level_override), pure
+# pass-throughs over the shared_-aliased atm_observability imports at
+# main.rs:32-34 -- both unmodified at d9fa67fcc. Reopened against the correct
+# file/line below; the graft-python occurrence is retained as a valid but
+# separate closed item, not a substitute for C15.
 <urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-d9fa67fcc-c9>
   a triage:Occurrence ;
   triage:file "boundaries/atm-http-runtime/http-runtime.toml" ;
   triage:line 48 ;
   triage:snippet "lint_rules = [\"LINT-BOUNDARY-HTTP-RUNTIME-DEPENDENCIES\", \"peer-dial-seam\"]" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "d9fa67fcc" ;
   triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
 
-<urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-d9fa67fcc-c15>
+<urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-d9fa67fcc-graftpy-wrappers>
   a triage:Occurrence ;
   triage:file "crates/atm-graft-python/src/observability.rs" ;
   triage:line 195 ;
   triage:snippet "thin fallback_path/new_logger wrappers removed; callers construct the logger directly" ;
   triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
+
+<urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-c15-mainrs>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/main.rs" ;
+  triage:line 333 ;
+  triage:snippet "fn logger_root_for_log_dir(log_dir: &Path) -> Result<PathBuf, AtmError> { shared_logger_root_for_log_dir(log_dir) }" ;
+  triage:status "open" ;
   triage:closed false ;
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "d9fa67fcc" ;
