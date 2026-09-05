@@ -1,4 +1,6 @@
-use atm_core::boundary::{MemberKey, RosterEntry, RosterHarness, RosterMemberKind};
+use atm_core::boundary::{
+    BuiltInNudgeTemplateKind, MemberKey, RosterEntry, RosterHarness, RosterMemberKind,
+};
 use atm_core::nudge_dispatch::build_task_reminder_dispatch;
 use atm_core::schema::AtmMessageId;
 use atm_core::types::{AgentName, IsoTimestamp, ModelName, TaskId, TeamName};
@@ -89,4 +91,28 @@ fn reminder_dispatch_skips_a_non_herdr_assignee() {
             .expect("recipient lookup")
             .is_none()
     );
+}
+
+#[test]
+fn reminder_dispatch_propagates_a_broken_task_override() {
+    let root = tempfile::tempdir().expect("temporary runtime root");
+    let assembly =
+        atm_runtime_test_support::open_isolated_sqlite_boundary(root.path()).expect("runtime");
+    let team: TeamName = "ax5-dispatch".parse().expect("team");
+    assembly
+        .service_runtime
+        .shared_roster_store_arc()
+        .save_roster(&RosterSnapshot {
+            team_name: team.clone(),
+            members: vec![member(&team, "herdr")],
+            refreshed_at: None,
+        })
+        .expect("roster");
+    assembly
+        .nudge_template_override_store
+        .save_template_override(&team, BuiltInNudgeTemplateKind::Task, "{{ invalid")
+        .expect("override");
+    let row = task_row(&team);
+    let key = MemberKey::new(team, row.assignee.clone());
+    assert!(build_task_reminder_dispatch(&assembly.service_runtime, &key, &row).is_err());
 }
