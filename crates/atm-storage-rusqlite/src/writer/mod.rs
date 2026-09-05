@@ -1026,6 +1026,74 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn ac3_primary_mailbox_insert_completes_while_diagnostic_lane_is_full() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("test runtime");
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:writer-ac3-non-interference-{}?mode=memory&cache=shared",
+                NEXT_TEST_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_writer_connection_for_target(&target).expect("writer connection");
+        ensure_schema(&mut connection, &target).expect("schema");
+        let mut cache = stmt_cache::WriterStatementCache;
+
+        let (primary_sender, mut primary_receiver) = tokio::sync::mpsc::channel(1);
+        let (diagnostic_sender, mut diagnostic_receiver) =
+            tokio::sync::mpsc::channel(DIAGNOSTIC_QUEUE_BATCHES);
+        for _ in 0..DIAGNOSTIC_QUEUE_BATCHES {
+            diagnostic_sender
+                .try_send(DiagnosticWriterMessage::Records(vec![DiagnosticEvent {
+                    ts_unix_ms: 0,
+                    level: "warn".to_owned(),
+                    component: "writer-ac3-non-interference".to_owned(),
+                    code: None,
+                    correlation_id: None,
+                    origin: "tracing".to_owned(),
+                    message: "diagnostic".to_owned(),
+                    detail: None,
+                }]))
+                .expect("fill the real bounded diagnostic channel");
+        }
+        assert!(matches!(
+            diagnostic_sender.try_send(DiagnosticWriterMessage::Records(Vec::new())),
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_))
+        ));
+
+        let (primary, reply) = queued_upsert(message("atm:ac3-primary"));
+        primary_sender
+            .try_send(WriterMessage::Submit {
+                op: primary.op,
+                reply: primary.reply,
+            })
+            .expect("admit primary write while diagnostics are saturated");
+
+        let Some(WriterWork::Primary(primary)) = runtime.block_on(receive_next_work(
+            &mut primary_receiver,
+            &mut diagnostic_receiver,
+            false,
+        )) else {
+            panic!("a saturated diagnostic lane must not prevent primary selection");
+        };
+        process_batch(&target, &mut connection, &mut cache, vec![primary]);
+
+        assert!(matches!(
+            reply.recv().expect("primary mailbox reply"),
+            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+        ));
+        let persisted: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM mail_messages WHERE message_key = ?1",
+                params!["atm:ac3-primary"],
+                |row| row.get(0),
+            )
+            .expect("count persisted primary mailbox row");
+        assert_eq!(persisted, 1);
+    }
+
     static NEXT_TEST_DB_ID: AtomicU64 = AtomicU64::new(1);
 
     fn message(key: &str) -> Message {
