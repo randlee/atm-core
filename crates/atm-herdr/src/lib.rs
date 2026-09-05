@@ -14,6 +14,7 @@ use tokio::io::AsyncReadExt;
 
 const HERDR_PROCESS_CAP: Duration = Duration::from_secs(5);
 const BREAKER_MAX_BACKOFF: Duration = Duration::from_secs(30);
+const HERDR_MAX_OUTPUT_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HerdrAgentStatus {
@@ -613,19 +614,51 @@ async fn run_command_with_binary(
             return Err(HerdrError::TimedOut);
         }
     };
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    if let Some(mut pipe) = child.stdout.take() {
-        let _ = pipe.read_to_end(&mut stdout).await;
-    }
-    if let Some(mut pipe) = child.stderr.take() {
-        let _ = pipe.read_to_end(&mut stderr).await;
-    }
+    let (stdout, stderr) = capture_command_output(&mut child).await?;
     Ok(CommandOutput {
-        stdout: String::from_utf8_lossy(&stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&stderr).into_owned(),
+        stdout,
+        stderr,
         success: status.success(),
     })
+}
+
+async fn capture_command_output(
+    child: &mut tokio::process::Child,
+) -> Result<(String, String), HerdrError> {
+    let (stdout, stdout_truncated) = if let Some(pipe) = child.stdout.take() {
+        read_capped(pipe).await
+    } else {
+        (Vec::new(), false)
+    };
+    let (stderr, stderr_truncated) = if let Some(pipe) = child.stderr.take() {
+        read_capped(pipe).await
+    } else {
+        (Vec::new(), false)
+    };
+    if stdout_truncated || stderr_truncated {
+        return Err(HerdrError::Advisory {
+            code: format!(
+                "output_truncated: stdout={stdout_truncated}, stderr={stderr_truncated}, limit={HERDR_MAX_OUTPUT_BYTES}"
+            ),
+        });
+    }
+    Ok((
+        String::from_utf8_lossy(&stdout).into_owned(),
+        String::from_utf8_lossy(&stderr).into_owned(),
+    ))
+}
+
+async fn read_capped(reader: impl tokio::io::AsyncRead + Unpin) -> (Vec<u8>, bool) {
+    let mut output = Vec::new();
+    let _ = reader
+        .take((HERDR_MAX_OUTPUT_BYTES as u64).saturating_add(1))
+        .read_to_end(&mut output)
+        .await;
+    let truncated = output.len() > HERDR_MAX_OUTPUT_BYTES;
+    if truncated {
+        output.truncate(HERDR_MAX_OUTPUT_BYTES);
+    }
+    (output, truncated)
 }
 
 fn session_environment(session: Option<&HerdrSession>) -> Option<(&'static str, &str)> {
@@ -890,7 +923,7 @@ pub mod testing {
             &'a self,
             agent: &'a AgentName,
             session: Option<&'a HerdrSession>,
-            _text: &'a str,
+            text: &'a str,
             _deadline: RequestDeadline,
         ) -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>>
         {
@@ -901,7 +934,7 @@ pub mod testing {
                     state.calls.push(FakeHerdrCall::Prompt {
                         agent: agent.to_string(),
                         session: session.cloned(),
-                        text: _text.to_owned(),
+                        text: text.to_owned(),
                     });
                     (state.prompt_gate.take(), state.prompt_results.pop_front())
                 })
@@ -1086,6 +1119,14 @@ mod tests {
         );
         assert_eq!(get_args(&agent), vec!["agent", "get", "alice"]);
         assert_eq!(list_args(), vec!["agent", "list"]);
+    }
+
+    #[tokio::test]
+    async fn capped_output_reports_truncation_without_retaining_extra_bytes() {
+        let input = vec![b'x'; HERDR_MAX_OUTPUT_BYTES + 1];
+        let (output, truncated) = read_capped(std::io::Cursor::new(input)).await;
+        assert!(truncated);
+        assert_eq!(output.len(), HERDR_MAX_OUTPUT_BYTES);
     }
 
     #[tokio::test]

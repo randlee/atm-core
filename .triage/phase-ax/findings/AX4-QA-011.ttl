@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX4-QA-011>
+  a triage:Finding ;
+  triage:findingId "AX4-QA-011" ;
+  triage:title "Sprint AX.4 doc reads status: complete but the D1-D4 deliverable checkboxes remain unchecked" ;
+  triage:description "AX.4 QA-1 (quality-mgr ax4-qa-r1, PR #1194 Final Quality Report 2026-09-05T09:14Z; req-qa ATM-QA-006, arch-qa and ruthless-boundary-qa converging) at head aaf2e04bf. docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md frontmatter says status: complete while every D1-D4 deliverable checkbox is still '[ ]'. Same pattern as AX3-QA2-005 on the AX.3 branch. Fix: tick the delivered checkboxes as the last edit of the fix pass." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T09:17:58Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX4 ;
+  triage:foundAt "2026-09-05T09:14:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-011/AX4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-011/AX4-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-011/AX4-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-011/AX4-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX4-QA-011/AX4-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
+  triage:line 41 ;
+  triage:snippet "- [ ] D1 — `atm send --task-complete <TASK_ID>`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .
+
+<urn:atm:triage:occurrence/AX4-QA-011/AX4-2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
+  triage:line 47 ;
+  triage:snippet "- [ ] D2 — `atm list --tasks [--member <name>]` and" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .
+
+<urn:atm:triage:occurrence/AX4-QA-011/AX4-3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
+  triage:line 56 ;
+  triage:snippet "- [ ] D3 — docs: `docs/requirements.md` §6.5 (`atm send` flags) and §6.6" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .
+
+<urn:atm:triage:occurrence/AX4-QA-011/AX4-4>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
+  triage:line 67 ;
+  triage:snippet "- [ ] D4 — tests listed under Required validation." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .
+
+<urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:orderIndex 4 .

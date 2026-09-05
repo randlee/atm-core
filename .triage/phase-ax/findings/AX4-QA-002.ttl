@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX4-QA-002>
+  a triage:Finding ;
+  triage:findingId "AX4-QA-002" ;
+  triage:title "Required D4 integration test (crates/atm/tests, AC1 and AC2 end to end on a rusqlite runtime) does not exist" ;
+  triage:description "AX.4 QA-1 (quality-mgr ax4-qa-r1, PR #1194 Final Quality Report 2026-09-05T09:14Z; found by req-qa, confirmed by quality-mgr) at head aaf2e04bf. The sprint doc docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md Required validation names a concrete artifact: a crates/atm/tests integration test covering AC1 (list surfaces after AX.3's AC1 scenario) and AC2 (atm send --task-complete success, unknown-id and exit-code paths) end to end on a rusqlite runtime. No such file exists at HEAD: crates/atm/tests holds only cli_surface.rs, compose_passthrough.rs, openapi_surface.rs, peer_cli.rs and cli_surface_baseline.json, none touching tasks. All task coverage in the diff is unit-level. Fix: add the named integration test exercising AC1 and AC2 against a real rusqlite-backed runtime." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T09:16:22Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX4 ;
+  triage:foundAt "2026-09-05T09:14:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-002/AX4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX4-QA-002/AX4-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
+  triage:line 127 ;
+  triage:snippet "- `crates/atm/tests` integration: AC 1 and AC 2 end to end on a rusqlite" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/AX4/aaf2e04b> .
+
+<urn:atm:triage:worktree/AX4/aaf2e04b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:orderIndex 4 .

@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX4-QA-009>
+  a triage:Finding ;
+  triage:findingId "AX4-QA-009" ;
+  triage:title "Sprint AX.4 doc D3 mis-cites requirements.md section 6.6 for the new atm list flags; the content lives at 7.3 and 7.12" ;
+  triage:description "AX.4 QA-1 (quality-mgr ax4-qa-r1, PR #1194 Final Quality Report 2026-09-05T09:14Z; found by req-qa ATM-QA-004) at head aaf2e04bf. docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md D3 text cites docs/requirements.md section 6.6 as the location of the new atm list --tasks / --task-events flags, but the content was added at sections 7.3 and 7.12. The content exists; only the citation is wrong. Fix: correct the citation in the sprint doc." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T09:20:54Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX4 ;
+  triage:foundAt "2026-09-05T09:14:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-009/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-009/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-009/3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX4-QA-009/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
+  triage:line 21 ;
+  triage:snippet "rationale: ... both edit docs/requirements.md (AX.1 lines 1094/1105/4496, AX.4 §6.5/§6.6/§15.4) ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .
+
+<urn:atm:triage:occurrence/AX4-QA-009/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
+  triage:line 56 ;
+  triage:snippet "D3 — docs: `docs/requirements.md` §6.5 (`atm send` flags) and §6.6 (`atm list` flags) list the new flags;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .
+
+<urn:atm:triage:occurrence/AX4-QA-009/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
+  triage:line 119 ;
+  triage:snippet "4. Requirements §6.5/§6.6/§15.4, team-protocol, and `tasks.md` merged;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .
+
+<urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:orderIndex 4 .

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX4-QA-004>
+  a triage:Finding ;
+  triage:findingId "AX4-QA-004" ;
+  triage:title "Committed release-findings.json claims status fail / just lint failed while the live lint gate passes 35/35 at the same head" ;
+  triage:description "AX.4 QA-1 (quality-mgr ax4-qa-r1, PR #1194 Final Quality Report 2026-09-05T09:14Z) at head aaf2e04bf. Commit aaf2e04bf 'chore(ax4): refresh validation findings' committed a regenerated scripts/validate_release.py artifact release-findings.json with status fail and a lint finding ('just lint failed', exit_code 1, blocks true, generatedAt 2026-09-05T07:22:40Z). quality-mgr and rust-qa-agent both re-ran python3 .just/run_lint.py all at this head and got 35/35 clean; rust-qa-agent full just validate regenerated the file with status pass. The committed artifact therefore misrepresents the run it claims to record (stale or dirty environment on the dev side). Not a gate failure, but a process-integrity defect. Fix: regenerate from a clean environment and commit an accurate artifact, or drop the artifact change from the branch; investigate why the original run reported a false lint failure." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T09:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX4 ;
+  triage:foundAt "2026-09-05T09:14:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-004/AX4QA004-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-004/AX4QA004-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX4-QA-004/AX4QA004-1>
+  a triage:Occurrence ;
+  triage:file "release-findings.json" ;
+  triage:line 5 ;
+  triage:snippet "\"status\": \"fail\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04bfa26fdc3c277eff97d99927f971c0a7b> .
+
+<urn:atm:triage:occurrence/AX4-QA-004/AX4QA004-2>
+  a triage:Occurrence ;
+  triage:file "release-findings.json" ;
+  triage:line 10 ;
+  triage:snippet "\"summary\": \"just lint failed\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04bfa26fdc3c277eff97d99927f971c0a7b> .
+
+<urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04bfa26fdc3c277eff97d99927f971c0a7b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:orderIndex 4 .

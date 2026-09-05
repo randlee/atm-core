@@ -8,35 +8,35 @@
   a triage:Finding ;
   triage:findingId "AX2-QA-002" ;
   triage:title "Required Herdr-member atm send / atm queue end-to-end test absent from crates/atm-core/tests/nudge_mode.rs" ;
-  triage:description "Sprint AX.2 Required validation: in crates/atm-core/tests/nudge_mode.rs, a Herdr member, atm send then atm queue, asserting the emitted prompt text for each equals the expected Delivery / Queue default render. At 4f77d2fff the AX.2 diff against origin/feature/ax1-queue-template-class does not touch nudge_mode.rs at all; the only Herdr reference is tmux_and_herdr_delivery_families_share_the_nudge_kind_table, which loops over string labels against the backend-independent pure function. Same underlying gap as AX.1's AX1-QA2-001 (cipher's AX.1 fix pass adds the Herdr-backed member); this record covers the AX.2-specific prompt-text assertions on the Herdr sink for send and queue, which gate AX.2 on their own. Reported by req-qa, confirmed by quality-mgr on PR #1186 QA-1." ;
+  triage:description "Follow-up after cipher's fix pass. quality-mgr QA-2 (PR #1186 Final Quality Report, 2026-09-05T07:36:04Z) verified fixed at e7d4d5453: crates/atm-core/tests/nudge_mode.rs now drives a Herdr-backed member through send and queue and asserts the rendered prompt text against the real default_template() output via assert_herdr_rendered_default. Confirm at HEAD that the helper exists and is exercised for both Delivery and Queue kinds, then record the finding as fixed on feature/ax2-herdr-template-rendering at e7d4d5453." ;
   triage:phaseId "phase-ax" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "ATM-QA" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-09-05T06:35:00Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
   triage:foundIn triage:AX2 ;
   triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-002/AX2-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AX2-QA-002/AX2-1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/tests/nudge_mode.rs" ;
-  triage:line 199 ;
-  triage:snippet "harness: RosterHarness::PythonGraft (Herdr variant required but missing)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 668 ;
+  triage:snippet "fn assert_herdr_rendered_default" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
-  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
-  triage:occursIn <urn:atm:triage:worktree/AX2/4f77d2fff> .
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:occursIn <urn:atm:triage:worktree/AX2/e7d4d545> .
 
-<urn:atm:triage:worktree/AX2/4f77d2fff>
+<urn:atm:triage:worktree/AX2/e7d4d545>
   a triage:WorktreeSnapshot ;
   triage:path "feature/ax2-herdr-template-rendering" ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
-  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
-  triage:orderIndex 3 .
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:orderIndex 1 .
