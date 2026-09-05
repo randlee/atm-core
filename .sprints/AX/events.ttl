@@ -89,3 +89,7 @@ triage:r6 a triage:Resolution ;
 triage:c6 a triage:Completion ;
     triage:ofSprint triage:AX3 ;
     triage:at "2026-09-05T07:05:07Z"^^xsd:dateTime .
+
+triage:c7 a triage:Completion ;
+    triage:ofSprint triage:AX2 ;
+    triage:at "2026-09-05T07:17:32Z"^^xsd:dateTime .
