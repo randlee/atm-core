@@ -68,6 +68,23 @@ mod tests {
     }
 
     #[test]
+    fn retained_diagnostics_codes_keep_distinct_stable_wire_spellings() {
+        for (code, wire) in [
+            (
+                AtmErrorCode::RetainedDiagnosticsHealthOk,
+                "ATM_RETAINED_DIAGNOSTICS_HEALTH_OK",
+            ),
+            (
+                AtmErrorCode::WarningRetainedDiagnosticsDegraded,
+                "ATM_WARNING_RETAINED_DIAGNOSTICS_DEGRADED",
+            ),
+        ] {
+            assert_eq!(code.as_str(), wire);
+            assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));
+        }
+    }
+
+    #[test]
     fn template_send_error_codes_keep_their_stable_wire_spelling() {
         for (code, wire) in [
             (AtmErrorCode::TemplateLoadFailed, "TEMPLATE_LOAD_FAILED"),
