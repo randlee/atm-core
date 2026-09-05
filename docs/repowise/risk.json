@@ -1,0 +1,65 @@
+{
+  "ref": "HEAD",
+  "score": 1.9,
+  "probability": 0.1865,
+  "level": "low",
+  "risk_percentile": 5.8,
+  "review_priority": "low",
+  "classification": "Below typical",
+  "baseline_sample_size": 200,
+  "exclude_patterns": [],
+  "is_fix": true,
+  "features": {
+    "la": 2,
+    "ld": 1,
+    "nf": 1,
+    "nd": 1,
+    "ns": 1,
+    "entropy": 0.0,
+    "exp": 44
+  },
+  "drivers": [
+    {
+      "feature": "la",
+      "value": 2.0,
+      "contribution": -1.0688,
+      "label": "fewer lines added than baseline"
+    },
+    {
+      "feature": "entropy",
+      "value": 0.0,
+      "contribution": -0.1026,
+      "label": "more focused than baseline"
+    },
+    {
+      "feature": "nf",
+      "value": 1.0,
+      "contribution": 0.0742,
+      "label": "fewer files than baseline"
+    },
+    {
+      "feature": "ns",
+      "value": 1.0,
+      "contribution": 0.0266,
+      "label": "fewer subsystems than baseline"
+    },
+    {
+      "feature": "exp",
+      "value": 44.0,
+      "contribution": -0.0246,
+      "label": "more experienced author than baseline"
+    },
+    {
+      "feature": "nd",
+      "value": 1.0,
+      "contribution": 0.0133,
+      "label": "fewer directories than baseline"
+    },
+    {
+      "feature": "ld",
+      "value": 1.0,
+      "contribution": -0.0113,
+      "label": "fewer lines deleted than baseline"
+    }
+  ]
+}
