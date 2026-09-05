@@ -26,6 +26,27 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AV-HOTFIX-003/AV4-4> ;
   triage:triageRecordVersion "1" .
 
+# RULING (Rand, relayed via fenix, 2026-09-05T19:10Z), APPROVED fix
+# direction -- still triage:dispatchReady false:
+# schema validation for cross-host messages: the peer write envelope must
+# carry a schema/API version; the receiver rejects a major-version mismatch
+# with a dedicated error naming both versions, and tolerates minor skew.
+# Semver assumption: extensions are minor and must be tolerated; breaking
+# changes are major. Rand also identified a PROCESS gap: there is no defined
+# process for when a breaking change to the cross-host interface is
+# allowed. That is a planned item, not a bug in this finding -- tracked as
+# GitHub issue #1217 ("Planned process: semver-versioned cross-host
+# interface and breaking-change approval (needs a plan)"); see that issue
+# for the process design, not this record.
+# The other proposed items in this finding (wire up the dead CLI preflight,
+# doctor version reporting, an envelope-change guard test) are NOT yet
+# explicitly ruled -- list as proposed only, not approved.
+#
+# CLARIFICATION (Rand, relayed via fenix, 2026-09-05T19:10Z; also added as a
+# comment on issue #1217): an optional parameter added to a command is a
+# MINOR bump of the HTTP schema version (must be tolerated by older peers).
+# Only removal or a semantic change of an existing field is a MAJOR bump.
+
 <urn:atm:triage:occurrence/AV-HOTFIX-003/AV4-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon-client/src/compatibility.rs" ;
