@@ -47,10 +47,12 @@ approved that.
 | Herdr IPC | `HERDR_MINIMUM_VERSION` (Herdr release semver from `ping.version`; Herdr `PROTOCOL_VERSION` recorded per release as a secondary fact) in `crates/atm-herdr` | Herdr's published wire, outside our control | Every Herdr release `>= HERDR_MINIMUM_VERSION`, simultaneously, from one daemon build |
 | SQLite storage schema | `STORAGE_SCHEMA_VERSION` (semver) declared by `atm-storage-rusqlite` and persisted in the database | `DB_MIGRATIONS` and the `ensure_*` migration functions | The previous supported release binary opening the same database (daemon-switch rollback) |
 
-`HERDR_MINIMUM_VERSION` and `STORAGE_SCHEMA_VERSION` do not exist yet. The
-phase-ay plan lands the Herdr constant (AY.1, AY.3). The storage constant
-needs its own planned sprint; until it lands, the SQLite rules below are
-applied against the migration functions directly.
+`HERDR_MINIMUM_VERSION` is `0.8.0` today (`crates/atm-herdr/src/lib.rs`),
+set by Rand on 2026-09-05 from the M5 agents' drift review of Herdr
+v0.8.0..v0.8.2. The phase-ay plan lands the runtime checks around it (AY.1,
+AY.3). `STORAGE_SCHEMA_VERSION` does not exist yet and needs its own planned
+sprint; until it lands, the SQLite rules below are applied against the
+migration functions directly.
 
 ### D2. Classification
 

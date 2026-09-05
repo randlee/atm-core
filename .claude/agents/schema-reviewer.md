@@ -50,9 +50,9 @@ The Herdr IPC consumed by `crates/atm-herdr` (CLI JSON envelopes today,
 socket / named-pipe NDJSON API later) is governed by the same pattern, with
 one difference: Herdr's wire drifts outside this repository's control.
 
-- `atm-core` declares a `HERDR_MINIMUM_VERSION`, keyed on the Herdr
-  **release** version (semver, as reported by `ping.version`; minimum 0.8.0
-  per Rand). Herdr's integer `PROTOCOL_VERSION` versions only its bincode
+- `crates/atm-herdr` declares `HERDR_MINIMUM_VERSION` (`0.8.0` today, set by
+  Rand 2026-09-05), keyed on the Herdr **release** version (semver, as
+  reported by `ping.version`). Herdr's integer `PROTOCOL_VERSION` versions only its bincode
   client socket, not the NDJSON API, and is recorded per release as a
   secondary fact. It is our responsibility to support **every** Herdr
   release at or above the minimum, at the same time, from one daemon build.
@@ -63,8 +63,8 @@ one difference: Herdr's wire drifts outside this repository's control.
   version-gated at runtime), never by requiring the newest Herdr.
 - Every accepted Herdr protocol version must have a conformance test; a
   Herdr wire change we react to without a test is a finding.
-- Until the phase-ay plan lands the constant and its tests, review the
-  Herdr adapter (`crates/atm-herdr`, `crates/atm-http-runtime/src/herdr_queue_wake.rs`)
+- Until the phase-ay plan lands the runtime checks around the constant,
+  review the Herdr adapter (`crates/atm-herdr`, `crates/atm-http-runtime/src/herdr_queue_wake.rs`)
   for any assumption that only the newest Herdr is present.
 
 ## SQLite Storage Schema (third governed interface)
@@ -170,7 +170,7 @@ Return fenced JSON only.
   "status": "PASS | FAIL",
   "http_api_version": { "before": "1.1.0", "after": "1.2.0", "correct": true },
   "cli_schema_version": { "before": 1, "after": 1, "correct": true },
-  "herdr_minimum_version": { "before": "n/a", "after": "n/a", "raised": false, "approval": null },
+  "herdr_minimum_version": { "before": "0.8.0", "after": "0.8.0", "raised": false, "approval": null },
   "storage_schema_version": { "before": "n/a", "after": "n/a", "correct": true },
   "changes": [
     {
