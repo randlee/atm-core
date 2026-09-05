@@ -317,11 +317,15 @@ Deliverables:
    Launch contract (Rand, 2026-09-05): the daemon and every atm agent
    run inside a Herdr pane and inherit Herdr's complete environment
    (socket path, binary path, pane/tab/workspace ids, everything else
-   Herdr sets). atm manages none of it: it reads `HERDR_SOCKET_PATH`
-   and `HERDR_BIN_PATH` the way any Herdr client does, passes its
-   environment to `herdr` children unchanged, and with the backend
-   enabled probes with `List` at startup and exits with one diagnostic
-   if that fails. A process not launched by Herdr has no pane id and
+   Herdr sets). What matters is that the daemon connects to the right
+   socket, and Herdr's own client already guarantees that: with
+   `HERDR_SOCKET_PATH` set (daemon in a pane) the `herdr` CLI uses it;
+   with it unset (daemon under launchd or a Windows service) the CLI
+   uses the default session socket in its config dir
+   (src/session.rs). atm computes no path and manages no variable: it
+   passes its environment to `herdr` children unchanged, and with the
+   backend enabled probes with `List` at startup and exits with one
+   diagnostic naming the socket if that fails. A process not launched by Herdr has no pane id and
    gets no nudges, by design. W2's socket transport connects to
    `HERDR_SOCKET_PATH` as given. Doctor herdr section reports transport
    kind, resolved binary, resolved endpoint (the `\\.\pipe\` form on
