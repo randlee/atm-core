@@ -21,7 +21,19 @@
   triage:foundIn triage:AW2 ;
   triage:foundAt "2026-09-05T06:07:09Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW2-CI-003/AW2-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T06:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+# CLOSURE (qa-pr1179-r8-repin, quality-mgr): independently re-verified at the
+# repinned tip 82d194c6d in /tmp/verify-aw2-r7 -- `cargo test -p
+# atm-architecture --test boundary_enforcement` reports 91 passed, 0 failed
+# (the 5 BOUNDARY-*-Sqlite violations from storage_types.rs no longer
+# reproduce, matching fenix's cherry-pick of arch-ctm's bb1feeaa7). Also
+# re-ran `cargo test -p atm-storage-rusqlite -p atm-daemon-bootstrap` (132
+# passed, 0 failed, AC2/AC3/AC4/AC7 tests all present and green) plus
+# `cargo clippy --all-targets` and `cargo fmt --check` on both crates: all
+# clean. Confirmed fixed, not just trusted.
 
 <urn:atm:triage:occurrence/AW2-CI-003/AW2-1>
   a triage:Occurrence ;
@@ -29,7 +41,7 @@
   triage:line 10 ;
   triage:snippet "BOUNDARY-MailStore-Sqlite requires private implementation.type SqliteMessageStore" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
   triage:headSha "82d194c6d" ;
   triage:occursIn <urn:atm:triage:worktree/AW2/fee01b959> .

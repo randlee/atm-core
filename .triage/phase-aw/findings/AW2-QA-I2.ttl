@@ -50,7 +50,7 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
-  triage:headSha "d3eee516b" ;
+  triage:headSha "82d194c6d" ;
   triage:occursIn <urn:atm:triage:worktree/AW2/d3eee516b> .
 
 <urn:atm:triage:worktree/AW2/d3eee516b>
