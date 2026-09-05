@@ -18,25 +18,58 @@ use syn::visit::Visit;
 
 const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "atm-daemon"),
+    ("atm", "atm-peer-tls-interop"),
     ("atm", "atm-storage-rusqlite"),
+    ("atm", "peer-tls"),
+    ("atm", "telemetry-implementation"),
+    ("atm-core", "atm-daemon"),
+    ("atm-core", "atm-storage-rusqlite"),
+    ("atm-core", "sc-observability"),
     ("atm-daemon", "atm-runtime"),
+    ("atm-daemon", "atm-peer-tls-interop"),
     ("atm-daemon", "atm-storage-rusqlite"),
+    ("atm-daemon", "atm-observability"),
+    ("atm-daemon", "peer-tls"),
+    ("atm-daemon-bootstrap", "atm-peer-tls-interop"),
+    ("atm-daemon-client", "atm-daemon"),
+    ("atm-daemon-client", "atm-storage-rusqlite"),
+    ("atm-error", "atm-core"),
+    ("atm-error", "atm-storage-rusqlite"),
+    ("atm-observability", "atm-daemon-bootstrap"),
+    ("atm-observability", "atm-http-runtime"),
+    ("atm-observability", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-storage-rusqlite"),
     ("atm-storage", "atm-core"),
     ("atm-storage", "atm-daemon"),
     ("atm-storage", "atm-storage-rusqlite"),
+    ("atm-storage", "telemetry-implementation"),
     ("atm-storage-rusqlite", "atm-core"),
     ("atm-storage-rusqlite", "atm-runtime"),
+    ("atm-storage-rusqlite", "telemetry-implementation"),
     ("atm-graft", "atm-daemon"),
     ("atm-graft", "atm-daemon-bootstrap"),
+    ("atm-graft", "atm-peer-tls-interop"),
     ("atm-graft", "atm-storage-rusqlite"),
     ("atm-graft", "interprocess"),
+    ("atm-graft", "peer-tls"),
+    ("atm-graft-python", "atm-daemon"),
+    ("atm-graft-python", "atm-storage-rusqlite"),
+    ("atm-graft-python", "axum"),
+    ("atm-graft-python", "hyper"),
+    ("atm-graft-python", "reqwest"),
     ("atm-daemon-bootstrap", "atm-graft"),
     ("atm-http-runtime", "atm"),
     ("atm-http-runtime", "atm-daemon-bootstrap"),
     ("atm-http-runtime", "atm-graft"),
     ("atm-http-runtime", "atm-storage-rusqlite"),
+    ("atm-http-runtime", "peer-tls"),
+    ("atm-http-runtime", "telemetry-implementation"),
+    ("atm-query-python", "atm-core"),
+    ("atm-query-python", "atm-graft"),
+    ("atm-query-python", "atm-http-runtime"),
+    ("atm-query-python", "rusqlite"),
     ("atm-runtime", "atm-daemon"),
+    ("atm-runtime", "atm-peer-tls-interop"),
     ("atm-core", "atm-template-sc-compose"),
     ("atm-storage", "atm-template-sc-compose"),
     ("atm-storage-rusqlite", "atm-template-sc-compose"),
@@ -51,6 +84,8 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-herdr", "atm-daemon-bootstrap"),
     ("atm-herdr", "atm-http-runtime"),
     ("atm-herdr", "atm-storage-rusqlite"),
+    ("hermes-atm", "atm-daemon"),
+    ("hermes-atm", "atm-storage-rusqlite"),
 ];
 
 const RETIRED_DAEMON_CONSTRUCT_FRAGMENTS: &[(&str, &str)] = &[
@@ -3847,42 +3882,35 @@ fn missing_forbidden_edges(
 }
 
 fn guarded_boundary_files() -> Vec<PathBuf> {
-    let root = workspace_root();
-    let mut files = vec![
-        root.join("boundaries/atm/local-socket-client-transport.toml"),
-        root.join("boundaries/atm-graft/shared-client-consumer.toml"),
-        root.join("boundaries/atm-http-runtime/http-runtime.toml"),
-        root.join("boundaries/atm-http-runtime/member-state-transition-sink.toml"),
-        root.join("boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"),
-        root.join("boundaries/atm-runtime/runtime-composition.toml"),
-        root.join("boundaries/atm-template-sc-compose/sc-composer.toml"),
-        root.join("boundaries/atm-herdr/herdr-process-adapter.toml"),
-    ];
-    files.extend(boundary_files_in("atm-storage"));
-    let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))
-        .expect("boundaries/atm-storage-rusqlite directory must be readable")
+    all_boundary_files()
+}
+
+fn all_boundary_files() -> Vec<PathBuf> {
+    let root = workspace_root().join("boundaries");
+    let mut files = fs::read_dir(&root)
+        .unwrap_or_else(|error| panic!("boundaries directory must be readable: {error}"))
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("toml"))
+        .filter(|path| path.is_dir())
+        .flat_map(|directory| {
+            fs::read_dir(&directory)
+                .unwrap_or_else(|error| {
+                    panic!("boundary directory {} must be readable: {error}", directory.display())
+                })
+                .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+                .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("toml"))
+                .collect::<Vec<_>>()
+        })
         .collect::<Vec<_>>();
-    sqlite_files.sort();
-    files.extend(sqlite_files);
+    files.sort();
     files
 }
 
 #[test]
-fn guarded_boundaries_include_every_atm_storage_record() {
-    let root = workspace_root();
-    let guarded_storage_files = guarded_boundary_files()
-        .into_iter()
-        .filter(|path| path.parent() == Some(root.join("boundaries/atm-storage").as_path()))
-        .collect::<BTreeSet<_>>();
-    let storage_boundary_files = boundary_files_in("atm-storage")
-        .into_iter()
-        .collect::<BTreeSet<_>>();
-
+fn guarded_boundaries_include_every_boundary_record() {
     assert_eq!(
-        guarded_storage_files, storage_boundary_files,
-        "the architecture guard must sweep every boundaries/atm-storage TOML record"
+        guarded_boundary_files().into_iter().collect::<BTreeSet<_>>(),
+        all_boundary_files().into_iter().collect::<BTreeSet<_>>(),
+        "the architecture guard must sweep every boundaries/*/*.toml record"
     );
 }
 
