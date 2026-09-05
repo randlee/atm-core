@@ -154,7 +154,10 @@ struct RemoveMemberCommand {
 struct SetNudgeTemplateCommand {
     #[arg(long)]
     team: String,
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "template kind: delivery, delivery_ack, queue, queue_ack, task, acknowledge, acknowledge_task"
+    )]
     kind: String,
 
     #[arg(long = "template-body")]
@@ -168,7 +171,10 @@ struct SetNudgeTemplateCommand {
 struct DisableNudgeTemplateCommand {
     #[arg(long)]
     team: String,
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "template kind: delivery, delivery_ack, queue, queue_ack, task, acknowledge, acknowledge_task"
+    )]
     kind: String,
 
     #[arg(long)]
@@ -179,7 +185,10 @@ struct DisableNudgeTemplateCommand {
 struct ClearNudgeTemplateCommand {
     #[arg(long)]
     team: String,
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "template kind: delivery, delivery_ack, queue, queue_ack, task, acknowledge, acknowledge_task"
+    )]
     kind: String,
 
     #[arg(long)]

@@ -32,7 +32,7 @@ where
             .recipient_pane_id
             .clone()
             .or_else(|| delivery_snapshot.recipient_pane_id.as_ref().cloned())?;
-        let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event)?;
+        let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event, kind)?;
         return Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(
@@ -54,7 +54,7 @@ where
         });
     }
     if delivery_snapshot.graft_post_send {
-        let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event)?;
+        let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event, kind)?;
         return Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
@@ -96,11 +96,15 @@ const fn nudge_kind_for_mode(nudge_mode: NudgeMode) -> NudgeKind {
 
 /// Render the database-resolved built-in nudge once for every first-party
 /// delivery sink. Tmux and graft therefore receive identical XML text.
-fn render_built_in_nudge_for_dispatch<R>(runtime: &R, event: &PostSendHookEvent) -> Option<String>
+fn render_built_in_nudge_for_dispatch<R>(
+    runtime: &R,
+    event: &PostSendHookEvent,
+    delivery_kind: NudgeKind,
+) -> Option<String>
 where
     R: RetainedServiceRuntime + ?Sized,
 {
-    let kind = built_in_nudge_template_kind_from_post_send_event(event);
+    let kind = built_in_nudge_template_kind_from_post_send_event(event, delivery_kind);
     let override_row = match runtime.load_nudge_template_override(&event.recipient_team, kind) {
         Ok(row) => row,
         Err(error) => {

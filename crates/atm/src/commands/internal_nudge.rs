@@ -302,8 +302,8 @@ mod tests {
     use std::time::Duration;
 
     use atm_core::boundary::{
-        BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, InternalNudgeEnvelope, PostSendHookEvent,
-        ResolvedBuiltInNudgeTemplate, TMUX_DOUBLE_ENTER_DELAY,
+        BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, InternalNudgeEnvelope, NudgeKind,
+        PostSendHookEvent, ResolvedBuiltInNudgeTemplate, TMUX_DOUBLE_ENTER_DELAY,
         built_in_nudge_template_kind_from_post_send_event,
     };
     use atm_core::send::default_template;
@@ -350,37 +350,40 @@ mod tests {
     }
 
     #[test]
-    fn built_in_template_kind_selection_covers_six_paths() {
+    fn built_in_template_kind_selection_covers_seven_paths() {
         let mut event = base_event();
         assert_eq!(
-            built_in_nudge_template_kind_from_post_send_event(&event),
+            built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Steer),
             BuiltInNudgeTemplateKind::Delivery
+        );
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Queue),
+            BuiltInNudgeTemplateKind::Queue
         );
         event.requires_ack = true;
         assert_eq!(
-            built_in_nudge_template_kind_from_post_send_event(&event),
+            built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Steer),
             BuiltInNudgeTemplateKind::DeliveryAck
+        );
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Queue),
+            BuiltInNudgeTemplateKind::QueueAck
         );
         event.requires_ack = false;
         event.task_id = Some("AD.21".parse().expect("task"));
         assert_eq!(
-            built_in_nudge_template_kind_from_post_send_event(&event),
-            BuiltInNudgeTemplateKind::DeliveryTask
-        );
-        event.requires_ack = true;
-        assert_eq!(
-            built_in_nudge_template_kind_from_post_send_event(&event),
-            BuiltInNudgeTemplateKind::DeliveryTaskAck
+            built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Queue),
+            BuiltInNudgeTemplateKind::Task
         );
         event.is_ack = true;
         event.requires_ack = false;
         assert_eq!(
-            built_in_nudge_template_kind_from_post_send_event(&event),
+            built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Steer),
             BuiltInNudgeTemplateKind::AcknowledgeTask
         );
         event.task_id = None;
         assert_eq!(
-            built_in_nudge_template_kind_from_post_send_event(&event),
+            built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Steer),
             BuiltInNudgeTemplateKind::Acknowledge
         );
     }
@@ -438,7 +441,7 @@ mod tests {
             },
             sink_target: BuiltInNudgeSinkTarget::Tmux,
             template: ResolvedBuiltInNudgeTemplate {
-                kind: BuiltInNudgeTemplateKind::DeliveryTaskAck,
+                kind: BuiltInNudgeTemplateKind::Task,
                 body: Some("<atm from=\"{{from}}\" message-id=\"{{message_id}}\"/>".to_string()),
             },
         })
@@ -450,10 +453,7 @@ mod tests {
 
         assert_eq!(input.sink_target, BuiltInNudgeSinkTarget::Tmux);
         assert_eq!(input.event.task_id.expect("task").as_str(), "AD.21");
-        assert_eq!(
-            input.template.kind,
-            BuiltInNudgeTemplateKind::DeliveryTaskAck
-        );
+        assert_eq!(input.template.kind, BuiltInNudgeTemplateKind::Task);
         assert_eq!(
             input.template.body.as_deref(),
             Some("<atm from=\"{{from}}\" message-id=\"{{message_id}}\"/>")

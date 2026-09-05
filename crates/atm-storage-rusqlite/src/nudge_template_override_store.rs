@@ -233,6 +233,29 @@ mod tests {
     }
 
     #[test]
+    fn sqlite_override_store_round_trips_queue_family_and_task_kinds() {
+        let backend = crate::SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let team = "test-team".parse().expect("team");
+        for (kind, body) in [
+            (BuiltInNudgeTemplateKind::Queue, "<queue/>"),
+            (BuiltInNudgeTemplateKind::QueueAck, "<queue-ack/>"),
+            (BuiltInNudgeTemplateKind::Task, "<task/>"),
+        ] {
+            backend
+                .nudge_template_override_store()
+                .save_template_override(&team, kind, body)
+                .expect("save");
+            let row = backend
+                .nudge_template_override_store()
+                .load_template_override(&team, kind)
+                .expect("lookup")
+                .expect("row");
+            assert_eq!(row.kind, kind);
+            assert_eq!(row.template_body(), Some(body));
+        }
+    }
+
+    #[test]
     fn sqlite_override_store_returns_none_for_missing_row() {
         let backend = crate::SqliteStorageBackend::in_memory_for_test().expect("backend");
 

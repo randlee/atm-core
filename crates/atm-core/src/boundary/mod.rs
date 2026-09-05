@@ -134,14 +134,22 @@ impl PostSendHookEvent {
 
 pub fn built_in_nudge_template_kind_from_post_send_event(
     event: &PostSendHookEvent,
+    delivery_kind: NudgeKind,
 ) -> BuiltInNudgeTemplateKind {
-    match (event.is_ack, event.task_id.is_some(), event.requires_ack) {
-        (true, true, _) => BuiltInNudgeTemplateKind::AcknowledgeTask,
-        (true, false, _) => BuiltInNudgeTemplateKind::Acknowledge,
-        (false, true, true) => BuiltInNudgeTemplateKind::DeliveryTaskAck,
-        (false, true, false) => BuiltInNudgeTemplateKind::DeliveryTask,
-        (false, false, true) => BuiltInNudgeTemplateKind::DeliveryAck,
-        (false, false, false) => BuiltInNudgeTemplateKind::Delivery,
+    use BuiltInNudgeTemplateKind as K;
+    match (
+        event.is_ack,
+        event.task_id.is_some(),
+        event.requires_ack,
+        delivery_kind,
+    ) {
+        (true, true, _, _) => K::AcknowledgeTask,
+        (true, false, _, _) => K::Acknowledge,
+        (false, true, _, _) => K::Task,
+        (false, false, false, NudgeKind::Steer) => K::Delivery,
+        (false, false, true, NudgeKind::Steer) => K::DeliveryAck,
+        (false, false, false, NudgeKind::Queue) => K::Queue,
+        (false, false, true, NudgeKind::Queue) => K::QueueAck,
     }
 }
 
