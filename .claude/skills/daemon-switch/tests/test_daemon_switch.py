@@ -6,6 +6,7 @@ import importlib.util
 import io
 import argparse
 import json
+import os
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 import plistlib
@@ -23,6 +24,13 @@ DAEMON_SWITCH = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(DAEMON_SWITCH)
 
 
+POSIX_ONLY = unittest.skipUnless(
+    os.name == "posix",
+    "launchd/systemd/AF_UNIX backends and POSIX permission bits do not exist on Windows",
+)
+
+
+@POSIX_ONLY
 class StaleSocketCleanupTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -66,6 +74,7 @@ class StaleSocketCleanupTests(unittest.TestCase):
         self.assertTrue(self.socket_path.is_file())
 
 
+@POSIX_ONLY
 class QuiesceTests(unittest.TestCase):
     def test_requires_explicit_confirmation(self) -> None:
         with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "--yes"):
@@ -697,6 +706,7 @@ class ReadinessAndRollbackTests(unittest.TestCase):
         development.assert_called_once_with(candidate_cli, candidate_daemon)
 
 
+@POSIX_ONLY
 class TemporaryLaunchJournalTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -937,6 +947,7 @@ class TemporaryLaunchControlPlaneTests(unittest.TestCase):
         )
 
 
+@POSIX_ONLY
 class MacosTemporaryLaunchAdapterTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -1237,6 +1248,7 @@ class WindowsTemporaryLaunchAdapterTests(unittest.TestCase):
             self.adapter.restore_exact(self.args, session)
 
 
+@POSIX_ONLY
 class LinuxTemporaryLaunchAdapterTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
