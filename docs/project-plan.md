@@ -1598,16 +1598,15 @@ dogfood run (issue #1173): the Herdr sink bypasses the built-in nudge
 templates and injects fixed wake text; `atm queue` has no template class
 of its own; and task-tagged mail has no state, so a second task can be
 acked while the first is in progress and an idle assignee is never
-reminded. Six sequential sprints: `AX.1` queue template class and
-default-body fixes, `AX.2` Herdr template rendering, `AX.3` task state
-machine and `--task-complete`, `AX.4` task reminder cycle in the Herdr
-pump, `AX.5` lead notification and doctor codes, `AX.6` live Herdr
-evidence. Execution tracks: A = AX.1 → AX.2 and B = AX.3 **run in
-parallel** from day one (`parallel_safe`: AX.1∥AX.3, AX.2∥AX.3); C =
-AX.4 → AX.5 starts after A and B merge; D = AX.6 last. `must_follow`
-edges: AX.1→AX.2, AX.2→AX.4, AX.3→AX.4, AX.4→AX.5, AX.5→AX.6. Branches
-are worktrees via `sc-git-worktree`; PR bases and merges via `gh stack`
-(sequence in the phase plan §6).
+reminded. Seven sprints in four tracks: A = `AX.1` queue template class
+→ `AX.2` Herdr template rendering; B = `AX.3` task state machine and
+storage → `AX.4` task CLI and docs, **running in parallel with A**
+(`parallel_safe`: AX.1∥AX.3, AX.2∥AX.3); C = `AX.5` reminder cycle →
+`AX.6` lead notification and doctor, after A and B merge; D = `AX.7`
+live Herdr evidence. `must_follow` edges: AX.1→AX.2, AX.3→AX.4,
+AX.2→AX.5, AX.4→AX.5, AX.5→AX.6, AX.6→AX.7. Branches are worktrees via
+`sc-git-worktree`; PR bases and merges via `gh stack` (sequence in the
+phase plan §6).
 
 The authoritative plan is
 [phase-ax-plan](./plans/phase-ax/phase-ax-plan.md) with per-sprint docs
@@ -1617,12 +1616,13 @@ Phase AX sprint status:
 
 | Sprint | Track | Execute | Status | Branch | Artifacts |
 | --- | --- | --- | --- | --- | --- |
-| `AX.1` | A | parallel with AX.3 | `planned` | `feature/ax1-queue-template-class` | `docs/plans/phase-ax/sprint-AX.1-queue-template-class.md`, ADR-019 amendment |
-| `AX.2` | A | after AX.1; parallel with AX.3 | `planned` | `feature/ax2-herdr-template-rendering` | `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md`, ADR-058 amendment, `boundaries/atm-herdr/herdr-process-adapter.toml` |
-| `AX.3` | B | parallel with AX.1, AX.2 | `planned` | `feature/ax3-task-state-machine` | `docs/plans/phase-ax/sprint-AX.3-task-state-machine.md`, `docs/adr/ADR-061-task-state-machine.md`, ADR-054 amendment, `boundaries/atm-storage/task-store.toml` |
-| `AX.4` | C | after AX.2 and AX.3 merge | `planned` | `feature/ax4-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.4-task-reminder-cycle.md`, ADR-054 amendment (marker exception) |
-| `AX.5` | C | after AX.4 | `planned` | `feature/ax5-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.5-lead-notification-doctor.md` |
-| `AX.6` | D | after AX.5 merges | `planned` | none (proof on `integrate/phase-ax`) | `docs/plans/phase-ax/ax6-live-proof.md` |
+| `AX.1` | A | parallel with AX.3/AX.4 | `planned` | `feature/ax1-queue-template-class` | `docs/plans/phase-ax/sprint-AX.1-queue-template-class.md`, ADR-019 amendment |
+| `AX.2` | A | after AX.1; parallel with AX.3/AX.4 | `planned` | `feature/ax2-herdr-template-rendering` | `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md`, ADR-058 amendment, `boundaries/atm-herdr/herdr-process-adapter.toml`, `docs/atm-herdr/requirements.md` |
+| `AX.3` | B | parallel with AX.1/AX.2 | `planned` | `feature/ax3-task-state-machine` | `docs/plans/phase-ax/sprint-AX.3-task-state-machine.md`, `docs/adr/ADR-061-task-state-machine.md`, ADR-054 amendment, `boundaries/atm-storage/task-store.toml` |
+| `AX.4` | B | after AX.3; parallel with AX.1/AX.2 | `planned` | `feature/ax4-task-cli-and-docs` | `docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md`, `docs/user-documents/tasks.md` |
+| `AX.5` | C | after A and B merge | `planned` | `feature/ax5-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md`, ADR-054 amendment (marker exception) |
+| `AX.6` | C | after AX.5 | `planned` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
+| `AX.7` | D | after AX.6 merges | `planned` | none (proof on `integrate/phase-ax`) | `docs/plans/phase-ax/ax7-live-proof.md` |
 
 ## Publishing Improvements
 

@@ -78,11 +78,36 @@ shape-only completion fails the sprint.
   `[contracts]` notes record that prompt text is caller-supplied rendered
   template text and that the adapter never composes text; `[status]`
   note dated.
-- [ ] D7 — tests listed under Required validation.
+- [ ] D7 — `docs/atm-herdr/requirements.md`: `HR-CORE-002` (line 112)
+  rewritten to "emits exactly `herdr agent prompt <AgentName> <text>`
+  where `<text>` is the caller-supplied rendered built-in nudge template
+  (ADR-058 D2 as amended); no `--wait` and no other flag; the crate never
+  composes or alters the text". `HR-SAFE-003` (line 208) restated with a
+  dated note: "The only text this crate writes into a Herdr child's argv
+  is the rendered built-in nudge template produced by atm-core's renderer
+  for the recipient team and kind — the same text the tmux and graft
+  sinks inject. The crate never reads message content itself. The
+  template's `description` placeholder resolves to the message summary,
+  or to the message text when no summary was given, exactly as on the
+  other backends; no additional length bound is imposed beyond the
+  operating system's single-argument limit." The verification bullet at
+  line 396 keeps "match `herdr-cli-contract-fixture.md` verbatim".
+  `docs/atm-herdr/architecture.md`: trait signature near line 186 gains
+  the `text` parameter; fixture references near lines 513 and 534 keep
+  their wording. `docs/plans/phase-aq/fixtures/herdr-cli-contract-fixture.md`
+  line 51: the prompt row becomes
+  `["herdr","agent","prompt","agent-a","<rendered built-in nudge template>"]`
+  with one sentence stating the fourth element is the rendered template.
+- [ ] D8 — tests listed under Required validation.
 
 ### Paths to delete
 
 None (two symbols deleted inside `crates/atm-herdr/src/lib.rs`).
+
+### Paths that must not change
+
+- `docs/plans/**` other than the fixture row above: planning prose may
+  keep the name `HERDR_WAKE_TEXT`.
 
 ## Code contracts
 
@@ -132,13 +157,18 @@ list}`; `crates/atm-http-runtime/src/storage_and_nudge_router.rs`.
 
 ## Acceptance criteria
 
-1. `grep -rn HERDR_WAKE_TEXT crates docs` returns nothing.
+1. `grep -rn HERDR_WAKE_TEXT crates docs/adr docs/atm-herdr docs/requirements.md docs/architecture.md boundaries`
+   returns nothing (`docs/plans/**` is excluded by design).
 2. A Herdr-backed member's prompt text equals the tmux-backed render for
    the same `PostSendHookEvent`.
-3. Pump nudges carry a Queue-family or Task body (no `<when>`).
+3. The prompt text the pump emits for a queued message equals the
+   Queue / QueueAck / Task render `build_built_in_dispatch` produces for
+   the same member and message.
 4. `prompt_args` output has exactly four elements for `session: Some` and
    `session: None`, and argv[3] is byte-identical to a six-line input.
-5. ADR-058 amended with a dated history entry; `boundary-guard` review of
+5. ADR-058 amended with a dated history entry; `HR-CORE-002` and
+   `HR-SAFE-003` read as in D7 and `grep -n 'fixed mailbox-read prompt\|never interpolated' docs/atm-herdr/requirements.md`
+   returns nothing; `boundary-guard` review of
    `herdr-process-adapter.toml` passes; `just validate` green.
 
 ## Required validation
@@ -156,6 +186,7 @@ list}`; `crates/atm-http-runtime/src/storage_and_nudge_router.rs`.
   `ac08_dispatch_selector_is_used_by_tick_once` updated to assert the
   rendered text carried on the Herdr target.
 - `crates/atm-daemon-bootstrap` selector tests updated for the call site.
+- `crates/atm-herdr` argv-equality tests updated to the D7 fixture row.
 - `just validate`; quality-mgr Final Quality Report on the PR; `arch-qa`
   review of the ADR-058 amendment; `boundary-guard` on the Herdr boundary
   record.

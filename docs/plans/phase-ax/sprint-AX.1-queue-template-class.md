@@ -71,9 +71,9 @@ shape-only completion fails the sprint.
   types carry the kind unchanged (verify by test that a `queue_ack`
   override round-trips through `set_nudge_template_override_with_store`).
 - [ ] D6 — normative docs lose the six-kind bound:
-  `docs/requirements.md` post-send hook block ("exactly six named template
-  cases", near line 1093), the "six built-in template bodies" statement
-  near line 1105, and the emitter-seam statement near line 4496;
+  `docs/requirements.md` line 1094 ("exactly six named template cases"),
+  line 1105 ("those six built-in template bodies"), and line 4496 ("the
+  six built-in nudge template bodies"); each must read "seven";
   `docs/architecture.md` lines 2736–2738; `docs/atm/requirements.md`
   lines 143–144. Each states the seven kinds and the rule that
   `NudgeKind` selects the delivery or queue family.
@@ -83,8 +83,12 @@ shape-only completion fails the sprint.
   `NudgeKind` rule; `docs/adr/INDEX.md` entry text updated if the ADR
   status line changes.
 - [ ] D7 — user docs and examples: `docs/user-documents/nudge-templates.md`
-  documents the seven kinds, the C2 mapping, the retirement, the
-  migration, and the corrected read action;
+  documents the seven kinds (line 23 "exactly six" becomes "seven"), the
+  C2 mapping, the migration, and the corrected read action, and records
+  the retirement with the sentence "Two former task steer kinds were
+  retired in phase AX and are rejected on input; see the ADR-019
+  amendment for their names and the migration" (the retired names appear
+  only in the ADR-019 amendment, so AC 2's gate holds);
   `docs/user-documents/examples/nudge-templates/`: fix `read atm` in
   `delivery.xml`, `delivery_ack.xml`, `manage-templates.sh`; delete
   `delivery_task.xml` and `delivery_task_ack.xml`; add `queue.xml`,
@@ -94,7 +98,19 @@ shape-only completion fails the sprint.
   `scripts/test_atm_nudge.py` lines 281 and 287, and
   `.claude/skills/restore-team-communications/SKILL.md` line 76 replace
   `read atm --team <team>` / `read atm` with the targeted read action.
-- [ ] D9 — tests listed under Required validation.
+- [ ] D9 — task-tagged mail is always deferred (phase plan §2 "tasks are
+  always queued"): new `pub(crate) fn nudge_mode_for_request(request:
+  &SendRequest, task_id: &Option<TaskId>) -> NudgeMode` beside
+  `request_requires_ack` in `crates/atm-core/src/send/mod.rs` returning
+  `NudgeMode::Deferred` when `task_id.is_some()`, otherwise
+  `request.nudge_mode`; called at both sites that call
+  `request_requires_ack` (`prepare_persisted_write` and
+  `prepare_persisted_write_async` in `crates/atm-core/src/write/pipeline.rs`).
+  Consequence on every backend: a `--task-id` send never steers; tmux and
+  graft recipients get the pending-nudge marker exactly as `atm queue`
+  does today and are nudged with the Task body when idle. (AX.5 removes
+  the marker for Herdr recipients only.) Code contract C5.
+- [ ] D10 — tests listed under Required validation.
 
 ### Paths to delete
 
@@ -112,6 +128,8 @@ shape-only completion fails the sprint.
   fixture bodies for their own injectors, not built-in defaults.
 - `crates/atm-architecture/tests/pending_nudge_store_boundary.rs`: its
   `read atm-storage types source` strings are unrelated prose.
+- `scripts/hooks/test_queue_hooks.py` lines 150 and 154: `read atm` is a
+  fixture body for the queue hook under test, not a built-in default.
 
 ## Code contracts
 
@@ -224,6 +242,18 @@ lacks `'queue'`, rebuild (create `_new`, copy accepted rows, drop old,
 rename). Retired rows are dropped because the new `CHECK` cannot hold
 them.
 
+### C5 — task mail is deferred
+
+```rust
+// crates/atm-core/src/send/mod.rs
+pub(crate) fn nudge_mode_for_request(request: &SendRequest, task_id: &Option<TaskId>) -> NudgeMode {
+    if task_id.is_some() { NudgeMode::Deferred } else { request.nudge_mode }
+}
+```
+
+The Task body therefore never needs `<when>`: it is only ever delivered
+from the queue (marker on tmux and graft; AX.5 pump on Herdr).
+
 ### Unchanged surfaces
 
 `nudge_template::render_built_in_nudge` signature; `PostSendHookEvent`;
@@ -239,11 +269,16 @@ trait; `crates/atm-core/src/nudge_dispatch.rs`.
    --file x.xml` succeeds; `atm queue --requires-ack` to a member of that
    team renders the override; `atm teams set-nudge-template atm-dev
    delivery_task_ack --file x.xml` exits 3 with the `use "task"` hint.
-2. Gates: `grep -rn 'read atm --team' crates/atm-core/src/send/nudge_template.rs docs/user-documents scripts .claude/skills/restore-team-communications`
-   returns nothing; `grep -rln 'delivery_task_ack' docs/requirements.md docs/architecture.md docs/atm/requirements.md docs/user-documents`
-   returns nothing; `default_template(kind)` for all seven kinds contains
-   no `read atm ` (unit assertion).
-3. All Required validation tests pass; `just validate` green, including
+2. Gates, each must return nothing:
+   `grep -rn 'read atm --team' crates/atm-core/src/send/nudge_template.rs docs/user-documents scripts .claude/skills/restore-team-communications`;
+   `grep -rln 'delivery_task_ack' docs/requirements.md docs/architecture.md docs/atm/requirements.md docs/user-documents`;
+   `grep -rn 'six built-in\|six named template\|exactly one of six\|those six\|exactly six' docs/requirements.md docs/architecture.md docs/atm/requirements.md docs/user-documents`.
+   Unit assertion: `default_template(kind)` for all seven kinds contains
+   no `read atm `.
+4. `atm send tmux-member --task-id t1 --stdin` writes the message, sets
+   the pending-nudge marker, emits no steer, and the marker nudge renders
+   the Task body; `atm send tmux-member --stdin` (no task) still steers.
+5. All Required validation tests pass; `just validate` green, including
    `scripts/check-nudge-taxonomy.py` with an unchanged allowlist (no new
    identifier in this sprint contains `nudge`; the migration function is
    named without it).
@@ -253,7 +288,9 @@ trait; `crates/atm-core/src/nudge_dispatch.rs`.
 - `crates/atm-core/tests/nudge_mode.rs`: for one Herdr-backed and one
   tmux-backed member, `atm send` resolves Delivery / DeliveryAck,
   `atm queue` resolves Queue / QueueAck, and a `--task-id` send resolves
-  Task in both modes (six assertions per backend).
+  Task and `NudgeMode::Deferred` whether sent with `atm send` or `atm
+  queue` (AC 4; six assertions per backend, plus the marker assertion
+  for the tmux member on the sync and async write paths).
 - `crates/atm-core/src/send/nudge_template.rs` unit tests: every default
   body renders without error; no default body contains `read atm `;
   Queue, QueueAck, Task bodies lack `<when`; Delivery, DeliveryAck
@@ -279,6 +316,7 @@ trait; `crates/atm-core/src/nudge_dispatch.rs`.
 
 ## Out of scope
 
-Herdr rendering (AX.2); task state (AX.3); any change to the renderer's
+Herdr rendering (AX.2); task state (AX.3, AX.4); the Herdr marker
+exception (AX.5); any change to the renderer's
 placeholder set or conditional handling; watermark or re-nudge behaviour;
 a `show-nudge-template` command.

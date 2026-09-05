@@ -1,9 +1,9 @@
 ---
 phase: AX
-sprint: AX.5
+sprint: AX.6
 title: Lead notification and doctor
-branch: feature/ax5-lead-notification-doctor
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ax5-lead-notification-doctor
+branch: feature/ax6-lead-notification-doctor
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ax6-lead-notification-doctor
 integration_branch: integrate/phase-ax
 status: draft
 recommended_agent: Cipher-311d
@@ -11,17 +11,17 @@ recommended_model: fast
 execution_track: C
 parallel_with: []
 dependency_relations:
-  - prerequisite: AX.4
-    dependent: AX.5
-    relation: must_follow
-    rationale: the lead notification fires from the reminder counter and record_reminder result AX.4 introduces in the pump.
   - prerequisite: AX.5
     dependent: AX.6
     relation: must_follow
-    rationale: AX.6 proves the merged integrate head live.
+    rationale: the lead notification fires from the reminder counter and record_reminder result AX.5 introduces in the pump.
+  - prerequisite: AX.6
+    dependent: AX.7
+    relation: must_follow
+    rationale: AX.7 proves the merged integrate head live.
 ---
 
-# AX.5 — Lead notification and doctor
+# AX.6 — Lead notification and doctor
 
 Tell the team's lead when a task stalls, reserve the sender name the
 daemon uses for that message, and make doctor report the roster and
@@ -29,7 +29,7 @@ task conditions an operator needs to see.
 
 ## Rule
 
-After every successful `record_reminder` in the AX.4 task step:
+After every successful `record_reminder` in the AX.5 task step:
 
 ```
 if row.reminder_count % 10 == 0:
@@ -62,10 +62,16 @@ shape-only completion fails the sprint.
   lookup, so no fallback is needed for a non-roster sender.
 - [ ] D2 — lead notification in the pump task step
   (`crates/atm-http-runtime/src/herdr_queue_wake.rs`) per the rule; the
-  write goes through the daemon's existing `write_mail_with_runtime`
-  path with `NudgeMode::Deferred`; `HerdrQueueWakeStats` gains
+  write calls `write_mail_with_runtime` with `NudgeMode::Deferred`
+  **inside the pump's existing `run_blocking` helper** (line 115), never
+  on the Tokio worker directly; a failed write is logged and appends no
+  `LeadNotified` row (same shape as the AX.5 emit-failure rule);
+  `HerdrQueueWakeStats` and the `herdr_queue_poll_tick` record gain
   `lead_notifications: usize`.
-- [ ] D3 — doctor (`crates/atm-core/src/doctor/mod.rs`):
+- [ ] D3 — doctor (`crates/atm-core/src/doctor/mod.rs`, reading task
+  rows through `runtime.task_store()` inside
+  `run_doctor_with_runtime_ports`, line 174; no new `RuntimeDoctorPorts`
+  field):
   `ATM_ROSTER_NO_LEAD` warning per team with no `Lead` member;
   `ATM_ROSTER_MULTIPLE_LEADS` warning per team with more than one;
   `ATM_ROSTER_RESERVED_NAME` warning per member named `atm-daemon`;
@@ -122,7 +128,7 @@ TaskStalled,         // "ATM_TASK_STALLED"
 
 ### Unchanged surfaces
 
-`TaskStore` trait; the AX.4 reminder rule and cadence; roster schema;
+`TaskStore` trait; the AX.5 reminder rule and cadence; roster schema;
 `AgentType` enum; every existing doctor code.
 
 ## Acceptance criteria
@@ -140,7 +146,7 @@ TaskStalled,         // "ATM_TASK_STALLED"
 
 ## Required validation
 
-- `crates/atm-http-runtime/src/herdr_queue_wake.rs` tests (`ax5_01_*`
+- `crates/atm-http-runtime/src/herdr_queue_wake.rs` tests (`ax6_01_*`
   naming): AC 1 scenarios, including no-lead and two-lead teams
   (no message, warn log, no `LeadNotified` row).
 - `crates/atm-core/src/team_admin/member_mutation.rs` tests: AC 2 for
