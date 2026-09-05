@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-QA4-001>
+  a triage:Finding ;
+  triage:findingId "AX3-QA4-001" ;
+  triage:title "ReaderPool/PoolInner has no Drop impl and discards worker JoinHandles, so SQLite reader connections close asynchronously after the storage backend is dropped; the AX3-QA3-001 Windows remove_dir_all sharing-violation race is only narrowed by drop(assembly), not closed" ;
+  triage:description "AX.3 QA-4 (quality-mgr ax3-qa-r4, PR #1191 Final Quality Report 2026-09-05T10:29Z; independently confirmed by quality-mgr's Drop-chain analysis, arch-qa, and rust-qa-agent) at head 097dbd8b2. Re-assessment of AX3-QA3-001 (which stays open; this is the new record). The one-line fix drop(assembly); at crates/atm-runtime/src/composition.rs:348 deterministically closes the writer handle (SqliteWriter has a bounded-join Drop, crates/atm-storage-rusqlite/src/writer/mod.rs:326), but crates/atm-storage-rusqlite/src/reader_pool.rs has no impl Drop for ReaderPool or PoolInner: schedule_quarantine spawns a detached watchdog thread via thread::spawn (reader_pool.rs:609) and spawn_worker (reader_pool.rs:663) starts each reader thread via thread::Builder::new().spawn(...) (reader_pool.rs:677-692) whose returned JoinHandle is discarded by the trailing '?' at line 697 -- the Worker struct pushed at line 698 stores only id/sender/interrupt/state, no JoinHandle -- so dropping the pool only closes the workers' channel; each worker's rusqlite::Connection (and its file handle) is released later on a detached thread with no join back to the caller. HEAD confirmed via git grep: 'impl Drop' returns no match in reader_pool.rs, and no 'impl Drop for (ReaderPool|PoolInner)' exists anywhere in the crate. Every SqliteStorageBackend eagerly spawns the mailbox and search reader lanes, so the test's std::fs::remove_dir_all can still race a live reader connection on Windows (os error 32) non-deterministically. Fix: give the pool handle a real Drop mirroring SqliteWriter::drop -- retain each worker JoinHandle, signal shutdown, join every worker with a bounded deadline (warn and detach on timeout), never self-join from a worker thread; cover both reader lanes. A tempfile::TempDir-before-assembly reverse-drop-order approach does not close the race. References: PR #1191 comment https://github.com/randlee/atm-core/pull/1191#issuecomment-5551178280; CI run https://github.com/randlee/atm-core/actions/runs/33958891979; prior record .triage/phase-ax/findings/AX3-QA3-001.ttl (stays open, not superseded)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RUST-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T10:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T10:29:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA4-001/AX3-2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA4-001/AX3-2-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-QA4-001/AX3-2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 609 ;
+  triage:snippet "thread::spawn(move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "097dbd8b2581590db968a2d16c8288ea9b789658" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/097dbd8> .
+
+<urn:atm:triage:occurrence/AX3-QA4-001/AX3-2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 663 ;
+  triage:snippet "fn spawn_worker(self: &Arc<Self>, id: usize) -> Result<(), AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "097dbd8b2581590db968a2d16c8288ea9b789658" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/097dbd8> .
+
+<urn:atm:triage:worktree/AX3/097dbd8>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "097dbd8b2581590db968a2d16c8288ea9b789658" ;
+  triage:orderIndex 2 .

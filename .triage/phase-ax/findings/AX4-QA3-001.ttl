@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX4-QA3-001>
+  a triage:Finding ;
+  triage:findingId "AX4-QA3-001" ;
+  triage:title "Sprint AX.4 doc frontmatter is invalid YAML: the rationale key at line 21 was re-indented from 4 to 2 spaces, breaking nesting under the '- prerequisite: AX.1' list item" ;
+  triage:description "AX.4 QA-3 (quality-mgr ax4-qa-r3, PR #1194 Final Quality Report 2026-09-05T10:59Z; filed independently by req-qa, arch-qa and rust-qa-agent, confirmed by quality-mgr) at head 349b694a98bbffe5bc5d720384625d69199846c8. The AX4-QA2-004 fix commit e1f76e5bf corrected the citation text on docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md:21 (section 6.6 -> 7.3/7.12) but the same edit changed the indentation of the 'rationale:' key from 4 spaces to 2, so it no longer nests under the '- prerequisite: AX.1' list item in the parallel_safe block; rust-qa-agent ran yaml.safe_load() on the frontmatter and got a parse error at lines 20-21, so this is genuinely invalid YAML, not a style nit. AX4-QA2-004 therefore stays open (its citation residual is fixed but the line is still defective). Fix: re-indent line 21 to 4 spaces so it sits under the list item, and verify the frontmatter parses with yaml.safe_load." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T11:01:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX4 ;
+  triage:foundAt "2026-09-05T10:59:35Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA3-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX4-QA3-001/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
+  triage:line 21 ;
+  triage:snippet "rationale: no functional dependency; both edit docs/requirements.md (AX.1 lines 1094/1105/4496, AX.4 §6.5/§7.3/§7.12/§15.4) and docs/user-documents/nudge-templates.md (AX.1 rewrites the kind inventory, AX.4 adds one ADR-061 cross-reference) in different sections; resolved by AX.4 merging integrate/phase-ax forward after track A lands and before opening its PR, the same rule AX.3 follows." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "349b694a98bbffe5bc5d720384625d69199846c8" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/349b694a> .
+
+<urn:atm:triage:worktree/ax4-task-cli-and-docs/349b694a>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "349b694a98bbffe5bc5d720384625d69199846c8" ;
+  triage:orderIndex 4 .
