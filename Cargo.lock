@@ -317,8 +317,12 @@ name = "atm-observability"
 version = "1.5.0"
 dependencies = [
  "agent-team-mail-core",
+ "sc-observability",
  "sc-observability-types",
+ "serde_json",
  "tempfile",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
