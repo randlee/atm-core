@@ -75,6 +75,7 @@ use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use template_catalog_store::template_catalog_store;
+pub use writer::DiagnosticTimelinePersistenceStats;
 
 #[cfg(any(test, feature = "test-support"))]
 #[derive(Debug)]

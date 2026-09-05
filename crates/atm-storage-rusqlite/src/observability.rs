@@ -56,9 +56,11 @@ pub trait SqliteObservability: Send + Sync {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, Default)]
 pub struct NullSqliteObservability;
 
+#[cfg(test)]
 impl SqliteObservability for NullSqliteObservability {
     fn emit(&self, _event: SqliteObservabilityEvent) -> Result<(), AtmError> {
         Ok(())

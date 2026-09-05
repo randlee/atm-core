@@ -13,6 +13,7 @@ use atm_observability::{
 };
 use atm_storage::{DiagnosticEvent, DiagnosticTimelineStore};
 use atm_storage_rusqlite::DIAGNOSTIC_DETAIL_MAX_BYTES;
+use atm_storage_rusqlite::DiagnosticTimelinePersistenceStats;
 use serde_json::{Map, Value};
 
 pub const DIAGNOSTIC_BATCH_MAX: usize = 128;
@@ -33,11 +34,14 @@ pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticT
     let Some(bridge) = INSTALLED_BRIDGE.get() else {
         return;
     };
+    let persistence_stats = store.persistence_stats();
+    let store: Arc<dyn DiagnosticTimelineStore> = store;
     let stats = Arc::new(DiagnosticTimelineStats::default());
-    let writer = Arc::new(DiagnosticTimelineWriter::new(
+    let writer = Arc::new(DiagnosticTimelineWriter::new_with_persistence(
         store,
         DiagnosticPolicy::default(),
         stats,
+        persistence_stats,
     ));
     writer.flush_due();
     let counters = Arc::new(CombinedDiagnosticCounters::new(
@@ -154,6 +158,7 @@ pub struct DiagnosticTimelineWriter {
     store: Arc<dyn DiagnosticTimelineStore>,
     policy: DiagnosticPolicy,
     stats: Arc<DiagnosticTimelineStats>,
+    persistence_stats: Option<Arc<DiagnosticTimelinePersistenceStats>>,
     buffered: Mutex<BufferedEvents>,
 }
 
@@ -166,15 +171,17 @@ impl std::fmt::Debug for DiagnosticTimelineWriter {
 }
 
 impl DiagnosticTimelineWriter {
-    pub fn new(
+    pub fn new_with_persistence(
         store: Arc<dyn DiagnosticTimelineStore>,
         policy: DiagnosticPolicy,
         stats: Arc<DiagnosticTimelineStats>,
+        persistence_stats: Arc<DiagnosticTimelinePersistenceStats>,
     ) -> Self {
         Self {
             store,
             policy,
             stats,
+            persistence_stats: Some(persistence_stats),
             buffered: Mutex::new(BufferedEvents {
                 events: Vec::with_capacity(DIAGNOSTIC_BATCH_MAX),
                 last_flush: Instant::now(),
@@ -197,6 +204,7 @@ impl DiagnosticTimelineWriter {
         {
             self.flush_locked(&mut buffered);
         }
+        self.refresh_persisted_stats();
     }
 
     fn flush_locked(&self, buffered: &mut BufferedEvents) -> SinkOffer {
@@ -204,12 +212,7 @@ impl DiagnosticTimelineWriter {
         buffered.last_flush = Instant::now();
         let count = events.len() as u64;
         match self.store.record_batch(&events) {
-            Ok(()) => {
-                self.stats
-                    .timeline_written_total
-                    .fetch_add(count, Ordering::Relaxed);
-                SinkOffer::Accepted
-            }
+            Ok(()) => SinkOffer::Accepted,
             Err(error) if error.message().contains("queue is full") => {
                 self.stats
                     .timeline_dropped_queue_full_total
@@ -223,6 +226,18 @@ impl DiagnosticTimelineWriter {
                 SinkOffer::Dropped(DropReason::PersistFailed)
             }
         }
+    }
+
+    fn refresh_persisted_stats(&self) {
+        let Some(persistence) = &self.persistence_stats else {
+            return;
+        };
+        self.stats
+            .timeline_written_total
+            .store(persistence.written_total(), Ordering::Relaxed);
+        self.stats
+            .timeline_dropped_persist_error_total
+            .store(persistence.persist_error_total(), Ordering::Relaxed);
     }
 }
 
@@ -245,7 +260,9 @@ impl DiagnosticSink for DiagnosticTimelineWriter {
         }
         buffered.events.push(diagnostic_event(event));
         if buffered.events.len() == DIAGNOSTIC_BATCH_MAX {
-            self.flush_locked(&mut buffered)
+            let offer = self.flush_locked(&mut buffered);
+            self.refresh_persisted_stats();
+            offer
         } else {
             SinkOffer::Accepted
         }

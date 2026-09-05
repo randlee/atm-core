@@ -56,6 +56,10 @@ pub(crate) enum WriteOp {
     AdmitTemplateMessage(Box<TemplateMessageAdmission>),
     /// Lower-priority callers submit bounded, already-redacted batches only.
     RecordDiagnostics(Vec<DiagnosticEvent>),
+    /// Retention shares the lower-priority diagnostic writer lane.
+    PruneDiagnostics {
+        now_unix_ms: i64,
+    },
 }
 
 impl std::fmt::Debug for WriteOp {
@@ -93,6 +97,10 @@ impl std::fmt::Debug for WriteOp {
                 .debug_tuple("RecordDiagnostics")
                 .field(&events.len())
                 .finish(),
+            Self::PruneDiagnostics { now_unix_ms } => formatter
+                .debug_struct("PruneDiagnostics")
+                .field("now_unix_ms", now_unix_ms)
+                .finish(),
         }
     }
 }
@@ -116,6 +124,7 @@ pub(crate) enum WriteOpResult {
         existing: Option<Box<Message>>,
     },
     DiagnosticsRecorded,
+    DiagnosticsPruned(u64),
 }
 
 pub(crate) fn execute(
@@ -189,6 +198,25 @@ pub(crate) fn execute(
                 ).map_err(|error| sqlite_error(target, "failed to record diagnostic timeline batch", error))?;
             }
             Ok(WriteOpResult::DiagnosticsRecorded)
+        }
+        WriteOp::PruneDiagnostics { now_unix_ms } => {
+            let cutoff = now_unix_ms - crate::DIAGNOSTIC_MAX_AGE_DAYS * 24 * 60 * 60 * 1_000;
+            let mut deleted = 0_u64;
+            loop {
+                let rows = connection.execute("DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events WHERE ts_unix_ms < ?1 ORDER BY id LIMIT ?2)", params![cutoff, crate::DIAGNOSTIC_PRUNE_BATCH]).map_err(|error| sqlite_error(target, "failed to prune expired diagnostic events", error))?;
+                deleted += rows as u64;
+                if rows < crate::DIAGNOSTIC_PRUNE_BATCH {
+                    break;
+                }
+            }
+            loop {
+                let rows = connection.execute("DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms ASC LIMIT ?1 OFFSET ?2)", params![crate::DIAGNOSTIC_PRUNE_BATCH, crate::DIAGNOSTIC_MAX_ROWS]).map_err(|error| sqlite_error(target, "failed to prune excess diagnostic events", error))?;
+                deleted += rows as u64;
+                if rows == 0 {
+                    break;
+                }
+            }
+            Ok(WriteOpResult::DiagnosticsPruned(deleted))
         }
     }
 }

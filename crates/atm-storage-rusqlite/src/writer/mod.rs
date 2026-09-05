@@ -4,6 +4,7 @@ mod stmt_cache;
 
 pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
 
+use crate::DIAGNOSTIC_PRUNE_CHECK_EVERY;
 use crate::observability::{
     SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
@@ -11,14 +12,11 @@ use crate::shared_db::{
     SharedDbTarget, SqliteConnection, ensure_schema, open_writer_connection_for_target,
     sqlite_error,
 };
-use crate::{
-    DIAGNOSTIC_MAX_AGE_DAYS, DIAGNOSTIC_MAX_ROWS, DIAGNOSTIC_PRUNE_BATCH,
-    DIAGNOSTIC_PRUNE_CHECK_EVERY,
-};
 use atm_storage::{AtmError, AtmErrorCode, DiagnosticEvent};
 use rusqlite::TransactionBehavior;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -64,6 +62,14 @@ enum WriterMessage {
     Shutdown,
 }
 
+enum DiagnosticWriterMessage {
+    Records(Vec<DiagnosticEvent>),
+    Prune {
+        now_unix_ms: i64,
+        reply: SyncSender<Result<u64, AtmError>>,
+    },
+}
+
 /// Result of a non-blocking diagnostic-lane offer.  Diagnostic events must
 /// never backpressure or fail a primary durable-state operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,6 +80,24 @@ pub(crate) enum DiagnosticBatchOffer {
     InvalidBatch,
 }
 
+/// Persist-side counters are separate from producer queue-full accounting so
+/// the health projection never treats a merely accepted batch as durable.
+#[derive(Debug, Default)]
+pub struct DiagnosticTimelinePersistenceStats {
+    written_total: AtomicU64,
+    persist_error_total: AtomicU64,
+}
+
+impl DiagnosticTimelinePersistenceStats {
+    pub fn written_total(&self) -> u64 {
+        self.written_total.load(Ordering::Relaxed)
+    }
+
+    pub fn persist_error_total(&self) -> u64 {
+        self.persist_error_total.load(Ordering::Relaxed)
+    }
+}
+
 struct QueuedWrite {
     op: Box<WriteOp>,
     reply: ReplyTx,
@@ -81,7 +105,8 @@ struct QueuedWrite {
 
 pub(crate) struct SqliteWriter {
     sender: Option<tokio::sync::mpsc::Sender<WriterMessage>>,
-    diagnostic_sender: Option<tokio::sync::mpsc::Sender<Vec<DiagnosticEvent>>>,
+    diagnostic_sender: Option<tokio::sync::mpsc::Sender<DiagnosticWriterMessage>>,
+    diagnostic_stats: Arc<DiagnosticTimelinePersistenceStats>,
     worker: Option<JoinHandle<()>>,
     observability: Arc<dyn SqliteObservability>,
     write_op_deadline: Duration,
@@ -155,6 +180,7 @@ impl SqliteWriter {
         let (sender, receiver) = tokio::sync::mpsc::channel(channel_capacity);
         let (diagnostic_sender, diagnostic_receiver) =
             tokio::sync::mpsc::channel(DIAGNOSTIC_QUEUE_BATCHES);
+        let diagnostic_stats = Arc::new(DiagnosticTimelinePersistenceStats::default());
         let worker_runtime = build_runtime().map_err(|error| {
             let error = AtmError::daemon_unavailable(format!(
                 "failed to initialize sqlite writer timer: {error}"
@@ -168,6 +194,7 @@ impl SqliteWriter {
             error
         })?;
         let worker_observability = Arc::clone(&observability);
+        let worker_diagnostic_stats = Arc::clone(&diagnostic_stats);
         let worker = thread::Builder::new()
             .name("atm-sqlite-writer".to_string())
             .spawn(move || {
@@ -176,6 +203,7 @@ impl SqliteWriter {
                     connection,
                     receiver,
                     diagnostic_receiver,
+                    worker_diagnostic_stats,
                     worker_observability,
                     worker_runtime,
                 )
@@ -195,6 +223,7 @@ impl SqliteWriter {
         Ok(Self {
             sender: Some(sender),
             diagnostic_sender: Some(diagnostic_sender),
+            diagnostic_stats,
             worker: Some(worker),
             observability,
             write_op_deadline,
@@ -361,13 +390,39 @@ impl SqliteWriter {
         let Some(sender) = self.diagnostic_sender.as_ref() else {
             return DiagnosticBatchOffer::WriterClosed;
         };
-        match sender.try_send(batch) {
+        match sender.try_send(DiagnosticWriterMessage::Records(batch)) {
             Ok(()) => DiagnosticBatchOffer::Accepted,
             Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => DiagnosticBatchOffer::QueueFull,
             Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
                 DiagnosticBatchOffer::WriterClosed
             }
         }
+    }
+
+    pub(crate) fn diagnostic_stats(&self) -> Arc<DiagnosticTimelinePersistenceStats> {
+        Arc::clone(&self.diagnostic_stats)
+    }
+
+    pub(crate) fn prune_diagnostics(&self, now_unix_ms: i64) -> Result<u64, AtmError> {
+        let sender = self
+            .diagnostic_sender
+            .as_ref()
+            .ok_or_else(writer_channel_closed_error)?;
+        let (reply, receiver) = mpsc::sync_channel(1);
+        sender
+            .try_send(DiagnosticWriterMessage::Prune { now_unix_ms, reply })
+            .map_err(|error| match error {
+                tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                    writer_queue_timeout_error(self.write_op_deadline)
+                }
+                tokio::sync::mpsc::error::TrySendError::Closed(_) => writer_channel_closed_error(),
+            })?;
+        receiver
+            .recv_timeout(self.write_op_deadline)
+            .map_err(|error| match error {
+                RecvTimeoutError::Timeout => writer_reply_timeout_error(self.write_op_deadline),
+                RecvTimeoutError::Disconnected => writer_reply_channel_closed_error(),
+            })?
     }
 }
 
@@ -530,7 +585,8 @@ fn writer_loop(
     target: Arc<SharedDbTarget>,
     mut connection: SqliteConnection,
     mut receiver: tokio::sync::mpsc::Receiver<WriterMessage>,
-    mut diagnostic_receiver: tokio::sync::mpsc::Receiver<Vec<DiagnosticEvent>>,
+    mut diagnostic_receiver: tokio::sync::mpsc::Receiver<DiagnosticWriterMessage>,
+    diagnostic_stats: Arc<DiagnosticTimelinePersistenceStats>,
     observability: Arc<dyn SqliteObservability>,
     runtime: tokio::runtime::Runtime,
 ) {
@@ -551,15 +607,21 @@ fn writer_loop(
                 runtime.block_on(collect_batch(&mut receiver, &mut batch, &mut shutting_down));
                 process_batch(&target, &mut connection, &mut cache, batch);
             }
-            WriterWork::Diagnostics(batch) => {
-                process_diagnostic_batch(
+            WriterWork::Diagnostics(message) => match message {
+                DiagnosticWriterMessage::Records(batch) => process_diagnostic_batch(
                     &target,
                     &mut connection,
                     &mut cache,
                     batch,
                     &mut diagnostic_rows_since_prune,
-                );
-            }
+                    diagnostic_stats.as_ref(),
+                ),
+                DiagnosticWriterMessage::Prune { now_unix_ms, reply } => {
+                    let result =
+                        process_diagnostic_prune(&target, &mut connection, &mut cache, now_unix_ms);
+                    let _ = reply.send(result);
+                }
+            },
         }
     }
     checkpoint_writer_connection(target.as_ref(), &mut connection, observability.as_ref());
@@ -567,12 +629,12 @@ fn writer_loop(
 
 enum WriterWork {
     Primary(QueuedWrite),
-    Diagnostics(Vec<DiagnosticEvent>),
+    Diagnostics(DiagnosticWriterMessage),
 }
 
 async fn receive_next_work(
     receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
-    diagnostic_receiver: &mut tokio::sync::mpsc::Receiver<Vec<DiagnosticEvent>>,
+    diagnostic_receiver: &mut tokio::sync::mpsc::Receiver<DiagnosticWriterMessage>,
     shutting_down: bool,
 ) -> Option<WriterWork> {
     if shutting_down {
@@ -623,6 +685,7 @@ fn process_diagnostic_batch(
     cache: &mut stmt_cache::WriterStatementCache,
     batch: Vec<DiagnosticEvent>,
     diagnostic_rows_since_prune: &mut usize,
+    diagnostic_stats: &DiagnosticTimelinePersistenceStats,
 ) {
     let batch_len = batch.len();
     let should_prune =
@@ -642,9 +705,12 @@ fn process_diagnostic_batch(
             match result {
                 Ok(_) => {
                     if should_prune {
-                        prune_diagnostic_rows(
+                        let _ = ops::execute(
+                            &WriteOp::PruneDiagnostics {
+                                now_unix_ms: chrono::Utc::now().timestamp_millis(),
+                            },
                             &transaction,
-                            chrono::Utc::now().timestamp_millis(),
+                            cache,
                             target,
                         )?;
                     }
@@ -656,33 +722,49 @@ fn process_diagnostic_batch(
             }
         });
     if let Err(error) = result {
+        diagnostic_stats
+            .persist_error_total
+            .fetch_add(batch_len as u64, Ordering::Relaxed);
         tracing::warn!(origin = "timeline", code = "ATM_DIAGNOSTIC_PERSIST_FAILED", error = %error, "diagnostic timeline batch dropped");
     } else if should_prune {
+        diagnostic_stats
+            .written_total
+            .fetch_add(batch_len as u64, Ordering::Relaxed);
         *diagnostic_rows_since_prune = 0;
     } else {
+        diagnostic_stats
+            .written_total
+            .fetch_add(batch_len as u64, Ordering::Relaxed);
         *diagnostic_rows_since_prune += batch_len;
     }
 }
 
-fn prune_diagnostic_rows(
-    transaction: &rusqlite::Transaction<'_>,
-    now_unix_ms: i64,
+fn process_diagnostic_prune(
     target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let cutoff = now_unix_ms - DIAGNOSTIC_MAX_AGE_DAYS * 24 * 60 * 60 * 1_000;
+    connection: &mut SqliteConnection,
+    cache: &mut stmt_cache::WriterStatementCache,
+    now_unix_ms: i64,
+) -> Result<u64, AtmError> {
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            sqlite_error(target, "failed to open diagnostic prune transaction", error)
+        })?;
+    let result = ops::execute(
+        &WriteOp::PruneDiagnostics { now_unix_ms },
+        &transaction,
+        cache,
+        target,
+    )?;
     transaction
-        .execute(
-            "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events WHERE ts_unix_ms < ?1 ORDER BY id LIMIT ?2)",
-            rusqlite::params![cutoff, DIAGNOSTIC_PRUNE_BATCH],
-        )
-        .map_err(|error| sqlite_error(target, "failed to prune expired diagnostic events", error))?;
-    transaction
-        .execute(
-            "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms ASC LIMIT ?1 OFFSET ?2)",
-            rusqlite::params![DIAGNOSTIC_PRUNE_BATCH, DIAGNOSTIC_MAX_ROWS],
-        )
-        .map_err(|error| sqlite_error(target, "failed to prune excess diagnostic events", error))?;
-    Ok(())
+        .commit()
+        .map_err(|error| sqlite_error(target, "failed to commit diagnostic prune", error))?;
+    match result {
+        WriteOpResult::DiagnosticsPruned(deleted) => Ok(deleted),
+        other => Err(AtmError::daemon_unavailable(format!(
+            "sqlite writer returned the wrong result for diagnostic prune: {other:?}"
+        ))),
+    }
 }
 
 async fn collect_batch(

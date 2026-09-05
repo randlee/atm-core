@@ -4,12 +4,14 @@
 //! opening an independent writer connection here would let best-effort
 //! telemetry contend with mailbox durability.
 
+#[cfg(test)]
 use std::path::Path;
 use std::sync::Arc;
 
 use atm_storage::{AtmError, DiagnosticEvent, DiagnosticQuery, DiagnosticTimelineStore};
 use rusqlite::params;
 
+#[cfg(test)]
 use crate::observability::PassiveSqliteObservability;
 use crate::shared_db::SharedDb;
 use crate::writer::{DIAGNOSTIC_BATCH_MAX, DiagnosticBatchOffer};
@@ -38,7 +40,8 @@ impl SqliteDiagnosticTimeline {
     /// Opens a stand-alone timeline using the same one-writer topology as the
     /// storage backend. Production callers should use the backend accessor so
     /// the timeline shares that backend's writer worker.
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> {
+    #[cfg(test)]
+    pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_with_observability(
             path,
             Arc::new(PassiveSqliteObservability),
@@ -48,6 +51,10 @@ impl SqliteDiagnosticTimeline {
 
     pub(crate) fn from_shared_db(db: Arc<SharedDb>) -> Self {
         Self { db }
+    }
+
+    pub fn persistence_stats(&self) -> Arc<crate::writer::DiagnosticTimelinePersistenceStats> {
+        self.db.writer.diagnostic_stats()
     }
 
     fn offer_batch(&self, events: Vec<DiagnosticEvent>) -> Result<(), AtmError> {
@@ -112,21 +119,7 @@ impl DiagnosticTimelineStore for SqliteDiagnosticTimeline {
     }
 
     fn prune(&self, now_unix_ms: i64) -> Result<u64, AtmError> {
-        let cutoff = now_unix_ms - DIAGNOSTIC_MAX_AGE_DAYS * 24 * 60 * 60 * 1_000;
-        self.db.with_transaction(|transaction| {
-            let mut deleted = 0_u64;
-            loop {
-                let rows = transaction.execute("DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events WHERE ts_unix_ms < ?1 ORDER BY id LIMIT ?2)", params![cutoff, DIAGNOSTIC_PRUNE_BATCH]).map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-                deleted += rows as u64;
-                if rows < DIAGNOSTIC_PRUNE_BATCH { break; }
-            }
-            loop {
-                let rows = transaction.execute("DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms ASC LIMIT ?1 OFFSET ?2)", params![DIAGNOSTIC_PRUNE_BATCH, DIAGNOSTIC_MAX_ROWS]).map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-                deleted += rows as u64;
-                if rows == 0 { break; }
-            }
-            Ok(deleted)
-        })
+        self.db.writer.prune_diagnostics(now_unix_ms)
     }
 }
 
