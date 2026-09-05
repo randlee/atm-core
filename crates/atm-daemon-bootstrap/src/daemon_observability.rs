@@ -203,14 +203,30 @@ fn retained_log_policy(rotation_max_bytes: u64) -> RetainedLogPolicy {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
     use std::sync::{Arc, Condvar, Mutex};
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
 
     use atm_core::test_support::EnvGuard;
     use serial_test::serial;
     use tempfile::TempDir;
 
     use super::{DaemonObservability, RetainedLogPolicy};
+
+    /// Makes a rotated log unambiguously older than the configured retention
+    /// age without relying on scheduler delay or filesystem timestamp
+    /// resolution.
+    fn age_rotated_log(path: &Path, retention_max_age: Duration) {
+        let expired_at = SystemTime::now()
+            .checked_sub(retention_max_age + Duration::from_secs(1))
+            .expect("test retention age must not underflow SystemTime");
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(path)
+            .expect("open rotated log for mtime rewrite")
+            .set_times(std::fs::FileTimes::new().set_modified(expired_at))
+            .expect("backdate rotated log");
+    }
 
     #[test]
     #[serial]
@@ -305,11 +321,13 @@ mod tests {
         std::fs::write(&active_log_path, "active\n").expect("active log");
         let rotated_log_path = log_dir.join("atm.log.jsonl.1");
         std::fs::write(&rotated_log_path, "stale\n").expect("rotated log");
+        let retention_max_age = Duration::from_millis(1);
+        age_rotated_log(&rotated_log_path, retention_max_age);
 
         let policy = RetainedLogPolicy {
             rotation_max_bytes: 1024,
             rotation_max_files: 5,
-            retention_max_age: Duration::from_millis(1),
+            retention_max_age,
             maintenance_cadence: Duration::from_nanos(1),
             writer_shutdown_timeout: Duration::from_secs(1),
             maintenance_max_work_per_pass: Some(5),
