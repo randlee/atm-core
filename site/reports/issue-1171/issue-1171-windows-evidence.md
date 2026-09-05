@@ -83,6 +83,11 @@ lines, spell, hermes-adapter, hermes-atm-boundary, atm-graft-python-boundary,
 daemon-singleton, legacy-transport-removal, peer-dial-seam, sc-boundary,
 sc-portability, pytests`.
 
+## Reports index
+
+`just reports-index --check` completed successfully after these artifacts were
+written.
+
 ## Retained files
 
 - `tcp-f16-64-campaign-1.log`: wrapper preflight failure and recovery attempt.
