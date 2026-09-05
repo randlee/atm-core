@@ -192,3 +192,31 @@ triage:a11 a triage:Assignment ;
 triage:c11 a triage:Completion ;
     triage:ofSprint triage:AX3 ;
     triage:at "2026-09-05T10:19:19Z"^^xsd:dateTime .
+
+triage:r24 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX4-QA-004> ;
+    triage:resolvedAt "2026-09-05T10:25:28Z"^^xsd:dateTime .
+
+triage:r25 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX4-QA-005> ;
+    triage:resolvedAt "2026-09-05T10:25:28Z"^^xsd:dateTime .
+
+triage:r26 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX4-QA-007> ;
+    triage:resolvedAt "2026-09-05T10:25:28Z"^^xsd:dateTime .
+
+triage:r27 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX4-QA-008> ;
+    triage:resolvedAt "2026-09-05T10:25:28Z"^^xsd:dateTime .
+
+triage:r28 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX4-QA-010> ;
+    triage:resolvedAt "2026-09-05T10:25:28Z"^^xsd:dateTime .
+
+triage:r29 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX4-QA-011> ;
+    triage:resolvedAt "2026-09-05T10:25:28Z"^^xsd:dateTime .
+
+triage:r30 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX4-QA-012> ;
+    triage:resolvedAt "2026-09-05T10:25:28Z"^^xsd:dateTime .
