@@ -32,16 +32,19 @@ task conditions an operator needs to see.
 After every successful `record_reminder` in the AX.5 task step:
 
 ```
-if row.reminder_count % 10 == 0:
+if row.reminder_count >= 10 * (row.lead_notified_count + 1):          # due: one notification per ten reminders, none skipped
     lead := the single roster member of row.team with agent_type == Lead
     if lead is none or more than one: log at warn; continue          # visible via doctor
-    id := write queued message from "atm-daemon" to lead, body C1, requires_ack = false, no task_id
-    record_lead_notified(row, now, lead, id)
+    id := write queued message from DAEMON_ACTOR_NAME to lead, body C1, requires_ack = false, no task_id
+    if write failed: log; continue                                   # no LeadNotified row; still due on the next reminder (60 s)
+    record_lead_notified(row, now, lead, id)                         # increments lead_notified_count
 ```
 
 The message is ordinary queued mail: the lead's own pump or tmux queue
-marker nudges it as today. The counter is not reset; the twentieth
-reminder produces the second message.
+marker nudges it as today. The counters are not reset; the twentieth
+reminder produces the second message. Because "due" compares the two
+counters, a failed write at reminder ten is retried at reminder eleven
+rather than silently waiting for reminder twenty.
 
 ## Deliverables
 
@@ -49,9 +52,9 @@ This is the authoritative deliverable checklist. Every listed deliverable
 lands production-ready for the scope this sprint claims; partial or
 shape-only completion fails the sprint.
 
-- [ ] D1 — reserved sender `atm-daemon`: constant
-  `RESERVED_DAEMON_SENDER: &str = "atm-daemon"` in
-  `crates/atm-storage/src/contract.rs`; `add_member_with_roster_store`
+- [ ] D1 — reserved sender `atm-daemon`: the string is
+  `atm_storage::task_store::DAEMON_ACTOR_NAME` (defined in AX.3 beside
+  `TaskActor`; this sprint defines no second constant); `add_member_with_roster_store`
   and `update_member_with_roster_store` in
   `crates/atm-core/src/team_admin/member_mutation.rs` reject the name
   with `ATM_MESSAGE_VALIDATION_FAILED` and detail `atm-daemon is a

@@ -110,12 +110,14 @@ shape-only completion fails the sprint.
   `.claude/skills/restore-team-communications/SKILL.md` line 76 replace
   `read atm --team <team>` / `read atm` with the targeted read action.
 - [ ] D9 — task-tagged mail is always deferred (phase plan §2 "tasks are
-  always queued"): new `pub(crate) fn nudge_mode_for_request(request:
+  always queued"): new `pub(crate) fn send_mode_for_task_request(request:
   &SendRequest, task_id: &Option<TaskId>) -> NudgeMode` beside
   `request_requires_ack` in `crates/atm-core/src/send/mod.rs` returning
   `NudgeMode::Deferred` when `task_id.is_some()`, otherwise
-  `request.nudge_mode`; called at both sites that call
-  `request_requires_ack` (`prepare_persisted_write` and
+  `request.nudge_mode`. The name deliberately avoids the `nudge` word
+  family: `scripts/check-nudge-taxonomy.py` captures whole identifiers,
+  and `nudge_mode_for_request` would be a new token outside the frozen
+  allowlist. Called at both sites that call `request_requires_ack` (`prepare_persisted_write` and
   `prepare_persisted_write_async` in `crates/atm-core/src/write/pipeline.rs`).
   Consequence per backend, all of which is today's `atm queue` behaviour
   (`build_received_hook_dispatches` in `crates/atm-core/src/write/pipeline.rs`
@@ -276,7 +278,7 @@ them.
 
 ```rust
 // crates/atm-core/src/send/mod.rs
-pub(crate) fn nudge_mode_for_request(request: &SendRequest, task_id: &Option<TaskId>) -> NudgeMode {
+pub(crate) fn send_mode_for_task_request(request: &SendRequest, task_id: &Option<TaskId>) -> NudgeMode {
     if task_id.is_some() { NudgeMode::Deferred } else { request.nudge_mode }
 }
 ```
@@ -287,7 +289,7 @@ The result is **written back onto the request**: in
 `let task_id = request.task_id.clone();`,
 
 ```rust
-request.nudge_mode = nudge_mode_for_request(&request, &task_id);
+request.nudge_mode = send_mode_for_task_request(&request, &task_id);
 ```
 
 before `persist_send_message*` runs and before `PreparedWrite {

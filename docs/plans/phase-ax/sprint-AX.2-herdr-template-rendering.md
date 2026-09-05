@@ -73,7 +73,9 @@ shape-only completion fails the sprint.
   resolved for the recipient team and kind"; argv shape unchanged
   (`agent prompt <name> <text>`); session still travels via
   `HERDR_SESSION` in the child environment; the line-safety rule from D4
-  recorded; dated history entry.
+  recorded; dated history entry; the status line changes from
+  "Proposed" to "Accepted" (the contract has been operative since
+  AQ2.6/AQ2.7).
 - [ ] D6 — `boundaries/atm-herdr/herdr-process-adapter.toml`:
   `[contracts]` notes record that prompt text is caller-supplied rendered
   template text and that the adapter never composes text; `[status]`

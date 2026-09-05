@@ -137,9 +137,14 @@ shape-only completion fails the sprint.
   (`crates/atm-storage/src/lib.rs`, `crates/atm-core/src/boundary/mod.rs`,
   `crates/atm-core/src/lib.rs`); add task types and the pure state
   machine in `crates/atm-storage/src/task_state.rs` per code contract
-  C1, re-exported from `atm_storage::contract` and, for the
-  daemon-runtime crates, through `atm_core::boundary` (same pattern as
-  `PendingNudgeStore`). All new identifiers avoid the `nudge` word
+  C1; add the `TaskStore` trait, `DummyTaskStore`, `MessageWriteOrigin`
+  and `DAEMON_ACTOR_NAME` in new `crates/atm-storage/src/task_store.rs`
+  per code contracts C2 and C6 (the `sealed` module in `contract.rs`
+  becomes `pub(crate)` so sibling modules can seal). `contract.rs` gains
+  only `pub use crate::task_store::*` plus the two defaulted provenance
+  methods, so every existing `atm_storage::contract::X` path keeps
+  working and the daemon-runtime crates import through
+  `atm_core::boundary` (same pattern as `PendingNudgeStore`). All new identifiers avoid the `nudge` word
   family so `scripts/check-nudge-taxonomy.py` needs no allowlist change.
 - [ ] D2 — `TaskStore` sealed trait (`crates/atm-storage/src/contract.rs`,
   code contract C2), `DummyTaskStore` double beside
@@ -251,6 +256,19 @@ shape-only completion fails the sprint.
   re-counting the capability traits to seven; `docs/requirements.md` §7
   (storage) lists `TaskStore`, the two tables, and `MessageWriteOrigin`.
 - [ ] D8 — tests listed under Required validation.
+- [ ] D9 — `crates/atm-storage/src/contract.rs` decomposition (arch-qa
+  RULE-003): the file is already 1133 non-test lines (tests start at
+  line 1134) and AX.1, AX.3 and AX.6 all add to it. Extract the graft
+  receiver and peer-configuration section (lines 760–1003:
+  `GraftReceiverRegistration`, `GraftReceiverLease`,
+  `GraftEndpointStoreError`, `GraftReceiverEndpointStore`,
+  `CertificateFingerprint`, `PrivateKeyRef`, `HttpsInterface`,
+  `LocalCertificate`, `TrustedPeer`, `PeerConfigStore`) into new
+  `crates/atm-storage/src/peer_contract.rs` with `pub use` re-exports
+  from `contract.rs`, so no import path outside the crate changes and
+  no boundary record moves. After this sprint `contract.rs` has at most
+  1000 non-test lines (AC 6 gate) with room for AX.6's additions; no
+  behaviour change, existing tests untouched.
 
 ### Paths to delete
 
@@ -273,6 +291,9 @@ pub enum TaskEvent { Assigned, Acked, Completed }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskActor { Member(AgentName), Daemon }
+/// The one string for the daemon actor and the reserved sender name; AX.6
+/// consumes this constant instead of defining its own.
+pub const DAEMON_ACTOR_NAME: &str = "atm-daemon";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskRow {
@@ -287,10 +308,13 @@ pub struct TaskRow {
     pub updated_at: IsoTimestamp,
     pub last_reminded_at: Option<IsoTimestamp>, // written by AX.5 only
     pub reminder_count: u32,                    // written by AX.5 only
+    pub lead_notified_count: u32,               // written by AX.6 only
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskRejected { pub detail: String }
+// Every `detail` ends with the remediation the AX.6 doctor codes also use:
+// "Run: atm list --task-events <task_id> --member <assignee>"
 
 /// Outcome of one row-local step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -324,7 +348,8 @@ pub struct TaskEventRow {
     pub to_state: Option<TaskState>, // == from_state for Rejected/Reminded/LeadNotified
     pub actor: TaskActor,
     pub message_id: Option<AtmMessageId>,
-    pub detail: Option<String>,      // "resend" on a re-send; rejection text on Rejected; outcome on Reminded
+    pub outcome: Option<ReminderOutcome>, // Reminded rows only; typed, never free text
+    pub detail: Option<String>,      // "resend" on a re-send; rejection text on Rejected; None otherwise
 }
 ```
 
@@ -335,7 +360,7 @@ pub struct TaskEventRow {
 ### C2 — store contract
 
 ```rust
-// crates/atm-storage/src/contract.rs
+// crates/atm-storage/src/task_store.rs (new; `pub use`d from contract.rs)
 pub trait TaskStore: sealed::Sealed + Send + Sync {
     /// Current row, if any.
     fn load_task(&self, member: &MemberKey, task_id: &TaskId)
@@ -349,10 +374,10 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
     fn list_task_events(&self, team: &TeamName, task_id: &TaskId, assignee: Option<&AgentName>)
         -> Result<Vec<TaskEventRow>, AtmError>;
     /// AX.5: increments `reminder_count`, sets `last_reminded_at`,
-    /// appends a `Reminded` row with `detail` = outcome; returns the updated row.
+    /// appends a `Reminded` row with `outcome` set (typed column); returns the updated row.
     fn record_reminder(&self, member: &MemberKey, task_id: &TaskId,
         at: IsoTimestamp, outcome: ReminderOutcome) -> Result<TaskRow, AtmError>;
-    /// AX.6: appends a `LeadNotified` row.
+    /// AX.6: increments `lead_notified_count` and appends a `LeadNotified` row.
     fn record_lead_notified(&self, member: &MemberKey, task_id: &TaskId,
         at: IsoTimestamp, lead: &AgentName, message_id: &AtmMessageId) -> Result<(), AtmError>;
 }
@@ -385,6 +410,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     updated_at TEXT NOT NULL,
     last_reminded_at TEXT NULL,
     reminder_count INTEGER NOT NULL DEFAULT 0,
+    lead_notified_count INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (team, task_id, assignee)
 );
 CREATE INDEX IF NOT EXISTS tasks_open_by_member
@@ -401,6 +427,7 @@ CREATE TABLE IF NOT EXISTS task_events (
     to_state TEXT NULL,
     actor TEXT NOT NULL,          -- member name or 'atm-daemon'
     message_id TEXT NULL,
+    outcome TEXT NULL CHECK(outcome IN ('emitted', 'unrenderable', 'blocked')),
     detail TEXT NULL,
     PRIMARY KEY (team, task_id, assignee, seq)
 );
@@ -463,7 +490,7 @@ error_types = ["AtmError"]
 notes = [
   "state change: only the message writer transaction applies Assigned/Acked/Completed; no TaskStore method changes tasks.state",
   "audit: task_events is append-only; every accepted transition, rejection, reminder, and lead notification is one row in the acting transaction",
-  "replay: per (team, task_id, assignee) the Assigned/Acked/Completed rows replayed through transition reproduce tasks.state; latest Assigned.message_id == assignment_message_id; count(Reminded) == reminder_count; max(Reminded.at) == last_reminded_at; description is not replayable",
+  "replay: per (team, task_id, assignee) the Assigned/Acked/Completed rows replayed through transition reproduce tasks.state; latest Assigned.message_id == assignment_message_id; count(Reminded) == reminder_count; max(Reminded.at) == last_reminded_at; count(LeadNotified) == lead_notified_count; description is not replayable",
   "provenance: transitions apply only to MessageWriteOrigin::Local inserts and to the acknowledgement op",
   "CLI (atm) reads TaskRow/TaskEventRow through atm_storage::contract, the same path nudge-template-override-store.toml grants it; daemon crates import through atm_core::boundary",
 ]
@@ -544,7 +571,7 @@ for the AX.4 list command.
 ### C6 — write provenance carrier
 
 ```rust
-// crates/atm-storage/src/contract.rs
+// crates/atm-storage/src/task_store.rs (enum); the two trait methods below stay in contract.rs
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageWriteOrigin { #[default] Local, Peer }
@@ -651,14 +678,17 @@ paths; `atm read` / `atm ack` argument shapes; `DeliveryRecipientSnapshot`;
    sync and async prepare paths and survive an envelope
    serialise/deserialise round trip under the key `taskComplete`.
 5. The replay claim holds for every scenario above (state,
-   `assignment_message_id`, `reminder_count`, `last_reminded_at`).
+   `assignment_message_id`, `reminder_count`, `last_reminded_at`,
+   `lead_notified_count`).
 6. Gates: `grep -rn 'UPDATE task_events\|DELETE FROM task_events' crates`
    empty; `grep -rn 'TaskState(' crates/atm-storage/src/contract.rs`
    empty; `grep -rn 'atm_storage::.*Task' crates/atm-http-runtime/src crates/atm-daemon-bootstrap/src`
    empty; `python scripts/check-nudge-taxonomy.py` passes with an
    unchanged allowlist; `boundary-guard` review of `task-store.toml`
    and `task-store-sqlite.toml` passes; ADR-061, the ADR-054 amendment, and requirements §7 merged;
-   `just validate` green.
+   `just validate` green; contract.rs size gate:
+   `awk '/^#\[cfg\(test\)\]/{exit} {n++} END{exit n>1000}' crates/atm-storage/src/contract.rs`
+   succeeds (non-test lines ≤ 1000).
 
 ## Required validation
 

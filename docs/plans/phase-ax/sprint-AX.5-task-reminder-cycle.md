@@ -56,7 +56,7 @@ eligible  := pending ∩ idle                                                # e
 prompted  := drain_eligible(eligible)                                      # existing drain runs FIRST; bounded by stats.prompted
 tasks     := match service_runtime.task_store():
                  Ok(store) => store
-                 Err(e)    => { warn!(error = %e, "task step skipped: task store unavailable"); save_stats; return }   # drain already ran
+                 Err(e)    => { warn on first failure only; stats.task_step_skipped = true; save_stats; return }   # drain already ran
 for member in idle ∪ blocked, in roster order:
     open := tasks.open_tasks(member)                            # non-Complete, oldest first
     target := the Active row in open, else the first Assigned row, else none
@@ -64,26 +64,25 @@ for member in idle ∪ blocked, in roster order:
     if member in prompted: last_attempt[member] := now; continue          # the drain's nudge rendered the Task body this tick
     if target.last_reminded_at is Some and now − it < TASK_REMINDER_INTERVAL_MS: continue
     if last_attempt[member] is Some and now − it < TASK_REMINDER_INTERVAL_MS: continue   # guards a store that failed to record
-    last_attempt[member] := now
     if member in blocked:
         tasks.record_reminder(member, target.task_id, now, Blocked)       # no prompt: Herdr rejects input to a blocked agent
-        stats.task_reminders_blocked += 1
+        stats.task_reminders_blocked += 1; last_attempt[member] := now
         continue
     if stats.prompted == HERDR_MAX_PROMPTS_PER_TICK: break
     dispatch := build_task_reminder_dispatch(service_runtime, member, target)          # C1
     match dispatch:
         Ok(None)          => continue                                    # assignee no longer Herdr-backed; nothing recorded
         Err(_)            => tasks.record_reminder(member, target.task_id, now, Unrenderable);
-                             stats.task_reminders_unrenderable += 1
+                             stats.task_reminders_unrenderable += 1; last_attempt[member] := now
         Ok(Some(dispatch)) =>
             match self.selector.select_emitter(&dispatch):                # line 311; the sealed core boundary
-                None          => log herdr_queue_poll_outcome outcome="reminder_target_not_present"; continue   # no record, no budget
+                None          => log herdr_queue_poll_outcome outcome="reminder_target_not_present"; continue   # no record, no budget, no stamp
                 Some(emitter) =>
                     match emitter.emit_received_message(dispatch, RequestDeadline::after(HERDR_REQUEST_DEADLINE)):   # line 350
                         Ok(_)                 => tasks.record_reminder(member, target.task_id, now, Emitted)
-                                                 stats.prompted += 1; stats.task_reminders += 1
-                        Err(HerdrUnavailable) => stats.breaker_open += 1         # no record; next tick retries
-                        Err(other)            => log; no record; next tick retries
+                                                 stats.prompted += 1; stats.task_reminders += 1; last_attempt[member] := now
+                        Err(HerdrUnavailable) => stats.breaker_open += 1         # no record, no stamp; next 5 s tick retries
+                        Err(other)            => log; no record, no stamp; next 5 s tick retries
 ```
 
 Properties that must hold and are each tested:
@@ -95,7 +94,11 @@ Properties that must hold and are each tested:
    then at most one per `TASK_REMINDER_INTERVAL_MS` (60 s) per member
    while the member stays idle with an open task. Both the stored
    `last_reminded_at` and the in-memory last-attempt guard enforce it,
-   so a store write failure cannot cause a burst.
+   so a store write failure cannot cause a burst. The guard is stamped
+   only when an outcome is recorded (`emitted`, `blocked`,
+   `unrenderable`) or the drain prompted the member; a breaker-open,
+   transient emit error, or absent emitter leaves it unset, so the next
+   5 s tick retries exactly as AC 4 promises.
 3. **Active wins.** A member with an `Active` task is never reminded of a
    different `Assigned` task.
 4. **Emit failure records nothing.** Breaker open or a Herdr error writes
@@ -121,9 +124,12 @@ Properties that must hold and are each tested:
    for an idle assignee. Runtime health records the member as `Blocked`,
    never `Active`.
 8. **A missing `TaskStore` disables only the task step.** When
-   `service_runtime.task_store()` errs, one warn-level log is written,
-   `task_reminders` stays 0, and `drain_eligible` still runs; queued-mail
-   delivery is never affected.
+   `service_runtime.task_store()` errs, `task_reminders` stays 0 and
+   `drain_eligible` still runs; queued-mail delivery is never affected.
+   The warning is logged on transition only (once when the store first
+   becomes unavailable, once on recovery), not on every 5 s tick, and
+   the poll-tick record carries `task_step_skipped: bool` so the
+   condition stays observable while the log stays quiet.
 
 Daemon-down behaviour is unchanged from queued mail: no reminder until
 the pump runs.
