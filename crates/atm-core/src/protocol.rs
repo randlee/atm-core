@@ -436,6 +436,7 @@ pub enum RuntimeMemberState {
     Offline,
     Idle,
     Active,
+    Blocked,
 }
 
 /// Current non-authoritative runtime observation for one roster member.

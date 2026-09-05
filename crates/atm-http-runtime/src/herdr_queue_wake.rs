@@ -32,6 +32,8 @@ pub const HERDR_POLL_INTERVAL_MS: u64 = 5_000;
 pub const HERDR_MAX_PROMPTS_PER_TICK: usize = 16;
 /// Consecutive no-input releases before one retry-budget attempt is spent.
 pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
+/// Minimum spacing between task reminders for one Herdr assignee.
+pub const TASK_REMINDER_INTERVAL_MS: u64 = 60_000;
 const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
 
 #[cfg(test)]
@@ -57,6 +59,7 @@ pub struct HerdrQueueWakePump {
     herdr_process: Arc<dyn HerdrProcessAdapter>,
     cursor: Arc<Mutex<usize>>,
     release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
+    clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
     #[cfg(test)]
     handoff_cleanup_test_gate: Arc<Mutex<Option<HandoffCleanupTestGate>>>,
@@ -77,10 +80,17 @@ impl HerdrQueueWakePump {
             herdr_process,
             cursor: Arc::new(Mutex::new(0)),
             release_streaks: Arc::new(Mutex::new(HashMap::new())),
+            clock: Arc::new(IsoTimestamp::now),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
             #[cfg(test)]
             handoff_cleanup_test_gate: Arc::new(Mutex::new(None)),
         }
+    }
+
+    #[must_use]
+    pub fn with_clock(mut self, clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>) -> Self {
+        self.clock = clock;
+        self
     }
 
     #[cfg(test)]
@@ -144,7 +154,7 @@ impl HerdrQueueWakePump {
     /// Runs one complete roster/list/claim/dispatch pass.
     pub async fn tick_once(&self) {
         let mut stats = HerdrQueueWakeStats {
-            last_tick_at: Some(IsoTimestamp::now()),
+            last_tick_at: Some((self.clock)()),
             ..HerdrQueueWakeStats::default()
         };
         let pending_store = match self.service_runtime.pending_nudge_store() {
@@ -589,7 +599,8 @@ fn member_order(left: &MemberKey, right: &MemberKey) -> std::cmp::Ordering {
 fn runtime_state(status: HerdrAgentStatus) -> RuntimeMemberState {
     match status {
         HerdrAgentStatus::Idle | HerdrAgentStatus::Done => RuntimeMemberState::Idle,
-        HerdrAgentStatus::Working | HerdrAgentStatus::Blocked => RuntimeMemberState::Active,
+        HerdrAgentStatus::Working => RuntimeMemberState::Active,
+        HerdrAgentStatus::Blocked => RuntimeMemberState::Blocked,
         HerdrAgentStatus::Unknown => RuntimeMemberState::Unknown,
     }
 }
