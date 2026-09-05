@@ -436,7 +436,7 @@ design decision in this plan):
 
 | Question | Needed by |
 |---|---|
-| CRLF vs LF on stdout/stderr JSON observed on a real Windows run | AY.5 evidence |
+| CRLF vs LF on stdout/stderr JSON observed on a real Windows run | AY.5 audit run |
 | Detached-child stdio and console behaviour of `herdr.exe` spawned by the daemon | AY.5 |
 | Pipe ACL / impersonation model in practice (same-user vs any local user) | AY.6 boundary revision |
 
@@ -945,7 +945,8 @@ line) in atm-herdr, one exemption line in the AI.11 guard, the AY.2
 public-item pin test, the NDJSON columns of `herdr-versions.md`, and the
 boundary TOML under P-E; AY.4/AY.5 do not touch those paths (AY.4:
 daemon-switch skill and governance docs; AY.5: `transport_cli.rs`, the
-installer's Windows branch, the audit doc, evidence). AY.6 is **not**
+installer's Windows branch, the audit doc; no evidence directory, ruling
+5). AY.6 is **not**
 parallel-safe with AY.3 (AYP-R3-011): both edit
 `crates/atm-architecture/tests/boundary_enforcement.rs` (AY.3's
 long-lived-child grep guard; AY.6's AI.11 exemption and pin-test
@@ -1627,7 +1628,7 @@ operation.
 
 ## Sprint AY.5: Windows process correctness and installer branch (size S, FastPC4)
 
-Branch `feature/ay5-windows-herdr-evidence`, created from
+Branch `feature/ay5-windows-herdr-process-installer`, created from
 `feature/ay4-daemon-switch-herdr` (stacked). Dependencies: must_follow
 AY.4 and preconditions P-C, P-D; parallel_safe AY.6. Dev agent: the
 named Windows agent (P-D). AY.5 does not dispatch while P-C or P-D is
@@ -2059,10 +2060,10 @@ AX does not wait on any AY sprint.
 ## Windows machine and team (Rand, 2026-09-05)
 
 - Windows testing runs on **FastPC4**. Rand will set up a Windows
-  `atm-dev` team on FastPC4; AY.5 dev, the Windows-observed audit rows
-  and the live-evidence deliverable execute there, inside a Herdr
-  session, with the daemon and Herdr installed per-user by
-  `daemon-switch`.
+  `atm-dev` team on FastPC4; AY.5 dev and the Windows-observed audit
+  rows, plus AY.7's live-evidence deliverable 3 (the phase's only
+  evidence owner, ruling 5), execute there, inside a Herdr session, with
+  the daemon and Herdr installed per-user by `daemon-switch`.
 - Cross-host messaging from FastPC4 has been unreliable because of VPN
   issues. Design: park one agent on the FastPC4 team whose only job is
   to report back regularly (on a fixed cadence and on every sprint
@@ -2313,3 +2314,12 @@ AX does not wait on any AY sprint.
   deliverable 3 spells the full evidence set inline and takes the
   release-readiness gate for Windows Herdr parity. Sprint map, Windows
   track, AX status note and risk 8 aligned.
+- r20 (2026-09-05): critical-plan-reviewer R11 (solar, on r19: 1
+  important) and plan-scope r10 (PASS, 1 wording). AYP-R11-001 and
+  AYS-R10-M1: the four stale AY.5-evidence references fixed (audit row
+  "AY.5 audit run"; parallel-safety file list has no evidence directory;
+  AY.5 branch renamed `feature/ay5-windows-herdr-process-installer`;
+  "Windows machine and team" attributes the live-evidence deliverable to
+  AY.7). AY.7 deliverable 3 is the sole normative evidence-owner
+  statement. Sweep phrases checked clean outside this ledger: "AY.5
+  evidence", "ay5-windows-herdr-evidence", "audit doc, evidence".
