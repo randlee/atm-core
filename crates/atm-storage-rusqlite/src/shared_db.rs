@@ -126,6 +126,22 @@ CREATE INDEX IF NOT EXISTS idx_peer_https_interfaces_enabled
 CREATE INDEX IF NOT EXISTS idx_peer_trusted_peers_enabled
     ON peer_trusted_peers(enabled);
 
+CREATE TABLE IF NOT EXISTS diagnostic_events (
+    id INTEGER PRIMARY KEY,
+    ts_unix_ms INTEGER NOT NULL,
+    level TEXT NOT NULL,
+    component TEXT NOT NULL,
+    code TEXT NULL,
+    correlation_id TEXT NULL,
+    origin TEXT NOT NULL,
+    message TEXT NOT NULL,
+    detail TEXT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_diagnostic_events_ts_unix_ms
+    ON diagnostic_events(ts_unix_ms);
+CREATE INDEX IF NOT EXISTS idx_diagnostic_events_component_ts_unix_ms
+    ON diagnostic_events(component, ts_unix_ms);
+
 -- AK.2 retires the worker-only reconciliation policy.  `IF EXISTS` makes the
 -- migration safe for both historical databases and fresh installs.
 DROP TABLE IF EXISTS peer_sync_policies;

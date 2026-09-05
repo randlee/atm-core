@@ -9,6 +9,7 @@
 
 mod analyst_query;
 mod control_path_pool;
+mod diagnostic_timeline;
 mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;
 mod mail_messages_schema;
@@ -60,6 +61,10 @@ use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TemplateCatalogSt
 use atm_storage::{
     AtmError, EffectiveReaderLane, EffectiveReaderLanes, IsoTimestamp, StorageFactory,
     StorageHandleParts, StorageHandles,
+};
+pub use diagnostic_timeline::{
+    DIAGNOSTIC_DETAIL_MAX_BYTES, DIAGNOSTIC_MAX_AGE_DAYS, DIAGNOSTIC_MAX_ROWS,
+    DIAGNOSTIC_PRUNE_BATCH, SqliteDiagnosticTimeline,
 };
 use graft_receiver_endpoint_store::SqliteGraftReceiverEndpointStore;
 use rusqlite::{Connection, OptionalExtension, params};
