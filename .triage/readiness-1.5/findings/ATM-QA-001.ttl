@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001" ;
+  triage:title "run_admission_capacity.os_account_home still resolves the Windows OS-account home from USERPROFILE for the ADR-026 durable-root safety check" ;
+  triage:description "qa-pr1178-r1 sibling sweep: scripts/smoke/run_admission_capacity.py os_account_home() resolved the Windows OS-account home via os.environ USERPROFILE, the same caller-controlled override that 67715df3b removed from benchmark_account.py, for the identical durable-root-safety check. Fixed on fix/1171-capacity-home-snapshot at 7b6dffd52 by delegating to benchmark_account.account_home (token-bound profile) and mapping BenchmarkAccountError to SmokeError, with two unit tests. Workspace sweep: no other harness-side USERPROFILE durable-root site; scripts/phase-aq/run_aq4_transfer_evidence.py uses USERPROFILE only as a transfer-environment passthrough and crates/ sites are product HOME resolution, out of scope." ;
+  triage:phaseId "readiness-1.5" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "harness-durable-root-safety" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T03:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-1171 ;
+  triage:foundAt "2026-09-05T02:42:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/FIX-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-001/FIX-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 829 ;
+  triage:snippet "def os_account_home() -> Path:" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "fix/1171-capacity-home-snapshot" ;
+  triage:headSha "7b6dffd52" ;
+  triage:occursIn <urn:atm:triage:worktree/FIX/7b6dffd52> .
+
+<urn:atm:triage:worktree/FIX/7b6dffd52>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/fix/1171-capacity-home-snapshot" ;
+  triage:branch "fix/1171-capacity-home-snapshot" ;
+  triage:headSha "7b6dffd52" ;
+  triage:orderIndex 1 .
