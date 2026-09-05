@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA1-017>
+  a triage:Finding ;
+  triage:findingId "AX5-QA1-017" ;
+  triage:title "ReadDeadline::new(HERDR_REQUEST_DEADLINE).expect() is reachable from the production tick path" ;
+  triage:description "AX.5 QA-1 (quality-mgr ax5-qa-r1, PR #1201 Final Quality Report 2026-09-05T12:38Z) at head da823baaa0018933f8daac388733c51eb14e9335. rust-qa-agent QA-003: crates/atm-http-runtime/src/herdr_queue_wake.rs:412 calls ReadDeadline::new(HERDR_REQUEST_DEADLINE).expect(...) on the production tick path; it is safe today only because the constant is fixed-positive, and a future edit to zero would panic at runtime instead of failing to compile. Fix: construct the deadline once (const/OnceLock validated at startup with a compile-time or startup assertion) or handle the Err by skipping the step with a warn." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RUST-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T12:44:25Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T12:38:08Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA1-017/AX5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA1-017/AX5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 412 ;
+  triage:snippet "ReadDeadline::new(HERDR_REQUEST_DEADLINE).expect(\"positive Herdr task reminder deadline\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:occursIn <urn:atm:triage:worktree/ax5-task-reminder-cycle/da823ba> .
+
+<urn:atm:triage:worktree/ax5-task-reminder-cycle/da823ba>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/ax5-task-reminder-cycle" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:orderIndex 5 .

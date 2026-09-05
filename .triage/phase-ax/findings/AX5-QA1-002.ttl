@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA1-002>
+  a triage:Finding ;
+  triage:findingId "AX5-QA1-002" ;
+  triage:title "Missing acceptance-criteria tests for AC1, AC2, AC4, AC7; AC6 only half covered" ;
+  triage:description "AX.5 QA-1 (quality-mgr ax5-qa-r1, PR #1201 Final Quality Report 2026-09-05T12:38Z) at head da823baaa0018933f8daac388733c51eb14e9335. req-qa: no test exercises the ack/--task-complete sequence (AC1), the 17-member reminder-path budget share (AC2), breaker-open/select_emitter-None during a reminder (AC4), or the no-TaskStore-installed drain-continues-with-one-warning path (AC7); AC6 is half covered (blocked state tested, but not transition from blocked back to idle with reminder emission). Acceptance criteria are at docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md:253. Fix: add one deterministic test per AC (clock-seam driven) and complete AC6 coverage." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T14:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T12:38:08Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA1-002/AX5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA1-002/AX5-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md" ;
+  triage:line 253 ;
+  triage:snippet "## Acceptance criteria" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5/da823baaa> .
+
+<urn:atm:triage:worktree/AX5/da823baaa>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax5-task-reminder-cycle" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:orderIndex 5 .

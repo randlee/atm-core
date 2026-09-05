@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA1-007>
+  a triage:Finding ;
+  triage:findingId "AX5-QA1-007" ;
+  triage:title "remind_open_tasks reads the task store for every candidate before the HERDR_MAX_PROMPTS_PER_TICK budget check; per-tick DB cost is O(candidates) with Burst missed-tick behaviour" ;
+  triage:description "AX.5 QA-1 (quality-mgr ax5-qa-r1, PR #1201 Final Quality Report 2026-09-05T12:38Z) at head da823baaa0018933f8daac388733c51eb14e9335. rust-service-hardening-agent RSH-003: remind_open_tasks (crates/atm-http-runtime/src/herdr_queue_wake.rs:365) performs a task-store read per candidate; the budget check lives inside emit_task_reminder (crates/atm-http-runtime/src/herdr_queue_wake.rs:448) and is reached only after the read. Per-tick DB read cost is therefore O(candidates) not O(budget); combined with tokio::time::interval's default MissedTickBehavior::Burst, a large due-candidate set risks sustained back-to-back tick overruns with no escape valve. Fix: check the remaining budget before issuing each read (stop reading once the budget is exhausted) and/or set MissedTickBehavior::Skip/Delay on the interval; add a test asserting reads stop at the budget." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T12:42:34Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T12:38:08Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA1-007/ax5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA1-007/ax5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 395 ;
+  triage:snippet "let Some(row) = self.read_due_task(reader.as_ref(), &candidate, now).await else {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:occursIn <urn:atm:triage:worktree/ax5/da823ba> .
+
+<urn:atm:triage:worktree/ax5/da823ba>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax5-task-reminder-cycle" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:orderIndex 5 .

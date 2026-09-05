@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA1-005>
+  a triage:Finding ;
+  triage:findingId "AX5-QA1-005" ;
+  triage:title "record_task_outcome stamps the cooldown guards only if the record_reminder DB write succeeds, after the Herdr prompt was already delivered; a transient write failure re-arms the reminder on the next 5s tick" ;
+  triage:description "AX.5 QA-1 (quality-mgr ax5-qa-r1, PR #1201 Final Quality Report 2026-09-05T12:38Z) at head da823baaa0018933f8daac388733c51eb14e9335. rust-service-hardening-agent RSH-002 (functional bug): record_task_outcome (crates/atm-http-runtime/src/herdr_queue_wake.rs:498) only stamps the in-memory cooldown guard last_task_attempt and the durable last_reminded_at when record_task_reminder (crates/atm-http-runtime/src/herdr_queue_wake.rs:524) succeeds, but the Herdr prompt has already been delivered unconditionally beforehand. A transient write failure right after a successful emit leaves both cooldown guards unset, so reminder_due (crates/atm-http-runtime/src/herdr_queue_wake.rs:540) re-arms the same member/task on the very next 5s tick instead of respecting the 60s TASK_REMINDER_INTERVAL_MS cadence, risking repeat-nudge spam. Fix: stamp the in-memory cooldown (and schedule/log the durable write failure) regardless of the durable write result once the prompt was emitted; add a test for emit-ok/write-fail -> no re-arm within the interval. Verified at committed HEAD da823baaa0018933f8daac388733c51eb14e9335 via git show: record_task_outcome (line 498) calls record_task_reminder (line 508) and returns early on failure (line 511) before stamp_task_attempt (line 521) runs, confirming the cooldown guard is skipped on a durable-write failure after prompt emission." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T12:38:08Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T12:38:08Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA1-005/AX5-QA1-005-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA1-005/AX5-QA1-005-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 498 ;
+  triage:snippet "async fn record_task_outcome(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:occursIn <urn:atm:triage:worktree/ax5/da823baaa> .
+
+<urn:atm:triage:worktree/ax5/da823baaa>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax5-task-reminder-cycle" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:orderIndex 5 .
