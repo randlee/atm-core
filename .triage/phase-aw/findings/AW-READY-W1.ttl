@@ -24,6 +24,22 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-W1/AX-INHERIT> ;
   triage:triageRecordVersion "1" .
 
+# RULING (Rand, relayed via fenix, 2026-09-05T21:05Z), msg-id
+# 01M1SNZVNRXQGW4NYBMJV3ECM5:
+# DEFER to phase-ay. Rand chose option 1 verbatim: "deferred to phase-ay by
+# Rand, 2026-09-05." Cross-reference: the phase-ay plan PR is #1214.
+# Effect: AW-READY-W1 no longer blocks integrate/phase-aw -> develop (#1199)
+# once the other 13 AW-READY records close. This ruling does NOT change
+# triage:severity/triage:status/triage:dispatchReady above (append-only, no
+# renumbering) -- it is recorded here as the authoritative disposition for
+# the phase-aw readiness gate; phase-ay owns follow-through on the
+# underlying Windows Herdr named-pipe backend work.
+# CLARIFICATION (same ruling): Windows Herdr nudge parity REMAINS a 1.5.x
+# release blocker via the release-readiness checklist -- Rand's earlier
+# rejection of the ADR-058 feature deferral stands. This ruling only says
+# phase-aw is not the phase that delivers it; it does not relax the
+# release-readiness requirement.
+
 <urn:atm:triage:occurrence/AW-READY-W1/ADR058>
   a triage:Occurrence ;
   triage:file "docs/adr/ADR-058-herdr-local-steer-backend-contract.md" ;
