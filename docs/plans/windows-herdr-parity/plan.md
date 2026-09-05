@@ -64,10 +64,11 @@ atm own Herdr and gated the daemon on Herdr being reachable.
    them with their provenance.
 5. **Herdr over the CLI transport works today; prove Windows once, on the
    target transport** (Rand, 2026-09-05, r19). No sprint runs a live
-   Windows evidence campaign for the CLI transport. AY.5 is limited to
+   Windows evidence campaign for the CLI transport. AY.7 is limited to
    Windows process correctness in `transport_cli.rs`, the Windows branch
    of the installer, and the audit columns; the single live Windows Herdr
-   evidence set of the phase is AY.7's, on the socket transport.
+   evidence set of the phase is AY.10's, on the socket transport after the
+   AY.9 cutover has merged.
 
 ## Baseline: the phase-ax Herdr contract is the starting point
 
@@ -82,7 +83,7 @@ table format. Any Herdr contract change that lands in phase AX before the
 cut is inherited by AY as-is. AY changes that contract only where this
 plan says so: it deletes the three Windows scope-out statements, adds
 HR-PLAT-001 and HR-LIFE-001, amends ADR-058 D3 for the transport pair,
-corrects the ADR-058 Herdr pin, and (AY.6 only) revises the boundary TOML
+corrects the ADR-058 Herdr pin, and (AY.8 only) revises the boundary TOML
 io_owns. Everything else in the AX contract is carried unchanged, and the
 "Request set" section below lists it from the AX.6 head.
 
@@ -187,7 +188,7 @@ Plan-declared schema rules (checked by the `schema-reviewer` agent, PR
 Before PR #1218 `crates/atm-herdr` had no version constant and a mismatch
 surfaced only as `HerdrError::ProtocolMismatch`. AY.1 (version table, drift
 procedure), AY.2 (recordings and replay) and AY.3 (doctor check) land
-rules 2 to 5 for the CLI transport on top of the #1218 constant; AY.6
+rules 2 to 5 for the CLI transport on top of the #1218 constant; AY.8
 extends the same matrix to the direct socket client.
 
 ### Mechanism: low-code by design (Rand, 2026-09-05)
@@ -214,7 +215,7 @@ mechanism is:
    fresh process against whatever Herdr is there.
 2. **`HERDR_MINIMUM_VERSION` is a doctor check, not a runtime branch.**
    Doctor runs `herdr --version` (CLI transport) or reads `ping.version`
-   (AY.6) and reports below-minimum as a finding with the remedy. The
+   (AY.8) and reports below-minimum as a finding with the remedy. The
    daemon does not gate calls on it: a too-old Herdr fails on its own
    terms (unknown flag, exit 2) and the breaker/doctor already surface
    that.
@@ -297,8 +298,8 @@ grounded in the tag rather than assumed.
 
 | Area | Change | Effect on atm |
 |---|---|---|
-| `agent prompt --wait` | Activity gate now requires an observed `working` or `blocked` status (8633a398, 7916be16; `src/api/wait.rs:177-320,516`); a prompt into an already-working agent skips the gate; done/idle churn without `working` ends in `timeout`; blocked-after-submit returns success with `agent_status: blocked`; `agent_prompt_stalled` message text changed (`wait.rs:662-664`); on Windows the dispatch is bounded by the caller timeout and returns `timeout`, not `server_unavailable` | Material for HR-CORE-002/003: the same nudge can end in `timeout` on a newer Herdr where v0.8.2 returned `agent_prompt_stalled`. atm keys on codes, never message text; AY.1 re-verifies (docs) and AY.2 tests the `HerdrError` mapping and the queue-pump/reminder behaviour under both outcomes (rule 3) |
-| Update model | `herdr update` keeps a compatible old server running (cc88b3b8, `CompatibleServerKept`); `herdr status` `restart_needed` keys on endpoint generation, not PROTOCOL_VERSION | An updated CLI binary against a still-running old server fails every CLI command with `protocol_mismatch`, and that state is now normal and sticky; doctor must make it legible; direct NDJSON (AY.3) is immune |
+| `agent prompt --wait` | Activity gate now requires an observed `working` or `blocked` status (8633a398, 7916be16; `src/api/wait.rs:177-320,516`); a prompt into an already-working agent skips the gate; done/idle churn without `working` ends in `timeout`; blocked-after-submit returns success with `agent_status: blocked`; `agent_prompt_stalled` message text changed (`wait.rs:662-664`); on Windows the dispatch is bounded by the caller timeout and returns `timeout`, not `server_unavailable` | Material for HR-CORE-002/003: the same nudge can end in `timeout` on a newer Herdr where v0.8.2 returned `agent_prompt_stalled`. atm keys on codes, never message text; AY.1 re-verifies (docs), AY.2 tests the `HerdrError` mapping, and AY.4 tests queue-pump/reminder behaviour under both outcomes (rule 3) |
+| Update model | `herdr update` keeps a compatible old server running (cc88b3b8, `CompatibleServerKept`); `herdr status` `restart_needed` keys on endpoint generation, not PROTOCOL_VERSION | An updated CLI binary against a still-running old server fails every CLI command with `protocol_mismatch`, and that state is now normal and sticky; doctor must make it legible; direct NDJSON (AY.8) is immune |
 | PROTOCOL_VERSION | 20 -> 22 (d79fd746, 99c23cd1); versions the bincode client socket, not the NDJSON API | See "PROTOCOL_VERSION and compatibility" |
 | Windows PATH | Installer prepends the versioned release dir to the user PATH (8162e265, `distribution/install.ps1:881-904`); `%LOCALAPPDATA%\Programs\Herdr\bin` stays as a junction alias | Never persist a resolved `herdr.exe` path; resolve per spawn; configured `binary_path` may point at the alias |
 | CRT | x86_64 build statically links the CRT (73825652) | No VC++ redistributable needed; arm64 not covered |
@@ -306,9 +307,9 @@ grounded in the tag rather than assumed.
 | `herdr server` | Entry unchanged (`src/main.rs:542`); `run_server` moved to `src/server/headless/bootstrap.rs` (207be3c7) with identical duplicate detection and restore | No change |
 | Endpoint resolution: `ipc.rs`, `session.rs`, `api/client.rs`, `socket_paths.rs` | Byte-identical across the range | No change |
 | NDJSON envelope, `agent.*` shapes, limits, `notification show`, CLI argv and exit codes | No change; additive methods and fields only (`ping.capabilities.endpoint_protocol_generation`, `workspace.close.close_group`, `worktree.*.trust_repository`, new `pane.*`, `command.invoke`, `integration.list`) | Parsers must tolerate unknown fields; AY.1 asserts it |
-| `events.subscribe` | Starts at the live sequence, no replay (20a500a7) | Irrelevant unless AY.6 subscribes; documented |
+| `events.subscribe` | Starts at the live sequence, no replay (20a500a7) | Irrelevant unless AY.8 subscribes; documented |
 | Autostart | Still none at HEAD (grep for login item / LaunchAgent / RunAtLoad / autostart / schtasks / Register-ScheduledTask / systemd / SMAppService: only SSH keepalive hits) | Confirms the installer-owned start-at-login entry design |
-| API pipe ACL | Unchanged: `restrict_socket_permissions` is a no-op on Windows (`src/ipc.rs:342-345`); the SDDL DACL at `ipc.rs:141-167` serves only the remote-attach bridge | AY.3 boundary revision records the API pipe as default-DACL |
+| API pipe ACL | Unchanged: `restrict_socket_permissions` is a no-op on Windows (`src/ipc.rs:342-345`); the SDDL DACL at `ipc.rs:141-167` serves only the remote-attach bridge | AY.8 boundary revision records the API pipe as default-DACL |
 
 Summary for the six operations atm uses (`agent prompt`, `agent wait`,
 `agent get`, `agent list`, `notification show`, `status server --json`):
@@ -347,11 +348,11 @@ between v0.8.2 and 3a822e81. AY.1 adds the v0.8.0 column.
   (`src/api/client.rs:55-61`), and on Windows an `Unsupported` timeout
   failure is swallowed (`src/api/client.rs:115-120`). atm's own process
   deadline plus kill-and-reap is the only bound on a hung `herdr.exe`;
-  the Windows kill/reap correctness item (AY.5) is mandatory, not hygiene.
+  the Windows kill/reap correctness item (AY.7) is mandatory, not hygiene.
 - ACL: Unix API socket is chmod 0600 (`src/server/socket_paths.rs:12`);
   on Windows `restrict_socket_permissions` is a no-op for the API pipe
   (`src/ipc.rs:342-345`); the same-user SDDL DACL exists only on the
-  private remote-attach listener (`src/ipc.rs:143-168`). AY.6 must treat
+  private remote-attach listener (`src/ipc.rs:143-168`). AY.8 must treat
   the Windows API pipe as reachable by any local user and record that in
   the boundary revision; doctor reports it.
 - Child env: every pane gets `HERDR_SOCKET_PATH`, `HERDR_BIN_PATH`,
@@ -436,9 +437,9 @@ design decision in this plan):
 
 | Question | Needed by |
 |---|---|
-| CRLF vs LF on stdout/stderr JSON observed on a real Windows run | AY.5 audit run |
-| Detached-child stdio and console behaviour of `herdr.exe` spawned by the daemon | AY.5 |
-| Pipe ACL / impersonation model in practice (same-user vs any local user) | AY.6 boundary revision |
+| CRLF vs LF on stdout/stderr JSON observed on a real Windows run | AY.7 audit run |
+| Detached-child stdio and console behaviour of `herdr.exe` spawned by the daemon | AY.7 |
+| Pipe ACL / impersonation model in practice (same-user vs any local user) | AY.8 boundary revision |
 
 ## Startup, environment and failure model (normative)
 
@@ -522,7 +523,9 @@ installed, doctor prints one line "herdr: not configured".
   it spawns falls back to Herdr's default socket, which is the socket
   Herdr just created. Nothing to detect, nothing to resolve.
 - Explicit configuration (optional, daemon config and roster):
-  `herdr.binary_path` (absolute path or directory containing `herdr` /
+  `herdr.transport` (`"cli"` or `"socket"`; the reader accepts the key in
+  AY.9, defaults to `"socket"` after cutover, and rejects every other
+  value as `ConfigParseFailed`), `herdr.binary_path` (absolute path or directory containing `herdr` /
   `herdr.exe`; default: PATH lookup by name as today), `herdr.socket_path`
   (absolute path of Herdr's API socket, on Windows the path string Herdr
   was started with; default: none) and, per roster member, the Herdr
@@ -533,17 +536,18 @@ installed, doctor prints one line "herdr: not configured".
   otherwise Herdr's default. On the CLI transport the child receives
   exactly one of `HERDR_SESSION=<session>` (HR-CORE-006, retained) or
   `HERDR_SOCKET_PATH=<socket_path>`, never both (Herdr would let the path
-  outrank the session); on the socket transport (AY.6) the same rule
+  outrank the session); on the socket transport (AY.8) the same rule
   selects the explicit path or the session-derived path. Config load
   rejects a relative `socket_path`. Doctor reports each endpoint with
-  its provenance (`session`, `socket_path`, `herdr-default`). When
+  its provenance (`session`, `socket_path`, `herdr_default`). When
   nothing is configured the child inherits the daemon's ambient
   environment unmodified. HR-CORE-006 is **retained unchanged**; the
-  previous revision's deletion of it is withdrawn. atm never reads
+  previous revision's deletion of it is withdrawn. The CLI fallback is
+  retained through atm 1.5.x and removed in atm 1.6.0. atm never reads
   `HERDR_SESSION` or `HERDR_SOCKET_PATH` from its own environment to
   synthesize a choice (requirements.md:153-160). Tests: AY.2 (env
   mapping and exclusivity, relative-path rejection), AY.3 (doctor
-  provenance per endpoint), AY.6 (socket target selection), AY.7 (round
+  provenance per endpoint), AY.8 (socket target selection), AY.9 (round
   trip through a configured `socket_path` against the fake socket
   server).
 
@@ -567,7 +571,7 @@ installed, doctor prints one line "herdr: not configured".
   `herdr.endpoints[]` (per endpoint: `session` or `"default"`,
   provenance, transport kind, `endpoint` (resolved socket/pipe name on
   the socket transport, `null` on CLI), binary resolution with
-  provenance `"configured"`/`"PATH"`, server `version`/`protocol` from
+  provenance `"configured"`/`"path"`, server `version`/`protocol` from
   `herdr status server --json` (CLI) or `ping` (socket), `state`,
   `remedy`, `capabilities.live_handoff` (true/false/null), `members[]`
   (entries carry exactly `name` and `outcome`: no `member` wrapper, no
@@ -588,9 +592,9 @@ installed, doctor prints one line "herdr: not configured".
 
   ```rust
   // crates/atm-core/src/doctor/herdr_state.rs. The DTOs below (plain data, serde derives,
-  // no I/O) land in AY.2 with HerdrDoctorProbe, which returns and consumes them; the
+  // no I/O) land in AY.3 with HerdrDoctorProbe, which returns and consumes them; the
   // HerdrEndpointDoctor port, ClosedHerdrEndpointDoctor, presence_findings and
-  // herdr_configured.rs are AY.3 stage 1 (AYF-R17-001). atm-core owns the DTOs and
+  // herdr_configured.rs are also AY.3. atm-core owns the DTOs and
   // the port because atm-core -> atm-herdr is a forbidden edge
   // (boundary_enforcement.rs:47); atm-herdr, which already depends on atm-core,
   // fills them. HerdrEndpointDoctor REPLACES HerdrPresenceDoctor (doctor/mod.rs:42;
@@ -601,18 +605,19 @@ installed, doctor prints one line "herdr: not configured".
   // probed twice. HerdrBreakerDoctor (doctor/report.rs:262) is unchanged. Every
   // variant carries its remedy via `fn remedy(&self) -> &'static str`; tests
   // iterate every variant on the CLI transport (AY.3) and again on the socket
-  // transport (AY.7).
+  // transport (AY.9).
   pub struct HerdrVersion(pub String);                 // as Herdr reports it; semver compare lives in atm-herdr
   pub enum HerdrTransportKind { Cli, Socket }
+  #[serde(rename_all = "snake_case")]
   pub enum HerdrEndpointProvenance { Session, SocketPath, HerdrDefault }
   pub struct HerdrEndpointObservation {
       pub session: Option<HerdrSession>,               // None = default endpoint
       pub provenance: HerdrEndpointProvenance,
       pub transport: HerdrTransportKind,
       pub endpoint: Option<String>,                    // AYS-R3-001: Display form of the resolved socket/pipe name,
-                                                       // filled by atm-herdr from its own HerdrEndpoint (AY.6/AY.7);
+                                                       // filled by atm-herdr from its own HerdrEndpoint (AY.8/AY.9);
                                                        // None on the CLI transport. HerdrEndpoint never enters atm-core.
-      pub binary: Option<(PathBuf, &'static str)>,     // resolved path + "configured" | "PATH" (CLI only)
+      pub binary: Option<(PathBuf, &'static str)>,     // resolved path + "configured" | "path" (CLI only)
       pub state: HerdrDoctorState,
       pub live_handoff: Option<bool>,                  // AYP-R5-004/AYP-R6-001: a probe fact, independent of `state`:
                                                        // Some(capabilities contains "live_handoff") whenever server_info/ping
@@ -627,10 +632,11 @@ installed, doctor prints one line "herdr: not configured".
   pub struct HerdrMemberPresence {
       #[serde(skip)] pub ordinal: usize,               // copied from the HerdrRosterMember: an ordering detail, not schema
       pub name: AgentName,
-      pub outcome: HerdrPresenceOutcome,               // plain externally tagged serde derive; the snapshot pins it
+      pub outcome: HerdrPresenceOutcome,               // internally tagged snake_case serde shape; snapshot-pinned
   }
   // JSON: endpoints[].members[] entries are exactly {"name", "outcome"}; the AY.3 snapshot test
   // asserts there is no `member` wrapper and no `ordinal` key (AYP-R8-002).
+  #[serde(tag = "kind", content = "detail", rename_all = "snake_case")]
   pub enum HerdrPresenceOutcome {
       Visible,                                         // `get` succeeded; any AgentStatus (Blocked included) is visible, as today
       Finding(DoctorFinding),                          // any non-infrastructure HerdrError, AgentNotFound included: the exact
@@ -652,6 +658,7 @@ installed, doctor prints one line "herdr: not configured".
   // AgentBlocked), one and several infrastructure-failed members, and a two-endpoint fixture
   // (default plus one session) with interleaved roster failures and two distinct
   // infrastructure reasons (only the first reason appears, once).
+  #[serde(tag = "kind", rename_all = "snake_case")]
   pub enum HerdrDoctorState {
       Ok { version: HerdrVersion, protocol: u32 },
       NotConfigured,
@@ -683,7 +690,7 @@ installed, doctor prints one line "herdr: not configured".
   pub struct ClosedHerdrEndpointDoctor;   // replaces ClosedHerdrPresenceDoctor; returns an empty Vec
   // Implemented once, in atm-daemon-bootstrap (replacement_handler.rs:
   // HerdrEndpointDoctorAdapter replaces HerdrPresenceDoctorAdapter) over atm-herdr's
-  // public `HerdrDoctorProbe` (AY.2). `MembersList` (team_admin.rs:93) is the doctor's
+  // public `HerdrDoctorProbe` (AY.3). `MembersList` (team_admin.rs:93) is the doctor's
   // view of one `load_team_roster` RosterSnapshot, built by
   // `ordered_roster_member_summaries` (doctor/mod.rs:679-698); the same instance feeds
   // `herdr_is_configured` below (AYS-R3-003).
@@ -694,7 +701,7 @@ installed, doctor prints one line "herdr: not configured".
   `HerdrError` and `HERDR_MINIMUM_VERSION`; it covers every `HerdrError`
   variant (`Other` is the exhaustive-match fallback; a test asserts no
   listed variant maps to `Other`).
-- Architecture and lifecycle tests (AY.3): (a) daemon starts and reaches
+- Architecture and lifecycle tests (AY.4): (a) daemon starts and reaches
   ready with no `herdr` binary on PATH and none configured, and a tmux
   nudge and a hermes graft nudge still succeed in that state; (b) same
   with a fake `herdr` that always returns `server_not_running`: the
@@ -706,9 +713,9 @@ installed, doctor prints one line "herdr: not configured".
 ### Herdr starts after atm has been running
 
 No special handling exists or is needed; the plan states the three
-mechanisms that make late start self-healing, and AY.3 tests them:
+mechanisms that make late start self-healing, and AY.4 tests them:
 
-1. Every call spawns a fresh `herdr` client process (AY.6: a fresh
+1. Every call spawns a fresh `herdr` client process (AY.8: a fresh
    connection per command). There is no session or connection state to
    re-establish, and the traits were configured from roster data, not
    from Herdr's runtime state.
@@ -817,7 +824,7 @@ polling loops beyond Herdr's own completion.
 
 Governance (AYP-R2-005, AYP-R3-005): the Herdr entry is outside
 REQ-P-DAEMON-SWITCH-001 (which covers only the matched ATM pair's
-temporary typed overlay). AY.4 therefore lands, as its first deliverable,
+temporary typed overlay). AY.5 therefore lands, as its first deliverable,
 an amendment approved with this plan: `REQ-P-DAEMON-SWITCH-002` and an
 ADR-053 addendum defining a separate, explicit subcommand `daemon-switch
 herdr-entry {install,remove,status}`. It is **operator-invoked only**:
@@ -831,7 +838,7 @@ the ownership marker inside each entry (comment/label `managed-by=atm
 daemon-switch`) are in "Installer". The owned object is not one file
 (AYP-R3-005): LaunchAgent plist plus bootstrap state (macOS), user unit
 file plus `enable` state (Linux), scheduled-task definition plus enabled
-state (Windows). AY.4 gives it its own small transaction, one journal
+state (Windows). AY.5 gives it its own small transaction, one journal
 record type stored in the ADR-053 journal directory (never the ATM
 overlay journal itself): `plan (render object, digest) -> durable
 journal {entry id, platform, digest, phase} -> atomic write ->
@@ -868,7 +875,7 @@ variant names (snake_case) with that variant's `remedy` text beside it;
 there is no aggregate `herdr.state` (AYP-R4-002).
 Every code has a fixture and a snapshot test of the JSON shape.
 
-User-experience contract (AY.3 and AY.4 acceptance, verified by req-qa):
+User-experience contract (AY.3 through AY.6 acceptance, verified by req-qa):
 
 - `atm doctor` herdr section ends in exactly one `HerdrDoctorState`
   variant per configured endpoint (table in "Failure behaviour"), each
@@ -892,98 +899,94 @@ User-experience contract (AY.3 and AY.4 acceptance, verified by req-qa):
 
 ## Sprint map, parallel tracks and stacking
 
-Seven sprints, numbered sequentially. Dependency relations follow
-`.claude/skills/plan-hardening/sprint-planning-guidelines.md`: every
-related sprint is listed as `must_follow` or `parallel_safe` with a
-rationale; `parallel_safe` means non-intersecting crates/modules, public
-contracts, artifacts and ownership.
+Ten sprints, numbered sequentially. Each row maps to exactly one
+authoritative sprint file. Relations follow
+`.claude/skills/plan-hardening/sprint-planning-guidelines.md`:
+`must_follow` names a development/merge dependency, while
+`parallel_safe` asserts non-intersecting implementation modules, public
+contracts, artifacts, and ownership.
 
-| Sprint | Title | Size | Track | must_follow | parallel_safe with | Machine | recommended_agent |
-|---|---|---|---|---|---|---|---|
-| AY.1 | Herdr audit, version table, requirement and ADR text | S | Docs | (P-A, P-B) | AY.2 | any | Cipher-311d/fast |
-| AY.2 | Private transport enum, CLI transport pure motion, atm-core doctor DTOs, portable fake-herdr with per-version recordings | M | Core | (P-A, P-B) | AY.1 | macOS/Linux | arch-ctm/deep-reasoning |
-| AY.3 | Startup/failure model: doctor port + boundary record, config wiring, breaker-open lead notification, lifecycle tests | L | Core | AY.2 | none | macOS/Linux | arch-ctm/deep-reasoning |
-| AY.4 | Installer: REQ-P-DAEMON-SWITCH-002 / ADR-053 addendum, `daemon-switch herdr-entry`, `--restart-herdr` (restart only) | L | Core | AY.3 | AY.6 | macOS/Linux | arch-ctm/deep-reasoning |
-| AY.5 | Windows process correctness, per-user installer branch, audit columns (no evidence campaign) | S | Windows | AY.4 (+ P-C, P-D) | AY.6 | FastPC4 | named Windows dev agent (P-D) |
-| AY.6 | Direct socket/pipe transport: code, fake socket server, compatibility matrix (no cutover, no composition change) | L | Socket | AY.1, AY.2, AY.3 (+ P-E) | AY.4, AY.5 | macOS/Linux (Windows lane in CI) | arch-ctm/deep-reasoning |
-| AY.7 | Socket cutover, CLI fallback retention, the phase's live evidence on macOS and Windows | M | Join | AY.5, AY.6 | none | macOS + FastPC4 | arch-ctm/deep-reasoning |
+| Sprint | Production closure | Size | Track | must_follow | parallel_safe with | Machine |
+| --- | --- | --- | --- | --- | --- | --- |
+| AY.1 | Audit, version ledger, requirements, ADR, architecture/history correction | S | Docs | P-A, P-B | AY.2 | any |
+| AY.2 | Private CLI transport foundation plus portable fake/replay fixtures | M | Core stack | P-A, P-B | AY.1 | macOS/Linux + Windows CI |
+| AY.3 | Endpoint doctor/config boundary and end-to-end activation | M | Core stack | AY.2, P-E(a) | none | macOS/Linux + Windows CI |
+| AY.4 | Breaker escalation and real-composition failure/recovery lifecycle | M | Core stack | AY.3 | AY.8 | macOS/Linux + Windows CI |
+| AY.5 | Transactional Herdr entry install/remove/status/repair | M | Core stack | AY.4 | AY.8 | macOS/Linux + platform fakes |
+| AY.6 | Coordinated Herdr restart/live-handoff and ATM-restart preflight | M | Core stack | AY.5 | AY.8 | macOS/Linux + platform fakes |
+| AY.7 | Windows process correctness and installer verification | S | Core/Windows stack | AY.6, P-C, P-D | AY.8 | FastPC4 |
+| AY.8 | Direct socket/pipe transport, fake server, compatibility/equivalence | L | Socket | AY.1, AY.2, AY.3, P-E(b) | AY.4, AY.5, AY.6, AY.7 | macOS/Linux + Windows CI |
+| AY.9 | Socket-default cutover, CLI fallback, doctor projection, lifecycle/CI | M | Join | AY.7, AY.8 | none | all CI lanes |
+| AY.10 | Live macOS/Windows proof and phase disposition | S | Proof | AY.9, P-C, P-D | none | rand-m5 + FastPC4 |
 
-Tracks that run in parallel once `integrate/phase-ay` exists:
+Execution waves are explicit:
 
-- **Docs track:** AY.1 alone. Touches `docs/atm-herdr/`, `docs/adr/`,
-  `docs/architecture.md`, `docs/plans/phase-aq/` only.
-- **Core track:** AY.2 -> AY.3 -> AY.4 (a `must_follow` chain). Touches
-  `crates/atm-herdr`, `crates/atm-daemon-bootstrap`, `crates/atm-core`
-  doctor, `crates/atm-architecture` tests, the `daemon-switch` skill.
-- **Socket track:** AY.6 after AY.1, AY.2 and AY.3 have all merged into
-  `integrate/phase-ay`; its branch is created from `integrate/phase-ay`
-  at that point, never stacked (AYS-R4-001; AYP-R3-011: AY.3 lands the
-  long-lived-child grep guard in `boundary_enforcement.rs` and AY.6 edits
-  the same file), in parallel with AY.4 and AY.5. Touches the new
-  `crates/atm-herdr/src/transport_socket.rs` and its test fixtures, the
-  `Socket(SocketIo)` arm in `crates/atm-herdr/src/transport.rs`, one
-  `mod transport_socket;` line in `crates/atm-herdr/src/lib.rs`, the
-  tokio `net` feature in `crates/atm-herdr/Cargo.toml` if not already
-  on, one exemption line in the AI.11 guard (`crates/atm-architecture`),
-  the `herdr-versions.md` NDJSON columns, and the boundary revision
-  (P-E). The exact file set is compared against AY.3/AY.4/AY.5 in the
-  AY.6 section.
-- **Windows track:** AY.5 after AY.4, on FastPC4. Touches
-  `transport_cli.rs` `cfg(windows)` code, the Windows branch of the
-  installer, and `docs/atm-herdr/windows-process-audit.md`; no evidence
-  directory (ruling 5).
-- **Join:** AY.7 after AY.5 and AY.6 have both merged into
-  `integrate/phase-ay`. It owns every composition change of the phase
-  that touches transport selection.
+| Wave | Work that may overlap | Entry/exit rule |
+| --- | --- | --- |
+| 1 | AY.1 and AY.2 | Both start after P-A/P-B; AY.1 is standalone and AY.2 is the stack bottom. |
+| 2 | AY.1 completion, AY.2 review, AY.3 development | AY.3 starts after AY.2 development/contracts are pushed and P-E(a) is approved; AY.2 merges before AY.3. |
+| 3 | AY.3 review and AY.4 development | AY.4 is stacked after AY.3 development is pushed; AY.3 merges before AY.4. |
+| 4 | AY.4 and AY.8 | AY.8 starts independently only after AY.1, AY.2, and AY.3 merge and P-E(b) is approved. |
+| 5 | AY.5 and AY.8 | AY.5 stays in the linear stack; AY.8 remains an independent sibling. |
+| 6 | AY.6 and AY.8 | Same independent concurrency; neither branch merges the unmerged sibling. |
+| 7 | AY.7 and AY.8 | AY.7 also requires P-C/P-D and FastPC4; AY.8 has no physical-host gate. |
+| 8 | AY.9 | Starts from `integrate/phase-ay` only after AY.7 and AY.8 merge. |
+| 9 | AY.10 | Starts only after AY.9 merges; proof uses that merged integration SHA. |
 
-`parallel_safe` rationale per pair: AY.1/AY.2 share no files (docs vs
-crate code; the version table in AY.1 points at the recordings AY.2
-commits under `crates/atm-herdr/tests/fixtures/herdr-versions/`, it does
-not duplicate them). AY.6 versus AY.4/AY.5: AY.6 adds one module and
-one fixture directory, edits `transport.rs` (enum arm) and `lib.rs` (mod
-line) in atm-herdr, one exemption line in the AI.11 guard, the AY.2
-public-item pin test, the NDJSON columns of `herdr-versions.md`, and the
-boundary TOML under P-E; AY.4/AY.5 do not touch those paths (AY.4:
-daemon-switch skill and governance docs; AY.5: `transport_cli.rs`, the
-installer's Windows branch, the audit doc; no evidence directory, ruling
-5). AY.6 is **not**
-parallel-safe with AY.3 (AYP-R3-011): both edit
-`crates/atm-architecture/tests/boundary_enforcement.rs` (AY.3's
-long-lived-child grep guard; AY.6's AI.11 exemption and pin-test
-amendment), so AY.6 must_follow AY.3 as a multi-parent join, not a
-stack (stacking rule below). AY.6 does not touch
-`build_replacement_handler` (crates/atm-daemon-bootstrap), doctor, the
-installer or `transport_cli.rs`: transport selection in the composition
-root is AY.7's first deliverable, so the only composition edits of the
-phase are AY.3 (CLI construction site) and AY.7 (selection and default),
-which are sequential.
+The sole linear stack is AY.2 -> AY.3 -> AY.4 -> AY.5 -> AY.6 ->
+AY.7. Use the `/gh-stack` skill for every operation on that stack.
+Branches are created with `sc-git-worktree` from the immediate parent so
+each child carries the parent's unmerged work. Because this is an external
+worktree/PR workflow, use `gh stack link` to create or update remote stack
+state, then verify actual PR bases directly:
 
-Stacking rule (gh-stack, as used in phase AX): every `must_follow` chain
-is a stack rooted on `integrate/phase-ay`. Branches are created with
-`sc-git-worktree` from the parent branch (not from integrate) so the
-child carries the parent's unmerged work. After the child PR opens,
-`gh stack link --base integrate/phase-ay <parent-branch> <child-branch>`
-records the dependency (append with `gh stack link <stack-number>
-<branch>`); `gh stack view --json` is the status source. Merge-forward
-trigger per the guidelines: parent development pushed, not QA; fenix
-merges parent -> child with a merge commit before every dev or fix round
-on the child. PR-completion trigger: the parent PR merges into
-`integrate/phase-ay` first, then the child. Never `gh stack rebase`,
-`gh stack sync` or `gh stack merge` in this repo (merge commits only, no
-rebase, no force-push); `gh pr merge --merge` per PR in stack order.
-Parallel-safe sprints are independent branches off `integrate/phase-ay`,
-not stacked. A sprint with several parents (AY.6 after AY.1, AY.2 and AY.3; AY.7
-after AY.5 and AY.6) is never stacked on any parent (AY.3's branch
-already carries AY.4 as its stacked child, and gh-stack refuses a branch
-shared by two stacks): it is dispatched only after every parent PR has
-merged into `integrate/phase-ay`, and its branch is created from
-`integrate/phase-ay` at that point (AYS-R4-001). No merge of an
-unmerged sibling into a sprint branch, ever.
+```bash
+gh stack link --base integrate/phase-ay \
+  feature/ay2-herdr-transport-seam \
+  feature/ay3-herdr-endpoint-doctor-config \
+  feature/ay4-herdr-breaker-lifecycle \
+  feature/ay5-herdr-entry-control-plane \
+  feature/ay6-herdr-restart-coordination \
+  feature/ay7-windows-herdr-process-installer
 
-Sprint docs: `/plan-hardening` produces one sprint doc per row at
-`docs/plans/phase-ay/sprint-AY.<n>-<slug>.md` with a single authoritative
-list each for deliverables, acceptance criteria and required validation,
-mirroring the sections below; QA reviews from those docs.
+gh pr view feature/ay2-herdr-transport-seam --json headRefName,baseRefName,state
+gh pr view feature/ay3-herdr-endpoint-doctor-config --json headRefName,baseRefName,state
+gh pr view feature/ay4-herdr-breaker-lifecycle --json headRefName,baseRefName,state
+gh pr view feature/ay5-herdr-entry-control-plane --json headRefName,baseRefName,state
+gh pr view feature/ay6-herdr-restart-coordination --json headRefName,baseRefName,state
+gh pr view feature/ay7-windows-herdr-process-installer --json headRefName,baseRefName,state
+```
+
+All commands are noninteractive. The parent-development-pushed event,
+not QA, triggers a merge commit from the parent into each active child
+before a development or fix round. Parent PRs merge first. Repository
+policy narrows the general `/gh-stack` workflow: never run `gh stack
+rebase`, `gh stack sync`, or `gh stack merge`; do not force-push; merge
+each PR in dependency order with `gh pr merge --merge`.
+
+AY.1 is standalone. AY.8 is a standalone three-parent join created from
+the merged integration head; AY.9 is a standalone two-parent join; AY.10
+is a standalone proof sprint that must observe the merged AY.9 head.
+None is passed to `gh stack link`, and no unmerged sibling is ever merged
+into one of those branches.
+
+The sprint files below are authoritative. Each has mandatory YAML
+frontmatter with exact scalar branch/worktree/stack-parent/PR-target
+values, plus one authoritative list each for production-ready
+deliverables, acceptance criteria, paths to delete, required validation,
+and explicit non-closure. QA reviews from these files, not from the
+umbrella:
+
+- [`sprint-AY.1-herdr-audit-docs.md`](../phase-ay/sprint-AY.1-herdr-audit-docs.md)
+- [`sprint-AY.2-herdr-transport-seam.md`](../phase-ay/sprint-AY.2-herdr-transport-seam.md)
+- [`sprint-AY.3-herdr-endpoint-doctor-config.md`](../phase-ay/sprint-AY.3-herdr-endpoint-doctor-config.md)
+- [`sprint-AY.4-herdr-breaker-lifecycle.md`](../phase-ay/sprint-AY.4-herdr-breaker-lifecycle.md)
+- [`sprint-AY.5-herdr-entry-control-plane.md`](../phase-ay/sprint-AY.5-herdr-entry-control-plane.md)
+- [`sprint-AY.6-herdr-restart-coordination.md`](../phase-ay/sprint-AY.6-herdr-restart-coordination.md)
+- [`sprint-AY.7-windows-herdr-process-installer.md`](../phase-ay/sprint-AY.7-windows-herdr-process-installer.md)
+- [`sprint-AY.8-herdr-socket-transport.md`](../phase-ay/sprint-AY.8-herdr-socket-transport.md)
+- [`sprint-AY.9-herdr-socket-cutover.md`](../phase-ay/sprint-AY.9-herdr-socket-cutover.md)
+- [`sprint-AY.10-herdr-live-proof.md`](../phase-ay/sprint-AY.10-herdr-live-proof.md)
 
 Common preconditions:
 
@@ -1015,20 +1018,22 @@ Common preconditions:
   over ATM to `<agent>@atm-dev.fastpc4` when the cross-host link is up;
   the ssh path is the fallback and the pane-management channel. The
   parked reporter agent remains the source of truth for evidence.
-- P-E (AY.3 and AY.6): two boundary files, each reviewed by the
+- P-E (AY.3 and AY.8): two boundary rulings, each reviewed by the
   `boundary-guard` agent, run by fenix before the owning sprint is
   dispatched; devs never author boundary TOML without this ruling. Owner:
   fenix. (a) AY.3: the new `boundaries/atm-core/herdr-endpoint-doctor.toml`
-  described under "Failure behaviour" (AYP-R4-003), reviewed after AY.2
-  merges and before AY.3 dispatch; the approved file is AY.3's first
-  commit. (b) AY.6: the revision below, reviewed after AY.2 merges and
-  before AY.6 dispatch; the approved diff is AY.6's first commit.
+  described under "Failure behaviour" (AYP-R4-003), together with AY.3's
+  public-contract inventory update to the atm-herdr boundary record,
+  reviewed after AY.2's transport foundation and recordings are pushed and before AY.3
+  development starts; AY.2 still merges before AY.3. The approved file is
+  AY.3's first commit. (b) AY.8: the revision below, reviewed after AY.3
+  merges and before AY.8 dispatch; the approved diff is AY.8's first commit.
   Proposed diff to `boundaries/atm-herdr/herdr-process-adapter.toml`:
 
   ```toml
   [ownership]
   io_owns = [
-    "tokio_process_spawn",          # CLI transport (retained until the AY.7 fallback window closes)
+    "tokio_process_spawn",          # CLI transport (retained until the AY.9 fallback window closes)
     "herdr_argv_construction",      # CLI transport (same)
     "herdr_local_socket_client",    # new: UDS / named-pipe NDJSON client, transport_socket.rs only
     "herdr_json_error_parsing",
@@ -1037,894 +1042,35 @@ Common preconditions:
   ```
 
   `io_forbidden` is unchanged. The two CLI keys are dropped in the sprint
-  that removes the CLI fallback (after AY.7, tracked in the project plan),
-  not in AY.6.
+  that removes the CLI fallback (atm 1.6.0, after AY.9), not in AY.8.
 
 Approval blocker (AYP-R2-011): P-C's readiness proof (date and ATM
 message id of the reporter's first round-trip) and P-D's exact FastPC4
 ATM identity are placeholders until Rand fills them. Plan approval
 (P-B) requires both filled or an explicit dated line from Rand deferring
-AY.5/AY.7 scheduling; AY.5 is never dispatched on a placeholder.
+AY.7/AY.10 scheduling; AY.7 is never dispatched on a placeholder.
 
 Common acceptance for every sprint: merge gate 0 blocking / 0 important /
 0 minor in scope, quality-mgr PASS posted on the PR, CI green at merge
 time (never a dispatch gate), no flaky-test tolerance, frozen files
 untouched without a written ruling, no tokio in atm-core.
 
-## Sprint AY.1: Herdr audit, version table, requirement and ADR text (size S)
+## Phase AY exit gate (AY.10 disposition)
 
-Branch `feature/ay1-herdr-audit-docs`. Docs only; no Rust changes.
-Dependencies: must_follow none (P-A, P-B); parallel_safe AY.2 (no shared
-files). recommended_agent Cipher-311d/fast.
-
-Deliverables:
-
-1. `docs/atm-herdr/windows-process-audit.md`: one row per item (expected
-   behaviour, Herdr file:line at v0.8.0, v0.8.2 and 3a822e81, observed,
-   verdict: no action / production fix / upstream request), folding in
-   the facts sections of this plan and the two drift tables; the v0.8.0
-   -> v0.8.2 per-operation diff for the six operations and the error-code
-   delta; Windows-observed columns left explicitly "AY.5" until filled.
-2. `docs/atm-herdr/herdr-versions.md` (schema rule 4): one row per Herdr
-   release from 0.8.0, with PROTOCOL_VERSION, the six operations' argv
-   and JSON shapes, drift items, and the path of the AY.2 recording;
-   v0.8.2 recorded as the first official Windows release artifact (a
-   packaging fact, explicitly not a compatibility floor: the minimum is
-   0.8.0 on every platform); the rule 5 drift-check procedure (paths,
-   command, where results go).
-3. Requirements: delete the Windows scope-out at
-   `docs/atm-herdr/requirements.md:376-378`; add HR-PLAT-001 (identical
-   command set, error table and breaker semantics on all platforms;
-   transport differences never surface as feature differences) and
-   HR-LIFE-001 (daemon never depends on Herdr for startup or readiness;
-   Herdr failures are per-call; no daemon restart on Herdr upgrade);
-   HR-TEST-006 amended for the portable fixture.
-4. ADR-058: amend D3 (UDS on macOS/Linux, named pipe on Windows, cited
-   from v0.8.2 and 3a822e81); replace the `d79fd746`/21 pin with
-   `HERDR_MINIMUM_VERSION` (ADR-061); record the decision that the AI.11
-   retired-transport ban targets atm's own IPC listener; the guard
-   (`RetiredWindowsTransportDetector` in
-   `crates/atm-architecture/tests/boundary_enforcement.rs`) today scans
-   every file under `crates/` and bans the identifiers `named_pipe` and
-   `NamedPipe`, so ADR-058 states that AY.6 narrows the guard by exactly
-   one exempted module (`crates/atm-herdr/src/transport_socket.rs`), the
-   ban staying in force everywhere else; delete the Windows scope-out at
-   line 576.
-5. `docs/architecture.md` Herdr section updated; AQ2.6 deliverable 5
-   marked superseded (history kept); the atm-herdr boundary TOML
-   `[contracts]` block updated (no io_owns change): `request_types` adds
-   `HerdrClientConfig` and `HerdrRosterMember` (the atm-core-owned probe
-   input of `HerdrDoctorProbe::observe`); `response_types` adds
-   `HerdrEndpointObservation` (the atm-core-owned doctor DTO returned by
-   `HerdrDoctorProbe`); `error_types` adds `AtmError`, which
-   `HerdrClientConfig::validate` returns as `ConfigParseFailed`. The
-   `## error_types` bullet of `docs/atm-herdr/boundaries.md` (today:
-   atm-herdr "never constructs an `AtmError` internally") is rewritten to
-   name the exactly two construction sites, `From<HerdrError> for
-   AtmError` (lib.rs:81, existing) and `HerdrClientConfig::validate`
-   (AY.2). The list mirrors every public cross-crate input, output and
-   error type of the AY.2 surface; boundary-guard checks the list against
-   the AY.2 signatures pinned in AY.2 acceptance 5 (AYP-R8-001).
-   Crate-private types (`HerdrIo`, `HerdrOp`,
-   `HerdrEnvelope`, `HerdrErrorEnvelope`, `HerdrServerInfo`, `CliIo`,
-   `SocketIo`) are not contracts and are not listed. boundary-guard
-   reviews the AY.1 diff against exactly this list.
-
-Acceptance criteria:
-
-1. Each deliverable's file exists with the named sections.
-2. `grep -n "out of scope" docs/atm-herdr/requirements.md docs/adr/ADR-058*` returns no Windows scope-out.
-3. Req-qa can enumerate HR-PLAT-001 and HR-LIFE-001.
-4. Schema-reviewer finds ADR-061 cited and no newest-Herdr assumption.
-5. `ls docs/adr/ADR-061-*.md | wc -l` prints 1 on the branch.
-
-Validation:
-
-1. Docs-only PR: no full CI cycle is required (repo rule).
-2. `just lint spell`, `just lint adr-index` and `just lint boundaries`
-   (for the TOML `[contracts]` edit), each exit 0 (`just lint <target>`
-   takes one target; there is no `lint-docs` recipe).
-
-Out of scope: any code; the Windows-observed audit columns (AY.5).
-
-## Sprint AY.2: private transport enum, CLI transport pure motion, portable fake-herdr (size M)
-
-Branch `feature/ay2-herdr-transport-seam`. Dependencies: must_follow none
-(P-A, P-B); parallel_safe AY.1. recommended_agent arch-ctm/deep-reasoning.
-Runs on macOS/Linux with all three CI lanes as the merge gate; no Windows
-machine, no live Herdr.
-
-Design rule (AYP-R2-001/003, AYP-R3-001, low-code): `HerdrProcessAdapter`
-in `crates/atm-herdr/src/lib.rs` stays the **only public trait** of
-atm-herdr, with its existing per-call `session: Option<&HerdrSession>`
-and `RequestDeadline` parameters unchanged, so per-member routing to
-different Herdr sessions keeps working exactly as in AX. The transport
-choice is a crate-private enum beneath `HerdrProcessInvoker`; there is
-no second public trait, no `async_trait`, no process-shaped response
-type, and no session in the client config. atm-herdr's public surface
-grows in AY.2 by exactly two concrete types, both consumed only by the
-composition root (`atm-daemon-bootstrap`, an allowed edge):
-`HerdrClientConfig` (input) and `HerdrDoctorProbe` (diagnostics, one
-method returning the atm-core-owned composite observation). An architecture test pins
-atm-herdr's public item list to today's list plus those two; AY.6 amends
-that one test once, adding `herdr_api_endpoint`, `HerdrHostEnv` and
-`HerdrEndpoint` (consumed by the composition root and rendered by the
-doctor probe for endpoint reporting, AYS-R3-002); no other sprint
-touches it.
-
-Deliverables:
-
-1. **Private transport enum.** New `crates/atm-herdr/src/transport.rs`
-   (crate-private):
-
-   ```rust
-   /// Explicit, daemon-global client configuration. Identity (agent, session)
-   /// stays per call on HerdrProcessAdapter; this holds only how to reach herdr.
-   pub struct HerdrClientConfig {
-       pub binary_path: Option<PathBuf>,  // file or directory; None = PATH lookup by name, resolved on every spawn
-       pub socket_path: Option<PathBuf>,  // Herdr's HERDR_SOCKET_PATH override; absolute; a per-call session outranks it
-   }
-   impl HerdrClientConfig {
-       /// Default::default() = PATH lookup, no socket_path (the AX behaviour).
-       /// Pure validation, no I/O (AYS-R5-002): Err on a relative `socket_path` or a relative
-       /// `binary_path`, as `AtmError::new(AtmErrorCode::ConfigParseFailed, <detail naming the key>)`,
-       /// the existing typed config contract (config/discovery.rs:37-47); no String error, no new
-       /// error type or helper (AYP-R7-003). Tested in AY.2 without any file; AY.3's
-       /// `herdr_config.rs` reader calls it after parsing and wraps the error once with the
-       /// file path, this error as the cause (its mapping table, AYP-R8-003).
-       pub fn validate(&self) -> Result<(), AtmError>;
-   }
-   /// One Herdr operation as the adapter already expresses it (argv builders at
-   /// lib.rs:631-657 keep producing the CLI form; the socket form is AY.6).
-   pub(crate) enum HerdrOp<'a> {
-       Prompt { agent: &'a AgentName, text: &'a str },
-       Wait   { agent: &'a AgentName, until: &'a [HerdrAgentStatus], timeout: Duration },
-       Get    { agent: &'a AgentName },
-       List,
-       Notify { title: &'a str, body: &'a str },
-       ServerStatus,                       // doctor only: `status server --json` / ping
-   }
-   /// Herdr's NDJSON envelope, parsed once; both transports produce exactly this.
-   pub(crate) struct HerdrEnvelope { pub result: Option<serde_json::Value>, pub error: Option<HerdrErrorEnvelope> }
-   pub(crate) struct HerdrErrorEnvelope { pub code: String, pub message: String, pub retry_after_ms: Option<u64> }
-   /// Crate-private transport. AY.2 has one variant; AY.6 adds Socket(SocketIo).
-   pub(crate) enum HerdrIo { Cli(CliIo) }
-   impl HerdrIo {
-       pub(crate) async fn call(&self, op: HerdrOp<'_>, session: Option<&HerdrSession>, deadline: RequestDeadline)
-           -> Result<HerdrEnvelope, HerdrError>;
-       pub(crate) async fn server_info(&self, session: Option<&HerdrSession>, deadline: RequestDeadline)
-           -> Result<HerdrServerInfo, HerdrError>; // doctor, per endpoint
-   }
-   pub(crate) struct HerdrServerInfo { pub version: String, pub protocol: u32, pub capabilities: Vec<String> }
-   // HerdrProcessInvoker { breaker, io: HerdrIo }; HerdrProcessInvoker::new(breaker, HerdrClientConfig)
-   // constructs HerdrIo::Cli. HerdrError: the existing closed enum, unchanged.
-   // HERDR_MINIMUM_VERSION already exists (PR #1218, 29e483e50); used by doctor (AY.3), never as a runtime branch.
-
-   /// crates/atm-herdr/src/doctor_probe.rs. Public concrete type, no trait (M2, AYS-R2-003).
-   pub struct HerdrDoctorProbe { io: HerdrIo, config: HerdrClientConfig }
-   impl HerdrDoctorProbe {
-       pub fn new(config: HerdrClientConfig) -> Self;                       // CLI transport; AY.7 adds the socket form
-       /// Never fails: every HerdrError becomes a HerdrDoctorState; compares against HERDR_MINIMUM_VERSION here.
-       /// One server_info (version, protocol, capabilities -> live_handoff: Option<bool>, kept whenever the
-       /// server answered) plus the existing bounded `get` per member (min(remaining, 2s) each, as
-       /// today) under BreakerPolicy::Bypass; HerdrError -> HerdrPresenceOutcome mapped here by
-       /// `presence_finding` (the AX `herdr_presence_finding`, moved verbatim into this crate), so the
-       /// adapter only groups roster members, with their roster ordinal, by endpoint
-       /// (AYP-R5-001/004, AYP-R6-001/002, AYP-R7-001).
-       pub async fn observe(&self, session: Option<&HerdrSession>, members: &[HerdrRosterMember], deadline: RequestDeadline)
-           -> atm_core::doctor::HerdrEndpointObservation;
-   }
-   ```
-
-   The atm-core DTO file `crates/atm-core/src/doctor/herdr_state.rs`
-   (`HerdrEndpointObservation`, `HerdrMemberPresence`,
-   `HerdrPresenceOutcome`, `HerdrRosterMember`, `HerdrDoctorState`,
-   `HerdrVersion`, `HerdrTransportKind`, `HerdrEndpointProvenance`, each
-   state with its `remedy`; code under "Failure behaviour") lands in AY.2
-   with this deliverable, because `HerdrDoctorProbe::observe` returns and
-   consumes it and AY.2 must compile alone (AY.3 must_follow AY.2). It is
-   plain data: serde derives, no port, no I/O, no boundary record. The
-   `HerdrEndpointDoctor` port, `ClosedHerdrEndpointDoctor`,
-   `presence_findings`, `herdr_configured.rs` and the boundary TOML stay
-   AY.3 stage 1 (AYF-R17-001, fenix).
-
-   `HerdrEnvelope -> AgentSnapshot / HerdrError` (parsers at lib.rs
-   675-770) stay in lib.rs (pure motion) and transport-independent;
-   `timeout` and `agent_prompt_stalled` map to the same atm outcome. The
-   io::Error to `HerdrError` translation lives in `CliIo`. Notify argv
-   stays exactly `notification show <title> --body <body> --sound
-   request` (HR-CORE-010). `HerdrProcessAdapter` gains no method:
-   doctor reaches `server_info` through `HerdrDoctorProbe` above. Per
-   call, `CliIo` sets exactly one of `HERDR_SESSION` or
-   `HERDR_SOCKET_PATH` in the child environment ("Endpoint precedence"
-   in "Daemon startup"); `session_environment` is extended, not
-   replaced, so the AX fixture stays valid.
-2. **CLI transport.** `transport_cli.rs`: today's `run_command_with_binary`
-   (lib.rs:555-625) and `session_environment` moved verbatim into
-   `CliIo`. Pure motion: the entire ADR-058 fixture suite, including
-   `session_environment_is_only_present_for_an_explicit_session`
-   (develop a7aebefb8 lib.rs:1113) and every atm-herdr check in
-   `crates/atm-architecture/tests/boundary_enforcement.rs`, passes on
-   macOS and Linux with zero fixture edits (zero-regression oracle).
-   Binary resolution honours `binary_path` (file or directory) before
-   PATH, on every spawn, never cached; missing binary is
-   `ServerUnavailable` naming what was searched. `server_info` runs
-   `herdr status server --json` under the same deadline.
-3. **Portable fake-herdr and recordings.** Test-only fake herdr Rust
-   binary (`crates/atm-herdr/tests/support/fake_herdr/main.rs`, test-only
-   `[[bin]]`, located via `CARGO_BIN_EXE_fake_herdr` so cargo supplies
-   the `.exe` suffix) replaces /bin/sh, so all six process tests run on
-   all three CI lanes with identical assertions. Modes: exit 0, exit 1,
-   stderr JSON envelope (`server_not_running`, `agent_prompt_stalled`,
-   `timeout`, `protocol_mismatch`), stdout JSON line, sleep past
-   deadline, echo argv and HERDR_SESSION, `status server --json` with a
-   configurable version, and a replay mode that serves recorded
-   responses from `crates/atm-herdr/tests/fixtures/herdr-versions/<version>/`
-   (one directory per recorded release: `0.8.2/` today, captured from
-   the reference checkout at the tag, committed byte-for-byte, each with
-   a `manifest.json` naming the version, PROTOCOL_VERSION and the six
-   operations; `herdr-versions.md` cites the manifests rather than
-   restating them), plus a `v0.8.0-blocked-prompt` delta mode. The
-   conformance suite runs once per recorded version and once per delta
-   mode. One-off in this sprint: the ADR-058 suite is also run against
-   the real v0.8.0 and v0.8.2 macOS artifacts (both published) and the
-   result is noted in the PR, so the 0.8.\* claim is grounded in
-   binaries, not only in recordings. Byte-exact LF output via write_all, never a .cmd shim. New
-   tests: success stdout parse through a real child; argv/HERDR_SESSION
-   round trip with two different sessions in one invoker; version switch
-   between two calls with no restart; unknown-field tolerance. Parsers
-   tolerate a trailing `\r`. HR-TEST-006 still holds. No-flaky rule:
-   deterministic fake, injected deadlines, hard bounds.
-
-Acceptance criteria:
-
-1. Zero-regression oracle green on macOS and Linux (ADR-058 suite,
-   boundary_enforcement atm-herdr checks, no fixture edits).
-2. The windows-latest CI lane executes the process-behaviour suite.
-3. Conformance replay passes for every directory under
-   `fixtures/herdr-versions/` (each with a `manifest.json`) and for
-   every delta mode; the one-off runs against the real v0.8.0 and v0.8.2
-   macOS artifacts are recorded in the PR.
-4. `HerdrProcessAdapter`'s signatures are unchanged (`git diff` on the
-   trait block is empty); two sessions in one invoker route correctly
-   (test).
-5. No `async_trait` dependency added; `HerdrIo`, `HerdrOp`,
-   `HerdrEnvelope`, `HerdrServerInfo` are `pub(crate)`; atm-herdr's
-   public item list equals the AX list plus `HerdrClientConfig` and
-   `HerdrDoctorProbe` (architecture test; AY.6 amends it to add its three
-   items, AYS-R3-002); the same test pins the two cross-crate signatures
-   `HerdrDoctorProbe::observe(&self, Option<&HerdrSession>,
-   &[HerdrRosterMember], RequestDeadline) -> HerdrEndpointObservation` and
-   `HerdrClientConfig::validate(&self) -> Result<(), AtmError>`, so the
-   TOML `[contracts]` list of AY.1 deliverable 5 and the surface cannot
-   drift (AYP-R8-001).
-6. `socket_path` and `binary_path`: relative path rejected by
-   `HerdrClientConfig::validate` with `AtmErrorCode::ConfigParseFailed`
-   and a detail naming the key (pure, no file I/O; the file reader is
-   AY.3, AYS-R5-002, AYP-R7-003); child env has
-   exactly one of `HERDR_SESSION` / `HERDR_SOCKET_PATH` per call (tests).
-7. Official benchmark shows no hot-path regression (see Validation 3).
-8. Boundary TOML io_owns unchanged.
-
-Validation:
-
-1. `just validate` (full workspace gate: lint, boundaries, docs,
-   architecture, tests); `cargo test -p atm-herdr` for the focused loop.
-2. `python3 .just/check_line_counts.py`.
-3. `just benchmark-official --branch integrate/phase-ay` from the dedicated
-   benchmark account per `docs/plans/phase-ao2/readiness.md`; pass =
-   exit 0 against the published floors; evidence path is the run's
-   published report directory, cited in the PR.
-
-Out of scope: composition changes; doctor runtime, port, report
-assembly and CLI rendering (the doctor DTO file is deliverable 1's,
-AYF-R17-001); installer; Windows-specific code; socket transport.
-
-## Sprint AY.3: startup/failure model (size L)
-
-Branch `feature/ay3-herdr-startup-failure-model`, created from
-`feature/ay2-herdr-transport-seam` (stacked). Dependencies: must_follow
-AY.2 (uses `HerdrClientConfig`, `HerdrIo`, `HerdrDoctorProbe`, fake-herdr);
-parallel_safe none (AY.6 must_follow AY.3, AYP-R3-011: both edit
-`boundary_enforcement.rs`). recommended_agent arch-ctm/deep-reasoning.
-Size L (AYS-R5-001; the boundary record, the doctor port over the AY.2
-DTOs, the presence correlation and the config reader were added by the
-review rounds; the estimate is unchanged by the DTO move) with the same
-internal order AY.4 uses (AYS-R2-005): **stage 1**
-is the P-E(a) boundary TOML as the first commit, then the whole of
-deliverable 2 (port over the AY.2 DTOs, both `HerdrEndpointDoctor` impls including
-`HerdrEndpointDoctorAdapter` over a `HerdrDoctorProbe` built from
-`HerdrClientConfig::default()`, `herdr_configured.rs`,
-`presence_findings`, impl-count test, doctor JSON), pushed and reviewed
-by fenix in the PR before **stage 2**, which is exactly deliverables 1
-and 3 (the `herdr_config.rs` reader, composition wiring of the file
-config into the invoker and the adapter's probe, escalation extension)
-plus the lifecycle tests (a) to (k). The stage boundary is the
-deliverable boundary: nothing in deliverable 1 is stage 1, and the
-exact-two impl-count gate is green on the stage-1 push (AYS-R6-001,
-AYP-R7-002);
-quality-mgr reviews the finished sprint once. Rand's seven-sprint ruling
-holds; nothing is split out.
-
-Deliverables:
-
-1. Composition: the one `HerdrProcessInvoker::new(breaker, config)`
-   site in `build_replacement_handler` (today `::new(breaker)` only,
-   replacement_handler.rs:308) fed by `HerdrClientConfig` from the
-   optional `[herdr]` section of `$HOME/.atm.toml` (`binary_path`,
-   `socket_path`), read by a new `herdr_config.rs` beside the existing
-   `atm_temp_config.rs` reader in atm-daemon-bootstrap (AYP-R5-002;
-   sessions stay per member, per call, from roster data as in AX):
-
-   ```rust
-   // crates/atm-daemon-bootstrap/src/herdr_config.rs (AY.3), same shape as
-   // atm_temp_config.rs::daemon_atm_config(env: &dyn EnvSource) -> Option<AtmConfig>.
-   /// Reads the optional `[herdr]` table of `$HOME/.atm.toml`. No file or no table ->
-   /// Ok(HerdrClientConfig::default()) (PATH lookup, no socket_path: the AX behaviour).
-   /// Every Err is AtmError::new(AtmErrorCode::ConfigParseFailed, detail), built with the
-   /// existing constructors only (atm-storage error.rs:18,53; `AtmError::config_invalid` does
-   /// not exist, AYP-R7-003), one row per failure class (AYP-R8-003):
-   ///   unresolvable home        -> detail "cannot resolve the home directory for .atm.toml [herdr]"; no cause
-   ///   unreadable file          -> detail names the file; .with_cause(the io::Error)
-   ///   malformed TOML           -> detail names the file; .with_cause(the toml deserializer error)
-   ///   unknown `[herdr]` key    -> detail names the file and the key (deny_unknown_fields); .with_cause(the deserializer error)
-   ///   `validate` Err           -> detail names the file and the key; .with_cause(the validate AtmError, whose detail names the key)
-   /// The daemon then fails startup exactly as it does for any other invalid `.atm.toml`
-   /// value (fail closed, never a silent default). Keys: `binary_path`, `socket_path`, both
-   /// optional strings (AYS-R5-002).
-   pub(crate) fn daemon_herdr_client_config(env: &dyn EnvSource) -> Result<HerdrClientConfig, AtmError>;
-   ```
-
-   Composition also passes that `HerdrClientConfig` to the
-   `HerdrDoctorProbe` held by stage 1's `HerdrEndpointDoctorAdapter`
-   (deliverable 2), replacing the `HerdrClientConfig::default()` it is
-   built with in stage 1. Deliverable 1 is stage 2 in full (AYS-R6-001).
-   No probe, no wait, no launch, no version chosen at startup.
-2. Doctor `herdr` section (stage 1 in full, AYS-R6-001): the
-   `HerdrEndpointDoctor` port in atm-core over the AY.2 DTOs (code in
-   "Failure behaviour"; AYF-R17-001); the `HerdrEndpointDoctorAdapter` in atm-daemon-bootstrap
-   (replacing `HerdrPresenceDoctorAdapter` and the `HerdrPresenceDoctor`
-   port; its `impl` carries the ADR-001 `Sealed` marker and is the one
-   production impl site permitted by
-   `boundaries/atm-core/herdr-endpoint-doctor.toml` (P-E, first commit
-   of AY.3) and its `docs/atm-core/boundaries.md` section, enforced by
-   the impl-count architecture test that lands in the same stage,
-   AYP-R4-003, AYP-R7-002) over a `HerdrDoctorProbe` built with
-   `HerdrClientConfig::default()` until deliverable 1 wires the file
-   config; the Herdr-configured predicate (roster has at least one
-   Herdr-backend member) defined once in atm-core and exposed through
-   `atm doctor --json` for AY.4:
-
-   ```rust
-   // crates/atm-core/src/herdr_configured.rs (new, one function, no state)
-   /// True when the daemon should construct a Herdr transport, install the
-   /// Herdr start-at-login entry (AY.4) and report the doctor `herdr` section.
-   /// Pure: takes already-loaded roster data, never touches I/O or config.
-   pub fn herdr_is_configured(roster: &MembersList) -> bool {
-       roster.members.iter().any(|m| matches!(
-           m.local_message_received_backend(),
-           Some(LocalMessageReceivedBackend::Herdr { .. })
-       ))
-   }
-   // MembersList / MemberSummary (team_admin.rs:52-93) and LocalMessageReceivedBackend
-   // (delivery_channel.rs) are existing atm-core types; this is the same filter the AX
-   // presence probe uses (replacement_handler.rs:139-144 at a7aebefb8). There is no
-   // `enabled` flag and no HerdrBackendConfig (AYP-R5-002). MembersList
-   // is built from one `load_team_roster` RosterSnapshot by
-   // `ordered_roster_member_summaries` (doctor/mod.rs:679-698); a doctor run builds it
-   // once and passes the same instance to this predicate and to
-   // `HerdrEndpointDoctor::observe`, so `configured` and `endpoints[]` never disagree
-   // (AYS-R3-003). The dev names these types exactly, adds no new type.
-   ```
-
-   Then one `HerdrEndpointObservation`
-   per distinct configured endpoint, each variant with its remedy;
-   server version and protocol from `HerdrDoctorProbe::observe` (`herdr
-   status server --json`) compared with `HERDR_MINIMUM_VERSION` inside
-   atm-herdr; presence data is the `members` list of the same observation
-   (the existing bounded `get` per Herdr-backend member under
-   `BreakerPolicy::Bypass`, outcomes typed by atm-herdr, never cleared by
-   server state), rendered by `presence_findings` in atm-core in roster
-   order with one global `HerdrUnavailable` Info, equal to the AX
-   adapter's `Vec<DoctorFinding>` (AYP-R5-001, AYP-R6-002, AYP-R7-001);
-   `live_handoff: Option<bool>` is filled from
-   `HerdrServerInfo.capabilities` whenever the server answered, including
-   `BelowMinimum` and `ClientServerMismatch` (Herdr master
-   `src/cli/status.rs:176-187,301-329` emits it with `compatible: false`),
-   and snapshotted for v0.8.0, v0.8.2 and 3a822e81 (AYP-R5-004,
-   AYP-R6-001); the breaker stays the
-   separate `herdr.breaker` report; no socket/pipe path computed by atm.
-   `atm doctor --json` gains `herdr.configured` (bool),
-   `herdr.endpoints[]` (deterministic order: `default`, then sessions
-   sorted bytewise; snapshot test), `herdr.breaker`; no aggregate
-   `herdr.state`/`herdr.remedy` (AYP-R4-002); an unreadable config or roster yields
-   `herdr.configured: null` plus an error field, so `daemon-switch`
-   fails closed.
-3. One escalation per breaker-open through the AX.6 helper
-   `crates/atm-http-runtime/src/herdr_escalation.rs::escalate(runtime,
-   herdr_process, task_store, daemon_home, team, mail_body, notification,
-   kind) -> EscalationOutcome` (`pub(crate)`, verified at 5120e0800:139;
-   no rename), so the breaker-open call site lives in atm-http-runtime
-   next to the queue-wake pump that already observes the breaker, with an
-   `EscalationNotification` carrying the doctor state text:
-   queued ATM mail to the lead and configured recipients is the durable
-   path, Herdr desktop notify is best-effort, dedup keyed on the
-   breaker's open timestamp, never the mail body (HR-SAFE-003 guard
-   extended to the new call site).
-4. Lifecycle tests, real-startup integration with negative proof (the
-   daemon-composed-feature rule): (a) daemon reaches ready with no
-   `herdr` binary and none configured; tmux and hermes nudges succeed;
-   (b) fake herdr always `server_not_running`: breaker opens, doctor
-   reports, daemon stays up, one notification; (c) grep guard: no code
-   path in atm-daemon-bootstrap or atm-http-runtime spawns `herdr server`
-   or any long-lived Herdr child; (d) fake herdr enters the
-   `protocol_mismatch` state mid-run: doctor text, one notification,
-   recovery on the next half-open; (e) connection reset during a `wait`:
-   no duplicate prompt, pending mail re-nudged by the pump; (f) daemon
-   restarted with queued mail: backlog drains; (g) below-minimum fake:
-   doctor finding, calls fail on Herdr's own terms; (h) every
-   `HerdrDoctorState` variant is produced by a fake-herdr mode or config
-   fixture and rendered with its remedy, and no listed `HerdrError`
-   variant maps to `Other`; (i) breaker opens while the fake's
-   `notification show` fails: lead mail and recipient mail are written,
-   `notify_ok == false`, exactly one escalation for the open cycle; (j)
-   open breaker: the Bypass probe still reports the live endpoint state
-   and `herdr.breaker` reports open; (k) roster with two named sessions
-   plus one default member yields three endpoint records with correct
-   provenance, and a configured `socket_path` yields provenance
-   `socket_path` for members without a session.
-
-Acceptance criteria:
-
-1. Tests (a) through (k) present and passing on all three lanes.
-2. Req-qa can map every `HerdrDoctorState` variant to a test.
-3. Escalation count asserted at exactly one per breaker cycle, with mail
-   written even when Herdr notify fails.
-4. `atm doctor --json` schema for `herdr.*` documented in
-   `docs/atm/cli-reference-1-5-0.md` and covered by a snapshot test that
-   asserts `members[]` entries carry exactly `name` and `outcome`
-   (AYP-R8-002).
-5. RULE-003 respected (new production code outside herdr_queue_wake.rs).
-6. `boundaries/atm-core/herdr-endpoint-doctor.toml` is the first commit
-   and matches the P-E-approved file; `just lint boundaries` passes; the
-   impl-count test finds exactly two `HerdrEndpointDoctor` impls;
-   `HerdrPresenceDoctor` no longer exists in the workspace (grep gate)
-   (AYP-R4-003).
-7. `daemon_herdr_client_config` tests: no file, file without `[herdr]`,
-   both keys set, unknown key, malformed TOML, unresolvable home,
-   unreadable file, relative `socket_path`, relative `binary_path`; every
-   error case asserts `AtmErrorCode::ConfigParseFailed` plus the detail
-   (file named, key named where its row says so) and the presence or
-   absence of a cause, row by row against the `herdr_config.rs` mapping
-   table (AYS-R5-002, AYP-R7-003, AYP-R8-003); the stage-1 push (boundary
-   TOML plus deliverable 2) is
-   reviewed by fenix before stage 2 starts (AYS-R5-001, AYS-R6-001).
-8. `presence_findings` zero-regression tests (visible in every
-   `AgentStatus`, not-visible, failed, infrastructure-failed, and the
-   two-endpoint interleaved fixture with two distinct infrastructure
-   reasons) pass with the whole ordered `Vec<DoctorFinding>` equal to the
-   AX adapter's on the same recordings (roster order, one global
-   `HerdrUnavailable` Info, AYP-R7-001);
-   `live_handoff` is `Some(true)` on a `ClientServerMismatch` fixture whose
-   server advertises it (AYP-R6-001/002); `herdr_is_configured` tested
-   against a roster with tmux, hermes and Herdr members (AYP-R5-002).
-
-Validation:
-
-1. `just validate`; `cargo test -p atm-core -p atm-http-runtime` for the
-   focused loop.
-2. `python3 .just/check_line_counts.py`.
-3. The architecture guard suite (part of `just validate`).
-
-Out of scope: installer changes (AY.4), Windows (AY.5).
-
-## Sprint AY.4: installer (size L)
-
-Branch `feature/ay4-daemon-switch-herdr`, created from
-`feature/ay3-herdr-startup-failure-model` (stacked). Dependencies:
-must_follow AY.3 (consumes `atm doctor --json` `herdr.configured` and
-`herdr.endpoints[]`); parallel_safe AY.6. recommended_agent
-arch-ctm/deep-reasoning (governance text plus a small platform-native
-transaction). Scope is the `daemon-switch` control plane
-(REQ-P-DAEMON-SWITCH-001, ADR-053, `.claude/skills/daemon-switch/SKILL.md`).
-Size L (AYS-R2-005) and internal order: deliverables 0 and 1
-(governance text, predicate fixtures) are pushed and reviewed by fenix
-in the PR before 2 and 3 (entry transaction, restart coordination)
-start; quality-mgr reviews the finished sprint once. Rand's seven-sprint
-ruling holds; nothing is split out.
-
-Deliverables:
-
-0. **Governance.** `REQ-P-DAEMON-SWITCH-002` in `docs/requirements.md`
-   and an ADR-053 addendum, transcribed from the "Governance" and "Error
-   inventory" paragraphs of "Upgrade and restart coordination" (approved
-   with this plan): explicit, operator-invoked subcommand `daemon-switch
-   herdr-entry {install,remove,status [--repair]}`, never run implicitly;
-   identifiers per endpoint; ownership marker; the entry transaction
-   (journal record type, plan/write/register/verify, repair); refusal
-   rules and error codes; fail-closed on ambiguity.
-1. **Configured predicate consumption.** `daemon-switch` decides
-   "Herdr-configured" only from `atm doctor --json` (`herdr.configured`
-   must be exactly `true`; `false`, `null`, missing or a doctor error
-   means not configured and, for `install`, a refusal naming the
-   reason). No Python re-implementation of the Rust predicate. Fixtures
-   prove the decision for: true, false, null with error, malformed
-   JSON, doctor exit non-zero.
-2. **Herdr start-at-login entries** via `herdr-entry install`, only
-   when configured: one entry per distinct configured endpoint
-   ("Installer": `herdr server` or `herdr --session <name> server`,
-   deterministic identifiers), macOS LaunchAgent (`RunAtLoad`, no
-   `KeepAlive`), Linux user unit, Windows per-user logon task under the
-   same account as the daemon, each written through the entry
-   transaction with the journal record; `herdr-entry remove` removes
-   only marker-bearing entries; `status --repair` completes or rolls
-   back an incomplete journal; session-0 / service installs on Windows
-   refused with `HERDR_ENTRY_ACCOUNT_MISMATCH`; the skill doc's install
-   procedure gains the step.
-3. **`--restart-herdr <endpoint>`** (restart only, one endpoint per
-   invocation, AYP-R4-001) per "Upgrade and restart coordination":
-   endpoint resolved against doctor `herdr.endpoints[]` (unknown,
-   ambiguous and `socket_path` cases refused with their codes); scoped
-   `server live-handoff` when the installed binary is newer than that
-   endpoint's server and its `capabilities.live_handoff` is `true`
-   (`ClientServerMismatch` state, AYP-R6-001); otherwise refuse
-   without `--stop-herdr-panes`, then scoped `server stop` and relaunch
-   via that endpoint's entry, verified by a doctor re-read; never
-   restarts the daemon; the daemon restart step refuses with
-   `HERDR_RESTART_ENDPOINTS_PENDING` while any endpoint is
-   `ClientServerMismatch`; rejected when not configured; never runs
-   `herdr update`.
-4. **Doctor** reports each entry's presence and marker per endpoint,
-   the stale-entry and missing-entry findings, and, on Windows, the
-   account and session of each task; skill doc updated.
-
-Acceptance criteria:
-
-1. Not-configured host: `herdr-entry install` refuses with
-   `HERDR_NOT_CONFIGURED` and writes nothing (test per fixture in
-   deliverable 1).
-2. Configured host: exactly one marker-bearing entry per distinct
-   endpoint written (fixtures: default only; default plus two named
-   sessions); `remove` removes them; `remove` with a foreign (unmarked)
-   entry present is a no-op with a message (tests).
-2b. Failure injection: crash between write and register, and between
-   register and verify, leaves a journal that `install`/`remove` refuse
-   with `HERDR_ENTRY_JOURNAL_ACTIVE` and `status --repair` resolves; a
-   marker-bearing entry whose digest differs is refused, never
-   overwritten (tests).
-2c. Every code in the error inventory has a fixture and a JSON snapshot
-   test; exit statuses 0/3/4 asserted.
-3. `install` with an unmarked entry of the same identifier refuses
-   (test).
-4. `--restart-herdr` refusals tested against a fake Herdr lacking
-   `live_handoff` (read from the doctor fixture's
-   `capabilities.live_handoff`, AYP-R5-004) and `null`; the positive
-   fixture (newer installed client, older running server in
-   `ClientServerMismatch`, `live_handoff: true`) selects the scoped
-   live-handoff path without `--stop-herdr-panes` (AYP-R6-001); against
-   doctor fixtures with
-   two configured endpoints and no selector
-   (`HERDR_RESTART_ENDPOINT_REQUIRED`), an unknown selector, a
-   `socket_path`-provenance endpoint, a mixed fixture (`socket_path` set
-   plus two named sessions: sessions restart, default refused,
-   AYP-R5-005), and a pending `ClientServerMismatch` on the daemon
-   restart step; the scoped argv (`herdr --session <name> server ...`)
-   and the `herdr_entry_identifier` result asserted per fixture for
-   default and named endpoints on macOS, Linux and Windows (AYP-R5-006);
-   the `herdr update` string does not appear in daemon-switch sources
-   (grep gate).
-5. The installer never starts Herdr itself outside `--restart-herdr`
-   and never probes whether it is running (grep gate).
-6. REQ-P-DAEMON-SWITCH-002 and the ADR-053 addendum present; req-qa can
-   map each rule to a test.
-
-Validation:
-
-1. `just validate`; daemon-switch's own test suite.
-2. Doc-lint for the requirements, ADR and skill doc updates.
-
-Out of scope: Windows live verification (AY.5); any Herdr upgrade
-operation.
-
-## Sprint AY.5: Windows process correctness and installer branch (size S, FastPC4)
-
-Branch `feature/ay5-windows-herdr-process-installer`, created from
-`feature/ay4-daemon-switch-herdr` (stacked). Dependencies: must_follow
-AY.4 and preconditions P-C, P-D; parallel_safe AY.6. Dev agent: the
-named Windows agent (P-D). AY.5 does not dispatch while P-C or P-D is
-unset; the phase proceeds with the other tracks.
-
-Deliverables:
-
-1. Windows process correctness inside `transport_cli.rs` only:
-   `herdr.exe` resolution via `binary_path` (file or directory) or PATH
-   on every spawn, never cached, alias directory documented as the
-   default configuration; CREATE_NO_WINDOW; kill-then-reap verified to
-   leave no orphan in `tasklist`; UTF-8 stdout handling. No
-   `cfg(windows)` outside the transport module (architecture test).
-2. Windows branch of the installer live-verified: logon tasks for the
-   daemon and Herdr in the user's session; refusal of service/session-0;
-   doctor account/session report.
-3. Windows-observed columns of `docs/atm-herdr/windows-process-audit.md`
-   filled from the live run (CRLF observation, detached stdio, console
-   flash, pipe name Herdr reports).
-4. No live Herdr evidence campaign (ruling 5): the CLI transport works
-   today, so nothing is proven twice. The installer verification run of
-   deliverable 2 records only the doctor `herdr` section it observed and
-   the audit observations of deliverable 3, each citing the FastPC4 run
-   (date, doctor output file). The phase's single live Windows Herdr
-   evidence set (round trips, negative cases, late start, upgrade,
-   latency, no console flash) is AY.7 deliverable 3, on the socket
-   transport.
-
-Acceptance criteria:
-
-1. Deliverables 1 through 3; deliverable 4 holds (grep gate: no
-   `evidence/` path added by this sprint).
-2. The Windows CI job stays the merge gate.
-3. Kill-then-reap and CREATE_NO_WINDOW are verified on FastPC4 (tasklist
-   shows no orphan; no console flash observed) and cited in the PR.
-
-Validation:
-
-1. `just validate` on Windows (FastPC4) and the three CI lanes.
-2. Audit column values cite the FastPC4 run they came from.
-
-Out of scope: socket transport on Windows (AY.7); any Herdr round-trip
-evidence (AY.7).
-
-## Sprint AY.6: direct socket/pipe transport, no cutover (size L)
-
-Branch `feature/ay6-herdr-socket-transport`, created from
-`integrate/phase-ay` once AY.1, AY.2 and AY.3 have all merged (a
-multi-parent join, not stacked; stacking rule under "Sprint map").
-Dependencies: must_follow AY.1 (`docs/atm-herdr/herdr-versions.md`
-exists; ADR-058 D3 amended text is the protocol authority), AY.2
-(`HerdrIo`, fake-herdr replay recordings) and AY.3 (its
-`boundary_enforcement.rs` grep guard precedes AY.6's edits to the same
-file, AYP-R3-011); precondition P-E (boundary revision approved);
-parallel_safe AY.4, AY.5 (see rationale above). recommended_agent
-arch-ctm/deep-reasoning. Size L is kept as one sprint on purpose: the
-Windows named-pipe branch is `cfg(windows)` code inside the same module,
-compiled and tested against the fake pipe server on the windows-latest
-CI lane; live Windows verification is AY.7, so AY.6 has no FastPC4
-dependency. Splitting it would create a sprint of a few dozen lines with
-its own QA cycle for no risk reduction.
-
-Deliverables:
-
-0. **Guard exemption.** `ai11_guarded_workspace_sources` in
-   `crates/atm-architecture/tests/boundary_enforcement.rs` excludes
-   exactly one extra path, `crates/atm-herdr/src/transport_socket.rs`,
-   with a rationale comment citing ADR-058 D3 and this sprint; a new
-   assertion pins the exemption list to that single entry so the
-   retired-transport ban keeps applying to every other file. Landed as
-   the second commit, after the P-E TOML diff.
-1. **Socket transport.** `crates/atm-herdr/src/transport_socket.rs`
-   adding `HerdrIo::Socket(SocketIo)` (crate-private) with no child
-   process:
-   `tokio::net::UnixStream` on unix, `tokio::net::windows::named_pipe`
-   on Windows (tokio already allowed in atm-herdr; no new crate edge).
-   The endpoint is exactly what Herdr's own client resolves for the
-   same inputs (AYP-R3-004; `src/api/client.rs` `ConnectionTarget`,
-   `src/session.rs` `api_socket_path_for`/`data_dir_for`,
-   `src/config/io.rs` `config_dir`; byte-identical v0.8.2..master):
-   explicit `socket_path` > session-derived > default;
-   `<config_dir>/herdr.sock` or `<config_dir>/sessions/<name>/herdr.sock`,
-   where `config_dir` is `$XDG_CONFIG_HOME/herdr` when that variable is
-   set (all platforms), else `~/.config/herdr` on macOS/Linux and
-   `%APPDATA%\herdr` on Windows (`herdr-dev` in Herdr debug builds is
-   never matched). On Windows the **same path string** is the pipe name:
-   Herdr hands it to `interprocess` `GenericNamespaced`, which prefixes
-   `\\.\pipe\` (`src/ipc.rs:44-51`), so atm connects to
-   `\\.\pipe\C:\Users\<user>\AppData\Roaming\herdr\herdr.sock`
-   (or the `sessions\<name>\` variant, or `\\.\pipe\<socket_path>`).
-   atm uses `tokio::net::windows::named_pipe::ClientOptions::open` and
-   `tokio::net::UnixStream::connect` directly and does not depend on
-   `interprocess`. This is the one place atm derives a Herdr path,
-   because a socket client cannot delegate resolution to the `herdr`
-   binary; the platform variables it reads (`XDG_CONFIG_HOME`, `APPDATA`,
-   `HOME`) are captured once at composition and injected, never read
-   inside the transport.
-
-   ```rust
-   /// Where Herdr's NDJSON API listens, as Herdr's own client resolves it. Pure; no probe, no I/O.
-   pub fn herdr_api_endpoint(cfg: &HerdrClientConfig, session: Option<&HerdrSession>, env: &HerdrHostEnv) -> HerdrEndpoint;
-   pub struct HerdrHostEnv { pub xdg_config_home: Option<PathBuf>, pub appdata: Option<PathBuf>, pub home: Option<PathBuf>, pub platform: Platform }
-   pub enum HerdrEndpoint { UnixSocket(PathBuf), NamedPipe(String) }   // NamedPipe carries the full \\.\pipe\... name
-   pub(crate) struct SocketIo { cfg: HerdrClientConfig, env: HerdrHostEnv, max_line_bytes: usize /* 1 MiB */ }
-   // HerdrIo::call for Socket: resolve the endpoint from (cfg, per-call session, env), open a
-   // fresh connection, one request line, one response line -> HerdrEnvelope, close. No ping on
-   // the hot path (AYP-R3-010): Herdr serves exactly one request per accepted connection
-   // (src/api/server.rs handle_connection_with_stop, identical at v0.8.0, v0.8.2, 3a822e81).
-   // server_info(session) opens its own one-request connection carrying `ping`
-   // {version, protocol, capabilities} on that endpoint; doctor only.
-   ```
-
-   Pinned byte-for-byte tests: unix default, unix named session,
-   `XDG_CONFIG_HOME` override, Windows default
-   (`\\.\pipe\C:\Users\u\AppData\Roaming\herdr\herdr.sock`),
-   Windows named session, `socket_path` override on both; AY.7 adds the
-   pipe name observed on FastPC4 (AY.5 audit row) as a fixture.
-2. **Protocol** per ADR-058 D3 (as amended by AY.1): **one request per
-   connection** (AYP-R3-010: Herdr's `handle_connection_with_stop` reads
-   one initial request and returns after serving it, at v0.8.0, v0.8.2
-   and 3a822e81): fresh connection, one NDJSON request line, one
-   response line, close; unknown fields tolerated. No `ping` on the nudge
-   path; version and minimum checks are doctor-only through
-   `HerdrIo::server_info`, which opens its own one-request connection
-   for `ping` (below minimum is a doctor finding, never a refusal). Request ids
-   `atm:agent:<cmd>`. `agent.prompt` with `wait` maps `timeout` and
-   `agent_prompt_stalled` to the same outcome. Bounds (AYP-R3-010): one
-   absolute `RequestDeadline` covers connect (including the Windows
-   `ERROR_PIPE_BUSY` retry loop) and the write, flush and read of the
-   single request together; exhaustion at any step is the
-   existing `HerdrError::Timeout`. Lines are read with a hard cap of
-   1 MiB (Herdr's own `MAX_INITIAL_REQUEST_BYTES`); an oversized line or
-   a stream that closes without `\n` is the existing
-   `HerdrError::InternalError` (infrastructure class, opens the breaker)
-   logged with the byte count at the transport boundary. Fake-server
-   cases: no newline, oversized response, stalled connect, stalled
-   write, stalled read, a second request line on one connection refused
-   by the fake exactly as Herdr refuses it (guard test that the
-   transport never writes two), pipe busy then free (Windows lane).
-3. **Compatibility matrix.** `docs/atm-herdr/herdr-versions.md` (created
-   by AY.1) gains the NDJSON columns per release (ping fields, request
-   shapes, error codes); keyed on `ping.version`/`capabilities`, never
-   PROTOCOL_VERSION.
-4. **Equivalence.** The whole ADR-058 fixture suite plus AY.2's replay
-   tests run through `HerdrProcessInvoker` constructed over each
-   `HerdrIo` variant with identical assertions (the public adapter is
-   the only surface under test); a fake
-   Herdr socket/pipe server fixture (test-only) mirrors the fake
-   binary's modes and per-version replay, including server absent and
-   late start, on all three CI lanes (the Windows lane exercises the
-   named-pipe path).
-
-5. **Public-item pin amendment (AYS-R3-002).** The AY.2 architecture
-   test's expected list gains exactly `herdr_api_endpoint`,
-   `HerdrHostEnv` and `HerdrEndpoint`, with a comment citing this
-   sprint; `SocketIo` stays `pub(crate)`.
-
-Files AY.6 edits (AYP-R3-011), compared against AY.3/AY.4/AY.5: new
-`crates/atm-herdr/src/transport_socket.rs` and
-`crates/atm-herdr/tests/support/fake_herdr_socket/`; edits to
-`crates/atm-herdr/src/transport.rs` (the `Socket(SocketIo)` arm of
-`HerdrIo` and its two match arms), `crates/atm-herdr/src/lib.rs` (one
-`mod transport_socket;` line), `crates/atm-herdr/Cargo.toml` (tokio
-`net` feature if not already enabled),
-`crates/atm-architecture/tests/boundary_enforcement.rs` (deliverable 0),
-the AY.2 public-item pin test under `crates/atm-architecture/tests/`
-(deliverable 5), `boundaries/atm-herdr/herdr-process-adapter.toml` (P-E),
-`docs/atm-herdr/herdr-versions.md`. None of these is touched by AY.4 or
-AY.5 (their file sets are listed under "Sprint map"), so parallel_safe
-holds on file evidence, not on a clean merge; AY.3 also edits
-`boundary_enforcement.rs`, which is why AY.6 must_follow AY.3
-(AYP-R3-011). No
-composition change: `build_replacement_handler` is byte-identical to its
-parent commit, and an architecture test asserts that `HerdrIo::Socket(`
-is constructed only inside `transport_socket.rs` `#[cfg(test)]` modules
-and `crates/atm-herdr/tests/` (path allowlist) until AY.7 removes the
-allowlist. Selection and default live in AY.7.
-
-Acceptance criteria:
-
-1. P-E TOML diff is the first commit and matches the approved fragment.
-2. Guard exemption (deliverable 0) present with the single-entry
-   assertion; the AI.11 suite passes.
-3. Equivalence suite green on both transports on all three CI lanes.
-4. `git diff <parent>..HEAD -- crates/atm-daemon-bootstrap` is empty and
-   the `HerdrIo::Socket(` construction-site allowlist test passes; the
-   PR's changed-file list is a subset of the list above (fenix checks).
-5. Bounds tests (deliverable 2) present on all three lanes.
-6. `herdr-versions.md` has NDJSON columns for every release from 0.8.0.
-7. Official benchmark run on the hot path; no regression.
-8. The AY.2 public-item pin test passes with exactly `herdr_api_endpoint`,
-   `HerdrHostEnv`, `HerdrEndpoint` added (AYS-R3-002).
-
-Validation:
-
-1. `just validate` (all three lanes via CI); `cargo test -p atm-herdr`.
-2. `python3 .just/check_line_counts.py`.
-3. `just benchmark-official --branch integrate/phase-ay` from the dedicated
-   benchmark account per `docs/plans/phase-ao2/readiness.md` (exit 0
-   against published floors; report directory cited in the PR).
-
-Out of scope: transport selection and default flip (AY.7); live
-evidence (AY.7); doctor changes (AY.7).
-
-## Sprint AY.7: socket cutover and live evidence (size M)
-
-Branch `feature/ay7-herdr-socket-cutover` off `integrate/phase-ay` after
-AY.5 and AY.6 have both merged (join; not stacked, see stacking rule).
-Dependencies: must_follow AY.5 (Windows process and installer facts
-live-verified) and AY.6 (socket code). recommended_agent
-arch-ctm/deep-reasoning; Windows evidence via the P-D agent.
-
-Deliverables:
-
-1. **Transport selection in the composition root.** The one
-   `HerdrProcessInvoker::new` site from AY.3 passes
-   `herdr.transport = "socket" | "cli"` (default `socket`) and the
-   invoker builds the matching `HerdrIo` variant; the CLI transport is retained as a
-   documented, explicit config fallback (never silent) for exactly one
-   atm minor version after the version that ships the cutover, then
-   removed (tracked in the project plan). No other composition change.
-2. **Lifecycle tests re-validated on the socket default.** AY.3's tests
-   (a) to (k) run against the socket transport with the semantics
-   adapted: (a) "no `herdr` binary" becomes "no endpoint reachable and
-   not configured"; (b) `server_not_running` becomes connection refused
-   or endpoint absent; (d) `protocol_mismatch` cannot occur on the
-   socket path, so adapted (d) is "the fake switches its recording set
-   (server version) between two calls with the daemon running: both
-   calls succeed, doctor shows the new version, no restart", which is
-   distinct from (g) "below-minimum fake: doctor `BelowMinimum` finding,
-   calls continue on Herdr's own terms", carried over unchanged
-   (AYS-R2-004); (e), (f), (h), (i), (j), (k) unchanged in intent. The
-   CLI variants keep running while the fallback exists.
-3. **Live evidence** on macOS and Windows through the socket transport,
-   the phase's only Windows Herdr evidence set (ruling 5), in the AX.7
-   evidence table format: doctor `herdr` section; prompt/wait/get/list/
-   notify round trips with observed request and response JSON;
-   end-to-end nudge from another host with timestamps at both ends;
-   transport-boundary structured logs; negative cases live (Herdr
-   stopped: daemon stays up, tmux/hermes unaffected, breaker opens and
-   recovers; agent not found; agent blocked; slow call hits the 5 s cap
-   with no orphan); late-start case; upgrade case (socket client is
-   immune to `protocol_mismatch`; evidence shows nudges continuing
-   across a `herdr update`); nudge latency sample; explicit
-   confirmation that no console window flashes on Windows. Evidence is
-   captured by the FastPC4 team (Windows) and on rand-m5 (macOS) and
-   committed byte-for-byte; agents never author evidence records.
-4. **Doctor** reports, per endpoint record, the transport in use
-   (`HerdrTransportKind::Socket`) and the resolved endpoint in the
-   atm-core-owned `HerdrEndpointObservation::endpoint: Option<String>`
-   field (AYS-R3-001): `HerdrDoctorProbe` (atm-herdr, which depends on
-   atm-core) renders its own `HerdrEndpoint` through `Display` into that
-   field; `HerdrEndpoint` itself never appears in atm-core or
-   atm-daemon-bootstrap (the existing forbidden-edge test plus a grep
-   assertion). `HerdrDoctorProbe::new` gains the transport selection from
-   the same config value.
-
-Acceptance criteria:
-
-1. Default transport is `socket` (test) and `herdr.transport = "cli"`
-   selects the CLI transport (test); no third value accepted.
-2. Adapted lifecycle tests (a) to (k) pass on all three CI lanes for the
-   socket default, with (d) and (g) as two distinct tests; CLI variants
-   still pass.
-3. Evidence committed byte-for-byte for both platforms; the FastPC4 set
-   is the release-readiness gate for Windows Herdr parity (moved from
-   AY.5, ruling 5).
-4. AY.2 zero-regression oracle green on the socket transport.
-5. Fallback documented with its removal version in the project plan.
-6. Doctor shows transport and endpoint (test).
-
-Validation:
-
-1. `just validate` (all three lanes via CI).
-2. Evidence `cmp` against captured artifacts before commit.
-3. `just benchmark-official --branch integrate/phase-ay` per
-   `docs/plans/phase-ao2/readiness.md` (exit 0; report cited in the PR).
-
-Out of scope: any new Herdr capability adoption; removing the CLI
-transport.
-
-## Phase AY exit gate (AY.7 disposition)
-
-Phase AY is not complete until a dated decision on AY.7 (socket cutover)
+Phase AY is not complete until a dated decision in AY.10, after the socket
+cutover and live matrix,
 is recorded here and in `docs/project-plan.md`, chosen by Rand from
 exactly these:
 
-- **Ship**: AY.7 merged, acceptance above met.
-- **Defer**: AY.7 deferred to a named phase, ADR-058 D3 amended to say
-  the CLI transport is the supported design until then; AY.6 code stays
+- **Ship**: AY.9 merged and AY.10 live acceptance met.
+- **Defer**: the live cutover proof is deferred to a named phase, ADR-058 D3 amended to say
+  the CLI transport is the supported design until then; AY.8 code stays
   behind explicit config.
-- **Cancel**: AY.7 dropped, ADR-058 D3 rewritten to make the CLI
+- **Cancel**: the AY.9 cutover is backed out, ADR-058 D3 rewritten to make the CLI
   transport the permanent design, and a cleanup PR merged before phase
   closure that deletes `transport_socket.rs`, the fake socket server,
   the `herdr_local_socket_client` ownership key, the AI.11 exemption
-  line and the NDJSON columns; the AY.6 and AY.7 sections here marked
+  line and the NDJSON columns; the AY.8 through AY.10 sprint docs marked
   superseded. The gate check for Cancel is mechanical: `test ! -e
   crates/atm-herdr/src/transport_socket.rs` on the integrate head.
 
@@ -1944,7 +1090,7 @@ ADR-058 lacked (see AW-READY-W1).
 
 Source of truth: feature/ax6-lead-notification-doctor (PR #1204, head
 c3268df8a). Every request carries the configured session when there is
-one (child env `HERDR_SESSION`, HR-CORE-006, retained); the AY.6 socket
+one (child env `HERDR_SESSION`, HR-CORE-006, retained); the AY.8 socket
 transport derives the endpoint from that same configured session.
 
 | Requirement | Operation | Today's argv |
@@ -1965,7 +1111,7 @@ atm-herdr.
 
 Boundary: `boundaries/atm-herdr/herdr-process-adapter.toml` io_owns
 `tokio_process_spawn` and `herdr_argv_construction`. AY.2 changes neither
-(pure motion inside the crate). AY.6 adds `herdr_local_socket_client`
+(pure motion inside the crate). AY.8 adds `herdr_local_socket_client`
 under the P-E revision and keeps both CLI keys while the CLI path exists
 (additive, AYP-R2-002); the CLI keys go when the CLI code goes. forbidden_edges stay (no
 atm-core/atm-storage/rusqlite into atm-herdr; no atm-herdr into
@@ -1986,7 +1132,7 @@ compiled constant with `ping.protocol` before every request
 
 Consequences for atm:
 
-- Under the CLI transport (AY.2 through AY.5) the check is Herdr's own and
+- Under the CLI transport (AY.2 through AY.7) the check is Herdr's own and
   passes whenever the CLI binary and the running server come from the
   same install. After cc88b3b8, `herdr update` keeps a compatible old
   server running and `herdr status` no longer flags PROTOCOL_VERSION
@@ -1995,10 +1141,10 @@ Consequences for atm:
   the code (existing `HerdrError::ProtocolMismatch`), the breaker opens,
   and doctor names the remedy (restart Herdr). No atm release is
   involved.
-- Under the socket transport (AY.6, AY.7) atm never sees `protocol_mismatch`.
+- Under the socket transport (AY.8, AY.9) atm never sees `protocol_mismatch`.
   Compatibility becomes atm's own responsibility and is keyed on
   `HERDR_MINIMUM_VERSION` and the `ping` result (`version`,
-  `capabilities`), never on PROTOCOL_VERSION. This is why AY.6's blocking
+  `capabilities`), never on PROTOCOL_VERSION. This is why AY.8's blocking
   prerequisite is the conformance matrix, not the socket code.
 - ADR-058's pin of `d79fd746` / 21 is replaced by `HERDR_MINIMUM_VERSION`
   and the per-release table in `herdr-versions.md` (AY.1).
@@ -2008,8 +1154,8 @@ Consequences for atm:
 Status 2026-09-05 (fenix@rand-m5): AX.1 through AX.5 are merged into
 integrate/phase-ax; AX.6 (PR #1204) is in its second fix pass; AX.7
 (PR #1206, stacked on AX.6) is the macOS live-proof sprint and keeps its
-own accepted scope (Windows runs are out of AX.7 scope and stay so; AY.7
-owns Windows evidence, ruling 5). One PR integrate/phase-ax -> develop follows
+own accepted scope (Windows runs are out of AX.7 scope and stay so; AY.9
+does not inherit that proof; AY.10 owns Windows evidence, ruling 5). One PR integrate/phase-ax -> develop follows
 AX.7 and the phase-ending review.
 
 Decision (Rand, 2026-09-05): `integrate/phase-ay` is cut from
@@ -2031,18 +1177,19 @@ AX does not wait on any AY sprint.
    adopted.
 2. Transport extraction silently changes macOS/Linux behaviour:
    pure-motion commit, unedited fixtures, boundary tests unchanged.
-3. Orphaned herdr.exe after timeout: explicit live-verified test (AY.5).
+3. Orphaned herdr.exe after timeout: explicit live-verified test (AY.7).
 4. Console flash per nudge: CREATE_NO_WINDOW plus visual confirmation
-   (AY.5).
+   (AY.7).
 5. Merge collision with AX: AY branches from phase-ax after AX.6 and
    merges forward after the phase-ax PR lands (P-A).
-6. Hot-path regression: official benchmark run before merge (AY.2, AY.6, AY.7).
-7. AY.7 (socket cutover) quietly dropped again: the exit gate requires a dated
+6. Hot-path regression: official benchmark run before merge (AY.2, AY.8, AY.9).
+7. AY.9/AY.10 (socket cutover and proof) quietly dropped again: the exit gate requires a dated
    Ship/Defer/Cancel decision line before the phase PR.
-8. FastPC4 not ready: only AY.5 and AY.7 depend on it (P-C/P-D), and
-   AY.7 waits for AY.5. AY.1 through AY.4 and AY.6 land without a Windows
-   machine; the phase cannot close with Windows parity claimed until
-   AY.7's Windows evidence exists (ruling 5).
+8. FastPC4 not ready: only AY.7 and AY.10 depend on it (P-C/P-D), and
+   AY.10 waits for AY.9. AY.1 through AY.6 and AY.8 land without a physical
+   Windows machine; AY.9 waits for the AY.7 Windows implementation gate,
+   and the phase cannot close with Windows parity claimed until AY.10's
+   Windows evidence exists (ruling 5).
 9. Two launchers race at login (atm-installed Herdr entry vs a GUI Herdr
    the user opens): the entry has no KeepAlive, the loser exits 1 once,
    the GUI attaches as a client to whichever server won, and the daemon
@@ -2060,8 +1207,8 @@ AX does not wait on any AY sprint.
 ## Windows machine and team (Rand, 2026-09-05)
 
 - Windows testing runs on **FastPC4**. Rand will set up a Windows
-  `atm-dev` team on FastPC4; AY.5 dev work (including filling the
-  Windows-observed audit rows) and AY.7's live-evidence deliverable 3
+  `atm-dev` team on FastPC4; AY.7 dev work (including filling the
+  Windows-observed audit rows) and AY.10's live-evidence matrix
   (the phase's only evidence owner, ruling 5) both execute there, inside
   a Herdr session, with the daemon and Herdr installed per-user by
   `daemon-switch`.
@@ -2329,3 +1476,14 @@ AX does not wait on any AY sprint.
   closed, 1 wording). AYS-R11-M1: "Windows machine and team" sentence
   reworded for subject/verb agreement; no scope change. Both reviewers
   PASS on r20 84f2a8469; r21 is this one sentence plus the ledger entry.
+- r22 (2026-09-05): sprint-plan hardening supersedes the earlier
+  seven-sprint packaging and its pre-hardening PASS statements. Ten
+  authoritative sprint files now separate transport foundation, endpoint
+  doctor/config, breaker lifecycle, entry transaction, restart
+  coordination, Windows verification, socket implementation, cutover, and
+  live proof. The umbrella's duplicate sprint checklists were deleted;
+  mandatory frontmatter, execution waves, exact PR parents, `/gh-stack`
+  external-link workflow, canonical doctor JSON, and the AY.10 evidence
+  disposition gate are the current review surface. A new plan-scope and
+  critical review is required before approval; r21 is historical evidence,
+  not approval of r22.
