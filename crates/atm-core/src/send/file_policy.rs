@@ -216,7 +216,12 @@ mod tests {
     fn share_dir_source_is_not_truncated_by_file_reference_copy() {
         let current_dir = tempdir().expect("current tempdir");
         let home_dir = tempdir().expect("home tempdir");
-        let share_dir = home_dir.path().join(".config").join("atm").join(TEST_TEAM);
+        let share_dir = home_dir
+            .path()
+            .join(".config")
+            .join("atm")
+            .join("share")
+            .join(TEST_TEAM);
         fs::create_dir_all(&share_dir).expect("share directory");
         let source_path = share_dir.join("payload.txt");
         let original = b"source content must survive";
@@ -231,6 +236,7 @@ mod tests {
         )
         .expect("share-dir source should be accepted");
 
+        assert_eq!(source_path.parent(), Some(share_dir.as_path()));
         assert!(reference.contains("payload.txt"));
         assert_eq!(
             fs::read(&source_path).expect("source remains readable"),

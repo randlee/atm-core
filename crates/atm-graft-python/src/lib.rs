@@ -410,7 +410,9 @@ fn observability_paths() -> PyResult<PyObservabilityPaths> {
             .join(atm_core::observability::CANONICAL_LOG_FILE_NAME)
             .display()
             .to_string(),
-        fallback_log_path: observability::fallback_path(&log_dir).display().to_string(),
+        fallback_log_path: atm_core::observability::graft_fallback_log_path(&log_dir)
+            .display()
+            .to_string(),
         log_dir: log_dir.display().to_string(),
         log_dir_source: source.to_owned(),
     })
@@ -608,7 +610,9 @@ impl PyGraftSession {
             // selected for this machine; it must never auto-start another one.
             client: Mutex::new(Some(GraftClient::connect_existing().map_err(atm_error)?)),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&log_dir),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&log_dir),
+            )),
             #[cfg(test)]
             reconnect_replacement: Mutex::new(None),
             #[cfg(test)]

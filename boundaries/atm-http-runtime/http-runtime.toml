@@ -45,7 +45,7 @@ allowed_test_double_paths = ["crate::tests::TestRouter", "crate::tests::Passthro
 forbidden_test_bypasses = ["listener_bind", "endpoint_publication"]
 
 [enforcement]
-lint_rules = ["LINT-BOUNDARY-HTTP-RUNTIME-DEPENDENCIES", "LINT-PEER-DIAL-SEAM"]
+lint_rules = ["LINT-BOUNDARY-HTTP-RUNTIME-DEPENDENCIES", "peer-dial-seam"]
 review_gates = ["core_contracts_only", "typestate_lifecycle", "all_routes_from_core_table", "no_raw_http", "no_tls_adapter", "no_legacy_daemon_composition", "adr_060_peer_dial_locked"]
 
 [status]
