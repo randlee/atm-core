@@ -300,6 +300,9 @@ class CliParityTests(unittest.TestCase):
         cls.second_identity = cls.fixture.get("second_identity", cls.identity)
         cls.team = cls.fixture["team"]
         cls.chat_id = cls.fixture.get("chat_id", "parity")
+        cls._prior_environment = os.environ.copy()
+        os.environ.clear()
+        os.environ.update(cls.environment)
 
         from hermes_atm import native_tools
 
@@ -316,8 +319,12 @@ class CliParityTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
-        if cls._generated is not None:
-            cls._generated.close()
+        try:
+            if cls._generated is not None:
+                cls._generated.close()
+        finally:
+            os.environ.clear()
+            os.environ.update(cls._prior_environment)
 
     @classmethod
     def _cli(cls, *arguments: str, identity: str | None = None) -> dict[str, object]:
