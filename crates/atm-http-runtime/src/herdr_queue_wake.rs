@@ -21,6 +21,9 @@ use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrProcessAdapter};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
+#[cfg(test)]
+use tokio::sync::Notify;
+
 use crate::runtime_health::RuntimeHealth;
 
 /// Poll cadence required by AQ2.7.
@@ -30,6 +33,49 @@ pub const HERDR_MAX_PROMPTS_PER_TICK: usize = 16;
 /// Consecutive no-input releases before one retry-budget attempt is spent.
 pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
 const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
+
+#[cfg(test)]
+type HandoffCleanupTestGate = (Arc<Notify>, Arc<Notify>);
+
+#[cfg(test)]
+static HANDOFF_CLEANUP_TEST_GATE: std::sync::OnceLock<Mutex<Option<HandoffCleanupTestGate>>> =
+    std::sync::OnceLock::new();
+
+#[cfg(test)]
+fn install_handoff_cleanup_test_gate() -> (Arc<Notify>, Arc<Notify>) {
+    let entered = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    HANDOFF_CLEANUP_TEST_GATE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .expect("handoff cleanup gate lock")
+        .replace((Arc::clone(&entered), Arc::clone(&release)));
+    (entered, release)
+}
+
+#[cfg(test)]
+fn clear_handoff_cleanup_test_gate() {
+    HANDOFF_CLEANUP_TEST_GATE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .expect("handoff cleanup gate lock")
+        .take();
+}
+
+#[cfg(test)]
+async fn await_handoff_cleanup_test_gate() {
+    let Some((entered, release)) = HANDOFF_CLEANUP_TEST_GATE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .expect("handoff cleanup gate lock")
+        .as_ref()
+        .cloned()
+    else {
+        return;
+    };
+    entered.notify_one();
+    release.notified().await;
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HerdrQueueWakeStats {
@@ -356,6 +402,8 @@ impl HerdrQueueWakePump {
                 // await so cancellation cannot re-release an already
                 // delivered claim.
                 release.disarm();
+                #[cfg(test)]
+                await_handoff_cleanup_test_gate().await;
                 let runtime = self.service_runtime.clone();
                 let member_key = member.key.clone();
                 let message_id = claim.msg;
@@ -623,9 +671,8 @@ mod tests {
     use atm_core::LocalServiceRuntime;
     use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
-        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MemberKey,
-        MessageReceivedHookSelector, NudgeClaim, PendingNudgeStore, PostSendEmissionPath,
-        RosterEntry, RosterHarness, RosterMemberKind,
+        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
+        PostSendEmissionPath, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::observability::NullObservability;
@@ -641,7 +688,7 @@ mod tests {
     use serde_json::json;
     use std::future::Future;
     use std::pin::Pin;
-    use std::sync::{Arc, Mutex, mpsc};
+    use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::watch;
 
@@ -696,70 +743,6 @@ mod tests {
                     .map(|HerdrPromptOutcome::Accepted(_)| PostSendEmissionPath::LocalHerdr)
                     .map_err(Into::into)
             })
-        }
-    }
-
-    struct GateClearPendingStore {
-        inner: Arc<dyn PendingNudgeStore + Send + Sync>,
-        clear_started: Mutex<Option<mpsc::Sender<()>>>,
-        allow_clear: Mutex<mpsc::Receiver<()>>,
-    }
-
-    impl atm_storage::contract::sealed::Sealed for GateClearPendingStore {}
-
-    impl PendingNudgeStore for GateClearPendingStore {
-        fn mark_pending(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-            at: atm_core::types::IsoTimestamp,
-        ) -> Result<bool, AtmError> {
-            self.inner.mark_pending(member, msg, at)
-        }
-
-        fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
-            self.inner.claim_next_pending(member)
-        }
-
-        fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
-            self.inner.requeue_pending(member, claim)
-        }
-
-        fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
-            self.inner.release_pending(member, claim)
-        }
-
-        fn clear_pending_on_read(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            self.inner.clear_pending_on_read(member, msg)
-        }
-
-        fn clear_pending_on_handoff(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            if let Some(sender) = self
-                .clear_started
-                .lock()
-                .expect("clear-started gate lock")
-                .take()
-            {
-                sender.send(()).expect("clear-started receiver");
-            }
-            self.allow_clear
-                .lock()
-                .expect("allow-clear gate lock")
-                .recv()
-                .expect("allow-clear sender");
-            self.inner.clear_pending_on_handoff(member, msg)
-        }
-
-        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
-            self.inner.list_pending_members()
         }
     }
 
@@ -885,75 +868,6 @@ mod tests {
             status: HerdrAgentStatus::Idle,
             workspace_id: None,
         }])
-    }
-
-    fn build_test_pump_with_gated_clear() -> (
-        tempfile::TempDir,
-        LocalServiceRuntime,
-        Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
-        Arc<HerdrQueueWakePump>,
-        MemberKey,
-        mpsc::Receiver<()>,
-        mpsc::Sender<()>,
-    ) {
-        let root = tempfile::tempdir().expect("temporary root");
-        let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
-        let team: TeamName = "aq27-team".parse().expect("team");
-        assembly
-            .service_runtime
-            .shared_roster_store_arc()
-            .save_roster(&RosterSnapshot {
-                team_name: team.clone(),
-                members: vec![herdr_member(&team, "aq27-agent")],
-                refreshed_at: None,
-            })
-            .expect("roster");
-        queue_message(root.path(), &assembly.service_runtime, &team, "aq27-agent");
-
-        let inner = assembly
-            .service_runtime
-            .pending_nudge_store()
-            .expect("pending store");
-        let (clear_started_tx, clear_started_rx) = mpsc::channel();
-        let (allow_clear_tx, allow_clear_rx) = mpsc::channel();
-        let runtime =
-            assembly
-                .service_runtime
-                .with_pending_nudge_store(Arc::new(GateClearPendingStore {
-                    inner,
-                    clear_started: Mutex::new(Some(clear_started_tx)),
-                    allow_clear: Mutex::new(allow_clear_rx),
-                }));
-        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
-        fake.queue_list_result(Ok(HerdrListOutcome {
-            agents: vec![AgentSnapshot {
-                name: Some("aq27-agent".to_owned()),
-                status: HerdrAgentStatus::Idle,
-                workspace_id: None,
-            }],
-        }));
-        let selector = Arc::new(FakeSelector {
-            emitter: FakeEmitter {
-                process: Arc::clone(&fake),
-            },
-        });
-        let process: Arc<dyn HerdrProcessAdapter> = fake.clone();
-        let pump = Arc::new(HerdrQueueWakePump::new(
-            runtime.clone(),
-            selector,
-            super::RuntimeHealth::default(),
-            process,
-        ));
-        let key = MemberKey::new(team, "aq27-agent".parse().expect("agent"));
-        (
-            root,
-            runtime,
-            fake,
-            pump,
-            key,
-            clear_started_rx,
-            allow_clear_tx,
-        )
     }
 
     fn build_test_pump_with_two_sessions() -> (
@@ -1458,14 +1372,11 @@ mod tests {
 
     #[tokio::test]
     async fn ac11_successful_prompt_cancellation_cannot_rerelease_claim() {
-        let (_root, runtime, fake, pump, key, clear_started, allow_clear) =
-            build_test_pump_with_gated_clear();
+        let (_root, runtime, fake, pump, _health, key) = build_test_pump();
+        let (clear_started, allow_clear) = super::install_handoff_cleanup_test_gate();
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let task = pump.clone().start(shutdown_rx);
-        tokio::task::spawn_blocking(move || clear_started.recv())
-            .await
-            .expect("clear-started waiter join")
-            .expect("clear-started notification");
+        clear_started.notified().await;
 
         shutdown_tx.send(()).expect("shutdown notification");
         task.await.expect("poll task join");
@@ -1479,7 +1390,7 @@ mod tests {
             "a successful Herdr prompt must not be re-released while cleanup is pending"
         );
 
-        allow_clear.send(()).expect("allow marker cleanup");
+        allow_clear.notify_one();
         tokio::time::timeout(Duration::from_secs(1), async {
             loop {
                 if runtime
@@ -1513,6 +1424,7 @@ mod tests {
             1,
             "the next tick must not prompt the already accepted message again"
         );
+        super::clear_handoff_cleanup_test_gate();
     }
 
     #[tokio::test]

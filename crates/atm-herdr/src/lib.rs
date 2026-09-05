@@ -614,6 +614,17 @@ async fn run_command_with_binary(
             return Err(HerdrError::TimedOut);
         }
     };
+    let (stdout, stderr) = capture_command_output(&mut child).await?;
+    Ok(CommandOutput {
+        stdout,
+        stderr,
+        success: status.success(),
+    })
+}
+
+async fn capture_command_output(
+    child: &mut tokio::process::Child,
+) -> Result<(String, String), HerdrError> {
     let (stdout, stdout_truncated) = if let Some(pipe) = child.stdout.take() {
         read_capped(pipe).await
     } else {
@@ -631,11 +642,10 @@ async fn run_command_with_binary(
             ),
         });
     }
-    Ok(CommandOutput {
-        stdout: String::from_utf8_lossy(&stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&stderr).into_owned(),
-        success: status.success(),
-    })
+    Ok((
+        String::from_utf8_lossy(&stdout).into_owned(),
+        String::from_utf8_lossy(&stderr).into_owned(),
+    ))
 }
 
 async fn read_capped(reader: impl tokio::io::AsyncRead + Unpin) -> (Vec<u8>, bool) {
