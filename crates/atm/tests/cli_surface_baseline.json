@@ -1992,6 +1992,17 @@
           "short": null
         },
         {
+          "has_default": false,
+          "id": "message_id_positional",
+          "long": null,
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
           "has_default": true,
           "id": "no_since_last_seen",
           "long": "no-since-last-seen",
