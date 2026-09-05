@@ -1011,6 +1011,7 @@ mod tests {
                     origin: "tracing".to_owned(),
                     message: "diagnostic".to_owned(),
                     detail: None,
+                    id: 0,
                 }]))
                 .expect("diagnostic queue capacity is exactly eight batches");
         }
@@ -1063,6 +1064,7 @@ mod tests {
                     origin: "tracing".to_owned(),
                     message: "diagnostic".to_owned(),
                     detail: None,
+                    id: 0,
                 }]))
                 .expect("fill the real bounded diagnostic channel");
         }
@@ -1131,6 +1133,7 @@ mod tests {
             origin: "tracing".to_owned(),
             message: "bridged diagnostic".to_owned(),
             detail: None,
+            id: 0,
         };
         diagnostic_sender
             .try_send(DiagnosticWriterMessage::Records(vec![bridged.clone()]))

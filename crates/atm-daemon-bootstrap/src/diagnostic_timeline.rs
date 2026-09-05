@@ -378,6 +378,9 @@ fn diagnostic_event(event: &RetainedEvent<'_>) -> DiagnosticEvent {
         origin: event.origin.to_owned(),
         message: event.message.to_owned(),
         detail,
+        // Assigned only by the storage query path once persisted; see
+        // `DiagnosticEvent::id` for why the pre-insert value is always 0.
+        id: 0,
     }
 }
 
