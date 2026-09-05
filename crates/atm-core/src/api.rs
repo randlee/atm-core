@@ -24,7 +24,7 @@ use base64::Engine as _;
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 /// Version of the daemon's HTTP request contract.
-pub const HTTP_API_VERSION: &str = crate::protocol::HTTP_API_VERSION;
+pub use crate::protocol::HTTP_API_VERSION;
 /// HTTP response header carrying the canonical clear outcome for the `204`
 /// clear route. Framework adapters use this shared contract instead of
 /// inventing a JSON body for a no-content response.
