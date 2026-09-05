@@ -2060,10 +2060,11 @@ AX does not wait on any AY sprint.
 ## Windows machine and team (Rand, 2026-09-05)
 
 - Windows testing runs on **FastPC4**. Rand will set up a Windows
-  `atm-dev` team on FastPC4; AY.5 dev and the Windows-observed audit
-  rows, plus AY.7's live-evidence deliverable 3 (the phase's only
-  evidence owner, ruling 5), execute there, inside a Herdr session, with
-  the daemon and Herdr installed per-user by `daemon-switch`.
+  `atm-dev` team on FastPC4; AY.5 dev work (including filling the
+  Windows-observed audit rows) and AY.7's live-evidence deliverable 3
+  (the phase's only evidence owner, ruling 5) both execute there, inside
+  a Herdr session, with the daemon and Herdr installed per-user by
+  `daemon-switch`.
 - Cross-host messaging from FastPC4 has been unreliable because of VPN
   issues. Design: park one agent on the FastPC4 team whose only job is
   to report back regularly (on a fixed cadence and on every sprint
@@ -2323,3 +2324,8 @@ AX does not wait on any AY sprint.
   AY.7). AY.7 deliverable 3 is the sole normative evidence-owner
   statement. Sweep phrases checked clean outside this ledger: "AY.5
   evidence", "ay5-windows-herdr-evidence", "audit doc, evidence".
+- r21 (2026-09-05): critical-plan-reviewer R12 (solar, on r20: PASS
+  0/0/0, AYP-R11-001 closed) and plan-scope r11 (PASS, AYS-R10-M1
+  closed, 1 wording). AYS-R11-M1: "Windows machine and team" sentence
+  reworded for subject/verb agreement; no scope change. Both reviewers
+  PASS on r20 84f2a8469; r21 is this one sentence plus the ledger entry.
