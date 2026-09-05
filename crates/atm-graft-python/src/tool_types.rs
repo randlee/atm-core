@@ -7,7 +7,6 @@ use atm_core::send::{SendOutcome, WriteOutcome};
 use atm_core::types::{CommandAction, ReadSelection};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use std::sync::OnceLock;
 
 use super::PyMessage;
 use crate::observability::ObservabilityStatus;
@@ -291,7 +290,16 @@ impl From<atm_core::list::ListRow> for AtmListRow {
     }
 }
 
-static FROM_AGENT_WARNING: OnceLock<()> = OnceLock::new();
+static FROM_AGENT_WARNING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Resets the warn-once latch so a test doesn't depend on whichever test in
+/// this binary happens to touch `from_agent` first. Test-only: production
+/// code has exactly one process-lifetime latch by design.
+#[cfg(test)]
+pub(crate) fn reset_from_agent_warning_for_test() {
+    FROM_AGENT_WARNING.store(false, std::sync::atomic::Ordering::SeqCst);
+}
 
 #[pymethods]
 impl AtmListRow {
@@ -302,7 +310,7 @@ impl AtmListRow {
 
     #[getter(from_agent)]
     fn agent_name_deprecated(&self, py: Python<'_>) -> PyResult<String> {
-        if FROM_AGENT_WARNING.set(()).is_ok() {
+        if !FROM_AGENT_WARNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
             let warnings = py.import("warnings")?;
             let warning_type = py.get_type::<pyo3::exceptions::PyDeprecationWarning>();
             warnings.call_method1(
@@ -564,6 +572,11 @@ mod tests {
     #[test]
     fn deprecated_from_agent_warns_once_and_matches_from() {
         Python::initialize();
+        // The warn-once latch is process-global by design (one Python
+        // DeprecationWarning per process, not per call). Reset it here so
+        // this assertion doesn't depend on test execution order within the
+        // binary.
+        super::reset_from_agent_warning_for_test();
         Python::attach(|py| {
             let row = AtmListRow {
                 message_id: None,
