@@ -30,9 +30,10 @@ pub use report::{
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
     DoctorSeverity, DoctorStatus, DoctorSummary, GraftReceiverLeaseDoctorReport,
     GraftReceiversDoctorReport, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
-    HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport, PeerAuthorityDoctorReport,
-    PeerConfigDoctorReport, PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex,
-    PostSendHookRuleReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
+    HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport, LegacyLiteralIpPeerDoctorReport,
+    PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
+    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, ReaderLaneDoctorReport,
+    ReaderLanesDoctorReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
 
 /// Async application port for the live Herdr visibility checks performed by
@@ -289,8 +290,37 @@ fn peer_config_doctor_report_inner(
                 enabled: peer.enabled,
             })
             .collect(),
+        legacy_literal_ip_peers: legacy_literal_ip_peer_reports(&peers),
         validation_failure: None,
     })
+}
+
+/// Projects legacy literal-IP trusted-peer rows (enabled or disabled) with
+/// their exact safe migrate/revoke remediation for `atm doctor` output.
+fn legacy_literal_ip_peer_reports(
+    peers: &[atm_storage::TrustedPeer],
+) -> Vec<LegacyLiteralIpPeerDoctorReport> {
+    let audit = atm_storage::TrustedPeerCatalogAudit::from_peers(peers);
+    audit
+        .legacy_literal_enabled_hosts()
+        .iter()
+        .map(|host| (host, true))
+        .chain(
+            audit
+                .legacy_literal_disabled_hosts()
+                .iter()
+                .map(|host| (host, false)),
+        )
+        .map(|(host, enabled)| LegacyLiteralIpPeerDoctorReport {
+            host: host.to_string(),
+            enabled,
+            migrate_command: atm_storage::TrustedPeerCatalogAudit::migrate_command(
+                host,
+                "<hostname>",
+            ),
+            revoke_command: atm_storage::TrustedPeerCatalogAudit::revoke_command(host),
+        })
+        .collect()
 }
 
 struct DoctorRunContext {
@@ -339,6 +369,7 @@ fn build_doctor_report(
         environment: environment.clone(),
         client_context: doctor_client_context(&environment),
         daemon_context: None,
+        reader_lanes: None,
         member_roster,
         graft_receivers,
         observability: observability_health,
@@ -791,7 +822,9 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
-    use super::{ordered_member_summaries, peer_config_doctor_report};
+    use super::{
+        legacy_literal_ip_peer_reports, ordered_member_summaries, peer_config_doctor_report,
+    };
     use crate::config::AtmConfig;
     use crate::config::types::{HookRecipient, PostSendHookRule};
     use crate::doctor::{
@@ -1827,6 +1860,59 @@ mod tests {
     }
 
     #[test]
+    fn legacy_literal_ip_peer_reports_names_hosts_with_exact_remediation() {
+        let peers = vec![
+            TrustedPeer {
+                host: "rand-m5.local".parse().expect("host"),
+                fingerprint: "sha256:durable".parse().expect("fingerprint"),
+                enabled: true,
+                https_port: std::num::NonZeroU16::new(443).expect("port"),
+            },
+            TrustedPeer {
+                host: "192.168.128.29".parse().expect("host"),
+                fingerprint: "sha256:legacy-enabled".parse().expect("fingerprint"),
+                enabled: true,
+                https_port: std::num::NonZeroU16::new(443).expect("port"),
+            },
+            TrustedPeer {
+                host: "10.0.0.5".parse().expect("host"),
+                fingerprint: "sha256:legacy-disabled".parse().expect("fingerprint"),
+                enabled: false,
+                https_port: std::num::NonZeroU16::new(443).expect("port"),
+            },
+        ];
+        let reports = legacy_literal_ip_peer_reports(&peers);
+        assert_eq!(reports.len(), 2, "the durable hostname row is excluded");
+
+        let enabled_host: HostName = "192.168.128.29".parse().expect("host");
+        let disabled_host: HostName = "10.0.0.5".parse().expect("host");
+
+        let enabled = reports
+            .iter()
+            .find(|report| report.host == "192.168.128.29")
+            .expect("enabled legacy row reported");
+        assert!(enabled.enabled);
+        assert_eq!(
+            enabled.migrate_command,
+            atm_storage::TrustedPeerCatalogAudit::migrate_command(&enabled_host, "<hostname>")
+        );
+        assert_eq!(
+            enabled.revoke_command,
+            atm_storage::TrustedPeerCatalogAudit::revoke_command(&enabled_host)
+        );
+
+        let disabled = reports
+            .iter()
+            .find(|report| report.host == "10.0.0.5")
+            .expect("disabled legacy row reported");
+        assert!(!disabled.enabled);
+        assert_eq!(
+            disabled.revoke_command,
+            atm_storage::TrustedPeerCatalogAudit::revoke_command(&disabled_host)
+        );
+    }
+
+    #[test]
     fn peer_config_doctor_projection_redacts_private_key_reference_from_store() {
         let (report, findings) = peer_config_doctor_report(&StubPeerConfigStore::healthy());
 
@@ -1840,6 +1926,7 @@ mod tests {
             Some("sha256:local")
         );
         assert!(report.validation_failure.is_none());
+        assert!(report.legacy_literal_ip_peers.is_empty());
 
         let serialized = serde_json::to_string(&report).expect("serialize doctor projection");
         assert!(!serialized.contains("keychain:secret"));

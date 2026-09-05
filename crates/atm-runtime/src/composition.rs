@@ -6,8 +6,8 @@ use std::sync::Arc;
 use atm_core::boundary::{
     self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, TemplateComposer,
 };
-use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::doctor::{DoctorFinding, DoctorSeverity};
+use atm_core::doctor::{ReaderLaneDoctorReport, ReaderLanesDoctorReport, RuntimeDoctorPorts};
 use atm_core::error::AtmError;
 use atm_core::home::HostRuntimeScope;
 use atm_core::{LocalServiceRuntime, load_atm_config};
@@ -76,6 +76,7 @@ pub struct RuntimeAssembly {
     pub nudge_template_override_store: Arc<dyn boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
+    pub reader_lanes: Option<ReaderLanesDoctorReport>,
     pub workflow_telemetry: WorkflowTelemetryRuntime,
     template_composer: Option<Arc<dyn TemplateComposer>>,
 }
@@ -92,6 +93,7 @@ impl fmt::Debug for RuntimeAssembly {
             )
             .field("peer_config_store", &"dyn PeerConfigStore")
             .field("doctor_ports", &self.doctor_ports)
+            .field("reader_lanes", &self.reader_lanes)
             .field("workflow_telemetry", &"WorkflowTelemetryRuntime")
             .field(
                 "template_composer",
@@ -151,6 +153,18 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     let storage = inputs
         .storage_factory
         .open(inputs.host_runtime_scope.durable_state_root.as_ref())?;
+    let reader_lanes = storage
+        .effective_reader_lanes()
+        .map(|lanes| ReaderLanesDoctorReport {
+            mailbox: ReaderLaneDoctorReport {
+                pool_size: lanes.mailbox.pool_size,
+                queue_depth: lanes.mailbox.queue_depth,
+            },
+            search: ReaderLaneDoctorReport {
+                pool_size: lanes.search.pool_size,
+                queue_depth: lanes.search.queue_depth,
+            },
+        });
     let storage_backends = StorageBackends {
         messages: storage.message_store(),
         rosters: storage.roster_store(),
@@ -189,6 +203,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         nudge_template_override_store,
         peer_config_store,
         doctor_ports,
+        reader_lanes,
         workflow_telemetry,
         template_composer,
     })

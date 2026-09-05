@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+## 1.5.0
+
+- Phase AV mailbox-read serialization fix: dedicated reader lanes for mailbox
+  and search queries with bounded pools and queue depth, so reads no longer
+  serialize behind the writer lane; `atm doctor --json` now publishes the
+  effective `reader_lanes` contract (Phase AV, #1120, #1143)
+- release-readiness gate: the 1.4.7-1.4.13 readiness campaign on the
+  isolated atmbench host and Windows, with smoke/benchmark evidence and
+  benchmark floors recorded under `site/reports/` and triage records under
+  `.triage/readiness-1.4/` (#1141, #1150, #1151-#1155, #1159, #1167-#1169)
+- fix(http-runtime): dial direct peers by their routable address with a
+  short-lived resolution cache and surface the connect cause in the CLI
+  (#1142)
+- fix(peer-tls): fail closed on legacy literal-IP trusted-peer rows and print
+  the exact migration remediation (#972, #1138)
+- fix(storage): preserve the raw SQLite cause on mapped errors and print a
+  `Cause:` line in the CLI (#1134); one-time rebuild relaxing the legacy
+  `mail_messages.message_text NOT NULL` constraint so template sends work on
+  databases created before 2026-08-11 (#1135)
+- fix: retain OS causes for retained-log startup failures (#1130, #1131) and
+  harden the daemon observability boundary in `atm-observability` (#1133)
+- fix: support a pinned self-signed daemon-dev signing identity (Phase AS,
+  #1127)
+- fix(smoke): validated `ATM_SMOKE_DIRECT_PEER_PORT` override for the
+  direct-peer smoke rows (#1152)
+- fix(bootstrap): Windows `just bootstrap` selects the pinned Python 3.14
+  instead of the first `python.exe` on PATH (#1165)
+- lint: guard SQLite writer platform neutrality (ADR-007, #1107)
+- chore: upgrade the sc-compose ecosystem pins to 1.6.1 (#1129); centralize
+  workspace crate versioning (#1122)
 - document that release archives nest their binaries under a top-level
   `atm_<version>_<target-triple>/` directory (for example,
   `atm_1.4.6_aarch64-unknown-linux-gnu/bin/atm`) rather than a flat archive

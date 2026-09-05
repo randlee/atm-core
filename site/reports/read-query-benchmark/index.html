@@ -34,20 +34,20 @@
   </style>
 </head>
 <body>
-  <!-- output_path: /Users/atmbench/github/atm-core/site/reports/read-query-benchmark/index.html -->
-  <!-- json_output_path: /Users/atmbench/github/atm-core/site/reports/read-query-benchmark/20260831T212118Z-rand-m5.local-read.json -->
+  <!-- output_path: /Users/atmbench/github/atm-core-worktrees/evidence/readiness-1.4.11-atmbench/site/reports/read-query-benchmark/index.html -->
+  <!-- json_output_path: /Users/atmbench/github/atm-core-worktrees/evidence/readiness-1.4.11-atmbench/site/reports/read-query-benchmark/20260904T065446Z-rand-m5.local-read.json -->
   <header>
     <h1>ATM read/query benchmark</h1>
     <p class="subtitle">AV.4 additive read benchmark families</p>
-    <p class="generated-at">Generated: 2026-08-31T21:21:18.339639Z</p>
+    <p class="generated-at">Generated: 2026-09-04T06:54:46.399585Z</p>
     <div class="status status-pass">PASS</div>
   </header>
 
   <section class="summary">
-&lt;p&gt;Read/query campaign &lt;code&gt;20260831T212118Z-rand-m5.local-read&lt;/code&gt; on &lt;code&gt;rand-m5.local&lt;/code&gt;.&lt;/p&gt;&lt;p&gt;Corpus seed &lt;code&gt;av4-corpus-v1&lt;/code&gt;; generator &lt;code&gt;av4-corpus-generator-1&lt;/code&gt;; fan-out 32.&lt;/p&gt;
+&lt;p&gt;Read/query campaign &lt;code&gt;20260904T065446Z-rand-m5.local-read&lt;/code&gt; on &lt;code&gt;rand-m5.local&lt;/code&gt;.&lt;/p&gt;&lt;p&gt;Corpus seed &lt;code&gt;av4-corpus-v1&lt;/code&gt;; generator &lt;code&gt;av4-corpus-generator-1&lt;/code&gt;; fan-out 32.&lt;/p&gt;&lt;p&gt;&lt;strong&gt;Measurement note:&lt;/strong&gt; Throughput floors are end-to-end CLI (spawn-dominated) sensors; deeper lane-sensitivity redesign is deferred under AV-EXP-C6.&lt;/p&gt;
   </section>
 
-&lt;section&gt;&lt;h2&gt;Family metrics&lt;/h2&gt;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Family&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;th&gt;p50 requests/s&lt;/th&gt;&lt;th&gt;p50 latency ms&lt;/th&gt;&lt;th&gt;p95&lt;/th&gt;&lt;th&gt;p99&lt;/th&gt;&lt;th&gt;Success rate&lt;/th&gt;&lt;th&gt;Requests/s&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td&gt;read-fanout&lt;/td&gt;&lt;td&gt;PASS&lt;/td&gt;&lt;td&gt;777.3276062223811&lt;/td&gt;&lt;td&gt;23.074770986568183&lt;/td&gt;&lt;td&gt;37.127832998521626&lt;/td&gt;&lt;td&gt;39.71462498884648&lt;/td&gt;&lt;td&gt;1.000000&lt;/td&gt;&lt;td&gt;777.328&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;query-fts&lt;/td&gt;&lt;td&gt;PASS&lt;/td&gt;&lt;td&gt;761.1703954362348&lt;/td&gt;&lt;td&gt;23.283270478714257&lt;/td&gt;&lt;td&gt;37.531667039729655&lt;/td&gt;&lt;td&gt;40.19829200115055&lt;/td&gt;&lt;td&gt;1.000000&lt;/td&gt;&lt;td&gt;761.170&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;read-under-write-load&lt;/td&gt;&lt;td&gt;PASS&lt;/td&gt;&lt;td&gt;755.7001481381022&lt;/td&gt;&lt;td&gt;23.57572951586917&lt;/td&gt;&lt;td&gt;37.90949995163828&lt;/td&gt;&lt;td&gt;40.2715839445591&lt;/td&gt;&lt;td&gt;1.000000&lt;/td&gt;&lt;td&gt;755.700&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/section&gt;&lt;section&gt;&lt;h2&gt;Reader-lane diagnostics&lt;/h2&gt;&lt;pre&gt;{
+&lt;section&gt;&lt;h2&gt;Family metrics&lt;/h2&gt;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Family&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;th&gt;p50 requests/s&lt;/th&gt;&lt;th&gt;p50 latency ms&lt;/th&gt;&lt;th&gt;p95&lt;/th&gt;&lt;th&gt;p99&lt;/th&gt;&lt;th&gt;Success rate&lt;/th&gt;&lt;th&gt;Requests/s&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td&gt;read-fanout&lt;/td&gt;&lt;td&gt;PASS&lt;/td&gt;&lt;td&gt;798.799165214668&lt;/td&gt;&lt;td&gt;22.49820799988811&lt;/td&gt;&lt;td&gt;35.736874997382984&lt;/td&gt;&lt;td&gt;38.03716699985671&lt;/td&gt;&lt;td&gt;1.000000&lt;/td&gt;&lt;td&gt;798.799&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;query-fts&lt;/td&gt;&lt;td&gt;PASS&lt;/td&gt;&lt;td&gt;799.1104369741917&lt;/td&gt;&lt;td&gt;21.99541650043102&lt;/td&gt;&lt;td&gt;35.73954199964646&lt;/td&gt;&lt;td&gt;37.973124999552965&lt;/td&gt;&lt;td&gt;1.000000&lt;/td&gt;&lt;td&gt;799.110&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;read-under-write-load&lt;/td&gt;&lt;td&gt;PASS&lt;/td&gt;&lt;td&gt;790.6925378273327&lt;/td&gt;&lt;td&gt;22.376603999873623&lt;/td&gt;&lt;td&gt;36.22012500272831&lt;/td&gt;&lt;td&gt;38.468165999802295&lt;/td&gt;&lt;td&gt;1.000000&lt;/td&gt;&lt;td&gt;790.693&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/section&gt;&lt;section&gt;&lt;h2&gt;Reader-lane diagnostics&lt;/h2&gt;&lt;pre&gt;{
   &amp;quot;query-fts&amp;quot;: {
     &amp;quot;deadline_expiries&amp;quot;: {
       &amp;quot;expired_in_queue&amp;quot;: {
@@ -72,11 +72,11 @@
       }
     },
     &amp;quot;execution_ms&amp;quot;: {
-      &amp;quot;max&amp;quot;: 44.79262500535697,
-      &amp;quot;min&amp;quot;: 5.138499895110726,
-      &amp;quot;p50&amp;quot;: 23.283270478714257,
-      &amp;quot;p95&amp;quot;: 37.531667039729655,
-      &amp;quot;p99&amp;quot;: 40.19829200115055
+      &amp;quot;max&amp;quot;: 40.24783299973933,
+      &amp;quot;min&amp;quot;: 4.6624999995401595,
+      &amp;quot;p50&amp;quot;: 21.99541650043102,
+      &amp;quot;p95&amp;quot;: 35.73954199964646,
+      &amp;quot;p99&amp;quot;: 37.973124999552965
     },
     &amp;quot;in_flight&amp;quot;: {
       &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
@@ -156,11 +156,11 @@
       }
     },
     &amp;quot;execution_ms&amp;quot;: {
-      &amp;quot;max&amp;quot;: 44.824875076301396,
-      &amp;quot;min&amp;quot;: 4.856374929659069,
-      &amp;quot;p50&amp;quot;: 23.074770986568183,
-      &amp;quot;p95&amp;quot;: 37.127832998521626,
-      &amp;quot;p99&amp;quot;: 39.71462498884648
+      &amp;quot;max&amp;quot;: 41.12566700132447,
+      &amp;quot;min&amp;quot;: 4.842292000830639,
+      &amp;quot;p50&amp;quot;: 22.49820799988811,
+      &amp;quot;p95&amp;quot;: 35.736874997382984,
+      &amp;quot;p99&amp;quot;: 38.03716699985671
     },
     &amp;quot;in_flight&amp;quot;: {
       &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,
@@ -240,11 +240,11 @@
       }
     },
     &amp;quot;execution_ms&amp;quot;: {
-      &amp;quot;max&amp;quot;: 47.89458401501179,
-      &amp;quot;min&amp;quot;: 5.2357499953359365,
-      &amp;quot;p50&amp;quot;: 23.57572951586917,
-      &amp;quot;p95&amp;quot;: 37.90949995163828,
-      &amp;quot;p99&amp;quot;: 40.2715839445591
+      &amp;quot;max&amp;quot;: 43.338667001080466,
+      &amp;quot;min&amp;quot;: 4.951584000082221,
+      &amp;quot;p50&amp;quot;: 22.376603999873623,
+      &amp;quot;p95&amp;quot;: 36.22012500272831,
+      &amp;quot;p99&amp;quot;: 38.468165999802295
     },
     &amp;quot;in_flight&amp;quot;: {
       &amp;quot;reason&amp;quot;: &amp;quot;the CLI does not expose this AV.1a D5 runtime gauge yet&amp;quot;,

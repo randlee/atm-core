@@ -1,6 +1,59 @@
 {
-  "generated_at": "2026-08-31T21:21:18.339639Z",
+  "effective_lane_settings": {
+    "mailbox": {
+      "pool_size": 4,
+      "queue_depth": 16
+    },
+    "search": {
+      "pool_size": 2,
+      "queue_depth": 8
+    }
+  },
+  "execution_identity": {
+    "execution_account": "atmbench",
+    "home": "/Users/atmbench",
+    "hostname": "rand-m5.local",
+    "uid": 502
+  },
+  "generated_at": "2026-09-04T06:54:46.399585Z",
   "host_label": "rand-m5.local",
+  "measurement_note": "Throughput floors are end-to-end CLI (spawn-dominated) sensors; deeper lane-sensitivity redesign is deferred under AV-EXP-C6.",
+  "ratchet": {
+    "convention": "AO2 observed p50 minus tolerance",
+    "current_revision": 2,
+    "engaged": true,
+    "entries": [
+      {
+        "candidate_floor": 758.8592069539346,
+        "current_floor": 754.8485109810853,
+        "host_label": "rand-m5.local",
+        "observed_p50": 798.799165214668,
+        "previous_floor": 754.8485109810853,
+        "proposed_floor": 758.8592069539346,
+        "target": "read-fanout"
+      },
+      {
+        "candidate_floor": 759.154915125482,
+        "current_floor": 753.0965761111854,
+        "host_label": "rand-m5.local",
+        "observed_p50": 799.1104369741917,
+        "previous_floor": 753.0965761111854,
+        "proposed_floor": 759.154915125482,
+        "target": "query-fts"
+      },
+      {
+        "candidate_floor": 751.157910935966,
+        "current_floor": 739.2049099275857,
+        "host_label": "rand-m5.local",
+        "observed_p50": 790.6925378273327,
+        "previous_floor": 739.2049099275857,
+        "proposed_floor": 751.157910935966,
+        "target": "read-under-write-load"
+      }
+    ],
+    "previous_revision": 1,
+    "tolerance_pct": 5
+  },
   "report_html": "read-query-benchmark/index.html",
   "report_type": "benchmark",
   "schema_version": 1

@@ -1,0 +1,94 @@
+{
+  "artifact_kind": "send_message_benchmark_summary",
+  "benchmark_target": "tcp-tls",
+  "campaign_id": null,
+  "cleanup_failure": null,
+  "command": "just benchmark --target tcp-tls",
+  "daemon_version": "atm 1.4.12",
+  "direct_sqlite_message_write": null,
+  "doctor_after_restart_status": "passed",
+  "doctor_status": "passed",
+  "durability_after_restart": {
+    "expected_accepted_count": 1000000,
+    "method": "isolated_sqlite_exact_count_after_restart",
+    "observed_mailbox_count": 1000000,
+    "passed": true
+  },
+  "execution_daemon": "shipped_atm_daemon",
+  "failure": null,
+  "frames_per_connection": 8,
+  "generated_at": "2026-09-04T05:33:51.425810Z",
+  "hook_mode": "active",
+  "host_arch": "arm64",
+  "host_label": "local",
+  "host_os": "darwin",
+  "host_state_isolation": "dedicated_benchmark_os_account",
+  "messages_per_connection": 8,
+  "metrics": {
+    "accepted_count": 1000000,
+    "admissions_per_second": {
+      "max": 19401.368199928558,
+      "min": 18735.05264690398,
+      "p50": 19270.73099663212,
+      "p95": 19401.368199928558,
+      "p99": 19401.368199928558
+    },
+    "application_wire_bytes": {
+      "request": 849263890,
+      "response": 412263890,
+      "total": 1261527780
+    },
+    "application_wire_bytes_per_second": {
+      "max": 24479676.32625986,
+      "min": 23638952.6772311,
+      "p50": 24314844.83500058,
+      "p95": 24479676.32625986,
+      "p99": 24479676.32625986
+    },
+    "connection_count": 125000,
+    "connections_per_second": {
+      "max": 2425.1710249910698,
+      "min": 2341.8815808629975,
+      "p50": 2408.841374579015,
+      "p95": 2425.1710249910698,
+      "p99": 2425.1710249910698
+    },
+    "first_failure": null,
+    "interval_count": 10,
+    "interval_latency_ms": {
+      "max": 169.63170799863292,
+      "min": 1.1360000007698545,
+      "p50": 30.323166500238585,
+      "p95": 56.16066699985822,
+      "p99": 69.88516700039327
+    },
+    "passed_interval_count": 10,
+    "request_frames_per_second": {
+      "max": 19401.368199928558,
+      "min": 18735.05264690398,
+      "p50": 19270.73099663212,
+      "p95": 19401.368199928558,
+      "p99": 19401.368199928558
+    },
+    "requested_count": 1000000,
+    "response_count": 1000000,
+    "time_to_send_1k_s": {
+      "max": 0.05337588417000006,
+      "min": 0.051542756660001035,
+      "p50": 0.051892445835001126,
+      "p95": 0.05337588417000006,
+      "p99": 0.05337588417000006
+    }
+  },
+  "minimum_sample_count": 10,
+  "passed": true,
+  "peer_wire_security": "mutual-tls",
+  "requested_messages_per_sample": 100000,
+  "run_duration_s": 52.09374408300209,
+  "sample_count": 10,
+  "schema_version": 3,
+  "source_revision": "4f1202bf236a79a96302940028bef53b5b90f6cf",
+  "target_duration_s": 20.0,
+  "transport": "tcp",
+  "worker_limit": 512
+}

@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-BENCH-DIRTY-TREE-001>
+  a triage:Finding ;
+  triage:findingId "RRG-BENCH-DIRTY-TREE-001" ;
+  triage:title "benchmark-official refuses to run when the shared benchmark worktree holds untracked reports from an earlier campaign, and its error does not name the offending paths or the evidence-safe remedy" ;
+  triage:description "Release-readiness step 1 on prerelease/v1.4.12 (4f1202bf2), atmbench account on rand-m5, 2026-09-04T05:4xZ (arch-ctm under fenix@rand-m5 step-1 GO): just benchmark-official refused before execution with working tree is dirty before sync because scripts/smoke/benchmark_official.py require_clean_tree (line 258) treats any git status porcelain output, including untracked historical report files under site/reports/ left by earlier campaigns on the same shared worktree (their automatic push had failed, RRG-BENCH-FQDN-001 era, so they were never cleared), as a reason to refuse. The refusal is right in spirit (ambient state must not leak into official evidence) but the harness neither names the dirty paths nor distinguishes untracked prior evidence under site/reports/ from real source modifications, and the only remedy it suggests is commit or remove local changes, which invites deleting evidence. Classification: harness, minor. Fix: report the dirty paths in the error; treat untracked files under site/reports/ as retained evidence and either commit them on the evidence branch automatically before sync or instruct the operator to do exactly that; never suggest removal for report paths. Interim workaround used for the campaign: commit the untracked reports on the evidence branch as their own evidence commit, then rerun. No product code involved." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "benchmark-harness" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-04T05:52:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-04T05:47:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-DIRTY-TREE-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-DIRTY-TREE-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-09-04T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RRG-BENCH-DIRTY-TREE-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_official.py" ;
+  triage:line 258 ;
+  triage:snippet "def require_clean_tree(self, stage: str) -> None: dirty = self.command([git, status, --porcelain]).stdout.strip(); if dirty: raise OfficialBenchmarkError(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "4f1202bf2" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/4f1202bf2> .
+
+<urn:atm:triage:worktree/CAND/4f1202bf2>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "4f1202bf2" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/RRG-BENCH-DIRTY-TREE-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_official.py" ;
+  triage:line 259 ;
+  triage:snippet "QA-8: fixed at 6b8fe580f via classify_dirty_lines/dirty_tree_detail (benchmark_official.py:259-304): names every porcelain path, splits retained site/reports/ untracked evidence from real source changes, suggests (never executes) commit for evidence paths, never suggests deletion; independently confirmed closed by req-qa, arch-qa, and ruthless-boundary-qa, including a tracked-modification-under-site/reports bypass check" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "110d4d9ad" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/110d4d9ad-benchdirty> .
+
+<urn:atm:triage:worktree/CAND/110d4d9ad-benchdirty>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "110d4d9ad" ;
+  triage:orderIndex 2 .

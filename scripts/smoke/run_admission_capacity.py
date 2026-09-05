@@ -313,6 +313,8 @@ def v4_result_from_evidence(
         p50_admissions_per_second=(None if metrics is None else metrics.admissions_per_second.p50),
         baseline_p50_floor=context.baseline.p50_floor,
     )
+    if evidence.get("failure") and status == "FAIL":
+        status = "INCOMPLETE"
     return BenchmarkRunResult(
         campaign_id=context.campaign_id,
         host_label=str(evidence["host_label"]),
@@ -320,9 +322,9 @@ def v4_result_from_evidence(
         target=context.target,
         status=status,
         incomplete_reason=(
-            None
-            if complete
-            else str(evidence.get("failure") or "benchmark did not complete every lifecycle stage")
+            str(evidence.get("failure"))
+            if evidence.get("failure")
+            else (None if complete else "benchmark did not complete every lifecycle stage")
         ),
         generated_at=generated_at,
         source_revision=str(evidence.get("source_revision") or source_revision()),
@@ -347,7 +349,20 @@ def write_v4_evidence(
     try:
         result = v4_result_from_evidence(evidence, context=context)
     except (KeyError, ValueError) as error:
-        raise SmokeError(f"could not emit direct v4 benchmark evidence: {error}") from error
+        # Preserve malformed-lane evidence and let the suite continue.  Keep
+        # the offending counts in the reason while projecting a schema-valid
+        # INCOMPLETE result for publication.
+        evidence["passed"] = False
+        evidence["failure"] = f"count invariant violation (real counts are recorded): {error}"
+        result = v4_result_from_evidence(evidence, context=context)
+    if result.status == "FAIL" and result.messages_durable > result.messages_admitted:
+        result = result.model_copy(update={
+            "status": "INCOMPLETE",
+            "incomplete_reason": (
+                f"count invariant violation: requested={result.messages_requested}, "
+                f"admitted={result.messages_admitted}, durable={result.messages_durable}"
+            ),
+        })
     destination = directory / f"{artifact_id(campaign_id=context.campaign_id, target=context.target)}.json"
     atomic_json(destination, result.model_dump(mode="json"))
     return destination, result
@@ -1210,18 +1225,27 @@ def disposable_peer_host(roster: CapacityRoster) -> str:
     server-side pin map.  An operator may supply a host only through the
     explicit benchmark variable; no machine name is embedded in the runner.
     """
-    host = os.environ.get("ATM_CAPACITY_PEER_HOST", socket.getfqdn()).strip().rstrip(".")
+    configured = os.environ.get("ATM_CAPACITY_PEER_HOST")
+    host = (configured if configured is not None else socket.getfqdn()).strip().rstrip(".")
+    # Reverse-DNS on some hosts yields an ephemeral, oversized .arpa artifact.
+    # Prefer the durable local hostname before asking the operator to configure one.
+    invalid = host.endswith(".arpa") or len(host) > 64 or "." not in host or host.startswith(".")
+    if invalid and configured is None:
+        fallback = socket.gethostname().strip().rstrip(".")
+        if fallback and not fallback.endswith(".arpa") and len(fallback) <= 64 and "." in fallback:
+            host = fallback
     try:
         socket.inet_pton(socket.AF_INET, host)
         raise SmokeError("benchmark mTLS authority must be a durable hostname, not an IPv4 address")
     except OSError:
         pass
-    if "." not in host or host.startswith(".") or host.endswith("."):
+    authority = f"capacity-{roster.run_id}.{host}"
+    if "." not in host or host.startswith(".") or host.endswith(".") or host.endswith(".arpa") or len(host) > 64 or len(authority) > 64:
         raise SmokeError(
             "benchmark mTLS authority must be a durable DNS or mDNS hostname; "
             "set ATM_CAPACITY_PEER_HOST explicitly when local DNS is incomplete"
         )
-    return f"capacity-{roster.run_id}.{host}"
+    return authority
 
 
 def _required_command(command: list[str], env: dict[str, str], description: str) -> None:

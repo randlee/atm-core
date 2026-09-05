@@ -56,6 +56,7 @@ mod http1_server;
 mod loopback_tcp;
 mod message_handler;
 mod peer_connection_pool;
+mod peer_dial;
 mod peer_stream;
 mod private_staging;
 mod runtime_health;
@@ -74,7 +75,7 @@ use loopback_tcp::{
 };
 #[cfg(unix)]
 pub(crate) use runtime_setup::validate_unix_socket_path;
-use runtime_setup::{build_direct_peer_server, validate_config};
+use runtime_setup::{build_direct_peer_server, ensure_process_descriptor_limit, validate_config};
 #[cfg(unix)]
 use unix_socket::{
     UnixSocketPathGuard, UnixSocketStartupLock, bind_unix_listener, reclaim_stale_unix_socket,
@@ -478,6 +479,7 @@ impl HttpRuntime<Configured> {
     /// configured Unix socket is bound additively and uses the same router as
     /// the authenticated loopback listener.
     pub async fn start(self) -> Result<HttpRuntime<Running>, AtmError> {
+        ensure_process_descriptor_limit();
         let (listener, local_address) = bind_loopback_listener(&self.config, &self.health).await?;
         // Every enabled listener must be bound before publishing the loopback
         // endpoint record.  Otherwise a client could observe a Ready-looking
@@ -2373,7 +2375,7 @@ mod tests {
             .execute(ApiRequest::new(write_request()))
             .await
             .expect_err("a second connection must not reach the router while the first is active");
-        assert_eq!(error.code().as_str(), "ATM_WAIT_TIMEOUT");
+        assert_eq!(error.code().as_str(), "ATM_DAEMON_MAY_HAVE_EXECUTED");
         assert_eq!(handler.calls.load(Ordering::SeqCst), 1);
 
         handler.release.notify_waiters();

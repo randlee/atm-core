@@ -1,0 +1,55 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-TRUST-KEY-LOOPBACK-001>
+  a triage:Finding ;
+  triage:findingId "RRG-TRUST-KEY-LOOPBACK-001" ;
+  triage:title "self-send to <agent>@<team>.localhost dials loopback:43101 but the mTLS client config is selected by bare trust hostname, so a trust entry named localhost pinned to another daemon on 43102 shadows the local daemon and the send fails with an mTLS pin mismatch" ;
+  triage:description "Reported by skillrx@hermes on rand-m5 at ~20:55Z on 2026-09-03 and independently by loki: atm send skillrx@hermes.localhost exits 3 RemoteDeliveryUnconfirmed with an mTLS pin mismatch. Sanitized facts: the local daemon on 43101 presents certificate fingerprint prefix BFCA while the enabled trust entry named localhost is pinned to fingerprint prefix 4E7B with https_port 43102 (an ssh tunnel to the Colima VM daemon); the send dialed localhost:43101 and verified against the 43102 pin. quality-mgr verdict 01M1MHGXV9KT656R81YSPZE8PK: product defect, Blocking for the readiness gate because it breaks the documented localhost smoke stage (the rand-m5 site/reports smoke rows for localhost and local-ip stages at 20260831T2032Z and 20260831T2035Z already FAILED for the same reason). Root cause: routing keys the self-send by address (is_legacy_direct_host short-circuits localhost to the loopback port without consulting peers) while trust keys by bare HostName (client_config_for matches candidate.authority == peer), so two different daemons that share the hostname literal localhost cannot be distinguished and a foreign entry silently shadows the local self-send route. Note that the trust entry itself is a harness isolation violation on rand-m5 (Colima peers must never be named localhost; being removed) and is the primary classification; this record is the secondary product record and stands on its own. Required fix shape per quality-mgr: key trust lookups the same way routing does (host plus https_port, or the resolved dial address), so an entry pinned for 43102 can never be consulted for a 43101 dial; as defense in depth, warn (not hard-reject, to avoid a startup regression on hosts that still carry such an entry) when an enabled trust entry declares a loopback literal host that collides with the local daemon's own self-send address. Closure bar: a regression test that seeds a trust entry named localhost on a non-local port with a foreign fingerprint and proves a localhost self-send still verifies against the local daemon; a test for the warning; no change to the frozen legacy synchronous daemon; the readiness localhost smoke stage passing on rand-m5 after the entry is removed and again with a deliberately colliding entry present. QA-4c update 2026-09-04T03:35Z (quality-mgr, code-only verdict, no host access): the code and regression-test halves of the closure bar are already satisfied on this branch as of commit 462370d3b (ancestor of 758d484b9, landed before this finding was even triaged): crates/peer-tls/src/lib.rs:270 client_config_for now matches candidate.authority == peer AND candidate.https_port == port against the actually-dialed TCP port; test rrg_trust_key_loopback_001_client_config_requires_exact_authority_port (lib.rs:767) seeds a foreign pin at localhost:43102 and a real pin at rand-m5.local:43101, proves a 43101 dial against the foreign-pinned localhost authority is rejected and a 43102 dial still succeeds; loopback_port_collisions (lib.rs:71-90) implements the warn-not-reject defense-in-depth, wired at adapter construction and covered by test loopback_port_collisions_returns_only_enabled_local_matches (lib.rs:603). Do not re-dispatch a code fix for this finding. What remains, and is the sole reason this record stays open: the record's own live-evidence bar (readiness localhost smoke stage passing on rand-m5 with the offending entry removed, and again with a deliberately colliding entry present) has not been run -- per standing project direction the rand-m5 host daemon stays at 1.4.10 for now, so this live proof is held pending that decision, not pending further code." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "peer-trust" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-03T21:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S2 ;
+  triage:foundAt "2026-09-03T20:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-TRUST-KEY-LOOPBACK-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-TRUST-KEY-LOOPBACK-001/CAND-2> ;
+  triage:triageRecordVersion "3" ;
+  triage:releaseDecision "Rand decision 2026-09-04 (team-lead ruling 01M1NX1PDN9W25WGCB6B2D4Y91): deferred to post-release. The 1.4.13 release ships without this fix; tracked as a known follow-up. Status and dispatchReady unchanged (already open, no pre-release dispatch); arch-ctm idle on this item. Companion records: RRG-DIRECT-PEER-BIND-ADDR-001, RRG-CLI-DIRECT-PEER-DIAL-PORT-001, RRG-TRUST-KEY-LOOPBACK-001." .
+
+<urn:atm:triage:occurrence/RRG-TRUST-KEY-LOOPBACK-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/send.rs" ;
+  triage:line 726 ;
+  triage:snippet "fn is_legacy_direct_host(raw_host: &str) -> bool {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "500d13a35" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/500d13a35> .
+
+<urn:atm:triage:occurrence/RRG-TRUST-KEY-LOOPBACK-001/CAND-2>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 229 ;
+  triage:snippet ".find(|candidate| candidate.authority == *peer)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "500d13a35" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/500d13a35> .
+
+<urn:atm:triage:worktree/CAND/500d13a35>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "500d13a35" ;
+  triage:orderIndex 1 .

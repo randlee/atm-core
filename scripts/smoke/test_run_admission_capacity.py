@@ -402,6 +402,27 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertNotIn("transport", recorded)
         self.assertNotIn("thresholds", recorded)
 
+    def test_matrix_writer_publishes_count_invariant_violation_with_real_counts(self):
+        evidence = complete_evidence(
+            host_label="rand-m5", transport="uds", benchmark_target="uds",
+            frames_per_connection=8, source_revision="a" * 40,
+            durability_after_restart={"expected_accepted_count": 1, "observed_mailbox_count": 95, "passed": False},
+        )
+        evidence["runs"][0]["intervals"][0]["accepted_count"] = 1
+        context = RUNNER.V4EmissionContext(
+            target="uds", campaign_id="20260824T000000Z-rand-m5", os_name="macos",
+            baseline=RUNNER.BaselineEntry(host_label="rand-m5", target="uds", p50_floor=1, approved_by="qa", effective_from="2026-08-24T00:00:00Z"),
+            binary_hashes={"atm": "b" * 64, "atm-daemon": "c" * 64},
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path, result = RUNNER.write_v4_evidence(Path(directory), evidence, context)
+            recorded = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(result.status, "INCOMPLETE")
+        self.assertEqual((recorded["messages_requested"], recorded["messages_admitted"], recorded["messages_durable"]), (1000, 1, 95))
+        self.assertIn("requested=1000", result.incomplete_reason)
+        self.assertIn("admitted=1", result.incomplete_reason)
+        self.assertIn("durable=95", result.incomplete_reason)
+
     def test_durability_count_after_restart_is_exact_and_roster_scoped(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1853,6 +1874,17 @@ class AdmissionCapacityTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"ATM_CAPACITY_PEER_HOST": "m5.local"}, clear=False):
             self.assertEqual(RUNNER.disposable_peer_host(first), "capacity-first.m5.local")
             self.assertEqual(RUNNER.disposable_peer_host(second), "capacity-second.m5.local")
+
+    def test_disposable_peer_authority_falls_back_from_reverse_dns_artifact(self):
+        roster = RUNNER.CapacityRoster("run", "team", "agent", "recipient")
+        with mock.patch.object(RUNNER.socket, "getfqdn", return_value="1.0.0.0." + "x" * 70 + ".ip6.arpa"), mock.patch.object(RUNNER.socket, "gethostname", return_value="rand-m5.local"):
+            self.assertEqual(RUNNER.disposable_peer_host(roster), "capacity-run.rand-m5.local")
+
+    def test_disposable_peer_authority_rejects_oversized_configured_host(self):
+        roster = RUNNER.CapacityRoster("run", "team", "agent", "recipient")
+        with mock.patch.dict(os.environ, {"ATM_CAPACITY_PEER_HOST": "x" * 65}, clear=False):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "ATM_CAPACITY_PEER_HOST"):
+                RUNNER.disposable_peer_host(roster)
 
     def test_public_tcp_targets_select_only_the_ordinary_daemon_mode(self):
         self.assertEqual(

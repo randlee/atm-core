@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-BENCH-FQDN-001>
+  a triage:Finding ;
+  triage:findingId "RRG-BENCH-FQDN-001" ;
+  triage:title "Official benchmark on atmbench derives the disposable mTLS authority from socket.getfqdn(), which on rand-m5 now returns a 72-char ip6.arpa reverse name; cert generation fails and the tcp lane collapses" ;
+  triage:description "Release-readiness step 1 on rand-m5/atmbench, candidate 1.4.9 @ 2e3c93a7c (tag prerelease/v1.4.9), evidence commit 5e596404e / PR #1146, campaign 20260903T183628Z-m5-atmbench: sqlite, uds and tcp-tls lanes are INCOMPLETE with 'could not generate disposable P-256 mTLS certificate: ... asn1 encoding routines ... string too long ... maxsize=64' and the tcp lane FAILs at p50 422.18 msg/s against the 17000 floor with first_failure HTTP 503 ATM_MAILBOX_WRITE_FAILED 'failed to look up graft receiver endpoint'. Root cause for the certificate failure: scripts/smoke/run_admission_capacity.py disposable_peer_host() defaults to socket.getfqdn(); on rand-m5 (randlee account, verified 2026-09-03T18:55Z) getfqdn() returns '1.0.0.0.[...].ip6.arpa' (72 characters, an IPv6 loopback reverse-lookup artifact of the host resolver configuration, 11 scutil resolvers; gethostname() is rand-m5.local), which exceeds the X.509 commonName limit of 64 and the runner's own 'durable hostname' intent. The last passing m5-atmbench campaign (20260826T204324Z) predates this resolver state. The runner accepts an explicit ATM_CAPACITY_PEER_HOST override, so the operator-side workaround is ATM_CAPACITY_PEER_HOST=rand-m5.local on atmbench; the harness defect is that a .arpa / over-length getfqdn() result is accepted silently instead of being rejected with an actionable error or replaced by a sane fallback. The tcp-lane 503 'failed to look up graft receiver endpoint' persisted on 1.4.10 with the valid ATM_CAPACITY_PEER_HOST=rand-m5.local override, so it is a product finding tracked separately as RRG-INGRESS-ADMIT-001 and is out of scope for this record. Harness fix landed at 50e8614f9 on chore/readiness-candidate-1.4.7 (accepted by quality-mgr QA-4a): an over-length or .arpa getfqdn() result is rejected with an actionable error and rand-m5.local is used as the explicit host." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "benchmark-harness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-03T18:58:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S1 ;
+  triage:foundAt "2026-09-03T18:36:28Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-FQDN-001/CAND-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-FQDN-001/CAND-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-FQDN-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-09-03T22:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/RRG-BENCH-FQDN-001/CAND-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1213 ;
+  triage:snippet "host = os.environ.get(\"ATM_CAPACITY_PEER_HOST\", socket.getfqdn()).strip().rstrip(\".\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "2e3c93a7c" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/2e3c93a7c> .
+
+<urn:atm:triage:occurrence/RRG-BENCH-FQDN-001/CAND-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1226 ;
+  triage:snippet "f\"CN = {host}\\n\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "2e3c93a7c" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/2e3c93a7c> .
+
+<urn:atm:triage:worktree/CAND/2e3c93a7c>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "2e3c93a7c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/RRG-BENCH-FQDN-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1213 ;
+  triage:snippet "quality-mgr QA-4b independent re-verification confirmed fixed at 50e8614f9: over-length/.arpa getfqdn() result rejected with actionable error, rand-m5.local used as explicit host" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "d1e148a6b" ;
+  triage:occursIn <urn:atm:triage:worktree/CAND/d1e148a6b> .
+
+<urn:atm:triage:worktree/CAND/d1e148a6b>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/chore/readiness-candidate-1.4.7" ;
+  triage:branch "chore/readiness-candidate-1.4.7" ;
+  triage:headSha "d1e148a6b" ;
+  triage:orderIndex 2 .

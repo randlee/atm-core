@@ -64,6 +64,25 @@ atm log filter --level error
 Use doctor and retained logs first. Those are the supported operator-facing
 surfaces for daemon/runtime recovery.
 
+### macOS Local Network Permission Prompt
+
+On macOS, the first time a freshly built or re-signed `atm` daemon or CLI
+touches the local network the system shows a Local Network permission
+prompt. Until it is answered the daemon's network path is blocked: a
+loopback `atm send` fails with `RemoteDeliveryUnconfirmed` and cross-host
+sends report "could not connect to direct peer", while `atm doctor` can
+still pass. Hardware-smoke runs have also reported `atm doctor` timing
+out while a permission dialog was pending. If those symptoms appear
+right after a build:
+
+1. Answer the prompt, or grant access under System Settings → Privacy &
+   Security → Local Network for the `atm` and `atm-daemon` binaries.
+2. Confirm `atm doctor --json` returns promptly and one loopback
+   `atm send` to yourself is accepted; a passing doctor alone does not
+   prove the grant is in place.
+3. Re-check after every rebuild or re-sign; the grant is per binary and a
+   new build can trigger the prompt again (tracked as atm-core #1140).
+
 ## Post-Send Warning Surface
 
 Symptoms:

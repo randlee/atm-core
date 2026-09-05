@@ -1,0 +1,177 @@
+{
+  "campaign_id": "20260903T183628Z-m5-atmbench",
+  "completed_at": "2026-09-03T18:36:42.444157Z",
+  "host_label": "m5-atmbench",
+  "os": "macos",
+  "phase": "ao2",
+  "results": [
+    {
+      "baseline": {
+        "p50_floor": 35000.0,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "055e80a9213d8cff5a271258b5bb71d6784022d0e19618f901eeb2f8324a6f48",
+        "atm-daemon": "5ee4ec4a45f58290d3bea95b5a307b3415e8261cd075e852a970d6c1d426f9ab"
+      },
+      "campaign_id": "20260903T183628Z-m5-atmbench",
+      "direct_sqlite_message_write": null,
+      "durability_after_restart": null,
+      "frames_per_connection": 0,
+      "generated_at": "2026-09-03T18:36:39.681959Z",
+      "host_label": "m5-atmbench",
+      "incomplete_reason": "benchmark snapshot phase failed: could not generate disposable P-256 mTLS certificate: problems making Certificate Request\n8431459968:error:0DFFF097:asn1 encoding routines:CRYPTO_internal:string too long:/AppleInternal/Library/BuildRoots/4~CNqEugB7-7yoTeHDwKLZ0PRIsI79y9XP33qXeIo/Library/Caches/com.apple.xbs/TemporaryDirectory.MoIAiI/Sources/libressl/libressl-3.3/crypto/asn1/a_mbstr.c:156:maxsize=64; recovery: keep the benchmark daemon stopped and inspect retained snapshot staging material",
+      "messages_admitted": 0,
+      "messages_durable": 0,
+      "messages_requested": 0,
+      "metrics": null,
+      "os": "macos",
+      "schema_version": 4,
+      "source_revision": "863ee20139cf6ffaf0647601c4b9dfae4a37ab51",
+      "status": "INCOMPLETE",
+      "target": "sqlite"
+    },
+    {
+      "baseline": {
+        "p50_floor": 18000.0,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "055e80a9213d8cff5a271258b5bb71d6784022d0e19618f901eeb2f8324a6f48",
+        "atm-daemon": "5ee4ec4a45f58290d3bea95b5a307b3415e8261cd075e852a970d6c1d426f9ab"
+      },
+      "campaign_id": "20260903T183628Z-m5-atmbench",
+      "direct_sqlite_message_write": null,
+      "durability_after_restart": null,
+      "frames_per_connection": 8,
+      "generated_at": "2026-09-03T18:36:40.494445Z",
+      "host_label": "m5-atmbench",
+      "incomplete_reason": "benchmark snapshot phase failed: could not generate disposable P-256 mTLS certificate: problems making Certificate Request\n8431459968:error:0DFFF097:asn1 encoding routines:CRYPTO_internal:string too long:/AppleInternal/Library/BuildRoots/4~CNqEugB7-7yoTeHDwKLZ0PRIsI79y9XP33qXeIo/Library/Caches/com.apple.xbs/TemporaryDirectory.MoIAiI/Sources/libressl/libressl-3.3/crypto/asn1/a_mbstr.c:156:maxsize=64; recovery: keep the benchmark daemon stopped and inspect retained snapshot staging material",
+      "messages_admitted": 0,
+      "messages_durable": 0,
+      "messages_requested": 0,
+      "metrics": null,
+      "os": "macos",
+      "schema_version": 4,
+      "source_revision": "863ee20139cf6ffaf0647601c4b9dfae4a37ab51",
+      "status": "INCOMPLETE",
+      "target": "uds"
+    },
+    {
+      "baseline": {
+        "p50_floor": 17000.0,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "055e80a9213d8cff5a271258b5bb71d6784022d0e19618f901eeb2f8324a6f48",
+        "atm-daemon": "5ee4ec4a45f58290d3bea95b5a307b3415e8261cd075e852a970d6c1d426f9ab"
+      },
+      "campaign_id": "20260903T183628Z-m5-atmbench",
+      "direct_sqlite_message_write": null,
+      "durability_after_restart": {
+        "expected_accepted_count": 600,
+        "method": "isolated_sqlite_exact_count_after_restart",
+        "observed_mailbox_count": 600,
+        "passed": true
+      },
+      "frames_per_connection": 8,
+      "generated_at": "2026-09-03T18:36:40.623858Z",
+      "host_label": "m5-atmbench",
+      "incomplete_reason": null,
+      "messages_admitted": 600,
+      "messages_durable": 600,
+      "messages_requested": 1000,
+      "metrics": {
+        "accepted_count": 600,
+        "admissions_per_second": {
+          "max": 422.18351542814537,
+          "min": 422.18351542814537,
+          "p50": 422.18351542814537,
+          "p95": 422.18351542814537,
+          "p99": 422.18351542814537
+        },
+        "application_wire_bytes": {
+          "request": 820265,
+          "response": 400666,
+          "total": 1220931
+        },
+        "application_wire_bytes_per_second": {
+          "max": 859094.9027920015,
+          "min": 859094.9027920015,
+          "p50": 859094.9027920015,
+          "p95": 859094.9027920015,
+          "p99": 859094.9027920015
+        },
+        "connection_count": 125,
+        "connections_per_second": {
+          "max": 87.95489904753028,
+          "min": 87.95489904753028,
+          "p50": 87.95489904753028,
+          "p95": 87.95489904753028,
+          "p99": 87.95489904753028
+        },
+        "first_failure": "HTTP 503: {\"code\":\"ATM_MAILBOX_WRITE_FAILED\",\"message\":\"failed to look up graft receiver endpoint\\n  Recovery: Repair mailbox access or wait for the competing operation, then retry.\\n  Recovery: Repair mailbox access or wait for the competing operation, then retry.\"}",
+        "interval_count": 1,
+        "interval_latency_ms": {
+          "max": 1415.3893750626594,
+          "min": 41.929000057280064,
+          "p50": 599.952916498296,
+          "p95": 1089.0579170081764,
+          "p99": 1302.7598339831457
+        },
+        "passed_interval_count": 0,
+        "request_frames_per_second": {
+          "max": 703.6391923802422,
+          "min": 703.6391923802422,
+          "p50": 703.6391923802422,
+          "p95": 703.6391923802422,
+          "p99": 703.6391923802422
+        },
+        "requested_count": 1000,
+        "response_count": 1000,
+        "time_to_send_1k_s": {
+          "max": 2.368638195136252,
+          "min": 2.368638195136252,
+          "p50": 2.368638195136252,
+          "p95": 2.368638195136252,
+          "p99": 2.368638195136252
+        }
+      },
+      "os": "macos",
+      "schema_version": 4,
+      "source_revision": "863ee20139cf6ffaf0647601c4b9dfae4a37ab51",
+      "status": "FAIL",
+      "target": "tcp"
+    },
+    {
+      "baseline": {
+        "p50_floor": 13500.0,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "055e80a9213d8cff5a271258b5bb71d6784022d0e19618f901eeb2f8324a6f48",
+        "atm-daemon": "5ee4ec4a45f58290d3bea95b5a307b3415e8261cd075e852a970d6c1d426f9ab"
+      },
+      "campaign_id": "20260903T183628Z-m5-atmbench",
+      "direct_sqlite_message_write": null,
+      "durability_after_restart": null,
+      "frames_per_connection": 8,
+      "generated_at": "2026-09-03T18:36:42.318969Z",
+      "host_label": "m5-atmbench",
+      "incomplete_reason": "benchmark snapshot phase failed: could not generate disposable P-256 mTLS certificate: problems making Certificate Request\n8431459968:error:0DFFF097:asn1 encoding routines:CRYPTO_internal:string too long:/AppleInternal/Library/BuildRoots/4~CNqEugB7-7yoTeHDwKLZ0PRIsI79y9XP33qXeIo/Library/Caches/com.apple.xbs/TemporaryDirectory.MoIAiI/Sources/libressl/libressl-3.3/crypto/asn1/a_mbstr.c:156:maxsize=64; recovery: keep the benchmark daemon stopped and inspect retained snapshot staging material",
+      "messages_admitted": 0,
+      "messages_durable": 0,
+      "messages_requested": 0,
+      "metrics": null,
+      "os": "macos",
+      "schema_version": 4,
+      "source_revision": "863ee20139cf6ffaf0647601c4b9dfae4a37ab51",
+      "status": "INCOMPLETE",
+      "target": "tcp-tls"
+    }
+  ],
+  "schema_version": 4,
+  "source_revision": "863ee20139cf6ffaf0647601c4b9dfae4a37ab51",
+  "started_at": "2026-09-03T18:36:28.177152Z",
+  "status": "INCOMPLETE"
+}

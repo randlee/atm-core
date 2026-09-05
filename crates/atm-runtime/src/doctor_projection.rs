@@ -11,7 +11,8 @@ use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::doctor::{
     DoctorExecutionContext, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity,
-    HerdrPresenceDoctor, RuntimeDoctorPorts, append_doctor_findings, run_doctor_with_runtime_ports,
+    HerdrPresenceDoctor, ReaderLanesDoctorReport, RuntimeDoctorPorts, append_doctor_findings,
+    run_doctor_with_runtime_ports,
 };
 use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::RuntimeStatusSnapshot;
@@ -24,6 +25,9 @@ use crate::{StateHandoffDiagnostics, SupervisorState};
 pub struct DoctorProjectionConfig {
     pub worker_count: usize,
     pub queue_depth: usize,
+    /// Effective capacities selected by the live storage assembly. The field
+    /// remains absent for projections not attached to a running daemon.
+    pub reader_lanes: Option<ReaderLanesDoctorReport>,
 }
 
 impl Default for DoctorProjectionConfig {
@@ -31,6 +35,7 @@ impl Default for DoctorProjectionConfig {
         Self {
             worker_count: 4,
             queue_depth: 16,
+            reader_lanes: None,
         }
     }
 }
@@ -60,6 +65,7 @@ pub trait DoctorProjection: Send + Sync {
 pub struct StorageDoctorProjection {
     sender: tokio::sync::mpsc::Sender<DoctorJob>,
     presence: Arc<dyn HerdrPresenceDoctor>,
+    reader_lanes: Option<ReaderLanesDoctorReport>,
     workers: Arc<DoctorWorkers>,
 }
 
@@ -97,6 +103,7 @@ impl StorageDoctorProjection {
         })?;
         let (sender, receiver) = tokio::sync::mpsc::channel(config.queue_depth);
         let presence = Arc::clone(&doctor_ports.herdr_presence);
+        let reader_lanes = config.reader_lanes;
         let receiver = Arc::new(tokio::sync::Mutex::new(receiver));
         let mut handles = Vec::with_capacity(config.worker_count);
         for _ in 0..config.worker_count {
@@ -111,6 +118,7 @@ impl StorageDoctorProjection {
         Ok(Self {
             sender,
             presence,
+            reader_lanes,
             workers: Arc::new(DoctorWorkers { handles }),
         })
     }
@@ -194,6 +202,7 @@ impl DoctorProjection for StorageDoctorProjection {
             );
         }
         report.daemon_context = context.daemon_context;
+        report.reader_lanes = self.reader_lanes;
         Ok(report)
     }
 }

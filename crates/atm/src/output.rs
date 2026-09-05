@@ -330,6 +330,19 @@ fn render_doctor_peer_config(peer_config: &atm_core::doctor::PeerConfigDoctorRep
             if peer.enabled { "enabled" } else { "disabled" }
         ));
     }
+    for legacy_peer in &peer_config.legacy_literal_ip_peers {
+        rendered.push_str(&format!(
+            "\n  legacy literal-IP peer {} ({}): migrate with `{}` or retire with `{}`",
+            legacy_peer.host,
+            if legacy_peer.enabled {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            legacy_peer.migrate_command,
+            legacy_peer.revoke_command
+        ));
+    }
     rendered
 }
 
@@ -1026,11 +1039,54 @@ mod tests {
                 enabled: true,
             }],
             validation_failure: None,
+            legacy_literal_ip_peers: Vec::new(),
         });
 
         assert!(rendered.contains("sha256:public-fingerprint"));
         assert!(rendered.contains("peer.example.test:43101 (enabled)"));
         assert!(!rendered.contains("private_key_ref"));
         assert!(!rendered.contains("keychain:secret"));
+    }
+
+    /// ATM-QA-001 / RBQA-F001: the human-readable `atm doctor` text must
+    /// surface every legacy literal-IP trusted-peer row and its exact
+    /// remediation commands, not just the `--json` output.
+    #[test]
+    fn doctor_peer_text_surfaces_legacy_literal_ip_peers_and_remediation() {
+        let rendered = render_doctor_peer_config(&PeerConfigDoctorReport {
+            configured_interface_count: 1,
+            enabled_interface_count: 1,
+            certificate_fingerprint: Some("sha256:public-fingerprint".to_string()),
+            trusted_peer_count: 2,
+            enabled_trusted_peer_count: 1,
+            trusted_peers: Vec::new(),
+            validation_failure: None,
+            legacy_literal_ip_peers: vec![
+                atm_core::doctor::LegacyLiteralIpPeerDoctorReport {
+                    host: "192.168.128.29".to_string(),
+                    enabled: true,
+                    migrate_command: "atm peer trust migrate --map 192.168.128.29=<hostname> --yes"
+                        .to_string(),
+                    revoke_command: "atm peer trust revoke --host 192.168.128.29 --yes".to_string(),
+                },
+                atm_core::doctor::LegacyLiteralIpPeerDoctorReport {
+                    host: "10.0.0.5".to_string(),
+                    enabled: false,
+                    migrate_command: "atm peer trust migrate --map 10.0.0.5=<hostname> --yes"
+                        .to_string(),
+                    revoke_command: "atm peer trust revoke --host 10.0.0.5 --yes".to_string(),
+                },
+            ],
+        });
+
+        assert!(rendered.contains("192.168.128.29"));
+        assert!(rendered.contains("(enabled)"));
+        assert!(rendered.contains("atm peer trust migrate --map 192.168.128.29=<hostname> --yes"));
+        assert!(rendered.contains("atm peer trust revoke --host 192.168.128.29 --yes"));
+
+        assert!(rendered.contains("10.0.0.5"));
+        assert!(rendered.contains("(disabled)"));
+        assert!(rendered.contains("atm peer trust migrate --map 10.0.0.5=<hostname> --yes"));
+        assert!(rendered.contains("atm peer trust revoke --host 10.0.0.5 --yes"));
     }
 }

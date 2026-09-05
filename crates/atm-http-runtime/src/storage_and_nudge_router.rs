@@ -137,6 +137,68 @@ impl ControlPathSyncBridge {
     }
 }
 
+/// Receiver-hook work that a peer response does not wait for.
+///
+/// A peer write is acknowledged as soon as the message is durably persisted,
+/// so its receiver hook (a tmux nudge, a graft handoff) cannot run on the
+/// response path without risking the caller's absolute request budget. The
+/// hook is therefore detached from the response but never unobserved: every
+/// warning it produces is logged with the originating request id and counted
+/// on `RuntimeHealth`, and daemon shutdown drains whatever is still in
+/// flight instead of abandoning it mid-emission.
+#[derive(Clone, Default)]
+struct DetachedReceivedHooks {
+    tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
+}
+
+impl DetachedReceivedHooks {
+    fn observe<F>(&self, runtime_health: RuntimeHealth, request_id: RequestId, hook: F)
+    where
+        F: Future<Output = Vec<WarningEntry>> + Send + 'static,
+    {
+        let task = tokio::spawn(async move {
+            for warning in hook.await {
+                runtime_health.record_detached_received_hook_warning();
+                tracing::warn!(
+                    subsystem = "atm_http_runtime.received_hook",
+                    action = "peer_received_hook",
+                    outcome = "warning",
+                    %request_id,
+                    code = ?warning.code,
+                    detail = %warning.message,
+                    "receiver hook reported a warning after the peer write was durably persisted"
+                );
+            }
+        });
+        let mut tasks = self.lock();
+        tasks.retain(|task| !task.is_finished());
+        tasks.push(task);
+    }
+
+    /// Awaits every in-flight detached hook, bounded by `deadline`.
+    ///
+    /// Tasks that outlive the bound stay detached: this drain must not delay
+    /// daemon shutdown past its own budget.
+    async fn drain(&self, deadline: std::time::Duration) {
+        let pending = std::mem::take(&mut *self.lock());
+        let _timed_out = tokio::time::timeout(deadline, async {
+            for task in pending {
+                let _joined = task.await;
+            }
+        })
+        .await;
+    }
+
+    /// The registry holds only `JoinHandle`s and nothing under this guard can
+    /// panic, so a poisoned lock would mean an unrelated invariant already
+    /// broke; surfacing it is correct.
+    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<tokio::task::JoinHandle<()>>> {
+        self.tasks
+            .lock()
+            .expect("detached received-hook registry is never held across a panic")
+    }
+}
+
 /// The replacement implementation of the canonical write operation.
 ///
 /// Storage stays behind `LocalServiceRuntime`'s core interfaces and
@@ -161,6 +223,7 @@ pub struct StorageAndNudgeRouter {
     bare_cli_fifo: BareCliFifo,
     bare_cli_queue_full_drops: BareCliQueueFullDrops,
     member_state_transition_sink: Option<Arc<dyn crate::MemberStateTransitionSink>>,
+    detached_received_hooks: DetachedReceivedHooks,
 }
 
 impl StorageAndNudgeRouter {
@@ -193,6 +256,7 @@ impl StorageAndNudgeRouter {
             bare_cli_fifo: Default::default(),
             bare_cli_queue_full_drops: Default::default(),
             member_state_transition_sink: None,
+            detached_received_hooks: DetachedReceivedHooks::default(),
         }
     }
 
@@ -297,12 +361,15 @@ impl StorageAndNudgeRouter {
     }
 
     /// Drains retained authenticated peer connections after HTTP request
-    /// admission has stopped. Individual request guards remain non-blocking
-    /// on drop; only this daemon lifecycle path awaits driver termination.
+    /// admission has stopped, then the receiver-hook work that peer responses
+    /// deliberately did not wait for. Individual request guards remain
+    /// non-blocking on drop; only this daemon lifecycle path awaits driver
+    /// termination.
     pub async fn shutdown_peer_connections(&self, deadline: std::time::Duration) {
         if let Some(pool) = &self.peer_connection_pool {
             pool.shutdown(deadline).await;
         }
+        self.detached_received_hooks.drain(deadline).await;
     }
 
     async fn commit_write(
@@ -606,20 +673,27 @@ impl StorageAndNudgeRouter {
         let runtime_health = self.runtime_health.clone();
         let bare_cli_queue_full_drops = self.bare_cli_queue_full_drops.clone();
         let daemon_context = self.daemon_context.clone();
-        let mut runtime_status = runtime_health.snapshot();
-        runtime_status.bare_cli_queue_full_drops_total =
+        let mut initial_runtime_status = runtime_health.snapshot();
+        initial_runtime_status.bare_cli_queue_full_drops_total =
             bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
         let mut report = doctor_projection
             .project(
                 query.with_daemon_paths(self.daemon_home.clone()),
                 DoctorProjectionContext {
-                    runtime_status: Some(runtime_status),
+                    runtime_status: Some(initial_runtime_status),
                     daemon_context,
                     handoff,
                 },
                 deadline,
             )
             .await?;
+        let mut runtime_status = report.member_roster.as_ref().map_or_else(
+            || runtime_health.snapshot(),
+            |roster| runtime_health.snapshot_with_roster(roster),
+        );
+        runtime_status.bare_cli_queue_full_drops_total =
+            bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
+        report.runtime_status = Some(runtime_status);
         let runtime_status = report
             .runtime_status
             .as_ref()
@@ -725,6 +799,7 @@ impl StorageAndNudgeRouter {
                 store
                     .register(&request, atm_core::types::IsoTimestamp::now().into_inner())
                     .map_err(graft_store_error)?;
+                runtime.invalidate_graft_receiver_lease(&request.team, &request.agent);
                 Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverRegister))
             })
             .await
@@ -755,6 +830,7 @@ impl StorageAndNudgeRouter {
                         atm_core::types::IsoTimestamp::now().into_inner(),
                     )
                     .map_err(graft_store_error)?;
+                runtime.invalidate_graft_receiver_lease(&request.team, &request.agent);
                 Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverRefresh))
             })
             .await
@@ -775,6 +851,7 @@ impl StorageAndNudgeRouter {
                 store
                     .unregister(&request.team, &request.agent, &request.owner_generation)
                     .map_err(graft_store_error)?;
+                runtime.invalidate_graft_receiver_lease(&request.team, &request.agent);
                 Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverUnregister))
             })
             .await
@@ -886,10 +963,24 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             }
             if committed.newly_persisted {
                 let hook = self.clone();
-                let warnings = hook
-                    .emit_received_hook(committed.received_hook_dispatches, deadline)
-                    .await;
-                append_warnings(&mut committed.outcome, warnings);
+                let hook_task = async move {
+                    hook.emit_received_hook(committed.received_hook_dispatches, deadline)
+                        .await
+                };
+                if matches!(ingress, AuthenticatedIngress::Peer) {
+                    // Peer writes acknowledge durable persistence immediately; a
+                    // receiver hook (tmux nudge, etc.) must not hold the remote
+                    // request open past its absolute budget. The hook still runs
+                    // and its warnings are logged against this request id.
+                    self.detached_received_hooks.observe(
+                        self.runtime_health.clone(),
+                        request_id,
+                        hook_task,
+                    );
+                } else {
+                    let warnings = hook_task.await;
+                    append_warnings(&mut committed.outcome, warnings);
+                }
             }
             Ok(ApiResponse::new(write_response(committed.outcome)))
         })
@@ -2277,6 +2368,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn doctor_projection_serializes_effective_storage_reader_lane_settings() {
+        let fixture = fixture(true, None, None);
+        let assembly =
+            open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
+        let reader_lanes = assembly
+            .reader_lanes
+            .expect("SQLite assembly exposes its effective reader lanes");
+        assert_eq!(reader_lanes.mailbox.pool_size, 4);
+        assert_eq!(reader_lanes.mailbox.queue_depth, 16);
+        assert_eq!(reader_lanes.search.pool_size, 2);
+        assert_eq!(reader_lanes.search.queue_depth, 8);
+        let projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig {
+                reader_lanes: Some(reader_lanes),
+                ..DoctorProjectionConfig::default()
+            },
+            assembly.service_runtime,
+            assembly.doctor_ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start doctor projection");
+        let report = projection
+            .project(
+                atm_core::doctor::DoctorQuery::default(),
+                DoctorProjectionContext::default(),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("doctor report");
+        let json = serde_json::to_value(&report).expect("doctor report serializes");
+        assert_eq!(json["reader_lanes"]["mailbox"]["pool_size"], 4);
+        assert_eq!(json["reader_lanes"]["mailbox"]["queue_depth"], 16);
+        assert_eq!(json["reader_lanes"]["search"]["pool_size"], 2);
+        assert_eq!(json["reader_lanes"]["search"]["queue_depth"], 8);
+    }
+
+    #[tokio::test]
     async fn doctor_projection_serves_parallel_control_requests_without_the_read_bridge() {
         let fixture = fixture(true, None, None);
         let assembly =
@@ -2324,6 +2452,7 @@ mod tests {
                 DoctorProjectionConfig {
                     worker_count: 1,
                     queue_depth: 1,
+                    ..DoctorProjectionConfig::default()
                 },
                 assembly.service_runtime,
                 assembly.doctor_ports,
@@ -3336,25 +3465,26 @@ mod tests {
 
         let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
         assert_eq!(response.status(), StatusCode::CREATED);
-        assert!(
-            fixture
-                .received_hook
-                .emitted_ids
-                .lock()
-                .expect("inspect deferred hook emissions")
-                .len()
-                == 1,
+        let emitted_count = fixture
+            .received_hook
+            .emitted_ids
+            .lock()
+            .expect("inspect deferred hook emissions")
+            .len();
+        assert_eq!(
+            emitted_count, 1,
             "a graft recipient receives its queue-shaped handoff at write time"
         );
+        let first_dispatch_kind = fixture
+            .received_hook
+            .dispatches
+            .lock()
+            .expect("inspect deferred dispatch")
+            .first()
+            .expect("queue dispatch")
+            .kind;
         assert_eq!(
-            fixture
-                .received_hook
-                .dispatches
-                .lock()
-                .expect("inspect deferred dispatch")
-                .first()
-                .expect("queue dispatch")
-                .kind,
+            first_dispatch_kind,
             NudgeKind::Queue,
             "the graft handoff is explicitly queue-kind"
         );
@@ -4100,13 +4230,14 @@ mod tests {
                 "direct peer host {peer_host} receives the canonical send response"
             );
         }
+        let direct_peer_emissions = fixture
+            .received_hook
+            .emitted_ids
+            .lock()
+            .expect("inspect direct peer hooks")
+            .clone();
         assert_eq!(
-            fixture
-                .received_hook
-                .emitted_ids
-                .lock()
-                .expect("inspect direct peer hooks")
-                .as_slice(),
+            direct_peer_emissions.as_slice(),
             &[message_id],
             "the idempotent duplicate stays durable but emits no second hook"
         );
@@ -4119,11 +4250,16 @@ mod tests {
             "the direct peer write reaches the shared storage boundary"
         );
         {
+            // Cloned out of the guard: an assertion below must not panic
+            // while the fixture's hook mutex is held, or a receiver-hook task
+            // that is still running would fail with a poisoned lock instead
+            // of the real assertion.
             let dispatches = fixture
                 .received_hook
                 .dispatches
                 .lock()
-                .expect("inspect direct peer nudge dispatches");
+                .expect("inspect direct peer nudge dispatches")
+                .clone();
             assert_eq!(dispatches.len(), 1, "one durable write emits one nudge");
             assert_eq!(
                 dispatches[0]
@@ -4356,7 +4492,8 @@ mod tests {
                 .received_hook
                 .dispatches
                 .lock()
-                .expect("inspect two-runtime nudge dispatches");
+                .expect("inspect two-runtime nudge dispatches")
+                .clone();
             assert_eq!(local_dispatches.len(), 1, "direct ingress emits one nudge");
             assert_eq!(
                 local_dispatches[0]
@@ -4520,19 +4657,140 @@ mod tests {
             .expect("direct peer runtime drains");
     }
 
+    /// A receiver hook that reports when it started and then blocks until
+    /// the test releases it. The channel and notify pair are the
+    /// synchronisation primitives; the test never sleeps for a fixed period.
+    struct GatedReceivedHook {
+        started: tokio::sync::mpsc::UnboundedSender<()>,
+        release: Arc<tokio::sync::Notify>,
+        completions: Arc<AtomicUsize>,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for GatedReceivedHook {}
+
+    impl AsyncMessageReceivedHookEmitter for GatedReceivedHook {
+        fn emit_received_message(
+            &self,
+            _dispatch: BuiltInPostSendDispatch,
+            _deadline: RequestDeadline,
+        ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>>
+        {
+            self.started.send(()).expect("report the hook start");
+            let release = Arc::clone(&self.release);
+            let completions = Arc::clone(&self.completions);
+            Box::pin(async move {
+                release.notified().await;
+                completions.fetch_add(1, Ordering::SeqCst);
+                Err(AtmError::daemon_unavailable(
+                    "intentional slow peer receiver hook failure",
+                ))
+            })
+        }
+    }
+
+    struct GatedReceivedHookSelector {
+        emitter: Arc<GatedReceivedHook>,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for GatedReceivedHookSelector {}
+
+    impl MessageReceivedHookSelector for GatedReceivedHookSelector {
+        fn select_emitter(
+            &self,
+            _dispatch: &BuiltInPostSendDispatch,
+        ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
+            Some(self.emitter.as_ref())
+        }
+    }
+
+    #[tokio::test]
+    async fn peer_write_responds_before_a_slow_received_hook_whose_warning_is_still_observed() {
+        let (started, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
+        let release = Arc::new(tokio::sync::Notify::new());
+        let hook = Arc::new(GatedReceivedHook {
+            started,
+            release: Arc::clone(&release),
+            completions: Arc::new(AtomicUsize::new(0)),
+        });
+        let selected_hook = Arc::clone(&hook);
+        let fixture = fixture_with_selector(true, None, None, move |_recording_hook| {
+            Arc::new(GatedReceivedHookSelector {
+                emitter: selected_hook,
+            })
+        });
+
+        let response = fixture
+            .router
+            .write_with_request_id(
+                write_request(fixture.home_dir.clone(), fixture.current_dir.clone()),
+                AuthenticatedIngress::Peer,
+                // Bounded so a regression that puts the hook back on the
+                // response path fails here instead of hanging the suite.
+                RequestDeadline::after(Duration::from_secs(5)),
+                atm_core::protocol::next_request_id(),
+            )
+            .await
+            .expect("a peer write is acknowledged after durable persistence");
+        started_rx
+            .recv()
+            .await
+            .expect("the detached receiver hook started");
+        assert_eq!(
+            hook.completions.load(Ordering::SeqCst),
+            0,
+            "the peer response returned while the receiver hook was still running"
+        );
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+        else {
+            panic!("a peer write keeps the canonical send outcome");
+        };
+        assert!(
+            outcome.warnings.is_empty(),
+            "a hook detached from the response cannot report through the response envelope"
+        );
+        assert!(
+            fixture
+                .message_store
+                .load_message(&MessageKey::from(outcome.message_id))
+                .expect("read committed peer message")
+                .is_some(),
+            "the peer acknowledgement follows durable persistence"
+        );
+
+        release.notify_one();
+        fixture
+            .router
+            .detached_received_hooks
+            .drain(Duration::from_secs(30))
+            .await;
+        assert_eq!(
+            hook.completions.load(Ordering::SeqCst),
+            1,
+            "the detached receiver hook still ran to completion"
+        );
+        assert_eq!(
+            fixture
+                .runtime_health
+                .detached_received_hook_warnings_total(),
+            1,
+            "the detached hook warning was observed against its request id, not discarded"
+        );
+    }
+
     #[tokio::test]
     async fn axum_route_rejected_write_emits_no_hook_and_persists_no_message() {
         let fixture = fixture(false, None, None);
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
         let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert!(
-            fixture
-                .received_hook
-                .emitted_ids
-                .lock()
-                .expect("inspect received-hook emissions")
-                .is_empty(),
+        let emissions_after_rejection = fixture
+            .received_hook
+            .emitted_ids
+            .lock()
+            .expect("inspect received-hook emissions")
+            .len();
+        assert_eq!(
+            emissions_after_rejection, 0,
             "rejected write does not emit a receiver hook"
         );
         let messages = fixture
@@ -4564,13 +4822,14 @@ mod tests {
         // and leaves no mailbox record; availability mapping is covered by
         // the dedicated lock-timeout tests in the SQLite backend.
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert!(
-            fixture
-                .received_hook
-                .emitted_ids
-                .lock()
-                .expect("inspect received-hook emissions")
-                .is_empty(),
+        let emissions_after_storage_failure = fixture
+            .received_hook
+            .emitted_ids
+            .lock()
+            .expect("inspect received-hook emissions")
+            .len();
+        assert_eq!(
+            emissions_after_storage_failure, 0,
             "storage failure must not emit a receiver hook"
         );
         assert!(
@@ -4609,13 +4868,14 @@ mod tests {
         )
         .await;
         assert_eq!(receipt.status(), StatusCode::CREATED);
+        let receipt_emissions = fixture
+            .received_hook
+            .emitted_ids
+            .lock()
+            .expect("inspect received-hook emissions")
+            .clone();
         assert_eq!(
-            fixture
-                .received_hook
-                .emitted_ids
-                .lock()
-                .expect("inspect received-hook emissions")
-                .as_slice(),
+            receipt_emissions.as_slice(),
             &[message_id],
             "idempotent peer receipt must not emit a second receiver hook"
         );
@@ -4679,13 +4939,14 @@ mod tests {
             value["warnings"].as_array().is_none_or(Vec::is_empty),
             "an unavailable receiver capability is not a post-commit hook failure"
         );
-        assert!(
-            fixture
-                .received_hook
-                .emitted_ids
-                .lock()
-                .expect("inspect received-hook emissions")
-                .is_empty(),
+        let emissions_without_capability = fixture
+            .received_hook
+            .emitted_ids
+            .lock()
+            .expect("inspect received-hook emissions")
+            .len();
+        assert_eq!(
+            emissions_without_capability, 0,
             "the selector prevents an unavailable receiver hook from starting"
         );
         let messages = fixture
@@ -4830,14 +5091,14 @@ mod tests {
             cancelled.load(Ordering::SeqCst),
             "deadline cancellation drops the hook future instead of leaving detached work"
         );
+        let timed_out_emissions = fixture
+            .received_hook
+            .emitted_ids
+            .lock()
+            .expect("inspect timed-out received-hook emission")
+            .len();
         assert_eq!(
-            fixture
-                .received_hook
-                .emitted_ids
-                .lock()
-                .expect("inspect timed-out received-hook emission")
-                .len(),
-            1,
+            timed_out_emissions, 1,
             "the hook begins before its dedicated timeout expires"
         );
     }

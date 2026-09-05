@@ -548,7 +548,7 @@ impl GraftSession {
         client: Option<Arc<dyn GraftReceiverLeaseClient>>,
     ) -> Result<GraftReceiveLoopWorker, AtmError> {
         let (stop_tx, stop_rx) = mpsc::channel();
-        let ready_latch = ReceiverReadyLatch::new();
+        let mut ready_latch = ReceiverReadyLatch::new();
         let join_handle = spawn_graft_receive_loop(
             graft_root,
             options,
@@ -569,10 +569,10 @@ impl GraftSession {
                 // typed bind/ownership error is never replaced by the latch's
                 // generic timeout or disconnect diagnostic.
                 let _ = stop_tx.send(());
-                match join_receive_loop_with_deadline(join_handle) {
-                    Err(worker_error) => Err(worker_error),
-                    Ok(()) => Err(readiness_error),
-                }
+                Err(receive_loop_startup_error(
+                    readiness_error,
+                    join_receive_loop_with_deadline(join_handle),
+                ))
             }
         }
     }
@@ -647,6 +647,30 @@ fn spawn_graft_receive_loop(
             })
         })
         .map_err(spawn_receive_loop_error)
+}
+
+/// Reports the cause a caller can act on when receiver startup did not reach
+/// readiness.
+///
+/// The worker's own typed failure (bind refused, endpoint already owned, a
+/// lease/announce failure that ended the loop) is always the actionable one,
+/// so it replaces the latch's generic diagnostic outright. When the worker
+/// neither failed nor signaled in time, the readiness error is returned with
+/// the join outcome appended so a timeout is never reported bare.
+fn receive_loop_startup_error(
+    readiness_error: AtmError,
+    worker_result: Result<(), AtmError>,
+) -> AtmError {
+    match worker_result {
+        Err(worker_error) => worker_error,
+        Ok(()) => AtmError::new(
+            readiness_error.code(),
+            format!(
+                "{} (the receive loop stopped without reporting a failure)",
+                readiness_error.message()
+            ),
+        ),
+    }
 }
 
 fn spawn_receive_loop_error(source: std::io::Error) -> AtmError {
@@ -1024,6 +1048,43 @@ mod tests {
             .expect_err("second receiver must report the endpoint ownership conflict");
 
         assert_eq!(error.code(), AtmErrorCode::GraftReceiverAlreadyActive);
+        active.close().expect("close active receiver");
+    }
+
+    #[test]
+    fn minimal_workspace_activation_conflict_reports_a_cause_not_a_bare_timeout() {
+        // RRG-HERMES-FLEET-NUDGE-001 shape: a Hermes host activates a
+        // receiver against a minimal workspace root whose `.atm.toml` carries
+        // only a default team. When that activation cannot succeed, the
+        // caller must receive the receive loop's own typed cause, promptly,
+        // rather than the readiness latch's bare `WaitTimeout`.
+        let paths = test_paths();
+        fs::write(
+            paths.workspace_root.join(".atm.toml"),
+            "[atm]\ndefault_team = \"test-team\"\n",
+        )
+        .expect("write minimal config");
+        let active = GraftSession::activate(session_options(&paths), Arc::new(NoopInjector))
+            .expect("minimal workspace root must activate a receiver");
+        assert_eq!(
+            active.snapshot().expect("snapshot").state,
+            GraftSessionState::Listening
+        );
+
+        let started = std::time::Instant::now();
+        let error = GraftSession::activate(session_options(&paths), Arc::new(NoopInjector))
+            .expect_err("a conflicting activation must fail");
+
+        assert_eq!(error.code(), AtmErrorCode::GraftReceiverAlreadyActive);
+        assert!(
+            !error.message().contains("readiness was not signaled"),
+            "startup failure must not be masked by the readiness timeout: {}",
+            error.message()
+        );
+        assert!(
+            started.elapsed() < RECEIVE_LOOP_READY_DEADLINE,
+            "a failed receive loop must be reported before the readiness deadline"
+        );
         active.close().expect("close active receiver");
     }
 

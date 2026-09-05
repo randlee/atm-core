@@ -148,6 +148,8 @@ pub enum AtmErrorCode {
     /// The stored graft receiver lease is owned by a different generation
     /// than the one making the request (register/refresh/unregister).
     GraftReceiverNotOwner,
+    /// A receiver refresh found no durable lease row and must re-announce.
+    GraftReceiverNotRegistered,
     PostSendAdvisoryDeliveryFailed,
     TestFakeTransportInjectionFailed,
     HelpTopicNotFound,
@@ -318,6 +320,7 @@ impl AtmErrorCode {
             Self::PostSendGraftUnavailable => "ATM_POST_SEND_GRAFT_UNAVAILABLE",
             Self::GraftReceiverAlreadyActive => "ATM_GRAFT_RECEIVER_ALREADY_ACTIVE",
             Self::GraftReceiverNotOwner => "ATM_GRAFT_RECEIVER_NOT_OWNER",
+            Self::GraftReceiverNotRegistered => "ATM_GRAFT_RECEIVER_NOT_REGISTERED",
             Self::PostSendAdvisoryDeliveryFailed => "ATM_POST_SEND_ADVISORY_DELIVERY_FAILED",
             Self::TestFakeTransportInjectionFailed => "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED",
             Self::HelpTopicNotFound => "ATM_HELP_TOPIC_NOT_FOUND",
@@ -496,6 +499,7 @@ fn parse_post_send_or_misc_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_POST_SEND_GRAFT_UNAVAILABLE" => AtmErrorCode::PostSendGraftUnavailable,
         "ATM_GRAFT_RECEIVER_ALREADY_ACTIVE" => AtmErrorCode::GraftReceiverAlreadyActive,
         "ATM_GRAFT_RECEIVER_NOT_OWNER" => AtmErrorCode::GraftReceiverNotOwner,
+        "ATM_GRAFT_RECEIVER_NOT_REGISTERED" => AtmErrorCode::GraftReceiverNotRegistered,
         "ATM_POST_SEND_ADVISORY_DELIVERY_FAILED" => AtmErrorCode::PostSendAdvisoryDeliveryFailed,
         "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED" => {
             AtmErrorCode::TestFakeTransportInjectionFailed

@@ -4068,6 +4068,53 @@ mail correctness.
   - trust add, replace, and revoke refresh the one live daemon's verifier
     atomically without starting a second daemon
 
+- `REQ-CORE-TRANSPORT-002E` Outbound peer dialing must resolve the registered
+  hostname at connect time, dial only routable addresses in a fixed order
+  inside the request budget, and remember a working answer briefly in process
+  memory. Dial order, budget, cache, and diagnostics rules are defined by
+  ADR-060; this requirement fixes the contract and ADR-060 is the design of
+  record. Neither may drift without a superseding ADR.
+
+  Required behavior:
+  - the operating-system resolver (DNS, DDNS, or mDNS for `.local` names)
+    is the only address source; ATM performs no reverse lookup and stores no
+    resolved address durably (`REQ-CORE-TRANSPORT-002D`)
+  - an IPv6 answer that is link-local (`fe80::/10`) and carries no interface
+    scope is unroutable and is never dialed; IPv4 answers are dialed before
+    routable IPv6 answers; no more than four addresses are dialed for one
+    connect attempt
+  - each address attempt is bounded by an even share of the remaining request
+    budget across the addresses still untried, so one unresponsive address can
+    never consume the budget a later reachable address needs
+  - a process-local address cache keyed by the canonical registered hostname
+    holds a working answer for at least five minutes. `rand-m5`,
+    `rand-m5.local`, and any ASCII-case variant address one cache entry; the
+    `.local` suffix never selects a different code path
+  - a valid cache entry is found in well under one millisecond; when the
+    cached addresses no longer connect, the name is resolved again and dialed
+    again inside the same request budget, so a peer whose address changed
+    while moving between wired, Wi-Fi, and VPN networks is reached without an
+    error surfacing to the caller. A re-resolution taking milliseconds is
+    acceptable; an unreachable peer leaves no cache entry behind
+  - timing contract (non-functional): a dial against cached addresses is
+    bounded by the smaller of half the remaining budget and 500 ms, so with
+    the 3 s server request budget at least about 2 s remains for the fresh
+    lookup and dial. That covers an mDNS answer delayed by retransmits after
+    a network change (about 2 s worst case); only a resolver that never
+    answers, or a peer that is asleep or off the network, produces a
+    caller-visible, named failure
+  - the dial rules, constants, and cache key normalization are locked by
+    ADR-060 and enforced by the `peer-dial-seam` lint: name resolution and
+    peer TCP dialing exist only in `peer_dial.rs`, and the locked constants
+    may change only together with a superseding ADR
+  - the mTLS pooled connector and the `plaintext-test` direct connector
+    (`REQ-CORE-TRANSPORT-002B1`) apply the same address ordering; there is no
+    wire-security mode that dials an unfiltered answer
+  - a connect failure is logged at `warn` with the peer and every attempted
+    address and reason, and the caller-visible error names the attempted
+    addresses and reasons without exposing message content, tokens, or raw
+    configuration (`#904`)
+
 - `REQ-CORE-TRANSPORT-002B` Cross-host inbound authorization must use mTLS and
   a durable deny-by-default exact peer allowlist before routing.
 

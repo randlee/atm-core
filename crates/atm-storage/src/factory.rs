@@ -8,6 +8,22 @@ use crate::{
     PeerConfigStore, PendingNudgeStore, RosterStore, TemplateCatalogStore,
 };
 
+/// Effective capacity settings for one reader lane, selected by the backend
+/// when it constructs the live pool.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EffectiveReaderLane {
+    pub pool_size: usize,
+    pub queue_depth: usize,
+}
+
+/// Backend-neutral effective capacity settings for the benchmarked reader
+/// lanes. This is runtime data, not a benchmark-side default.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EffectiveReaderLanes {
+    pub mailbox: EffectiveReaderLane,
+    pub search: EffectiveReaderLane,
+}
+
 /// Backend-neutral handles returned by the selected durable storage backend.
 #[derive(Clone)]
 pub struct StorageHandles {
@@ -22,6 +38,7 @@ pub struct StorageHandles {
     template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
     message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
     async_message_search_store: Arc<dyn AsyncMessageSearchStore + Send + Sync>,
+    effective_reader_lanes: Option<EffectiveReaderLanes>,
 }
 
 /// Typed assembly input for [`StorageHandles`].
@@ -42,6 +59,7 @@ pub struct StorageHandleParts {
     pub template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
     pub message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
     pub async_message_search_store: Arc<dyn AsyncMessageSearchStore + Send + Sync>,
+    pub effective_reader_lanes: Option<EffectiveReaderLanes>,
 }
 
 impl fmt::Debug for StorageHandles {
@@ -63,6 +81,7 @@ impl fmt::Debug for StorageHandles {
             .field("template_catalog_store", &"dyn TemplateCatalogStore")
             .field("message_search_store", &"dyn MessageSearchStore")
             .field("async_message_search_store", &"dyn AsyncMessageSearchStore")
+            .field("effective_reader_lanes", &self.effective_reader_lanes)
             .finish()
     }
 }
@@ -81,6 +100,7 @@ impl StorageHandles {
             template_catalog_store: parts.template_catalog_store,
             message_search_store: parts.message_search_store,
             async_message_search_store: parts.async_message_search_store,
+            effective_reader_lanes: parts.effective_reader_lanes,
         }
     }
 
@@ -138,6 +158,13 @@ impl StorageHandles {
     /// Returns the Tokio-safe companion for the same search semantics.
     pub fn async_message_search_store(&self) -> Arc<dyn AsyncMessageSearchStore + Send + Sync> {
         Arc::clone(&self.async_message_search_store)
+    }
+
+    /// Returns the effective reader-pool capacities selected by the backend,
+    /// when that backend exposes the benchmarked mailbox and search lanes.
+    #[must_use]
+    pub fn effective_reader_lanes(&self) -> Option<EffectiveReaderLanes> {
+        self.effective_reader_lanes
     }
 }
 

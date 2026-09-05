@@ -1,0 +1,67 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RRG-BENCH-FLOOR-PROFILE-KEY-001>
+  a triage:Finding ;
+  triage:findingId "RRG-BENCH-FLOOR-PROFILE-KEY-001" ;
+  triage:title "Send-family benchmark floors are keyed by host_label and target only, so a floor seeded from one load profile (frames per connection, workers) silently gates official runs at a different profile" ;
+  triage:description "Found during release-readiness 1.4.13 Windows step 3 (cwin, FastPC4, 2026-09-04). cwin's official send campaign 20260904T152523Z (host_label windows-x64-01, 8 frames per connection, readiness profile) reported tcp FAIL at p50 7564.12 msg/s against p50_floor 8793.914612253. quality-mgr verified (ruling 01M1PKBX0S8WM3G66TQ670RS9G) that the floor's effective_from 2026-08-01T21:13:05.279797Z matches the historical report 20260801-211305.279797-windows-x64-01-tcp-f16.xhtml exactly: the seed is a 16-frame, 64-worker run, so the readiness comparison is cross-profile. Both the windows-x64-01 tcp and tcp-tls entries are labelled historical migration seed, pending quality review, with no rationale and no reviewer or quorum, unlike the rand-m5 and m5-atmbench entries. quality-mgr ruled both floors UNREVIEWED and not a valid gate; the FAIL is informational and blocks nothing (Windows results are informational per the readiness plan). Harness gap on develop f39c22364: scripts/smoke/benchmark_schema.py BaselineEntry (line 124) carries host_label, target, p50_floor, approved_by, effective_from and optional rationale but no load-profile fields, and BaselineSet.entry_for (line 176) resolves a floor by host_label and target alone (line 178), while every result records frames_per_connection and the migration path (scripts/smoke/migrate_benchmark_history.py) can seed a floor from any historical profile. Same shape as the read-family host_label issue (RRG-READ-RATCHET-STATE-001 lineage). Classification: benchmark-harness, important, harness only (no product code), dispatchReady false pending quality-mgr scoping. Proposed fix scope when dispatched: make the floor key profile-aware (host_label, target, frames_per_connection and worker count, or a named profile id), reject official comparisons whose profile does not match the floor's, require the migration tool to record the seed profile and refuse cross-profile seeds, and re-seed windows-x64-01 tcp and tcp-tls only through quality-mgr's approved reseed from same-profile clean runs. No floor value moves without quality-mgr approval. Control evidence: cwin's f16/64 control run 20260904-161450.219123-windows-x64-01-tcp-f16.json on evidence/readiness-1.4.13-windows (da14c6af9) measured p50 7928.89 msg/s, also below the seed value, so a same-profile Windows regression remains possible and is tracked as part of the informational Windows result, not by this record." ;
+  triage:phaseId "readiness-1.4" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "benchmark-harness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-04T16:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:RRG-S3 ;
+  triage:foundAt "2026-09-04T15:25:23Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-FLOOR-PROFILE-KEY-001/DEV-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-FLOOR-PROFILE-KEY-001/DEV-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RRG-BENCH-FLOOR-PROFILE-KEY-001/DEV-3> ;
+  triage:triageRecordVersion "2" ;
+  triage:qmgrRuling "quality-mgr ruling 2026-09-04 (01M1PMGXXCKVZHM5W0Z1VD8VFE), independently verified against cwin report 7922e27c8: the windows-x64-01 tcp seed (2973fe2f9, 8793.91, 2026-08-01) is the only recorded PASS in the whole f16/64 history; fd8dd58e0 8636.26, 78ec6008c 6581.30 and the 1.4.13 candidate f39c22364 7928.89 are all below it, so the seed is a single-run outlier, not a representative floor. Windows tcp stays informational and non-blocking for 1.4.13. No pre-release profiling; post-release work. When this record is dispatched, the reseed must draw on multiple same-profile runs (the retained f16/64 set plus a fresh candidate run), never the outlier alone. Rand concurred 2026-09-04: Windows was never tested consistently and its floors were never maintained." .
+
+<urn:atm:triage:occurrence/RRG-BENCH-FLOOR-PROFILE-KEY-001/DEV-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_schema.py" ;
+  triage:line 178 ;
+  triage:snippet "if entry.host_label == host_label and entry.target == target:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "f39c22364" ;
+  triage:occursIn <urn:atm:triage:worktree/DEV/f39c22364> .
+
+<urn:atm:triage:occurrence/RRG-BENCH-FLOOR-PROFILE-KEY-001/DEV-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_schema.py" ;
+  triage:line 124 ;
+  triage:snippet "class BaselineEntry(BaseModel):" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "f39c22364" ;
+  triage:occursIn <urn:atm:triage:worktree/DEV/f39c22364> .
+
+<urn:atm:triage:occurrence/RRG-BENCH-FLOOR-PROFILE-KEY-001/DEV-3>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/baselines.json" ;
+  triage:line 74 ;
+  triage:snippet "\"p50_floor\": 8793.914612253," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "f39c22364" ;
+  triage:occursIn <urn:atm:triage:worktree/DEV/f39c22364> .
+
+<urn:atm:triage:worktree/DEV/f39c22364>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core" ;
+  triage:branch "develop" ;
+  triage:headSha "f39c22364" ;
+  triage:orderIndex 1 .
