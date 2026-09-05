@@ -817,11 +817,9 @@ mod tests {
     #[test]
     fn attach_timeline_second_call_does_not_replace_the_active_writer() {
         let log_dir = tempfile::tempdir().expect("temp log dir");
-        let service_name =
-            sc_observability_types::ServiceName::new("atm-test").expect("valid service name");
         let logger = std::sync::Arc::new(
             atm_observability::build_retained_logger(
-                service_name,
+                "atm-test",
                 log_dir.path(),
                 test_retained_log_policy(),
                 None,
