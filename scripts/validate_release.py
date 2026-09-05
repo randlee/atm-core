@@ -346,6 +346,104 @@ def validate_cli_surface(root: Path, findings: list[Finding]) -> None:
     )
 
 
+def workspace_member_manifests(root: Path) -> dict[str, Path]:
+    """Map every workspace member package name to its Cargo.toml."""
+
+    cargo = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+    members = cargo.get("workspace", {}).get("members", [])
+    manifests: dict[str, Path] = {}
+    for member in members if isinstance(members, list) else []:
+        for member_dir in sorted(root.glob(member)) if isinstance(member, str) else []:
+            crate_toml = member_dir / "Cargo.toml"
+            if not crate_toml.is_file():
+                continue
+            name = tomllib.loads(crate_toml.read_text(encoding="utf-8")).get("package", {}).get("name")
+            if isinstance(name, str):
+                manifests[name] = crate_toml
+    return manifests
+
+
+def crate_is_publishable(crate_toml: Path) -> bool:
+    publish = tomllib.loads(crate_toml.read_text(encoding="utf-8")).get("package", {}).get("publish")
+    return not (publish is False or (isinstance(publish, list) and not publish))
+
+
+def workspace_dependency_names(crate_toml: Path, root: Path, members: dict[str, Path]) -> set[str]:
+    """Workspace crates this crate needs published first (runtime, build, target deps)."""
+
+    data = tomllib.loads(crate_toml.read_text(encoding="utf-8"))
+    workspace_deps = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8")).get("workspace", {}).get(
+        "dependencies", {}
+    )
+
+    def resolve(dep_name: str, spec: object) -> str | None:
+        if isinstance(spec, dict) and spec.get("workspace") is True:
+            spec = workspace_deps.get(dep_name, {})
+        if isinstance(spec, dict):
+            package = spec.get("package", dep_name)
+            return package if isinstance(package, str) and ("path" in spec or package in members) else None
+        return dep_name if dep_name in members else None
+
+    tables = [data.get("dependencies", {}), data.get("build-dependencies", {})]
+    for target in data.get("target", {}).values():
+        if isinstance(target, dict):
+            tables.extend((target.get("dependencies", {}), target.get("build-dependencies", {})))
+    names: set[str] = set()
+    for table in tables:
+        if isinstance(table, dict):
+            names.update(package for dep, spec in table.items() if (package := resolve(dep, spec)))
+    return names
+
+
+def validate_manifest_dependency_coverage(root: Path, findings: list[Finding]) -> None:
+    """Every workspace dependency of a published crate must itself be published by the manifest.
+
+    Fails closed: if the workspace member list cannot be resolved, or a published crate is not
+    itself a resolvable member, the check reports an error instead of evaluating nothing.
+
+    Consumer-owned check absent from the kit CLI (upstream sc-publish gap): the kit's
+    ``validate-publish-order`` silently ignores dependencies missing from the manifest,
+    which let the 1.5.0 readiness preflight run without ``atm-herdr`` and
+    ``atm-observability`` declared until ``cargo package`` failed.
+    """
+
+    contract = load_release_contract(root)
+    crates = [crate for crate in contract.get("crates", []) if isinstance(crate, dict) and crate.get("publish")]
+    published = {crate.get("package") for crate in crates}
+    members = workspace_member_manifests(root)
+    problems: list[str] = []
+    if crates and not members:
+        problems.append("Cargo.toml [workspace].members resolved to no crates; dependency coverage cannot be evaluated")
+    for crate in crates:
+        package = crate.get("package")
+        crate_toml = root / str(crate.get("cargo_toml", ""))
+        if not crate_toml.is_file():
+            problems.append(f"{package}: cargo_toml {crate.get('cargo_toml')!r} does not exist")
+            continue
+        if members.get(package) != crate_toml:
+            problems.append(f"{package}: not a resolvable [workspace].members crate at {crate.get('cargo_toml')}")
+            continue
+        for dependency in sorted(workspace_dependency_names(crate_toml, root, members)):
+            dependency_toml = members.get(dependency)
+            if dependency_toml is None:
+                continue
+            if not crate_is_publishable(dependency_toml):
+                problems.append(f"{package} depends on workspace crate {dependency} which sets publish = false")
+            elif dependency not in published:
+                problems.append(f"{package} depends on workspace crate {dependency} which the manifest does not publish")
+    if problems:
+        findings.append(
+            Finding(
+                check="manifest-dependency-coverage",
+                severity="error",
+                summary="published crates depend on workspace crates the manifest does not publish",
+                detail="\n".join(problems),
+            )
+        )
+        return
+    print("ok: every workspace dependency of a published crate is published by the manifest")
+
+
 def validate_manifest(
     root: Path,
     findings: list[Finding],
@@ -377,6 +475,7 @@ def validate_manifest(
     for check, cmd, summary in commands:
         completed = run_capture(cmd, cwd=root)
         append_completed_findings(findings, check, completed, f"{check} passed", summary)
+    validate_manifest_dependency_coverage(root, findings)
     validate_preflight_contract(root, findings)
 
 

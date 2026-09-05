@@ -8,54 +8,30 @@
   a triage:Finding ;
   triage:findingId "AW1-QA-B1" ;
   triage:title "check-runtime-stderr gate splits on first #[cfg(test)] and has no scripts/tests self-test" ;
-  triage:description "scripts/check-runtime-stderr.py production_source() splits the file text on the FIRST '#[cfg(test)]' occurrence instead of isolating a trailing test module. crates/atm-daemon-bootstrap/src/daemon_observability.rs has an early #[cfg(test)] at line 13 of 771 lines, so the gate scans only 12 lines and silently exempts all production code after it. AC6 also requires a synthetic-violation self-test under scripts/tests/ which does not exist. Converged: rust-qa-agent QA-001, ruthless-boundary-qa RBQA-F001, arch-qa ARCH-002, req-qa ATM-QA-002." ;
+  triage:description "scripts/check-runtime-stderr.py production_source() splits the file text on the FIRST '#[cfg(test)]' occurrence instead of isolating a trailing test module, so crates/atm-daemon-bootstrap/src/daemon_observability.rs (early #[cfg(test)] at line 13) was almost entirely exempted. AC6 also requires a synthetic-violation self-test under scripts/tests/. Fix claimed at feature/aw1-tracing-bridge@014ed4c14: script now uses .just/lint_common.py::rust_file_test_scope and scripts/tests/test_check_runtime_stderr.py was added. quality-mgr verified CLOSED (both occurrences) at 014ed4c14 in message 01M1QGZ8V9P35ABPMYVB98G4PF." ;
   triage:phaseId "phase-aw" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "AW1-QA" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-09-04T20:00:00Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-04T21:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW1 ;
   triage:foundAt "2026-09-05T00:43:44Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AW1-QA-B1/AW1-QA-B1-1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AW1-QA-B1/AW1-QA-B1-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
-<urn:atm:triage:occurrence/AW1-QA-B1/AW1-QA-B1-1>
-  a triage:Occurrence ;
-  triage:file "scripts/check-runtime-stderr.py" ;
-  triage:line 21 ;
-  triage:snippet "return text.split(\"#[cfg(test)]\", 1)[0]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/aw1-tracing-bridge" ;
-  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
-  triage:occursIn <urn:atm:triage:worktree/AW1-FB/3427357a> .
-
-<urn:atm:triage:occurrence/AW1-QA-B1/AW1-QA-B1-2>
-  a triage:Occurrence ;
-  triage:file "scripts/tests" ;
-  triage:line 0 ;
-  triage:snippet "AC6 synthetic-violation self-test missing" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/aw1-tracing-bridge" ;
-  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
-  triage:occursIn <urn:atm:triage:worktree/AW1-FB/3427357a> .
-
-<urn:atm:triage:worktree/AW1-INT/4928f795>
+<urn:atm:triage:worktree/.worktrees/integrate-phase-aw>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/integrate-phase-aw" ;
   triage:branch "integrate/phase-aw" ;
-  triage:headSha "4928f79527272827237a3b1a8d2b10f4b07ead86" ;
+  triage:headSha "a1e4b11a8d083ba8aab9e5d72a940323fd744b29" ;
   triage:orderIndex 0 .
 
-<urn:atm:triage:worktree/AW1-FB/3427357a>
+<urn:atm:triage:worktree/.worktrees/feature-aw1>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/feature-aw1" ;
   triage:branch "feature/aw1-tracing-bridge" ;
-  triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
+  triage:headSha "014ed4c145c82086ace7a8a5b744b3f130368177" ;
   triage:orderIndex 1 .
