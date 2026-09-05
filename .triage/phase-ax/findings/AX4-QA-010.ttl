@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX4-QA-010>
+  a triage:Finding ;
+  triage:findingId "AX4-QA-010" ;
+  triage:title "docs/user-documents/tasks.md documents the task commands but omits the C1 rendered example tables that D3 requires" ;
+  triage:description "AX.4 QA-1 (quality-mgr ax4-qa-r1, PR #1194 Final Quality Report 2026-09-05T09:14Z; found by req-qa ATM-QA-005) at head aaf2e04bf. Sprint AX.4 D3 requires the user document to carry the C1 examples (sprint-AX.4-task-cli-and-docs.md line 65: with the C1 examples); docs/user-documents/tasks.md describes atm send --task-complete and atm list --tasks / --task-events but never reproduces the C1 rendered example tables (TASK_ID/STATE/... and SEQ/AT/EVENT/... headers from code contract C1). Fix: add the C1 example tables to tasks.md, consistent with whichever rendering AX4-QA-005 settles on." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T09:21:42Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX4 ;
+  triage:foundAt "2026-09-05T09:14:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-010/AX4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX4-QA-010/AX4-1>
+  a triage:Occurrence ;
+  triage:file "docs/user-documents/tasks.md" ;
+  triage:line 25 ;
+  triage:snippet "Inspect the durable task ledger with either of these surfaces: -- lists atm list --tasks and atm list --task-events only, no C1 rendered example tables (see sprint-AX.4-task-cli-and-docs.md line 65 D3, line 75 C1)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .
+
+<urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:orderIndex 4 .
