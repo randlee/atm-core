@@ -321,6 +321,7 @@ dependencies = [
  "sc-observability",
  "sc-observability-types",
  "serde_json",
+ "serial_test",
  "tempfile",
  "tracing",
  "tracing-subscriber",

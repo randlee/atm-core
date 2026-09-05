@@ -4,17 +4,45 @@ Local runs stay opt-in: set ``ATM_CLI_PARITY_FIXTURE`` to a JSON fixture
 pointing at an operator-owned disposable daemon. CI sets
 ``ATM_CLI_PARITY_CI=1``; in that mode this module creates an isolated roster,
 starts the checked-out CLI's paired daemon, and tears it down after the test.
+
+KNOWN ISOLATION GAP (readiness-review B5, tracked as a follow-up, not fixed
+here): ``_GeneratedParityFixture._environment`` below sets ``HOME``,
+``ATM_HOME``, ``ATM_LOG_DIR``, and ``TMPDIR`` to a disposable per-run
+directory, but ``atm-core::home::current_host_runtime_scope`` (the daemon's
+own runtime-scope resolver) intentionally ignores all of those and always
+resolves ``owner.lock``, the endpoint, and the durable state root from the
+real OS user record (``getpwuid``/equivalent) -- that is deliberate host-scope
+behavior for the real daemon, not a bug, and this test file must not change
+it. The practical effect is that the "disposable" daemon this fixture starts
+actually owns the operator's real ``~/.atm/daemon`` and writes the real
+``~/.atm/db``: this class is therefore host-exclusive today. It reliably
+passes only on a host with no other ``atm-daemon`` already running (e.g. a
+fresh CI VM); running it on a workstation with a live personal daemon will
+fail on the ``owner.lock`` acquisition, not because of a defect in this test.
+Until a real runtime-scope override lands for tests, treat this suite as
+serialized/host-exclusive and do not run it concurrently with any other
+``atm-daemon`` instance on the same machine.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import queue
+import threading
 from pathlib import Path
 import subprocess
 import tempfile
 import time
 import unittest
+
+# Bounded wait for the daemon readiness handshake and for every CLI
+# subprocess invocation. Every blocking call in this module must be bounded
+# by one of these deadlines rather than able to hang indefinitely: a stalled
+# daemon or CLI process fails the test with a clear message instead of
+# wedging the whole suite.
+_DAEMON_READY_TIMEOUT_SECONDS = 30
+_CLI_SUBPROCESS_TIMEOUT_SECONDS = 30
 
 
 def _without_observability(value: object) -> object:
@@ -64,6 +92,9 @@ class _GeneratedParityFixture:
         self._temporary = tempfile.TemporaryDirectory(prefix="atm-cli-parity-")
         self.root = Path(self._temporary.name)
         self.process: subprocess.Popen[str] | None = None
+        self._stderr_lines: list[str] = []
+        self._stderr_thread: threading.Thread | None = None
+        self._stdout_thread: threading.Thread | None = None
 
     def _environment(self) -> dict[str, str]:
         home = self.root / "home"
@@ -108,7 +139,7 @@ class _GeneratedParityFixture:
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=30,
+            timeout=_CLI_SUBPROCESS_TIMEOUT_SECONDS,
             check=False,
         )
         if completed.returncode != 0:
@@ -157,19 +188,61 @@ class _GeneratedParityFixture:
             encoding="utf-8",
             errors="replace",
         )
-        deadline = time.monotonic() + 30
+
+        # Drain stderr continuously on its own thread from the moment the
+        # process starts. Without this, a chatty daemon can fill the stderr
+        # pipe buffer (commonly 64 KiB) and block on write() forever while
+        # this fixture is only reading stdout -- a classic two-process
+        # deadlock, not a timing race, and no readiness deadline below can
+        # rescue it once that happens.
+        assert self.process.stderr is not None
+        stderr_pipe = self.process.stderr
+
+        def _drain_stderr() -> None:
+            for line in iter(stderr_pipe.readline, ""):
+                self._stderr_lines.append(line)
+
+        self._stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
+        self._stderr_thread.start()
+
+        # Pump stdout lines onto a queue on its own thread so the readiness
+        # wait below can use `Queue.get(timeout=...)`, a single call with a
+        # real bounded deadline, instead of a plain `readline()` that can
+        # block past the deadline if the daemon never writes another line.
+        assert self.process.stdout is not None
+        stdout_pipe = self.process.stdout
+        stdout_lines: queue.Queue[str | None] = queue.Queue()
+
+        def _pump_stdout() -> None:
+            for line in iter(stdout_pipe.readline, ""):
+                stdout_lines.put(line)
+            stdout_lines.put(None)
+
+        self._stdout_thread = threading.Thread(target=_pump_stdout, daemon=True)
+        self._stdout_thread.start()
+
+        deadline = time.monotonic() + _DAEMON_READY_TIMEOUT_SECONDS
         ready = False
-        while time.monotonic() < deadline:
-            if self.process.poll() is not None:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or self.process.poll() is not None:
                 break
-            line = self.process.stdout.readline() if self.process.stdout else ""
+            try:
+                line = stdout_lines.get(timeout=remaining)
+            except queue.Empty:
+                break
+            if line is None:
+                break
             if line.strip() == "ATM_DAEMON_READY":
                 ready = True
                 break
         if not ready:
-            stderr = self.process.stderr.read().strip() if self.process.stderr else ""
             self.stop()
-            raise RuntimeError(f"parity daemon did not become ready: {stderr}")
+            stderr_text = "".join(self._stderr_lines).strip()
+            raise RuntimeError(
+                "parity daemon did not become ready within "
+                f"{_DAEMON_READY_TIMEOUT_SECONDS}s: {stderr_text}"
+            )
 
         return {
             "atm": str(atm),
@@ -182,14 +255,20 @@ class _GeneratedParityFixture:
         }
 
     def stop(self) -> None:
-        if self.process is None or self.process.poll() is not None:
-            return
-        self.process.terminate()
-        try:
-            self.process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            self.process.kill()
-            self.process.wait(timeout=5)
+        if self.process is not None and self.process.poll() is None:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait(timeout=5)
+        # Bounded joins: once the process has exited, both reader threads
+        # observe EOF on their pipe and return on their own; a timeout here
+        # only guards against this method itself ever hanging.
+        if self._stdout_thread is not None:
+            self._stdout_thread.join(timeout=5)
+        if self._stderr_thread is not None:
+            self._stderr_thread.join(timeout=5)
 
     def close(self) -> None:
         self.stop()
@@ -260,6 +339,7 @@ class CliParityTests(unittest.TestCase):
             capture_output=True,
             text=True,
             env=environment,
+            timeout=_CLI_SUBPROCESS_TIMEOUT_SECONDS,
         )
         return json.loads(completed.stdout)
 

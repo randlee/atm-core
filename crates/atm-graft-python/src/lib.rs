@@ -977,6 +977,24 @@ mod tests {
         }
     }
 
+    /// Returns a directory unique to this call for the fallback logger used
+    /// by tests that don't assert on fallback-log content (see
+    /// [`test_session_with_fallback_path`] for the path that does). A shared
+    /// `std::env::temp_dir()` subdirectory would collide across parallel
+    /// tests in this binary and across concurrent `cargo test` invocations on
+    /// the same host; a fresh [`TempDir`] per call has no such collision.
+    /// The directory is intentionally leaked (never removed) rather than
+    /// tied to the caller's stack: the fallback logger's writer keeps
+    /// appending to it for the life of the `PyGraftSession`, which in these
+    /// tests is the whole test function, so there is no drop point earlier
+    /// than process exit that would be safe to remove it at.
+    fn leaked_fallback_dir() -> std::path::PathBuf {
+        let tempdir = TempDir::new().expect("per-call fallback logger directory");
+        let path = tempdir.path().to_path_buf();
+        std::mem::forget(tempdir);
+        path
+    }
+
     fn test_session(
         initial: Arc<FakeClientTransport>,
         replacement: Arc<FakeClientTransport>,
@@ -987,9 +1005,7 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(initial))),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(
-                &std::env::temp_dir().join("atm-graft-python-tests"),
-            ),
+            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
             reconnect_replacement: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
                 replacement,
             ))),
@@ -1314,9 +1330,7 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(
-                &std::env::temp_dir().join("atm-graft-python-tests"),
-            ),
+            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1517,9 +1531,7 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(
-                &std::env::temp_dir().join("atm-graft-python-tests"),
-            ),
+            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1878,9 +1890,7 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(
-                &std::env::temp_dir().join("atm-graft-python-tests"),
-            ),
+            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1980,9 +1990,7 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(transport))),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(
-                &std::env::temp_dir().join("atm-graft-python-tests"),
-            ),
+            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -2043,9 +2051,7 @@ mod tests {
                 })),
             )))),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(
-                &std::env::temp_dir().join("atm-graft-python-tests"),
-            ),
+            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
