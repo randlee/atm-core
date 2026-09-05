@@ -43,5 +43,5 @@ lint_rules = ["LINT-BOUNDARY-TASK-STORE-SQLITE"]
 review_gates = ["private_sqlite_impl", "no_cli_sqlite_lookup"]
 
 [status]
-state = "implemented"
+state = "concrete_landed"
 notes = ["AX.3"]
