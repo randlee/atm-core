@@ -180,10 +180,12 @@ pub struct LocalTmuxNudgeTarget {
 }
 
 /// Target metadata for a Herdr prompt. The live agent name is carried by the
-/// dispatch event; only the optional per-member session is persisted.
+/// dispatch event; the optional per-member session and rendered template are
+/// resolved before the dispatch crosses into the process adapter.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct HerdrNudgeTarget {
     pub session: Option<crate::HerdrSession>,
+    pub rendered_nudge: String,
 }
 
 /// Backend-specific payload for a local steer.

@@ -682,7 +682,12 @@ mod tests {
                     }
                 };
                 process
-                    .prompt(&dispatch.event.recipient, target.session.as_ref(), deadline)
+                    .prompt(
+                        &dispatch.event.recipient,
+                        target.session.as_ref(),
+                        &target.rendered_nudge,
+                        deadline,
+                    )
                     .await
                     .map(|HerdrPromptOutcome::Accepted(_)| PostSendEmissionPath::LocalHerdr)
                     .map_err(Into::into)
@@ -943,7 +948,13 @@ mod tests {
             atm_herdr::testing::FakeHerdrCall::Prompt {
                 agent,
                 session: Some(session),
-            } if agent == "aq27-agent" && session.as_str() == "aq27-test"
+                text,
+                ..
+            } if agent == "aq27-agent"
+                && session.as_str() == "aq27-test"
+                && text.contains("atm read --message-id")
+                && text.contains("AQ2.7 test message")
+                && !text.contains("<when ")
         )));
         assert!(
             runtime
