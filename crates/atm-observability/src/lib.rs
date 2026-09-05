@@ -14,14 +14,7 @@ use sc_observability_types::DiagnosticInfo;
 
 /// Opaque shared retained logger handle. Its concrete backend is deliberately
 /// confined to this facade.
-pub struct RetainedLogger(RetainedLoggerBackend);
-
-#[allow(clippy::large_enum_variant)]
-enum RetainedLoggerBackend {
-    Logger(sc_observability::Logger),
-    #[cfg(test)]
-    QueueFull,
-}
+pub struct RetainedLogger(sc_observability::Logger);
 
 /// Process-neutral settings for ATM's retained JSONL logger.
 #[derive(Debug, Clone, Copy)]

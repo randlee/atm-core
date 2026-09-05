@@ -5,7 +5,6 @@
 //! request types.
 
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Instant;
 
 use ::atm_graft::{
     GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudge,
@@ -25,11 +24,13 @@ use atm_core::types::{AgentName, ChatId, IsoTimestamp, ReadSelection, TeamName};
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 
+mod message;
 mod observability;
 mod query;
 mod recovery;
 mod tool_types;
 
+use message::PyMessage;
 pub use tool_types::AtmSendResult as AtmAckResult;
 pub use tool_types::{
     AtmListResult, AtmListRow, AtmReadResult, AtmSendResult, AtmToolError, PyObservability,
@@ -206,17 +207,6 @@ impl PyAgentAddress {
     }
 }
 
-#[pyclass(skip_from_py_object)]
-#[derive(Clone, Debug)]
-pub struct PyMessage {
-    #[pyo3(get)]
-    message_id: Option<String>,
-    #[pyo3(get)]
-    source: PyAgentAddress,
-    #[pyo3(get)]
-    body: String,
-}
-
 #[derive(Clone, Copy)]
 enum DaemonRecoveryPolicy {
     /// Refresh the client but do not replay a possibly accepted write.
@@ -233,42 +223,6 @@ enum DaemonRecovery<T> {
         refresh_error: Option<PyErr>,
         observability: observability::ObservabilityStatus,
     },
-}
-
-impl PyMessage {
-    fn from_read(outcome: ReadOutcome) -> PyResult<Vec<Self>> {
-        outcome
-            .message
-            .map(|message| {
-                PyAgentAddress::from_typed(
-                    AgentAddress::new(
-                        message.envelope.from,
-                        message.envelope.source_chat_id,
-                        message.envelope.source_team,
-                        None,
-                    )
-                    .map_err(atm_error)?,
-                )
-                .map(|source| Self {
-                    message_id: message.envelope.message_id.map(|id| id.to_string()),
-                    source,
-                    body: message.envelope.text,
-                })
-            })
-            .transpose()
-            .map(Option::into_iter)
-            .map(Iterator::collect)
-    }
-}
-
-#[pymethods]
-impl PyMessage {
-    fn __repr__(&self) -> String {
-        format!(
-            "PyMessage(message_id={:?}, source={})",
-            self.message_id, self.source.agent
-        )
-    }
 }
 
 #[pyclass(skip_from_py_object)]
@@ -709,7 +663,7 @@ impl PyGraftSession {
         let query = self.build_list_query("actionable", None, None, None, None, None)?;
         match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, "list", || {
             self.list_outcome(query.clone())
-                .map(|outcome| outcome.count)
+                .map(|outcome| outcome.count_value())
         }) {
             DaemonRecovery::Completed(count, _) => Ok(count),
             DaemonRecovery::Failed { error, .. } => Err(error),

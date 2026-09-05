@@ -36,8 +36,8 @@ scope = "inside_owner_crate"
 forbidden = ["rusqlite::Connection", "reqwest::Client", "hyper::Client", "axum::Router"]
 
 [contracts]
-request_types = ["PyAgentAddress", "PyGraftSessionOptions", "AtmSendRequest", "AtmReadRequest", "AtmListRequest", "AtmAckRequest"]
-response_types = ["PyMessage", "PyMailboxWorkCounts", "PyNudge", "AtmSendResult", "AtmReadResult", "AtmListRow", "AtmListResult", "AtmAckResult", "PyObservabilityPaths"]
+request_types = ["PyAgentAddress", "PyGraftSessionOptions", "AtmSendRequest", "AtmAckRequest", "AtmReadRequest", "AtmListRequest"]
+response_types = ["PyMessage", "PyMailboxWorkCounts", "PyNudge", "AtmSendResult", "AtmAckResult", "AtmReadResult", "AtmListRow", "AtmListResult", "PyObservabilityPaths"]
 error_types = ["AtmGraftError", "AtmToolError"]
 notes = ["The binding delegates all mailbox state and transport to atm-graft; it neither stores mail nor chooses a host chat route."]
 
