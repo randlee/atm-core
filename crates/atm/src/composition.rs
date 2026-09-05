@@ -950,6 +950,7 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                task_complete: None,
                 extra: serde_json::Map::new(),
             }
         }
@@ -1034,6 +1035,7 @@ mod tests {
             message_id: AtmMessageId::new(),
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             summary: None,
             message: None,
             warnings: Vec::new(),
