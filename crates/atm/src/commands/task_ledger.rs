@@ -1,7 +1,8 @@
 use anyhow::Result;
 use atm_core::list::{ListOutcome, TaskLedgerQuery};
+use atm_storage::TaskActor;
 use atm_storage::contract::{TaskEventRow, TaskRow};
-use atm_storage::{ReminderOutcome, TaskActor, TaskEventKind, TaskEventMarker, TaskState};
+use chrono::SecondsFormat;
 
 pub(super) fn print_task_ledger(
     outcome: &ListOutcome,
@@ -30,12 +31,12 @@ pub(super) fn render_task_ledger(
         };
     }
     match task_ledger {
-        TaskLedgerQuery::Tasks { .. } => render_tasks(&outcome.task_rows),
-        TaskLedgerQuery::Events { .. } => render_task_events(&outcome.task_event_rows),
+        TaskLedgerQuery::Tasks { .. } => Ok(render_tasks(&outcome.task_rows)),
+        TaskLedgerQuery::Events { .. } => Ok(render_task_events(&outcome.task_event_rows)),
     }
 }
 
-fn render_tasks(rows: &[TaskRow]) -> Result<String> {
+fn render_tasks(rows: &[TaskRow]) -> String {
     let mut rendered = String::from(
         "TASK_ID     STATE     ASSIGNEE  ASSIGNER   ASSIGNED_AT               REMINDERS\n",
     );
@@ -43,52 +44,37 @@ fn render_tasks(rows: &[TaskRow]) -> Result<String> {
         rendered.push_str(&format!(
             "{:<11} {:<9} {:<9} {:<10} {:<25} {}\n",
             row.task_id.as_str(),
-            task_state_name(row.state),
+            row.state.as_str(),
             row.assignee.as_str(),
             row.assigner.as_str(),
-            row.assigned_at.into_inner().to_rfc3339(),
+            row.assigned_at
+                .into_inner()
+                .to_rfc3339_opts(SecondsFormat::Secs, true),
             row.reminder_count,
         ));
     }
-    Ok(rendered)
+    rendered
 }
 
-fn render_task_events(rows: &[TaskEventRow]) -> Result<String> {
+fn render_task_events(rows: &[TaskEventRow]) -> String {
     let mut rendered = String::from(
-        "SEQ  AT                        EVENT      FROM      TO        ACTOR       DETAIL\n",
+        "SEQ  AT                        EVENT      FROM      TO        ACTOR    DETAIL\n",
     );
     for row in rows {
         rendered.push_str(&format!(
-            "{:<4} {:<25} {:<10} {:<9} {:<9} {:<11} {}\n",
+            "{:<4} {:<25} {:<10} {:<9} {:<9} {:<8} {}\n",
             row.seq,
-            row.at.into_inner().to_rfc3339(),
-            task_event_name(row.event),
-            row.from_state.map(task_state_name).unwrap_or("-"),
-            row.to_state.map(task_state_name).unwrap_or("-"),
+            row.at
+                .into_inner()
+                .to_rfc3339_opts(SecondsFormat::Secs, true),
+            row.event.as_str(),
+            row.from_state.map(|state| state.as_str()).unwrap_or("-"),
+            row.to_state.map(|state| state.as_str()).unwrap_or("-"),
             task_actor_name(&row.actor),
             task_event_detail(row),
         ));
     }
-    Ok(rendered)
-}
-
-const fn task_state_name(state: TaskState) -> &'static str {
-    match state {
-        TaskState::Assigned => "assigned",
-        TaskState::Active => "active",
-        TaskState::Complete => "complete",
-    }
-}
-
-const fn task_event_name(event: TaskEventKind) -> &'static str {
-    match event {
-        TaskEventKind::Assigned => "assigned",
-        TaskEventKind::Acked => "acked",
-        TaskEventKind::Completed => "completed",
-        TaskEventKind::Rejected => "rejected",
-        TaskEventKind::Reminded => "reminded",
-        TaskEventKind::LeadNotified => "lead_notified",
-    }
+    rendered
 }
 
 fn task_actor_name(actor: &TaskActor) -> &str {
@@ -101,24 +87,9 @@ fn task_actor_name(actor: &TaskActor) -> &str {
 fn task_event_detail(row: &TaskEventRow) -> String {
     row.detail.clone().unwrap_or_else(|| {
         row.marker
-            .map(task_event_marker_name)
-            .or_else(|| row.outcome.map(reminder_outcome_name))
+            .map(|marker| marker.as_str())
+            .or_else(|| row.outcome.map(|outcome| outcome.as_str()))
             .unwrap_or("-")
             .to_string()
     })
-}
-
-const fn task_event_marker_name(marker: TaskEventMarker) -> &'static str {
-    match marker {
-        TaskEventMarker::Resend => "resend",
-        TaskEventMarker::AssignmentMissing => "assignment_missing",
-    }
-}
-
-const fn reminder_outcome_name(outcome: ReminderOutcome) -> &'static str {
-    match outcome {
-        ReminderOutcome::Emitted => "emitted",
-        ReminderOutcome::Unrenderable => "unrenderable",
-        ReminderOutcome::Blocked => "blocked",
-    }
 }

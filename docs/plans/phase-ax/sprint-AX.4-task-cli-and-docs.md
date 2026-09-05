@@ -53,7 +53,7 @@ shape-only completion fails the sprint.
   sanctioned path `nudge-template-override-store.toml` grants `atm`);
   `conflicts_with_all` against every mailbox filter including the
   existing `--task <id>`; human and `--json` output per code contract C1.
-- [ ] D3 — docs: `docs/requirements.md` §6.5 (`atm send` flags) and §6.6
+- [ ] D3 — docs: `docs/requirements.md` §6.5 (`atm send` flags) and §7.3/§7.12
   (`atm list` flags) list the new flags; §15.4 "Task Metadata Rule"
   extended with the state machine summary, the ack gate,
   `--task-complete`, the completion-from-Assigned acknowledgement rule,
@@ -116,7 +116,7 @@ every existing `atm list` filter.
    unknown id exits 3 and writes no message; `--task-complete` together
    with `--task-id` exits 2.
 3. `atm list --tasks --task t-1` and `--task-events t-1 --unread` exit 2.
-4. Requirements §6.5/§6.6/§15.4, team-protocol, and `tasks.md` merged;
+4. Requirements §6.5/§7.3/§7.12/§15.4, team-protocol, and `tasks.md` merged;
    `just validate` green.
 
 ## Required validation

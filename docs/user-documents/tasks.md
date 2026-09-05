@@ -36,4 +36,21 @@ returns that task's append-only events in sequence order. An unknown task id
 prints the event header only (or `[]` as JSON) and succeeds. See ADR-061 for
 the task tables and audit/replay contract.
 
+Human task rows use this stable layout:
+
+```
+TASK_ID     STATE     ASSIGNEE  ASSIGNER   ASSIGNED_AT               REMINDERS
+t-42        active    cipher    fenix      2026-09-05T10:12:03Z      3
+t-43        assigned  cipher    fenix      2026-09-05T10:12:04Z      0
+```
+
+Human task-event rows use this stable layout:
+
+```
+SEQ  AT                        EVENT      FROM      TO        ACTOR    DETAIL
+1    2026-09-05T10:12:03Z      assigned   -         assigned  fenix    -
+2    2026-09-05T10:12:40Z      acked      assigned  active    cipher   -
+3    2026-09-05T10:13:40Z      reminded   active    active    atm-daemon emitted
+```
+
 Return to the [ATM User Guide](./README.md).

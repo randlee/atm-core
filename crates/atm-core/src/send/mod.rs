@@ -222,14 +222,8 @@ impl WriteRequest {
 
     /// Marks this message as a request to complete a previously assigned task.
     #[must_use]
-    pub fn with_task_complete(mut self, task_id: TaskId) -> Self {
-        self.task_complete = Some(task_id);
-        self
-    }
-
-    #[must_use]
-    pub fn with_task_complete_opt(mut self, task_id: Option<TaskId>) -> Self {
-        self.task_complete = task_id;
+    pub fn with_task_complete(mut self, task_id: impl Into<Option<TaskId>>) -> Self {
+        self.task_complete = task_id.into();
         self
     }
 

@@ -149,7 +149,10 @@ impl ListCommand {
                     member: self.member.clone(),
                 });
             if self.member.is_some() && task_ledger.is_none() {
-                anyhow::bail!("--member requires --tasks or --task-events <TASK_ID>");
+                return Err(atm_core::error::AtmError::validation(
+                    "--member requires --tasks or --task-events <TASK_ID>",
+                )
+                .into());
             }
             Ok(task_ledger)
         }
@@ -324,7 +327,7 @@ mod tests {
         assert_eq!(
             tasks,
             "TASK_ID     STATE     ASSIGNEE  ASSIGNER   ASSIGNED_AT               REMINDERS\n\
-t-42        active    cipher    fenix      2026-09-05T10:12:03+00:00 3\n"
+t-42        active    cipher    fenix      2026-09-05T10:12:03Z      3\n"
         );
 
         let events = render_task_ledger(
@@ -338,8 +341,8 @@ t-42        active    cipher    fenix      2026-09-05T10:12:03+00:00 3\n"
         .expect("human task events");
         assert_eq!(
             events,
-            "SEQ  AT                        EVENT      FROM      TO        ACTOR       DETAIL\n\
-1    2026-09-05T10:12:03+00:00 assigned   -         assigned  fenix       -\n"
+            "SEQ  AT                        EVENT      FROM      TO        ACTOR    DETAIL\n\
+1    2026-09-05T10:12:03Z      assigned   -         assigned  fenix    -\n"
         );
 
         let json = render_task_ledger(&outcome, &TaskLedgerQuery::Tasks { member: None }, true)

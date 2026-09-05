@@ -592,9 +592,15 @@ impl StorageAndNudgeRouter {
                     "request deadline expired before task-ledger inspection",
                 ));
             }
-            return atm_core::list::list_task_ledger_with_runtime(query, &self.service_runtime)
-                .map(ResponseEnvelope::List)
-                .map(ApiResponse::new);
+            let runtime = self.service_runtime.clone();
+            return self
+                .control_path_sync_bridge
+                .run(deadline, move || {
+                    atm_core::list::list_task_ledger_with_runtime(query, &runtime)
+                        .map(ResponseEnvelope::List)
+                        .map(ApiResponse::new)
+                })
+                .await;
         }
         let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
             AtmError::daemon_unavailable(
@@ -2551,6 +2557,22 @@ mod tests {
                 "{handler} must not acquire the global blocking bridge"
             );
         }
+    }
+
+    #[test]
+    fn task_ledger_handler_uses_the_control_path_sync_bridge() {
+        let source = include_str!("storage_and_nudge_router.rs")
+            .split("\n#[cfg(test)]\nmod tests")
+            .next()
+            .expect("production source");
+        let start = source
+            .find("async fn list_messages")
+            .expect("list handler exists");
+        let tail = &source[start..];
+        let end = tail.find("\n    async fn ").unwrap_or(tail.len());
+        let handler = &tail[..end];
+        assert!(handler.contains("control_path_sync_bridge"));
+        assert!(handler.contains("list_task_ledger_with_runtime"));
     }
 
     #[tokio::test]

@@ -16,6 +16,17 @@ pub enum ReminderOutcome {
     Blocked,
 }
 
+impl ReminderOutcome {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Emitted => "emitted",
+            Self::Unrenderable => "unrenderable",
+            Self::Blocked => "blocked",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageWriteOrigin {
