@@ -1,0 +1,6 @@
+started_utc=2026-09-05T00:54:40.1313702Z
+candidate_sha=5875b70bdcc01337eac2a6fdeda1d1a48cc1d550
+host=FASTPC4 account=rz\rand.lee benchmark_profile=C:\atm-bench\home-1.5.0 runtime_home=C:\atm-bench\home-1.5.0\.atm host_label=windows-x64-01-isolated scheduler=not-used-current-account-authorized
+INFO: No tasks are running which match the specified criteria.
+F:\github\atm-core-worktrees\evidence\readiness-1.5.0-windows\site\reports\issue-1171\query-fts-32-way-current-account.json
+exit_code=0

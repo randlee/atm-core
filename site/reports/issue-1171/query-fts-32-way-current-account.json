@@ -1,0 +1,165 @@
+{
+  "account": "rand.lee",
+  "candidate_sha": "5875b70bdcc01337eac2a6fdeda1d1a48cc1d550",
+  "daemon_output": {
+    "stderr_tail": [],
+    "stdout_tail": [
+      "ATM_DAEMON_READY"
+    ]
+  },
+  "daemon_port": 25648,
+  "doctor": {
+    "client_context": {
+      "cli_schema_version": 1,
+      "http_api_version": "1.0.0",
+      "identity": "capacity-agent-9226495140af",
+      "team": "capacity-team-9226495140af",
+      "version": "1.5.0"
+    },
+    "config": {
+      "findings": []
+    },
+    "daemon_context": {
+      "cli_schema_version": 1,
+      "http_api_version": "1.0.0",
+      "identity": "capacity-agent-9226495140af",
+      "peer_wire_security": "plaintext-test",
+      "team": "capacity-team-9226495140af",
+      "version": "1.5.0"
+    },
+    "drift_findings": [],
+    "environment": {
+      "atm_home": "C:\\atm-bench\\home-1.5.0\\.atm",
+      "atm_identity": "capacity-agent-9226495140af",
+      "atm_team": "capacity-team-9226495140af",
+      "team_override": null
+    },
+    "findings": [
+      {
+        "code": "ATM_OBSERVABILITY_HEALTH_OK",
+        "message": "shared observability active at C:\\atm-bench\\home-1.5.0\\.atm\\logs\\atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+        "remediation": null,
+        "severity": "info"
+      }
+    ],
+    "graft_receivers": {
+      "receivers": []
+    },
+    "herdr_breaker": {
+      "state": "closed"
+    },
+    "herdr_queue_pump": {
+      "breaker": {
+        "state": "closed"
+      },
+      "last_tick_at": "2026-09-05T00:54:41.064484700Z"
+    },
+    "mail_store": {
+      "findings": []
+    },
+    "member_roster": {
+      "members": [],
+      "team": "capacity-team-9226495140af"
+    },
+    "observability": {
+      "active_log_path": "C:\\atm-bench\\home-1.5.0\\.atm\\logs\\atm.log.jsonl",
+      "detail": "writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+      "diagnostic": null,
+      "logging_state": "healthy",
+      "maintenance": {
+        "last_pass_at": null,
+        "pruned_files_total": 0,
+        "rotated_files_total": 0,
+        "state": "running"
+      },
+      "query_state": null
+    },
+    "post_send": {
+      "config_root": "",
+      "external_rules": [],
+      "recipient_paths": []
+    },
+    "reader_lanes": {
+      "mailbox": {
+        "pool_size": 4,
+        "queue_depth": 16
+      },
+      "search": {
+        "pool_size": 2,
+        "queue_depth": 8
+      }
+    },
+    "recommendations": [],
+    "roster_store": {
+      "findings": []
+    },
+    "runtime_status": {
+      "degraded_ingest": false,
+      "herdr_queue_last_tick_at": "2026-09-05T00:54:41.064484700Z",
+      "liveness": "running",
+      "member_counts": {
+        "active_members": 0,
+        "idle_members": 0,
+        "offline_members": 0,
+        "unknown_members": 0
+      },
+      "readiness": "ready",
+      "singleton_owner_pid": 59992
+    },
+    "summary": {
+      "error_count": 0,
+      "info_count": 1,
+      "message": "ATM doctor completed with healthy findings only",
+      "status": "healthy",
+      "warning_count": 0
+    }
+  },
+  "execution_mode": "current-account; scheduled-task isolation unavailable to unelevated token",
+  "host": "FASTPC4",
+  "host_label": "windows-x64-01-isolated",
+  "limitation": "The checked-in read runner rejects Windows before workload execution because POSIX identity capture is unavailable; this invokes its unchanged corpus, fanout, and observation functions directly.",
+  "profile_root": "C:\\atm-bench\\home-1.5.0",
+  "reader_lanes": {
+    "mailbox": {
+      "pool_size": 4,
+      "queue_depth": 16
+    },
+    "search": {
+      "pool_size": 2,
+      "queue_depth": 8
+    }
+  },
+  "requests": {
+    "elapsed_seconds": 5.028939200099558,
+    "failed": 107,
+    "failure_codes": {
+      "other": 107
+    },
+    "failure_samples": [
+      "bounded mailbox reader lane request failed\n  Recovery: Wait for the daemon to finish an in-flight request, then retry.",
+      "bounded mailbox reader lane request failed\n  Recovery: Wait for the daemon to finish an in-flight request, then retry.",
+      "bounded mailbox reader lane request failed\n  Recovery: Wait for the daemon to finish an in-flight request, then retry.",
+      "bounded mailbox reader lane request failed\n  Recovery: Wait for the daemon to finish an in-flight request, then retry.",
+      "bounded mailbox reader lane request failed\n  Recovery: Wait for the daemon to finish an in-flight request, then retry.",
+      "bounded mailbox reader lane request failed\n  Recovery: Wait for the daemon to finish an in-flight request, then retry.",
+      "bounded mailbox reader lane request failed\n  Recovery: Wait for the daemon to finish an in-flight request, then retry.",
+      "bounded mailbox reader lane request failed\n  Recovery: Wait for the daemon to finish an in-flight request, then retry.",
+      "bounded mailbox reader lane request failed\n  Recovery: Wait for the daemon to finish an in-flight request, then retry.",
+      "bounded mailbox reader lane request failed\n  Recovery: Wait for the daemon to finish an in-flight request, then retry."
+    ],
+    "successful": 3573,
+    "total": 3680
+  },
+  "runtime_home": "C:\\atm-bench\\home-1.5.0\\.atm",
+  "saturation_counter": {
+    "doctor_exposed": false,
+    "reason": "doctor schema reports reader-lane settings but no saturation counter",
+    "structured_log_events_in_measurement_window": 107
+  },
+  "workload": {
+    "family": "query-fts",
+    "fanout": 32,
+    "measurement_seconds": 5.0,
+    "warmup_seconds": 2.0
+  }
+}

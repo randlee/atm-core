@@ -1,0 +1,12 @@
+started_utc=2026-09-05T00:46:42.7052834Z
+candidate_sha=5875b70bdcc01337eac2a6fdeda1d1a48cc1d550
+host=FASTPC4 account=rz\rand.lee benchmark_profile=C:\atm-bench\home-1.5.0 runtime_root=C:\Users\rand.lee\AppData\Local\Temp\atm-capacity-1171-current host_label=windows-x64-01-isolated scheduler=not-used-current-account-authorized
+TASKLIST_PRECHECK
+INFO: No tasks are running which match the specified criteria.
+capacity smoke error: benchmark-account bootstrap failed: could not create benchmark-account directory C:\atm-bench\home-1.5.0\.atm: [WinError 3] The system cannot find the path specified: 'C:\\atm-bench\\home-1.5.0\\.atm'
+RETRY_AFTER_CREATING_PROFILE_ROOT
+INFO: No tasks are running which match the specified criteria.
+benchmark-account manifest created: C:\atm-bench\home-1.5.0\.atm\benchmark-account.json
+local benchmark trace: F:\github\atm-core-worktrees\evidence\readiness-1.5.0-windows\artifacts\benchmark\send-message-benchmark\20260905-004651.854426-windows-x64-01-isolated-tcp-f16.json
+FAIL admission-capacity evidence: F:\github\atm-core-worktrees\evidence\readiness-1.5.0-windows\site\reports\send-message-benchmark\20260905-004651.854426-windows-x64-01-isolated-tcp-f16.json
+exit_code=1
