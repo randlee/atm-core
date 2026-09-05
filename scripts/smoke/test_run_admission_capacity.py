@@ -104,6 +104,21 @@ def healthy_managed_status() -> dict[str, object]:
 
 
 class AdmissionCapacityTests(unittest.TestCase):
+    def test_os_account_home_uses_token_bound_account_home(self):
+        """The durable-root safety check resolves the OS account like benchmark_account, never USERPROFILE."""
+        token_home = Path("C:/token-owned-profile") if os.name == "nt" else Path("/home/token-owned")
+        with (
+            mock.patch.dict(os.environ, {"USERPROFILE": "C:/spoofed-profile", "HOME": "/spoofed-home"}),
+            mock.patch.object(RUNNER, "account_home", return_value=token_home),
+        ):
+            self.assertEqual(RUNNER.os_account_home(), token_home)
+
+    def test_os_account_home_reports_account_resolution_failure(self):
+        with mock.patch.object(RUNNER, "account_home", side_effect=RUNNER.BenchmarkAccountError("no token")):
+            with self.assertRaises(RUNNER.SmokeError) as raised:
+                RUNNER.os_account_home()
+        self.assertIn("no token", str(raised.exception))
+
     def test_default_workers_match_the_reviewed_f8_load_shape(self):
         self.assertEqual(RUNNER.DEFAULT_WORKERS, 512)
 
