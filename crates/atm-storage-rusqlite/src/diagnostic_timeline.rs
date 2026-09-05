@@ -140,8 +140,6 @@ pub(crate) fn truncate_detail(detail: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, Instant};
-
     use super::{
         DIAGNOSTIC_DETAIL_MAX_BYTES, DIAGNOSTIC_MAX_ROWS, SqliteDiagnosticTimeline, truncate_detail,
     };
@@ -174,20 +172,22 @@ mod tests {
                 detail: None,
             }])
             .expect("non-blocking diagnostic offer");
-        let deadline = Instant::now() + Duration::from_secs(2);
-        loop {
-            let rows = timeline
-                .query(&DiagnosticQuery::default())
-                .expect("timeline query");
-            if rows
-                .iter()
-                .any(|row| row.code.as_deref() == Some("ATM_TEST"))
-            {
-                break;
-            }
-            assert!(Instant::now() < deadline, "diagnostic writer did not drain");
-            std::thread::yield_now();
-        }
+        // The diagnostic writer lane is a single FIFO channel: `prune()`
+        // sends a `Prune{reply}` message on that same channel and blocks on
+        // its reply, so once it returns, every message queued ahead of it
+        // (including our `record_batch` offer above) has already been
+        // applied. That gives a deterministic synchronization point with no
+        // clock or poll loop; `now_unix_ms = 0` prunes nothing (the cutoff is
+        // seven days before the epoch), so the seeded row survives.
+        timeline.prune(0).expect("prune reply drains the FIFO lane");
+        let rows = timeline
+            .query(&DiagnosticQuery::default())
+            .expect("timeline query");
+        assert!(
+            rows.iter()
+                .any(|row| row.code.as_deref() == Some("ATM_TEST")),
+            "diagnostic writer did not persist the batch before the prune reply: {rows:?}"
+        );
     }
 
     #[test]
