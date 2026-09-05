@@ -1083,6 +1083,30 @@ mod tests {
         command.run(&observability).await.expect("snapshot run");
     }
 
+    #[test]
+    fn default_jsonl_snapshot_matches_the_pre_aw3_golden_bytes() {
+        let snapshot = AtmLogSnapshot {
+            records: vec![AtmLogRecord {
+                timestamp: chrono::DateTime::from_timestamp_millis(100)
+                    .expect("fixture timestamp")
+                    .into(),
+                level: LogLevelFilter::Info,
+                service: atm_core::observability::service_name("atm").expect("fixture service"),
+                target: Some("cli.command".to_owned()),
+                action: Some("send".to_owned()),
+                message: Some("jsonl fixture".to_owned()),
+                fields: Default::default(),
+            }],
+            truncated: false,
+        };
+        let rendered = format!(
+            "{}\n",
+            serde_json::to_string_pretty(&snapshot).expect("serialize retained snapshot")
+        );
+        let golden = include_str!("../../tests/fixtures/log-jsonl-default.json");
+        assert_eq!(rendered.as_bytes(), golden.as_bytes());
+    }
+
     #[tokio::test]
     #[serial(env)]
     async fn run_snapshot_fails_without_caller_context() {
