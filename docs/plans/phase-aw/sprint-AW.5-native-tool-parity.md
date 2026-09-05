@@ -58,8 +58,9 @@ selected (`PyMessage::from_read` → `_message_result`). The real gaps are:
    field). The ack case sends a `requires_ack` message from a second
    fixture identity, acks it natively, and compares against the CLI ack of
    a twin message. The test
-   lives in `crates/atm-graft-python/tests/test_cli_parity.py` and is in the
-   3.11–3.14 matrix.
+   lives in `crates/atm-graft-python/tests/test_cli_parity.py` and runs in
+   CI's platform test job on Python 3.14.7. The abi3 compatibility matrix
+   independently validates wheel imports on Python 3.11–3.14.
 4. **Boundary (definite)**: the binding adds its explicitly allowlisted
    `serde_json` dependency so each `to_json()` method uses the canonical
    serializer directly. The baseline this sprint diffs against is the

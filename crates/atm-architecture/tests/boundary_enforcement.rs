@@ -4167,6 +4167,61 @@ fn av3_read_handler_allowed_types() -> BTreeSet<String> {
         .collect()
 }
 
+#[test]
+fn aw_diagnostics_composition_stays_behind_the_timeline_store_contract() {
+    let root = workspace_root();
+    let bootstrap =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs"));
+    let diagnostics_route =
+        read_source(&root.join("crates/atm-http-runtime/src/diagnostics_route.rs"));
+    let doctor_observability =
+        read_source(&root.join("crates/atm-http-runtime/src/doctor_observability.rs"));
+    let sqlite_backend = read_source(&root.join("crates/atm-storage-rusqlite/src/lib.rs"));
+    let sqlite_backend_implementation = sqlite_backend
+        .split("impl SqliteStorageBackend {")
+        .nth(1)
+        .expect("SQLite storage backend implementation");
+    let sqlite_production = sqlite_backend_implementation
+        .split("\n    #[cfg(test)]")
+        .next()
+        .expect("storage backend production region");
+
+    assert!(
+        bootstrap.contains("let store: Arc<dyn DiagnosticTimelineStore> = store;")
+            && bootstrap.contains("DiagnosticTimelineWriter::new_with_persistence("),
+        "bootstrap must erase the SQLite implementation at the diagnostic timeline composition seam"
+    );
+    assert!(
+        diagnostics_route.contains("Option<Arc<dyn DiagnosticTimelineStore>>"),
+        "the diagnostics HTTP route must accept only the timeline-store capability"
+    );
+    for forbidden in [
+        "SqliteDiagnosticTimeline",
+        "atm_storage_rusqlite",
+        "SharedDb",
+    ] {
+        assert!(
+            !diagnostics_route.contains(forbidden),
+            "the diagnostics HTTP route must not name the SQLite implementation `{forbidden}`"
+        );
+        assert!(
+            !doctor_observability.contains(forbidden),
+            "the doctor diagnostics projection must not name the SQLite implementation `{forbidden}`"
+        );
+    }
+    assert_eq!(
+        sqlite_production
+            .matches("SqliteDiagnosticTimeline::from_shared_db")
+            .count(),
+        1,
+        "the storage backend must retain exactly one production construction path for its shared diagnostic timeline"
+    );
+    assert!(
+        !sqlite_production.contains("SqliteDiagnosticTimeline {"),
+        "the storage backend must construct the diagnostic timeline only through from_shared_db"
+    );
+}
+
 fn av3_trait_signature_types(source: &str, trait_name: &str) -> BTreeSet<String> {
     let syntax = syn::parse_file(source).expect("AV.3 trait source must parse as Rust");
     let trait_item = syntax
