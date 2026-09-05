@@ -658,10 +658,11 @@ Common preconditions:
   round-trip report to rand-m4 or rand-m5. Owner: Rand. Target date: set
   by Rand in this line when known.
 - P-D: the Windows dev agent is named here (ATM identity on the FastPC4
-  team, agent kind) by Rand, and the outbound dispatch path is stated
-  (fenix sends j2 assignments to `<agent>@atm-dev.fastpc4`; if the
-  cross-host link is down the reporter relays the last assignment id and
-  fenix re-sends when the link returns).
+  team, agent kind) by Rand. Dispatch path (Rand, 2026-09-05): ssh into
+  FastPC4 over the VPN, run by Rand, available today; `herdr` runs over
+  that ssh session. fenix hands Rand the rendered j2 assignment; ATM
+  cross-host delivery to `<agent>@atm-dev.fastpc4` is used when the link
+  is up and the reporter relays the last assignment id when it is not.
 
 Common acceptance for every sprint: merge gate 0 blocking / 0 important /
 0 minor in scope, quality-mgr PASS posted on the PR, CI green at merge
@@ -1210,6 +1211,10 @@ AX does not wait on any AY sprint.
   gh-stack stacking rule (link only; merge commits; never rebase/sync),
   recommended agents, and per-sprint deliverables/acceptance/validation
   lists.
+- Rand, 2026-09-05 (relayed by team-lead): FastPC4 dispatch is ssh over
+  VPN run by Rand (P-D updated); the LaunchAgent/user-unit start-at-login
+  entry (RunAtLoad, no KeepAlive) is the decided mechanism, "leave it to
+  the user" rejected. Decisions go to Rand directly from now on.
 - Rand, 2026-09-05: plan not approved yet; startup and environment
   concerns; atm must not own Herdr; no hard gate; launchd installs Herdr
   entry only when configured, mirrored in daemon-switch; late Herdr
