@@ -14,10 +14,11 @@ use crate::boundary::{
 };
 use crate::delivery_policy::DeliveryPolicyCoordinator;
 use crate::error::AtmError;
-use crate::schema::AtmMessageId;
+use crate::schema::{AtmMessageId, authenticated_source_host};
 use crate::send::NudgeMode;
 use crate::send::hook::build_built_in_dispatch;
 use crate::service_runtime::LocalServiceRuntime;
+use atm_storage::TaskRow;
 
 /// Clears the exact durable queue marker after a successful handoff.
 ///
@@ -143,5 +144,48 @@ pub fn rebuild_received_hook_dispatch(
         &event,
         &message.envelope.text,
         nudge_mode,
+    ))
+}
+
+/// Builds a deferred Task reminder without requiring the assignment message
+/// to remain in the mailbox. A missing assignment record only removes the
+/// optional source-host attribution; the durable task row remains sufficient
+/// to render the reminder body.
+pub fn build_task_reminder_dispatch(
+    runtime: &LocalServiceRuntime,
+    member: &MemberKey,
+    row: &TaskRow,
+) -> Result<Option<BuiltInPostSendDispatch>, AtmError> {
+    let delivery_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
+        runtime,
+        member.team(),
+        member.agent(),
+    )?;
+    let sender_host = runtime
+        .message_store
+        .load_message(&MessageKey::from(row.assignment_message_id))?
+        .map(|message| authenticated_source_host(&message.envelope))
+        .transpose()?
+        .flatten();
+    let event = PostSendHookEvent {
+        sender: row.assigner.clone(),
+        sender_chat_id: None,
+        sender_team: row.team.clone(),
+        sender_host,
+        recipient: row.assignee.clone(),
+        recipient_team: row.team.clone(),
+        message_id: row.assignment_message_id,
+        description: row.description.clone(),
+        requires_ack: true,
+        is_ack: false,
+        task_id: Some(row.task_id.clone()),
+        recipient_pane_id: delivery_snapshot.recipient_pane_id.clone(),
+    };
+    Ok(build_built_in_dispatch(
+        runtime,
+        &delivery_snapshot,
+        &event,
+        &row.description,
+        NudgeMode::Deferred,
     ))
 }
