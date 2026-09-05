@@ -183,3 +183,8 @@ triage:r23 a triage:Resolution ;
 triage:c10 a triage:Completion ;
     triage:ofSprint triage:AX4 ;
     triage:at "2026-09-05T10:10:09Z"^^xsd:dateTime .
+
+triage:a11 a triage:Assignment ;
+    triage:ofSprint triage:AX3 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-05T10:11:44Z"^^xsd:dateTime .
