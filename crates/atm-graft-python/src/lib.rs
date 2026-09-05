@@ -1001,7 +1001,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(initial))),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
+            )),
             reconnect_replacement: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
                 replacement,
             ))),
@@ -1326,7 +1328,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
+            )),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1527,7 +1531,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
+            )),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1886,7 +1892,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
+            )),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1986,7 +1994,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(transport))),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
+            )),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -2047,7 +2057,9 @@ mod tests {
                 })),
             )))),
             receiver: Mutex::new(None),
-            fallback_logger: observability::new_logger(&leaked_fallback_dir()),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
+            )),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),

@@ -304,9 +304,9 @@ pub(crate) fn build_logger(
     let active_log_path = prepare_retained_log(log_dir)?;
     let mut config = LoggerConfig::default_for(
         service_name.clone(),
-        atm_observability::logger_root_for_log_dir(log_dir)?,
+        shared_logger_root_for_log_dir(log_dir)?,
     );
-    config.level = atm_observability::logger_level_override()?.unwrap_or(SharedLevelFilter::Info);
+    config.level = logger_level_override()?.unwrap_or(SharedLevelFilter::Info);
     // Make the retained file threshold explicit so lifecycle info! events stay
     // in the default retained log unless ATM_LOG overrides the level.
     // ATM CLI owns stdout/stderr UX by default; only opt into a shared
@@ -346,7 +346,7 @@ fn init_tracing(stderr_logs: bool) -> Result<(), AtmError> {
         .with_writer(std::io::stderr)
         .with_ansi(false)
         .with_max_level(tracing_level_filter(
-            atm_observability::logger_level_override()?.unwrap_or(SharedLevelFilter::Info),
+            logger_level_override()?.unwrap_or(SharedLevelFilter::Info),
         ))
         .without_time()
         .finish();

@@ -167,11 +167,6 @@ impl RetainedLogger {
             result
         })
     }
-
-    #[cfg(test)]
-    pub(crate) fn flush_for_test(&self) {
-        self.0.flush().expect("retained logger flush");
-    }
 }
 
 fn retained_command_level(outcome: &str) -> Level {

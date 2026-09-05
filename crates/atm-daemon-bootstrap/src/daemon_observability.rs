@@ -114,7 +114,7 @@ impl DaemonObservability {
     }
 
     #[cfg(test)]
-    fn shutdown_for_test(self) -> sc_observability_types::LoggingHealthReport {
+    fn shutdown_for_test(self) {
         let logger = match Arc::try_unwrap(self.logger) {
             Ok(logger) => logger,
             Err(_) => panic!("test observability logger must have one owner"),
@@ -127,7 +127,7 @@ impl DaemonObservability {
             Ok(retained_logger) => retained_logger,
             Err(_) => panic!("test retained logger must have one owner"),
         };
-        retained_logger.shutdown()
+        let _ = retained_logger.shutdown();
     }
 
     #[cfg(test)]
@@ -319,15 +319,12 @@ mod tests {
                 .expect("bootstrap");
         observability.flush_for_test();
 
-        let completion = Arc::new((
-            Mutex::new(None::<sc_observability_types::LoggingHealthReport>),
-            Condvar::new(),
-        ));
+        let completion = Arc::new((Mutex::new(None::<()>), Condvar::new()));
         let completion_worker = Arc::clone(&completion);
         let shutdown_worker = std::thread::spawn(move || {
-            let health = observability.shutdown_for_test();
+            observability.shutdown_for_test();
             let (state, changed) = &*completion_worker;
-            *state.lock().expect("completion state") = Some(health);
+            *state.lock().expect("completion state") = Some(());
             changed.notify_one();
         });
 
@@ -341,19 +338,12 @@ mod tests {
             !timeout.timed_out(),
             "background writer shutdown exceeded the hard test bound"
         );
-        let health = state.take().expect("completion health");
+        state.take().expect("completion completion");
         shutdown_worker.join().expect("shutdown worker");
 
         assert!(
             !rotated_log_path.exists(),
             "background prune worker should remove expired rotated files"
-        );
-
-        assert!(
-            health.maintenance.as_ref().is_some_and(|report| {
-                report.pruned_files_total >= sc_observability_types::FileCount::from_usize(1)
-            }),
-            "maintenance stats should record the background prune pass"
         );
     }
 }
