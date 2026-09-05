@@ -164,21 +164,14 @@ have zero commits after v0.8.2, so these hold at HEAD too.
   panes, and `HERDR_SOCKET_PATH` outranks `HERDR_SESSION`
   (`src/session.rs:82-83`). Also `HERDR_ENV=1` blocks nested launches
   (`src/main.rs:478-482`).
-- Consequence for atm (Rand, 2026-09-05): the atm daemon is a singleton
-  under launchd / a Windows service, so it never inherits a pane's
-  `HERDR_SOCKET_PATH`; it must own the Herdr endpoint itself. Today
-  `session_environment` only sets `HERDR_SESSION` on the child
-  (`crates/atm-herdr/src/lib.rs:627-629`) and works because the launchd
-  environment is clean. W1 makes this explicit: the daemon resolves the
-  endpoint from its configured `HerdrSession` (or an optional configured
-  socket path) using Herdr's own rules above, sets `HERDR_SOCKET_PATH`
-  and `HERDR_SESSION` on every child, and removes any inherited
-  `HERDR_SOCKET_PATH`/`HERDR_CLIENT_SOCKET_PATH`/`HERDR_ENV`. On Windows
-  the same path value is what Herdr maps to `\\.\pipe\<path>`, so one
-  code path serves both platforms. Doctor reports the resolved endpoint.
-  The fixture covers a polluted parent env (pane-launched daemon for
-  dev/dogfood) and a clean one. This is also the endpoint field W2's
-  direct client reuses.
+- Consequence for atm (Rand, 2026-09-05): Herdr is the per-user
+  singleton that owns the socket and the environment. The daemon and
+  atm agents inherit whatever Herdr set and resolve nothing; the
+  `herdr` client falls back to the default session socket when the
+  variable is absent. Today `session_environment` sets `HERDR_SESSION`
+  on the child (`crates/atm-herdr/src/lib.rs:627-629`); W1 drops that
+  and passes the environment through unchanged. The full rule is W1
+  deliverable 5.
 
 ## Facts read from Herdr v0.8.2 (CLI parity)
 
@@ -303,16 +296,11 @@ Deliverables:
    tolerate a trailing `\r` regardless of the audit result. HR-TEST-006 ("CI never depends on Herdr being
    installed") still holds. No-flaky rule: deterministic fake, injected
    deadlines, hard bounds, nothing may block forever.
-5. **Composition, endpoint ownership, launch verification, doctor.**
+5. **Composition, launch verification, doctor.**
    One `HerdrCliTransport` construction site in
-   `build_replacement_handler`. The daemon owns the endpoint (Rand,
-   2026-09-05): `HerdrEndpoint` is resolved once at startup from the
-   configured `HerdrSession` (optional explicit `socket_path` override)
-   using Herdr's own rules; every child gets `HERDR_SOCKET_PATH` and
-   `HERDR_SESSION` set explicitly and inherited
-   `HERDR_SOCKET_PATH`/`HERDR_CLIENT_SOCKET_PATH`/`HERDR_ENV` removed.
-   Herdr runs one server per user per session on a machine, so the
-   daemon binds to exactly one session.
+   `build_replacement_handler`. Herdr runs one server per user on a
+   machine and owns its socket; the daemon binds to nothing and
+   resolves nothing.
 
    Launch contract (Rand, 2026-09-05): the daemon and every atm agent
    run inside a Herdr pane and inherit Herdr's complete environment
