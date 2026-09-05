@@ -3567,9 +3567,11 @@ mod tests {
                 }
             })
             .try_fold(None, |state, event| {
-                atm_storage::transition(state, event).map(|transition| match transition {
-                    atm_storage::Transition::To(state) => Some(state),
-                    atm_storage::Transition::NoOp => state,
+                atm_storage::transition(state, event, &task_id, &agent()).map(|transition| {
+                    match transition {
+                        atm_storage::Transition::To(state) => Some(state),
+                        atm_storage::Transition::NoOp => state,
+                    }
                 })
             })
             .expect("task event replay");

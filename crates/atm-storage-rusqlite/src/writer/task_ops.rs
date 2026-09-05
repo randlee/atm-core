@@ -74,10 +74,12 @@ fn transition_for(
     row: Option<&TaskRow>,
     open: &[TaskRow],
     event: TaskEvent,
+    task_id: &TaskId,
     actor: &AgentName,
 ) -> Result<Transition, AtmError> {
-    admit(row, open, event, actor).map_err(|error| error.into_atm_error())?;
-    transition(row.map(|task| task.state), event).map_err(|error| error.into_atm_error())
+    admit(row, open, event, task_id, actor).map_err(|error| error.into_atm_error())?;
+    transition(row.map(|task| task.state), event, task_id, actor)
+        .map_err(|error| error.into_atm_error())
 }
 
 /// Writes the durable rejection audit after the failed operation's savepoint
@@ -276,6 +278,7 @@ fn apply_task_assignment(
         row.as_ref(),
         &open,
         TaskEvent::Assigned,
+        &typed_task_id,
         &record.envelope.from,
     )?;
     let at = record.envelope.timestamp.to_string();
@@ -337,13 +340,14 @@ fn apply_task_completion(
             &record.agent,
         )?,
     };
-    let Some(row) = row else {
-        return Err(task_rejected(format!(
-            "no open task {task_id} for {}",
-            record.envelope.from
-        )));
-    };
-    let next = transition_for(Some(&row), &[], TaskEvent::Completed, &record.envelope.from)?;
+    let next = transition_for(
+        row.as_ref(),
+        &[],
+        TaskEvent::Completed,
+        &typed_task_id,
+        &record.envelope.from,
+    )?;
+    let row = row.expect("completion admission accepts only an existing task row");
     let Transition::To(next_state) = next else {
         return Err(task_rejected("task completion did not produce a state"));
     };
@@ -445,7 +449,7 @@ pub(super) fn apply_task_acknowledgement(
         return Ok(());
     };
     let open = load_open_task_rows(connection, target, &source.team, &source.agent)?;
-    let next = transition_for(Some(&row), &open, TaskEvent::Acked, actor)?;
+    let next = transition_for(Some(&row), &open, TaskEvent::Acked, task_id, actor)?;
     let Transition::To(next_state) = next else {
         return Ok(());
     };
