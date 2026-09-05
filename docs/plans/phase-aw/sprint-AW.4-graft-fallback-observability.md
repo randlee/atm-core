@@ -120,10 +120,13 @@ parallel_safe: [AW.2]
   diff adds no Cargo dependency other than `atm-observability` to
   `crates/atm-graft-python/Cargo.toml`; no `crates/atm-daemon/` change.
 - AC10 (atm_ack happy path): against a running daemon, `atm_ack` on a
-  message that requires an ack returns `kind = "success"`, the message no
-  longer appears under `atm_list(selection="pending_ack")`, and the result
-  equals `atm ack <id> "<reply>" --json` key-for-key (same fixture as
-  AW.5's parity test).
+  message that requires an ack returns a typed success, the message no
+  longer appears under `atm_list(selection="pending_ack")`, and the
+  delivered acknowledgement subset (`message_id`, `requires_ack`, and
+  `outcome`) matches `atm ack <id> "<reply>" --json` for those keys. Full
+  key-for-key projection parity, including the canonical envelope, is owned
+  by AW.5 D1/D2 and its parity test (AC6); AW.4 does not implement that
+  projection.
 - AC11 (atm_ack errors): missing `reply` or `message_id` fails pydantic
   validation with the standard `invalid_request` envelope; acking a message
   that is not pending returns the same `AtmToolError` code the CLI reports
