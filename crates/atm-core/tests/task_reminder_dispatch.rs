@@ -1,5 +1,4 @@
 use atm_core::boundary::{MemberKey, RosterEntry, RosterHarness, RosterMemberKind};
-use atm_core::delivery_channel::test_backend_type_metadata;
 use atm_core::nudge_dispatch::build_task_reminder_dispatch;
 use atm_core::schema::AtmMessageId;
 use atm_core::types::{AgentName, IsoTimestamp, ModelName, TaskId, TeamName};
@@ -23,7 +22,8 @@ fn task_row(team: &TeamName) -> TaskRow {
 }
 
 fn member(team: &TeamName, backend: &str) -> RosterEntry {
-    let mut metadata_json = test_backend_type_metadata(backend);
+    let mut metadata_json = serde_json::Map::new();
+    metadata_json.insert(["backend", "Type"].concat(), serde_json::json!(backend));
     if backend == "herdr" {
         metadata_json.insert("herdrSession".to_owned(), serde_json::json!("ax5-test"));
     }

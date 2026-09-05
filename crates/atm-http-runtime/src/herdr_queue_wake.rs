@@ -41,7 +41,7 @@ const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
 type HandoffCleanupTestGate = (Arc<Notify>, Arc<Notify>);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct HerdrQueueWakeStats {
+pub(crate) struct HerdrQueueWakeStats {
     pub listed_sessions: usize,
     pub pending_members: usize,
     pub idle_members: usize,
@@ -96,8 +96,9 @@ impl HerdrQueueWakePump {
         }
     }
 
+    #[cfg(test)]
     #[must_use]
-    pub fn with_clock(mut self, clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>) -> Self {
+    fn with_clock(mut self, clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>) -> Self {
         self.clock = clock;
         self
     }
@@ -140,6 +141,7 @@ impl HerdrQueueWakePump {
     pub fn start(self: Arc<Self>, mut shutdown: watch::Receiver<()>) -> JoinHandle<()> {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_millis(HERDR_POLL_INTERVAL_MS));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 tokio::select! {
                     changed = shutdown.changed() => {
@@ -203,6 +205,7 @@ impl HerdrQueueWakePump {
                 return;
             }
         };
+        self.prune_member_state(&candidates);
 
         let (eligible, task_candidates) = self.list_eligible(candidates, &mut stats).await;
         let prompted_by_drain = self
@@ -387,6 +390,9 @@ impl HerdrQueueWakePump {
         self.note_task_step_availability(true, None);
         let now = (self.clock)();
         for candidate in candidates {
+            if !candidate.blocked && stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
+                break;
+            }
             if prompted_by_drain.contains(&candidate.member.key) {
                 self.stamp_task_attempt(&candidate.member.key, now);
                 continue;
@@ -405,18 +411,24 @@ impl HerdrQueueWakePump {
         candidate: &TaskCandidate,
         now: IsoTimestamp,
     ) -> Option<TaskRow> {
+        let deadline = match ReadDeadline::new(HERDR_REQUEST_DEADLINE) {
+            Ok(deadline) => deadline,
+            Err(error) => {
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_read", outcome = "deadline_invalid", error = %error, member = %candidate.member.key, "Herdr task reminder read skipped");
+                return None;
+            }
+        };
         let rows = match reader
             .list_tasks(
                 candidate.member.key.team().clone(),
                 Some(candidate.member.key.agent().clone()),
-                ReadDeadline::new(HERDR_REQUEST_DEADLINE)
-                    .expect("positive Herdr task reminder deadline"),
+                deadline,
             )
             .await
         {
             Ok(rows) => rows,
             Err(error) => {
-                tracing::warn!(error = %error, member = %candidate.member.key, "Herdr task reminder read failed");
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_read", outcome = "failed", error = %error, member = %candidate.member.key, "Herdr task reminder read failed");
                 return None;
             }
         };
@@ -458,7 +470,8 @@ impl HerdrQueueWakePump {
         let dispatch = match dispatch {
             Ok(Some(dispatch)) => dispatch,
             Ok(None) => return,
-            Err(_) => {
+            Err(error) => {
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_render", outcome = "unrenderable", error = %error, member = %candidate.member.key, "Herdr task reminder could not render");
                 self.record_task_outcome(
                     task_store,
                     &candidate.member.key,
@@ -491,7 +504,9 @@ impl HerdrQueueWakePump {
                 .await
             }
             Err(error) if error.code() == AtmErrorCode::HerdrUnavailable => stats.breaker_open += 1,
-            Err(_) => {}
+            Err(error) => {
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_emit", outcome = "failed", error = %error, error_code = ?error.code(), member = %candidate.member.key, "Herdr task reminder emission failed")
+            }
         }
     }
 
@@ -508,6 +523,9 @@ impl HerdrQueueWakePump {
             .record_task_reminder(task_store, member, row, now, outcome)
             .await
         {
+            if outcome == ReminderOutcome::Emitted {
+                self.stamp_task_attempt(member, now);
+            }
             return;
         }
         match outcome {
@@ -532,9 +550,19 @@ impl HerdrQueueWakePump {
         let store = Arc::clone(store);
         let member = member.clone();
         let task_id = row.task_id.clone();
-        run_blocking(move || store.record_reminder(&member, &task_id, now, outcome))
-            .await
-            .is_ok()
+        let write_member = member.clone();
+        let write_task_id = task_id.clone();
+        match run_blocking(move || {
+            store.record_reminder(&write_member, &write_task_id, now, outcome)
+        })
+        .await
+        {
+            Ok(_) => true,
+            Err(error) => {
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_record", outcome = "failed", error = %error, member = %member, task_id = %task_id, "Herdr task reminder bookkeeping failed");
+                false
+            }
+        }
     }
 
     fn reminder_due(&self, member: &MemberKey, row: &TaskRow, now: IsoTimestamp) -> bool {
@@ -559,6 +587,21 @@ impl HerdrQueueWakePump {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .insert(member.clone(), now);
+    }
+
+    fn prune_member_state(&self, candidates: &[HerdrCandidate]) {
+        let members: HashSet<_> = candidates
+            .iter()
+            .map(|candidate| candidate.key.clone())
+            .collect();
+        self.last_task_attempt
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|member, _| members.contains(member));
+        self.release_streaks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|member, _| members.contains(member));
     }
 
     fn note_task_step_availability(&self, available: bool, error: Option<&AtmError>) {
@@ -739,7 +782,8 @@ impl HerdrQueueWakePump {
     }
 
     #[must_use]
-    pub fn stats(&self) -> HerdrQueueWakeStats {
+    #[cfg(test)]
+    fn stats(&self) -> HerdrQueueWakeStats {
         self.last_stats
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
