@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T19:45:51Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr AX.6 QA-3 recheck (QA-AX6-R3-1788637011) at head 43e1d40b33357024dea87742b4f8a114e7fd4966; fixed by arch-ctm fix pass GO-AX6-FIX2-1788635243 (Completion c22). Report: PR #1204 comment 5554337367. Sprint verdict remains FAIL on AX6-QA3-001/002." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T19:05:06Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
@@ -29,8 +32,8 @@
   triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
   triage:line 417 ;
   triage:snippet "atm-daemon is a reserved sender name (add-member path)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "c3268df8a3dfa5c84f4465459c5d2ba86df1c857" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/c3268df8a3dfa5c84f4465459c5d2ba86df1c857> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
   triage:line 417 ;
   triage:snippet "atm-daemon is a reserved sender name (update-member path)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-herdr-dogfood-evidence" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .

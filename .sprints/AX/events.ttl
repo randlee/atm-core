@@ -458,3 +458,9 @@ triage:a23 a triage:Assignment ;
 triage:c22 a triage:Completion ;
     triage:ofSprint triage:AX6 ;
     triage:at "2026-09-05T19:35:32Z"^^xsd:dateTime .
+
+triage:r77 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA2-006> ; triage:resolvedAt "2026-09-05T19:45:51Z"^^xsd:dateTime .
+triage:r78 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA2-007> ; triage:resolvedAt "2026-09-05T19:45:51Z"^^xsd:dateTime .
+triage:r79 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA2-008> ; triage:resolvedAt "2026-09-05T19:45:51Z"^^xsd:dateTime .
+triage:r80 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA2-009> ; triage:resolvedAt "2026-09-05T19:45:51Z"^^xsd:dateTime .
+triage:r81 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA2-010> ; triage:resolvedAt "2026-09-05T19:45:51Z"^^xsd:dateTime .
