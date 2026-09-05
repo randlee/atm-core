@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX4-QA-007>
+  a triage:Finding ;
+  triage:findingId "AX4-QA-007" ;
+  triage:title "--member validation in ListCommand::task_ledger uses a bare anyhow::bail! instead of the CLI's AtmError validation idiom, losing the stable error code and exit-code mapping" ;
+  triage:description "AX.4 QA-1 (quality-mgr ax4-qa-r1, PR #1194 Final Quality Report 2026-09-05T09:14Z; found by rust-best-practices-agent RBP-F001) at head aaf2e04bf. crates/atm/src/commands/list.rs:152 in ListCommand::task_ledger() raises anyhow::bail!(\"--member requires --tasks or --task-events <TASK_ID>\") while every sibling validation path in the CLI crate (send.rs, send_to.rs, peek.rs, read.rs, internal_nudge.rs, peer.rs) uses AtmError::validation or validation_with_recovery. The plain anyhow error falls through to the generic wrapper and loses the AtmErrorCode and exit-code mapping. Fix: replace with AtmError::validation_with_recovery(...) or at minimum AtmError::validation(...). Sweep of crates/atm/src/commands at HEAD (git grep, crate scope) also found pre-existing anyhow::bail!/bail! sites in clear.rs (lines 74, 78, 99) and log.rs (lines 124, 185, 220, 241) that predate the AX.4 range (116bd23b0..aaf2e04bf per git diff) and are not counted as occurrences of this finding." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T09:17:24Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX4 ;
+  triage:foundAt "2026-09-05T09:14:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-007/AX4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX4-QA-007/AX4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/list.rs" ;
+  triage:line 152 ;
+  triage:snippet "anyhow::bail!(\"--member requires --tasks or --task-events <TASK_ID>\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04bfa26fdc3c277eff97d99927f971c0a7b> .
+
+<urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04bfa26fdc3c277eff97d99927f971c0a7b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:orderIndex 4 .

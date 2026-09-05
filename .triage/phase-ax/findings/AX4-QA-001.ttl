@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX4-QA-001>
+  a triage:Finding ;
+  triage:findingId "AX4-QA-001" ;
+  triage:title "Synchronous task-ledger read called inline in the async Tokio list_messages handler, bypassing the control_path_sync_bridge used by every other sync call in storage_and_nudge_router.rs" ;
+  triage:description "AX.4 QA-1 (quality-mgr ax4-qa-r1, PR #1194 Final Quality Report 2026-09-05T09:14Z; found by arch-qa, reproduced by quality-mgr, corroborated by rust-best-practices-agent) at head aaf2e04bf. crates/atm-http-runtime/src/storage_and_nudge_router.rs async fn list_messages() (line 595) calls atm_core::list::list_task_ledger_with_runtime(query, self.service_runtime) directly. That function (crates/atm-core/src/list.rs:267-300) is fully synchronous and reads through TaskStore/rusqlite, a single-writer-lock backend, so the call can pin a Tokio worker for the query duration including any writer-lock wait. Every other synchronous core operation in this file (clear_messages, heartbeat, queue_get_next, graft_receiver_star) is wrapped in self.control_path_sync_bridge.run(deadline, closure). This is new code in the Tokio+Axum target-architecture crate, not legacy daemon code. Fix: wrap the call in self.control_path_sync_bridge.run(...) exactly as clear_messages does." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T09:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX4 ;
+  triage:foundAt "2026-09-05T09:14:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-001/AX4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX4-QA-001/AX4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 595 ;
+  triage:snippet "return atm_core::list::list_task_ledger_with_runtime(query, self.service_runtime)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04bfa26fdc3c277eff97d99927f971c0a7b> .
+
+<urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04bfa26fdc3c277eff97d99927f971c0a7b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:orderIndex 4 .

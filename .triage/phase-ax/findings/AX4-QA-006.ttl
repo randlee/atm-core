@@ -1,0 +1,90 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX4-QA-006>
+  a triage:Finding ;
+  triage:findingId "AX4-QA-006" ;
+  triage:title "task_ledger.rs hand-duplicates enum-to-string mappings that serde rename_all already defines canonically in atm-storage" ;
+  triage:description "AX.4 QA-1 (quality-mgr ax4-qa-r1, PR #1194 Final Quality Report 2026-09-05T09:14Z; found by ruthless-boundary-qa RBQA-F003) at head aaf2e04bf. crates/atm/src/commands/task_ledger.rs:75-124 task_state_name, task_event_name, task_actor_name, task_event_marker_name and reminder_outcome_name hand-write match arms reproducing the strings that TaskState, TaskEventKind, TaskEventMarker and ReminderOutcome already produce via #[serde(rename_all = snake_case)] at crates/atm-storage/src/task_state.rs:16-22,139-148 and task_store.rs:11-17. This creates a third independent owner of the same naming decision. Fix: expose a canonical Display or as_str() on the enums in atm-storage and have the human-table renderer call it." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T09:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX4 ;
+  triage:foundAt "2026-09-05T09:14:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-006/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-006/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-006/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-006/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA-006/5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX4-QA-006/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task_ledger.rs" ;
+  triage:line 75 ;
+  triage:snippet "const fn task_state_name(state: TaskState) -> &'static str {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-ax4-task-cli-and-docs/aaf2e04b> .
+
+<urn:atm:triage:occurrence/AX4-QA-006/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task_ledger.rs" ;
+  triage:line 83 ;
+  triage:snippet "const fn task_event_name(event: TaskEventKind) -> &'static str {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-ax4-task-cli-and-docs/aaf2e04b> .
+
+<urn:atm:triage:occurrence/AX4-QA-006/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task_ledger.rs" ;
+  triage:line 94 ;
+  triage:snippet "fn task_actor_name(actor: &TaskActor) -> &str {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-ax4-task-cli-and-docs/aaf2e04b> .
+
+<urn:atm:triage:occurrence/AX4-QA-006/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task_ledger.rs" ;
+  triage:line 111 ;
+  triage:snippet "const fn task_event_marker_name(marker: TaskEventMarker) -> &'static str {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-ax4-task-cli-and-docs/aaf2e04b> .
+
+<urn:atm:triage:occurrence/AX4-QA-006/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task_ledger.rs" ;
+  triage:line 118 ;
+  triage:snippet "const fn reminder_outcome_name(outcome: ReminderOutcome) -> &'static str {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-ax4-task-cli-and-docs/aaf2e04b> .
+
+<urn:atm:triage:worktree/feature-ax4-task-cli-and-docs/aaf2e04b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
+  triage:orderIndex 4 .
