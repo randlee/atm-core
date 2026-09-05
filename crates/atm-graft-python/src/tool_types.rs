@@ -3,9 +3,8 @@
 use atm_core::error::AtmErrorCode;
 use atm_core::list::ListOutcome;
 use atm_core::read::ReadOutcome;
-use atm_core::schema::ThreadMode;
-use atm_core::send::{SendOutcome, WarningEntry, WriteOutcome};
-use atm_core::types::{CommandAction, DisplayBucket, MessageClass, ReadSelection};
+use atm_core::send::{SendOutcome, WriteOutcome};
+use atm_core::types::{CommandAction, ReadSelection};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::sync::OnceLock;
@@ -158,7 +157,11 @@ impl AtmSendResult {
     }
 
     fn to_json(&self) -> String {
-        write_outcome_json(&self.outcome_value)
+        match &self.outcome_value {
+            WriteOutcome::Sent(outcome) => serde_json::to_string(outcome),
+            WriteOutcome::Acknowledged(outcome) => serde_json::to_string(outcome),
+        }
+        .expect("canonical ATM write outcome serializes")
     }
 }
 
@@ -244,7 +247,7 @@ impl AtmReadResult {
     }
 
     fn to_json(&self) -> String {
-        read_outcome_json(&self.outcome_value)
+        serde_json::to_string(&self.outcome_value).expect("canonical ATM read outcome serializes")
     }
 }
 
@@ -256,7 +259,6 @@ pub struct AtmListRow {
     pub(crate) message_id: Option<String>,
     #[pyo3(get)]
     pub(crate) summary: String,
-    pub(crate) from_agent: String,
     from: String,
     #[pyo3(get)]
     pub(crate) timestamp: String,
@@ -273,7 +275,6 @@ impl From<atm_core::list::ListRow> for AtmListRow {
         Self {
             message_id: row.message_id.map(|id| id.to_string()),
             summary: row.summary,
-            from_agent: row.from.to_string(),
             from: row.from.to_string(),
             timestamp: canonical_timestamp(&row.timestamp),
             read: row.read,
@@ -305,7 +306,7 @@ impl AtmListRow {
                 ),
             )?;
         }
-        Ok(self.from_agent.clone())
+        Ok(self.from.clone())
     }
 }
 
@@ -368,63 +369,19 @@ impl AtmListResult {
     }
 
     fn to_json(&self) -> String {
-        list_outcome_json(&self.outcome_value)
+        serde_json::to_string(&self.outcome_value).expect("canonical ATM list outcome serializes")
     }
 }
 
-fn json_quote(value: &str) -> String {
-    let mut output = String::with_capacity(value.len() + 2);
-    output.push('"');
-    for character in value.chars() {
-        match character {
-            '"' => output.push_str("\\\""),
-            '\\' => output.push_str("\\\\"),
-            '\n' => output.push_str("\\n"),
-            '\r' => output.push_str("\\r"),
-            '\t' => output.push_str("\\t"),
-            character if character.is_control() => {
-                output.push_str(&format!("\\u{:04x}", character as u32));
-            }
-            character => output.push(character),
-        }
+impl AtmListResult {
+    pub(crate) fn with_observability(mut self, status: ObservabilityStatus) -> Self {
+        self.observability = py_observability(status);
+        self
     }
-    output.push('"');
-    output
-}
 
-fn field(output: &mut String, first: &mut bool, name: &str, value: &str) {
-    if !*first {
-        output.push(',');
+    pub(crate) fn count_value(&self) -> usize {
+        self.outcome_value.count
     }
-    *first = false;
-    output.push_str(&json_quote(name));
-    output.push(':');
-    output.push_str(value);
-}
-
-fn string_field(output: &mut String, first: &mut bool, name: &str, value: &str) {
-    field(output, first, name, &json_quote(value));
-}
-
-fn optional_string_field(output: &mut String, first: &mut bool, name: &str, value: Option<String>) {
-    if let Some(value) = value {
-        string_field(output, first, name, &value);
-    }
-}
-
-fn nullable_string_field(output: &mut String, first: &mut bool, name: &str, value: Option<String>) {
-    match value {
-        Some(value) => string_field(output, first, name, &value),
-        None => field(output, first, name, "null"),
-    }
-}
-
-fn bool_field(output: &mut String, first: &mut bool, name: &str, value: bool) {
-    field(output, first, name, if value { "true" } else { "false" });
-}
-
-fn usize_field(output: &mut String, first: &mut bool, name: &str, value: usize) {
-    field(output, first, name, &value.to_string());
 }
 
 pub(crate) fn canonical_timestamp(value: &atm_core::types::IsoTimestamp) -> String {
@@ -490,25 +447,6 @@ fn write_task_id(value: &WriteOutcome) -> Option<String> {
     }
 }
 
-fn bucket_counts_json(
-    output: &mut String,
-    first: &mut bool,
-    counts: &atm_core::read::BucketCounts,
-) {
-    let mut value = String::from("{");
-    let mut nested_first = true;
-    usize_field(&mut value, &mut nested_first, "unread", counts.unread);
-    usize_field(
-        &mut value,
-        &mut nested_first,
-        "pending_ack",
-        counts.pending_ack,
-    );
-    usize_field(&mut value, &mut nested_first, "history", counts.history);
-    value.push('}');
-    field(output, first, "bucket_counts", &value);
-}
-
 fn bucket_counts_dict<'py>(
     py: Python<'py>,
     counts: &atm_core::read::BucketCounts,
@@ -524,389 +462,6 @@ fn bucket_counts_dict<'py>(
         .set_item("history", counts.history)
         .expect("dict accepts integer");
     result
-}
-
-fn warning_json(warning: &WarningEntry) -> String {
-    let mut value = String::from("{");
-    let mut first = true;
-    string_field(&mut value, &mut first, "message", &warning.message);
-    if let Some(code) = warning.code {
-        string_field(&mut value, &mut first, "code", code.as_str());
-    }
-    if let Some(recovery) = &warning.recovery {
-        string_field(&mut value, &mut first, "recovery", recovery);
-    }
-    value.push('}');
-    value
-}
-
-fn warnings_json(warnings: &[WarningEntry]) -> String {
-    format!(
-        "[{}]",
-        warnings
-            .iter()
-            .map(warning_json)
-            .collect::<Vec<_>>()
-            .join(",")
-    )
-}
-
-fn send_outcome_json(outcome: &SendOutcome) -> String {
-    let mut value = String::from("{");
-    let mut first = true;
-    string_field(&mut value, &mut first, "action", action(outcome.action));
-    string_field(&mut value, &mut first, "team", outcome.team.as_ref());
-    string_field(&mut value, &mut first, "agent", outcome.agent.as_ref());
-    string_field(&mut value, &mut first, "sender", outcome.sender.as_ref());
-    string_field(&mut value, &mut first, "outcome", outcome.outcome.as_str());
-    string_field(
-        &mut value,
-        &mut first,
-        "message_id",
-        &outcome.message_id.to_string(),
-    );
-    bool_field(&mut value, &mut first, "requires_ack", outcome.requires_ack);
-    optional_string_field(
-        &mut value,
-        &mut first,
-        "task_id",
-        outcome.task_id.as_ref().map(ToString::to_string),
-    );
-    optional_string_field(&mut value, &mut first, "summary", outcome.summary.clone());
-    optional_string_field(&mut value, &mut first, "message", outcome.message.clone());
-    if !outcome.warnings.is_empty() {
-        field(
-            &mut value,
-            &mut first,
-            "warnings",
-            &warnings_json(&outcome.warnings),
-        );
-    }
-    if outcome.dry_run {
-        bool_field(&mut value, &mut first, "dry_run", true);
-    }
-    value.push('}');
-    value
-}
-
-fn ack_outcome_json(outcome: &atm_core::ack::AckOutcome) -> String {
-    let mut value = String::from("{");
-    let mut first = true;
-    string_field(&mut value, &mut first, "action", action(outcome.action));
-    string_field(&mut value, &mut first, "team", outcome.team.as_ref());
-    string_field(&mut value, &mut first, "agent", outcome.agent.as_ref());
-    string_field(
-        &mut value,
-        &mut first,
-        "message_id",
-        &outcome.message_id.to_string(),
-    );
-    optional_string_field(
-        &mut value,
-        &mut first,
-        "task_id",
-        outcome.task_id.as_ref().map(ToString::to_string),
-    );
-    let disposition = match &outcome.reply_disposition {
-        atm_core::ack::AckReplyDisposition::Sent {
-            reply_message_id,
-            reply_target,
-        } => format!(
-            "{{\"kind\":\"sent\",\"reply_message_id\":{},\"reply_target\":{}}}",
-            json_quote(&reply_message_id.to_string()),
-            json_quote(&reply_target.to_string())
-        ),
-    };
-    field(&mut value, &mut first, "reply_disposition", &disposition);
-    string_field(&mut value, &mut first, "reply_text", &outcome.reply_text);
-    if !outcome.warnings.is_empty() {
-        field(
-            &mut value,
-            &mut first,
-            "warnings",
-            &warnings_json(&outcome.warnings),
-        );
-    }
-    value.push('}');
-    value
-}
-
-fn write_outcome_json(outcome: &WriteOutcome) -> String {
-    match outcome {
-        WriteOutcome::Sent(outcome) => send_outcome_json(outcome),
-        WriteOutcome::Acknowledged(outcome) => ack_outcome_json(outcome),
-    }
-}
-
-fn list_row_json(row: &atm_core::list::ListRow) -> String {
-    let mut value = String::from("{");
-    let mut first = true;
-    nullable_string_field(
-        &mut value,
-        &mut first,
-        "message_id",
-        row.message_id.map(|id| id.to_string()),
-    );
-    string_field(&mut value, &mut first, "summary", &row.summary);
-    string_field(&mut value, &mut first, "from", row.from.as_ref());
-    string_field(
-        &mut value,
-        &mut first,
-        "timestamp",
-        &canonical_timestamp(&row.timestamp),
-    );
-    bool_field(&mut value, &mut first, "read", row.read);
-    bool_field(&mut value, &mut first, "pending_ack", row.pending_ack);
-    nullable_string_field(
-        &mut value,
-        &mut first,
-        "task_id",
-        row.task_id.as_ref().map(ToString::to_string),
-    );
-    value.push('}');
-    value
-}
-
-fn list_outcome_json(outcome: &ListOutcome) -> String {
-    let mut value = String::from("{");
-    let mut first = true;
-    string_field(&mut value, &mut first, "action", action(outcome.action));
-    string_field(&mut value, &mut first, "team", outcome.team.as_ref());
-    string_field(&mut value, &mut first, "agent", outcome.agent.as_ref());
-    string_field(
-        &mut value,
-        &mut first,
-        "selection_mode",
-        read_selection(outcome.selection_mode),
-    );
-    bool_field(
-        &mut value,
-        &mut first,
-        "history_collapsed",
-        outcome.history_collapsed,
-    );
-    usize_field(&mut value, &mut first, "count", outcome.count);
-    field(
-        &mut value,
-        &mut first,
-        "rows",
-        &format!(
-            "[{}]",
-            outcome
-                .rows
-                .iter()
-                .map(list_row_json)
-                .collect::<Vec<_>>()
-                .join(",")
-        ),
-    );
-    bucket_counts_json(&mut value, &mut first, &outcome.bucket_counts);
-    value.push('}');
-    value
-}
-
-fn message_class(value: MessageClass) -> &'static str {
-    match value {
-        MessageClass::Unread => "unread",
-        MessageClass::PendingAck => "pending_ack",
-        MessageClass::Acknowledged => "acknowledged",
-        MessageClass::Read => "read",
-    }
-}
-
-fn display_bucket(value: DisplayBucket) -> &'static str {
-    match value {
-        DisplayBucket::Unread => "unread",
-        DisplayBucket::PendingAck => "pending_ack",
-        DisplayBucket::History => "history",
-    }
-}
-
-fn classified_message_json(message: &atm_core::read::ClassifiedMessage) -> String {
-    let mut value = String::from("{");
-    let mut first = true;
-    string_field(
-        &mut value,
-        &mut first,
-        "bucket",
-        display_bucket(message.bucket),
-    );
-    string_field(
-        &mut value,
-        &mut first,
-        "class",
-        message_class(message.class),
-    );
-    classified_message_content(&mut value, &mut first, &message.envelope);
-    classified_message_ack_metadata(&mut value, &mut first, &message.envelope);
-    classified_message_lifecycle(&mut value, &mut first, &message.envelope);
-    value.push('}');
-    value
-}
-
-fn classified_message_content(
-    output: &mut String,
-    first: &mut bool,
-    envelope: &atm_core::schema::InboxMessage,
-) {
-    string_field(output, first, "from", envelope.from.as_ref());
-    optional_string_field(
-        output,
-        first,
-        "sourceChatId",
-        envelope.source_chat_id.as_ref().map(ToString::to_string),
-    );
-    string_field(output, first, "text", &envelope.text);
-    string_field(
-        output,
-        first,
-        "timestamp",
-        &canonical_timestamp(&envelope.timestamp),
-    );
-    bool_field(output, first, "read", envelope.read);
-    optional_string_field(
-        output,
-        first,
-        "source_team",
-        envelope.source_team.as_ref().map(ToString::to_string),
-    );
-    optional_string_field(
-        output,
-        first,
-        "destinationChatId",
-        envelope
-            .destination_chat_id
-            .as_ref()
-            .map(ToString::to_string),
-    );
-    optional_string_field(output, first, "summary", envelope.summary.clone());
-}
-
-fn classified_message_ack_metadata(
-    output: &mut String,
-    first: &mut bool,
-    envelope: &atm_core::schema::InboxMessage,
-) {
-    optional_string_field(
-        output,
-        first,
-        "message_id",
-        envelope.message_id.map(|id| id.to_string()),
-    );
-    bool_field(output, first, "requires_ack", envelope.requires_ack);
-    optional_string_field(
-        output,
-        first,
-        "pendingAckAt",
-        envelope.pending_ack_at.as_ref().map(canonical_timestamp),
-    );
-    optional_string_field(
-        output,
-        first,
-        "acknowledgedAt",
-        envelope.acknowledged_at.as_ref().map(canonical_timestamp),
-    );
-    optional_string_field(
-        output,
-        first,
-        "acknowledgesMessageId",
-        envelope.acknowledges_message_id.map(|id| id.to_string()),
-    );
-    optional_string_field(
-        output,
-        first,
-        "parentMessageId",
-        envelope.parent_message_id.map(|id| id.to_string()),
-    );
-}
-
-fn classified_message_lifecycle(
-    output: &mut String,
-    first: &mut bool,
-    envelope: &atm_core::schema::InboxMessage,
-) {
-    if let Some(thread_mode) = envelope.thread_mode {
-        string_field(
-            output,
-            first,
-            "threadMode",
-            match thread_mode {
-                ThreadMode::AddDetails => "add-details",
-                ThreadMode::Supersede => "supersede",
-            },
-        );
-    }
-    optional_string_field(
-        output,
-        first,
-        "expiresAt",
-        envelope.expires_at.as_ref().map(canonical_timestamp),
-    );
-    optional_string_field(
-        output,
-        first,
-        "taskId",
-        envelope.task_id.as_ref().map(ToString::to_string),
-    );
-    for (name, item) in &envelope.extra {
-        field(output, first, name, &item.to_string());
-    }
-}
-
-fn read_outcome_json(outcome: &ReadOutcome) -> String {
-    let mut value = String::from("{");
-    let mut first = true;
-    string_field(&mut value, &mut first, "action", action(outcome.action));
-    string_field(&mut value, &mut first, "team", outcome.team.as_ref());
-    string_field(&mut value, &mut first, "agent", outcome.agent.as_ref());
-    string_field(
-        &mut value,
-        &mut first,
-        "selection_mode",
-        read_selection(outcome.selection_mode),
-    );
-    bool_field(
-        &mut value,
-        &mut first,
-        "mutation_applied",
-        outcome.mutation_applied,
-    );
-    usize_field(&mut value, &mut first, "count", outcome.count);
-    if let Some(message) = &outcome.message {
-        field(
-            &mut value,
-            &mut first,
-            "message",
-            &classified_message_json(message),
-        );
-    }
-    optional_string_field(
-        &mut value,
-        &mut first,
-        "selected_message_id",
-        outcome.selected_message_id.map(|id| id.to_string()),
-    );
-    usize_field(&mut value, &mut first, "match_count", outcome.match_count);
-    usize_field(
-        &mut value,
-        &mut first,
-        "additional_match_count",
-        outcome.additional_match_count,
-    );
-    bucket_counts_json(&mut value, &mut first, &outcome.bucket_counts);
-    value.push('}');
-    value
-}
-
-impl AtmListResult {
-    pub(crate) fn with_observability(mut self, status: ObservabilityStatus) -> Self {
-        self.observability = py_observability(status);
-        self
-    }
-
-    pub(crate) fn count_value(&self) -> usize {
-        self.outcome_value.count
-    }
 }
 
 /// Structured native-tool error data used by Python adapters' failure envelope.
@@ -984,10 +539,65 @@ fn is_delivery_uncertain_code(code: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use atm_core::error::AtmErrorCode;
+    use atm_core::types::IsoTimestamp;
     use pyo3::exceptions::PyException;
     use pyo3::prelude::*;
+    use pyo3::types::PyDict;
 
-    use super::{AtmToolError, is_delivery_uncertain_code};
+    use super::{AtmListRow, AtmToolError, canonical_timestamp, is_delivery_uncertain_code};
+
+    #[test]
+    fn canonical_timestamps_use_cli_z_suffix() {
+        let timestamp = canonical_timestamp(&IsoTimestamp::now());
+
+        assert!(timestamp.ends_with('Z'));
+        assert!(!timestamp.ends_with("+00:00"));
+    }
+
+    #[test]
+    fn deprecated_from_agent_warns_once_and_matches_from() {
+        Python::initialize();
+        Python::attach(|py| {
+            let row = AtmListRow {
+                message_id: None,
+                summary: "summary".to_owned(),
+                from: "source-agent".to_owned(),
+                timestamp: "2026-09-05T00:00:00Z".to_owned(),
+                read: false,
+                pending_ack: true,
+                task_id: None,
+            };
+            let warnings = py.import("warnings").expect("warnings module");
+            let options = PyDict::new(py);
+            options
+                .set_item("record", true)
+                .expect("warning capture options");
+            let context = warnings
+                .call_method("catch_warnings", (), Some(&options))
+                .expect("warning capture context");
+            let records = context
+                .call_method0("__enter__")
+                .expect("enter warning capture context");
+            warnings
+                .call_method1("simplefilter", ("always",))
+                .expect("enable warning capture");
+
+            assert_eq!(row.agent_name(), "source-agent");
+            assert_eq!(
+                row.agent_name_deprecated(py).expect("deprecated getter"),
+                row.agent_name()
+            );
+            assert_eq!(
+                row.agent_name_deprecated(py).expect("deprecated getter"),
+                row.agent_name()
+            );
+
+            context
+                .call_method1("__exit__", (py.None(), py.None(), py.None()))
+                .expect("exit warning capture context");
+            assert_eq!(records.len().expect("warning record length"), 1);
+        });
+    }
 
     #[test]
     fn unstructured_python_errors_use_the_canonical_internal_error_code() {
