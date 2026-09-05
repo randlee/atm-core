@@ -563,16 +563,18 @@ installed, doctor prints one line "herdr: not configured".
   the socket transport, `null` on CLI), binary resolution with
   provenance `"configured"`/`"PATH"`, server `version`/`protocol` from
   `herdr status server --json` (CLI) or `ping` (socket), `state`,
-  `remedy`, `capabilities.live_handoff`, `agents[]` (name, state); ordered
+  `remedy`, `capabilities.live_handoff` (true/false/null), `members[]`
+  (name, outcome); ordered
   `default` first, then sessions sorted bytewise, so
   the JSON is reproducible), and **no aggregate** `herdr.state` /
   `herdr.remedy` (AYP-R4-002): `daemon-switch` consumes
   `herdr.configured` and iterates `herdr.endpoints[]`, and `herdr.breaker` (the existing AX.6
   `HerdrBreakerDoctorReport`: state, retry_after_ms,
   consecutive_failures; the breaker is host-wide and is **not** folded
-  into the endpoint state, AYP-R3-006). The probe is one bounded `herdr
-  agent list` plus one `herdr status server --json` (CLI) or one `ping`
-  (socket) per endpoint, run by doctor itself under
+  into the endpoint state, AYP-R3-006). The probe is one `herdr status server --json` (CLI) or one `ping`
+  (socket) per endpoint plus the existing bounded `get` per Herdr-backend
+  member of that endpoint (exactly today's presence probe,
+  replacement_handler.rs:125-206), run by doctor itself under
   `BreakerPolicy::Bypass`, so an open breaker never hides the live
   endpoint state (test). Doctor does **not** compute Herdr's socket or
   pipe path under the CLI transport; it reports what Herdr says.
@@ -584,9 +586,9 @@ installed, doctor prints one line "herdr: not configured".
   // fills them. HerdrEndpointDoctor REPLACES HerdrPresenceDoctor (doctor/mod.rs:42;
   // AYP-R4-003): one port, one probe path. The presence DoctorFindings that
   // HerdrPresenceDoctor produced are derived in atm-core from the observations
-  // (fn presence_findings(&[HerdrEndpointObservation], &MembersList) -> Vec<DoctorFinding>,
-  // correlating each Herdr-backend member with the `agents` of its endpoint; AYP-R5-001), so
-  // no endpoint is probed twice. HerdrBreakerDoctor (doctor/report.rs:262) is unchanged. Every
+  // (fn presence_findings(&[HerdrEndpointObservation]) -> Vec<DoctorFinding>, from the typed
+  // per-member outcomes each endpoint carries; AYP-R5-001/AYP-R6-002), so no member is
+  // probed twice. HerdrBreakerDoctor (doctor/report.rs:262) is unchanged. Every
   // variant carries its remedy via `fn remedy(&self) -> &'static str`; tests
   // iterate every variant on the CLI transport (AY.3) and again on the socket
   // transport (AY.7).
@@ -602,18 +604,28 @@ installed, doctor prints one line "herdr: not configured".
                                                        // None on the CLI transport. HerdrEndpoint never enters atm-core.
       pub binary: Option<(PathBuf, &'static str)>,     // resolved path + "configured" | "PATH" (CLI only)
       pub state: HerdrDoctorState,
-      pub live_handoff: bool,                          // AYP-R5-004: HerdrServerInfo.capabilities contains "live_handoff";
-                                                       // false unless state is Ok. JSON: endpoints[].capabilities.live_handoff
-      pub agents: Vec<HerdrAgentObservation>,          // AYP-R5-001: one `agent list` per endpoint; empty unless state is Ok
+      pub live_handoff: Option<bool>,                  // AYP-R5-004/AYP-R6-001: a probe fact, independent of `state`:
+                                                       // Some(capabilities contains "live_handoff") whenever server_info/ping
+                                                       // returned (Ok, BelowMinimum, ClientServerMismatch); None only when
+                                                       // capability retrieval failed. JSON: endpoints[].capabilities.live_handoff
+      pub members: Vec<HerdrMemberPresence>,           // AYP-R5-001/AYP-R6-002: one entry per Herdr-backend roster member
+                                                       // routed to this endpoint, never cleared by `state` (BelowMinimum
+                                                       // still probes: calls continue on Herdr's terms)
   }
-  pub struct HerdrAgentObservation { pub name: AgentName, pub state: HerdrAgentState }
-  pub enum HerdrAgentState { Visible { status: String }, NotRunning, Blocked, Error { code: String } }
-  // presence_findings (atm-core): for every Herdr-backend member, find its endpoint (by
-  // session) and its agent by name: absent -> the existing HerdrAgentNotVisible warning;
-  // NotRunning/Blocked/Error -> the existing HerdrError-mapped warning text
-  // (replacement_handler.rs:182-206 today); endpoint state not Ok -> one Info
-  // HerdrUnavailable "presence probe skipped" as today. Zero-regression tests: visible,
-  // missing, non-running, infrastructure-failed member, each without a second probe.
+  pub struct HerdrMemberPresence { pub member: AgentName, pub outcome: HerdrPresenceOutcome }
+  pub enum HerdrPresenceOutcome {
+      Visible,                                         // `get` succeeded; any AgentStatus (Blocked included) is visible, as today
+      NotVisible,                                      // HerdrError::AgentNotFound
+      Failed { code: String, detail: String },         // any other non-infrastructure HerdrError, mapped by atm-herdr
+      Skipped,                                         // infrastructure-class HerdrError (is_infrastructure())
+  }
+  // presence_findings (atm-core) reproduces replacement_handler.rs:125-206 exactly:
+  // NotVisible -> the existing HerdrAgentNotVisible warning; Failed -> the existing
+  // HerdrError-mapped warning text; any Skipped on an endpoint -> one Info HerdrUnavailable
+  // "presence probe skipped" for that endpoint; Visible -> nothing. Zero-regression tests:
+  // visible (Idle/Working/Blocked/Done), not-visible, failed (e.g. AgentBlocked), one and
+  // several infrastructure-failed members, each asserting byte-identical findings to the
+  // AX adapter's output on the same fake-herdr recording.
   pub enum HerdrDoctorState {
       Ok { version: HerdrVersion, protocol: u32 },
       NotConfigured,
@@ -748,8 +760,11 @@ the operator's own Herdr operation; atm only restarts what is installed.
    (<name>)]`), never rebuilt in restart code (AYP-R5-006).
 1. If the installed `herdr` binary is newer than that endpoint's running
    server (its own `version` from doctor) and doctor's
-   `endpoints[].capabilities.live_handoff` is true for it (AYP-R5-004;
-   no second probe), run the scoped `server live-handoff` so agent panes
+   `endpoints[].capabilities.live_handoff` is `true` for it (AYP-R5-004;
+   `null` counts as unknown and takes the stop path; that endpoint's state
+   is normally `ClientServerMismatch` here, which is why the capability is
+   carried independently of state, AYP-R6-001; no second probe), run the
+   scoped `server live-handoff` so agent panes
    survive; report Herdr's own result and stop on failure (Herdr's
    rollback owns the socket state).
 2. Otherwise print that stopping the server exits every agent pane on
@@ -1149,9 +1164,11 @@ Deliverables:
    impl HerdrDoctorProbe {
        pub fn new(config: HerdrClientConfig) -> Self;                       // CLI transport; AY.7 adds the socket form
        /// Never fails: every HerdrError becomes a HerdrDoctorState; compares against HERDR_MINIMUM_VERSION here.
-       /// One server_info (version, protocol, capabilities.live_handoff) plus one `agent list` under
-       /// BreakerPolicy::Bypass on the same endpoint fill state, live_handoff and agents (AYP-R5-001/004).
-       pub async fn observe(&self, session: Option<&HerdrSession>, deadline: RequestDeadline)
+       /// One server_info (version, protocol, capabilities -> live_handoff: Option<bool>, kept whenever the
+       /// server answered) plus the existing bounded `get` per member (min(remaining, 2s) each, as
+       /// today) under BreakerPolicy::Bypass; HerdrError -> HerdrPresenceOutcome mapped here, so the
+       /// adapter only groups roster members by endpoint (AYP-R5-001/004, AYP-R6-001/002).
+       pub async fn observe(&self, session: Option<&HerdrSession>, members: &[AgentName], deadline: RequestDeadline)
            -> atm_core::doctor::HerdrEndpointObservation;
    }
    ```
@@ -1318,12 +1335,17 @@ Deliverables:
    per distinct configured endpoint, each variant with its remedy;
    server version and protocol from `HerdrDoctorProbe::observe` (`herdr
    status server --json`) compared with `HERDR_MINIMUM_VERSION` inside
-   atm-herdr; presence data is the `agents` list of the same observation
-   (one bounded `herdr agent list` per endpoint under
-   `BreakerPolicy::Bypass`), correlated with the roster by
-   `presence_findings` in atm-core (AYP-R5-001); `live_handoff` is filled
-   from `HerdrServerInfo.capabilities` and snapshotted for v0.8.0, v0.8.2
-   and 3a822e81 (AYP-R5-004); the breaker stays the
+   atm-herdr; presence data is the `members` list of the same observation
+   (the existing bounded `get` per Herdr-backend member under
+   `BreakerPolicy::Bypass`, outcomes typed by atm-herdr, never cleared by
+   server state), rendered by `presence_findings` in atm-core with
+   byte-identical findings to the AX adapter (AYP-R5-001, AYP-R6-002);
+   `live_handoff: Option<bool>` is filled from
+   `HerdrServerInfo.capabilities` whenever the server answered, including
+   `BelowMinimum` and `ClientServerMismatch` (Herdr master
+   `src/cli/status.rs:176-187,301-329` emits it with `compatible: false`),
+   and snapshotted for v0.8.0, v0.8.2 and 3a822e81 (AYP-R5-004,
+   AYP-R6-001); the breaker stays the
    separate `herdr.breaker` report; no socket/pipe path computed by atm.
    `atm doctor --json` gains `herdr.configured` (bool),
    `herdr.endpoints[]` (deterministic order: `default`, then sessions
@@ -1383,9 +1405,12 @@ Acceptance criteria:
    both keys set, unknown key, malformed TOML, relative `socket_path`
    (AYS-R5-002); the stage-1 push (boundary TOML plus deliverable 2) is
    reviewed by fenix before stage 2 starts (AYS-R5-001).
-7. `presence_findings` zero-regression tests (visible, missing,
-   non-running, infrastructure-failed) pass; `herdr_is_configured` tested
-   against a roster with tmux, hermes and Herdr members (AYP-R5-001/002).
+7. `presence_findings` zero-regression tests (visible in every
+   `AgentStatus`, not-visible, failed, infrastructure-failed) pass with
+   findings byte-identical to the AX adapter on the same recordings;
+   `live_handoff` is `Some(true)` on a `ClientServerMismatch` fixture whose
+   server advertises it (AYP-R6-001/002); `herdr_is_configured` tested
+   against a roster with tmux, hermes and Herdr members (AYP-R5-002).
 
 Validation:
 
@@ -1444,7 +1469,8 @@ Deliverables:
    endpoint resolved against doctor `herdr.endpoints[]` (unknown,
    ambiguous and `socket_path` cases refused with their codes); scoped
    `server live-handoff` when the installed binary is newer than that
-   endpoint's server and it advertises `live_handoff`; otherwise refuse
+   endpoint's server and its `capabilities.live_handoff` is `true`
+   (`ClientServerMismatch` state, AYP-R6-001); otherwise refuse
    without `--stop-herdr-panes`, then scoped `server stop` and relaunch
    via that endpoint's entry, verified by a doctor re-read; never
    restarts the daemon; the daemon restart step refuses with
@@ -1475,7 +1501,11 @@ Acceptance criteria:
    (test).
 4. `--restart-herdr` refusals tested against a fake Herdr lacking
    `live_handoff` (read from the doctor fixture's
-   `capabilities.live_handoff`, AYP-R5-004), against doctor fixtures with
+   `capabilities.live_handoff`, AYP-R5-004) and `null`; the positive
+   fixture (newer installed client, older running server in
+   `ClientServerMismatch`, `live_handoff: true`) selects the scoped
+   live-handoff path without `--stop-herdr-panes` (AYP-R6-001); against
+   doctor fixtures with
    two configured endpoints and no selector
    (`HERDR_RESTART_ENDPOINT_REQUIRED`), an unknown selector, a
    `socket_path`-provenance endpoint, a mixed fixture (`socket_path` set
@@ -2122,3 +2152,11 @@ AX does not wait on any AY sprint.
   -> Result<HerdrClientConfig, AtmError>`, missing table = default, fail
   closed otherwise) and relative-path validation moved to the pure
   `HerdrClientConfig::validate` so AY.2 acceptance 6 needs no file I/O.
+- r15 (2026-09-05): critical-plan-reviewer R6 (solar, on r13: 2 blocking;
+  AYP-R4-003, R5-002/003/005/006 closed). AYP-R6-001 (`live_handoff:
+  Option<bool>` kept whenever the server answered, independent of state;
+  restart consumes `true`, positive `ClientServerMismatch` fixture),
+  AYP-R6-002 (per-member outcomes from the existing bounded `get`, typed
+  `HerdrPresenceOutcome` {Visible, NotVisible, Failed, Skipped}, mapped in
+  atm-herdr, never cleared by state; `presence_findings` byte-identical
+  to the AX adapter; `agent list` no longer used for presence).
