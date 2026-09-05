@@ -8,28 +8,30 @@
   a triage:Finding ;
   triage:findingId "RBQA-F003-AW5" ;
   triage:title "from_agent deprecation shim has no test coverage for one-shot warning or from == from_agent" ;
-  triage:description "qa-pr1184-r1 ruthless-boundary-qa: the OnceLock-gated from_agent deprecation warning in crates/atm-graft-python/src/tool_types.rs has zero tests. Add a test asserting the warning fires once and that from_agent equals from." ;
+  triage:description "qa-pr1184-r1 ruthless-boundary-qa: the OnceLock-gated from_agent deprecation warning in crates/atm-graft-python/src/tool_types.rs has zero tests. Add a test asserting the warning fires once and that from_agent equals from. CLOSURE (2026-09-05T05:30:00Z): r2 verified fixed: quality-mgr independently confirmed test tool_types::tests::deprecated_from_agent_warns_once_and_matches_from exists and passes (cargo test -p atm-graft-python), covering the deprecation-warning behavior." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
   triage:category "test-coverage" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T04:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW5 ;
   triage:foundAt "2026-09-05T04:35:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-AW5/AW5-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T05:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-F003-AW5/AW5-1>
   a triage:Occurrence ;
   triage:file "crates/atm-graft-python/src/tool_types.rs" ;
   triage:line 1 ;
   triage:snippet "OnceLock-gated from_agent deprecation warning untested" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw5-native-tool-parity" ;
   triage:headSha "3d1862c25" ;
   triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .

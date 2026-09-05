@@ -8,29 +8,31 @@
   a triage:Finding ;
   triage:findingId "AW5-CI-002" ;
   triage:title "CI Test (ubuntu-latest) fails: test_cli_parity read/peek envelope mismatch now that the parity test runs in CI" ;
-  triage:description "PR #1184 at 1fb8e08cb, ci.yml run 33945711374 job 101251737238: crates/atm-graft-python/tests/test_cli_parity.py::CliParityTests::test_list_read_send_and_ack_match_cli FAILS in _assert_parity (line 284, called from 296): the native read envelope reports action read while the CLI envelope reports action peek and carries additional_match_count; the two dicts differ. The test now executes in CI (closes the ATM-QA-AW5R1-002 gap) and immediately exposes a real AW.5 parity defect between the native typed read result and the CLI read output. Fix the envelope (action name and field set) so native read is byte-equivalent to the CLI, do not weaken the assertion." ;
+  triage:description "PR #1184 at 1fb8e08cb, ci.yml run 33945711374 job 101251737238: crates/atm-graft-python/tests/test_cli_parity.py::CliParityTests::test_list_read_send_and_ack_match_cli FAILS in _assert_parity (line 284, called from 296): the native read envelope reports action read while the CLI envelope reports action peek and carries additional_match_count; the two dicts differ. The test now executes in CI (closes the ATM-QA-AW5R1-002 gap) and immediately exposes a real AW.5 parity defect between the native typed read result and the CLI read output. Fix the envelope (action name and field set) so native read is byte-equivalent to the CLI, do not weaken the assertion. CLOSURE (2026-09-05T05:30:00Z): r2 verified fixed at b7fbf54e64 (fix commit, on top of 1fb8e08cb): AtmReadResult::from_peek_outcome now forces action=Read before delegating to from_outcome, aligning the native read envelope with the CLI's read output including additional_match_count. quality-mgr independently reviewed the source diff, independently ran `cargo test -p atm-graft-python` (34 passed, including the new assertion on action/additional_match_count), and attempted a live ATM_CLI_PARITY_CI=1 fixture run but was blocked by the same host-daemon-singleton limitation cipher reported (a live production atm-daemon already owns the host-wide owner.lock, so a second disposable daemon cannot start on this workstation) -- not a regression from this fix. Live CI at b7fbf54e64 is the authoritative end-to-end check and was still running at verification time; see quality-mgr's r2 verdict for CI follow-up." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
   triage:category "ci" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T05:12:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW5 ;
   triage:foundAt "2026-09-05T05:03:51Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW5-CI-002/AW5-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW5-CI-002/AW5-2> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T05:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AW5-CI-002/AW5-1>
   a triage:Occurrence ;
   triage:file "crates/atm-graft-python/tests/test_cli_parity.py" ;
   triage:line 284 ;
   triage:snippet "_assert_parity read envelope action read vs peek" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw5-native-tool-parity" ;
   triage:headSha "1fb8e08cb" ;
   triage:occursIn <urn:atm:triage:worktree/AW5/1fb8e08cb> .
@@ -40,8 +42,8 @@
   triage:file "crates/atm-graft-python/src/tool_types.rs" ;
   triage:line 1 ;
   triage:snippet "native read envelope action and field set differ from CLI" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw5-native-tool-parity" ;
   triage:headSha "1fb8e08cb" ;
   triage:occursIn <urn:atm:triage:worktree/AW5/1fb8e08cb> .

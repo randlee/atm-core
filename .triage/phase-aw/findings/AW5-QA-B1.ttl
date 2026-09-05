@@ -8,29 +8,31 @@
   a triage:Finding ;
   triage:findingId "AW5-QA-B1" ;
   triage:title "to_json() is a hand-rolled string-concatenation JSON encoder instead of the serde_json path output.rs uses, so CLI parity is coincidental, not structural" ;
-  triage:description "qa-pr1184-r1 arch-qa (quality-mgr msg 01M1QXDGHQZTCEGFGPX7Z1C39T, independently re-verified): crates/atm-graft-python/Cargo.toml has no serde_json dependency and no serde_json use exists under crates/atm-graft-python/src/. The to_json() methods on AtmSendResult / AtmReadResult / AtmListResult in tool_types.rs (lines 375-881: json_quote, field, string_field, classified_message_json, ...) manually re-derive field names and renames. Sprint doc deliverable 1 (docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md:37-38) requires to_json() produced by the same serde_json path output.rs uses. Output matches today by coincidence and will drift on future atm-core field changes, defeating the sprint purpose. Fix: serialize via serde_json against the canonical WriteOutcome / ReadOutcome / ListOutcome (same types and serde attributes output.rs uses), delete the hand-rolled encoder functions. This subsumes AW5-CI-001 (the 112-line classified_message_json RULE-002 hit is a symptom); do not split that function, remove it. Boundary manifest, hot-path and legacy-daemon checks passed." ;
+  triage:description "qa-pr1184-r1 arch-qa (quality-mgr msg 01M1QXDGHQZTCEGFGPX7Z1C39T, independently re-verified): crates/atm-graft-python/Cargo.toml has no serde_json dependency and no serde_json use exists under crates/atm-graft-python/src/. The to_json() methods on AtmSendResult / AtmReadResult / AtmListResult in tool_types.rs (lines 375-881: json_quote, field, string_field, classified_message_json, ...) manually re-derive field names and renames. Sprint doc deliverable 1 (docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md:37-38) requires to_json() produced by the same serde_json path output.rs uses. Output matches today by coincidence and will drift on future atm-core field changes, defeating the sprint purpose. Fix: serialize via serde_json against the canonical WriteOutcome / ReadOutcome / ListOutcome (same types and serde attributes output.rs uses), delete the hand-rolled encoder functions. This subsumes AW5-CI-001 (the 112-line classified_message_json RULE-002 hit is a symptom); do not split that function, remove it. Boundary manifest, hot-path and legacy-daemon checks passed. CLOSURE (2026-09-05T05:30:00Z): r2 verified fixed: arch-qa and rust-qa-agent confirm to_json() delegates to the shared serde_json path with no hand-rolled JSON construction remaining." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
   triage:category "architecture" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T04:36:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW5 ;
   triage:foundAt "2026-09-05T04:33:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW5-QA-B1/AW5-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW5-QA-B1/AW5-2> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T05:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AW5-QA-B1/AW5-1>
   a triage:Occurrence ;
   triage:file "crates/atm-graft-python/src/tool_types.rs" ;
   triage:line 375 ;
   triage:snippet "hand-rolled json_quote/field/string_field/classified_message_json encoder lines 375-881" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw5-native-tool-parity" ;
   triage:headSha "3d1862c25" ;
   triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .
@@ -40,8 +42,8 @@
   triage:file "crates/atm-graft-python/Cargo.toml" ;
   triage:line 1 ;
   triage:snippet "no serde_json dependency" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw5-native-tool-parity" ;
   triage:headSha "3d1862c25" ;
   triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .
