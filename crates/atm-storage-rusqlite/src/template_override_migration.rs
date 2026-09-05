@@ -1,4 +1,4 @@
-use crate::shared_db::{SharedDbTarget, SqliteConnection, sqlite_error};
+use crate::shared_db_support::{SharedDbTarget, SqliteConnection, ensure_column, sqlite_error};
 use atm_storage::error::AtmError;
 
 type TemplateOverrideRow = (String, String, String, String, String);
@@ -7,7 +7,7 @@ pub(crate) fn ensure_team_nudge_template_override_columns(
     connection: &SqliteConnection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
-    crate::shared_db::ensure_column(
+    ensure_column(
         connection,
         target,
         "team_nudge_template_overrides",

@@ -28,6 +28,7 @@ mod search_store;
 mod shared_db;
 mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
+mod shared_db_support;
 mod team_roster_schema;
 mod template_catalog_schema;
 mod template_catalog_store;
