@@ -220,12 +220,12 @@ Reviewer ownership note:
   and named artifacts are actually present in the implementation or planning
   docs; req-qa also owns the deliverable completion percentage
 - `arch-qa` owns structural and boundary compliance of the code that exists
-- `schema-reviewer` owns HTTP/peer wire-schema semver: it records minor
-  bumps and blocks breaking changes or plan drift that lack Rand's recorded
-  approval and sign-off (rules on GitHub issue #1217)
 - a branch is not merge-ready if req-qa cannot trace planned deliverables to
   concrete repository evidence
 - a branch is not merge-ready if deliverable completion is below `100%`
+- `schema-reviewer` owns HTTP/peer wire-schema semver: it records minor
+  bumps and blocks breaking changes or plan drift that lack Rand's recorded
+  approval and sign-off (rules on GitHub issue #1217)
 
 ## Output Format
 

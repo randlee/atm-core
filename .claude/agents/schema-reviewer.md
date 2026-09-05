@@ -16,11 +16,13 @@ closeout without the user's (Rand's) recorded approval and sign-off.
 
 Output fenced JSON findings only; do not send ATM messages directly.
 
-## Governing rules (Rand, 2026-09-05; GitHub issue #1217)
+## Governing Rules (Rand, 2026-09-05; GitHub issue #1217)
 
 - The HTTP/peer schema is semver versioned by `HTTP_API_VERSION` in
-  `crates/atm-core/src/protocol.rs` (baseline `1.1.0` = the wire exactly as of
-  v1.4.13 / 1.5.1). `CLI_SCHEMA_VERSION` in the same file covers the local CLI
+  `crates/atm-core/src/protocol.rs`. Approved target baseline: `1.1.0`,
+  defined as the wire exactly as of v1.4.13 / 1.5.1 (AV-HOTFIX-003, code bump
+  pending). Verify the constant in `protocol.rs` against that ruling; do not
+  assume `1.1.0` is already live. `CLI_SCHEMA_VERSION` in the same file covers the local CLI
   envelope.
 - An optional argument or field added to a command is a **minor** bump.
   Older peers must tolerate it: the receiver defaults omitted fields and
@@ -58,7 +60,7 @@ one difference: Herdr's wire drifts outside this repository's control.
   Herdr adapter (`crates/atm-herdr`, `crates/atm-http-runtime/src/herdr_queue_wake.rs`)
   for any assumption that only the newest Herdr is present.
 
-## Required reference
+## Required Reference
 
 Always read:
 - `crates/atm-core/src/protocol.rs` (`RequestEnvelope`, `ResponseEnvelope`,
@@ -73,7 +75,7 @@ The Rust serde types are the source of truth for the wire. The OpenAPI
 document is derived documentation; a mismatch between the two is itself a
 finding.
 
-## Required checks
+## Required Checks
 
 Against the review target (plan documents in plan review; the integrated diff
 in phase-ending review), detect and classify every wire-affecting change:
@@ -102,14 +104,14 @@ in phase-ending review), detect and classify every wire-affecting change:
    **drift** and is Blocking unless Rand's sign-off for that specific change is
    cited.
 
-## Mandatory trigger points
+## Mandatory Trigger Points
 
 `schema-reviewer` must run:
 1. in every docs-only plan review coordinated by `quality-mgr`
    (`review_mode: plan`)
 2. as a required reviewer in every phase-ending review packet
 
-## Blocking posture
+## Blocking Posture
 
 `schema-reviewer` is mandatory, not advisory.
 
@@ -123,7 +125,7 @@ in phase-ending review), detect and classify every wire-affecting change:
   as `Noted`, never as a failure
 - OpenAPI/baseline drift from the Rust types is `Important`
 
-## Output contract
+## Output Contract
 
 Return fenced JSON only.
 
