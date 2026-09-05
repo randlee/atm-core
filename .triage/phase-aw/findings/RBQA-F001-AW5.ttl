@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F001-AW5>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001-AW5" ;
+  triage:title "hermes-graft-binding.toml response_types omits PyObservability and PyGraftSessionSnapshot, which AW.5 newly registers as public pymodule classes" ;
+  triage:description "qa-pr1184-r1 ruthless-boundary-qa (quality-mgr msg 01M1QXH12PE2ARX4YJGHHSCRE2, independently confirmed): boundaries/atm-graft-python/hermes-graft-binding.toml response_types (line 40) still lists the 9-item AW.4 set, but the AW.5 diff adds m.add_class for PyObservability and PyGraftSessionSnapshot in crates/atm-graft-python/src/lib.rs, both returned from getters. Undeclared public surface. Fix: add both to response_types. Process gap noted for follow-up outside this sprint: no lint enforces response_types against actual add_class calls." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T04:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW5 ;
+  triage:foundAt "2026-09-05T04:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AW5/AW5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AW5/AW5-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F001-AW5/AW5-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-graft-python/hermes-graft-binding.toml" ;
+  triage:line 40 ;
+  triage:snippet "response_types lists only the 9 AW.4 items" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .
+
+<urn:atm:triage:occurrence/RBQA-F001-AW5/AW5-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "add_class PyObservability and PyGraftSessionSnapshot added by AW.5" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .
+
+<urn:atm:triage:worktree/AW5/3d1862c25>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw5-native-tool-parity" ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:orderIndex 5 .

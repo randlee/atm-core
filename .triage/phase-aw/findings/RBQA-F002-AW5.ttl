@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F002-AW5>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002-AW5" ;
+  triage:title "AtmListRow stores from and from_agent as two redundant String fields from the same source value" ;
+  triage:description "qa-pr1184-r1 ruthless-boundary-qa: AtmListRow in crates/atm-graft-python/src/tool_types.rs carries from and from_agent as two separate String fields populated from one value. Collapse to one stored field with from_agent derived through the deprecation shim; no behaviour change." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T04:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW5 ;
+  triage:foundAt "2026-09-05T04:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AW5/AW5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F002-AW5/AW5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/tool_types.rs" ;
+  triage:line 1 ;
+  triage:snippet "AtmListRow from and from_agent duplicate strings" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .
+
+<urn:atm:triage:worktree/AW5/3d1862c25>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw5-native-tool-parity" ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:orderIndex 5 .

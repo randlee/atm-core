@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F003-AW5>
+  a triage:Finding ;
+  triage:findingId "RBQA-F003-AW5" ;
+  triage:title "from_agent deprecation shim has no test coverage for one-shot warning or from == from_agent" ;
+  triage:description "qa-pr1184-r1 ruthless-boundary-qa: the OnceLock-gated from_agent deprecation warning in crates/atm-graft-python/src/tool_types.rs has zero tests. Add a test asserting the warning fires once and that from_agent equals from." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T04:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW5 ;
+  triage:foundAt "2026-09-05T04:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-AW5/AW5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F003-AW5/AW5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/tool_types.rs" ;
+  triage:line 1 ;
+  triage:snippet "OnceLock-gated from_agent deprecation warning untested" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .
+
+<urn:atm:triage:worktree/AW5/3d1862c25>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw5-native-tool-parity" ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:orderIndex 5 .
