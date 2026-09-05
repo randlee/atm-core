@@ -51,7 +51,9 @@ use tokio::task::JoinHandle;
 
 mod bare_cli_fifo;
 mod client;
+mod herdr_escalation;
 mod herdr_queue_wake;
+mod herdr_queue_wake_escalation;
 mod http1_server;
 mod loopback_tcp;
 mod message_handler;

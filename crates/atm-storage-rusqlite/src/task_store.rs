@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{
-    AtmError, AtmMessageId, MemberKey, ReminderOutcome, TaskActor, TaskEventKind, TaskEventMarker,
-    TaskEventRow, TaskRow, TaskState, TaskStore,
+    AtmError, AtmMessageId, EscalationScope, MAX_ESCALATION_RECIPIENTS, MemberKey, ReminderOutcome,
+    TaskActor, TaskEventKind, TaskEventMarker, TaskEventRow, TaskRow, TaskState, TaskStore,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -30,6 +30,13 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE INDEX IF NOT EXISTS tasks_open_by_member
     ON tasks(team, assignee, assigned_at) WHERE state <> 'complete';
+
+CREATE TABLE IF NOT EXISTS escalation_recipients (
+    scope_key TEXT NOT NULL,
+    address TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (scope_key, address)
+);
 
 CREATE TABLE IF NOT EXISTS task_events (
     team TEXT NOT NULL,
@@ -344,6 +351,93 @@ impl TaskStore for SqliteTaskStore {
                 lead.as_str(), Some(message_id), None)
         })
     }
+
+    fn list_escalation_recipients(&self, scope: &EscalationScope) -> Result<Vec<String>, AtmError> {
+        let scope_key = scope.key();
+        self.db.with_connection(|connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT address FROM escalation_recipients
+                     WHERE scope_key = ?1 ORDER BY address ASC",
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to prepare escalation recipient list", error)
+                })?;
+            let rows = statement
+                .query_map([scope_key], |row| row.get(0))
+                .map_err(|error| self.db.error("failed to list escalation recipients", error))?;
+            rows.map(|row| {
+                row.map_err(|error| {
+                    self.db
+                        .error("failed to decode escalation recipient", error)
+                })
+            })
+            .collect()
+        })
+    }
+
+    fn add_escalation_recipient(
+        &self,
+        scope: &EscalationScope,
+        address: &str,
+        at: atm_storage::types::IsoTimestamp,
+    ) -> Result<bool, AtmError> {
+        let scope_key = scope.key();
+        self.db.with_transaction(|connection| {
+            let already_present: bool = connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM escalation_recipients
+                      WHERE scope_key = ?1 AND address = ?2)",
+                    params![scope_key, address],
+                    |row| row.get(0),
+                )
+                .map_err(|error| self.db.error("failed to check escalation recipient", error))?;
+            if already_present {
+                return Ok(false);
+            }
+            let count: usize = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM escalation_recipients WHERE scope_key = ?1",
+                    [&scope_key],
+                    |row| row.get(0),
+                )
+                .map_err(|error| self.db.error("failed to count escalation recipients", error))?;
+            if count >= MAX_ESCALATION_RECIPIENTS {
+                return Err(AtmError::validation(format!(
+                    "escalation recipient scope already has the maximum of {MAX_ESCALATION_RECIPIENTS} recipients"
+                )));
+            }
+            let inserted = connection
+                .execute(
+                    "INSERT OR IGNORE INTO escalation_recipients(scope_key, address, added_at)
+                     VALUES (?1, ?2, ?3)",
+                    params![scope_key, address, at.to_string()],
+                )
+                .map_err(|error| self.db.error("failed to add escalation recipient", error))?;
+            Ok(inserted == 1)
+        })
+    }
+
+    fn remove_escalation_recipient(
+        &self,
+        scope: &EscalationScope,
+        address: &str,
+    ) -> Result<bool, AtmError> {
+        let scope_key = scope.key();
+        self.db.with_connection(|connection| {
+            let removed = connection
+                .execute(
+                    "DELETE FROM escalation_recipients WHERE scope_key = ?1 AND address = ?2",
+                    params![scope_key, address],
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to remove escalation recipient", error)
+                })?;
+            Ok(removed == 1)
+        })
+    }
 }
 
 fn parse<T: std::str::FromStr>(value: &str, subject: &str) -> rusqlite::Result<T>
@@ -400,6 +494,7 @@ fn invalid(value: &str, subject: &str) -> rusqlite::Error {
         format!("invalid {subject}: {value}").into(),
     )
 }
+
 const fn state_name(value: TaskState) -> &'static str {
     match value {
         TaskState::Assigned => "assigned",
@@ -422,5 +517,128 @@ const fn outcome_name(value: ReminderOutcome) -> &'static str {
         ReminderOutcome::Emitted => "emitted",
         ReminderOutcome::Unrenderable => "unrenderable",
         ReminderOutcome::Blocked => "blocked",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SqliteStorageBackend;
+
+    const TEST_TEAM: &str = "ax6-recipient-test";
+    const DAEMON_RECIPIENT: &str = "ops@ax6-recipient-test";
+    const TEAM_RECIPIENT: &str = "team-ops@ax6-recipient-test";
+
+    #[test]
+    fn escalation_recipients_are_scoped_deduplicated_and_capped() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.task_store();
+        let daemon = EscalationScope::Daemon;
+        let team_name: TeamName = TEST_TEAM.parse().expect("team");
+        let team = EscalationScope::Team(team_name.clone());
+        let now = IsoTimestamp::now();
+
+        assert!(
+            store
+                .add_escalation_recipient(&daemon, DAEMON_RECIPIENT, now)
+                .expect("daemon add")
+        );
+        assert!(
+            !store
+                .add_escalation_recipient(&daemon, DAEMON_RECIPIENT, now)
+                .expect("duplicate add")
+        );
+        assert_eq!(
+            store
+                .list_escalation_recipients(&daemon)
+                .expect("daemon list"),
+            vec![DAEMON_RECIPIENT]
+        );
+        assert_eq!(
+            store
+                .effective_escalation_recipients(&team_name)
+                .expect("daemon fallback"),
+            vec![DAEMON_RECIPIENT]
+        );
+
+        assert!(
+            store
+                .add_escalation_recipient(&team, TEAM_RECIPIENT, now)
+                .expect("team add")
+        );
+        assert_eq!(
+            store
+                .effective_escalation_recipients(&team_name)
+                .expect("team override"),
+            vec![TEAM_RECIPIENT]
+        );
+        assert!(
+            store
+                .remove_escalation_recipient(&team, TEAM_RECIPIENT)
+                .expect("team remove")
+        );
+        assert_eq!(
+            store
+                .effective_escalation_recipients(&team_name)
+                .expect("fallback after remove"),
+            vec![DAEMON_RECIPIENT]
+        );
+
+        for index in 0..MAX_ESCALATION_RECIPIENTS.saturating_sub(1) {
+            assert!(
+                store
+                    .add_escalation_recipient(&daemon, &format!("ops-{index}@{TEST_TEAM}"), now,)
+                    .expect("recipient add")
+            );
+        }
+        let error = store
+            .add_escalation_recipient(&daemon, &format!("overflow@{TEST_TEAM}"), now)
+            .expect_err("scope cap");
+        assert!(error.message().contains("maximum"));
+    }
+
+    #[test]
+    fn concurrent_recipient_adds_do_not_exceed_scope_cap() {
+        use std::sync::{Arc, Barrier};
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.task_store();
+        let scope = EscalationScope::Daemon;
+        let now = IsoTimestamp::now();
+        for index in 0..MAX_ESCALATION_RECIPIENTS.saturating_sub(1) {
+            store
+                .add_escalation_recipient(&scope, &format!("seed-{index}@ax6-test"), now)
+                .expect("seed recipient");
+        }
+        let start = Arc::new(Barrier::new(2));
+        let handles: Vec<_> = ["first@ax6-test", "second@ax6-test"]
+            .into_iter()
+            .map(|address| {
+                let store = Arc::clone(&store);
+                let start = Arc::clone(&start);
+                let scope = scope.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    store.add_escalation_recipient(&scope, address, now)
+                })
+            })
+            .collect();
+        let outcomes: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("add thread"))
+            .collect();
+
+        assert_eq!(
+            outcomes.iter().filter(|outcome| outcome.is_ok()).count(),
+            1,
+            "exactly one interleaved add can claim the final slot"
+        );
+        assert_eq!(
+            store
+                .list_escalation_recipients(&scope)
+                .expect("recipient list")
+                .len(),
+            MAX_ESCALATION_RECIPIENTS
+        );
     }
 }

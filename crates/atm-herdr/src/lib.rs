@@ -206,6 +206,14 @@ pub trait HerdrProcessAdapter: Send + Sync {
         session: Option<&'a HerdrSession>,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<HerdrListOutcome, HerdrError>> + Send + 'a>>;
+
+    /// Shows a desktop notification without targeting a Herdr pane.
+    fn notify<'a>(
+        &'a self,
+        title: &'a str,
+        body: &'a str,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<(), HerdrError>> + Send + 'a>>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -461,6 +469,24 @@ impl HerdrProcessAdapter for HerdrProcessInvoker {
             deadline,
         ))
     }
+
+    fn notify<'a>(
+        &'a self,
+        title: &'a str,
+        body: &'a str,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<(), HerdrError>> + Send + 'a>> {
+        Box::pin(async move {
+            let args = notification_args(title, body);
+            let output =
+                run_command(&self.breaker, &args, None, deadline, BreakerPolicy::Bypass).await?;
+            if output.success {
+                Ok(())
+            } else {
+                Err(parse_error(&output.stderr))
+            }
+        })
+    }
 }
 
 async fn execute_get(
@@ -701,6 +727,18 @@ fn list_args() -> Vec<String> {
     vec!["agent".to_owned(), "list".to_owned()]
 }
 
+fn notification_args(title: &str, body: &str) -> Vec<String> {
+    vec![
+        "notification".to_owned(),
+        "show".to_owned(),
+        title.to_owned(),
+        "--body".to_owned(),
+        body.to_owned(),
+        "--sound".to_owned(),
+        "request".to_owned(),
+    ]
+}
+
 fn record_result<T>(breaker: &HerdrSpawnBreaker, result: &Result<T, HerdrError>) {
     if let Err(error) = result {
         if error.is_infrastructure() {
@@ -840,6 +878,10 @@ pub mod testing {
         List {
             session: Option<HerdrSession>,
         },
+        Notify {
+            title: String,
+            body: String,
+        },
     }
 
     #[derive(Debug, Default)]
@@ -851,6 +893,7 @@ pub mod testing {
         get_results: VecDeque<Result<HerdrGetOutcome, HerdrError>>,
         list_results: VecDeque<Result<HerdrListOutcome, HerdrError>>,
         list_gate: Option<Arc<tokio::sync::Notify>>,
+        notify_results: VecDeque<Result<(), HerdrError>>,
     }
 
     #[derive(Debug, Default, Clone)]
@@ -897,6 +940,12 @@ pub mod testing {
         pub fn queue_list_result(&self, result: Result<HerdrListOutcome, HerdrError>) {
             if let Ok(mut state) = self.state.lock() {
                 state.list_results.push_back(result);
+            }
+        }
+
+        pub fn queue_notify_result(&self, result: Result<(), HerdrError>) {
+            if let Ok(mut state) = self.state.lock() {
+                state.notify_results.push_back(result);
             }
         }
 
@@ -1035,6 +1084,28 @@ pub mod testing {
                 result
             })
         }
+
+        fn notify<'a>(
+            &'a self,
+            title: &'a str,
+            body: &'a str,
+            _deadline: RequestDeadline,
+        ) -> Pin<Box<dyn Future<Output = Result<(), HerdrError>> + Send + 'a>> {
+            let result = self
+                .state
+                .lock()
+                .map(|mut state| {
+                    state.calls.push(FakeHerdrCall::Notify {
+                        title: title.to_owned(),
+                        body: body.to_owned(),
+                    });
+                    state.notify_results.pop_front()
+                })
+                .ok()
+                .flatten()
+                .unwrap_or(Ok(()));
+            Box::pin(async move { result })
+        }
     }
 }
 
@@ -1119,6 +1190,18 @@ mod tests {
         );
         assert_eq!(get_args(&agent), vec!["agent", "get", "alice"]);
         assert_eq!(list_args(), vec!["agent", "list"]);
+        assert_eq!(
+            notification_args("Task escalation", "line one\nline two"),
+            vec![
+                "notification",
+                "show",
+                "Task escalation",
+                "--body",
+                "line one\nline two",
+                "--sound",
+                "request"
+            ]
+        );
     }
 
     #[tokio::test]

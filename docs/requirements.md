@@ -72,6 +72,14 @@ daemon, the write path has no Python, and a Claude Code task list is a
 per-session harness artifact rather than a cross-host record. The AC.6
 deletion stands: ADR-061 revives none of that scaffolding.
 
+Phase-AX.6 amendment (2026-09-05): lead notification and escalation are part
+of the retained task surface. `atm-daemon` is the reserved daemon actor and
+cannot be added to or renamed in the roster. Open-task reminders notify the
+single roster lead at reminder thresholds 10, 20, and so on; blocked runtime
+episodes use the same escalation path with an initial 60-second delay and
+10-minute re-notification. Configured daemon and per-team escalation
+recipients are additive fan-out destinations, with a per-tick cap of eight.
+
 The retained product surface is:
 - `atm send`
 - `atm list`
@@ -85,6 +93,9 @@ The retained product surface is:
 
 Approved additive CLI feature for the Phase `Y` line:
 - `atm help`
+
+Approved additive CLI feature for the Phase `AX` line:
+- `atm escalation add|remove|list`
 
 The system must preserve the retained command behavior unless these
 requirements explicitly retire or change it.
@@ -403,9 +414,12 @@ Satisfied by:
 - file-reference policy handling for `send --file`
 - origin-inbox merge / ingest compatibility for Claude-owned inbox files
 - ATM-owned read/ack/clear/task state in SQLite
+- daemon and per-team escalation-recipient state in SQLite
+- lead and escalation-recipient notifications for repeated or blocked tasks
 - structured logging through `sc-observability`
 - log query and follow through `sc-observability`
 - local diagnostics through `atm doctor`
+- the Phase `AX` additive CLI feature `atm escalation`
 - local team discovery and recovery through `atm teams`
 - local roster verification through `atm members`
 - native agent/plugin notification interface
@@ -2131,6 +2145,10 @@ The initial doctor implementation must cover:
 - `sc-observability` initialization health
 - active shared log path visibility
 - `sc-observability` query-health readiness for `atm log`
+- open-task reminder thresholds and lead-notification audit outcomes
+- blocked runtime episode escalation and retry behavior
+- daemon and per-team escalation recipient configuration and effective-source
+  reporting
 
 Caller-context behavior for `atm doctor`:
 
@@ -2166,6 +2184,14 @@ Each doctor finding must expose at least:
 
 The obsolete config-identity finding must use:
 - `ATM_WARNING_IDENTITY_DRIFT`
+
+Phase AX.6 doctor findings must use these warning codes and actionable guidance:
+
+- `ATM_ROSTER_NO_LEAD` — `assign one lead: atm teams update-member <team> <member> --agent-type lead`
+- `ATM_ROSTER_MULTIPLE_LEADS` — `keep one lead: atm teams update-member <team> <member> --agent-type <other type>`
+- `ATM_ROSTER_RESERVED_NAME` — `rename the member: atm-daemon is reserved for daemon-originated messages`
+- `ATM_TASK_STALLED` — `check the assignee or close the task: atm send <assignee> --task-complete <task_id> --stdin`
+- `ATM_MEMBER_BLOCKED` — `<member> is waiting for interactive input; attach to its Herdr agent and answer the prompt`
 
 Critical findings must cause a non-zero exit status.
 
@@ -2217,6 +2243,9 @@ Bare `atm teams` must:
 - persist the member's durable `home_dir` on the canonical ATM roster row and
   project that same `home_dir` into compatibility `config.json.members`
 - create any required local inbox state atomically with the roster update
+- reject the reserved member name `atm-daemon` with
+  `ATM_MESSAGE_VALIDATION_FAILED`; an existing legacy row may remain and is
+  reported by `atm doctor` as `ATM_ROSTER_RESERVED_NAME`
 
 `atm teams update-member` must:
 - validate that the target team exists
@@ -2236,6 +2265,9 @@ Bare `atm teams` must:
 - project the repaired metadata deterministically into compatibility
   `config.json`
 - preserve unchanged member metadata when a field is not supplied
+- reject the reserved member name `atm-daemon` with
+  `ATM_MESSAGE_VALIDATION_FAILED`; an existing legacy row may remain and is
+  reported by `atm doctor` as `ATM_ROSTER_RESERVED_NAME`
 
 `atm teams remove-member` must:
 - require the caller identity to belong to the target team

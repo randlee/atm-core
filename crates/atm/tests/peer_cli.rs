@@ -6,9 +6,14 @@
 use std::process::Command;
 
 fn help_for(arguments: &[&str]) -> String {
+    let fixture = tempfile::tempdir().expect("temporary ATM environment");
     let output = Command::new(env!("CARGO_BIN_EXE_atm"))
         .args(arguments)
         .arg("--help")
+        .env("ATM_HOME", fixture.path())
+        .env("ATM_CONFIG_HOME", fixture.path().join("config"))
+        .env("ATM_LOG_DIR", fixture.path().join("logs"))
+        .env("ATM_TEAMS_DIR", fixture.path().join("teams"))
         .output()
         .expect("run ATM peer command help");
     assert!(
@@ -62,7 +67,7 @@ fn peer_trust_commands_are_wired_through_the_real_cli() {
 
 #[test]
 fn peer_mutations_reject_missing_yes_before_touching_durable_configuration() {
-    let tempdir = tempfile::TempDir::new().expect("temporary log directory");
+    let fixture = tempfile::tempdir().expect("temporary ATM environment");
     let output = Command::new(env!("CARGO_BIN_EXE_atm"))
         .args([
             "peer",
@@ -73,7 +78,10 @@ fn peer_mutations_reject_missing_yes_before_touching_durable_configuration() {
             "--fingerprint",
             "sha256:test",
         ])
-        .env("ATM_LOG_DIR", tempdir.path())
+        .env("ATM_HOME", fixture.path())
+        .env("ATM_CONFIG_HOME", fixture.path().join("config"))
+        .env("ATM_LOG_DIR", fixture.path().join("logs"))
+        .env("ATM_TEAMS_DIR", fixture.path().join("teams"))
         .output()
         .expect("run unconfirmed peer mutation");
 

@@ -8,6 +8,12 @@ reviewed_for_release: 1.4.4
 
 ATM supports built-in nudge behavior and bounded operator override surfaces.
 
+Repeated open-task reminders also produce daemon escalation notifications.
+At reminders 10, 20, and later multiples of 10, the unique roster lead is
+notified. A blocked member is escalated after 60 seconds and re-notified every
+10 minutes while the blocked episode continues. These daemon messages are
+system-generated and are not controlled by the seven built-in template kinds.
+
 ## Purpose
 
 Nudges provide small operator-facing notifications when ATM workflows require

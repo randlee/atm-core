@@ -152,59 +152,78 @@ impl DoctorProjection for StorageDoctorProjection {
             .await
             .map_err(|_| AtmError::daemon_unavailable("doctor request deadline expired"))?
             .map_err(|_| AtmError::daemon_unavailable("doctor control lane stopped"))??;
-        if let Some(roster) = report.member_roster.as_ref() {
-            let remaining = deadline.remaining().ok_or_else(|| {
-                AtmError::daemon_unavailable(
-                    "doctor request deadline expired before Herdr projection",
-                )
-            })?;
-            match tokio::time::timeout(remaining, self.presence.probe(roster, deadline)).await {
-                Ok(findings) => append_doctor_findings(&mut report, findings),
-                Err(_) => append_doctor_findings(
-                    &mut report,
-                    vec![DoctorFinding {
-                        severity: DoctorSeverity::Warning,
-                        code: atm_storage::AtmErrorCode::DaemonUnavailable,
-                        message: "Herdr presence projection exceeded the doctor request deadline"
-                            .to_owned(),
-                        remediation: Some(
-                            "Inspect the Herdr service, then rerun `atm doctor`.".to_owned(),
-                        ),
-                    }],
-                ),
-            }
+        if let Some(roster) = report.member_roster.clone() {
+            self.append_presence_findings(&mut report, &roster, deadline)
+                .await?;
         }
-        if let Some(runtime_status) = context.runtime_status {
-            report.runtime_status = Some(runtime_status);
-        }
-        if let Some(handoff) = context.handoff
-            && handoff.state != SupervisorState::Ready
-        {
-            append_doctor_findings(
-                &mut report,
-                vec![DoctorFinding {
-                    severity: DoctorSeverity::Warning,
-                    code: atm_storage::AtmErrorCode::DaemonUnavailable,
-                    message: format!(
-                        "mailbox read-state handoff is {:?}; buffered={}, restarts={}, rejected_full={}, rejected_unavailable={}, retry_deadline_exhaustions={}",
-                        handoff.state,
-                        handoff.buffered_depth,
-                        handoff.restart_count,
-                        handoff.rejected_buffer_full,
-                        handoff.rejected_unavailable,
-                        handoff.retry_deadline_exhaustions,
-                    ),
-                    remediation: Some(
-                        "Inspect the mailbox writer lane and restart the daemon if the handoff does not recover."
-                            .to_owned(),
-                    ),
-                }],
-            );
-        }
-        report.daemon_context = context.daemon_context;
+        append_context_findings(&mut report, context);
         report.reader_lanes = self.reader_lanes;
         Ok(report)
     }
+}
+
+impl StorageDoctorProjection {
+    async fn append_presence_findings(
+        &self,
+        report: &mut DoctorReport,
+        roster: &atm_core::team_admin::MembersList,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError> {
+        let remaining = deadline.remaining().ok_or_else(|| {
+            AtmError::daemon_unavailable("doctor request deadline expired before Herdr projection")
+        })?;
+        match tokio::time::timeout(remaining, self.presence.probe(roster, deadline)).await {
+            Ok(findings) => append_doctor_findings(report, findings),
+            Err(_) => append_doctor_findings(
+                report,
+                vec![DoctorFinding {
+                    severity: DoctorSeverity::Warning,
+                    code: atm_storage::AtmErrorCode::DaemonUnavailable,
+                    message: "Herdr presence projection exceeded the doctor request deadline"
+                        .to_owned(),
+                    remediation: Some(
+                        "Inspect the Herdr service, then rerun `atm doctor`.".to_owned(),
+                    ),
+                }],
+            ),
+        }
+        Ok(())
+    }
+}
+
+fn append_context_findings(report: &mut DoctorReport, context: DoctorProjectionContext) {
+    if let Some(runtime_status) = context.runtime_status {
+        report.runtime_status = Some(runtime_status.clone());
+        append_doctor_findings(
+            report,
+            atm_core::doctor::runtime_condition_findings(&runtime_status),
+        );
+    }
+    if let Some(handoff) = context.handoff
+        && handoff.state != SupervisorState::Ready
+    {
+        append_doctor_findings(
+            report,
+            vec![DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: atm_storage::AtmErrorCode::DaemonUnavailable,
+                message: format!(
+                    "mailbox read-state handoff is {:?}; buffered={}, restarts={}, rejected_full={}, rejected_unavailable={}, retry_deadline_exhaustions={}",
+                    handoff.state,
+                    handoff.buffered_depth,
+                    handoff.restart_count,
+                    handoff.rejected_buffer_full,
+                    handoff.rejected_unavailable,
+                    handoff.retry_deadline_exhaustions,
+                ),
+                remediation: Some(
+                    "Inspect the mailbox writer lane and restart the daemon if the handoff does not recover."
+                        .to_owned(),
+                ),
+            }],
+        );
+    }
+    report.daemon_context = context.daemon_context;
 }
 
 impl StorageDoctorProjection {

@@ -37,6 +37,7 @@ pub mod doctor;
 pub mod error;
 /// Stable ATM-owned error-code registry used by core and CLI layers.
 pub mod error_codes;
+pub mod escalation_admin;
 /// Thin graft-facing daemon client traits.
 pub mod graft;
 /// Public ATM home and team-path resolution helpers.

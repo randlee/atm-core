@@ -1621,7 +1621,7 @@ Phase AX sprint status:
 | `AX.3` | B | parallel with AX.1/AX.2 | `complete` | `feature/ax3-task-state-machine` | `docs/plans/phase-ax/sprint-AX.3-task-state-machine.md`, `docs/adr/ADR-061-task-state-machine.md`, ADR-054 amendment, `boundaries/atm-storage/task-store.toml`, `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` |
 | `AX.4` | B | after AX.3; parallel with AX.1/AX.2 | `complete` | `feature/ax4-task-cli-and-docs` | `docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md`, `docs/user-documents/tasks.md` |
 | `AX.5` | C | after A and B merge | `complete` | `feature/ax5-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md`, ADR-061 reminder-cycle section |
-| `AX.6` | C | after AX.5 | `planned` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
+| `AX.6` | C | after AX.5 | `complete` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
 | `AX.7` | D | after AX.6 merges | `planned` | none (proof on `integrate/phase-ax`) | `docs/plans/phase-ax/ax7-live-proof.md` |
 
 ## Publishing Improvements

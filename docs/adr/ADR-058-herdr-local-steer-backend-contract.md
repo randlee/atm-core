@@ -676,3 +676,19 @@ template remains one argv element byte-for-byte, with exactly four argv
 elements (`agent`, `prompt`, agent name, rendered text). This amendment records
 the operative contract implemented in `atm-core`, `atm-daemon-bootstrap`,
 `atm-http-runtime`, and `atm-herdr`.
+
+## Amendment — Phase AX.6 lead notification (2026-09-05)
+
+`HerdrProcessAdapter::notify(title, body, deadline)` is the public adapter
+operation for daemon escalation notifications. The real adapter emits exactly
+the following argv, with each value as a separate argument:
+
+```text
+["herdr","notification","show",title,"--body",body,"--sound","request"]
+```
+
+The notification is a Herdr notification, not a pane-targeting operation: ATM
+never emits `send-keys`, `send_input`, tmux, or a pane id for this path. The
+adapter applies the caller's bounded deadline and reports a non-zero Herdr
+exit as a typed failure. Lead and configured-recipient mail remain independent
+delivery attempts, so a notification failure does not erase their outcomes.

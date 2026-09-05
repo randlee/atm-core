@@ -145,6 +145,11 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
   (`src/api/schema/agents.rs:184-208` in the pinned Herdr checkout),
   returned under `ResponseResult::AgentList`
   (`src/app/api/agents.rs:19`); no other `AgentInfo` field is read.
+- `HR-CORE-010` `HerdrProcessAdapter::notify` emits exactly
+  `herdr notification show <title> --body <body> --sound request`, preserves
+  title and body as separate argv values, and applies the caller-supplied
+  external deadline. It is a notification operation only; it never targets a
+  pane or sends keystrokes.
 - `HR-CORE-006` `HERDR_SESSION` is set on the spawned child's environment,
   per invocation, if and only if the caller passes a non-empty session
   string; when the caller passes none, the child inherits the ambient

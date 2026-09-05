@@ -78,6 +78,40 @@ Run ATM health and configuration diagnostics
 | `--json` |  | no | Emit the doctor report as JSON. |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 
+### `atm escalation`
+
+Manage daemon-wide and per-team escalation recipients
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+#### `atm escalation add`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `<address>` |  | yes |  |
+| `--team` |  | no |  |
+| `--json` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+#### `atm escalation list`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--team` |  | no |  |
+| `--json` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+#### `atm escalation remove`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `<address>` |  | yes |  |
+| `--team` |  | no |  |
+| `--json` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
 ### `atm help`
 
 Show ATM-owned conceptual help or delegated clap subcommand help
@@ -580,3 +614,5 @@ Show the stored schema/frontmatter for one exact immutable SHA
 | `<sha>` |  | yes |  |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+

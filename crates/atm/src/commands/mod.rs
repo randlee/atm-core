@@ -9,6 +9,7 @@ pub(crate) mod caller_context;
 pub mod clear;
 pub mod compose;
 pub mod doctor;
+pub mod escalation;
 pub mod help;
 pub(crate) mod internal_heartbeat;
 pub(crate) mod internal_nudge;
@@ -36,6 +37,7 @@ pub use api::ApiCommand;
 pub use clear::ClearCommand;
 pub use compose::ComposeCommand;
 pub use doctor::DoctorCommand;
+pub use escalation::EscalationCommand;
 pub use help::HelpCommand;
 pub(crate) use internal_heartbeat::InternalHeartbeatCommand;
 pub(crate) use internal_nudge::InternalNudgeCommand;
@@ -124,6 +126,7 @@ enum Command {
     Clear(ClearCommand),
     Log(LogCommand),
     Doctor(DoctorCommand),
+    Escalation(EscalationCommand),
     Help(HelpCommand),
     #[command(hide = true)]
     InternalNudge(InternalNudgeCommand),
@@ -155,6 +158,7 @@ impl Command {
             Self::Clear(command) => command.run(observability).await,
             Self::Log(command) => command.run(observability),
             Self::Doctor(command) => command.run(observability).await,
+            Self::Escalation(command) => command.run().await,
             Self::Help(command) => command.run(observability),
             Self::InternalNudge(command) => command.run(observability).await,
             Self::InternalHeartbeat(command) => command.run(observability).await,
