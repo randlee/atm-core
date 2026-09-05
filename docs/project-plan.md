@@ -1560,7 +1560,7 @@ The authoritative plan is
 critical review round 1 folded in); phase-au sprint docs are being cut from
 it under `docs/plans/phase-au/` on branch `plan/boundary-regression`.
 
-## 55. Phase AW — Unified Retained Runtime Logging [IN PROGRESS]
+## 55. Phase AW — Unified Retained Runtime Logging [COMPLETE — INTEGRATION PR #1199]
 
 Phase AW makes replacement-runtime tracing retained and safely observable:
 AW.1 installs the allowlisted non-blocking tracing bridge, AW.2 persists the
