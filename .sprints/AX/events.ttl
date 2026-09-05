@@ -220,3 +220,8 @@ triage:r29 a triage:Resolution ;
 triage:r30 a triage:Resolution ;
     triage:resolves <urn:atm:triage:finding/AX4-QA-012> ;
     triage:resolvedAt "2026-09-05T10:25:28Z"^^xsd:dateTime .
+
+triage:a12 a triage:Assignment ;
+    triage:ofSprint triage:AX4 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-05T10:29:30Z"^^xsd:dateTime .
