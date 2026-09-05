@@ -3,7 +3,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::error::AtmError;
-use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
 use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmMaintenanceHealthReport, AtmMaintenanceWorkerState,
@@ -11,21 +10,12 @@ use atm_core::observability::{
     LogTailSession, ObservabilityPort, diagnostic_code,
 };
 use atm_observability::{
-    RetainedLogOffer, RetainedLogPolicy, RetainedLogger, build_retained_logger_from_env,
-    sanitize_retained_fields,
+    RetainedCommandEvent, RetainedLogOffer, RetainedLogPolicy, RetainedLogger,
+    build_retained_logger_from_env,
 };
-use serde_json::Map;
 
-type ActionName = sc_observability_types::ActionName;
-type CorrelationId = sc_observability_types::CorrelationId;
-type Level = sc_observability_types::Level;
-type LogEvent = sc_observability_types::LogEvent;
-type OutcomeLabel = sc_observability_types::OutcomeLabel;
-type ProcessIdentity = sc_observability_types::ProcessIdentity;
-type SchemaVersion = sc_observability_types::SchemaVersion;
 type ServiceName = sc_observability_types::ServiceName;
 type TargetCategory = sc_observability_types::TargetCategory;
-type Timestamp = sc_observability_types::Timestamp;
 
 const ATM_SERVICE_NAME: &str = "atm";
 const ATM_DAEMON_TARGET: &str = "atm.daemon";
@@ -153,21 +143,22 @@ impl atm_core::boundary::sealed::Sealed for DaemonObservability {}
 
 impl ObservabilityPort for DaemonObservability {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
-        let fields = command_event_fields(&event);
-
-        self.emit_log_event(EmitLogEvent {
-            scope: "observability",
-            action: ActionName::new(event.action.as_str()).map_err(|_source| {
-                AtmError::observability_emit("failed to validate ATM daemon command action")
-            })?,
-            outcome: OutcomeLabel::new(event.outcome.as_str()).map_err(|_source| {
-                AtmError::observability_emit("failed to validate ATM daemon command outcome")
-            })?,
-            message: None,
-            request_id: None,
-            correlation_id: None,
-            fields,
-        })
+        let logger = self.logger.lock().map_err(|_| {
+            AtmError::observability_emit(
+                "shared daemon observability emit failed because the logger lock was poisoned",
+            )
+        })?;
+        match logger.0.try_log_command(RetainedCommandEvent {
+            target: ATM_DAEMON_TARGET,
+            action: event.action.as_str(),
+            outcome: event.outcome.as_str(),
+            code: event.error_code.map(|code| code.as_str()),
+        })? {
+            RetainedLogOffer::Accepted | RetainedLogOffer::QueueFull => Ok(()),
+            RetainedLogOffer::Rejected { diagnostic_code } => Err(AtmError::observability_emit(
+                format!("shared daemon observability log admission failed ({diagnostic_code})"),
+            )),
+        }
     }
 
     fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
@@ -206,70 +197,6 @@ impl ObservabilityPort for DaemonObservability {
             degraded: Vec::new(),
             detail,
         })
-    }
-}
-
-fn command_event_fields(event: &CommandEvent) -> Map<String, serde_json::Value> {
-    let mut fields = Map::new();
-    if let Some(error_code) = event.error_code {
-        fields.insert(
-            "code".to_string(),
-            serde_json::Value::String(error_code.to_string()),
-        );
-    }
-    sanitize_retained_fields(fields)
-}
-
-// Keep validated correlation identifiers typed at this internal boundary so
-// each emit path does not repeatedly round-trip through String parsing.
-struct EmitLogEvent {
-    scope: &'static str,
-    action: ActionName,
-    outcome: OutcomeLabel,
-    message: Option<String>,
-    request_id: Option<CorrelationId>,
-    correlation_id: Option<CorrelationId>,
-    fields: Map<String, serde_json::Value>,
-}
-
-impl DaemonObservability {
-    fn emit_log_event(&self, event: EmitLogEvent) -> Result<(), AtmError> {
-        let event = LogEvent {
-            version: SchemaVersion::new(
-                sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION,
-            )
-            .map_err(|_source| {
-                AtmError::observability_emit(format!(
-                    "failed to validate ATM daemon {} schema version",
-                    event.scope
-                ))
-            })?,
-            timestamp: Timestamp::now_utc(),
-            level: level_for_outcome(event.scope, &event.action, event.outcome.as_str()),
-            service: self.service_name.clone(),
-            target: self.target_category.clone(),
-            action: event.action,
-            message: event.message,
-            identity: ProcessIdentity::default(),
-            trace: None,
-            request_id: event.request_id,
-            correlation_id: event.correlation_id,
-            outcome: Some(event.outcome),
-            diagnostic: None,
-            state_transition: None,
-            fields: event.fields,
-        };
-        let logger = self.logger.lock().map_err(|_| {
-            AtmError::observability_emit(
-                "shared daemon observability emit failed because the logger lock was poisoned",
-            )
-        })?;
-        match logger.0.try_log(event) {
-            RetainedLogOffer::Accepted | RetainedLogOffer::QueueFull => Ok(()),
-            RetainedLogOffer::Rejected { diagnostic_code } => Err(AtmError::observability_emit(
-                format!("shared daemon observability log admission failed ({diagnostic_code})"),
-            )),
-        }
     }
 }
 
@@ -404,32 +331,6 @@ fn map_diagnostic_summary(
     }
 }
 
-fn level_for_outcome(subsystem: &str, action: &ActionName, outcome: &str) -> Level {
-    if outcome.starts_with("delivery_policy.") {
-        return Level::Debug;
-    }
-
-    match outcome {
-        "ok" | "sent" | "dry_run" => Level::Info,
-        "expected_peer_disconnect" => Level::Info,
-        "timeout" => Level::Warn,
-        "error" | "failed" | "malformed_request" | "transport_failure" | "request_failure"
-        | "saturated" => Level::Error,
-        other => {
-            tracing::warn!(
-                code = %AtmErrorCode::ObservabilityEmitFailed,
-                service = ATM_SERVICE_NAME,
-                target = ATM_DAEMON_TARGET,
-                subsystem,
-                action = action.as_str(),
-                outcome = other,
-                "unknown ATM daemon outcome for observability level"
-            );
-            Level::Warn
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::time::{Duration, Instant};
@@ -439,50 +340,7 @@ mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
 
-    use super::{ActionName, DaemonObservability, RetainedLogPolicy};
-
-    #[test]
-    fn delivery_policy_outcomes_map_to_debug() {
-        assert_eq!(
-            super::level_for_outcome(
-                "delivery_policy",
-                &ActionName::new("test.action").expect("action"),
-                "delivery_policy.new_message.primary_nudge",
-            ),
-            sc_observability_types::Level::Debug
-        );
-        assert_eq!(
-            super::level_for_outcome(
-                "delivery_policy",
-                &ActionName::new("test.action").expect("action"),
-                "delivery_policy.ack_reply.delivered",
-            ),
-            sc_observability_types::Level::Debug
-        );
-    }
-
-    #[test]
-    fn daemon_outcomes_map_to_documented_levels() {
-        for (outcome, expected) in [
-            ("ok", sc_observability_types::Level::Info),
-            ("sent", sc_observability_types::Level::Info),
-            ("dry_run", sc_observability_types::Level::Info),
-            ("timeout", sc_observability_types::Level::Warn),
-            ("error", sc_observability_types::Level::Error),
-            ("failed", sc_observability_types::Level::Error),
-            ("future-outcome", sc_observability_types::Level::Warn),
-        ] {
-            assert_eq!(
-                super::level_for_outcome(
-                    "daemon_test",
-                    &ActionName::new("test.action").expect("action"),
-                    outcome,
-                ),
-                expected,
-                "outcome={outcome}"
-            );
-        }
-    }
+    use super::{DaemonObservability, RetainedLogPolicy};
 
     #[test]
     #[serial]

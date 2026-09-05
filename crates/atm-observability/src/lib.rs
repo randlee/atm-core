@@ -11,7 +11,11 @@ use std::{fs, fs::OpenOptions};
 use atm_core::error::AtmError;
 use atm_core::observability::RetainedSinkFaultMode;
 use atm_core::{EnvSource, ProcessEnvSource};
-use sc_observability_types::DiagnosticInfo;
+use sc_observability_types::{
+    ActionName, DiagnosticInfo, Level, LogEvent, OutcomeLabel, ProcessIdentity, SchemaVersion,
+    ServiceName, TargetCategory, Timestamp,
+};
+use serde_json::Map;
 
 /// Opaque shared retained logger handle. Its concrete backend is deliberately
 /// confined to this facade.
@@ -36,6 +40,17 @@ pub enum RetainedLogOffer {
     Rejected { diagnostic_code: String },
 }
 
+/// ATM-owned stable metadata for a direct retained command record.
+///
+/// This deliberately has no body, identity, request-id, task-id, or backend
+/// type fields; callers cannot bypass the retained-data policy.
+pub struct RetainedCommandEvent<'a> {
+    pub target: &'a str,
+    pub action: &'a str,
+    pub outcome: &'a str,
+    pub code: Option<&'a str>,
+}
+
 impl RetainedLogger {
     pub fn health(&self) -> sc_observability_types::LoggingHealthReport {
         self.0.health()
@@ -53,7 +68,7 @@ impl RetainedLogger {
         self.0.flush()
     }
 
-    pub fn try_log(&self, event: sc_observability_types::LogEvent) -> RetainedLogOffer {
+    pub(crate) fn try_log(&self, event: LogEvent) -> RetainedLogOffer {
         #[cfg(test)]
         if queue_full_for_test() {
             return RetainedLogOffer::QueueFull;
@@ -67,6 +82,49 @@ impl RetainedLogger {
         }
     }
 
+    /// Admits a direct command outcome through the same allowlist used by the
+    /// tracing bridge.
+    pub fn try_log_command(
+        &self,
+        event: RetainedCommandEvent<'_>,
+    ) -> Result<RetainedLogOffer, AtmError> {
+        let action = ActionName::new(event.action.to_owned()).map_err(|_| {
+            AtmError::observability_emit("failed to validate retained command action")
+        })?;
+        let outcome = OutcomeLabel::new(event.outcome.to_owned()).map_err(|_| {
+            AtmError::observability_emit("failed to validate retained command outcome")
+        })?;
+        let target = TargetCategory::new(event.target.to_owned()).map_err(|_| {
+            AtmError::observability_emit("failed to validate retained command target")
+        })?;
+        let mut fields = Map::new();
+        if let Some(code) = event.code {
+            fields.insert(
+                "code".to_owned(),
+                serde_json::Value::String(code.to_owned()),
+            );
+        }
+        let log_event = LogEvent {
+            version: SchemaVersion::new(sc_observability_types::OBSERVATION_ENVELOPE_VERSION)
+                .expect("literal schema version"),
+            timestamp: Timestamp::now_utc(),
+            level: retained_command_level(event.outcome),
+            service: ServiceName::new("atm").expect("literal service name"),
+            target,
+            action,
+            message: None,
+            identity: ProcessIdentity::default(),
+            trace: None,
+            request_id: None,
+            correlation_id: None,
+            outcome: Some(outcome),
+            diagnostic: None,
+            state_transition: None,
+            fields: sanitize_retained_fields(fields),
+        };
+        Ok(self.try_log(log_event))
+    }
+
     #[cfg(test)]
     pub(crate) fn force_queue_full_for_test<T>(operation: impl FnOnce() -> T) -> T {
         QUEUE_FULL_FOR_TEST.with(|forced| {
@@ -75,6 +133,15 @@ impl RetainedLogger {
             forced.set(false);
             result
         })
+    }
+}
+
+fn retained_command_level(outcome: &str) -> Level {
+    match outcome {
+        "ok" | "sent" | "dry_run" | "expected_peer_disconnect" => Level::Info,
+        "error" | "failed" | "malformed_request" | "transport_failure" | "request_failure"
+        | "saturated" => Level::Error,
+        _ => Level::Warn,
     }
 }
 

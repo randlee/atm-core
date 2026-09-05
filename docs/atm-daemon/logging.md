@@ -79,10 +79,12 @@ Without extra operator tuning, the replacement Tokio/Axum daemon retains:
 The tracing bridge retains only the allowlisted structured fields: `ts`,
 `level`, `component`, `code`, `action`, `correlation_id`, `outcome`,
 `elapsed_ms`, `attempt`, `strategy`, `endpoint_kind`, `failure_class`,
-`error_layer`, `origin`, `message`, and `detail`. It drops every other field,
-including message bodies, recipients, tokens, raw environment/configuration,
-and absolute user paths. Admission is non-blocking: a full logger queue drops
-the record and increments the retained diagnostic drop counter. Events emitted
+`error_layer`, and `origin`. Free-form `message` and `detail` text is never
+retained; it remains only on the live tracing/stderr path. Every other field is
+dropped, including message bodies, recipients, tokens, raw
+environment/configuration, and absolute user paths. Admission is non-blocking:
+a full logger queue drops the record and increments the retained diagnostic drop
+counter. Events emitted
 while the bridge is writing are dropped to prevent recursion.
 
 No post-bootstrap runtime path writes directly to stderr. The documented

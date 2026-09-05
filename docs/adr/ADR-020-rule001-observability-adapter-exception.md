@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | ID | ADR-020 |
-| Status | **Accepted** |
+| Status | **Superseded in part by Phase AW** |
 | Date | 2026-07-08 |
 | Deciders | Rand Lee |
 | Relates to | ADR-001, ADR-018, ADR-019, AD18/ARCH-004 |
@@ -13,9 +13,9 @@
 
 ## Context
 
-`RULE-001` forbids direct `sc_observability_types` imports from arbitrary
-daemon library modules. During the `AD.25` through `AD.30` follow-up planning
-review, arch-qa re-verified the actual `atm-daemon` module graph and found:
+`RULE-001` formerly allowed a narrow legacy-daemon exception. Phase AW moved
+the retained pipeline behind `atm-observability`; the synchronous daemon is
+frozen for Phase AM deletion and is no longer an ownership candidate.
 
 - `crates/atm-daemon/src/daemon_runtime_observability.rs` is declared via
   `mod daemon_runtime_observability;` in `crates/atm-daemon/src/lib.rs`
@@ -36,6 +36,14 @@ library-internal adapter exception with explicit lint enforcement and review
 conditions.
 
 ## Decision
+
+Phase AW supersedes the legacy exception below: `atm-observability` is the
+only sanctioned library owner of `sc-observability` and
+`sc-observability-types`. Its public facade must expose ATM-owned contracts,
+not backend event, logger, health, level, or service-name types. Binary entry
+points may remain direct backend adapters until they adopt that facade.
+
+The historical decision follows for audit context only.
 
 Accept one sanctioned library-internal adapter exception to `RULE-001` for the
 `atm-daemon` crate:
@@ -112,4 +120,5 @@ The exception remains acceptable only while all of the following stay true:
   `sc_observability_types::ActionName` or `OutcomeLabel` directly
 
 If any of those conditions stop being true, this ADR must be reopened rather
-than silently widening the exception.
+than silently widening the exception. The Phase AW supersession above is the
+current governing condition.

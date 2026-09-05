@@ -48,4 +48,4 @@ review_gates = ["allowlist_redaction", "single_global_install", "non_blocking_qu
 
 [status]
 state = "active"
-notes = ["Only atm-daemon-bootstrap installs the process-global tracing bridge; source scan enforces this module-level rule."]
+notes = ["Only atm-daemon-bootstrap installs the process-global tracing bridge; atm-observability is the sole sanctioned library owner of sc-observability backend types."]
