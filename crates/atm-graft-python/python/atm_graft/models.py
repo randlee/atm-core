@@ -83,6 +83,17 @@ class AtmReadRequest(_ToolRequest):
     )
 
 
+class AtmAckRequest(_ToolRequest):
+    message_id: str = Field(
+        min_length=1,
+        description="Exact ATM message identifier that is currently awaiting your acknowledgement.",
+    )
+    reply: str = Field(
+        min_length=1,
+        description="Reply text to send as the acknowledgement.",
+    )
+
+
 class AtmListRequest(_ToolRequest):
     selection: Literal["actionable", "all", "unread", "pending_ack"] = Field(
         default="actionable",

@@ -157,7 +157,8 @@ Phase-wide invariants (apply to every sprint):
 - **Redaction allowlist, not denylist.** `RETAINED_FIELD_ALLOWLIST` (defined
   in AW.1, reused by AW.2/AW.4): `ts, level, component, code, action,
   correlation_id, outcome, elapsed_ms, attempt, strategy, endpoint_kind,
-  failure_class, error_layer, origin, message, detail`. Anything else is
+  failure_class, refresh_error_code, error_layer, origin, message, detail`.
+  Anything else is
   dropped. Never message bodies, template values, recipients, chat IDs,
   credentials, tokens, raw env/config values, absolute user paths.
 - **Bounded everywhere.** Queues, batch sizes, row counts, detail length, and

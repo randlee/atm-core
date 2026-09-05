@@ -20,7 +20,7 @@ io_owns = ["retained_jsonl_queue_admission"]
 io_forbidden = ["daemon_lifecycle", "database_io"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon-bootstrap", "atm"]
+allowed_dependents = ["atm-daemon-bootstrap", "atm", "atm-graft-python"]
 allowed_dependencies = ["atm-core", "sc-observability", "sc-observability-types", "serde_json", "tempfile", "tracing", "tracing-subscriber"]
 forbidden_edges = [
   "atm-daemon -> atm-observability",
