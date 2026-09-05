@@ -7,6 +7,7 @@ use atm_core::observability::{
 };
 use atm_core::types::IsoTimestamp;
 use clap::{Args, Subcommand, ValueEnum};
+use serde::Serialize;
 
 use crate::commands::caller_context::{CallerContextOverrides, resolve_cli_caller_context};
 use crate::observability::CliObservability;
@@ -30,11 +31,17 @@ impl LogCommand {
         let _caller_context = resolve_cli_caller_context(CallerContextOverrides::default())?;
         match self.mode {
             LogModeCommand::Snapshot(args) => {
+                if args.source != LogSource::Jsonl {
+                    return args.run_timeline();
+                }
                 let snapshot = observability.query(args.build_query(LogMode::Snapshot)?)?;
                 output::print_log_snapshot(&snapshot, args.json)
             }
             LogModeCommand::Filter(args) => {
                 args.ensure_filter_present()?;
+                if args.source != LogSource::Jsonl {
+                    return args.run_timeline();
+                }
                 let snapshot = observability.query(args.build_query(LogMode::Snapshot)?)?;
                 output::print_log_snapshot(&snapshot, args.json)
             }
@@ -62,6 +69,16 @@ enum CliLogLevel {
     Error,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum LogSource {
+    /// The canonical retained JSONL file (the compatibility default).
+    Jsonl,
+    /// The daemon's bounded SQLite diagnostic timeline.
+    Timeline,
+    /// A bounded merged diagnostic view; sources are not lossless under overload.
+    Merged,
+}
+
 impl From<CliLogLevel> for LogLevelFilter {
     fn from(value: CliLogLevel) -> Self {
         match value {
@@ -76,6 +93,9 @@ impl From<CliLogLevel> for LogLevelFilter {
 
 #[derive(Debug, Args)]
 struct QueryArgs {
+    /// Select the retained-log source. JSONL is the byte-compatible default.
+    #[arg(long, value_enum, default_value_t = LogSource::Jsonl)]
+    source: LogSource,
     /// Restrict results to one or more severity levels.
     #[arg(long = "level", value_enum)]
     levels: Vec<CliLogLevel>,
@@ -88,6 +108,10 @@ struct QueryArgs {
     #[arg(long)]
     since: Option<String>,
 
+    /// Restrict timeline records to a component prefix.
+    #[arg(long)]
+    component: Option<String>,
+
     /// Maximum number of returned records.
     #[arg(long)]
     limit: Option<usize>,
@@ -98,6 +122,48 @@ struct QueryArgs {
 }
 
 impl QueryArgs {
+    fn run_timeline(&self) -> Result<()> {
+        let runtime = atm_daemon_bootstrap::assemble_default_runtime()?;
+        let level = self.levels.first().map(|level| match level {
+            CliLogLevel::Trace => "trace",
+            CliLogLevel::Debug => "debug",
+            CliLogLevel::Info => "info",
+            CliLogLevel::Warn => "warn",
+            CliLogLevel::Error => "error",
+        });
+        let records = runtime
+            .diagnostic_timeline
+            .query(&atm_storage::DiagnosticQuery {
+                since: None,
+                until: None,
+                level_at_least: level.map(str::to_owned),
+                component_prefix: self.component.clone(),
+                limit: Some(self.limit.unwrap_or(DEFAULT_SNAPSHOT_LIMIT).min(5_000)),
+            })?;
+        let note = "sources are independently bounded; merged view is not lossless under overload";
+        if self.json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&TimelineOutput {
+                    note,
+                    records: records
+                        .into_iter()
+                        .map(|event| TimelineRecord::from_event(event, self.source))
+                        .collect(),
+                })?
+            );
+        } else {
+            println!("Note: {note}");
+            for event in records {
+                println!(
+                    "{} {} {} {}",
+                    event.ts_unix_ms, event.level, event.component, event.message
+                );
+            }
+        }
+        Ok(())
+    }
+
     fn build_query(&self, mode: LogMode) -> Result<AtmLogQuery> {
         let limit = match mode {
             LogMode::Snapshot => Some(self.limit.unwrap_or(DEFAULT_SNAPSHOT_LIMIT)),
@@ -125,6 +191,43 @@ impl QueryArgs {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Serialize)]
+struct TimelineOutput {
+    note: &'static str,
+    records: Vec<TimelineRecord>,
+}
+
+#[derive(Serialize)]
+struct TimelineRecord {
+    source: &'static str,
+    ts_unix_ms: i64,
+    level: String,
+    component: String,
+    code: Option<String>,
+    correlation_id: Option<String>,
+    origin: String,
+    message: String,
+}
+
+impl TimelineRecord {
+    fn from_event(event: atm_storage::DiagnosticEvent, source: LogSource) -> Self {
+        Self {
+            source: match source {
+                LogSource::Jsonl => "jsonl",
+                LogSource::Timeline => "timeline",
+                LogSource::Merged => "timeline",
+            },
+            ts_unix_ms: event.ts_unix_ms,
+            level: event.level,
+            component: event.component,
+            code: event.code,
+            correlation_id: event.correlation_id,
+            origin: event.origin,
+            message: event.message,
+        }
     }
 }
 

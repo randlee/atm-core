@@ -678,6 +678,17 @@
         {
           "args": [
             {
+              "has_default": false,
+              "id": "component",
+              "long": "component",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
               "has_default": true,
               "id": "json",
               "long": "json",
@@ -725,6 +736,17 @@
               "has_default": false,
               "id": "since",
               "long": "since",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "source",
+              "long": "source",
               "num_args": {
                 "max": 1,
                 "min": 1
@@ -750,6 +772,17 @@
         {
           "args": [
             {
+              "has_default": false,
+              "id": "component",
+              "long": "component",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
               "has_default": true,
               "id": "json",
               "long": "json",
@@ -806,6 +839,17 @@
             },
             {
               "has_default": true,
+              "id": "source",
+              "long": "source",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
               "id": "stderr_logs",
               "long": "stderr-logs",
               "num_args": {
@@ -821,6 +865,17 @@
         },
         {
           "args": [
+            {
+              "has_default": false,
+              "id": "component",
+              "long": "component",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
             {
               "has_default": true,
               "id": "json",
@@ -880,6 +935,17 @@
               "has_default": false,
               "id": "since",
               "long": "since",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "source",
+              "long": "source",
               "num_args": {
                 "max": 1,
                 "min": 1
