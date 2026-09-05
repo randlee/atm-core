@@ -7,8 +7,8 @@
 use std::sync::{Arc, Mutex};
 
 use atm_core::boundary::{
-    MemberKey, NudgeClaim, PendingNudgeStore, PostSendBuiltInTarget, RosterHarness,
-    RosterMemberKind,
+    MemberKey, NudgeClaim, NudgeKind, PendingNudgeStore, PostSendBuiltInTarget, PostSendHookEvent,
+    RosterHarness, RosterMemberKind, built_in_nudge_template_kind_from_post_send_event,
 };
 use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
@@ -16,7 +16,7 @@ use atm_core::schema::AtmMessageId;
 use atm_core::send::{
     NudgeMode, SendMessageSource, WriteRequest, prepare_write_with_runtime, write_mail_with_runtime,
 };
-use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
+use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
 
 /// Records every `mark_pending` call; every other method is a trivial no-op
 /// since this suite never exercises the durable claim/requeue lifecycle.
@@ -174,6 +174,18 @@ fn write_request(
     .expect("write request")
     .with_nudge_mode(nudge_mode)
     .with_origin_metadata(message_id, timestamp)
+}
+
+fn task_write_request(
+    home_dir: &std::path::Path,
+    team: &TeamName,
+    nudge_mode: NudgeMode,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
+) -> WriteRequest {
+    let mut request = write_request(home_dir, team, nudge_mode, message_id, timestamp);
+    request.task_id = Some("task-ax1".parse::<TaskId>().expect("task id"));
+    request
 }
 
 #[test]
@@ -438,5 +450,120 @@ fn failing_marker_store_does_not_fail_the_deferred_write() {
         failing_store.mark_pending_call_count(),
         1,
         "the failing store double must exercise the marker error path"
+    );
+}
+
+#[test]
+fn task_tagged_sync_prepare_forces_deferred_mode() {
+    let (root, runtime, _recording_store, team) = setup();
+    let home_dir = root.path().join("home");
+    std::fs::create_dir_all(&home_dir).expect("home dir");
+    let request = task_write_request(
+        &home_dir,
+        &team,
+        NudgeMode::Immediate,
+        AtmMessageId::new(),
+        IsoTimestamp::now(),
+    );
+
+    let prepared =
+        prepare_write_with_runtime(request, &NullObservability, &runtime).expect("prepare write");
+    assert_eq!(
+        prepared.outbound_request().nudge_mode,
+        NudgeMode::Deferred,
+        "task-tagged sync writes are always queued"
+    );
+}
+
+#[tokio::test]
+async fn task_tagged_async_prepare_forces_deferred_mode() {
+    let (root, runtime, _recording_store, team) = setup();
+    let home_dir = root.path().join("home");
+    std::fs::create_dir_all(&home_dir).expect("home dir");
+    let request = task_write_request(
+        &home_dir,
+        &team,
+        NudgeMode::Immediate,
+        AtmMessageId::new(),
+        IsoTimestamp::now(),
+    );
+
+    let prepared =
+        atm_core::send::prepare_write_with_async_runtime(request, &NullObservability, &runtime)
+            .await
+            .expect("prepare async write");
+    assert_eq!(
+        prepared.outbound_request().nudge_mode,
+        NudgeMode::Deferred,
+        "task-tagged async writes are always queued"
+    );
+}
+
+#[test]
+fn tmux_and_herdr_delivery_families_share_the_nudge_kind_table() {
+    let event = |requires_ack, task_id| PostSendHookEvent {
+        sender: "sender".parse().expect("sender"),
+        sender_chat_id: None,
+        sender_team: "test-team".parse().expect("sender team"),
+        sender_host: None,
+        recipient: "recipient".parse().expect("recipient"),
+        recipient_team: "test-team".parse().expect("recipient team"),
+        message_id: AtmMessageId::new(),
+        description: "fixture".to_owned(),
+        requires_ack,
+        is_ack: false,
+        task_id,
+        recipient_pane_id: None,
+    };
+    let task_id = Some("task-ax1".parse::<TaskId>().expect("task id"));
+    for backend in ["tmux", "herdr"] {
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(
+                &event(false, None),
+                NudgeKind::Steer,
+            ),
+            atm_core::boundary::BuiltInNudgeTemplateKind::Delivery,
+            "{backend} Delivery"
+        );
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&event(true, None), NudgeKind::Steer,),
+            atm_core::boundary::BuiltInNudgeTemplateKind::DeliveryAck,
+            "{backend} DeliveryAck"
+        );
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(
+                &event(false, None),
+                NudgeKind::Queue,
+            ),
+            atm_core::boundary::BuiltInNudgeTemplateKind::Queue,
+            "{backend} Queue"
+        );
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&event(true, None), NudgeKind::Queue,),
+            atm_core::boundary::BuiltInNudgeTemplateKind::QueueAck,
+            "{backend} QueueAck"
+        );
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(
+                &event(true, task_id.clone()),
+                NudgeKind::Queue,
+            ),
+            atm_core::boundary::BuiltInNudgeTemplateKind::Task,
+            "{backend} task"
+        );
+    }
+}
+
+#[test]
+fn acknowledge_default_templates_match_recorded_pre_ax1_fixtures() {
+    assert_eq!(
+        atm_core::send::default_template(atm_core::boundary::BuiltInNudgeTemplateKind::Acknowledge),
+        "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\"/>"
+    );
+    assert_eq!(
+        atm_core::send::default_template(
+            atm_core::boundary::BuiltInNudgeTemplateKind::AcknowledgeTask
+        ),
+        "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\" task-id=\"{{task_id}}\"/>"
     );
 }
