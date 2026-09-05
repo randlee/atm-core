@@ -62,6 +62,12 @@ atm own Herdr and gated the daemon on Herdr being reachable.
    the binary path, defaulting to Herdr's own defaults, passes them to
    the child exactly as HR-CORE-006 already specifies, and doctor reports
    them with their provenance.
+5. **Herdr over the CLI transport works today; prove Windows once, on the
+   target transport** (Rand, 2026-09-05, r19). No sprint runs a live
+   Windows evidence campaign for the CLI transport. AY.5 is limited to
+   Windows process correctness in `transport_cli.rs`, the Windows branch
+   of the installer, and the audit columns; the single live Windows Herdr
+   evidence set of the phase is AY.7's, on the socket transport.
 
 ## Baseline: the phase-ax Herdr contract is the starting point
 
@@ -898,9 +904,9 @@ contracts, artifacts and ownership.
 | AY.2 | Private transport enum, CLI transport pure motion, atm-core doctor DTOs, portable fake-herdr with per-version recordings | M | Core | (P-A, P-B) | AY.1 | macOS/Linux | arch-ctm/deep-reasoning |
 | AY.3 | Startup/failure model: doctor port + boundary record, config wiring, breaker-open lead notification, lifecycle tests | L | Core | AY.2 | none | macOS/Linux | arch-ctm/deep-reasoning |
 | AY.4 | Installer: REQ-P-DAEMON-SWITCH-002 / ADR-053 addendum, `daemon-switch herdr-entry`, `--restart-herdr` (restart only) | L | Core | AY.3 | AY.6 | macOS/Linux | arch-ctm/deep-reasoning |
-| AY.5 | Windows process correctness, per-user installer, live Windows evidence | M | Windows | AY.4 (+ P-C, P-D) | AY.6 | FastPC4 | named Windows dev agent (P-D) |
+| AY.5 | Windows process correctness, per-user installer branch, audit columns (no evidence campaign) | S | Windows | AY.4 (+ P-C, P-D) | AY.6 | FastPC4 | named Windows dev agent (P-D) |
 | AY.6 | Direct socket/pipe transport: code, fake socket server, compatibility matrix (no cutover, no composition change) | L | Socket | AY.1, AY.2, AY.3 (+ P-E) | AY.4, AY.5 | macOS/Linux (Windows lane in CI) | arch-ctm/deep-reasoning |
-| AY.7 | Socket cutover, CLI fallback retention, live evidence on macOS and Windows | M | Join | AY.5, AY.6 | none | macOS + FastPC4 | arch-ctm/deep-reasoning |
+| AY.7 | Socket cutover, CLI fallback retention, the phase's live evidence on macOS and Windows | M | Join | AY.5, AY.6 | none | macOS + FastPC4 | arch-ctm/deep-reasoning |
 
 Tracks that run in parallel once `integrate/phase-ay` exists:
 
@@ -924,7 +930,8 @@ Tracks that run in parallel once `integrate/phase-ay` exists:
   AY.6 section.
 - **Windows track:** AY.5 after AY.4, on FastPC4. Touches
   `transport_cli.rs` `cfg(windows)` code, the Windows branch of the
-  installer, and the evidence directory.
+  installer, and `docs/atm-herdr/windows-process-audit.md`; no evidence
+  directory (ruling 5).
 - **Join:** AY.7 after AY.5 and AY.6 have both merged into
   `integrate/phase-ay`. It owns every composition change of the phase
   that touches transport selection.
@@ -1618,7 +1625,7 @@ Validation:
 Out of scope: Windows live verification (AY.5); any Herdr upgrade
 operation.
 
-## Sprint AY.5: Windows process correctness and live evidence (size M, FastPC4)
+## Sprint AY.5: Windows process correctness and installer branch (size S, FastPC4)
 
 Branch `feature/ay5-windows-herdr-evidence`, created from
 `feature/ay4-daemon-switch-herdr` (stacked). Dependencies: must_follow
@@ -1640,31 +1647,30 @@ Deliverables:
 3. Windows-observed columns of `docs/atm-herdr/windows-process-audit.md`
    filled from the live run (CRLF observation, detached stdio, console
    flash, pipe name Herdr reports).
-4. Live Windows evidence (AX.7 evidence table format, owned by AY):
-   doctor herdr section; prompt/wait/get/list/notify round trips with
-   observed argv and JSON; end-to-end nudge from another host with
-   timestamps at both ends; transport-boundary structured logs; negative
-   cases live (Herdr stopped: daemon stays up, tmux/hermes unaffected,
-   breaker opens and recovers; agent not found; agent blocked; slow
-   command hits the 5 s cap with no orphan); late-start case; upgrade
-   case (`herdr update` without restart: mismatch state, doctor text,
-   notification, recovery after `--restart-herdr`); nudge latency
-   sample; explicit confirmation no console window flashes. Evidence is
-   captured by the FastPC4 team and committed byte-for-byte; agents never
-   author evidence records.
+4. No live Herdr evidence campaign (ruling 5): the CLI transport works
+   today, so nothing is proven twice. The installer verification run of
+   deliverable 2 records only the doctor `herdr` section it observed and
+   the audit observations of deliverable 3, each citing the FastPC4 run
+   (date, doctor output file). The phase's single live Windows Herdr
+   evidence set (round trips, negative cases, late start, upgrade,
+   latency, no console flash) is AY.7 deliverable 3, on the socket
+   transport.
 
 Acceptance criteria:
 
-1. Deliverables 1 through 4.
+1. Deliverables 1 through 3; deliverable 4 holds (grep gate: no
+   `evidence/` path added by this sprint).
 2. The Windows CI job stays the merge gate.
-3. FastPC4 evidence is the release-readiness gate for Windows Herdr parity.
+3. Kill-then-reap and CREATE_NO_WINDOW are verified on FastPC4 (tasklist
+   shows no orphan; no console flash observed) and cited in the PR.
 
 Validation:
 
 1. `just validate` on Windows (FastPC4) and the three CI lanes.
-2. Evidence `cmp` against the captured artifacts before commit.
+2. Audit column values cite the FastPC4 run they came from.
 
-Out of scope: socket transport on Windows (AY.7).
+Out of scope: socket transport on Windows (AY.7); any Herdr round-trip
+evidence (AY.7).
 
 ## Sprint AY.6: direct socket/pipe transport, no cutover (size L)
 
@@ -1855,10 +1861,20 @@ Deliverables:
    calls continue on Herdr's own terms", carried over unchanged
    (AYS-R2-004); (e), (f), (h), (i), (j), (k) unchanged in intent. The
    CLI variants keep running while the fallback exists.
-3. **Live evidence** on macOS and Windows, same set as AY.5 deliverable
-   4, through the socket transport, including the upgrade case (socket
-   client is immune to `protocol_mismatch`; evidence shows nudges
-   continuing across a `herdr update`).
+3. **Live evidence** on macOS and Windows through the socket transport,
+   the phase's only Windows Herdr evidence set (ruling 5), in the AX.7
+   evidence table format: doctor `herdr` section; prompt/wait/get/list/
+   notify round trips with observed request and response JSON;
+   end-to-end nudge from another host with timestamps at both ends;
+   transport-boundary structured logs; negative cases live (Herdr
+   stopped: daemon stays up, tmux/hermes unaffected, breaker opens and
+   recovers; agent not found; agent blocked; slow call hits the 5 s cap
+   with no orphan); late-start case; upgrade case (socket client is
+   immune to `protocol_mismatch`; evidence shows nudges continuing
+   across a `herdr update`); nudge latency sample; explicit
+   confirmation that no console window flashes on Windows. Evidence is
+   captured by the FastPC4 team (Windows) and on rand-m5 (macOS) and
+   committed byte-for-byte; agents never author evidence records.
 4. **Doctor** reports, per endpoint record, the transport in use
    (`HerdrTransportKind::Socket`) and the resolved endpoint in the
    atm-core-owned `HerdrEndpointObservation::endpoint: Option<String>`
@@ -1876,7 +1892,9 @@ Acceptance criteria:
 2. Adapted lifecycle tests (a) to (k) pass on all three CI lanes for the
    socket default, with (d) and (g) as two distinct tests; CLI variants
    still pass.
-3. Evidence committed byte-for-byte for both platforms.
+3. Evidence committed byte-for-byte for both platforms; the FastPC4 set
+   is the release-readiness gate for Windows Herdr parity (moved from
+   AY.5, ruling 5).
 4. AY.2 zero-regression oracle green on the socket transport.
 5. Fallback documented with its removal version in the project plan.
 6. Doctor shows transport and endpoint (test).
@@ -1989,8 +2007,8 @@ Consequences for atm:
 Status 2026-09-05 (fenix@rand-m5): AX.1 through AX.5 are merged into
 integrate/phase-ax; AX.6 (PR #1204) is in its second fix pass; AX.7
 (PR #1206, stacked on AX.6) is the macOS live-proof sprint and keeps its
-own accepted scope (Windows runs are out of AX.7 scope and stay so; AY.5
-owns Windows evidence). One PR integrate/phase-ax -> develop follows
+own accepted scope (Windows runs are out of AX.7 scope and stay so; AY.7
+owns Windows evidence, ruling 5). One PR integrate/phase-ax -> develop follows
 AX.7 and the phase-ending review.
 
 Decision (Rand, 2026-09-05): `integrate/phase-ay` is cut from
@@ -2020,10 +2038,10 @@ AX does not wait on any AY sprint.
 6. Hot-path regression: official benchmark run before merge (AY.2, AY.6, AY.7).
 7. AY.7 (socket cutover) quietly dropped again: the exit gate requires a dated
    Ship/Defer/Cancel decision line before the phase PR.
-8. FastPC4 not ready: only AY.5 depends on it (P-C/P-D), and AY.7 waits
-   for AY.5. AY.1 through AY.4 and AY.6 land without a Windows machine;
-   the phase cannot close with Windows parity claimed until AY.5 evidence
-   exists.
+8. FastPC4 not ready: only AY.5 and AY.7 depend on it (P-C/P-D), and
+   AY.7 waits for AY.5. AY.1 through AY.4 and AY.6 land without a Windows
+   machine; the phase cannot close with Windows parity claimed until
+   AY.7's Windows evidence exists (ruling 5).
 9. Two launchers race at login (atm-installed Herdr entry vs a GUI Herdr
    the user opens): the entry has no KeepAlive, the loser exits 1 once,
    the GUI attaches as a client to whichever server won, and the daemon
@@ -2287,3 +2305,11 @@ AX does not wait on any AY sprint.
   the doctor pieces it excludes; AY.3 size-L rationale says "port over the
   AY.2 DTOs" and states the estimate is unchanged. AY.2 deliverable 1 is
   the authoritative DTO ownership statement.
+- r19 (2026-09-05): Rand ruling 5 ("herdr is working w/ cli today"):
+  no live Windows evidence campaign for the CLI transport. AY.5 narrowed
+  to size S (process correctness in `transport_cli.rs`, installer Windows
+  branch, audit columns; deliverable 4 now forbids an evidence directory;
+  AC 3 is the kill/reap and no-console-flash verification). AY.7
+  deliverable 3 spells the full evidence set inline and takes the
+  release-readiness gate for Windows Herdr parity. Sprint map, Windows
+  track, AX status note and risk 8 aligned.
