@@ -61,8 +61,27 @@ Herdr's full source is available (ADR-058 pinned
 location to be confirmed with Rand). Required reads, cited in the sprint
 doc before dispatch:
 
+Step 0 of AY.1 (blocking, before any code): locate the checkout, record
+its path and revision in the sprint doc, and note any drift from the ADR
+pin. Audit output is a new `docs/atm-herdr/windows-process-audit.md`,
+one row per item (expected behaviour, Herdr file:line consulted, observed
+on Windows, verdict: no action / production fix / upstream request).
+Unanswerable rows escalate upstream; nothing is inferred.
+
+Herdr files to read: `src/api/mod.rs:20` and `src/session.rs:96-180`
+(endpoint and session resolution, Windows equivalents, pipe naming);
+`src/api/client.rs:55-61` and `src/protocol/wire.rs:16` (transport,
+PROTOCOL_VERSION on the Windows build); `src/cli.rs:738-844`,
+`src/main.rs:568-580`, `src/cli/protocol_guard.rs`,
+`src/cli/server_not_running.rs`, `src/cli/agent.rs:506-841` (exit codes,
+stdout/stderr shape, connect failure); Cargo.toml and the release
+workflow (does `herdr.exe` build and ship at all); plus a grep for
+`cfg(windows)`, `named_pipe`, `NamedPipe`.
+
 | Question | Needed by |
 |---|---|
+| Does `herdr.exe` build and ship for Windows at all (if not, AY.1 becomes an upstream request) | W1, first |
+| CRLF vs LF on stdout/stderr JSON; exit codes and `server_not_running` identical on Windows | W1 |
 | Does `herdr.exe` ship for Windows, and does it resolve the pipe from `HERDR_SESSION` the same way it resolves the socket path on Unix? | W1 |
 | Windows pipe name convention | W1 (doctor reporting), W2 |
 | Framing on the pipe (same NDJSON as the socket?) and PROTOCOL_VERSION behaviour | W2 |
@@ -92,10 +111,17 @@ Deliverables:
    path override (never CWD-relative); CREATE_NO_WINDOW; kill-then-reap
    verified to leave no orphan; UTF-8 stdout handling. Missing binary is
    `ServerUnavailable` with a cause naming what was searched.
-4. **Portable fixtures.** Test-only fake herdr helper binary
-   (`crates/atm-herdr/tests/support/fake_herdr_bin.rs`, behind the
-   test-utils feature) replaces /bin/sh, so all six process tests run on
-   all three CI lanes. HR-TEST-006 ("CI never depends on Herdr being
+4. **Portable fixtures.** Test-only fake herdr Rust binary
+   (`crates/atm-herdr/tests/support/fake_herdr/main.rs`, test-only
+   `[[bin]]`, located via `CARGO_BIN_EXE_fake_herdr` so cargo supplies
+   the `.exe` suffix) replaces /bin/sh, so all six process tests run on
+   all three CI lanes with identical assertions. Modes: exit 0, exit 1,
+   stderr JSON envelope, stdout JSON line, sleep past deadline, echo
+   argv and HERDR_SESSION. Byte-exact LF output via write_all, never a
+   .cmd shim, so the fixture cannot introduce the CRLF the audit is
+   detecting. Two new tests: success stdout parse through a real child,
+   and argv/HERDR_SESSION round trip through CreateProcess. Parsers
+   tolerate a trailing `\r` regardless of the audit result. HR-TEST-006 ("CI never depends on Herdr being
    installed") still holds. No-flaky rule: deterministic fake, injected
    deadlines, hard bounds, nothing may block forever.
 5. **Composition and doctor.** One `HerdrCliTransport` construction site
@@ -166,6 +192,17 @@ Boundary: `boundaries/atm-herdr/herdr-process-adapter.toml` io_owns
 requires a new boundary revision, not an exception. forbidden_edges stay
 (no atm-core/atm-storage/rusqlite into atm-herdr; no atm-herdr into
 daemon/runtime crates).
+
+## PROTOCOL_VERSION pinning
+
+Herdr's client compares PROTOCOL_VERSION with the server on every
+command and any inequality is fatal (ADR-058:245-253). Under W1 that
+risk stays inside Herdr's own binary (client and server are one
+release); atm only maps the `protocol_mismatch` code, and doctor makes
+it legible. W2 would transfer that liability to atm's release cadence,
+so W2's blocking prerequisite is a compatibility strategy (negotiated
+range or an explicit supported-version matrix with a fast actionable
+failure), not the socket code.
 
 ## Ordering with phase AX
 
