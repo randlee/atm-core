@@ -216,6 +216,19 @@ pub struct PostSendDoctorReport {
     pub recipient_paths: Vec<RecipientDeliveryPathReport>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TeamEscalationRecipientsDoctorReport {
+    pub team: TeamName,
+    pub recipients: Vec<String>,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct EscalationRecipientsDoctorReport {
+    pub daemon: Vec<String>,
+    pub teams: Vec<TeamEscalationRecipientsDoctorReport>,
+}
+
 /// Safe projection of one registry-backed graft receiver lease.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GraftReceiverLeaseDoctorReport {
@@ -318,6 +331,8 @@ pub struct DoctorReport {
     pub herdr_queue_pump: HerdrQueuePumpDoctorReport,
     #[serde(default)]
     pub post_send: PostSendDoctorReport,
+    #[serde(default)]
+    pub escalation_recipients: EscalationRecipientsDoctorReport,
     pub config: ConfigDoctorReport,
     pub mail_store: MailStoreDoctorReport,
     pub roster_store: RosterStoreDoctorReport,

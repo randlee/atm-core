@@ -7,6 +7,7 @@ use serde_json::json;
 use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind, RosterStore};
 use crate::delivery_channel::{HerdrSession, LocalMessageReceivedBackend};
 use crate::error::AtmError;
+use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY};
 use crate::types::{AgentName, HostName, ModelName, PaneId, TeamName};
@@ -339,6 +340,7 @@ pub fn update_member_with_roster_store(
     validate_update_member_caller(roster_store, &request)?;
     let mut existing_roster = projection::load_team_roster(roster_store, &request.team)?;
     let member_name = request.member.0.clone();
+    ensure_member_name_available(&member_name)?;
     let member = existing_roster
         .iter_mut()
         .find(|existing_member| existing_member.agent_name == member_name)
@@ -395,6 +397,7 @@ fn ensure_member_absent(
     team: &TeamName,
     member: &AgentName,
 ) -> Result<(), AtmError> {
+    ensure_member_name_available(member)?;
     if existing_roster
         .iter()
         .any(|existing_member| existing_member.agent_name == *member)
@@ -402,6 +405,16 @@ fn ensure_member_absent(
         return Err(AtmError::member_already_exists(
             member.as_str(),
             team.as_str(),
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_member_name_available(member: &AgentName) -> Result<(), AtmError> {
+    if member.as_str() == atm_storage::DAEMON_ACTOR_NAME {
+        return Err(AtmError::new(
+            AtmErrorCode::MessageValidationFailed,
+            "atm-daemon is a reserved sender name",
         ));
     }
     Ok(())

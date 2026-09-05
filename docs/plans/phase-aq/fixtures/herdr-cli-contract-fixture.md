@@ -399,6 +399,20 @@ a synchronous, bounded read like `prompt`, not a long-lived wait.
 
 ---
 
+## F6. Lead escalation notification (AX6)
+
+AX6 uses the public `HerdrProcessAdapter::notify` operation for lead and
+blocked-task escalation. The exact argv is:
+
+```text
+["herdr","notification","show","Task escalation","--body","task t-42 has been reminded 10 times","--sound","request"]
+```
+
+The title and body are each one argv element, including any newlines in the
+body. There is no pane target, session argument, tmux operation, or shell
+interpolation. A successful command exits `0`; a non-zero exit is a typed
+adapter failure and does not change the independent mail-write results.
+
 ## F4. Launch convention only (never emitted by the daemon)
 
 ### F4.1 `agent start`

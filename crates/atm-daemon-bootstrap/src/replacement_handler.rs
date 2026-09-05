@@ -241,25 +241,17 @@ pub(crate) fn build_replacement_handler(
         runtime_health.clone(),
         recovery_sweep.transition_tracker(),
     );
-    let queue_wake_pump = Arc::new(HerdrQueueWakePump::new(
-        assembly.service_runtime.clone(),
-        Arc::clone(&selector),
+    let queue_wake_pump = build_queue_wake_pump(
+        &assembly,
+        selector.clone(),
         runtime_health.clone(),
         queue_wake_process,
-    ));
+    )?;
     let async_mailbox_runtime = assembly
         .async_mailbox_runtime
         .clone()
         .with_state_handoff(HandoffConfig::default())?;
-    let doctor_projection = StorageDoctorProjection::start(
-        DoctorProjectionConfig {
-            reader_lanes: assembly.reader_lanes,
-            ..DoctorProjectionConfig::default()
-        },
-        assembly.service_runtime.clone(),
-        assembly.doctor_ports.clone(),
-        Arc::clone(&observability),
-    )?;
+    let doctor_projection = build_doctor_projection(&assembly, Arc::clone(&observability))?;
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,
@@ -283,6 +275,38 @@ pub(crate) fn build_replacement_handler(
     .with_shared_direct_peer_client(shared_direct_peer_client()?);
     let handler = add_peer_connection_pool(handler, peer_adapter_selection);
     Ok((Arc::new(handler), recovery_sweep))
+}
+
+fn build_queue_wake_pump(
+    assembly: &RuntimeAssembly,
+    selector: Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    runtime_health: RuntimeHealth,
+    herdr_process: Arc<dyn HerdrProcessAdapter>,
+) -> Result<Arc<HerdrQueueWakePump>, AtmError> {
+    Ok(Arc::new(
+        HerdrQueueWakePump::new(
+            assembly.service_runtime.clone(),
+            selector,
+            runtime_health,
+            herdr_process,
+        )
+        .with_daemon_home(atm_core::home::atm_home()?),
+    ))
+}
+
+fn build_doctor_projection(
+    assembly: &RuntimeAssembly,
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+) -> Result<StorageDoctorProjection, AtmError> {
+    StorageDoctorProjection::start(
+        DoctorProjectionConfig {
+            reader_lanes: assembly.reader_lanes,
+            ..DoctorProjectionConfig::default()
+        },
+        assembly.service_runtime.clone(),
+        assembly.doctor_ports.clone(),
+        observability,
+    )
 }
 
 fn add_peer_connection_pool(

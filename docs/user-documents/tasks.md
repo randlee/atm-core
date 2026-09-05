@@ -41,6 +41,20 @@ task remains unattended: at most once per minute, after ordinary queued mail
 has had its turn. A blocked assignee is not prompted, but the task event log
 records the blocked reminder. Reminders stop as soon as the task is completed.
 
+Task attention has three layers: the task reminder mail, the lead escalation
+at every tenth reminder, and optional configured escalation recipients. Manage
+the latter with:
+
+```sh
+atm escalation add oncall@atm-dev
+atm escalation add --team atm-dev oncall@ops.example
+atm escalation list --team atm-dev
+atm escalation remove --team atm-dev oncall@ops.example
+```
+
+Team recipients replace the daemon default for that team; otherwise the daemon
+list is inherited. `atm doctor` shows the effective list and its source.
+
 Human task rows use this stable layout:
 
 ```

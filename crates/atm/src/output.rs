@@ -285,6 +285,7 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
         print_bootstrap_trace(bootstrap_trace);
     }
     print_doctor_peer_config(report);
+    print_doctor_escalation_recipients(report);
     print_doctor_environment(report);
     print_doctor_findings(report);
     print_doctor_roster(report);
@@ -484,6 +485,28 @@ fn print_doctor_findings(report: &DoctorReport) {
         );
         if let Some(remediation) = &finding.remediation {
             println!("    remediation: {remediation}");
+        }
+    }
+}
+
+fn print_doctor_escalation_recipients(report: &DoctorReport) {
+    println!();
+    println!("Escalation recipients (daemon default):");
+    if report.escalation_recipients.daemon.is_empty() {
+        println!("  none");
+    } else {
+        for recipient in &report.escalation_recipients.daemon {
+            println!("  {recipient}");
+        }
+    }
+    for team in &report.escalation_recipients.teams {
+        println!("  team {} [{}]:", team.team, team.source);
+        if team.recipients.is_empty() {
+            println!("    none");
+        } else {
+            for recipient in &team.recipients {
+                println!("    {recipient}");
+            }
         }
     }
 }

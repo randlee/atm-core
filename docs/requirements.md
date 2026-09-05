@@ -72,6 +72,14 @@ daemon, the write path has no Python, and a Claude Code task list is a
 per-session harness artifact rather than a cross-host record. The AC.6
 deletion stands: ADR-061 revives none of that scaffolding.
 
+Phase-AX.6 amendment (2026-09-05): lead notification and escalation are part
+of the retained task surface. `atm-daemon` is the reserved daemon actor and
+cannot be added to or renamed in the roster. Open-task reminders notify the
+single roster lead at reminder thresholds 10, 20, and so on; blocked runtime
+episodes use the same escalation path with an initial 60-second delay and
+10-minute re-notification. Configured daemon and per-team escalation
+recipients are additive fan-out destinations, with a per-tick cap of eight.
+
 The retained product surface is:
 - `atm send`
 - `atm list`
@@ -85,6 +93,7 @@ The retained product surface is:
 
 Approved additive CLI feature for the Phase `Y` line:
 - `atm help`
+- `atm escalation add|remove|list`
 
 The system must preserve the retained command behavior unless these
 requirements explicitly retire or change it.
@@ -403,6 +412,8 @@ Satisfied by:
 - file-reference policy handling for `send --file`
 - origin-inbox merge / ingest compatibility for Claude-owned inbox files
 - ATM-owned read/ack/clear/task state in SQLite
+- daemon and per-team escalation-recipient state in SQLite
+- lead and escalation-recipient notifications for repeated or blocked tasks
 - structured logging through `sc-observability`
 - log query and follow through `sc-observability`
 - local diagnostics through `atm doctor`
@@ -2131,6 +2142,10 @@ The initial doctor implementation must cover:
 - `sc-observability` initialization health
 - active shared log path visibility
 - `sc-observability` query-health readiness for `atm log`
+- open-task reminder thresholds and lead-notification audit outcomes
+- blocked runtime episode escalation and retry behavior
+- daemon and per-team escalation recipient configuration and effective-source
+  reporting
 
 Caller-context behavior for `atm doctor`:
 
@@ -2166,6 +2181,14 @@ Each doctor finding must expose at least:
 
 The obsolete config-identity finding must use:
 - `ATM_WARNING_IDENTITY_DRIFT`
+
+Phase AX.6 doctor findings must use these warning codes and actionable guidance:
+
+- `ATM_ROSTER_NO_LEAD` — designate exactly one roster member as lead
+- `ATM_ROSTER_MULTIPLE_LEADS` — remove the extra lead designation
+- `ATM_ROSTER_RESERVED_NAME` — rename the member; `atm-daemon` is reserved
+- `ATM_TASK_STALLED` — inspect or acknowledge the open task
+- `ATM_MEMBER_BLOCKED` — restore the member's runtime or inspect escalation
 
 Critical findings must cause a non-zero exit status.
 
@@ -2236,6 +2259,9 @@ Bare `atm teams` must:
 - project the repaired metadata deterministically into compatibility
   `config.json`
 - preserve unchanged member metadata when a field is not supplied
+- reject the reserved member name `atm-daemon` with
+  `ATM_MESSAGE_VALIDATION_FAILED`; an existing legacy row may remain and is
+  reported by `atm doctor` as `ATM_ROSTER_RESERVED_NAME`
 
 `atm teams remove-member` must:
 - require the caller identity to belong to the target team

@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{
-    AtmError, AtmMessageId, MemberKey, ReminderOutcome, TaskActor, TaskEventKind, TaskEventMarker,
-    TaskEventRow, TaskRow, TaskState, TaskStore,
+    AtmError, AtmMessageId, EscalationScope, MemberKey, ReminderOutcome, TaskActor, TaskEventKind,
+    TaskEventMarker, TaskEventRow, TaskRow, TaskState, TaskStore,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -30,6 +30,13 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE INDEX IF NOT EXISTS tasks_open_by_member
     ON tasks(team, assignee, assigned_at) WHERE state <> 'complete';
+
+CREATE TABLE IF NOT EXISTS escalation_recipients (
+    scope_key TEXT NOT NULL,
+    address TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (scope_key, address)
+);
 
 CREATE TABLE IF NOT EXISTS task_events (
     team TEXT NOT NULL,
@@ -342,6 +349,70 @@ impl TaskStore for SqliteTaskStore {
             ).map_err(|error| self.db.error("failed to record lead notification", error))?;
             self.append_event(connection, member, task_id, at, TaskEventKind::LeadNotified, row.state,
                 lead.as_str(), Some(message_id), None)
+        })
+    }
+
+    fn list_escalation_recipients(&self, scope: &EscalationScope) -> Result<Vec<String>, AtmError> {
+        let scope_key = scope.key();
+        self.db.with_connection(|connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT address FROM escalation_recipients
+                     WHERE scope_key = ?1 ORDER BY address ASC",
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to prepare escalation recipient list", error)
+                })?;
+            let rows = statement
+                .query_map([scope_key], |row| row.get(0))
+                .map_err(|error| self.db.error("failed to list escalation recipients", error))?;
+            rows.map(|row| {
+                row.map_err(|error| {
+                    self.db
+                        .error("failed to decode escalation recipient", error)
+                })
+            })
+            .collect()
+        })
+    }
+
+    fn add_escalation_recipient(
+        &self,
+        scope: &EscalationScope,
+        address: &str,
+        at: atm_storage::types::IsoTimestamp,
+    ) -> Result<bool, AtmError> {
+        let scope_key = scope.key();
+        self.db.with_connection(|connection| {
+            let inserted = connection
+                .execute(
+                    "INSERT OR IGNORE INTO escalation_recipients(scope_key, address, added_at)
+                     VALUES (?1, ?2, ?3)",
+                    params![scope_key, address, at.to_string()],
+                )
+                .map_err(|error| self.db.error("failed to add escalation recipient", error))?;
+            Ok(inserted == 1)
+        })
+    }
+
+    fn remove_escalation_recipient(
+        &self,
+        scope: &EscalationScope,
+        address: &str,
+    ) -> Result<bool, AtmError> {
+        let scope_key = scope.key();
+        self.db.with_connection(|connection| {
+            let removed = connection
+                .execute(
+                    "DELETE FROM escalation_recipients WHERE scope_key = ?1 AND address = ?2",
+                    params![scope_key, address],
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to remove escalation recipient", error)
+                })?;
+            Ok(removed == 1)
         })
     }
 }

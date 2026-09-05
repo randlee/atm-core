@@ -1,6 +1,7 @@
 //! Tokio-owned polling pump for deferred Herdr queue nudges.
 
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -53,20 +54,27 @@ pub(crate) struct HerdrQueueWakeStats {
     pub task_reminders_failed: usize,
     pub task_reminders_unrenderable: usize,
     pub task_reminders_blocked: usize,
+    pub lead_notifications: usize,
+    pub blocked_escalations: usize,
+    pub escalation_writes_failed: usize,
+    pub notifications_failed: usize,
     pub task_step_skipped: bool,
     pub last_tick_at: Option<IsoTimestamp>,
 }
 
 #[derive(Clone)]
 pub struct HerdrQueueWakePump {
-    service_runtime: LocalServiceRuntime,
+    pub(crate) service_runtime: LocalServiceRuntime,
     selector: Arc<dyn MessageReceivedHookSelector>,
     runtime_health: RuntimeHealth,
-    herdr_process: Arc<dyn HerdrProcessAdapter>,
+    pub(crate) herdr_process: Arc<dyn HerdrProcessAdapter>,
     cursor: Arc<Mutex<usize>>,
     release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
     clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>,
     last_task_attempt: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
+    pub(crate) blocked_since: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
+    pub(crate) last_blocked_notice: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
+    pub(crate) daemon_home: PathBuf,
     task_step_available: Arc<Mutex<Option<bool>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
     #[cfg(test)]
@@ -90,11 +98,21 @@ impl HerdrQueueWakePump {
             release_streaks: Arc::new(Mutex::new(HashMap::new())),
             clock: Arc::new(IsoTimestamp::now),
             last_task_attempt: Arc::new(Mutex::new(HashMap::new())),
+            blocked_since: Arc::new(Mutex::new(HashMap::new())),
+            last_blocked_notice: Arc::new(Mutex::new(HashMap::new())),
+            daemon_home: PathBuf::new(),
             task_step_available: Arc::new(Mutex::new(None)),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
             #[cfg(test)]
             handoff_cleanup_test_gate: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Supplies the daemon home used by daemon-originated escalation mail.
+    #[must_use]
+    pub fn with_daemon_home(mut self, daemon_home: PathBuf) -> Self {
+        self.daemon_home = daemon_home;
+        self
     }
 
     #[cfg(test)]
@@ -249,6 +267,10 @@ impl HerdrQueueWakePump {
             task_reminders_failed = stats.task_reminders_failed,
             task_reminders_unrenderable = stats.task_reminders_unrenderable,
             task_reminders_blocked = stats.task_reminders_blocked,
+            lead_notifications = stats.lead_notifications,
+            blocked_escalations = stats.blocked_escalations,
+            escalation_writes_failed = stats.escalation_writes_failed,
+            notifications_failed = stats.notifications_failed,
             task_step_skipped = stats.task_step_skipped,
             "Herdr queue wake poll tick"
         );
@@ -403,37 +425,63 @@ impl HerdrQueueWakePump {
         stats: &mut HerdrQueueWakeStats,
     ) {
         let reader = match self.service_runtime.async_task_ledger_reader() {
-            Ok(reader) => reader,
+            Ok(reader) => Some(reader),
             Err(error) => {
                 stats.task_step_skipped = true;
                 self.note_task_step_availability(false, Some(&error));
-                return;
+                None
             }
         };
         let task_store = match self.service_runtime.task_store() {
-            Ok(store) => store,
+            Ok(store) => Some(store),
             Err(error) => {
                 stats.task_step_skipped = true;
                 self.note_task_step_availability(false, Some(&error));
-                return;
+                None
             }
         };
-        self.note_task_step_availability(true, None);
-        let now = (self.clock)();
-        for candidate in candidates {
-            if !candidate.blocked && stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
-                continue;
-            }
-            if prompted_by_drain.contains(&candidate.member.key) {
-                self.stamp_task_attempt(&candidate.member.key, now);
-                continue;
-            }
-            let Some(row) = self.read_due_task(reader.as_ref(), &candidate, now).await else {
-                continue;
-            };
-            self.emit_task_reminder(&task_store, candidate, row, now, stats)
-                .await;
+        if reader.is_some() && task_store.is_some() {
+            self.note_task_step_availability(true, None);
         }
+        let now = (self.clock)();
+        let blocked_members: HashSet<_> = candidates
+            .iter()
+            .filter(|candidate| candidate.blocked)
+            .map(|candidate| candidate.member.key.clone())
+            .collect();
+        self.blocked_since
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|member, _| blocked_members.contains(member));
+        self.last_blocked_notice
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|member, _| blocked_members.contains(member));
+
+        if let (Some(reader), Some(task_store)) = (reader.as_ref(), task_store.as_ref()) {
+            for candidate in candidates {
+                if !candidate.blocked && stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
+                    continue;
+                }
+                if prompted_by_drain.contains(&candidate.member.key) {
+                    self.stamp_task_attempt(&candidate.member.key, now);
+                    continue;
+                }
+                let Some(row) = self.read_due_task(reader.as_ref(), &candidate, now).await else {
+                    continue;
+                };
+                self.emit_task_reminder(task_store, candidate, row, now, stats)
+                    .await;
+            }
+        }
+        self.escalate_blocked(
+            &blocked_members,
+            reader.as_ref().map(Arc::as_ref),
+            task_store.as_ref(),
+            now,
+            stats,
+        )
+        .await;
     }
 
     async fn read_due_task(
@@ -552,21 +600,9 @@ impl HerdrQueueWakePump {
         outcome: ReminderOutcome,
         stats: &mut HerdrQueueWakeStats,
     ) {
-        if !self
+        let recorded_row = self
             .record_task_reminder(task_store, member, row, now, outcome)
-            .await
-        {
-            match outcome {
-                ReminderOutcome::Emitted => {
-                    stats.prompted += 1;
-                    stats.task_reminders += 1;
-                }
-                ReminderOutcome::Unrenderable => stats.task_reminders_unrenderable += 1,
-                ReminderOutcome::Blocked => stats.task_reminders_blocked += 1,
-            }
-            self.stamp_task_attempt(member, now);
-            return;
-        }
+            .await;
         match outcome {
             ReminderOutcome::Emitted => {
                 stats.prompted += 1;
@@ -576,6 +612,10 @@ impl HerdrQueueWakePump {
             ReminderOutcome::Blocked => stats.task_reminders_blocked += 1,
         }
         self.stamp_task_attempt(member, now);
+        if let Ok(recorded_row) = recorded_row {
+            self.maybe_escalate_task(task_store, &recorded_row, now, stats)
+                .await;
+        }
     }
 
     async fn record_task_reminder(
@@ -585,7 +625,7 @@ impl HerdrQueueWakePump {
         row: &TaskRow,
         now: IsoTimestamp,
         outcome: ReminderOutcome,
-    ) -> bool {
+    ) -> Result<TaskRow, AtmError> {
         let store = Arc::clone(store);
         let member = member.clone();
         let task_id = row.task_id.clone();
@@ -596,12 +636,42 @@ impl HerdrQueueWakePump {
         })
         .await
         {
-            Ok(_) => true,
+            Ok(row) => Ok(row),
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_record", outcome = "failed", error = %error, member = %member, task_id = %task_id, "Herdr task reminder bookkeeping failed");
-                false
+                Err(error)
             }
         }
+    }
+
+    async fn maybe_escalate_task(
+        &self,
+        task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+        row: &TaskRow,
+        now: IsoTimestamp,
+        stats: &mut HerdrQueueWakeStats,
+    ) {
+        crate::herdr_queue_wake_escalation::maybe_escalate_task(self, task_store, row, now, stats)
+            .await;
+    }
+
+    async fn escalate_blocked(
+        &self,
+        blocked_members: &HashSet<MemberKey>,
+        reader: Option<&(dyn AsyncTaskLedgerReader + Send + Sync)>,
+        task_store: Option<&Arc<dyn atm_core::boundary::TaskStore + Send + Sync>>,
+        now: IsoTimestamp,
+        stats: &mut HerdrQueueWakeStats,
+    ) {
+        crate::herdr_queue_wake_escalation::escalate_blocked(
+            self,
+            blocked_members,
+            reader,
+            task_store,
+            now,
+            stats,
+        )
+        .await;
     }
 
     fn reminder_due(&self, member: &MemberKey, row: &TaskRow, now: IsoTimestamp) -> bool {
@@ -943,7 +1013,7 @@ fn herdr_candidates(
     Ok(candidates)
 }
 
-async fn run_blocking<T, F>(job: F) -> Result<T, AtmError>
+pub(crate) async fn run_blocking<T, F>(job: F) -> Result<T, AtmError>
 where
     T: Send + 'static,
     F: FnOnce() -> Result<T, AtmError> + Send + 'static,

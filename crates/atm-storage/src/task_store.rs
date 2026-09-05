@@ -11,6 +11,23 @@ use crate::schema::AtmMessageId;
 use crate::task_state::{TaskEventRow, TaskRow};
 use crate::types::{AgentName, IsoTimestamp, MemberKey, TaskId, TeamName};
 
+/// Selects the daemon-wide or team-specific escalation recipient list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EscalationScope {
+    Daemon,
+    Team(TeamName),
+}
+
+impl EscalationScope {
+    #[must_use]
+    pub fn key(&self) -> String {
+        match self {
+            Self::Daemon => "daemon".to_owned(),
+            Self::Team(team) => format!("team:{team}"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ReminderOutcome {
@@ -69,12 +86,38 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         lead: &AgentName,
         message_id: &AtmMessageId,
     ) -> Result<(), AtmError>;
+
+    fn list_escalation_recipients(&self, scope: &EscalationScope) -> Result<Vec<String>, AtmError>;
+
+    fn add_escalation_recipient(
+        &self,
+        scope: &EscalationScope,
+        address: &str,
+        at: IsoTimestamp,
+    ) -> Result<bool, AtmError>;
+
+    fn remove_escalation_recipient(
+        &self,
+        scope: &EscalationScope,
+        address: &str,
+    ) -> Result<bool, AtmError>;
+
+    fn effective_escalation_recipients(&self, team: &TeamName) -> Result<Vec<String>, AtmError> {
+        let team_recipients =
+            self.list_escalation_recipients(&EscalationScope::Team(team.clone()))?;
+        if team_recipients.is_empty() {
+            self.list_escalation_recipients(&EscalationScope::Daemon)
+        } else {
+            Ok(team_recipients)
+        }
+    }
 }
 
 /// Minimal in-memory implementation for composition and contract tests.
 #[derive(Debug, Default)]
 pub struct DummyTaskStore {
     rows: Mutex<HashMap<(MemberKey, TaskId), TaskRow>>,
+    escalation_recipients: Mutex<HashMap<String, Vec<String>>>,
     fail_reminders: bool,
 }
 
@@ -95,6 +138,7 @@ impl DummyTaskStore {
             .collect();
         Self {
             rows: Mutex::new(rows),
+            escalation_recipients: Mutex::new(HashMap::new()),
             fail_reminders,
         }
     }
@@ -189,5 +233,50 @@ impl TaskStore for DummyTaskStore {
         _message_id: &AtmMessageId,
     ) -> Result<(), AtmError> {
         Ok(())
+    }
+
+    fn list_escalation_recipients(&self, scope: &EscalationScope) -> Result<Vec<String>, AtmError> {
+        Ok(self
+            .escalation_recipients
+            .lock()
+            .expect("dummy escalation recipients lock")
+            .get(&scope.key())
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    fn add_escalation_recipient(
+        &self,
+        scope: &EscalationScope,
+        address: &str,
+        _at: IsoTimestamp,
+    ) -> Result<bool, AtmError> {
+        let mut recipients = self
+            .escalation_recipients
+            .lock()
+            .expect("dummy escalation recipients lock");
+        let list = recipients.entry(scope.key()).or_default();
+        if list.iter().any(|existing| existing == address) {
+            return Ok(false);
+        }
+        list.push(address.to_owned());
+        Ok(true)
+    }
+
+    fn remove_escalation_recipient(
+        &self,
+        scope: &EscalationScope,
+        address: &str,
+    ) -> Result<bool, AtmError> {
+        let mut recipients = self
+            .escalation_recipients
+            .lock()
+            .expect("dummy escalation recipients lock");
+        let Some(list) = recipients.get_mut(&scope.key()) else {
+            return Ok(false);
+        };
+        let before = list.len();
+        list.retain(|existing| existing != address);
+        Ok(list.len() != before)
     }
 }

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
 use crate::api::RequestDeadline;
-use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterStoreDoctor};
+use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterStoreDoctor, TaskState};
 use crate::config;
 use crate::delivery_channel::local_message_received_backend;
 use crate::error_codes::AtmErrorCode;
@@ -21,19 +21,20 @@ use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::default_runtime;
 use crate::team_admin::{MembersList, ordered_roster_member_summaries};
 use crate::types::{AgentName, TeamName};
-use atm_storage::PeerConfigStore;
+use atm_storage::{DAEMON_ACTOR_NAME, EscalationScope, PeerConfigStore};
 use std::sync::Arc;
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
-    DoctorSeverity, DoctorStatus, DoctorSummary, GraftReceiverLeaseDoctorReport,
-    GraftReceiversDoctorReport, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
-    HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport, LegacyLiteralIpPeerDoctorReport,
-    PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
-    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, ReaderLaneDoctorReport,
-    ReaderLanesDoctorReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
+    DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientsDoctorReport,
+    GraftReceiverLeaseDoctorReport, GraftReceiversDoctorReport, HerdrBreakerDoctor,
+    HerdrBreakerDoctorReport, HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport,
+    LegacyLiteralIpPeerDoctorReport, PeerAuthorityDoctorReport, PeerConfigDoctorReport,
+    PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
+    ReaderLaneDoctorReport, ReaderLanesDoctorReport, RecipientDeliveryPath,
+    RecipientDeliveryPathReport, TeamEscalationRecipientsDoctorReport,
 };
 
 /// Async application port for the live Herdr visibility checks performed by
@@ -168,6 +169,7 @@ pub fn run_doctor_with_runtime(
         None,
         None,
         HerdrBreakerDoctorReport::default(),
+        EscalationRecipientsDoctorReport::default(),
     ))
 }
 
@@ -199,6 +201,11 @@ pub fn run_doctor_with_runtime_ports(
         .as_ref()
         .map(|team| graft_receivers_doctor_report(runtime, team, &mut general_findings))
         .unwrap_or_default();
+    let escalation_recipients = ax6_task_and_roster_findings(
+        runtime,
+        doctor_context.resolved_team.as_ref(),
+        &mut general_findings,
+    );
     let findings = collect_doctor_findings(
         &reports,
         &drift_findings,
@@ -228,6 +235,7 @@ pub fn run_doctor_with_runtime_ports(
         None,
         None,
         runtime_doctors.herdr_breaker.report(),
+        escalation_recipients,
     ))
 }
 
@@ -359,6 +367,7 @@ fn build_doctor_report(
     runtime_status: Option<crate::protocol::RuntimeStatusSnapshot>,
     bootstrap_trace: Option<BootstrapTraceReport>,
     herdr_breaker: HerdrBreakerDoctorReport,
+    escalation_recipients: EscalationRecipientsDoctorReport,
 ) -> DoctorReport {
     let summary = summarize_doctor_findings(&findings);
     let recommendations = collect_recommendations(&findings);
@@ -379,6 +388,7 @@ fn build_doctor_report(
         },
         herdr_breaker,
         post_send,
+        escalation_recipients,
         config,
         mail_store,
         roster_store,
@@ -558,6 +568,194 @@ fn inspect_runtime_doctor_sections(
             findings,
         ),
     }
+}
+
+fn ax6_task_and_roster_findings(
+    runtime: &LocalServiceRuntime,
+    resolved_team: Option<&TeamName>,
+    findings: &mut Vec<DoctorFinding>,
+) -> EscalationRecipientsDoctorReport {
+    let roster_store = runtime.shared_roster_store_arc();
+    let mut teams = resolved_team.map_or_else(
+        || roster_store.list_teams().unwrap_or_default(),
+        |team| vec![team.clone()],
+    );
+    teams.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+    teams.dedup();
+
+    let task_store = runtime.task_store().ok();
+    let daemon = task_store
+        .as_ref()
+        .and_then(|store| {
+            store
+                .list_escalation_recipients(&EscalationScope::Daemon)
+                .ok()
+        })
+        .unwrap_or_default();
+    let mut team_reports = Vec::new();
+    for team in teams {
+        let Ok(roster) = roster_store.load_roster(&team) else {
+            continue;
+        };
+        let tasks = task_store
+            .as_ref()
+            .and_then(|store| store.list_tasks(&team, None).ok())
+            .unwrap_or_default();
+        ax6_team_findings(&team, &roster, &tasks, findings);
+        let team_scope = EscalationScope::Team(team.clone());
+        let own = task_store
+            .as_ref()
+            .and_then(|store| store.list_escalation_recipients(&team_scope).ok())
+            .unwrap_or_default();
+        team_reports.push(TeamEscalationRecipientsDoctorReport {
+            team,
+            source: if own.is_empty() {
+                "daemon default".to_owned()
+            } else {
+                "team".to_owned()
+            },
+            recipients: if own.is_empty() { daemon.clone() } else { own },
+        });
+    }
+    EscalationRecipientsDoctorReport {
+        daemon,
+        teams: team_reports,
+    }
+}
+
+fn ax6_team_findings(
+    team: &TeamName,
+    roster: &atm_storage::RosterSnapshot,
+    tasks: &[crate::boundary::TaskRow],
+    findings: &mut Vec<DoctorFinding>,
+) {
+    let lead_count = roster
+        .members
+        .iter()
+        .filter(|member| member.agent_type == crate::schema::AgentType::Lead)
+        .count();
+    if lead_count == 0 {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::RosterNoLead,
+            message: format!("team {team} has no lead member"),
+            remediation: Some(
+                "assign one lead: atm teams update-member <team> <member> --agent-type lead"
+                    .to_owned(),
+            ),
+        });
+    } else if lead_count > 1 {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::RosterMultipleLeads,
+            message: format!("team {team} has {lead_count} lead members"),
+            remediation: Some(
+                "keep one lead: atm teams update-member <team> <member> --agent-type <other type>"
+                    .to_owned(),
+            ),
+        });
+    }
+    ax6_reserved_name_findings(team, roster, findings);
+    for task in tasks
+        .iter()
+        .filter(|task| task.state != TaskState::Complete && task.reminder_count >= 10)
+    {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::TaskStalled,
+            message: format!(
+                "task {} assigned to {} has been reminded {} times",
+                task.task_id, task.assignee, task.reminder_count
+            ),
+            remediation: Some(
+                "check the assignee or close the task: atm send <assignee> --task-complete <task_id> --stdin"
+                    .to_owned(),
+            ),
+        });
+    }
+    ax6_member_info_findings(team, roster, tasks, findings);
+}
+
+fn ax6_reserved_name_findings(
+    team: &TeamName,
+    roster: &atm_storage::RosterSnapshot,
+    findings: &mut Vec<DoctorFinding>,
+) {
+    for member in &roster.members {
+        if member.agent_name.as_str() == DAEMON_ACTOR_NAME {
+            findings.push(DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: AtmErrorCode::RosterReservedName,
+                message: format!("team {team} contains reserved member name {DAEMON_ACTOR_NAME}"),
+                remediation: Some(
+                    "rename the member: atm-daemon is reserved for daemon-originated messages"
+                        .to_owned(),
+                ),
+            });
+        }
+    }
+}
+
+fn ax6_member_info_findings(
+    team: &TeamName,
+    roster: &atm_storage::RosterSnapshot,
+    tasks: &[crate::boundary::TaskRow],
+    findings: &mut Vec<DoctorFinding>,
+) {
+    for member in &roster.members {
+        let assigned = tasks
+            .iter()
+            .filter(|task| task.assignee == member.agent_name && task.state == TaskState::Assigned)
+            .count();
+        let active = tasks
+            .iter()
+            .filter(|task| task.assignee == member.agent_name && task.state == TaskState::Active)
+            .count();
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Info,
+            code: AtmErrorCode::ObservabilityHealthOk,
+            message: format!(
+                "team {team} member {}: assigned={assigned}, active={active}",
+                member.agent_name
+            ),
+            remediation: None,
+        });
+    }
+}
+
+/// Build warnings from the live runtime status snapshot supplied by the daemon.
+pub fn runtime_condition_findings(
+    snapshot: &crate::protocol::RuntimeStatusSnapshot,
+) -> Vec<DoctorFinding> {
+    let now = crate::types::IsoTimestamp::now();
+    snapshot
+        .members
+        .iter()
+        .filter(|observation| observation.state == crate::protocol::RuntimeMemberState::Blocked)
+        .map(|observation| {
+            let observed_at = observation
+                .state_changed_at
+                .or(observation.last_active_at)
+                .unwrap_or(now);
+            let age = now
+                .into_inner()
+                .signed_duration_since(observed_at.into_inner())
+                .num_seconds()
+                .max(0);
+            DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: AtmErrorCode::MemberBlocked,
+                message: format!(
+                    "member {}@{} is blocked; observation age {}s",
+                    observation.member, observation.team, age
+                ),
+                remediation: Some(
+                    "<member> is waiting for interactive input; attach to its Herdr agent and answer the prompt"
+                        .to_owned(),
+                ),
+            }
+        })
+        .collect()
 }
 
 fn push_obsolete_identity_finding(

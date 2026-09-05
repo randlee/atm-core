@@ -28,8 +28,8 @@ scope = "outside_owner_crate"
 forbidden = ["rusqlite::Connection"]
 
 [contracts]
-request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "MessageWriteOrigin"]
-response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>"]
+request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "MessageWriteOrigin", "EscalationScope"]
+response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>", "Vec<String>", "bool"]
 error_types = ["AtmError"]
 notes = [
   "state change: only the message writer transaction applies Assigned/Acked/Completed; no TaskStore method changes tasks.state",
@@ -37,6 +37,7 @@ notes = [
   "replay: per (team, task_id, assignee) the Assigned/Acked/Completed rows replayed through transition reproduce tasks.state; latest Assigned.message_id == assignment_message_id; count(Reminded) == reminder_count; max(Reminded.at) == last_reminded_at; count(LeadNotified) == lead_notified_count; description is not replayable",
   "provenance: transitions apply only to MessageWriteOrigin::Local inserts and to the acknowledgement op",
   "CLI (atm) reads TaskRow/TaskEventRow through atm_storage::contract; daemon crates import through atm_core::boundary",
+  "escalation recipients: list_escalation_recipients, add_escalation_recipient and remove_escalation_recipient store daemon or team-scoped ADR-040 addresses; team resolution falls back to the daemon list only when the team list is empty",
 ]
 
 [testing]

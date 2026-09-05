@@ -60,6 +60,29 @@ cadence. Rendering failures append `unrenderable`; successful emissions append
 task state. If the optional task store is unavailable, only the reminder step
 is skipped; deferred-mail draining continues.
 
+## Lead notification and escalation
+
+After a successful reminder is recorded, every tenth reminder is an escalation
+boundary: reminders 10, 20, 30, and so on notify the one roster member whose
+`agent_type` is `lead`. The lead mail is deferred daemon-originated mail and is
+audited as `LeadNotified` only when the lead write succeeds. A missing or
+ambiguous lead suppresses that audit event without suppressing configured
+escalation-recipient fan-out.
+
+Blocked runtime observations create an in-memory episode. The first escalation
+is eligible after 60 seconds and subsequent notifications are eligible every
+10 minutes. An episode is stamped only when at least one lead or configured
+recipient write, or the Herdr notification, succeeds; total failure therefore
+retries on the next eligible tick. Lead and recipient failures are independent
+and are surfaced in queue-pump statistics.
+
+Escalation recipients are stored by `TaskStore` in daemon scope or an explicit
+team scope. A team list replaces the daemon list for that team; absent team
+configuration falls back to the daemon list. The CLI accepts ADR-040 recipient
+forms through `atm escalation add|remove|list [--team <name>]`, validates them
+before persistence, and the doctor reports both effective recipients and
+their source. Fan-out is capped at eight recipients per escalation.
+
 ## Consequences
 
 This is a fresh Phase AX design, not restoration of the AC.6 scaffolding. It

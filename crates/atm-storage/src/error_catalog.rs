@@ -249,6 +249,21 @@ const fn warning_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::WarningHookExecutionFailed => {
             Some("Inspect the warning context and correct the reported condition.")
         }
+        AtmErrorCode::RosterNoLead => {
+            Some("assign one lead: atm teams update-member <team> <member> --agent-type lead")
+        }
+        AtmErrorCode::RosterMultipleLeads => {
+            Some("keep one lead: atm teams update-member <team> <member> --agent-type <other type>")
+        }
+        AtmErrorCode::RosterReservedName => {
+            Some("rename the member: atm-daemon is reserved for daemon-originated messages")
+        }
+        AtmErrorCode::TaskStalled => Some(
+            "check the assignee or close the task: atm send <assignee> --task-complete <task_id> --stdin",
+        ),
+        AtmErrorCode::MemberBlocked => Some(
+            "<member> is waiting for interactive input; attach to its Herdr agent and answer the prompt",
+        ),
         _ => None,
     }
 }

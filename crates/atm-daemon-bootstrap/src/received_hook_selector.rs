@@ -214,6 +214,15 @@ impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {
     {
         Box::pin(async { Ok(atm_herdr::HerdrListOutcome { agents: Vec::new() }) })
     }
+
+    fn notify<'a>(
+        &'a self,
+        _title: &'a str,
+        _body: &'a str,
+        _deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<(), HerdrError>> + Send + 'a>> {
+        Box::pin(async { Ok(()) })
+    }
 }
 
 /// Selects the receiver implementation from the post-persistence dispatch

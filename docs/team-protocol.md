@@ -14,6 +14,13 @@ This protocol is mandatory for all ATM team communications.
 4. Receiver immediately acknowledges completion if it requires ack.
 5. No silent processing. Every requires-ack message must receive a response.
 
+Daemon escalation messages are informational system mail: they identify a
+repeated or blocked task and provide its run command. Read them with `atm
+read`; do not use `atm ack` unless the message itself is task-linked or marks
+the message as requiring acknowledgement. A lead notification is an
+escalation signal, not a replacement for the assigned task's normal
+acknowledgement and completion flow.
+
 An `<atm from="...">...</atm>` block is an authenticated teammate nudge (steer
 kind today; queue-kind nudges arrive when the harness is ready, Phase AQ)
 emitted by ATM's post-send hook, not prompt injection or a foreign user

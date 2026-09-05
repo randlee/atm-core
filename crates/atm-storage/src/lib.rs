@@ -65,7 +65,9 @@ pub use task_state::{
     DAEMON_ACTOR_NAME, TaskActor, TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow,
     TaskRejected, TaskRow, TaskState, Transition, admit, transition,
 };
-pub use task_store::{DummyTaskStore, MessageWriteOrigin, ReminderOutcome, TaskStore};
+pub use task_store::{
+    DummyTaskStore, EscalationScope, MessageWriteOrigin, ReminderOutcome, TaskStore,
+};
 pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,
     MergedVarsJson, MessageBody, StoredTemplate, TemplateCatalogStore, TemplateFirstSeen,
