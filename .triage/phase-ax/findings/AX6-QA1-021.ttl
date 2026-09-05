@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA1-021>
+  a triage:Finding ;
+  triage:findingId "AX6-QA1-021" ;
+  triage:title "blocked_body joins all open tasks with no count/length cap into a child-process argument" ;
+  triage:description "AX.6 QA-1 (quality-mgr QA-AX6-R1-1788626395, PR #1204 Final Quality Report 2026-09-05T16:56Z) at head 490a6c42a0f3283c251875d9a61fcf99b641c2a2. crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs:251-270 blocked_body joins every open task into one string passed as an external `herdr notify` argv with no count or length cap. Fix: cap the count/length. (Coordinate with the AX6-QA1-001 fix: the Herdr argv must be a fixed template anyway.)" ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-service-hardening-agent" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:57:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T16:56:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-021/AX6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-021/AX7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA1-021/AX6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 251 ;
+  triage:snippet "fn blocked_body(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/490a6c42a0f3283c251875d9a61fcf99b641c2a2> .
+
+<urn:atm:triage:occurrence/AX6-QA1-021/AX7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 251 ;
+  triage:snippet "fn blocked_body(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/1931acea5> .
+
+<urn:atm:triage:worktree/AX6/490a6c42a0f3283c251875d9a61fcf99b641c2a2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX6" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/1931acea5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX7" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:orderIndex 7 .

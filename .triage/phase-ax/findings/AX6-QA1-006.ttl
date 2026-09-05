@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA1-006>
+  a triage:Finding ;
+  triage:findingId "AX6-QA1-006" ;
+  triage:title "boundaries/atm-herdr/herdr-process-adapter.toml not updated for notify / HR-SAFE-003" ;
+  triage:description "AX.6 QA-1 (quality-mgr QA-AX6-R1-1788626395, PR #1204 Final Quality Report 2026-09-05T16:56Z) at head 490a6c42a0f3283c251875d9a61fcf99b641c2a2. The D7 deliverable names boundaries/atm-herdr/herdr-process-adapter.toml as a review-gate artifact; it was never updated for HerdrProcessAdapter::notify. Compounds AX6-QA1-001. Also raised by req-qa ATM-QA-009. fenix ruling: this file may gain ONLY the D7 [contracts] note describing notify (fixed argv, no pane target, no mail body ever passed — HR-SAFE-003 holds); no exception for body forwarding may be written; visibility stays public." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:57:30Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T16:56:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-006/AX6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-006/AX7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA1-006/AX6-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-herdr/herdr-process-adapter.toml" ;
+  triage:line 52 ;
+  triage:snippet "[contracts]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/490a6c42a0f3283c251875d9a61fcf99b641c2a2> .
+
+<urn:atm:triage:occurrence/AX6-QA1-006/AX7-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-herdr/herdr-process-adapter.toml" ;
+  triage:line 52 ;
+  triage:snippet "[contracts]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea53d7716f0dc187c6231645af4f5e1243" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/1931acea53d7716f0dc187c6231645af4f5e1243> .
+
+<urn:atm:triage:worktree/AX6/490a6c42a0f3283c251875d9a61fcf99b641c2a2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ax6-lead-notification-doctor" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/1931acea53d7716f0dc187c6231645af4f5e1243>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ax7-herdr-dogfood-evidence" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea53d7716f0dc187c6231645af4f5e1243" ;
+  triage:orderIndex 7 .
