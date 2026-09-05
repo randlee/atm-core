@@ -33,6 +33,7 @@ use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
 use crate::RuntimeHealth;
 use crate::bare_cli_fifo::{BareCliFifo, BareCliQueueFullDrops, drain_bare_cli_messages};
+use crate::router_support::{append_warnings, hook_warning, write_response};
 
 fn retry_deferred_marker<F>(health: &RuntimeHealth, mut mark: F) -> Result<(), AtmError>
 where
@@ -486,6 +487,14 @@ impl StorageAndNudgeRouter {
             .into_inner()
         {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+                tracing::info!(
+                    subsystem = "atm_core.peer",
+                    action = "peer_send",
+                    outcome = "delivered",
+                    peer_host = %host,
+                    message_id = %message_id,
+                    "host-qualified message delivered to peer"
+                );
                 Ok(WriteOutcome::Sent(outcome))
             }
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
@@ -1124,30 +1133,6 @@ fn validate_graft_receiver_member(
         return Err(AtmError::agent_not_found(agent.as_str(), team.as_str()));
     }
     Ok(())
-}
-
-fn append_warnings(outcome: &mut WriteOutcome, warnings: Vec<WarningEntry>) {
-    match outcome {
-        WriteOutcome::Sent(outcome) => outcome.warnings.extend(warnings),
-        WriteOutcome::Acknowledged(outcome) => outcome.warnings.extend(warnings),
-    }
-}
-
-fn write_response(outcome: WriteOutcome) -> ResponseEnvelope {
-    match outcome {
-        WriteOutcome::Sent(outcome) => ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)),
-        WriteOutcome::Acknowledged(outcome) => {
-            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-        }
-    }
-}
-
-fn hook_warning(error: AtmError) -> WarningEntry {
-    WarningEntry::with_code(
-        error.code(),
-        format!("message received successfully, but its receiver hook did not run: {error}"),
-        Some("inspect the receiver hook endpoint or harness, then continue normally"),
-    )
 }
 
 #[cfg(test)]

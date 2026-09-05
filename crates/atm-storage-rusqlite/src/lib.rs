@@ -3421,6 +3421,59 @@ mod tests {
     }
 
     #[test]
+    fn sqlite_acknowledgement_errors_explain_missing_and_non_pending_sources() {
+        struct UnusedReplyBuilder;
+
+        impl AcknowledgementReplyBuilder for UnusedReplyBuilder {
+            fn build_reply(&self, _source: &Message) -> Result<Message, atm_storage::AtmError> {
+                panic!("the builder must not run for rejected acknowledgement sources");
+            }
+        }
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let missing_id = AtmMessageId::new();
+        let source = AcknowledgementSource {
+            team: team(),
+            agent: agent(),
+            message_id: missing_id,
+        };
+        let missing = store
+            .acknowledge_message_atomically(&source, Arc::new(UnusedReplyBuilder))
+            .expect_err("unknown acknowledgement source");
+        assert!(missing.message().contains("was not found"));
+        assert!(missing.message().contains("not addressed to the caller"));
+        assert!(
+            !missing
+                .message()
+                .contains("Correct the invalid ATM request or state before retrying")
+        );
+
+        let not_pending_id = AtmMessageId::new();
+        let mut not_pending = message(&format!("atm:{not_pending_id}"), "already read");
+        not_pending.envelope.message_id = Some(not_pending_id);
+        store.save_message(&not_pending).expect("save source");
+        let source = AcknowledgementSource {
+            team: not_pending.team,
+            agent: not_pending.agent,
+            message_id: not_pending_id,
+        };
+        let not_pending = store
+            .acknowledge_message_atomically(&source, Arc::new(UnusedReplyBuilder))
+            .expect_err("non-pending acknowledgement source");
+        assert!(
+            not_pending
+                .message()
+                .contains("not pending acknowledgement")
+        );
+        assert!(
+            !not_pending
+                .message()
+                .contains("Correct the invalid ATM request or state before retrying")
+        );
+    }
+
+    #[test]
     fn sqlite_backend_saves_loads_and_lists_rosters() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.roster_store();
