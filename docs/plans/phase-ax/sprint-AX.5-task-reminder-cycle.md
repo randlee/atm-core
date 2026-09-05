@@ -145,8 +145,9 @@ shape-only completion fails the sprint.
   every task send `Deferred`, so no steer suppression is needed.
   `SendOutcome` (`crates/atm-core/src/send/outcome.rs`) gains
   `task_tracked: bool` (serialised only when true, code contract C3).
-  tmux and graft recipients keep the marker. This is the recorded ADR-054
-  exception (D5).
+  tmux recipients keep the marker; graft recipients are unaffected (their
+  queue-kind wire handoff is not marker-driven). This is the recorded
+  ADR-054 exception (D5).
 - [ ] D5 — docs: ADR-061 gains a "Reminder cycle" section (rule,
   properties, 60 s, 5 s tick, shared prompt budget, Herdr only); dated
   ADR-054 amendment records that task-tagged mail to a Herdr recipient

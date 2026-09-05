@@ -106,9 +106,14 @@ shape-only completion fails the sprint.
   `request.nudge_mode`; called at both sites that call
   `request_requires_ack` (`prepare_persisted_write` and
   `prepare_persisted_write_async` in `crates/atm-core/src/write/pipeline.rs`).
-  Consequence on every backend: a `--task-id` send never steers; tmux and
-  graft recipients get the pending-nudge marker exactly as `atm queue`
-  does today and are nudged with the Task body when idle. (AX.5 removes
+  Consequence per backend, all of which is today's `atm queue` behaviour
+  (`build_received_hook_dispatches` in `crates/atm-core/src/write/pipeline.rs`
+  line 239–255): a tmux recipient gets no steer and the pending-nudge
+  marker, and is nudged with the Task body when idle; a graft recipient
+  is handed the Task body **immediately over the graft queue-kind wire
+  channel** (`NudgeKind::Queue` on the dispatch; hermes-agent holds it
+  natively until idle, the same way it distinguishes steer from queue
+  today); a Herdr recipient gets the marker and the pump. (AX.5 removes
   the marker for Herdr recipients only.) Code contract C5.
 - [ ] D10 — tests listed under Required validation.
 
@@ -252,7 +257,7 @@ pub(crate) fn nudge_mode_for_request(request: &SendRequest, task_id: &Option<Tas
 ```
 
 The Task body therefore never needs `<when>`: it is only ever delivered
-from the queue (marker on tmux and graft; AX.5 pump on Herdr).
+queue-class (marker on tmux; graft queue channel; AX.5 pump on Herdr).
 
 ### Unchanged surfaces
 
@@ -277,7 +282,9 @@ trait; `crates/atm-core/src/nudge_dispatch.rs`.
    no `read atm `.
 4. `atm send tmux-member --task-id t1 --stdin` writes the message, sets
    the pending-nudge marker, emits no steer, and the marker nudge renders
-   the Task body; `atm send tmux-member --stdin` (no task) still steers.
+   the Task body; `atm send graft-member --task-id t1 --stdin` emits one
+   graft dispatch with `NudgeKind::Queue` carrying the Task body;
+   `atm send tmux-member --stdin` (no task) still steers.
 5. All Required validation tests pass; `just validate` green, including
    `scripts/check-nudge-taxonomy.py` with an unchanged allowlist (no new
    identifier in this sprint contains `nudge`; the migration function is
@@ -290,7 +297,8 @@ trait; `crates/atm-core/src/nudge_dispatch.rs`.
   `atm queue` resolves Queue / QueueAck, and a `--task-id` send resolves
   Task and `NudgeMode::Deferred` whether sent with `atm send` or `atm
   queue` (AC 4; six assertions per backend, plus the marker assertion
-  for the tmux member on the sync and async write paths).
+  for the tmux member and the `NudgeKind::Queue` graft-dispatch assertion
+  on the sync and async write paths).
 - `crates/atm-core/src/send/nudge_template.rs` unit tests: every default
   body renders without error; no default body contains `read atm `;
   Queue, QueueAck, Task bodies lack `<when`; Delivery, DeliveryAck

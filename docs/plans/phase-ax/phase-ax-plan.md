@@ -102,9 +102,11 @@ Minor defects in the default template bodies found in the same review:
   placeholders (`from`, `team`, `message_id`, `description`, `task_id`),
   renderer, and override store are reused.
 - Tasks are always queued and always require ack **on every backend**:
-  a `--task-id` send is forced to `NudgeMode::Deferred` (AX.1), so tmux
-  and graft recipients get the queue marker and Herdr recipients get the
-  pump reminder; the Task body therefore carries no `<when>`. The template
+  a `--task-id` send is forced to `NudgeMode::Deferred` (AX.1). Each
+  backend then delivers it through its existing queue mechanism: tmux via
+  the pending-nudge marker, graft via its independent queue-kind wire
+  channel (hermes-agent supports steer and queue natively), Herdr via the
+  pump reminder. The Task body therefore carries no `<when>`. The template
   surface is seven kinds: `delivery`, `delivery_ack`, `queue`, `queue_ack`,
   `task`, `acknowledge`, `acknowledge_task`. `delivery_task` and
   `delivery_task_ack` are retired.
@@ -270,8 +272,9 @@ test or evidence gate.
   team.
 - Herdr steer and failed tmux hook not recorded in the shared JSONL log.
 - New placeholders (unread count) or renderer conditionals.
-- Task reminders for tmux and graft members (state tracking and the
-  queue marker apply to them; only the Herdr pump reminds in this phase).
+- Task reminders for tmux and graft members (state tracking applies to
+  them; tmux delivers through the marker and graft through its queue
+  channel; only the Herdr pump reminds in this phase).
 - Publishing reminder counters to `atm doctor`.
 - Cross-host and cross-team task assignment: task transitions are applied
   only to locally originated writes; peer receipts never create or reject

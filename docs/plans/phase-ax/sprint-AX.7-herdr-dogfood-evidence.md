@@ -56,7 +56,8 @@ the observed prompt text per case.
 | C14 | a task to cipher left idle and unacked for ≥ 10 min | ten `Reminded` rows; one queued message from `atm-daemon` in team-lead's inbox; doctor warns `ATM_TASK_STALLED`; clears after `--task-complete` |
 | C15 | `atm send cipher --task-id t-adm --stdin` from a peer host (cross-host send via `--peer`) | delivered; `atm list --tasks` shows no row for `t-adm` |
 | C15b | cipher `atm ack` of the C15 message | ack succeeds (exit 0); still no row and no event for `t-adm` |
-| C16 | `atm send tmux-or-graft-member --task-id t-tm --stdin` (one member temporarily on `--backend tmux`) | no steer; queue marker set; Task body delivered on idle |
+| C16 | `atm send tmux-member --task-id t-tm --stdin` (one member temporarily on `--backend tmux`) | no steer; queue marker set; Task body delivered on idle |
+| C17 | `atm send loki@hermes --task-id t-gr --stdin` (graft member, if the hermes testbed is up) | one graft dispatch with `kind: queue`; hermes-agent surfaces the Task body when idle; else recorded as not run |
 
 4. C6 is the regression case for the stranded-7a defect. With the targeted
    read action the recipient must read both messages. If stranding
@@ -85,6 +86,7 @@ None.
 ## Acceptance criteria
 
 1. C1–C5, C7–C14, and C16 PASS with transcripts.
+4. C17 PASS or recorded as not run.
 2. C6 PASS, or FAIL attributed to coalescing with the evidence attached
    and the follow-up issue referenced.
 3. C15 and C15b PASS or recorded as not run.
