@@ -620,11 +620,12 @@ fn with_auxiliary_admission(router: axum::Router, max_connections: usize) -> axu
 impl HttpRuntime<Configured> {
     fn canonical_router(&self) -> axum::Router {
         let auxiliary_routes = with_auxiliary_admission(
-            health_route::health_router(self.health.clone(), self.diagnostic_counters.clone())
-                .merge(diagnostics_route::diagnostics_router(
+            health_route::health_router(self.diagnostic_counters.clone()).merge(
+                diagnostics_route::diagnostics_router(
                     self.diagnostic_timeline.clone(),
                     self.config.timeouts.request,
-                )),
+                ),
+            ),
             self.config.limits.max_connections,
         );
 
@@ -2968,7 +2969,7 @@ mod tests {
         // Exactly one connection admitted at a time, so a single held
         // request exhausts the auxiliary admission layer's capacity.
         let router = with_auxiliary_admission(
-            health_route::health_router(RuntimeHealth::default(), None)
+            health_route::health_router(None)
                 .merge(diagnostics_route::diagnostics_router(
                     None,
                     Duration::from_secs(1),

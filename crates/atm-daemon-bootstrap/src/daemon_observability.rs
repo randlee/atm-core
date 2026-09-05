@@ -112,6 +112,29 @@ impl DaemonObservability {
             active_log_path,
         })
     }
+
+    #[cfg(test)]
+    fn shutdown_for_test(self) -> sc_observability_types::LoggingHealthReport {
+        let logger = match Arc::try_unwrap(self.logger) {
+            Ok(logger) => logger,
+            Err(_) => panic!("test observability logger must have one owner"),
+        };
+        let lifecycle = match logger.into_inner() {
+            Ok(lifecycle) => lifecycle,
+            Err(_) => panic!("test observability logger lock must not be poisoned"),
+        };
+        let retained_logger = match Arc::try_unwrap(lifecycle.0) {
+            Ok(retained_logger) => retained_logger,
+            Err(_) => panic!("test retained logger must have one owner"),
+        };
+        retained_logger.shutdown()
+    }
+
+    #[cfg(test)]
+    fn flush_for_test(&self) {
+        let logger = self.logger.lock().expect("test observability logger lock");
+        logger.0.flush().expect("test observability logger flush");
+    }
 }
 
 impl atm_core::boundary::sealed::Sealed for DaemonObservability {}
@@ -180,9 +203,9 @@ fn retained_log_policy(rotation_max_bytes: u64) -> RetainedLogPolicy {
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, Instant};
+    use std::sync::{Arc, Condvar, Mutex};
+    use std::time::Duration;
 
-    use atm_core::observability::ObservabilityPort;
     use atm_core::test_support::EnvGuard;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -287,26 +310,39 @@ mod tests {
             rotation_max_bytes: 1024,
             rotation_max_files: 5,
             retention_max_age: Duration::from_millis(1),
-            maintenance_cadence: Duration::from_millis(10),
+            maintenance_cadence: Duration::from_nanos(1),
             writer_shutdown_timeout: Duration::from_secs(1),
             maintenance_max_work_per_pass: Some(5),
         };
         let observability =
             super::DaemonObservability::bootstrap_at_log_dir_with_policy_for_test(log_dir, policy)
                 .expect("bootstrap");
+        observability.flush_for_test();
 
-        let deadline = Instant::now() + Duration::from_secs(2);
-        let mut health = observability.health().expect("initial health");
-        while Instant::now() < deadline
-            && (rotated_log_path.exists()
-                || health
-                    .maintenance
-                    .as_ref()
-                    .is_none_or(|report| report.pruned_files_total < 1))
-        {
-            health = observability.health().expect("health during prune wait");
-            std::thread::yield_now();
-        }
+        let completion = Arc::new((
+            Mutex::new(None::<sc_observability_types::LoggingHealthReport>),
+            Condvar::new(),
+        ));
+        let completion_worker = Arc::clone(&completion);
+        let shutdown_worker = std::thread::spawn(move || {
+            let health = observability.shutdown_for_test();
+            let (state, changed) = &*completion_worker;
+            *state.lock().expect("completion state") = Some(health);
+            changed.notify_one();
+        });
+
+        let (state, changed) = &*completion;
+        let state = state.lock().expect("completion state");
+        let (mut state, timeout) = changed
+            .wait_timeout_while(state, Duration::from_secs(2), |health| health.is_none())
+            .expect("completion wait");
+        assert!(state.is_some(), "background writer shutdown must complete");
+        assert!(
+            !timeout.timed_out(),
+            "background writer shutdown exceeded the hard test bound"
+        );
+        let health = state.take().expect("completion health");
+        shutdown_worker.join().expect("shutdown worker");
 
         assert!(
             !rotated_log_path.exists(),
@@ -314,10 +350,9 @@ mod tests {
         );
 
         assert!(
-            health
-                .maintenance
-                .as_ref()
-                .is_some_and(|report| report.pruned_files_total >= 1),
+            health.maintenance.as_ref().is_some_and(|report| {
+                report.pruned_files_total >= sc_observability_types::FileCount::from_usize(1)
+            }),
             "maintenance stats should record the background prune pass"
         );
     }
