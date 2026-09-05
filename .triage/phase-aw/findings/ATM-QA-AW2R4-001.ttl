@@ -12,7 +12,7 @@
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
   triage:category "test-coverage" ;
-  triage:severity "blocking" ;
+  triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
@@ -21,7 +21,24 @@
   triage:foundIn triage:AW2 ;
   triage:foundAt "2026-09-05T03:12:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AW2R4-001/AW2-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
+
+# PARTIAL FIX + SEVERITY REASSESSMENT (qa-pr1179-r8, quality-mgr): AW.2
+# round-8 (fee01b959) added
+# ac8_null_sqlite_observability_is_test_only_in_the_source_contract
+# (crates/atm-storage-rusqlite/src/observability.rs:85), but it only does an
+# include_str! substring match against observability.rs's own definition --
+# it does not scan crates/atm-storage-rusqlite/src/ as the AC text requires,
+# so it provides no regression protection against a future unguarded
+# reference in any other file. Independently confirmed insufficient by
+# quality-mgr, req-qa (filed as ATM-QA-AW2R8-002, Minor), and rust-qa-agent
+# (filed as QA-001, Important) -- all three separately verified the current
+# call sites (shared_db_reader_lanes.rs, writer/mod.rs, shared_db.rs,
+# analyst_query.rs, lib.rs) are correctly #[cfg(test)]-gated today, so there
+# is no live production violation, only a regression-detection gap.
+# Severity downgraded from blocking to important to match this round's
+# reviewer consensus (no live violation exists); team-lead may revise.
+# Status remains open pending a real crate-wide source scan.
 
 <urn:atm:triage:occurrence/ATM-QA-AW2R4-001/AW2-1>
   a triage:Occurrence ;

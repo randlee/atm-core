@@ -7,7 +7,7 @@
 <urn:atm:triage:finding/AW2-QA-I2>
   a triage:Finding ;
   triage:findingId "AW2-QA-I2" ;
-  triage:title "AC2/AC3/AC4/AC7 lack tests asserting their literal numeric/behavioural criteria" ;
+  triage:title "AC7 saturation test does not exercise the real overflow path (AC2/AC3/AC4 now closed)" ;
   triage:description "qa-pr1179-r4 (msg 01M1QS4C69FTKB887D5K0V12Y8) at d3eee516b: req-qa: implementations look correct but no test asserts the 25k-row prune bound (AC2), the exact saturation drop count with a single DEGRADED/RECOVERED pair (AC3), non-interference under forced diagnostic failure (AC4), and bridged-row-persists-to-SQLite (AC7). Important, not blocking r4, must not accumulate further." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
@@ -21,7 +21,26 @@
   triage:foundIn triage:AW2 ;
   triage:foundAt "2026-09-05T03:12:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW2-QA-I2/AW2-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
+
+# PARTIAL FIX (qa-pr1179-r8, quality-mgr): AW.2 round-8 (fee01b959) added
+# ac2_policy_selected_info_rows_reach_the_timeline,
+# ac3_diagnostic_persistence_failure_does_not_poison_later_offers
+# (crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs), and
+# ac4_prune_reduces_a_25k_fixture_to_the_documented_row_bound
+# (crates/atm-storage-rusqlite/src/diagnostic_timeline.rs), all independently
+# confirmed genuine by quality-mgr, req-qa, and rust-qa-agent -- these close
+# the AC2/AC3/AC4 portion of this finding. AC7's new test,
+# ac7_saturation_state_transitions_from_degraded_to_recovered_after_quiet_window
+# (crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs:496), only drives
+# DegradationMonitor::observe() directly with a manually backdated
+# degraded_since; it never exercises DiagnosticTimelineWriter::offer under a
+# real paused-writer/queue-full scenario, and asserts no
+# timeline_dropped_queue_full_total-equals-excess or single-emission
+# guarantee. Confirmed independently by quality-mgr and req-qa (filed as
+# req-qa's ATM-QA-AW2R8-001, Important); rust-qa-agent's pass did not flag
+# this gap and does not overrule the two independent confirmations. This
+# finding is narrowed to the remaining AC7 gap; status stays open/important.
 
 <urn:atm:triage:occurrence/AW2-QA-I2/AW2-1>
   a triage:Occurrence ;
