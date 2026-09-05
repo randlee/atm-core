@@ -1,7 +1,7 @@
 ---
-phase: WHP
-title: Windows Herdr parity (same command set, same feature set on macOS, Linux, Windows)
-integration_branch: develop (plan) / integrate/windows-herdr-parity (dev)
+phase: AY
+title: Phase AY, Windows Herdr parity and UDS/named-pipe transport (same command set, same feature set on macOS, Linux, Windows)
+integration_branch: develop (plan) / integrate/phase-ay (dev)
 status: draft
 owner: fenix
 authored: 2026-09-05
@@ -11,7 +11,7 @@ supersedes:
   - docs/plans/phase-aq/sprint-AQ2-6-herdr-steer-backend.md:728-730 (deliverable 5 Windows deferral)
 ---
 
-# Windows Herdr parity plan
+# Phase AY: Windows Herdr parity and UDS/named-pipe transport
 
 ## Why this plan exists
 
@@ -68,10 +68,10 @@ doc before dispatch:
 | Framing on the pipe (same NDJSON as the socket?) and PROTOCOL_VERSION behaviour | W2 |
 | Pipe ACL / impersonation model | W2 |
 
-## Sprint W1: parity via the CLI transport, proven on Windows (size M)
+## Sprint W1 (AY.1): parity via the CLI transport, proven on Windows (size M)
 
-Branch `feature/whp-1-windows-herdr-cli-parity` off
-`integrate/windows-herdr-parity` (off develop). Dev and live validation
+Sprint AY.1, branch `feature/ay1-windows-herdr-cli-parity` off
+`integrate/phase-ay` (off develop). Dev and live validation
 run on a Windows machine inside a Herdr session; the dev agent is itself
 a Herdr-backed roster member on that box.
 
@@ -126,7 +126,7 @@ process-behaviour suite; official zero-regression benchmark run on the
 hot path before merge (the diff should not touch it; prove it);
 quality-mgr PASS with flaky-test-qa deployed.
 
-## Sprint W2: direct socket/pipe client (size L, blocked on Herdr facts)
+## Sprint W2 (AY.2): direct socket/pipe client (size L, blocked on Herdr facts)
 
 `transport_socket.rs` implementing `HerdrTransport` with no child
 process: `tokio::net::UnixStream` on unix, `tokio::net::windows::named_pipe`
@@ -140,6 +140,33 @@ the composition-root default with the CLI transport retained one release
 as documented fallback. Not started until the pipe framing and ACL model
 are read from Herdr source.
 
+## Request set the transport must carry (from phase AX contract, fenix@rand-m5 2026-09-05)
+
+Source of truth: feature/ax6-lead-notification-doctor (PR #1204).
+Every request carries the session (today child env `HERDR_SESSION`,
+HR-CORE-006); a socket design needs an equivalent session field on every
+request, still derived from roster data, never from the daemon's own env.
+
+| Requirement | Operation | Today's argv |
+|---|---|---|
+| HR-CORE-002 | prompt | `herdr agent prompt <AgentName> <text>` (rendered nudge template only) |
+| HR-CORE-003 | wait | `herdr agent wait <AgentName> [--until <status>]... --timeout <secs>` |
+| HR-CORE-004 | get | `herdr agent get <AgentName>` (BreakerPolicy::Bypass allowed) |
+| HR-CORE-005 | list | `herdr agent list` |
+| HR-CORE-010 (AX.6) | notify | `herdr notification show <title> --body <body> --sound request`; mail body forbidden (HR-SAFE-003) |
+
+Responses: HR-CORE-007 AgentSnapshot from `result.agent`; HR-CORE-008
+closed HerdrError enum keyed by Herdr error codes; HR-CORE-009 and
+HR-SAFE-005..007 breaker on infrastructure-class failures (connect/IO
+class on a socket). HR-SAFE-001 no send-keys fallback; HR-SAFE-002 every
+call bounded; HR-SAFE-004 no durable Herdr state in atm-herdr.
+
+Boundary: `boundaries/atm-herdr/herdr-process-adapter.toml` io_owns
+`tokio_process_spawn` and `herdr_argv_construction`. W2 replaces both and
+requires a new boundary revision, not an exception. forbidden_edges stay
+(no atm-core/atm-storage/rusqlite into atm-herdr; no atm-herdr into
+daemon/runtime crates).
+
 ## Ordering with phase AX
 
 No AX sprint assumes Windows Herdr works (AX.7 excludes it). AX.2 and
@@ -147,7 +174,9 @@ AX.6 both edit `HerdrProcessAdapter` and ADR-058. Land W1 before AX.2 and
 AX.6: W1 changes no argv and no trait method, and once it lands every
 later argv change is validated on Windows by the platform-neutral argv
 contract test. If AX.2 lands first, W1 rebases and re-runs the full
-Windows evidence set. Widen AX.7 to capture a Windows Herdr run.
+Windows evidence set. Widen AX.7 to capture a Windows Herdr run. AX.6's notify
+(HR-CORE-010) must be in the platform-neutral argv contract test before
+W1 evidence is captured, or W1 captures it in a follow-up evidence round.
 
 ## Risks
 
