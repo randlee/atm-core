@@ -578,6 +578,27 @@ pub struct AtmTimelineObservabilityCounters {
     pub dropped_persist_error_total: u64,
 }
 
+impl AtmObservabilityHealth {
+    /// Projects the shared retained-diagnostics health contract onto the
+    /// doctor report without duplicating its degradation classifier.
+    pub fn apply_retained_diagnostics(
+        &mut self,
+        retained: crate::observability_counters::RetainedObservabilityHealth,
+    ) {
+        self.jsonl = AtmJsonlObservabilityCounters {
+            forwarded_total: retained.jsonl.forwarded_total,
+            dropped_queue_full_total: retained.jsonl.dropped_queue_full_total,
+            dropped_reentrant_total: retained.jsonl.dropped_reentrant_total,
+        };
+        self.timeline = AtmTimelineObservabilityCounters {
+            written_total: retained.timeline.written_total,
+            dropped_queue_full_total: retained.timeline.dropped_queue_full_total,
+            dropped_persist_error_total: retained.timeline.dropped_persist_error_total,
+        };
+        self.degraded = retained.degraded;
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AtmMaintenanceWorkerState {

@@ -34,7 +34,7 @@ use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
 use crate::RuntimeHealth;
 use crate::bare_cli_fifo::{BareCliFifo, BareCliQueueFullDrops, drain_bare_cli_messages};
-use crate::doctor_observability::{append_counter_finding, degraded_sources};
+use crate::doctor_observability::{append_counter_finding, project_counter_health};
 use crate::router_support::{ControlPathSyncBridge, DetachedReceivedHooks, retry_deferred_marker};
 
 /// The replacement implementation of the canonical write operation.
@@ -563,17 +563,7 @@ impl StorageAndNudgeRouter {
             .expect("projection retains runtime status");
         report.herdr_queue_pump.last_tick_at = runtime_status.herdr_queue_last_tick_at;
         report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
-        report.observability.jsonl.forwarded_total = diagnostic_counters.jsonl_forwarded_total;
-        report.observability.jsonl.dropped_queue_full_total =
-            diagnostic_counters.jsonl_dropped_queue_full_total;
-        report.observability.jsonl.dropped_reentrant_total =
-            diagnostic_counters.jsonl_dropped_reentrant_total;
-        report.observability.timeline.written_total = diagnostic_counters.timeline_written_total;
-        report.observability.timeline.dropped_queue_full_total =
-            diagnostic_counters.timeline_dropped_queue_full_total;
-        report.observability.timeline.dropped_persist_error_total =
-            diagnostic_counters.timeline_dropped_persist_error_total;
-        report.observability.degraded = degraded_sources(diagnostic_counters);
+        project_counter_health(&mut report.observability, diagnostic_counters);
         append_counter_finding(&mut report.findings, diagnostic_counters);
         Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
@@ -996,7 +986,9 @@ mod tests {
         PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
-    use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
+    use atm_core::observability_counters::{
+        DiagnosticCounters, DiagnosticCountersSource, RetainedObservabilityHealth,
+    };
     use atm_core::protocol::{
         GraftReceiverRegistration, GraftReceiverUnregistration, HeartbeatActivity, OwnerGeneration,
         QueueGetNextRequest, QueuedNudgeMessage, RequestEnvelope, ResponseEnvelope,
@@ -2208,7 +2200,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn doctor_reports_bootstrap_injected_server_version() {
+    async fn doctor_observability_fields_match_health_projection() {
         let fixture = fixture(true, None, None);
         let assembly =
             open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
@@ -2227,18 +2219,21 @@ mod tests {
             http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
             peer_wire_security: None,
         };
+        let counters = DiagnosticCounters {
+            jsonl_forwarded_total: 13,
+            jsonl_dropped_queue_full_total: 2,
+            jsonl_dropped_reentrant_total: 1,
+            timeline_written_total: 11,
+            timeline_dropped_queue_full_total: 3,
+            timeline_dropped_persist_error_total: 1,
+        };
+        let expected_health = RetainedObservabilityHealth::from(counters);
         let response = fixture
             .router
             .clone()
             .with_doctor_projection(Arc::new(doctor_projection))
             .with_daemon_context(daemon_context.clone())
-            .with_diagnostic_counters(Arc::new(CounterFixture(DiagnosticCounters {
-                jsonl_forwarded_total: 13,
-                jsonl_dropped_reentrant_total: 1,
-                timeline_written_total: 11,
-                timeline_dropped_persist_error_total: 1,
-                ..DiagnosticCounters::default()
-            })))
+            .with_diagnostic_counters(Arc::new(CounterFixture(counters)))
             .dispatch(
                 ApiRequest::new(atm_core::protocol::RequestEnvelope::Doctor(
                     atm_core::doctor::DoctorQuery::default(),
@@ -2253,11 +2248,31 @@ mod tests {
                 assert_eq!(report.daemon_context, Some(daemon_context));
                 assert_eq!(report.herdr_queue_pump.last_tick_at, None);
                 assert_eq!(report.herdr_queue_pump.breaker, report.herdr_breaker);
-                assert_eq!(report.observability.jsonl.forwarded_total, 13);
-                assert_eq!(report.observability.jsonl.dropped_reentrant_total, 1);
-                assert_eq!(report.observability.timeline.written_total, 11);
-                assert_eq!(report.observability.timeline.dropped_persist_error_total, 1);
-                assert_eq!(report.observability.degraded, ["jsonl", "timeline"]);
+                assert_eq!(
+                    report.observability.jsonl.forwarded_total,
+                    expected_health.jsonl.forwarded_total
+                );
+                assert_eq!(
+                    report.observability.jsonl.dropped_queue_full_total,
+                    expected_health.jsonl.dropped_queue_full_total
+                );
+                assert_eq!(
+                    report.observability.jsonl.dropped_reentrant_total,
+                    expected_health.jsonl.dropped_reentrant_total
+                );
+                assert_eq!(
+                    report.observability.timeline.written_total,
+                    expected_health.timeline.written_total
+                );
+                assert_eq!(
+                    report.observability.timeline.dropped_queue_full_total,
+                    expected_health.timeline.dropped_queue_full_total
+                );
+                assert_eq!(
+                    report.observability.timeline.dropped_persist_error_total,
+                    expected_health.timeline.dropped_persist_error_total
+                );
+                assert_eq!(report.observability.degraded, expected_health.degraded);
             }
             other => panic!("expected doctor report, got {other:?}"),
         }
