@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T23:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T22:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AWReadinessReview ;
@@ -40,3 +42,36 @@
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "9e6383f0b" ;
   triage:orderIndex 1 .
+
+# quality-mgr, 2026-09-05, qa-pr1199-r1 (re-pin ee54c0adc): closing this
+# record. PR #1227's parity-isolation fix on fix/aw-readiness-parity
+# (merged via #1222/#1227 into integrate/phase-aw at ee54c0adc) is the
+# resolution: crates/atm-graft-python/tests/test_cli_parity.py setUpClass
+# now does os.environ.clear(); os.environ.update(cls.environment)
+# (lines 328-330) BEFORE constructing native_tools.AtmNativeTools
+# (lines 337, 342) -- the exact suggested fix direction in this finding's
+# description -- with cls._prior_environment restored in tearDown
+# (lines 354-355). PR #1227 additionally hardens this with
+# _assert_debug_native_scope (lines 286-309), hard-failing before native-
+# session creation on a release wheel or scope mismatch. Confirmed a
+# genuine root-cause fix, not a guard/workaround, by direct read at
+# ee54c0adc. PASS verdict posted: PR #1199 comment
+# https://github.com/randlee/atm-core/pull/1199#issuecomment-5555593455.
+
+<urn:atm:triage:occurrence/AW-N5-ENV-001/N5-fixed-ee54c0adc>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_cli_parity.py" ;
+  triage:line 328 ;
+  triage:snippet "os.environ.clear(); os.environ.update(cls.environment) -- applied before constructing AtmNativeTools" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ee54c0adc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/ee54c0adc> .
+
+<urn:atm:triage:worktree/integrate-phase-aw/ee54c0adc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ee54c0adc" ;
+  triage:orderIndex 2 .
