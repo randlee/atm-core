@@ -184,9 +184,10 @@ cycle-1 hardening findings; binding unless Rand objects at plan review):
   every tenth task reminder, each produce queued mail from `atm-daemon`
   to the lead **and** a Herdr desktop notification through the sealed
   adapter (`herdr notification show`), repeated every 10 min while the
-  condition persists. A third layer: every roster member with the new
-  `agent_type = operator`, an ordinary ATM recipient on any backend,
-  receives the same queued message. The notification fires even with no lead or
+  condition persists. A third layer: every configured escalation
+  recipient for the team (`atm teams add-escalation <team> <address>`,
+  any resolvable ADR-040 address including `agent@team.host`) receives
+  the same queued message through the normal send path. The notification fires even with no lead or
   operator. Doctor codes remain the audit surface, not the alerting
   surface (AX.6).
 - Doctor gains five warning codes (AX.6): `ATM_ROSTER_NO_LEAD` (Rand; a
@@ -219,7 +220,7 @@ follow-up options on #1173, not open questions.
 | AX.3 | B | **parallel with AX.1/AX.2** | Task state machine and storage | `atm-storage` task types and pure transition, `TaskStore` and wiring, `MessageWriteOrigin` carrier on both insert paths, rusqlite tables and in-transaction application, ack gate, `SendRequest::with_task_complete`, two boundary records, ADR-061, ADR-054 amendment (trait re-count), requirements §7 | `sprint-AX.3-task-state-machine.md` |
 | AX.4 | B | after AX.3; **parallel with AX.1/AX.2** | Task completion and inspection CLI | `atm send --task-complete`, `atm list --tasks` / `--task-events`, requirements §6.5/§6.6/§15.4, team-protocol, `docs/user-documents/tasks.md` | `sprint-AX.4-task-cli-and-docs.md` |
 | AX.5 | C | after A and B merge | Task reminder cycle in the Herdr pump | pump task step, idle-set widening, clock seam, `RuntimeMemberState::Blocked`, blocked-assignee reminder outcome, task-row reminder rendering, drain-first ordering (no marker exception) | `sprint-AX.5-task-reminder-cycle.md` |
-| AX.6 | C | after AX.5 | Lead notification and doctor | `atm-daemon` reserved sender, lead message, blocked escalation, Herdr desktop notification via `HerdrProcessAdapter::notify`, `AgentType::Operator` recipients, five doctor codes with catalog guidance | `sprint-AX.6-lead-notification-doctor.md` |
+| AX.6 | C | after AX.5 | Lead notification and doctor | `atm-daemon` reserved sender, lead message, blocked escalation, Herdr desktop notification via `HerdrProcessAdapter::notify`, configured escalation recipients (any resolvable address), five doctor codes with catalog guidance | `sprint-AX.6-lead-notification-doctor.md` |
 | AX.7 | D | after AX.6 merges | Live Herdr dogfood evidence | `docs/plans/phase-ax/ax7-live-proof.md` | `sprint-AX.7-herdr-dogfood-evidence.md` |
 
 Dependency graph:
@@ -287,8 +288,8 @@ test or evidence gate.
    with ten or more reminders, and `ATM_MEMBER_BLOCKED` for a member
    observed blocked; a blocked assignee reaches the lead notification on
    the same schedule; a member blocked 60 s produces lead mail and a
-   Herdr desktop notification with no task involved; an `operator`
-   roster member receives every escalation. (AX.5 mapping and outcome;
+   Herdr desktop notification with no task involved; every configured
+   escalation recipient address receives every escalation. (AX.5 mapping and outcome;
    AX.6 AC 3, 5, 6, 7; AX.7 cases C14 and C18.)
 10. `just validate` green on the integrate head, including
     `scripts/check-nudge-taxonomy.py` with an unchanged allowlist;

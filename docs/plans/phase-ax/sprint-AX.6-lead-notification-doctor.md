@@ -70,20 +70,21 @@ for member in blocked:
 
 ```
 escalate(body):
-    recipients := {the single Lead of the team} ∪ {every roster member with agent_type == Operator}
+    recipients := {the single Lead of the team} ∪ tasks.list_escalation_recipients(team)     # configured ATM addresses, D8
     for r in recipients: write queued message from DAEMON_ACTOR_NAME to r, body, requires_ack = false   # per-recipient; failure logged
     herdr_process.notify(title = first line of body, body = remaining lines, deadline)                   # C4; failure logged
     log herdr_queue_poll_outcome outcome = "lead_notified" | "blocked_escalated", member, recipients count, notify ok?
 ```
 
 Three layers, all pushed. **Lead**: the coordinating agent on the team.
-**Operator**: any roster member with the new `agent_type = operator`
-(D8). It is an ordinary ATM recipient on whatever backend its roster row
-declares (tmux, Herdr, or graft), and the escalation is ordinary queued
-mail to it; how that recipient reaches a human, if at all, is outside
-ATM. **Screen**: the Herdr notification, which fires even when the team
-has neither lead nor operator. Nothing here depends on anyone running
-doctor or reading a mailbox. `BLOCKED_NOTIFY_MS = 60_000`,
+**Escalation recipients**: a per-team list of ATM addresses (D8), each
+any resolvable form ADR-040 accepts (`agent`, `agent@team`,
+`agent@team.host`), so the human's chosen relay may live on another team
+or another host. Each escalation is ordinary queued mail to each address
+through the same write path `atm send` uses; how that recipient reaches
+a human, if at all, is outside ATM. **Screen**: the Herdr notification,
+which fires even when the team has neither lead nor recipients. Nothing
+here depends on anyone running doctor or reading a mailbox. `BLOCKED_NOTIFY_MS = 60_000`,
 `BLOCKED_RENOTIFY_MS = 600_000`, both constants beside
 `TASK_REMINDER_INTERVAL_MS`. Nothing is ever sent to the blocked agent
 itself.
@@ -159,18 +160,27 @@ shape-only completion fails the sprint.
   contains member, task id, ages and a remediation command only, never a
   message body (HR-SAFE-003 holds); `docs/atm-herdr/requirements.md`
   gains `HR-CORE-004` (notification verb, fixed argv shape, fail-soft).
-- [ ] D8 — operator agent type: `AgentType::Operator` (serde and CLI
-  string `operator`) in `crates/atm-storage/src/contract.rs` line 478
-  with its `From<String>` / `Display` / `Serialize` / `Deserialize` arms
-  (lines 493–548, no other change to that file); `atm teams add-member`
-  and `update-member` accept `--agent-type operator`; `atm members`
-  renders `type=operator`; the roster-store `team_roster` `agent_type`
-  column needs no schema change (free text). Doctor's per-team info line
-  (D3) adds the operator count; no new warning code, since an operator
-  is optional and the Herdr notification is the floor. `docs/team-protocol.md`
-  and `docs/user-documents/tasks.md` describe the three layers and how
-  to register an operator (`atm teams add-member <team> <name>
-  --agent-type operator ...` with the same backend flags as any member).
+- [ ] D8 — escalation recipients (code contract C5): `TaskStore` gains
+  `list_escalation_recipients`, `add_escalation_recipient`,
+  `remove_escalation_recipient` (trait in
+  `crates/atm-storage/src/task_store.rs`, rusqlite implementation in
+  `task_store.rs`, table in `shared_db.rs`); CLI
+  `atm teams add-escalation <team> <address>`,
+  `atm teams remove-escalation <team> <address>`, and
+  `atm teams escalations <team>` in `crates/atm/src/commands/teams.rs`
+  through new `team_admin` functions beside
+  `set_nudge_template_override_with_store`
+  (`crates/atm-core/src/team_admin.rs` line 365). The address is parsed
+  at add time with the recipient parser `atm send` uses (ADR-040 forms;
+  malformed → `ATM_MESSAGE_VALIDATION_FAILED`, exit 3) and resolved at
+  send time like any send; an unresolvable or failed recipient is logged,
+  counted in `escalation_writes_failed`, and does not stop the other
+  recipients. Doctor's per-team info line (D3) lists the recipients; no
+  new warning code, since recipients are optional and the Herdr
+  notification is the floor. `boundaries/atm-storage/task-store.toml`
+  and the sqlite companion gain the three methods in `request_types` /
+  notes. `docs/team-protocol.md` and `docs/user-documents/tasks.md`
+  describe the three layers and the commands.
 
 ### Paths to delete
 
@@ -198,6 +208,25 @@ The first line doubles as the Herdr notification title.
 <member> has been waiting for interactive input since <since> (<age>)
 open tasks: <task_id> (assigned by <assigner>, <reminder_count> reminders) | none
 Attach to its Herdr agent and answer the prompt. Run: atm members --team <team>
+```
+
+### C5 — escalation recipients
+
+```rust
+// crates/atm-storage/src/task_store.rs (TaskStore additions)
+/// Team-scoped ATM addresses that receive every escalation, verbatim as configured.
+fn list_escalation_recipients(&self, team: &TeamName) -> Result<Vec<String>, AtmError>;
+fn add_escalation_recipient(&self, team: &TeamName, address: &str, at: IsoTimestamp) -> Result<bool, AtmError>;    // false if present
+fn remove_escalation_recipient(&self, team: &TeamName, address: &str) -> Result<bool, AtmError>;                    // false if absent
+```
+
+```sql
+CREATE TABLE IF NOT EXISTS team_escalation_recipients (
+    team_name TEXT NOT NULL,
+    address TEXT NOT NULL,        -- ADR-040 form as typed; resolved at send time
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (team_name, address)
+);
 ```
 
 ### C4 — adapter notification verb
@@ -232,7 +261,8 @@ MemberBlocked,       // "ATM_MEMBER_BLOCKED"
 
 ### Unchanged surfaces
 
-`TaskStore` trait; the AX.5 reminder cadence and pseudo-rule (this
+`TaskStore` methods introduced by AX.3 (this sprint adds the three C5
+methods); the AX.5 reminder cadence and pseudo-rule (this
 sprint adds `record_lead_notified` and `list_task_events` calls inside
 the task step, which AX.5 property 6 already permits); roster schema;
 `AgentType` enum; every existing doctor code.
@@ -261,12 +291,13 @@ the task step, which AX.5 property 6 already permits); roster schema;
 6. Every task lead notification (AC 1) is accompanied by one `notify`
    call; a failing `notify` is counted in `notifications_failed` and does
    not affect the mail or the `LeadNotified` row.
-7. With one lead and one graft-backed `operator` member, each escalation
-   writes two queued messages (one per recipient) and the operator's copy
-   produces one graft dispatch with `NudgeKind::Queue`; with an operator
-   and no lead, one message and no `ATM_ROSTER_NO_LEAD` suppression
-   (doctor still warns); a failed write to one recipient does not stop
-   the other.
+7. With one lead and one configured recipient `ops@hermes.rand-m4`, each
+   escalation writes two queued messages, the second addressed through
+   the normal cross-host path; with recipients and no lead, one message
+   per recipient and doctor still warns `ATM_ROSTER_NO_LEAD`; a failed
+   write to one recipient does not stop the others and increments
+   `escalation_writes_failed`; `atm teams add-escalation atm-dev 'not an
+   address'` exits 3; add/remove/list round-trip.
 
 ## Required validation
 
@@ -283,11 +314,12 @@ the task step, which AX.5 property 6 already permits); roster schema;
   blocked 30 s then idle produces nothing.
 - `crates/atm-herdr` tests: `notify` argv matches the fixture row
   verbatim; a non-zero exit maps to `HerdrError`.
-- `crates/atm-storage/src/contract.rs` tests: `AgentType::Operator`
-  round-trips through `From<String>`, `Display`, serde; unknown strings
-  still map to `Unknown`.
+- `crates/atm-storage-rusqlite/src/task_store.rs` tests: recipient
+  add/remove/list, duplicate add returns false.
+- `crates/atm-core/src/team_admin.rs` tests: malformed address rejected,
+  ADR-040 forms accepted verbatim.
 - `crates/atm-http-runtime/src/herdr_queue_wake.rs` tests (`ax6_03_*`):
-  AC 7 recipient fan-out with a recording graft emitter.
+  AC 7 recipient fan-out with a recording write path.
 - `crates/atm-core/src/doctor/mod.rs` tests: the five codes and the
   info counts.
 - `crates/atm-storage/src/error.rs` catalog test extended.
@@ -296,7 +328,7 @@ the task step, which AX.5 property 6 already permits); roster schema;
 ## Out of scope
 
 Configurable thresholds; escalation channels owned by the daemon beyond
-lead mail, operator mail and the Herdr notification (how an operator
-agent reaches its human is that agent's harness, not ATM); notifications
+lead mail, configured-recipient mail and the Herdr notification (how a
+recipient reaches its human is that recipient's business, not ATM); notifications
 for non-Herdr backends (they have no blocked signal); any change to the
 reminder cadence.
