@@ -20,6 +20,9 @@ agents:
   boundary-guard:
     version: 0.2.0
     path: .claude/agents/boundary-guard.md
+  schema-reviewer:
+    version: 0.1.0
+    path: .claude/agents/schema-reviewer.md
   ruthless-boundary-qa:
     version: 0.1.0
     path: .claude/agents/ruthless-boundary-qa.md
