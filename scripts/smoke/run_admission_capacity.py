@@ -873,8 +873,6 @@ def sqlite_writer_probe() -> Path:
     """
     suffix = ".exe" if os.name == "nt" else ""
     probe = ROOT / "target" / "release" / f"atm-daemon-benchmark{suffix}"
-    if probe.is_file():
-        return probe
     try:
         result = subprocess.run(
             [
