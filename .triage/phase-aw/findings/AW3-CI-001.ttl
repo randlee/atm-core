@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW3-CI-001>
+  a triage:Finding ;
+  triage:findingId "AW3-CI-001" ;
+  triage:title "CLI test builds fail E0063: QueryArgs test initializers missing component, source and until after the new query fields were added" ;
+  triage:description "PR #1182 CI (run 33942329987) clippy/lint: error E0063 missing fields component, source and until in initializer of commands::log::QueryArgs, three occurrences in the test module of crates/atm/src/commands/log.rs (initializers around lines 445, 464, 482 and the Snapshot(QueryArgs { ...}) literals at 518/550/602/627). Fix: add the new fields to every test initializer (or give QueryArgs a Default-based test constructor)." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-build" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T04:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T03:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-001/AW3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW3-CI-001/AW3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/log.rs" ;
+  triage:line 445 ;
+  triage:snippet "let args = QueryArgs { ... } without component/source/until" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "a60594ff1" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/a60594ff1> .
+
+<urn:atm:triage:worktree/AW3/a60594ff1>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "a60594ff1" ;
+  triage:orderIndex 4 .
