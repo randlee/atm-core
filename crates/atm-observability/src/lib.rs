@@ -10,6 +10,32 @@ use std::{fs, fs::OpenOptions};
 use atm_core::error::AtmError;
 use atm_core::observability::RetainedSinkFaultMode;
 
+/// Shared retained logger handle. Concrete backend construction is owned here.
+pub type RetainedLogger = sc_observability::Logger;
+
+/// Builds the daemon's one retained JSONL logger after the log path was checked.
+pub fn build_retained_logger(
+    service_name: sc_observability_types::ServiceName,
+    log_dir: &Path,
+    retained_log_policy: sc_observability::RetainedLogPolicy,
+) -> Result<RetainedLogger, AtmError> {
+    prepare_retained_log(log_dir)?;
+    let mut config = sc_observability::LoggerConfig::default_for(
+        service_name,
+        logger_root_for_log_dir(log_dir)?,
+    );
+    config.level = logger_level_override()?.unwrap_or(sc_observability_types::LevelFilter::Info);
+    config.retained_log_policy = retained_log_policy;
+    config.enable_console_sink = false;
+    sc_observability::Logger::builder(config)
+        .map(|builder| builder.build())
+        .map_err(|_| {
+            AtmError::observability_bootstrap(
+                "failed to initialize shared daemon observability logger",
+            )
+        })
+}
+
 pub mod tracing_bridge;
 
 pub use tracing_bridge::{

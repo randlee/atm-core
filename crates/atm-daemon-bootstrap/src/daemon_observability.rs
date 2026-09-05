@@ -10,12 +10,9 @@ use atm_core::observability::{
     AtmObservabilityDiagnostic, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort, RetainedSinkFaultMode, diagnostic_code,
 };
+use atm_observability::build_retained_logger;
 #[cfg(test)]
 use atm_observability::retained_sink_fault_mode as shared_retained_sink_fault_mode;
-use atm_observability::{
-    logger_level_override as shared_logger_level_override,
-    logger_root_for_log_dir as shared_logger_root_for_log_dir, prepare_retained_log,
-};
 use serde_json::Map;
 
 #[cfg(test)]
@@ -27,7 +24,6 @@ use sc_observability_types::DiagnosticInfo;
 type ActionName = sc_observability_types::ActionName;
 type CorrelationId = sc_observability_types::CorrelationId;
 type Level = sc_observability_types::Level;
-type SharedLevelFilter = sc_observability_types::LevelFilter;
 type LogEvent = sc_observability_types::LogEvent;
 type OutcomeLabel = sc_observability_types::OutcomeLabel;
 type ProcessIdentity = sc_observability_types::ProcessIdentity;
@@ -359,17 +355,8 @@ fn build_logger(
     service_name: &ServiceName,
     retained_log_policy: sc_observability::RetainedLogPolicy,
 ) -> Result<(sc_observability::Logger, PathBuf), AtmError> {
-    let active_log_path = prepare_retained_log(log_dir)?;
-    let mut config = sc_observability::LoggerConfig::default_for(
-        service_name.clone(),
-        logger_root_for_log_dir(log_dir)?,
-    );
-    config.level = logger_level_override()?.unwrap_or(SharedLevelFilter::Info);
-    config.retained_log_policy = retained_log_policy;
-    config.enable_console_sink = false;
-    let builder = sc_observability::Logger::builder(config).map_err(|_source| {
-        AtmError::observability_bootstrap("failed to initialize shared daemon observability logger")
-    })?;
+    let active_log_path = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
+    let logger = build_retained_logger(service_name.clone(), log_dir, retained_log_policy)?;
     #[cfg(test)]
     let builder = if let Some(mode) = retained_sink_fault {
         register_retained_sink_fault(builder, log_dir, mode)
@@ -378,11 +365,7 @@ fn build_logger(
     };
     #[cfg(not(test))]
     let _ = retained_sink_fault;
-    Ok((builder.build(), active_log_path))
-}
-
-fn logger_root_for_log_dir(log_dir: &Path) -> Result<PathBuf, AtmError> {
-    shared_logger_root_for_log_dir(log_dir)
+    Ok((logger, active_log_path))
 }
 
 fn retained_log_policy(rotation_max_bytes: u64) -> sc_observability::RetainedLogPolicy {
@@ -475,12 +458,6 @@ fn maintenance_state_label(state: sc_observability_types::MaintenanceWorkerState
         sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
         sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
     }
-}
-
-fn logger_level_override() -> Result<Option<SharedLevelFilter>, AtmError> {
-    // The daemon latches ATM_LOG during bootstrap; changing the environment
-    // later does not reconfigure the live retained logger.
-    shared_logger_level_override()
 }
 
 fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {
