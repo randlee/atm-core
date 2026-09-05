@@ -46,3 +46,8 @@ triage:a6 a triage:Assignment ;
     triage:ofSprint triage:AX3 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-09-05T06:20:00Z"^^xsd:dateTime .
+
+triage:a7 a triage:Assignment ;
+    triage:ofSprint triage:AX1 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-05T06:20:59Z"^^xsd:dateTime .
