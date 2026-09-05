@@ -973,25 +973,6 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                 return Ok(ApiResponse::new(write_response(outcome)));
             }
             let mut committed = self.commit_write(request, deadline).await?;
-            if ingress == AuthenticatedIngress::Local
-                && committed.newly_persisted
-                && committed
-                    .canonical_request
-                    .to
-                    .as_ref()
-                    .and_then(|recipient| recipient.host())
-                    .is_some()
-            {
-                let _ = self
-                    .dispatch_resolved_peer_write(
-                        &committed.canonical_request,
-                        committed.message_id,
-                        committed.persisted_timestamp,
-                        deadline,
-                        request_id,
-                    )
-                    .await?;
-            }
             if committed.newly_persisted {
                 let hook = self.clone();
                 let hook_task = async move {
