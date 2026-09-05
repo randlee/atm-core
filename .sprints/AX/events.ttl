@@ -480,3 +480,7 @@ triage:a25 a triage:Assignment ;
     triage:ofSprint triage:AX6 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-09-05T20:11:12Z"^^xsd:dateTime .
+
+triage:c24 a triage:Completion ;
+    triage:ofSprint triage:AX6 ;
+    triage:at "2026-09-05T20:15:16Z"^^xsd:dateTime .
