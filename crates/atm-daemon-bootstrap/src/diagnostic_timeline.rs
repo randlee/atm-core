@@ -836,6 +836,18 @@ mod tests {
         let worker = std::thread::spawn(move || super::run_flush_worker(stop_rx));
 
         stop_tx.send(()).expect("stop signal delivered");
-        worker.join().expect("flush worker exits after stop signal");
+        let (joined_tx, joined_rx) = std::sync::mpsc::sync_channel(1);
+        std::thread::spawn(move || {
+            let _ = joined_tx.send(worker.join());
+        });
+        match joined_rx.recv_timeout(std::time::Duration::from_secs(1)) {
+            Ok(result) => result.expect("flush worker exits after stop signal"),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                panic!("flush worker did not exit within the bounded stop deadline")
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                panic!("flush worker join watchdog disconnected")
+            }
+        }
     }
 }
