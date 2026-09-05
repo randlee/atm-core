@@ -432,11 +432,11 @@ impl StorageAndNudgeRouter {
         })
     }
 
-    /// Delivers one locally admitted host-qualified write using the daemon's
-    /// selected peer-wire mode. The record is already durable at this point;
-    /// this method creates neither a second application route nor delivery
-    /// recovery state. Per ADR-057, connection reuse can redial only before
-    /// exchange; it never retries a request after handing it to the sender.
+    /// Delivers a host-qualified write through the selected peer-wire mode.
+    ///
+    /// Cross-host writes are intentionally not admitted into the local mailbox:
+    /// without the durable outbox design, a failed peer exchange must leave no
+    /// misleading local echo or local nudge behind.
     async fn dispatch_resolved_peer_write(
         &self,
         request: &atm_core::send::WriteRequest,
@@ -444,9 +444,11 @@ impl StorageAndNudgeRouter {
         timestamp: atm_core::types::IsoTimestamp,
         deadline: RequestDeadline,
         _request_id: RequestId,
-    ) -> Result<(), AtmError> {
+    ) -> Result<WriteOutcome, AtmError> {
         let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
-            return Ok(());
+            return Err(AtmError::validation(
+                "cross-host delivery requires a host-qualified recipient",
+            ));
         };
         let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::daemon_unavailable(
@@ -480,7 +482,13 @@ impl StorageAndNudgeRouter {
             .await?
             .into_inner()
         {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => Ok(()),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+                Ok(WriteOutcome::Sent(outcome))
+            }
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+                Ok(WriteOutcome::Acknowledged(outcome))
+            }
+            ResponseEnvelope::Error(error) => Err(error),
             response => Err(AtmError::new(
                 atm_core::error_codes::AtmErrorCode::InternalError,
                 "cross-host daemon-owned delivery returned a non-write response",
@@ -942,6 +950,25 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             // shared writer uses them for its state and file-policy paths.
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
+            if ingress == AuthenticatedIngress::Local
+                && request
+                    .to
+                    .as_ref()
+                    .and_then(|recipient| recipient.host())
+                    .is_some()
+            {
+                let (message_id, timestamp) = atm_core::schema::AtmMessageId::new_with_timestamp();
+                let outcome = self
+                    .dispatch_resolved_peer_write(
+                        &request.with_origin_metadata(message_id, timestamp),
+                        message_id,
+                        timestamp,
+                        deadline,
+                        request_id,
+                    )
+                    .await?;
+                return Ok(ApiResponse::new(write_response(outcome)));
+            }
             let mut committed = self.commit_write(request, deadline).await?;
             if ingress == AuthenticatedIngress::Local
                 && committed.newly_persisted
@@ -952,14 +979,15 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                     .and_then(|recipient| recipient.host())
                     .is_some()
             {
-                self.dispatch_resolved_peer_write(
-                    &committed.canonical_request,
-                    committed.message_id,
-                    committed.persisted_timestamp,
-                    deadline,
-                    request_id,
-                )
-                .await?;
+                let _ = self
+                    .dispatch_resolved_peer_write(
+                        &committed.canonical_request,
+                        committed.message_id,
+                        committed.persisted_timestamp,
+                        deadline,
+                        request_id,
+                    )
+                    .await?;
             }
             if committed.newly_persisted {
                 let hook = self.clone();
@@ -4331,6 +4359,20 @@ mod tests {
             response.into_inner(),
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
         ));
+        assert!(
+            local
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("agent"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("read local recipient mailbox")
+                .is_empty(),
+            "a host-qualified send must not leave a local mailbox echo"
+        );
         assert_eq!(
             remote
                 .message_store
@@ -4344,7 +4386,7 @@ mod tests {
                 .expect("read remote recipient mailbox")
                 .len(),
             1,
-            "the peer listener receives exactly the locally admitted canonical write"
+            "the peer listener receives exactly one canonical write"
         );
         remote_runtime
             .begin_shutdown()
