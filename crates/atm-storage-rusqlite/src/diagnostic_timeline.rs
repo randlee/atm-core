@@ -8,13 +8,15 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use atm_storage::{AtmError, DiagnosticEvent, DiagnosticQuery, DiagnosticTimelineStore};
+use atm_storage::{
+    AtmError, DiagnosticEvent, DiagnosticQuery, DiagnosticRecordError, DiagnosticTimelineStore,
+};
 use rusqlite::params;
 
 #[cfg(test)]
 use crate::observability::PassiveSqliteObservability;
 use crate::shared_db::SharedDb;
-use crate::writer::{DIAGNOSTIC_BATCH_MAX, DiagnosticBatchOffer};
+use crate::writer::DiagnosticBatchOffer;
 
 pub const DIAGNOSTIC_DETAIL_MAX_BYTES: usize = 1024;
 pub const DIAGNOSTIC_MAX_ROWS: usize = 20_000;
@@ -57,24 +59,18 @@ impl SqliteDiagnosticTimeline {
         self.db.writer.diagnostic_stats()
     }
 
-    fn offer_batch(&self, events: Vec<DiagnosticEvent>) -> Result<(), AtmError> {
+    fn offer_batch(&self, events: Vec<DiagnosticEvent>) -> Result<(), DiagnosticRecordError> {
         match self.db.writer.try_record_diagnostics(events) {
             DiagnosticBatchOffer::Accepted => Ok(()),
-            DiagnosticBatchOffer::QueueFull => Err(AtmError::daemon_unavailable(
-                "diagnostic timeline queue is full; batch dropped",
-            )),
-            DiagnosticBatchOffer::WriterClosed => Err(AtmError::daemon_unavailable(
-                "diagnostic timeline writer is unavailable; batch dropped",
-            )),
-            DiagnosticBatchOffer::InvalidBatch => Err(AtmError::mailbox_write(format!(
-                "diagnostic timeline batch must contain 1..={DIAGNOSTIC_BATCH_MAX} events",
-            ))),
+            DiagnosticBatchOffer::QueueFull => Err(DiagnosticRecordError::QueueFull),
+            DiagnosticBatchOffer::WriterClosed => Err(DiagnosticRecordError::WriterClosed),
+            DiagnosticBatchOffer::InvalidBatch => Err(DiagnosticRecordError::InvalidBatch),
         }
     }
 }
 
 impl DiagnosticTimelineStore for SqliteDiagnosticTimeline {
-    fn record_batch(&self, events: &[DiagnosticEvent]) -> Result<(), AtmError> {
+    fn record_batch(&self, events: &[DiagnosticEvent]) -> Result<(), DiagnosticRecordError> {
         let events = events
             .iter()
             .cloned()
