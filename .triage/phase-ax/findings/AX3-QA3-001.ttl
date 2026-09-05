@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-QA3-001>
+  a triage:Finding ;
+  triage:findingId "AX3-QA3-001" ;
+  triage:title "composition_installs_the_task_store removes its temp dir while the SQLite runtime assembly is still alive; fails on Windows CI with a sharing violation (os error 32)" ;
+  triage:description "Found by CI on PR #1191 head 95f05b3f7f3106a67826383530f476693d0c3e6c: job 'Test (windows-latest)' of run 33958891979 failed with exactly one test failure, composition::tests::composition_installs_the_task_store in crates/atm-runtime/src/composition.rs, panicking at line 348 col 39 with 'remove tempdir: Os { code: 32, ... The process cannot access the file because it is being used by another process. }'. The test (added for AX3-QA2-003 in commit 95f05b3f7) creates a temp dir under std::env::temp_dir(), opens an isolated SQLite boundary via atm_runtime_test_support::open_isolated_sqlite_boundary(&root), asserts task_store().is_ok(), then calls std::fs::remove_dir_all(root).expect(...) while assembly (and its reader-pool/writer threads holding the .sqlite files open) is still in scope. On Windows an open file cannot be deleted, so the cleanup panics. ubuntu and macos passed. rust-qa-agent flagged the manual temp-dir cleanup as a minor note in ax3-qa-r3; it is a real cross-platform defect (docs/cross-platform-guidelines.md). Fix: drop the assembly before cleanup (drop(assembly)) and prefer tempfile::TempDir bound before the assembly so drop order releases the files first, or skip manual removal entirely; apply the same hygiene to daemon_config_doctor_does_not_read_a_caller_workspace only if it has the same pattern with an open handle. This blocks the merge gate because CI must be green at merge time. Crate-wide sweep (sweep_scope=crate, crates/atm-runtime) at HEAD 95f05b3f7f3106a67826383530f476693d0c3e6c found exactly 2 remove_dir_all call sites, both in composition.rs: line 348 (this finding) has a live SQLite runtime/storage handle (assembly) still in scope at the call, confirmed open; line 377 in daemon_config_doctor_does_not_read_a_caller_workspace removes a plain fixture workspace directory with no open storage/runtime handle (RuntimeConfigDoctor holds no file handle on the directory), so it is assessed as not exhibiting this defect pattern and is not recorded as a confirmed occurrence." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T10:10:05Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T10:03:16Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-QA3-001/AX3-2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-QA3-001/AX3-2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 348 ;
+  triage:snippet "std::fs::remove_dir_all(root).expect(\"remove tempdir\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "95f05b3f7f3106a67826383530f476693d0c3e6c" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/95f05b3f7> .
+
+<urn:atm:triage:worktree/AX3/95f05b3f7>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "95f05b3f7f3106a67826383530f476693d0c3e6c" ;
+  triage:orderIndex 2 .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX4-QA2-004>
+  a triage:Finding ;
+  triage:findingId "AX4-QA2-004" ;
+  triage:title "Residual of AX4-QA-009: sprint AX.4 doc line 21 (frontmatter parallel_safe rationale) still cites requirements.md section 6.6" ;
+  triage:description "AX.4 QA-2 (quality-mgr ax4-qa-r2, PR #1194 Final Quality Report 2026-09-05T10:24Z; found by req-qa, confirmed by quality-mgr) at head 193821c92835986b45070f382b4aa00a0f6ee688. Re-assessment of AX4-QA-009 (which stays open; this is the new record for the residual). The D3 deliverable text (line 56) and the AC4 citation (line 119) were corrected from 6.6 to 7.3/7.12, but the frontmatter parallel_safe dependency rationale at docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md:21 still reads 'AX.4 §6.5/§6.6/§15.4'. Fix: correct that third citation to the sections where the atm list flags actually live (7.3/7.12)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T10:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX4 ;
+  triage:foundAt "2026-09-05T10:24:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX4-QA2-004/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX4-QA2-004/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
+  triage:line 21 ;
+  triage:snippet "rationale: no functional dependency; both edit docs/requirements.md (AX.1 lines 1094/1105/4496, AX.4 §6.5/§6.6/§15.4) and docs/user-documents/nudge-templates.md ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "193821c92835986b45070f382b4aa00a0f6ee688" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/193821c9> .
+
+<urn:atm:triage:worktree/ax4-task-cli-and-docs/193821c9>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "193821c92835986b45070f382b4aa00a0f6ee688" ;
+  triage:orderIndex 4 .
