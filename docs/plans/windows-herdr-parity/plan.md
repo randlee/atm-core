@@ -47,8 +47,8 @@ atm own Herdr and gated the daemon on Herdr being reachable.
    failure is a per-call failure on the herdr harness only. The daemon
    never exits because of Herdr.
 3. **Startup ordering is an installer concern, not a daemon concern.**
-   When atm is configured to work with Herdr (herdr backend enabled in
-   daemon config and the roster has Herdr harness members), the service
+   When atm is configured to work with Herdr (the roster has at least
+   one member whose local backend is Herdr; no flag), the service
    installer (`daemon-switch`, through its explicit `herdr-entry install`
    step in the documented install procedure; see "Governance") also
    installs a Herdr start-at-login entry so Herdr is normally up before
@@ -441,10 +441,18 @@ checks. It applies to all three platforms.
 
 ### Configured or not
 
-atm is **Herdr-configured** on a host when the daemon config enables the
-herdr backend and the roster has at least one member on the Herdr
-harness. Otherwise atm is **not Herdr-configured** and nothing in this
-section applies: no Herdr traits are built, nothing Herdr-related is
+atm is **Herdr-configured** on a host when the roster has at least one
+member whose local backend is Herdr:
+`MemberSummary::local_message_received_backend()` is
+`Some(LocalMessageReceivedBackend::Herdr { .. })` (team_admin.rs:82-88,
+delivery_channel.rs:148-187 at a7aebefb8; roster metadata `backendType ==
+"herdr"`). There is **no separate enabled flag** (AYP-R5-002): roster
+backend selection is the enable signal, as today, and `RosterHarness` has
+no Herdr variant (atm-storage contract.rs:448-467). The optional `[herdr]`
+section of `$HOME/.atm.toml` (`binary_path`, `socket_path`) is tuning
+only, read by atm-daemon-bootstrap beside its existing `atm_temp_config.rs`
+reader of the same file. Otherwise atm is **not Herdr-configured** and
+nothing in this section applies: no Herdr traits are built, nothing Herdr-related is
 installed, doctor prints one line "herdr: not configured".
 
 ### Installer (`daemon-switch`, service install)
@@ -456,9 +464,9 @@ installed, doctor prints one line "herdr: not configured".
   runs `herdr --session <name> server` (Herdr applies `--session`
   globally before dispatching `server`: `src/session.rs`
   `configure_from_args`, `src/main.rs:579` at v0.8.2). The distinct
-  endpoints are the sessions named by roster members on the Herdr
-  harness plus the default when any such member names none. A configured
-  `herdr.socket_path` gets no entry: atm cannot know which Herdr
+  endpoints are the sessions named by roster members with the Herdr backend plus the default when any such member names none. Only the
+  endpoint derived from a configured `herdr.socket_path` gets no entry
+  (named-session endpoints on the same host do, AYP-R5-005): atm cannot know which Herdr
   invocation owns that path, and doctor says so (state
   `HERDR_SOCKET_PATH_NO_ENTRY`, remedy "start Herdr with the same socket
   override"). macOS: one LaunchAgent per entry with `RunAtLoad` and no
@@ -547,7 +555,7 @@ installed, doctor prints one line "herdr: not configured".
   doctor are unaffected. The daemon keeps running.
 - Doctor `herdr` section is one exhaustive typed state **per configured
   endpoint** (AY.3; AYP-R3-003): the endpoints are the sessions named by
-  roster members on the Herdr harness plus the default endpoint when any
+  roster members with the Herdr backend plus the default endpoint when any
   such member names none (or when `herdr.socket_path` is set). Rendered
   for humans and as `atm doctor --json`: `herdr.configured: bool`,
   `herdr.endpoints[]` (per endpoint: `session` or `"default"`,
@@ -555,7 +563,8 @@ installed, doctor prints one line "herdr: not configured".
   the socket transport, `null` on CLI), binary resolution with
   provenance `"configured"`/`"PATH"`, server `version`/`protocol` from
   `herdr status server --json` (CLI) or `ping` (socket), `state`,
-  `remedy`; ordered `default` first, then sessions sorted bytewise, so
+  `remedy`, `capabilities.live_handoff`, `agents[]` (name, state); ordered
+  `default` first, then sessions sorted bytewise, so
   the JSON is reproducible), and **no aggregate** `herdr.state` /
   `herdr.remedy` (AYP-R4-002): `daemon-switch` consumes
   `herdr.configured` and iterates `herdr.endpoints[]`, and `herdr.breaker` (the existing AX.6
@@ -575,8 +584,9 @@ installed, doctor prints one line "herdr: not configured".
   // fills them. HerdrEndpointDoctor REPLACES HerdrPresenceDoctor (doctor/mod.rs:42;
   // AYP-R4-003): one port, one probe path. The presence DoctorFindings that
   // HerdrPresenceDoctor produced are derived in atm-core from the observations
-  // (fn presence_findings(&[HerdrEndpointObservation]) -> Vec<DoctorFinding>), so no
-  // endpoint is probed twice. HerdrBreakerDoctor (doctor/report.rs:262) is unchanged. Every
+  // (fn presence_findings(&[HerdrEndpointObservation], &MembersList) -> Vec<DoctorFinding>,
+  // correlating each Herdr-backend member with the `agents` of its endpoint; AYP-R5-001), so
+  // no endpoint is probed twice. HerdrBreakerDoctor (doctor/report.rs:262) is unchanged. Every
   // variant carries its remedy via `fn remedy(&self) -> &'static str`; tests
   // iterate every variant on the CLI transport (AY.3) and again on the socket
   // transport (AY.7).
@@ -592,7 +602,18 @@ installed, doctor prints one line "herdr: not configured".
                                                        // None on the CLI transport. HerdrEndpoint never enters atm-core.
       pub binary: Option<(PathBuf, &'static str)>,     // resolved path + "configured" | "PATH" (CLI only)
       pub state: HerdrDoctorState,
+      pub live_handoff: bool,                          // AYP-R5-004: HerdrServerInfo.capabilities contains "live_handoff";
+                                                       // false unless state is Ok. JSON: endpoints[].capabilities.live_handoff
+      pub agents: Vec<HerdrAgentObservation>,          // AYP-R5-001: one `agent list` per endpoint; empty unless state is Ok
   }
+  pub struct HerdrAgentObservation { pub name: AgentName, pub state: HerdrAgentState }
+  pub enum HerdrAgentState { Visible { status: String }, NotRunning, Blocked, Error { code: String } }
+  // presence_findings (atm-core): for every Herdr-backend member, find its endpoint (by
+  // session) and its agent by name: absent -> the existing HerdrAgentNotVisible warning;
+  // NotRunning/Blocked/Error -> the existing HerdrError-mapped warning text
+  // (replacement_handler.rs:182-206 today); endpoint state not Ok -> one Info
+  // HerdrUnavailable "presence probe skipped" as today. Zero-regression tests: visible,
+  // missing, non-running, infrastructure-failed member, each without a second probe.
   pub enum HerdrDoctorState {
       Ok { version: HerdrVersion, protocol: u32 },
       NotConfigured,
@@ -609,8 +630,14 @@ installed, doctor prints one line "herdr: not configured".
   }
   // No BreakerOpen variant: the breaker is `HerdrBreakerDoctorReport` (AX.6, unchanged).
   // ADR-001 workspace-convention seal (AYP-R4-003): Sealed supertrait; `pub mod sealed`
-  // visibility unchanged; the single authorized impl site is recorded in
-  // docs/atm-core/boundaries.md and checked by the existing boundary lint records.
+  // visibility unchanged. Machine-readable record boundaries/atm-core/herdr-endpoint-doctor.toml
+  // (BOUNDARY-HerdrEndpointDoctor; [implementation] visibility = "trait_only";
+  // [dependencies] allowed_dependents = ["atm-daemon-bootstrap"]; forbidden_edges include
+  // "atm-core -> atm-herdr"), discovered by boundary_enforcement.rs core_boundary_files()
+  // and linked from a `## HerdrEndpointDoctor` section of docs/atm-core/boundaries.md; an
+  // architecture test counts `impl HerdrEndpointDoctor for` across the workspace and
+  // requires exactly two: ClosedHerdrEndpointDoctor (atm-core) and
+  // HerdrEndpointDoctorAdapter (atm-daemon-bootstrap). The TOML is P-E's AY.3 file.
   pub trait HerdrEndpointDoctor: crate::boundary::sealed::Sealed + Send + Sync {
       fn observe<'a>(&'a self, roster: &'a MembersList, caller_deadline: RequestDeadline)
           -> Pin<Box<dyn Future<Output = Vec<HerdrEndpointObservation>> + Send + 'a>>;
@@ -708,14 +735,21 @@ the operator's own Herdr operation; atm only restarts what is installed.
    (`HERDR_RESTART_ENDPOINT_UNKNOWN`); an omitted selector is accepted
    only when exactly one endpoint is configured, otherwise refused
    (`HERDR_RESTART_ENDPOINT_REQUIRED`, the message lists the endpoints);
-   a `herdr.socket_path` host is refused (`HERDR_RESTART_SOCKET_PATH`:
-   atm does not own that Herdr invocation). Every Herdr command below is
-   scoped to the selected endpoint: `herdr server ...` for `default`,
-   `herdr --session <name> server ...` for a session; the entry is the
-   matching `com.randlee.atm.herdr-server[.<name>]` identifier.
+   an endpoint whose `provenance` is `socket_path` is refused
+   (`HERDR_RESTART_SOCKET_PATH`: atm does not own that Herdr invocation);
+   named-session endpoints on the same host are eligible, since a
+   member's session outranks `socket_path` (AYP-R5-005). Every Herdr
+   command below is scoped to the selected endpoint: `herdr server ...`
+   for `default`, `herdr --session <name> server ...` for a session; the
+   entry is resolved by the one `herdr_entry_identifier(platform,
+   endpoint)` helper that `herdr-entry install/remove/status` also use
+   (macOS `com.randlee.atm.herdr-server[.<name>]`, Linux
+   `atm-herdr-server[@<name>].service`, Windows `ATM Herdr Server[
+   (<name>)]`), never rebuilt in restart code (AYP-R5-006).
 1. If the installed `herdr` binary is newer than that endpoint's running
-   server (its own `version` from doctor) and the server advertises
-   `live_handoff`, run the scoped `server live-handoff` so agent panes
+   server (its own `version` from doctor) and doctor's
+   `endpoints[].capabilities.live_handoff` is true for it (AYP-R5-004;
+   no second probe), run the scoped `server live-handoff` so agent panes
    survive; report Herdr's own result and stop on failure (Herdr's
    rollback owns the socket state).
 2. Otherwise print that stopping the server exits every agent pane on
@@ -938,11 +972,15 @@ Common preconditions:
   over ATM to `<agent>@atm-dev.fastpc4` when the cross-host link is up;
   the ssh path is the fallback and the pane-management channel. The
   parked reporter agent remains the source of truth for evidence.
-- P-E (AY.6 only): the boundary revision below is reviewed by the
-  `boundary-guard` agent, run by fenix on the TOML diff before AY.6 is
-  dispatched; the approved diff is AY.6's first commit. Owner: fenix.
-  Timing: after AY.2 merges, before AY.6 dispatch. Proposed diff to
-  `boundaries/atm-herdr/herdr-process-adapter.toml`:
+- P-E (AY.3 and AY.6): two boundary files, each reviewed by the
+  `boundary-guard` agent, run by fenix before the owning sprint is
+  dispatched; devs never author boundary TOML without this ruling. Owner:
+  fenix. (a) AY.3: the new `boundaries/atm-core/herdr-endpoint-doctor.toml`
+  described under "Failure behaviour" (AYP-R4-003), reviewed after AY.2
+  merges and before AY.3 dispatch; the approved file is AY.3's first
+  commit. (b) AY.6: the revision below, reviewed after AY.2 merges and
+  before AY.6 dispatch; the approved diff is AY.6's first commit.
+  Proposed diff to `boundaries/atm-herdr/herdr-process-adapter.toml`:
 
   ```toml
   [ownership]
@@ -1053,8 +1091,8 @@ no second public trait, no `async_trait`, no process-shaped response
 type, and no session in the client config. atm-herdr's public surface
 grows in AY.2 by exactly two concrete types, both consumed only by the
 composition root (`atm-daemon-bootstrap`, an allowed edge):
-`HerdrClientConfig` (input) and `HerdrDoctorProbe` (diagnostics, two
-methods, returning atm-core-owned DTOs). An architecture test pins
+`HerdrClientConfig` (input) and `HerdrDoctorProbe` (diagnostics, one
+method returning the atm-core-owned composite observation). An architecture test pins
 atm-herdr's public item list to today's list plus those two; AY.6 amends
 that one test once, adding `herdr_api_endpoint`, `HerdrHostEnv` and
 `HerdrEndpoint` (consumed by the composition root and rendered by the
@@ -1104,10 +1142,10 @@ Deliverables:
    impl HerdrDoctorProbe {
        pub fn new(config: HerdrClientConfig) -> Self;                       // CLI transport; AY.7 adds the socket form
        /// Never fails: every HerdrError becomes a HerdrDoctorState; compares against HERDR_MINIMUM_VERSION here.
+       /// One server_info (version, protocol, capabilities.live_handoff) plus one `agent list` under
+       /// BreakerPolicy::Bypass on the same endpoint fill state, live_handoff and agents (AYP-R5-001/004).
        pub async fn observe(&self, session: Option<&HerdrSession>, deadline: RequestDeadline)
            -> atm_core::doctor::HerdrEndpointObservation;
-       pub async fn list(&self, session: Option<&HerdrSession>, deadline: RequestDeadline)
-           -> Result<HerdrListOutcome, HerdrError>;                        // the existing presence probe, Bypass policy
    }
    ```
 
@@ -1205,14 +1243,19 @@ parallel_safe none (AY.6 must_follow AY.3, AYP-R3-011: both edit
 Deliverables:
 
 1. Composition: the one `HerdrProcessInvoker::new(breaker, config)`
-   site in `build_replacement_handler` fed by `HerdrClientConfig` from
-   daemon config (`herdr.binary_path`, `herdr.socket_path`; sessions
-   stay per member, per call, from roster data as in AX), plus the
+   site in `build_replacement_handler` (today `::new(breaker)` only,
+   replacement_handler.rs:308) fed by `HerdrClientConfig` from the
+   optional `[herdr]` section of `$HOME/.atm.toml` (`binary_path`,
+   `socket_path`), read by a new `herdr_config.rs` beside the existing
+   `atm_temp_config.rs` reader in atm-daemon-bootstrap (AYP-R5-002;
+   sessions stay per member, per call, from roster data as in AX), plus the
    `HerdrEndpointDoctorAdapter` (replacing `HerdrPresenceDoctorAdapter`
    and the `HerdrPresenceDoctor` port; its `impl` carries the ADR-001
-   `Sealed` marker and is the one impl site recorded in
-   `docs/atm-core/boundaries.md`, AYP-R4-003) over `HerdrDoctorProbe`; the Herdr-configured predicate
-   (backend enabled AND roster has Herdr harness members) defined once
+   `Sealed` marker and is the one production impl site permitted by
+   `boundaries/atm-core/herdr-endpoint-doctor.toml` (P-E, first commit
+   of AY.3) and its `docs/atm-core/boundaries.md` section, enforced by
+   the impl-count architecture test, AYP-R4-003) over `HerdrDoctorProbe`; the Herdr-configured predicate
+   (roster has at least one Herdr-backend member) defined once
    in atm-core and exposed through `atm doctor --json` for AY.4. No
    probe, no wait, no launch, no version chosen at startup.
 
@@ -1220,12 +1263,17 @@ Deliverables:
    // crates/atm-core/src/herdr_configured.rs (new, one function, no state)
    /// True when the daemon should construct a Herdr transport, install the
    /// Herdr start-at-login entry (AY.4) and report the doctor `herdr` section.
-   /// Pure: takes already-loaded config and roster data, never touches I/O.
-   pub fn herdr_is_configured(backend: &HerdrBackendConfig, roster: &MembersList) -> bool {
-       backend.enabled && roster.members.iter().any(|m| m.harness == RosterHarness::Herdr)
+   /// Pure: takes already-loaded roster data, never touches I/O or config.
+   pub fn herdr_is_configured(roster: &MembersList) -> bool {
+       roster.members.iter().any(|m| matches!(
+           m.local_message_received_backend(),
+           Some(LocalMessageReceivedBackend::Herdr { .. })
+       ))
    }
-   // HerdrBackendConfig is the existing config type; MembersList / MemberSummary /
-   // RosterHarness are the existing team_admin types (team_admin.rs:52-93). MembersList
+   // MembersList / MemberSummary (team_admin.rs:52-93) and LocalMessageReceivedBackend
+   // (delivery_channel.rs) are existing atm-core types; this is the same filter the AX
+   // presence probe uses (replacement_handler.rs:139-144 at a7aebefb8). There is no
+   // `enabled` flag and no HerdrBackendConfig (AYP-R5-002). MembersList
    // is built from one `load_team_roster` RosterSnapshot by
    // `ordered_roster_member_summaries` (doctor/mod.rs:679-698); a doctor run builds it
    // once and passes the same instance to this predicate and to
@@ -1237,8 +1285,12 @@ Deliverables:
    per distinct configured endpoint, each variant with its remedy;
    server version and protocol from `HerdrDoctorProbe::observe` (`herdr
    status server --json`) compared with `HERDR_MINIMUM_VERSION` inside
-   atm-herdr; the presence probe stays one bounded `herdr agent list`
-   per endpoint under `BreakerPolicy::Bypass`; the breaker stays the
+   atm-herdr; presence data is the `agents` list of the same observation
+   (one bounded `herdr agent list` per endpoint under
+   `BreakerPolicy::Bypass`), correlated with the roster by
+   `presence_findings` in atm-core (AYP-R5-001); `live_handoff` is filled
+   from `HerdrServerInfo.capabilities` and snapshotted for v0.8.0, v0.8.2
+   and 3a822e81 (AYP-R5-004); the breaker stays the
    separate `herdr.breaker` report; no socket/pipe path computed by atm.
    `atm doctor --json` gains `herdr.configured` (bool),
    `herdr.endpoints[]` (deterministic order: `default`, then sessions
@@ -1289,6 +1341,14 @@ Acceptance criteria:
 4. `atm doctor --json` schema for `herdr.*` documented in
    `docs/atm/cli-reference-1-5-0.md` and covered by a snapshot test.
 5. RULE-003 respected (new production code outside herdr_queue_wake.rs).
+6. `boundaries/atm-core/herdr-endpoint-doctor.toml` is the first commit
+   and matches the P-E-approved file; `just lint boundaries` passes; the
+   impl-count test finds exactly two `HerdrEndpointDoctor` impls;
+   `HerdrPresenceDoctor` no longer exists in the workspace (grep gate)
+   (AYP-R4-003).
+7. `presence_findings` zero-regression tests (visible, missing,
+   non-running, infrastructure-failed) pass; `herdr_is_configured` tested
+   against a roster with tmux, hermes and Herdr members (AYP-R5-001/002).
 
 Validation:
 
@@ -1377,11 +1437,16 @@ Acceptance criteria:
 3. `install` with an unmarked entry of the same identifier refuses
    (test).
 4. `--restart-herdr` refusals tested against a fake Herdr lacking
-   `live_handoff`, against doctor fixtures with two configured endpoints
-   and no selector (`HERDR_RESTART_ENDPOINT_REQUIRED`), an unknown
-   selector, a `socket_path` host, and a pending `ClientServerMismatch`
-   on the daemon restart step; the scoped argv (`herdr --session <name>
-   server ...`) and entry identifier (`.<name>`) asserted per fixture;
+   `live_handoff` (read from the doctor fixture's
+   `capabilities.live_handoff`, AYP-R5-004), against doctor fixtures with
+   two configured endpoints and no selector
+   (`HERDR_RESTART_ENDPOINT_REQUIRED`), an unknown selector, a
+   `socket_path`-provenance endpoint, a mixed fixture (`socket_path` set
+   plus two named sessions: sessions restart, default refused,
+   AYP-R5-005), and a pending `ClientServerMismatch` on the daemon
+   restart step; the scoped argv (`herdr --session <name> server ...`)
+   and the `herdr_entry_identifier` result asserted per fixture for
+   default and named endpoints on macOS, Linux and Windows (AYP-R5-006);
    the `herdr update` string does not appear in daemon-switch sources
    (grep gate).
 5. The installer never starts Herdr itself outside `--restart-herdr`
@@ -1997,3 +2062,18 @@ AX does not wait on any AY sprint.
   join created from `integrate/phase-ay` after AY.1, AY.2 and AY.3 have
   merged, never stacked (AY.4 is AY.3's stacked child); Socket track,
   rationale, stacking rule, AY.6 header and the r11 ledger line agree.
+- r13 (2026-09-05): critical-plan-reviewer R5 (solar, on r11: 2 blocking
+  / 5 important; AYP-R5-003 was the same defect as AYS-R4-001, fixed in
+  r12). AYP-R4-003 (machine-readable
+  `boundaries/atm-core/herdr-endpoint-doctor.toml` under P-E, docs
+  section, impl-count test, AY.3 acceptance 6), AYP-R5-001 (composite
+  observation with `agents`, `presence_findings(observations, roster)`,
+  zero-regression tests; `HerdrDoctorProbe` has one method), AYP-R5-002
+  (`herdr_is_configured(roster)` on `LocalMessageReceivedBackend::Herdr`;
+  no `enabled` flag, no `RosterHarness::Herdr`; `[herdr]` tuning section
+  of `$HOME/.atm.toml` read beside `atm_temp_config.rs`; "Herdr harness
+  members" wording corrected), AYP-R5-004 (`live_handoff` on the
+  observation and in doctor JSON; restart consumes it), AYP-R5-005
+  (refusal by endpoint provenance, mixed fixture; only the socket_path
+  endpoint lacks an entry), AYP-R5-006 (one `herdr_entry_identifier`
+  helper, asserted on three platforms).
