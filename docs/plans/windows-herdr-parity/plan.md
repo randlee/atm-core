@@ -146,8 +146,12 @@ Plan-declared schema rules (checked by the `schema-reviewer` agent, PR
    `PROTOCOL_VERSION`, the observed argv/JSON for the six operations atm
    uses (five nudge commands plus `status server --json` for doctor), and
    the drift items; the fake-herdr fixture (AY.2)
-   replays each version's recorded responses, so the full ADR-058 suite
-   runs once per supported version on every CI lane.
+   replays the recorded responses of the design target (v0.8.2 today)
+   plus a delta mode per documented behavioural difference (v0.8.0:
+   blocked-prompt submits then waits), so the ADR-058 suite covers every
+   0.8.\* release on every CI lane without one recording set per
+   release. A new Herdr release adds a recording set only when its diff
+   on our six operations is non-empty (rule 5).
 5. A dedicated drift check runs against the reference checkout
    (`/Users/randlee/Documents/github/herdr`, kept current by Rand): at
    every AY sprint start and at phase end, `git diff <last-recorded>..HEAD`
@@ -219,14 +223,30 @@ released artifact from v0.8.2 onward (9fac5172 "make Windows generally
 available", 2026-08-18, `release.yml` `x86_64-pc-windows-msvc`,
 `windows-arm64.yml`); v0.8.0 shipped Windows as beta without a release
 job. This is a packaging fact, not a compatibility floor: the minimum
-stays 0.8.0 on every platform. `herdr-versions.md` records "no official
-Windows artifact" for 0.8.0; conformance for 0.8.0 on Windows runs
-through the replayed recordings (platform-independent NDJSON/argv data)
-on the windows-latest CI lane, and the live Windows cases (AY.5, AY.7)
-run against the releases that have an artifact. **Open for Rand:**
-whether a source-built `herdr.exe` at v0.8.0 must also be exercised live
-on FastPC4 or the recordings-only proof is accepted for that one
-version. Until Rand rules, the plan assumes recordings-only.
+stays 0.8.0 on every platform.
+
+Design target (Rand, 2026-09-05): **design and test to v0.8.2 and claim
+0.8.\* compatibility**, minimum 0.8.0. Basis, verified on the tags
+(`git diff v0.8.0 v0.8.2`): the six operations atm uses have identical
+argv, flags, JSON shapes and exit codes at both tags (`src/cli/agent.rs`
+changes are all in `agent start`, unused by atm; `src/cli.rs` changes are
+output buffering, `--flag=value` expansion and the Windows channel gate;
+`src/cli/spec.rs` changes are help text and an unrelated `input`
+subcommand; `notification.rs` and `status.rs` unchanged; `ping`/`status
+server --json` fields unchanged). Error-code delta on our path: exactly
+one additive behaviour, `agent prompt` to an already-blocked agent is
+rejected with `agent_blocked` before any input at v0.8.2
+(`src/app/api/agents.rs`), where v0.8.0 submitted and then waited; atm
+already maps `agent_blocked` to `HerdrError::AgentBlocked` (AX contract)
+and handles the v0.8.0 outcome through the normal wait path, so both
+work with no branch. `agent_not_ready`/`agent_pane_busy` are `agent
+start` codes, not on our path. Consequences for the plan: one recording
+set (v0.8.2) is the conformance fixture, plus one delta line for v0.8.0
+in `herdr-versions.md` and a fake-herdr mode for the v0.8.0 blocked
+prompt behaviour; AY.2 runs the ADR-058 suite once against the real
+v0.8.0 macOS artifact as a one-off confirmation (the artifact exists);
+the Windows question for 0.8.0 is moot (no official artifact exists, so
+no user can be on it; Windows users are 0.8.2+ by construction).
 
 ### Reference checkout and release state (2026-09-05)
 
@@ -234,6 +254,7 @@ version. Until Rand rules, the plan assumes recordings-only.
 |---|---|
 | Reference checkout | `/Users/randlee/Documents/github/herdr`, branch master, HEAD `3a822e81` (2026-09-05) |
 | Releases in range | v0.8.0 = `857196de` (2026-08-03, PROTOCOL_VERSION 19); no v0.8.1 tag; v0.8.2 = `34ba52cc` (2026-08-19, PROTOCOL_VERSION 20) |
+| Release artifacts (GitHub Releases, 2026-09-05) | v0.8.0: `herdr-macos-aarch64`, `herdr-macos-x86_64`, `herdr-linux-aarch64`, `herdr-linux-x86_64` (no Windows). v0.8.2 (Latest): the same four plus `herdr-windows-x86_64.zip` (no Windows arm64 asset despite `windows-arm64.yml`). Preview builds are pre-releases (`preview-2026-08-31-b1ff4582e968` newest) |
 | After v0.8.2 | 92 commits to 3a822e81; `Cargo.toml` still 0.8.2; newest tag `preview-2026-08-31-b1ff4582e968` (HEAD is 41 past it, untagged); preview channel publishes from master; no sign of an imminent release |
 | Superseded pins | ADR-058 cites `d79fd746` / PROTOCOL_VERSION 21; the previous revision of this plan pinned v0.8.2 / 20. Both replaced by the minimum-version rule (AY.1 amends ADR-058) |
 
@@ -906,12 +927,16 @@ Deliverables:
    deadline, echo argv and HERDR_SESSION, `status server --json` with a
    configurable version, and a replay mode that serves recorded
    responses from `crates/atm-herdr/tests/fixtures/herdr-versions/<version>/`
-   (one directory per Herdr release from 0.8.0, captured from the
-   reference checkout at the tag, committed byte-for-byte, each with a
-   `manifest.json` naming the version, PROTOCOL_VERSION and the six
+   (one directory per recorded release: `0.8.2/` today, captured from
+   the reference checkout at the tag, committed byte-for-byte, each with
+   a `manifest.json` naming the version, PROTOCOL_VERSION and the six
    operations; `herdr-versions.md` cites the manifests rather than
-   restating them). The conformance suite runs once per recorded
-   version. Byte-exact LF output via write_all, never a .cmd shim. New
+   restating them), plus a `v0.8.0-blocked-prompt` delta mode. The
+   conformance suite runs once per recorded version and once per delta
+   mode. One-off in this sprint: the ADR-058 suite is also run against
+   the real v0.8.0 and v0.8.2 macOS artifacts (both published) and the
+   result is noted in the PR, so the 0.8.\* claim is grounded in
+   binaries, not only in recordings. Byte-exact LF output via write_all, never a .cmd shim. New
    tests: success stdout parse through a real child; argv/HERDR_SESSION
    round trip with two different sessions in one invoker; version switch
    between two calls with no restart; unknown-field tolerance. Parsers
@@ -924,7 +949,9 @@ Acceptance criteria:
    boundary_enforcement atm-herdr checks, no fixture edits).
 2. The windows-latest CI lane executes the process-behaviour suite.
 3. Conformance replay passes for every directory under
-   `fixtures/herdr-versions/`, each with a `manifest.json`.
+   `fixtures/herdr-versions/` (each with a `manifest.json`) and for
+   every delta mode; the one-off runs against the real v0.8.0 and v0.8.2
+   macOS artifacts are recorded in the PR.
 4. `HerdrProcessAdapter`'s signatures are unchanged (`git diff` on the
    trait block is empty); two sessions in one invoker route correctly
    (test).
@@ -1539,6 +1566,13 @@ AX does not wait on any AY sprint.
   reviewers noted the missing plan-hardening fenced-JSON handoff: these
   were pre-hardening reviews by Rand's request; the handoff comes with
   `/plan-hardening` after approval.
+- Rand, 2026-09-05: "design to 0.8.0 ... if there are no public api
+  changes between 0.8.0 and 0.8.2, we can design/test to 0.8.2 and call
+  it 0.8.* compatible." Verified on the tags: no changes on our six
+  operations except the additive `agent_blocked` prompt rejection.
+  Design target v0.8.2, claim 0.8.*, minimum 0.8.0; one recording set
+  plus one delta mode; artifact table added. The Windows 0.8.0 question
+  is moot (no artifact).
 - Rand, 2026-09-05: plan not approved yet; startup and environment
   concerns; atm must not own Herdr; no hard gate; launchd installs Herdr
   entry only when configured, mirrored in daemon-switch; late Herdr
