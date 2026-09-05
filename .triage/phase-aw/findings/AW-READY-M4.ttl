@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-M4>
+  a triage:Finding ;
+  triage:findingId "AW-READY-M4" ;
+  triage:title "Count-based diagnostic prune DELETE orders ASC with OFFSET=cap, deleting the newest rows instead of the oldest once the timeline hits its row cap" ;
+  triage:description "fenix reviewer-A (01M1S6XV64XHNGSP00NWXK26RQ), independently confirmed by quality-mgr via direct read (same defect also cited by arch-ctm and fenix-C). crates/atm-storage-rusqlite/src/writer/ops.rs:233-242: `DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms ASC LIMIT ?1 OFFSET ?2)` with OFFSET = DIAGNOSTIC_MAX_ROWS (20000) selects and deletes everything after the 20k oldest rows, i.e. the newest rows, not the oldest. Once at cap, the timeline freezes at its first 20k rows and every subsequent insert's excess is pruned immediately, until the separate age-based prune eventually clears space (see AW-READY-M3, which shows that age-based prune can itself never fire). The only existing regression test ac4_prune_reduces_a_25k_fixture_to_the_documented_row_bound (diagnostic_timeline.rs:193-228) asserts row COUNT only, never row identity/timing, so it cannot catch this class of bug. Fix: ORDER BY ts_unix_ms DESC, id DESC (or equivalent) to delete the actual oldest rows; add a regression test asserting survivors have the highest timestamps." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "retention-lifecycle" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW2 ;
+  triage:foundAt "2026-09-05T16:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M4/aw-integrate-235> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-M4/aw-integrate-235>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 235 ;
+  triage:snippet "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms ASC LIMIT ?1 OFFSET ?2)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/aw-integrate/7e61ad87e> .
+
+<urn:atm:triage:worktree/aw-integrate/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .

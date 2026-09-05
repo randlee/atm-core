@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-M6>
+  a triage:Finding ;
+  triage:findingId "AW-READY-M6" ;
+  triage:title "GET /v1/diagnostics advertises a 5000-row cap but storage silently clamps to 1000 with no cursor or truncation signal" ;
+  triage:description "arch-ctm (01M1S6VD1Y1G7CK9WKKA42DVKM) and fenix-C (01M1S751VVM0K4C7ZW6YDPC7BQ, their F2) independently converged (duplicate noted as O2 in fenix-C's report, counted once here); quality-mgr confirmed the storage-side clamp directly: crates/atm-storage-rusqlite/src/diagnostic_timeline.rs:91 `let limit = query.limit.unwrap_or(100).min(1_000) as i64;` while crates/atm-http-runtime/src/diagnostics_route.rs advertises/accepts up to 5000. No cursor/next_cursor, no route-specific read-concurrency or deadline bound, so a 20k-row retained timeline is neither fully traversable nor explicitly admission-bounded. Fix: single shared const for the cap (align route and storage), documented effective cap, stable opaque cursor + next_cursor, indexed query-plan test, semaphore/timeout/load-shed on reads." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "api-contract" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T16:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M6/aw-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-M6/aw-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 91 ;
+  triage:snippet "let limit = query.limit.unwrap_or(100).min(1_000) as i64;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/aw/7e61ad87e> .
+
+<urn:atm:triage:worktree/aw/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .

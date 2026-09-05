@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-N2>
+  a triage:Finding ;
+  triage:findingId "AW-READY-N2" ;
+  triage:title "ac4_queue_full_offer_is_non_blocking asserts elapsed<1s as its non-blocking proof instead of asserting the actual QueueFull variant/drop counter" ;
+  triage:description "fenix reviewer-B (01M1S72R6GNBE5ZETPK6943JMX). crates/atm-observability/src/tracing_bridge.rs:527-536 ac4_queue_full_offer_is_non_blocking asserts `elapsed < 1s` as proof of non-blocking behavior; this is a wall-clock timing assertion, not a behavioral one, and can flake under host contention (false pass on a slow blocking path, false fail on scheduling jitter). Redesign: assert the QueueFull variant and the drop counter directly, no clock; if a did-not-block proof is genuinely needed, run the offer on a thread and recv() a completion signal with no timeout." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-determinism" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW1 ;
+  triage:foundAt "2026-09-05T16:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N2/AW1-N2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-N2/AW1-N2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-observability/src/tracing_bridge.rs" ;
+  triage:line 536 ;
+  triage:snippet "assert!(start.elapsed() < Duration::from_secs(1));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e2796acffdad669adec8bad66855cf92" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e> .
+
+<urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e2796acffdad669adec8bad66855cf92" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,102 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-O7>
+  a triage:Finding ;
+  triage:findingId "AW-READY-O7" ;
+  triage:title "Minor hygiene bundle (10 items): duplicate counter structs, duplicate truncation logic, unregistered lint_rules id, dev/prod allowlist conflation, untyped escape-hatch API, admission-layer bypass on auxiliary routes, stale doc/plan field, thin wrappers, oversized wheel dependency edge, missing ADR" ;
+  triage:description "fenix-C architecture/boundaries review (01M1S751VVM0K4C7ZW6YDPC7BQ, their O7-O16), accepted on citation (each is a narrow, low-ambiguity hygiene item, not independently re-derived beyond confirming the reviewer's own clean-bill context: no boundary or legacy-daemon violation, 93/93 boundary tests pass, ADR-014 respected). Items: (1) duplicate counter-shape structs AtmJsonlObservabilityCounters vs JsonlDiagnosticCounters, field-for-field identical; (2) duplicate truncate_utf8/truncate_detail truncation logic; (3) a lint_rules id in a boundary TOML that resolves to no real rule; (4) a boundary record's allowed_dependencies conflating prod and dev-only edges, masking the exact prod edge AW.3 was meant to keep closed; (5) an untyped loopback_tcp_get_json GET-any-path escape hatch; (6) a non-cfg(test) internal constant re-exported as API; (7) a trait method (prune) with no production caller; (8) /v1/health and /v1/diagnostics bypass the canonical router's concurrency/load-shed/timeout admission layers -- still capability-authenticated, so exposure is not a hole, just an inconsistency; (9) an unused RuntimeHealth field with a stale doc/plan contract claim, plus two thin one-line wrapper functions; (10) a full atm-observability/sc-observability/tracing-subscriber edge pulled into the Python wheel to consume two constants; no ADR recording the new retained-diagnostics pipeline's components. Fix: dedupe the counter structs and truncation helpers; register or remove the dangling lint_rules id; split the boundary record's prod/dev edges; type the escape-hatch API; route health/diagnostics through the canonical admission layers or document the deliberate exception; remove the unused field/stale doc claim; inline or remove the thin wrappers; trim the Python wheel's dependency edge; record an ADR for the retained-diagnostics pipeline." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hygiene" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T16:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-6> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/observability_counters.rs" ;
+  triage:line 27 ;
+  triage:snippet "pub jsonl: JsonlDiagnosticCounters," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/observability_counters.rs" ;
+  triage:line 33 ;
+  triage:snippet "pub struct JsonlDiagnosticCounters {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/observability_counters.rs" ;
+  triage:line 66 ;
+  triage:snippet "jsonl: JsonlDiagnosticCounters {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/observability.rs" ;
+  triage:line 567 ;
+  triage:snippet "pub struct AtmJsonlObservabilityCounters {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/observability.rs" ;
+  triage:line 588 ;
+  triage:snippet "self.jsonl = AtmJsonlObservabilityCounters {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/observability.rs" ;
+  triage:line 632 ;
+  triage:snippet "pub jsonl: AtmJsonlObservabilityCounters," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW/7e61ad87e> .
+
+<urn:atm:triage:worktree/AW/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .

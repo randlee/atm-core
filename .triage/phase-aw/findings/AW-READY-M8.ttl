@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-M8>
+  a triage:Finding ;
+  triage:findingId "AW-READY-M8" ;
+  triage:title "Minor bundle: unescaped LIKE wildcard, bootstrap AlreadyInstalled fragility, silent OnceLock re-attach with no flush-thread stop signal, brittle queue-full string match" ;
+  triage:description "fenix reviewer-A (01M1S6XV64XHNGSP00NWXK26RQ), quality-mgr confirmed (a) and (c) by direct source read; (b) confirmed by reading daemon_observability.rs:94-99; (d) accepted on citation. (a) crates/atm-storage-rusqlite/src/diagnostic_timeline.rs:92 `component LIKE (?4 || '%')` has no ESCAPE clause, so a component value containing %/_ behaves as a wildcard, not a literal (bounded by 20k/1000 caps, not a DoS, but incorrect filtering). (b) crates/atm-daemon-bootstrap/src/daemon_observability.rs:94-99 hard-fails bootstrap if a global tracing subscriber is already installed (AlreadyInstalled -> bootstrap error); not reachable today since nothing else installs a subscriber first, fragility only. (c) crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs:30,65-66 `let _ = X.set(...)` silently discards a failed re-attach on ACTIVE_TIMELINE/ACTIVE_COUNTERS, and start_flush_worker's loop (:71-76) has no stop signal, never terminating. (d) crates/atm-storage-rusqlite/src/diagnostic_timeline.rs:226 classifies queue-full by `error.message().contains(\"queue is full\")`, a brittle string match rather than a typed error variant (this specific sub-item is elevated to important as AW-READY-O3, tracked separately -- this bundle keeps it at minor severity for the raw citation). Fix: ESCAPE clause or substr equality; document/assert bootstrap fragility; add a comment/assert for the silent OnceLock re-attach and a stop signal for the flush thread." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "retention-lifecycle" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:32:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW2 ;
+  triage:foundAt "2026-09-05T16:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M8/aw-integrate-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-M8/aw-integrate-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 92 ;
+  triage:snippet "component LIKE (?4 || '%')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/aw-integrate-7e61ad87e> .
+
+<urn:atm:triage:worktree/aw-integrate-7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/aw-integrate" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,102 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-N4>
+  a triage:Finding ;
+  triage:findingId "AW-READY-N4" ;
+  triage:title "atm-graft-python test_session() shares std::env::temp_dir()/atm-graft-python-tests as its fallback-log path across parallel tests and concurrent test runs on the same host" ;
+  triage:description "fenix reviewer-B (01M1S72R6GNBE5ZETPK6943JMX). crates/atm-graft-python/src/lib.rs test_session() (5 call sites: :991,1318,1521,1882,1984,2047) uses the shared std::env::temp_dir()/atm-graft-python-tests path for the fallback logger -- shared across parallel tests within a run and across concurrent cargo test invocations on the same host (rotation/rename collisions). Latent today (no test currently asserts on the file contents) but the exact shared-mutable-path class Family C already exists to catch. Redesign: per-test TempDir, matching the existing test_session_with_fallback_path pattern at :1001." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-determinism" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW4 ;
+  triage:foundAt "2026-09-05T16:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N4/N1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N4/N2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N4/N3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N4/N4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N4/N5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N4/N6> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-N4/N1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/lib.rs" ;
+  triage:line 991 ;
+  triage:snippet "std::env::temp_dir().join(\"atm-graft-python-tests\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW4/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-N4/N2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/lib.rs" ;
+  triage:line 1318 ;
+  triage:snippet "std::env::temp_dir().join(\"atm-graft-python-tests\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW4/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-N4/N3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/lib.rs" ;
+  triage:line 1521 ;
+  triage:snippet "std::env::temp_dir().join(\"atm-graft-python-tests\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW4/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-N4/N4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/lib.rs" ;
+  triage:line 1882 ;
+  triage:snippet "std::env::temp_dir().join(\"atm-graft-python-tests\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW4/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-N4/N5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/lib.rs" ;
+  triage:line 1984 ;
+  triage:snippet "std::env::temp_dir().join(\"atm-graft-python-tests\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW4/7e61ad87e> .
+
+<urn:atm:triage:occurrence/AW-READY-N4/N6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/lib.rs" ;
+  triage:line 2047 ;
+  triage:snippet "std::env::temp_dir().join(\"atm-graft-python-tests\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW4/7e61ad87e> .
+
+<urn:atm:triage:worktree/AW4/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .
