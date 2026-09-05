@@ -256,6 +256,23 @@ shape-only completion fails the sprint.
   re-counting the capability traits to seven; `docs/requirements.md` §7
   (storage) lists `TaskStore`, the two tables, and `MessageWriteOrigin`.
 - [ ] D8 — tests listed under Required validation.
+- [ ] D10 — supersede the Phase-AC task-storage deferral. `docs/requirements.md`
+  lines 52–64 ("Phase-AC supersession note") and `docs/architecture.md`
+  lines 2871–2880 ("Task Storage (Deferred)") say a later task store
+  "starts from Claude-code task schema plus Pydantic validation". Both
+  get a dated Phase-AX amendment directly below the existing text (the
+  historical note is kept, marked superseded, not rewritten): task
+  storage is approved in Phase AX (Rand, 2026-09-04, phase plan §2); the
+  canonical model is ADR-061's daemon-owned, message-derived state
+  machine implemented in Rust inside `atm-storage` / `atm-storage-rusqlite`;
+  the Claude-code-schema-plus-Pydantic direction is withdrawn because ATM
+  tasks are derived from messages the daemon already persists, the write
+  path is Rust with no Python in it, and a Claude Code task list is a
+  per-session harness artifact rather than a cross-host record. The
+  `AC.6` deletion stands: ADR-061 is a fresh design and revives none of
+  the deleted scaffolding. Gate: `grep -n Pydantic docs/requirements.md
+  docs/architecture.md` returns only lines inside the two superseded
+  notes, each followed by the Phase-AX amendment.
 - [ ] D9 — `crates/atm-storage/src/contract.rs` decomposition (arch-qa
   RULE-003): the file is already 1133 non-test lines (tests start at
   line 1134) and AX.1, AX.3 and AX.6 all add to it. Extract the graft
@@ -647,8 +664,9 @@ and re-upserts it in the same transaction. Intentionally bypassed:
 `load_pending_ack_source`'s successor invariants and reply building,
 because the completion message is the reply and no acknowledgement-of-
 an-ack is wanted. If the assignment message no longer exists, the
-completion still succeeds and the event row detail records
-`assignment_missing`.
+completion still succeeds and the `Completed` event row carries
+`marker = Some(TaskEventMarker::AssignmentMissing)` (C1); `detail` stays
+`None`, since it is reserved for `TaskRejected`.
 
 ### C8 — CLI-visible output of `atm send --json`
 

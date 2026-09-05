@@ -213,6 +213,14 @@ follow-up options on #1173, not open questions.
 | Re-sending an open task id to the same assignee | accepted: state unchanged, `assignment_message_id` and `description` updated, one `Assigned` event row with detail `resend` | rejected as a duplicate |
 | Completing a task that was never acked | accepted; the assignment message is marked acknowledged in the same transaction so it does not stay pending-ack forever | reject and require an ack first |
 
+- **Task storage is approved; the Phase-AC deferral is superseded.**
+  `docs/requirements.md` (Phase-AC supersession note) and
+  `docs/architecture.md` ("Task Storage (Deferred)") still say a later
+  task store would start from Claude-code task schema plus Pydantic.
+  AX.3 D10 amends both: the canonical task model is ADR-061's
+  message-derived state machine in Rust, the `AC.6` deletion stands, and
+  nothing deleted there is revived.
+
 ## 3. Sprints and execution tracks
 
 | Sprint | Track | Execute | Title | Owns | Doc |

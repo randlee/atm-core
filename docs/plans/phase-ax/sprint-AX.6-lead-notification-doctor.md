@@ -38,8 +38,8 @@ After every successful `record_reminder` in the AX.5 task step:
 
 ```
 if row.reminder_count >= 10 * (row.lead_notified_count + 1):          # due: one notification per ten reminders, none skipped
-    outcome := escalate(row.team, C1 body for row)                    # lead mail + configured recipients + Herdr notification
-    if outcome.lead_write is none: continue                           # no LeadNotified row; still due on the next reminder (60 s)
+    outcome := escalate(row.team, C1 body for row, "lead_notified")   # lead mail + configured recipients + Herdr notification
+    if outcome.lead_write is None: continue                           # no LeadNotified row; still due on the next reminder (60 s)
     record_lead_notified(row, now, outcome.lead, outcome.lead_write)  # increments lead_notified_count
 ```
 
@@ -60,20 +60,27 @@ for member in blocked:
     if now − since < BLOCKED_NOTIFY_MS: continue                        # 60 s: a prompt answered quickly is not an incident
     if last_blocked_notice[member] is Some and now − it < BLOCKED_RENOTIFY_MS: continue   # repeat every 10 min while still blocked
     open := tasks.open_tasks(member) if the store is available else []
-    escalate(C3 body for member, since, open)
+    escalate(member.team, C3 body(member, since, open), "blocked_escalated")   # outcome ignored: no per-task row to record
     last_blocked_notice[member] := now; stats.blocked_escalations += 1
 ```
 
 ### Escalation channel (shared by both rules)
 
 ```
-escalate(body):
-    configured := tasks.list_escalation_recipients(Team(team)); if empty: tasks.list_escalation_recipients(Daemon)   # D8 fallback
-    recipients := {the single Lead of the team} ∪ configured                                # configured ATM addresses
-    for r in recipients: write queued message from DAEMON_ACTOR_NAME to r, body, requires_ack = false   # per-recipient; failure logged
-    herdr_process.notify(title = first line of body, body = remaining lines, deadline)                   # C4; failure logged
-    log herdr_queue_poll_outcome outcome = "lead_notified" | "blocked_escalated", member, recipients count, notify ok?
+struct EscalationOutcome { lead: Option<MemberName>, lead_write: Option<MessageId>, recipients_written: u32, recipients_failed: u32, notify_ok: bool }
+
+escalate(team, body, kind) -> EscalationOutcome:                      # kind ∈ {"lead_notified", "blocked_escalated"}; the only two callers are the two rules above
+    lead := the single roster member of team with agent_type == Lead   # None if zero or several; visible via doctor (D3)
+    configured := tasks.effective_escalation_recipients(team)          # team list, else daemon list (D8 / C5)
+    lead_write := if lead: write queued message from DAEMON_ACTOR_NAME to lead, body, requires_ack = false   # None on failure, logged
+    for r in configured: write queued message from DAEMON_ACTOR_NAME to r, body, requires_ack = false        # per-recipient; failure logged, counted
+    notify_ok := herdr_process.notify(title = first line of body, body = remaining lines, deadline).is_ok()  # C4; failure logged
+    log herdr_queue_poll_outcome outcome = kind, team, lead present?, recipients_written, recipients_failed, notify_ok
+    return EscalationOutcome { lead, lead_write, recipients_written, recipients_failed, notify_ok }
 ```
+
+`stats.escalation_writes_failed += outcome.recipients_failed` and
+`stats.notifications_failed += !notify_ok` at both call sites (D6).
 
 Three layers, all pushed. **Lead**: the coordinating agent on the team.
 **Escalation recipients**: one daemon-wide oversight list of ATM
