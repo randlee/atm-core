@@ -24,6 +24,25 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AV-HOTFIX-001/AV-001-normalize> ;
   triage:triageRecordVersion "1" .
 
+# DESIGN RULING (Rand, relayed via fenix, 2026-09-05T18:45Z; status remains
+# "open", triage:dispatchReady stays false -- NO DISPATCH until fenix
+# confirms bugs 2-4 rulings and the design is fully approved):
+# Undeliverable host-qualified messages go into a durable outbound queue,
+# tagged with a stale-by time/date per message. When the cross-host link is
+# re-established, the queue is replayed IN ORDER; entries past their
+# stale-by time are dropped/marked failed rather than replayed.
+# Supporting facts fenix independently verified:
+# - The receiver already dedupes replayed ULIDs via
+#   DuplicateWriteDisposition::AlreadyDeliveredRemote in
+#   crates/atm-core/src/send/delivery_persistence.rs -- so ADR-057's stated
+#   premise of "no receiver idempotency" is stale and must be amended in the
+#   same change that ships this fix.
+# - The local-echo symptom traces to the mailbox key ignoring host: a
+#   host-qualified write lands in the local same-named agent's own inbox
+#   instead of being recognized as addressed to a remote peer.
+# Rulings for the AV-HOTFIX-001 code paths beyond this design decision
+# (bugs 2-4) are still pending and will follow one at a time.
+
 <urn:atm:triage:occurrence/AV-HOTFIX-001/AV-001-persist>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
