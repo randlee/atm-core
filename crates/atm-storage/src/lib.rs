@@ -3,6 +3,7 @@
 
 pub mod analyst_query;
 pub mod contract;
+pub mod diagnostics;
 pub mod error;
 mod error_catalog;
 pub mod error_codes;
@@ -42,6 +43,7 @@ pub use contract::{
     RosterSnapshot, RosterStore, StorageNotifier, TaskState, TeamNudgeTemplateOverrideMode,
     TeamNudgeTemplateOverrideRow, TrustedPeer, derive_ack_requirement,
 };
+pub use diagnostics::{DiagnosticEvent, DiagnosticQuery, DiagnosticTimelineStore};
 pub use error::AtmError;
 pub use error_codes::AtmErrorCode;
 pub use factory::{

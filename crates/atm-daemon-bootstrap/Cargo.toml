@@ -29,7 +29,6 @@ atm-template-sc-compose.workspace = true
 peer-tls.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-sc-observability.workspace = true
 sc-observability-types.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 fs4 = "0.13"

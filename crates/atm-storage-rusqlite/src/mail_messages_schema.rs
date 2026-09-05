@@ -196,7 +196,7 @@ fn rebuild_mail_messages_with_nullable_message_text(
             error,
         )
     })?;
-    tracing::info!(
+    tracing::info!(target: "atm_storage_rusqlite::maintenance",
         event = "sqlite.mail_messages.message_text_rebuild",
         db.namespace = %target.display(),
         db.rows_copied = copied,

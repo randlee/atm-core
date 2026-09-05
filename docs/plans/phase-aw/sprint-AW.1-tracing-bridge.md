@@ -2,6 +2,8 @@
 sprint: AW.1
 title: "Tracing bridge into sc-observability and runtime stderr retirement"
 branch: feature/aw1-tracing-bridge
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aw1-tracing-bridge
+status: complete
 base: integrate/phase-aw
 issues: "#905 ids 905-1, 905-2, 905-8 (fields/filtering/recursion/non-interference/redaction), 905-9 (allowlist doc)"
 must_follow: []
@@ -81,7 +83,7 @@ parallel_safe: []
    - `[dependencies].allowed_dependencies` = the exact dependency set of
      `crates/atm-observability/Cargo.toml` after this sprint: today
      `atm-core`, `sc-observability-types` plus the additions
-     `sc-observability`, `tracing`, `tracing-subscriber` (the PR must show
+     `sc-observability`, `serde_json`, `tracing`, `tracing-subscriber` (the PR must show
      the TOML and the manifest agree; `lint_boundaries.py` fails otherwise);
    - `forbidden_edges = ["atm-daemon -> atm-observability",
      "atm-observability -> atm-daemon-bootstrap",
