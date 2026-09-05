@@ -13,8 +13,9 @@ use super::{
     persist_message, prepare_threaded_message,
 };
 use crate::boundary::{
-    MailMessageState, MailStoreMailboxMetadataRow, Message, MessageKey,
-    NonClaudeOutboundDeliveryRequest, RosterEntry, RosterHarness, RosterMemberKind,
+    HerdrNudgeTarget, LocalSteerTarget, LocalTmuxNudgeTarget, MailMessageState,
+    MailStoreMailboxMetadataRow, Message, MessageKey, NonClaudeOutboundDeliveryRequest,
+    PostSendBuiltInTarget, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -31,7 +32,7 @@ use crate::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendReques
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
-use crate::types::{AgentName, CommandAction, IsoTimestamp, TeamName};
+use crate::types::{AgentName, CommandAction, IsoTimestamp, PaneId, TeamName};
 
 pub(crate) fn message(
     from: &str,
@@ -337,6 +338,62 @@ pub(super) fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipie
         bare_cli_post_send: false,
         roster_backed: true,
     }
+}
+
+#[test]
+fn tmux_and_herdr_dispatches_share_the_rendered_template() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let event = PostSendHookEvent {
+        sender: AgentName::from_validated(TEST_SENDER),
+        sender_chat_id: None,
+        sender_team: TeamName::from_validated(TEST_TEAM),
+        sender_host: None,
+        recipient: AgentName::from_validated("recipient"),
+        recipient_team: TeamName::from_validated(TEST_TEAM),
+        message_id: "01KZ0000000000000000000000".parse().expect("message"),
+        description: "rendered description".to_owned(),
+        requires_ack: false,
+        is_ack: false,
+        task_id: None,
+        recipient_pane_id: Some(PaneId::from_cli("%1").expect("pane")),
+    };
+    let mut tmux_snapshot = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    tmux_snapshot.recipient_pane_id = event.recipient_pane_id.clone();
+    tmux_snapshot.local_tmux_post_send = true;
+    let tmux = super::hook::build_built_in_dispatch(
+        &runtime,
+        &tmux_snapshot,
+        &event,
+        "message body",
+        crate::send::NudgeMode::Immediate,
+    )
+    .expect("tmux dispatch");
+    let mut herdr_snapshot = tmux_snapshot.clone();
+    herdr_snapshot.local_tmux_post_send = false;
+    herdr_snapshot.local_herdr_post_send = true;
+    let herdr = super::hook::build_built_in_dispatch(
+        &runtime,
+        &herdr_snapshot,
+        &event,
+        "message body",
+        crate::send::NudgeMode::Immediate,
+    )
+    .expect("Herdr dispatch");
+    let PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(LocalTmuxNudgeTarget {
+        rendered_nudge: tmux_text,
+        ..
+    })) = tmux.target
+    else {
+        panic!("expected tmux target");
+    };
+    let PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
+        rendered_nudge: herdr_text,
+        ..
+    })) = herdr.target
+    else {
+        panic!("expected Herdr target");
+    };
+    assert_eq!(tmux_text, herdr_text);
 }
 
 pub(super) fn outbound_message() -> InboxMessage {

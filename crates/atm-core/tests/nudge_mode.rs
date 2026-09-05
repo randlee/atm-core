@@ -18,6 +18,56 @@ use atm_core::send::{
 };
 use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
 
+#[derive(Default)]
+struct InMemoryAsyncStore;
+
+impl atm_storage::contract::sealed::Sealed for InMemoryAsyncStore {}
+
+impl atm_storage::MessageStore for InMemoryAsyncStore {
+    fn save_message(&self, _message: &atm_storage::Message) -> Result<(), AtmError> {
+        Ok(())
+    }
+
+    fn save_messages_atomically(&self, _messages: &[atm_storage::Message]) -> Result<(), AtmError> {
+        Ok(())
+    }
+
+    fn load_message(
+        &self,
+        _key: &atm_storage::MessageKey,
+    ) -> Result<Option<atm_storage::Message>, AtmError> {
+        Ok(None)
+    }
+
+    fn list_messages(
+        &self,
+        _query: &atm_storage::MessageQuery,
+    ) -> Result<Vec<atm_storage::Message>, AtmError> {
+        Ok(Vec::new())
+    }
+
+    fn delete_message(&self, _key: &atm_storage::MessageKey) -> Result<(), AtmError> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl atm_storage::AsyncMessageStore for InMemoryAsyncStore {}
+
+/// Minimal executor matching the core's async admission tests. This fixture's
+/// in-memory async store never yields, so no Tokio runtime is needed.
+fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    let waker = std::task::Waker::noop();
+    let mut context = std::task::Context::from_waker(waker);
+    let mut future = std::pin::pin!(future);
+    loop {
+        match future.as_mut().poll(&mut context) {
+            std::task::Poll::Ready(output) => return output,
+            std::task::Poll::Pending => std::thread::yield_now(),
+        }
+    }
+}
+
 /// Records every `mark_pending` call; every other method is a trivial no-op
 /// since this suite never exercises the durable claim/requeue lifecycle.
 #[derive(Default)]
@@ -109,12 +159,14 @@ fn setup_with_store(
     let root = tempfile::tempdir().expect("temp root");
     let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(root.path())
         .expect("sqlite runtime");
+    let async_store = Arc::new(InMemoryAsyncStore);
     let recording_store = Arc::new(RecordingPendingNudgeStore {
         fail_mark_pending,
         ..RecordingPendingNudgeStore::default()
     });
     let runtime = assembly
         .service_runtime
+        .with_async_message_store(async_store)
         .with_pending_nudge_store(recording_store.clone());
     let team: TeamName = "test-team".parse().expect("team");
     runtime
@@ -475,8 +527,8 @@ fn task_tagged_sync_prepare_forces_deferred_mode() {
     );
 }
 
-#[tokio::test]
-async fn task_tagged_async_prepare_forces_deferred_mode() {
+#[test]
+fn task_tagged_async_prepare_forces_deferred_mode() {
     let (root, runtime, _recording_store, team) = setup();
     let home_dir = root.path().join("home");
     std::fs::create_dir_all(&home_dir).expect("home dir");
@@ -488,10 +540,12 @@ async fn task_tagged_async_prepare_forces_deferred_mode() {
         IsoTimestamp::now(),
     );
 
-    let prepared =
-        atm_core::send::prepare_write_with_async_runtime(request, &NullObservability, &runtime)
-            .await
-            .expect("prepare async write");
+    let prepared = block_on(atm_core::send::prepare_write_with_async_runtime(
+        request,
+        &NullObservability,
+        &runtime,
+    ))
+    .expect("prepare async write");
     assert_eq!(
         prepared.outbound_request().nudge_mode,
         NudgeMode::Deferred,

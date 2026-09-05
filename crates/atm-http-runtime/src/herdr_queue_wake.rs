@@ -682,7 +682,12 @@ mod tests {
                     }
                 };
                 process
-                    .prompt(&dispatch.event.recipient, target.session.as_ref(), deadline)
+                    .prompt(
+                        &dispatch.event.recipient,
+                        target.session.as_ref(),
+                        &target.rendered_nudge,
+                        deadline,
+                    )
                     .await
                     .map(|HerdrPromptOutcome::Accepted(_)| PostSendEmissionPath::LocalHerdr)
                     .map_err(Into::into)
@@ -938,13 +943,25 @@ mod tests {
         queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
         pump.tick_once().await;
         assert_eq!(pump.stats().prompted, 1, "FIFO claims one message per tick");
-        assert!(fake.calls().iter().any(|call| matches!(
-            call,
-            atm_herdr::testing::FakeHerdrCall::Prompt {
-                agent,
-                session: Some(session),
-            } if agent == "aq27-agent" && session.as_str() == "aq27-test"
-        )));
+        let prompt_text = fake
+            .calls()
+            .into_iter()
+            .find_map(|call| match call {
+                atm_herdr::testing::FakeHerdrCall::Prompt { text, .. } => Some(text),
+                _ => None,
+            })
+            .expect("queue tick prompt");
+        let prompted_message_id = prompt_text
+            .split("message-id=\"")
+            .nth(1)
+            .and_then(|value| value.split('"').next())
+            .expect("message id in rendered prompt");
+        assert_eq!(
+            prompt_text,
+            format!(
+                "<atm from=\"sender@aq27-team\" message-id=\"{prompted_message_id}\">\n  <action>atm read --message-id {prompted_message_id}</action>\n  <description>AQ2.7 test message</description>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            )
+        );
         assert!(
             runtime
                 .pending_nudge_store()
