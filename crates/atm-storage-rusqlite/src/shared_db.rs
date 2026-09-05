@@ -115,42 +115,6 @@ CREATE TABLE IF NOT EXISTS peer_trusted_peers (
 CREATE INDEX IF NOT EXISTS idx_mail_message_states_mailbox
     ON mail_message_states(team, agent);
 
-CREATE TABLE IF NOT EXISTS tasks (
-    team TEXT NOT NULL,
-    task_id TEXT NOT NULL,
-    assignee TEXT NOT NULL,
-    assigner TEXT NOT NULL,
-    state TEXT NOT NULL CHECK(state IN ('assigned', 'active', 'complete')),
-    assignment_message_id TEXT NOT NULL,
-    description TEXT NOT NULL,
-    assigned_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    last_reminded_at TEXT NULL,
-    reminder_count INTEGER NOT NULL DEFAULT 0,
-    lead_notified_count INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (team, task_id, assignee)
-);
-
-CREATE INDEX IF NOT EXISTS tasks_open_by_member
-    ON tasks(team, assignee, assigned_at) WHERE state <> 'complete';
-
-CREATE TABLE IF NOT EXISTS task_events (
-    team TEXT NOT NULL,
-    task_id TEXT NOT NULL,
-    assignee TEXT NOT NULL,
-    seq INTEGER NOT NULL,
-    at TEXT NOT NULL,
-    event TEXT NOT NULL,
-    from_state TEXT NULL,
-    to_state TEXT NULL,
-    actor TEXT NOT NULL,
-    message_id TEXT NULL,
-    outcome TEXT NULL CHECK(outcome IN ('emitted', 'unrenderable', 'blocked')),
-    marker TEXT NULL CHECK(marker IN ('resend', 'assignment_missing')),
-    detail TEXT NULL,
-    PRIMARY KEY (team, task_id, assignee, seq)
-);
-
 CREATE INDEX IF NOT EXISTS idx_team_roster_team_name
     ON team_roster(team_name);
 
@@ -643,6 +607,7 @@ pub(crate) fn ensure_schema(
     migrate_template_override_kinds_to_seven(connection, target)?;
     ensure_mail_message_states_nudge_columns(connection, target)?;
     crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
+    crate::task_store::ensure_schema(connection, target)?;
     ensure_column(
         connection,
         target,

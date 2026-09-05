@@ -9,6 +9,55 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use super::SqliteTaskStore;
 use crate::shared_db::SharedDb;
+use crate::shared_db::{SharedDbTarget, SqliteConnection, sqlite_error};
+
+const TASK_SCHEMA_DDL: &str = r#"
+CREATE TABLE IF NOT EXISTS tasks (
+    team TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    assignee TEXT NOT NULL,
+    assigner TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('assigned', 'active', 'complete')),
+    assignment_message_id TEXT NOT NULL,
+    description TEXT NOT NULL,
+    assigned_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_reminded_at TEXT NULL,
+    reminder_count INTEGER NOT NULL DEFAULT 0,
+    lead_notified_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (team, task_id, assignee)
+);
+
+CREATE INDEX IF NOT EXISTS tasks_open_by_member
+    ON tasks(team, assignee, assigned_at) WHERE state <> 'complete';
+
+CREATE TABLE IF NOT EXISTS task_events (
+    team TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    assignee TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    at TEXT NOT NULL,
+    event TEXT NOT NULL,
+    from_state TEXT NULL,
+    to_state TEXT NULL,
+    actor TEXT NOT NULL,
+    message_id TEXT NULL,
+    outcome TEXT NULL CHECK(outcome IN ('emitted', 'unrenderable', 'blocked')),
+    marker TEXT NULL CHECK(marker IN ('resend', 'assignment_missing')),
+    detail TEXT NULL,
+    PRIMARY KEY (team, task_id, assignee, seq)
+);
+"#;
+
+/// Initializes the task-ledger schema outside the generic shared DB module.
+pub(crate) fn ensure_schema(
+    connection: &SqliteConnection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    connection
+        .execute_batch(TASK_SCHEMA_DDL)
+        .map_err(|error| sqlite_error(target, "failed to initialize task ledger schema", error))
+}
 
 impl SqliteTaskStore {
     pub(crate) fn new(db: Arc<SharedDb>) -> Self {
