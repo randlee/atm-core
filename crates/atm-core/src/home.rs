@@ -8,6 +8,10 @@ use crate::types::{AgentName, TeamName};
 
 const MAX_ATM_HOME_UTF8_BYTES: usize = 4096;
 const MAX_HOST_LOG_DIR_UTF8_BYTES: usize = 4096;
+/// Debug/test-only escape hatch for isolated process-pair tests. Release
+/// builds always derive runtime ownership from the operating-system account.
+#[cfg(debug_assertions)]
+const TEST_RUNTIME_HOME_ENV: &str = "ATM_TEST_RUNTIME_HOME";
 pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 pub const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
 pub const HOST_RUNTIME_SOCKET_FILE: &str = "atm-daemon.sock";
@@ -48,8 +52,15 @@ pub struct HostRuntimeScope {
 pub fn current_host_runtime_scope() -> Result<HostRuntimeScope, AtmError> {
     // This intentionally does not use HOME, USERPROFILE, ATM_HOME, or the
     // current directory: those are process-scoped inputs and therefore cannot
-    // define a host-wide singleton boundary.
-    let root = os_account_home()?.join(".atm");
+    // define a host-wide singleton boundary. Debug/test binaries can opt in
+    // to a separately named, validated scope for process-pair integration
+    // tests; that override is compiled out of release artifacts.
+    let home = test_runtime_home()?.unwrap_or(os_account_home()?);
+    host_runtime_scope_from_home(home)
+}
+
+fn host_runtime_scope_from_home(home: PathBuf) -> Result<HostRuntimeScope, AtmError> {
+    let root = home.join(".atm");
     let runtime_root = HostRuntimeRoot(root.join("daemon"));
     let durable_state_root = DurableStateRoot(root.join("db"));
     Ok(HostRuntimeScope {
@@ -59,6 +70,20 @@ pub fn current_host_runtime_scope() -> Result<HostRuntimeScope, AtmError> {
         runtime_root,
         durable_state_root,
     })
+}
+
+#[cfg(debug_assertions)]
+fn test_runtime_home() -> Result<Option<PathBuf>, AtmError> {
+    let Some(raw_home) = env::var_os(TEST_RUNTIME_HOME_ENV).filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    validate_test_runtime_home(raw_home.as_os_str()).map(Some)
+}
+
+#[cfg(not(debug_assertions))]
+fn test_runtime_home() -> Result<Option<PathBuf>, AtmError> {
+    Ok(None)
 }
 
 /// Resolve the ATM home directory for the current process.
@@ -356,6 +381,26 @@ fn validate_atm_home_os(raw_path: &OsStr) -> Result<PathBuf, AtmError> {
     validate_atm_home_path(PathBuf::from(raw_path))
 }
 
+#[cfg(debug_assertions)]
+fn validate_test_runtime_home(raw_path: &OsStr) -> Result<PathBuf, AtmError> {
+    let raw_path = raw_path.to_str().ok_or_else(|| {
+        AtmError::runtime_root_invalid(format!("{TEST_RUNTIME_HOME_ENV} must be valid UTF-8"))
+    })?;
+    if raw_path.len() > MAX_ATM_HOME_UTF8_BYTES {
+        return Err(AtmError::runtime_root_invalid(format!(
+            "{TEST_RUNTIME_HOME_ENV} must not exceed {MAX_ATM_HOME_UTF8_BYTES} UTF-8 bytes"
+        )));
+    }
+    let path = PathBuf::from(raw_path);
+    if !path.is_absolute() {
+        return Err(AtmError::runtime_root_invalid(format!(
+            "{TEST_RUNTIME_HOME_ENV} must be an absolute path: {}",
+            path.display()
+        )));
+    }
+    Ok(path)
+}
+
 fn validate_atm_home_path(path: PathBuf) -> Result<PathBuf, AtmError> {
     let utf8_path = path
         .to_str()
@@ -389,10 +434,10 @@ mod tests {
     #[cfg(unix)]
     use super::os_account_home;
     use super::{
-        atm_home, command_invocation_dir, host_db_dir_from_home, host_log_dir,
-        host_log_dir_from_home, host_mail_db_path_from_home, host_runtime_dir_from_home,
-        host_runtime_lock_path_from_home, inbox_path, inbox_path_from_home, team_dir,
-        team_dir_from_home,
+        atm_home, command_invocation_dir, current_host_runtime_scope, host_db_dir_from_home,
+        host_log_dir, host_log_dir_from_home, host_mail_db_path_from_home,
+        host_runtime_dir_from_home, host_runtime_lock_path_from_home, inbox_path,
+        inbox_path_from_home, team_dir, team_dir_from_home,
     };
     #[cfg(unix)]
     use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
@@ -581,6 +626,27 @@ mod tests {
                 .join(".atm")
                 .join("daemon")
                 .join("launch.lock")
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn host_runtime_scope_uses_the_debug_test_override() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let _runtime_home = LocalEnvGuard::set_raw(
+            super::TEST_RUNTIME_HOME_ENV,
+            tempdir.path().to_str().expect("utf8 path"),
+        );
+
+        let scope = current_host_runtime_scope().expect("test runtime scope");
+
+        assert_eq!(
+            scope.runtime_root.as_ref(),
+            tempdir.path().join(".atm").join("daemon")
+        );
+        assert_eq!(
+            scope.durable_state_root.as_ref(),
+            tempdir.path().join(".atm").join("db")
         );
     }
 
