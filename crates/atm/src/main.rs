@@ -976,7 +976,7 @@ mod adapter_tests {
 
         assert_eq!(
             atm_observability::logger_level_override_from(&env).expect("override"),
-            Some(RetainedLogLevel::Debug)
+            Some(atm_observability::RetainedLogLevel::Debug)
         );
     }
 
