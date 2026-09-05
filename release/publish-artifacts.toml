@@ -86,56 +86,70 @@ artifact = "atm-http-runtime"
 package = "atm-http-runtime"
 cargo_toml = "crates/atm-http-runtime/Cargo.toml"
 publish = true
-publish_order = 7
+publish_order = 9
 wait_after_publish_seconds = 30
 [[crates]]
 artifact = "atm-daemon-client"
 package = "atm-daemon-client"
 cargo_toml = "crates/atm-daemon-client/Cargo.toml"
 publish = true
-publish_order = 8
+publish_order = 10
+wait_after_publish_seconds = 30
+[[crates]]
+artifact = "atm-herdr"
+package = "atm-herdr"
+cargo_toml = "crates/atm-herdr/Cargo.toml"
+publish = true
+publish_order = 6
+wait_after_publish_seconds = 30
+[[crates]]
+artifact = "atm-observability"
+package = "atm-observability"
+cargo_toml = "crates/atm-observability/Cargo.toml"
+publish = true
+publish_order = 7
 wait_after_publish_seconds = 30
 [[crates]]
 artifact = "atm-runtime"
 package = "atm-runtime"
 cargo_toml = "crates/atm-runtime/Cargo.toml"
 publish = true
-publish_order = 6
+publish_order = 8
 wait_after_publish_seconds = 30
 [[crates]]
 artifact = "atm-template-sc-compose"
 package = "atm-template-sc-compose"
 cargo_toml = "crates/atm-template-sc-compose/Cargo.toml"
 publish = true
-publish_order = 9
+publish_order = 11
 wait_after_publish_seconds = 30
 [[crates]]
 artifact = "atm-daemon-bootstrap"
 package = "atm-daemon-bootstrap"
 cargo_toml = "crates/atm-daemon-bootstrap/Cargo.toml"
 publish = true
-publish_order = 10
+publish_order = 12
 wait_after_publish_seconds = 30
 [[crates]]
 artifact = "atm-daemon"
 package = "atm-daemon"
 cargo_toml = "crates/atm-daemon/Cargo.toml"
 publish = true
-publish_order = 11
+publish_order = 13
 wait_after_publish_seconds = 30
 [[crates]]
 artifact = "atm-graft"
 package = "atm-graft"
 cargo_toml = "crates/atm-graft/Cargo.toml"
 publish = true
-publish_order = 12
+publish_order = 14
 wait_after_publish_seconds = 30
 [[crates]]
 artifact = "agent-team-mail"
 package = "agent-team-mail"
 cargo_toml = "crates/atm/Cargo.toml"
 publish = true
-publish_order = 13
+publish_order = 15
 wait_after_publish_seconds = 0
 
 [[release_binaries]]
