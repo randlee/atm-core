@@ -1,0 +1,68 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX2-QA-003>
+  a triage:Finding ;
+  triage:findingId "AX2-QA-003" ;
+  triage:title "No upper bound on Herdr prompt text length; an oversized argv can execve-fail (E2BIG) and trip the shared HerdrSpawnBreaker for all Herdr-routed recipients" ;
+  triage:description "validate_prompt_text (crates/atm-herdr/src/lib.rs ~635-640) only rejects empty/whitespace text. rebuild_received_hook_dispatch (crates/atm-core/src/nudge_dispatch.rs ~123-128) falls back to the full message text (up to the 1 MiB cap) when envelope.summary is empty (legacy/migrated rows). On Linux a single argv element over MAX_ARG_STRLEN (128 KiB) fails execve with E2BIG, classified as HerdrError::ServerUnavailable, which trips the shared HerdrSpawnBreaker (BreakerPolicy::Shared) for every Herdr recipient. Reported by rust-service-hardening-agent RSH-001 (important) on PR #1186 QA-1 (head 4f77d2fff). Orchestrator ruling: deferred, because sprint AX.2 D7 explicitly states no additional length bound is imposed beyond the operating system's single-argument limit; the real defect is that an argument-size spawn failure is a scoped per-message error and must not be classified as ServerUnavailable / count toward the shared breaker. Tracked as a separate hardening issue." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T06:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX2 ;
+  triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-003/ax2-4f77d2fff-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-003/ax2-4f77d2fff-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-003/ax2-4f77d2fff-3> ;
+  triage:deferredNote "Sprint AX.2 D7 explicitly imposes no length bound beyond the OS single-argument limit; the shared-breaker misclassification of E2BIG spawn failures is tracked as a separate hardening issue (see references) for a later sprint." ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX2-QA-003/ax2-4f77d2fff-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 635 ;
+  triage:snippet "fn validate_prompt_text(text: &str) -> Result<(), HerdrError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2-4f77d2fff> .
+
+<urn:atm:triage:occurrence/AX2-QA-003/ax2-4f77d2fff-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 596 ;
+  triage:snippet "return Err(HerdrError::ServerUnavailable);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2-4f77d2fff> .
+
+<urn:atm:triage:occurrence/AX2-QA-003/ax2-4f77d2fff-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/nudge_dispatch.rs" ;
+  triage:line 127 ;
+  triage:snippet ".unwrap_or_else(|| message.envelope.text.clone())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2-4f77d2fff> .
+
+<urn:atm:triage:worktree/ax2-4f77d2fff>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:orderIndex 3 .
+

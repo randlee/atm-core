@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX2-QA-007>
+  a triage:Finding ;
+  triage:findingId "AX2-QA-007" ;
+  triage:title "FakeHerdrProcessAdapter::prompt names its used text parameter _text" ;
+  triage:description "crates/atm-herdr/src/lib.rs: the C2 trait-implementation update on FakeHerdrProcessAdapter::prompt introduced a parameter named _text (Rust's intentionally-unused convention) that the body immediately uses (_text.to_owned()) to populate FakeHerdrCall::Prompt; clippy pedantic used_underscore_binding flags this and it misleads readers. Introduced by the AX.2 diff. Fix: rename to text." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX2 ;
+  triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-007/AX2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX2-QA-007/AX2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 893 ;
+  triage:snippet "_text: &'a str," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2-herdr-template-rendering/4f77d2fff> .
+
+<urn:atm:triage:worktree/ax2-herdr-template-rendering/4f77d2fff>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:orderIndex 3 .
