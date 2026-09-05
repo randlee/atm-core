@@ -8,29 +8,31 @@
   a triage:Finding ;
   triage:findingId "AW1-RBP-F003" ;
   triage:title "observability_guidance() maps five observability error codes to one generic remediation string" ;
-  triage:description "rust-best-practices-agent RBP-F003 (confirmed by quality-mgr 01M1QGNECH4XPMY4KR9VHD7SXY): crates/atm-storage/src/error_catalog.rs:219-230 fn observability_guidance() maps all five ObservabilityEmitFailed/QueryFailed/FollowFailed/HealthFailed/BootstrapFailed codes (crates/atm-error/src/error_codes.rs:116-120) to the single string 'Repair the observability backend or retry the operation later.' Fix: differentiate the arms (bootstrap -> filesystem/permissions guidance; emit/health -> retry or report poisoned lock; query/follow -> log path/permissions). Call sites in the AW.1 diff: crates/atm-daemon-bootstrap/src/daemon_observability.rs 96-108, 172-194, 200-208, 328-341; pre-existing constructors crates/atm-storage/src/error.rs:495-525." ;
+  triage:description "rust-best-practices-agent RBP-F003 (confirmed by quality-mgr 01M1QGNECH4XPMY4KR9VHD7SXY): crates/atm-storage/src/error_catalog.rs:219-230 fn observability_guidance() maps all five ObservabilityEmitFailed/QueryFailed/FollowFailed/HealthFailed/BootstrapFailed codes (crates/atm-error/src/error_codes.rs:116-120) to the single string 'Repair the observability backend or retry the operation later.' Fix: differentiate the arms (bootstrap -> filesystem/permissions guidance; emit/health -> retry or report poisoned lock; query/follow -> log path/permissions). Call sites in the AW.1 diff: crates/atm-daemon-bootstrap/src/daemon_observability.rs 96-108, 172-194, 200-208, 328-341; pre-existing constructors crates/atm-storage/src/error.rs:495-525. Fix confirmed at feature/aw1-tracing-bridge@52c888ce1: observability_guidance() in crates/atm-storage/src/error_catalog.rs now differentiates bootstrap-failure guidance from emit/health-failure guidance and query/follow-failure guidance (three distinct strings instead of one generic string). quality-mgr independently verified CLOSED at 1106a5db4." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
   triage:category "AW1-RBP" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-09-05T02:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW1 ;
   triage:foundAt "2026-09-05T00:43:44Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW1-RBP-F003/AW0-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW1-RBP-F003/AW1-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AW1-RBP-F003/AW0-1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage/src/error_catalog.rs" ;
   triage:line 226 ;
   triage:snippet "Some(\"Repair the observability backend or retry the operation later.\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "4928f79527272827237a3b1a8d2b10f4b07ead86" ;
   triage:occursIn <urn:atm:triage:worktree/AW0/4928f79527272827237a3b1a8d2b10f4b07ead86> .
@@ -40,8 +42,8 @@
   triage:file "crates/atm-storage/src/error_catalog.rs" ;
   triage:line 226 ;
   triage:snippet "Some(\"Repair the observability backend or retry the operation later.\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw1-tracing-bridge" ;
   triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
   triage:occursIn <urn:atm:triage:worktree/AW1/3427357acc6cf4a61914c6f3cd7980557993ae12> .

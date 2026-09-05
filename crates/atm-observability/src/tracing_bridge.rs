@@ -524,12 +524,14 @@ mod tests {
 
     #[test]
     fn ac4_queue_full_offer_is_non_blocking() {
-        let bridge = TracingBridgeLayer::new(Arc::new(RetainedLogger::queue_full_for_test()));
+        let (_tempdir, bridge) = bridge();
         let start = Instant::now();
-        tracing::subscriber::with_default(
-            tracing_subscriber::Registry::default().with(bridge.clone()),
-            || tracing::warn!(target: "atm_http_runtime::listener", "queue pressure"),
-        );
+        RetainedLogger::force_queue_full_for_test(|| {
+            tracing::subscriber::with_default(
+                tracing_subscriber::Registry::default().with((*bridge).clone()),
+                || tracing::warn!(target: "atm_http_runtime::listener", "queue pressure"),
+            );
+        });
         assert!(start.elapsed() < Duration::from_secs(1));
         assert_eq!(
             bridge
