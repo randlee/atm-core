@@ -624,7 +624,7 @@ mod tests {
             || tracing::warn!(target: "atm_http_runtime::delivery", command = "send", body = "body-secret", token = "token-secret", "free-text-secret"),
         );
 
-        let jsonl = lines(&tempdir, 1);
+        let jsonl = lines(&tempdir, &bridge, 1);
         let retained: Value =
             serde_json::from_str(jsonl.lines().next().expect("retained JSONL row"))
                 .expect("valid retained JSONL");
