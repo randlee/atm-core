@@ -25,6 +25,13 @@
   triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "2" .
 
+# RE-VERIFY (qa-pr1179-r10, quality-mgr): PR #1179 tip moved 494f7c31a ->
+# 700bb7f1b (arch-ctm's AW2-CI-004, a Windows-CI CRLF-normalization fix to
+# the unrelated AC8 source-contract test in observability.rs, +5/-1, no
+# rebase). Re-ran the full suite at 700bb7f1b: cargo test -p
+# atm-storage-rusqlite -p atm-daemon-bootstrap: 197/197 passed, 0 failed.
+# This closure stands unaffected by the tip move.
+
 # CLOSURE (qa-pr1179-r10, quality-mgr): arch-ctm's fix (494f7c31a) adds
 # ac3_primary_mailbox_insert_completes_while_diagnostic_lane_is_full
 # (crates/atm-storage-rusqlite/src/writer/mod.rs:1029). quality-mgr
