@@ -40,3 +40,28 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:orderIndex 1 .
+
+# Developer follow-up on fix/aw-readiness-easy, PR #1215, 2026-09-05:
+# the same-file guard is exercised with the actual ~/.config/atm/share/<team>
+# fixture and the source bytes are asserted unchanged. Original guard:
+# f2962ecc1; follow-up regression-fixture proof: d9fa67fcc. QA owns closure.
+<urn:atm:triage:finding/AW-READY-P1>
+  triage:status "fixed" .
+
+<urn:atm:triage:occurrence/AW-READY-P1/fix-aw-readiness-easy-d9fa67fcc>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/file_policy.rs" ;
+  triage:line 221 ;
+  triage:snippet "let share_dir = home_dir.path().join(\".config\").join(\"atm\").join(\"share\").join(TEST_TEAM);" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:orderIndex 2 .

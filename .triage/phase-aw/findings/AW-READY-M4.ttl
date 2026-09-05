@@ -40,3 +40,26 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:orderIndex 1 .
+
+# Developer branch status, PR #1215, 2026-09-05: the count-prune fix is
+# present from 2603bbe56 and remains fixed on d9fa67fcc. QA owns closure.
+<urn:atm:triage:finding/AW-READY-M4>
+  triage:status "fixed" .
+
+<urn:atm:triage:occurrence/AW-READY-M4/fix-aw-readiness-easy-d9fa67fcc>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 235 ;
+  triage:snippet "ORDER BY ts_unix_ms DESC, id DESC LIMIT ?1 OFFSET ?2" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:orderIndex 2 .

@@ -100,3 +100,39 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:orderIndex 1 .
+
+# Developer follow-up on fix/aw-readiness-easy, PR #1215, 2026-09-05:
+# C9 resolves to the registered peer-dial-seam runner and C15's two pure
+# observability wrappers are removed, both in d9fa67fcc. The auxiliary-route
+# admission-layer portion (C12/C14) remains open and is owned by
+# fix/aw-readiness-api; C10 remains open and is owned by
+# fix/aw-readiness-contracts. This branch deliberately does not take those
+# owned items. QA owns closure for the fixed occurrences.
+<urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-d9fa67fcc-c9>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-http-runtime/http-runtime.toml" ;
+  triage:line 48 ;
+  triage:snippet "lint_rules = [\"LINT-BOUNDARY-HTTP-RUNTIME-DEPENDENCIES\", \"peer-dial-seam\"]" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
+
+<urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-d9fa67fcc-c15>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/observability.rs" ;
+  triage:line 195 ;
+  triage:snippet "thin fallback_path/new_logger wrappers removed; callers construct the logger directly" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:orderIndex 2 .

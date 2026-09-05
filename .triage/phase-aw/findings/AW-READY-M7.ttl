@@ -49,3 +49,26 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:orderIndex 1 .
+
+# Developer branch status, PR #1215, 2026-09-05: severity-rank filtering is
+# present from 7f678a558 and remains fixed on d9fa67fcc. QA owns closure.
+<urn:atm:triage:finding/AW-READY-M7>
+  triage:status "fixed" .
+
+<urn:atm:triage:occurrence/AW-READY-M7/fix-aw-readiness-easy-d9fa67fcc>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 92 ;
+  triage:snippet "CASE lower(level) WHEN 'trace' THEN 0 WHEN 'debug' THEN 1 WHEN 'info' THEN 2 WHEN 'warn' THEN 3 WHEN 'error' THEN 4" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:orderIndex 2 .

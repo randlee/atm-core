@@ -50,3 +50,25 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:orderIndex 1 .
+
+# Developer follow-up on fix/aw-readiness-easy, PR #1215, 2026-09-05:
+# the LIKE-filter half is fixed on d9fa67fcc. M8(c)'s flush-thread stop
+# signal remains open and is owned by fix/aw-readiness-contracts; this branch
+# deliberately does not take that runtime-lifecycle change. QA owns closure.
+<urn:atm:triage:occurrence/AW-READY-M8/fix-aw-readiness-easy-d9fa67fcc>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 92 ;
+  triage:snippet "component LIKE (?4 || '%') ESCAPE '\\\\'" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:orderIndex 2 .
