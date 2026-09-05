@@ -60,3 +60,28 @@ triage:a8 a triage:Assignment ;
 triage:c5 a triage:Completion ;
     triage:ofSprint triage:AX1 ;
     triage:at "2026-09-05T06:41:57Z"^^xsd:dateTime .
+
+triage:r1 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/ATM-QA-002> ;
+    triage:resolvedAt "2026-09-05T06:52:23Z"^^xsd:dateTime .
+
+triage:r2 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/ATM-QA-003> ;
+    triage:resolvedAt "2026-09-05T06:52:23Z"^^xsd:dateTime .
+
+triage:r3 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/ATM-QA-004> ;
+    triage:resolvedAt "2026-09-05T06:52:23Z"^^xsd:dateTime .
+
+triage:r4 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/RBP-F001> ;
+    triage:resolvedAt "2026-09-05T06:52:23Z"^^xsd:dateTime .
+
+triage:r5 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/RBP-F002> ;
+    triage:resolvedAt "2026-09-05T06:52:23Z"^^xsd:dateTime .
+
+triage:r6 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/RSH-001> ;
+    triage:resolvedAt "2026-09-05T06:52:23Z"^^xsd:dateTime .
+
