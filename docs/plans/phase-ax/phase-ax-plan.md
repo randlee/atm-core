@@ -20,6 +20,10 @@ dependency_relations:
     dependent: AX.3
     relation: parallel_safe
     rationale: no functional dependency; both add lines to crates/atm-core/src/boundary/mod.rs (AX.2 HerdrNudgeTarget field, AX.3 TaskStore re-exports), resolved by merge-forward before the AX.3 PR.
+  - prerequisite: AX.1
+    dependent: AX.4
+    relation: parallel_safe
+    rationale: no functional dependency; both edit docs/requirements.md and docs/user-documents/nudge-templates.md in different sections, resolved by AX.4 merging integrate/phase-ax forward after track A lands and before its PR.
   - prerequisite: AX.3
     dependent: AX.4
     relation: must_follow
@@ -143,12 +147,15 @@ cycle-1 hardening findings; binding unless Rand objects at plan review):
 - New task identifiers avoid the `nudge` word family (`reminder`,
   `Reminded`, `last_reminded_at`) so the frozen inventory in
   `scripts/check-nudge-taxonomy.py` does not grow.
-- Task-tagged mail to a Herdr-backed recipient carries **no** pending-nudge
-  marker (AX.5); the durable `tasks` row is its delivery record and the
-  pump task step is its only nudge source. This is
-  a recorded exception to ADR-054's marker contract (dated ADR-054
-  amendment plus ADR-061). Daemon-down behaviour is identical to queued
-  mail today: nothing is nudged until the daemon pump runs.
+- Task-tagged mail sets the pending-nudge marker on every backend exactly
+  like any other deferred send; ADR-054's marker contract is **not**
+  amended. On Herdr the existing drain delivers the first nudge (it
+  already renders the Task body because kind selection keys on
+  `task_id`), and the AX.5 task step reminds on the 60 s cadence
+  afterwards. Because the marker is backend-neutral, an assignee moved
+  off Herdr before reading is still nudged by the tmux hook path.
+  Daemon-down behaviour is identical to queued mail today: nothing is
+  nudged until the daemon pump runs.
 - `TaskStore` is the seventh optional storage capability trait under
   ADR-018 §3 as re-counted by ADR-054; ADR-061 is the follow-up ADR that
   rule requires.
@@ -164,9 +171,20 @@ cycle-1 hardening findings; binding unless Rand objects at plan review):
   message content itself.
 - Doctor does not publish reminder counters; the observable is the
   `herdr_queue_poll_tick` log record and `atm list --task-events`.
-- Doctor gains three warning codes: `ATM_ROSTER_NO_LEAD` (Rand),
-  `ATM_ROSTER_MULTIPLE_LEADS`, and `ATM_TASK_STALLED` (open task with ten
-  or more reminders).
+- **Blocked is a first-class member state** (Rand, 2026-09-05): a Herdr
+  agent at an approval or question prompt is reported as `blocked`, not
+  folded into `active`. `atm members` shows `state=blocked age=…`; doctor
+  warns `ATM_MEMBER_BLOCKED` for every member currently observed blocked;
+  a blocked assignee with an open task accrues reminders with outcome
+  `blocked` (no prompt is attempted, since Herdr rejects input to a
+  blocked agent) so the lead notification and `ATM_TASK_STALLED` fire on
+  the same schedule as for an idle assignee that never responds.
+- Doctor gains five warning codes (AX.6): `ATM_ROSTER_NO_LEAD` (Rand; a
+  team with no `lead`), `ATM_ROSTER_MULTIPLE_LEADS` (more than one),
+  `ATM_ROSTER_RESERVED_NAME` (a pre-existing roster member named
+  `atm-daemon`, the only surface that reports it), `ATM_TASK_STALLED`
+  (open task with ten or more reminders), and `ATM_MEMBER_BLOCKED` (a
+  member observed at an interactive prompt).
 - The reserved sender name `atm-daemon` is used for the lead notification
   and is rejected by `add-member` / `update-member`.
 
@@ -188,10 +206,10 @@ follow-up options on #1173, not open questions.
 | --- | --- | --- | --- | --- | --- |
 | AX.1 | A | **parallel with AX.3/AX.4** | Queue template class and default template fixes | `BuiltInNudgeTemplateKind`, override-table migration, kind selection, task sends forced deferred, default bodies, CLI kind strings, six-kind statements in docs and ADR-019 amendment, nudge scripts | `sprint-AX.1-queue-template-class.md` |
 | AX.2 | A | after AX.1; **parallel with AX.3/AX.4** | Herdr renders the built-in template | `HerdrNudgeTarget`, `send/hook.rs` Herdr branch, `HerdrProcessAdapter::prompt` and its three impls, bootstrap selector call site, ADR-058 amendment, `HR-CORE-002`/`HR-SAFE-003`, Herdr boundary record, contract fixture | `sprint-AX.2-herdr-template-rendering.md` |
-| AX.3 | B | **parallel with AX.1/AX.2** | Task state machine and storage | `atm-storage` task types and pure transition, `TaskStore` and wiring, `WriteProvenance` carrier, rusqlite tables and in-transaction application, ack gate, `SendRequest::with_task_complete`, ADR-061, ADR-054 amendment, requirements §7 | `sprint-AX.3-task-state-machine.md` |
+| AX.3 | B | **parallel with AX.1/AX.2** | Task state machine and storage | `atm-storage` task types and pure transition, `TaskStore` and wiring, `MessageWriteOrigin` carrier on both insert paths, rusqlite tables and in-transaction application, ack gate, `SendRequest::with_task_complete`, two boundary records, ADR-061, ADR-054 amendment (trait re-count), requirements §7 | `sprint-AX.3-task-state-machine.md` |
 | AX.4 | B | after AX.3; **parallel with AX.1/AX.2** | Task completion and inspection CLI | `atm send --task-complete`, `atm list --tasks` / `--task-events`, requirements §6.5/§6.6/§15.4, team-protocol, `docs/user-documents/tasks.md` | `sprint-AX.4-task-cli-and-docs.md` |
-| AX.5 | C | after A and B merge | Task reminder cycle in the Herdr pump | pump task step, idle-set widening, clock seam, task-row reminder rendering, Herdr marker exception, `task_tracked` outcome | `sprint-AX.5-task-reminder-cycle.md` |
-| AX.6 | C | after AX.5 | Lead notification and doctor | `atm-daemon` reserved sender, lead message, four doctor codes with catalog guidance | `sprint-AX.6-lead-notification-doctor.md` |
+| AX.5 | C | after A and B merge | Task reminder cycle in the Herdr pump | pump task step, idle-set widening, clock seam, `RuntimeMemberState::Blocked`, blocked-assignee reminder outcome, task-row reminder rendering, drain-first ordering (no marker exception) | `sprint-AX.5-task-reminder-cycle.md` |
+| AX.6 | C | after AX.5 | Lead notification and doctor | `atm-daemon` reserved sender, lead message, five doctor codes with catalog guidance | `sprint-AX.6-lead-notification-doctor.md` |
 | AX.7 | D | after AX.6 merges | Live Herdr dogfood evidence | `docs/plans/phase-ax/ax7-live-proof.md` | `sprint-AX.7-herdr-dogfood-evidence.md` |
 
 Dependency graph:
@@ -205,11 +223,13 @@ integrate/phase-ax
 
 Tracks A and B **execute in parallel** from day one. `must_follow` edges:
 AX.1→AX.2, AX.3→AX.4, AX.2→AX.5, AX.4→AX.5, AX.5→AX.6, AX.6→AX.7.
-`parallel_safe` pairs: AX.1∥AX.3, AX.2∥AX.3 (frontmatter carries the
-rationale); AX.4 inherits AX.3's parallelism. The price of the parallel
-tracks is one merge-forward of `integrate/phase-ax` into the AX.3 branch
-after track A merges, with a trivial conflict in
-`crates/atm-core/src/boundary/mod.rs` where both add lines.
+`parallel_safe` pairs: AX.1∥AX.3, AX.2∥AX.3, AX.1∥AX.4 (frontmatter
+carries each rationale). The price of the parallel tracks is one
+merge-forward of `integrate/phase-ax` into the track B branches after
+track A merges, touching three files where both tracks add lines in
+different places: `crates/atm-core/src/boundary/mod.rs` (AX.2/AX.3),
+`docs/requirements.md` and `docs/user-documents/nudge-templates.md`
+(AX.1/AX.4).
 
 ## 4. Acceptance contract for the phase
 
@@ -251,13 +271,18 @@ test or evidence gate.
    sixteen Herdr prompts per tick, reminders and queued mail together.
    (AX.5; AX.7 live evidence.)
 9. Every tenth reminder sends one queued message from `atm-daemon` to the
-   lead; doctor warns `ATM_ROSTER_NO_LEAD` on a team with no lead and
-   `ATM_TASK_STALLED` on an open task with ten or more reminders. (AX.6
-   tests; AX.7 case C14.)
+   lead; doctor warns `ATM_ROSTER_NO_LEAD` on a team with no lead,
+   `ATM_ROSTER_MULTIPLE_LEADS` on a team with two, `ATM_ROSTER_RESERVED_NAME`
+   for a member named `atm-daemon`, `ATM_TASK_STALLED` on an open task
+   with ten or more reminders, and `ATM_MEMBER_BLOCKED` for a member
+   observed blocked; a blocked assignee reaches the lead notification on
+   the same schedule. (AX.5 mapping and outcome; AX.6 AC 3; AX.7 cases
+   C14 and C18.)
 10. `just validate` green on the integrate head, including
     `scripts/check-nudge-taxonomy.py` with an unchanged allowlist;
-    `boundary-guard` review of `boundaries/atm-storage/task-store.toml`
-    and `boundaries/atm-herdr/herdr-process-adapter.toml`. (AX.3, AX.2;
+    `boundary-guard` review of `boundaries/atm-storage/task-store.toml`,
+    `boundaries/atm-storage-rusqlite/task-store-sqlite.toml`, and
+    `boundaries/atm-herdr/herdr-process-adapter.toml`. (AX.3, AX.2;
     phase PR.)
 
 ## 5. Out of scope (tracked as follow-ups on #1173)

@@ -45,8 +45,15 @@ shape-only completion fails the sprint.
   seven-value `CHECK` in code contract C4, copies every row whose kind is
   one of the seven, and drops each row whose kind is `delivery_task` or
   `delivery_task_ack` with one `tracing::warn!` line naming team and kind
-  (retained by REQ-P-OBS-003). Idempotent: a database already on the
-  seven-value `CHECK` is left untouched.
+  (retained by REQ-P-OBS-003). It runs inside `ensure_schema`
+  (shared_db.rs line 564) **after** `ensure_team_nudge_template_override_columns`
+  (line 690) in the same schema-ensure transaction, so the `mode` column
+  and its normalised values already exist when the rebuild names them.
+  Retired kinds are the only rows ever dropped; any other constraint
+  failure during the copy fails the open loudly instead of dropping
+  rows. Idempotent: a database already on the seven-value `CHECK` is
+  left untouched. The `CREATE TABLE IF NOT EXISTS` at line 77 also
+  carries the seven-value `CHECK` for fresh databases.
 - [ ] D3 — kind selection takes the nudge mode. Code contract C2.
   `built_in_nudge_template_kind_from_post_send_event` gains the
   `NudgeKind` parameter (`crates/atm-core/src/boundary/mod.rs`);
@@ -75,7 +82,11 @@ shape-only completion fails the sprint.
   line 1105 ("those six built-in template bodies"), and line 4496 ("the
   six built-in nudge template bodies"); each must read "seven";
   `docs/architecture.md` lines 2736–2738; `docs/atm/requirements.md`
-  lines 143–144. Each states the seven kinds and the rule that
+  lines 141–146 (replace the six-item kind list with the seven kinds);
+  `docs/atm-rusqlite/requirements.md` line 146 ("constrained to the six
+  built-in template kinds", the `CHECK` D2 rebuilds); and
+  `docs/atm-core/boundaries.md` line 247 ("the six built-in product
+  template bodies"). Each states the seven kinds and the rule that
   `NudgeKind` selects the delivery or queue family.
   `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md` gains
   a dated amendment section (original body unchanged) recording the
@@ -231,15 +242,29 @@ Acknowledge and AcknowledgeTask: unchanged.
 ### C4 — override table after migration
 
 ```sql
-CREATE TABLE IF NOT EXISTS team_nudge_template_overrides (
+-- crates/atm-storage-rusqlite/src/shared_db.rs: rebuilt table, full DDL
+CREATE TABLE team_nudge_template_overrides_new (
     team_name TEXT NOT NULL,
     template_kind TEXT NOT NULL
         CHECK(template_kind IN (
             'delivery', 'delivery_ack', 'queue', 'queue_ack', 'task',
             'acknowledge', 'acknowledge_task'
         )),
-    -- remaining columns unchanged
+    mode TEXT NOT NULL DEFAULT 'override'
+        CHECK(mode IN ('override', 'disabled')),
+    template_body TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (team_name, template_kind)
 );
+INSERT INTO team_nudge_template_overrides_new
+    (team_name, template_kind, mode, template_body, updated_at)
+SELECT team_name, template_kind, mode, template_body, updated_at
+  FROM team_nudge_template_overrides
+ WHERE template_kind NOT IN ('delivery_task', 'delivery_task_ack');
+DROP TABLE team_nudge_template_overrides;
+ALTER TABLE team_nudge_template_overrides_new RENAME TO team_nudge_template_overrides;
+CREATE INDEX IF NOT EXISTS idx_team_nudge_template_overrides_team_name
+    ON team_nudge_template_overrides(team_name);
 ```
 
 Migration detection: read `sql` from `sqlite_master` for the table; if it
@@ -256,8 +281,27 @@ pub(crate) fn nudge_mode_for_request(request: &SendRequest, task_id: &Option<Tas
 }
 ```
 
+The result is **written back onto the request**: in
+`prepare_persisted_write` (`crates/atm-core/src/write/pipeline.rs` line
+526) and `prepare_persisted_write_async` (line 594), immediately after
+`let task_id = request.task_id.clone();`,
+
+```rust
+request.nudge_mode = nudge_mode_for_request(&request, &task_id);
+```
+
+before `persist_send_message*` runs and before `PreparedWrite {
+outbound_request: request, .. }` is built (lines 575 and 641). The
+mutated `outbound_request` is what the three deferred-behaviour
+consumers read: `mark_pending_if_deferred` (line 113, queue marker),
+`build_received_hook_dispatches` (line 243, steer suppression; line 268,
+the `NudgeKind` handed to `build_built_in_dispatch`), and the daemon
+marker gate `storage_and_nudge_router.rs` line 396. It is also the
+request the post-write router forwards to a peer host, so a cross-host
+task send arrives `Deferred`. No other file changes.
+
 The Task body therefore never needs `<when>`: it is only ever delivered
-queue-class (marker on tmux; graft queue channel; AX.5 pump on Herdr).
+queue-class (marker on tmux and Herdr; graft queue channel).
 
 ### Unchanged surfaces
 
@@ -277,14 +321,21 @@ trait; `crates/atm-core/src/nudge_dispatch.rs`.
 2. Gates, each must return nothing:
    `grep -rn 'read atm --team' crates/atm-core/src/send/nudge_template.rs docs/user-documents scripts .claude/skills/restore-team-communications`;
    `grep -rln 'delivery_task_ack' docs/requirements.md docs/architecture.md docs/atm/requirements.md docs/user-documents`;
-   `grep -rn 'six built-in\|six named template\|exactly one of six\|those six\|exactly six' docs/requirements.md docs/architecture.md docs/atm/requirements.md docs/user-documents`.
+   `grep -rn 'six built-in\|six named template\|exactly one of six\|those six\|exactly six' docs/requirements.md docs/architecture.md docs/atm/requirements.md docs/atm-rusqlite/requirements.md docs/atm-core/boundaries.md docs/user-documents`.
    Unit assertion: `default_template(kind)` for all seven kinds contains
    no `read atm `.
+3. `atm ack` of a non-task message resolves `Acknowledge` and of a task
+   message resolves `AcknowledgeTask`; both render bodies byte-identical
+   to the pre-sprint defaults (snapshot fixture recorded before the
+   change). Closes phase acceptance item 3.
 4. `atm send tmux-member --task-id t1 --stdin` writes the message, sets
    the pending-nudge marker, emits no steer, and the marker nudge renders
-   the Task body; `atm send graft-member --task-id t1 --stdin` emits one
+   the Task body; `atm send herdr-member --task-id t1 --stdin` likewise
+   sets the marker; `atm send graft-member --task-id t1 --stdin` emits one
    graft dispatch with `NudgeKind::Queue` carrying the Task body;
-   `atm send tmux-member --stdin` (no task) still steers.
+   `atm send tmux-member --stdin` (no task) still steers. On both prepare
+   paths `PreparedWrite.outbound_request.nudge_mode` is `Deferred` for
+   the task send.
 5. All Required validation tests pass; `just validate` green, including
    `scripts/check-nudge-taxonomy.py` with an unchanged allowlist (no new
    identifier in this sprint contains `nudge`; the migration function is
@@ -298,7 +349,10 @@ trait; `crates/atm-core/src/nudge_dispatch.rs`.
   Task and `NudgeMode::Deferred` whether sent with `atm send` or `atm
   queue` (AC 4; six assertions per backend, plus the marker assertion
   for the tmux member and the `NudgeKind::Queue` graft-dispatch assertion
-  on the sync and async write paths).
+  on the sync and async write paths, and the
+  `PreparedWrite.outbound_request.nudge_mode == Deferred` assertion on
+  each path); AC 3 snapshot assertions for `Acknowledge` /
+  `AcknowledgeTask`.
 - `crates/atm-core/src/send/nudge_template.rs` unit tests: every default
   body renders without error; no default body contains `read atm `;
   Queue, QueueAck, Task bodies lack `<when`; Delivery, DeliveryAck
@@ -312,7 +366,8 @@ trait; `crates/atm-core/src/nudge_dispatch.rs`.
 - `crates/atm-storage-rusqlite/src/shared_db.rs` tests: AC 1 migration
   scenario (old six-value `CHECK` database → rebuilt, retired rows
   dropped, others retained, `queue_ack` insert accepted); second open is
-  a no-op.
+  a no-op; a legacy pre-`mode` database (no `mode` column) opens
+  cleanly with `mode` populated and the seven-value `CHECK` in place.
 - `crates/atm-storage-rusqlite/src/nudge_template_override_store.rs`
   tests: round trip for `queue`, `queue_ack`, `task`;
   `load_template_override` returns `None` for a retired kind after

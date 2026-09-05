@@ -20,9 +20,9 @@ dependency_relations:
     relation: parallel_safe
     rationale: no functional dependency; both add lines to crates/atm-core/src/boundary/mod.rs (HerdrNudgeTarget field here, TaskStore re-exports in AX.3), resolved by AX.3 merging integrate/phase-ax forward before its PR.
   - prerequisite: AX.2
-    dependent: AX.4
+    dependent: AX.5
     relation: must_follow
-    rationale: the AX.4 pump task step emits through the rendered-text path this sprint introduces.
+    rationale: the AX.5 pump task step emits through the rendered-text path this sprint introduces (HerdrNudgeTarget.rendered_nudge, prompt(text)); AX.4 is not a dependent of this sprint.
 ---
 
 # AX.2 — Herdr renders the built-in nudge template

@@ -93,15 +93,15 @@ Exactly one application site per event (code contract C6):
 
 | Event | Only application site | Actor |
 | --- | --- | --- |
-| `Assigned` | rusqlite message-insert ops with `WriteProvenance::Local`, when the record was actually inserted and its envelope has `task_id`, `acknowledges_message_id == None`, `task_complete == None` | envelope `from` |
+| `Assigned` | rusqlite message-insert ops with `MessageWriteOrigin::Local`, when the record was actually inserted and its envelope has `task_id`, `acknowledges_message_id == None`, `task_complete == None` | envelope `from` |
 | `Acked` | rusqlite `WriteOp::Acknowledge` (`execute_acknowledgement`), when the loaded source envelope has `task_id` | envelope `from` of the reply (the assignee) |
-| `Completed` | rusqlite message-insert ops with `WriteProvenance::Local`, when the record was actually inserted and its envelope has `task_complete` | envelope `from` |
+| `Completed` | rusqlite message-insert ops with `MessageWriteOrigin::Local`, when the record was actually inserted and its envelope has `task_complete` | envelope `from` |
 
 Idempotency and provenance:
 
 - A transition is applied only when the writer actually inserts the
   record (`inserted == true`). A duplicate-key admission applies nothing.
-- Writes with `WriteProvenance::Peer` (authenticated peer receipts,
+- Writes with `MessageWriteOrigin::Peer` (authenticated peer receipts,
   decided by `has_authenticated_peer_provenance` in
   `crates/atm-core/src/write/pipeline.rs`) never create, change, or
   reject task state. A peer-delivered ack reply arrives as a `Peer`
@@ -144,14 +144,19 @@ shape-only completion fails the sprint.
 - [ ] D2 — `TaskStore` sealed trait (`crates/atm-storage/src/contract.rs`,
   code contract C2), `DummyTaskStore` double beside
   `DummyPendingNudgeStore`, boundary file
-  `boundaries/atm-storage/task-store.toml` per code contract C5, and a
-  `## TaskStore` section in `docs/atm-storage/boundaries.md`.
+  `boundaries/atm-storage/task-store.toml` and its implementation
+  companion `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` per
+  code contract C5, and a `## TaskStore` section in
+  `docs/atm-storage/boundaries.md`.
 - [ ] D3 — wiring, one site per file, mirroring `PendingNudgeStore`:
-  `crates/atm-storage/src/factory.rs` (`StorageParts.task_store` field
-  and `StorageFactory::task_store()` accessor beside
-  `pending_nudge_store()` at line 133);
-  `crates/atm-storage-rusqlite/src/lib.rs` (backend field near line 667,
-  parts construction near line 746);
+  `crates/atm-storage/src/factory.rs` (`StorageHandleParts.task_store`
+  field at line 50, `StorageHandles::task_store()` accessor beside
+  `pending_nudge_store()` at line 133, and the `StorageHandles::from_parts`
+  mapping at line 90; the `StorageFactory` trait at line 172 is
+  unchanged); `crates/atm-storage-rusqlite/src/lib.rs`
+  (`SqliteStorageBackend` field near line 667 with its `task_store()`
+  accessor, and the `StorageHandleParts` literal in
+  `SqliteStorageFactory::open` near line 746);
   `crates/atm-core/src/service_runtime.rs`
   (`LocalServiceRuntime::with_task_store` builder and `task_store()`
   accessor returning `Result<Arc<dyn TaskStore + Send + Sync>, AtmError>`
@@ -174,38 +179,62 @@ shape-only completion fails the sprint.
   paths (`prepare_persisted_write` line 515 and
   `prepare_persisted_write_async` line 586 in
   `crates/atm-core/src/write/pipeline.rs`) and both persistence
-  functions (`persist_send_message` and `persist_send_message_async` in
-  `crates/atm-core/src/send/async_persistence.rs`) carry it. A request
+  functions (`persist_send_message` in `crates/atm-core/src/send/mod.rs`
+  line 461 and `persist_send_message_async` in
+  `crates/atm-core/src/send/async_persistence.rs` line 51) carry it. A request
   with both `task_id` and `task_complete` is rejected at validation.
 - [ ] D5 — write provenance carrier, code contract C6:
-  `WriteProvenance` in `crates/atm-storage/src/contract.rs`; new
-  `MessageStore::save_message_if_absent_with_provenance_async` with a
-  default that delegates to `save_message_if_absent_async`;
-  `TemplateMessageAdmission.provenance` field
-  (`crates/atm-storage/src/template_catalog.rs` line 267, constructor
-  default `Local`). Callers: `mirror_message_to_store_async`
-  (`crates/atm-core/src/send/persistence.rs` line 250) and
-  `persist_send_message_async` (async_persistence.rs line 51) receive
-  the provenance from the two prepare paths, which compute it with
-  `has_authenticated_peer_provenance`. Only `SqliteMessageStore`
-  overrides the new method; the other implementations
+  `MessageWriteOrigin` in `crates/atm-storage/src/contract.rs`; two new
+  defaulted methods, one per insert path:
+  `MessageStore::save_message_if_absent_with_provenance` (sync trait,
+  contract.rs line 612, delegates to `save_message_if_absent`) and
+  `AsyncMessageStore::save_message_if_absent_with_provenance_async`
+  (`#[async_trait]` trait, line 668, delegates to
+  `save_message_if_absent_async`); `TemplateMessageAdmission.provenance` field
+  (`crates/atm-storage/src/template_catalog.rs` line 267; the type has
+  no constructor, so the two struct-literal sites set it:
+  `crates/atm-core/src/send/async_persistence.rs` line 168 with the
+  caller's value and the test literal in
+  `crates/atm-storage-rusqlite/src/lib.rs` line 2539 with `Local`).
+  Both prepare paths compute the value with
+  `has_authenticated_peer_provenance` and thread it down: the sync path
+  `prepare_persisted_write` → `persist_send_message` (send/mod.rs line
+  461) → `mirror_message_to_store` (send/persistence.rs line 204) →
+  `RetainedMailboxRuntime::admit_message_record` →
+  `save_message_if_absent_with_provenance`; the async path
+  `prepare_persisted_write_async` → `persist_send_message_async`
+  (async_persistence.rs line 51) → `mirror_message_to_store_async`
+  (persistence.rs line 250) →
+  `save_message_if_absent_with_provenance_async`. The sync path matters
+  because `write/pipeline.rs` lines 433–435 route an authenticated-peer
+  ack receipt onto it. Only `SqliteMessageStore`
+  (`crates/atm-storage-rusqlite/src/lib.rs` line 625) overrides either
+  method. Every other `MessageStore` implementor keeps the sync default
+  (`crates/atm-storage/src/contract.rs` `DummyStore`,
+  `crates/atm-core/src/doctor/mod.rs` `UnusedMailStore`,
+  `crates/atm-storage-sqlserver-proof/src/lib.rs`
+  `SqlServerMessageStore`, plus the three below) and every other
+  `AsyncMessageStore` implementor keeps the async default
   (`crates/atm-runtime/src/mailbox_runtime.rs` `TestOnlyWriterLane`,
   `crates/atm-runtime-test-support/src/lib.rs` `RecordingWriter`,
-  `crates/atm-core/src/ack/admission_tests.rs` `InMemoryAsyncStore`,
-  `crates/atm-core/src/doctor/mod.rs` `UnusedMailStore`,
-  `crates/atm-storage/src/contract.rs` `DummyStore`,
-  `crates/atm-storage-sqlserver-proof/src/lib.rs`) keep the default and
-  apply no transitions; the `MessageStore` trait doc states this.
+  `crates/atm-core/src/ack/admission_tests.rs` `InMemoryAsyncStore`);
+  none applies transitions, and both trait docs state this.
 - [ ] D6 — rusqlite implementation
   (`crates/atm-storage-rusqlite/src/task_store.rs`, schema in
   `crates/atm-storage-rusqlite/src/shared_db.rs`, application in
   `crates/atm-storage-rusqlite/src/writer/ops.rs`): tables per code
   contract C3; `WriteOp::UpsertMessage` becomes `UpsertMessage { record,
-  provenance }` (the `submit_upsert_message` site in shared_db.rs line
-  244 passes `Local`; the new `_with_provenance_async` path passes the
-  caller's value); `WriteOp::AdmitTemplateMessage` reads
-  `admission.provenance`; `WriteOp::UpsertMessages` and
-  `WriteOp::AdmitDecomposedMessage` are `Local`; `ApplyReadDisplayState`
+  provenance }`; both construction sites gain a `provenance` parameter
+  forwarded from the new store methods: `submit_upsert_message`
+  (shared_db.rs line 244, from `save_message_if_absent_with_provenance`)
+  and `submit_upsert_message_async` (line 291, from
+  `save_message_if_absent_with_provenance_async`); the existing
+  un-suffixed store methods call them with `Local`;
+  `WriteOp::AdmitTemplateMessage` reads `admission.provenance`;
+  `WriteOp::UpsertMessages` and `WriteOp::AdmitDecomposedMessage` stay
+  `Local` because their only callers are the local atomic-ack path
+  (`persist_message_records_atomically`) and local template
+  decomposition, never a peer receipt; `ApplyReadDisplayState`
   and `RegisterTemplate` apply nothing. Application per the
   "one site per event" table: row resolution, `admit`, `transition`, the
   `task_events` row, and rollback on `Reject`, all inside the op's
@@ -220,7 +249,7 @@ shape-only completion fails the sprint.
   plan §2.1 defaults; `docs/adr/INDEX.md` entry; dated amendment
   appended to `docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md`
   re-counting the capability traits to seven; `docs/requirements.md` §7
-  (storage) lists `TaskStore`, the two tables, and `WriteProvenance`.
+  (storage) lists `TaskStore`, the two tables, and `MessageWriteOrigin`.
 - [ ] D8 — tests listed under Required validation.
 
 ### Paths to delete
@@ -330,7 +359,9 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum ReminderOutcome { Emitted, Unrenderable }
+pub enum ReminderOutcome { Emitted, Unrenderable, Blocked }
+// Blocked: the assignee was observed at an interactive prompt; no input was
+// attempted (Herdr rejects it) but the reminder is counted so the stall is visible.
 ```
 
 `MemberKey` is (team, agent) as in `PendingNudgeStore`. State-changing
@@ -395,47 +426,120 @@ AX.4.
 ### C5 — boundary record
 
 ```toml
-# boundaries/atm-storage/task-store.toml
-[boundary]
-id = "atm-storage.task-store"
-owner_crate = "atm-storage"
-path = "crates/atm-storage/src/contract.rs"
-symbols = ["TaskStore", "TaskRow", "TaskEventRow", "TaskState", "TaskEvent", "TaskEventKind", "TaskActor", "ReminderOutcome", "WriteProvenance", "DummyTaskStore"]
-introduced_by = "AX.3"
-adr = "docs/adr/ADR-061-task-state-machine.md"
+# boundaries/atm-storage/task-store.toml  (modelled on pending-nudge-store.toml)
+boundary_id = "BOUNDARY-TaskStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "TaskStore"
 
-[io]
-owns = ["task_state_transition", "task_event_audit"]
-forbidden = ["direct_sqlite_io", "message_delivery", "process_spawn", "nudge_emission"]
+[public]
+trait = "TaskStore"
+notes = "storage-neutral task ledger: read rows and events, append reminder and lead-notification audit rows; state transitions are applied only inside the backend's message-writer transaction, never through this trait"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["task_event_audit_append", "task_row_read"]
+io_forbidden = ["direct_sqlite_io", "message_delivery", "process_spawn", "task_state_transition"]
 
 [dependencies]
-allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
-forbidden_edges = ["atm-storage -> atm-core", "atm-http-runtime -> atm-storage"]
-forbidden_symbols_outside_owner = ["rusqlite::Connection"]
+allowed_dependents = ["atm", "atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite", "atm-storage -> atm-daemon", "atm-http-runtime -> atm-storage"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
 
 [contracts]
-state_change = "Only the message writer transaction applies Assigned/Acked/Completed; no TaskStore method changes state."
-audit = "task_events is append-only; every accepted transition, rejection, reminder, and lead notification is one row in the acting transaction."
-replay = "Per (team, task_id, assignee): Assigned/Acked/Completed rows replayed through transition reproduce tasks.state; latest Assigned.message_id == assignment_message_id; count(Reminded) == reminder_count; max(Reminded.at) == last_reminded_at. description is not replayable."
-provenance = "Transitions apply only to WriteProvenance::Local inserts and to the acknowledgement op."
-test_double = "crate::contract::DummyTaskStore"
+request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "MessageWriteOrigin"]
+response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>"]
+error_types = ["AtmError"]
+notes = [
+  "state change: only the message writer transaction applies Assigned/Acked/Completed; no TaskStore method changes tasks.state",
+  "audit: task_events is append-only; every accepted transition, rejection, reminder, and lead notification is one row in the acting transaction",
+  "replay: per (team, task_id, assignee) the Assigned/Acked/Completed rows replayed through transition reproduce tasks.state; latest Assigned.message_id == assignment_message_id; count(Reminded) == reminder_count; max(Reminded.at) == last_reminded_at; description is not replayable",
+  "provenance: transitions apply only to MessageWriteOrigin::Local inserts and to the acknowledgement op",
+  "CLI (atm) reads TaskRow/TaskEventRow through atm_storage::contract, the same path nudge-template-override-store.toml grants it; daemon crates import through atm_core::boundary",
+]
 
-[lint]
-id = "LINT-BOUNDARY-TASK-STORE-REFERENCES"
-rule = "atm-http-runtime and atm-daemon-bootstrap reference TaskStore types only via atm_core::boundary."
+[testing]
+allowed_test_double_paths = ["crate::contract::DummyTaskStore"]
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TASK-STORE-REFERENCES"]
+review_gates = ["no_cli_sqlite_lookup", "no_backend_to_core_edge_for_task_store", "no_task_state_write_outside_writer_transaction"]
 
 [status]
 state = "planned"
-note = "AX.3 introduces; AX.5 and AX.6 consume record_reminder / record_lead_notified."
+notes = ["AX.3 introduces the trait, the rusqlite implementation and the schema in one sprint", "AX.4 (atm list), AX.5 (record_reminder) and AX.6 (record_lead_notified, doctor) consume it"]
 ```
 
-The `[lint]` rule is enforced by an `atm-architecture` test modelled on
+```toml
+# boundaries/atm-storage-rusqlite/task-store-sqlite.toml  (modelled on pending-nudge-store-sqlite.toml)
+boundary_id = "BOUNDARY-TaskStore-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteTaskStore"
+
+[public]
+trait = "TaskStore"
+
+[implementation]
+type = "SqliteTaskStore"
+module = "atm_storage_rusqlite::task_store"
+visibility = "private"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["sqlite", "task_event_audit_append", "task_state_transition_in_writer_transaction"]
+io_forbidden = ["message_delivery", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SqliteTaskStore", "rusqlite::Connection"]
+
+[contracts]
+request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "MessageWriteOrigin"]
+response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>"]
+error_types = ["AtmError"]
+notes = ["transitions are applied by writer/ops.rs inside the UpsertMessage / AdmitTemplateMessage / Acknowledge transaction; task_store.rs itself only reads and appends"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TASK-STORE-SQLITE"]
+review_gates = ["private_sqlite_impl", "no_cli_sqlite_lookup"]
+
+[status]
+state = "planned"
+```
+
+Both lint rules are enforced by an `atm-architecture` test modelled on
 `crates/atm-architecture/tests/pending_nudge_store_boundary.rs`.
 `atm-http-runtime` has `atm-storage` only under `[dev-dependencies]`
 (`crates/atm-http-runtime/Cargo.toml` line 43) and must not gain a
 production dependency on it; the pump (AX.5) imports through
 `atm_core::boundary` and `boundaries/atm-http-runtime/http-runtime.toml`
-is not relaxed.
+is not relaxed. `crates/atm` already depends on `atm-storage`
+(`crates/atm/Cargo.toml` line 41) and is listed as an allowed dependent
+for the AX.4 list command.
 
 ### C6 — write provenance carrier
 
@@ -443,16 +547,32 @@ is not relaxed.
 // crates/atm-storage/src/contract.rs
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum WriteProvenance { #[default] Local, Peer }
+pub enum MessageWriteOrigin { #[default] Local, Peer }
+// Distinct from `atm_core::provenance::WriteProvenance<'a>` (the write-admission
+// field bundle re-exported by atm_core::write and constructed in write/pipeline.rs
+// lines 377/412/654), which is unchanged. No module imports both unqualified.
 
-pub trait MessageStore: sealed::Sealed + Send + Sync {
+pub trait MessageStore: sealed::Sealed + Send + Sync {           // sync trait, line 612
     /* existing methods unchanged */
-    /// Like `save_message_if_absent_async`, carrying the write's provenance
-    /// so task transitions apply only to local writes. Default: delegate.
+    /// Like `save_message_if_absent`, carrying the write's origin so task
+    /// transitions apply only to local writes. Default: delegate.
+    fn save_message_if_absent_with_provenance(
+        &self,
+        message: &Message,
+        provenance: MessageWriteOrigin,
+    ) -> Result<Option<Message>, AtmError> {
+        let _ = provenance;
+        self.save_message_if_absent(message)
+    }
+}
+
+#[async_trait::async_trait]
+pub trait AsyncMessageStore: MessageStore {                        // line 668
+    /* existing methods unchanged */
     async fn save_message_if_absent_with_provenance_async(
         &self,
         message: Message,
-        provenance: WriteProvenance,
+        provenance: MessageWriteOrigin,
     ) -> Result<Option<Message>, AtmError> {
         let _ = provenance;
         self.save_message_if_absent_async(message).await
@@ -462,12 +582,12 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
 // crates/atm-storage/src/template_catalog.rs
 pub struct TemplateMessageAdmission {
     /* existing fields */
-    pub provenance: WriteProvenance,   // Local unless the caller says Peer
+    pub provenance: MessageWriteOrigin,   // Local unless the caller says Peer
 }
 
 // crates/atm-storage-rusqlite/src/writer/ops.rs
 pub(crate) enum WriteOp {
-    UpsertMessage { record: Box<Message>, provenance: WriteProvenance },
+    UpsertMessage { record: Box<Message>, provenance: MessageWriteOrigin },
     /* other variants unchanged */
 }
 ```
@@ -537,7 +657,7 @@ paths; `atm read` / `atm ack` argument shapes; `DeliveryRecipientSnapshot`;
    empty; `grep -rn 'atm_storage::.*Task' crates/atm-http-runtime/src crates/atm-daemon-bootstrap/src`
    empty; `python scripts/check-nudge-taxonomy.py` passes with an
    unchanged allowlist; `boundary-guard` review of `task-store.toml`
-   passes; ADR-061, the ADR-054 amendment, and requirements §7 merged;
+   and `task-store-sqlite.toml` passes; ADR-061, the ADR-054 amendment, and requirements §7 merged;
    `just validate` green.
 
 ## Required validation
@@ -562,8 +682,11 @@ paths; `atm read` / `atm ack` argument shapes; `DeliveryRecipientSnapshot`;
   `ack_mail_with_runtime` for AC 1–4 on a tmux-backed member and a
   Herdr-backed member, on both prepare paths; nudge dispatch for a task
   send is unchanged from AX.1 behaviour.
-- `crates/atm-architecture/tests/task_store_boundary.rs`: the C5 lint
-  rule.
+- `crates/atm-architecture/tests/task_store_boundary.rs`: both C5 lint
+  rules (`atm-storage` record and `atm-storage-rusqlite` companion).
+- `crates/atm-storage-rusqlite/src/lib.rs` tests: `Peer` through the sync
+  `save_message_if_absent_with_provenance` and through the async variant
+  each create no task row; the un-suffixed methods behave as `Local`.
 - Composition tests: `LocalServiceRuntime::task_store()` returns the
   rusqlite store after `atm-runtime` composition and after
   `storage_and_nudge_router` assembly; the not-installed error shape.

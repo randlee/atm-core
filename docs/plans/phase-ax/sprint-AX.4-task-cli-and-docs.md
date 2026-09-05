@@ -15,6 +15,10 @@ dependency_relations:
     dependent: AX.4
     relation: must_follow
     rationale: the flags are thin plumbing over SendRequest::with_task_complete and TaskStore, both delivered by AX.3; stacked on the AX.3 branch.
+  - prerequisite: AX.1
+    dependent: AX.4
+    relation: parallel_safe
+    rationale: no functional dependency; both edit docs/requirements.md (AX.1 lines 1094/1105/4496, AX.4 §6.5/§6.6/§15.4) and docs/user-documents/nudge-templates.md (AX.1 rewrites the kind inventory, AX.4 adds one ADR-061 cross-reference) in different sections; resolved by AX.4 merging integrate/phase-ax forward after track A lands and before opening its PR, the same rule AX.3 follows.
   - prerequisite: AX.4
     dependent: AX.5
     relation: must_follow
@@ -43,7 +47,10 @@ shape-only completion fails the sprint.
 - [ ] D2 — `atm list --tasks [--member <name>]` and
   `atm list --task-events <TASK_ID> [--member <name>]`
   (`crates/atm/src/commands/list.rs`, which owns parsing and rendering),
-  reading through `LocalServiceRuntime::task_store()`;
+  reading through `LocalServiceRuntime::task_store()` and importing
+  `TaskRow` / `TaskEventRow` from `atm_storage::contract` (the CLI is an
+  `allowed_dependent` of the AX.3 task-store boundary record, the same
+  sanctioned path `nudge-template-override-store.toml` grants `atm`);
   `conflicts_with_all` against every mailbox filter including the
   existing `--task <id>`; human and `--json` output per code contract C1.
 - [ ] D3 — docs: `docs/requirements.md` §6.5 (`atm send` flags) and §6.6

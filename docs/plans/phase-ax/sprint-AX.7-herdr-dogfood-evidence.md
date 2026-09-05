@@ -47,7 +47,7 @@ the observed prompt text per case.
 | C5 | recipient `atm ack` back to fenix | Acknowledge body, unchanged shape |
 | C6 | `atm send` then `atm queue` to cipher 30 ms apart | DeliveryAck then Queue; both read and acked |
 | C7 | `atm teams set-nudge-template atm-dev queue --file q.xml` then C3 | override body; then `clear-nudge-template` |
-| C8 | two `--task-id` sends to idle cipher; cipher acks the first | `"task_tracked": true` in the send JSON, no steer; Task reminder for the first within one tick; none for the second; first ack succeeds (Active); cipher's `atm ack` of the second exits 3 naming the first |
+| C8 | two `--task-id` sends to idle cipher; cipher acks the first | no steer; the drain nudge renders the Task body for the first within one tick; a `reminded` row for it 60 s later and none for the second; first ack succeeds (Active); cipher's `atm ack` of the second exits 3 naming the first |
 | C9 | cipher `atm send fenix --task-complete <first> --stdin` | second task reminded on the next tick |
 | C10 | cipher `--task-complete` with an unassigned id | exit 3, no message written |
 | C11 | cipher acks the second task then stays idle 3 min without completing | Task reminders ~60 s apart, none closer; stop after `--task-complete` |
@@ -58,6 +58,7 @@ the observed prompt text per case.
 | C15b | cipher `atm ack` of the C15 message | ack succeeds (exit 0); still no row and no event for `t-adm` |
 | C16 | `atm send tmux-member --task-id t-tm --stdin` (one member temporarily on `--backend tmux`) | no steer; queue marker set; Task body delivered on idle |
 | C17 | `atm send loki@hermes --task-id t-gr --stdin` (graft member, if the hermes testbed is up) | one graft dispatch with `kind: queue`; hermes-agent surfaces the Task body when idle; else recorded as not run |
+| C18 | assign a task to cipher, then have cipher hit an approval prompt (e.g. a tool call needing confirmation) and leave it ≥ 2 min | `atm members` shows cipher `state=blocked`; doctor warns `ATM_MEMBER_BLOCKED`; `atm list --task-events` shows `reminded` rows with `blocked` and no Herdr prompt text in the pane; after the prompt is answered the next reminder is `emitted` |
 
 4. C6 is the regression case for the stranded-7a defect. With the targeted
    read action the recipient must read both messages. If stranding
@@ -78,6 +79,9 @@ This is the authoritative deliverable checklist.
   advancing, one `herdr_queue_poll_tick` log line with non-zero
   `task_reminders`, and the `atm list --task-events` output for C11 and
   C14 (`reminded` rows). Doctor does not report reminder counts.
+  `idle_members` on the poll-tick record keeps its pre-AX meaning
+  (pending and idle), so it is not evidence for the task step;
+  `task_reminders*` are.
 
 ### Paths to delete
 
@@ -85,7 +89,7 @@ None.
 
 ## Acceptance criteria
 
-1. C1–C5, C7–C14, and C16 PASS with transcripts.
+1. C1–C5, C7–C14, C16, and C18 PASS with transcripts.
 4. C17 PASS or recorded as not run.
 2. C6 PASS, or FAIL attributed to coalescing with the evidence attached
    and the follow-up issue referenced.
