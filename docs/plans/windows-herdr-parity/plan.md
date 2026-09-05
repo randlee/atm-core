@@ -612,20 +612,29 @@ installed, doctor prints one line "herdr: not configured".
                                                        // routed to this endpoint, never cleared by `state` (BelowMinimum
                                                        // still probes: calls continue on Herdr's terms)
   }
-  pub struct HerdrMemberPresence { pub member: AgentName, pub outcome: HerdrPresenceOutcome }
+  pub struct HerdrRosterMember { pub ordinal: usize, pub name: AgentName }   // ordinal = index in MembersList.members
+  pub struct HerdrMemberPresence { pub member: HerdrRosterMember, pub outcome: HerdrPresenceOutcome }
   pub enum HerdrPresenceOutcome {
       Visible,                                         // `get` succeeded; any AgentStatus (Blocked included) is visible, as today
-      NotVisible,                                      // HerdrError::AgentNotFound
-      Failed { code: String, detail: String },         // any other non-infrastructure HerdrError, mapped by atm-herdr
-      Skipped,                                         // infrastructure-class HerdrError (is_infrastructure())
+      Finding(DoctorFinding),                          // any non-infrastructure HerdrError, AgentNotFound included: the exact
+                                                       // DoctorFinding the AX adapter emits today, built in atm-herdr by
+                                                       // `presence_finding` (replacement_handler.rs:181-206
+                                                       // `herdr_presence_finding` moved verbatim: typed AtmErrorCode, catalog
+                                                       // remediation, emission_outcome text). DoctorFinding (doctor/report.rs:31,
+                                                       // PartialEq) is an existing atm-core type; nothing is rebuilt from strings.
+      Infrastructure { reason: String },               // is_infrastructure(): reason = format!("{error:?}"), as today
   }
-  // presence_findings (atm-core) reproduces replacement_handler.rs:125-206 exactly:
-  // NotVisible -> the existing HerdrAgentNotVisible warning; Failed -> the existing
-  // HerdrError-mapped warning text; any Skipped on an endpoint -> one Info HerdrUnavailable
-  // "presence probe skipped" for that endpoint; Visible -> nothing. Zero-regression tests:
-  // visible (Idle/Working/Blocked/Done), not-visible, failed (e.g. AgentBlocked), one and
-  // several infrastructure-failed members, each asserting byte-identical findings to the
-  // AX adapter's output on the same fake-herdr recording.
+  // presence_findings (atm-core) is the AX loop (replacement_handler.rs:125-154) run over the
+  // flattened observations (AYP-R7-001): collect every HerdrMemberPresence of every endpoint,
+  // sort by `member.ordinal` (roster order restored), push each Finding(f) in that order,
+  // remember only the FIRST Infrastructure reason across all endpoints, and append exactly
+  // one Info HerdrUnavailable "Herdr presence probe skipped: {reason}" after the loop;
+  // Visible -> nothing. Never one Info per endpoint. Zero-regression tests compare the whole
+  // ordered Vec<DoctorFinding> (PartialEq) with the AX adapter's output on the same
+  // fake-herdr recording: visible (Idle/Working/Blocked/Done), not-visible, failed (e.g.
+  // AgentBlocked), one and several infrastructure-failed members, and a two-endpoint fixture
+  // (default plus one session) with interleaved roster failures and two distinct
+  // infrastructure reasons (only the first reason appears, once).
   pub enum HerdrDoctorState {
       Ok { version: HerdrVersion, protocol: u32 },
       NotConfigured,
@@ -1129,9 +1138,11 @@ Deliverables:
    impl HerdrClientConfig {
        /// Default::default() = PATH lookup, no socket_path (the AX behaviour).
        /// Pure validation, no I/O (AYS-R5-002): Err on a relative `socket_path` or a relative
-       /// `binary_path`; the message names the key. Tested in AY.2 without any file; AY.3's
-       /// `herdr_config.rs` reader calls it after parsing and maps Err into AtmError.
-       pub fn validate(&self) -> Result<(), String>;
+       /// `binary_path`, as `AtmError::new(AtmErrorCode::ConfigParseFailed, <detail naming the key>)`,
+       /// the existing typed config contract (config/discovery.rs:37-47); no String error, no new
+       /// error type or helper (AYP-R7-003). Tested in AY.2 without any file; AY.3's
+       /// `herdr_config.rs` reader calls it after parsing and propagates the error unchanged.
+       pub fn validate(&self) -> Result<(), AtmError>;
    }
    /// One Herdr operation as the adapter already expresses it (argv builders at
    /// lib.rs:631-657 keep producing the CLI form; the socket form is AY.6).
@@ -1166,9 +1177,11 @@ Deliverables:
        /// Never fails: every HerdrError becomes a HerdrDoctorState; compares against HERDR_MINIMUM_VERSION here.
        /// One server_info (version, protocol, capabilities -> live_handoff: Option<bool>, kept whenever the
        /// server answered) plus the existing bounded `get` per member (min(remaining, 2s) each, as
-       /// today) under BreakerPolicy::Bypass; HerdrError -> HerdrPresenceOutcome mapped here, so the
-       /// adapter only groups roster members by endpoint (AYP-R5-001/004, AYP-R6-001/002).
-       pub async fn observe(&self, session: Option<&HerdrSession>, members: &[AgentName], deadline: RequestDeadline)
+       /// today) under BreakerPolicy::Bypass; HerdrError -> HerdrPresenceOutcome mapped here by
+       /// `presence_finding` (the AX `herdr_presence_finding`, moved verbatim into this crate), so the
+       /// adapter only groups roster members, with their roster ordinal, by endpoint
+       /// (AYP-R5-001/004, AYP-R6-001/002, AYP-R7-001).
+       pub async fn observe(&self, session: Option<&HerdrSession>, members: &[HerdrRosterMember], deadline: RequestDeadline)
            -> atm_core::doctor::HerdrEndpointObservation;
    }
    ```
@@ -1238,8 +1251,10 @@ Acceptance criteria:
    public item list equals the AX list plus `HerdrClientConfig` and
    `HerdrDoctorProbe` (architecture test; AY.6 amends it to add its three
    items, AYS-R3-002).
-6. `socket_path`: relative path rejected by `HerdrClientConfig::validate`
-   (pure, no file I/O; the file reader is AY.3, AYS-R5-002); child env has
+6. `socket_path` and `binary_path`: relative path rejected by
+   `HerdrClientConfig::validate` with `AtmErrorCode::ConfigParseFailed`
+   and a detail naming the key (pure, no file I/O; the file reader is
+   AY.3, AYS-R5-002, AYP-R7-003); child env has
    exactly one of `HERDR_SESSION` / `HERDR_SOCKET_PATH` per call (tests).
 7. Official benchmark shows no hot-path regression (see Validation 3).
 8. Boundary TOML io_owns unchanged.
@@ -1266,12 +1281,19 @@ parallel_safe none (AY.6 must_follow AY.3, AYP-R3-011: both edit
 `boundary_enforcement.rs`). recommended_agent arch-ctm/deep-reasoning.
 Size L (AYS-R5-001; the boundary record, the doctor port and DTOs, the
 presence correlation and the config reader were added by the review
-rounds) with the same internal order AY.4 uses (AYS-R2-005): **stage 1**,
-the P-E(a) boundary TOML as the first commit, then deliverable 2 (port,
-DTOs, `herdr_configured.rs`, `presence_findings`, impl-count test,
-doctor JSON), is pushed and reviewed by fenix in the PR before **stage
-2**, deliverables 1 and 3 (the `herdr_config.rs` reader, composition
-wiring, escalation extension) and the lifecycle tests (a) to (k), starts;
+rounds) with the same internal order AY.4 uses (AYS-R2-005): **stage 1**
+is the P-E(a) boundary TOML as the first commit, then the whole of
+deliverable 2 (port, DTOs, both `HerdrEndpointDoctor` impls including
+`HerdrEndpointDoctorAdapter` over a `HerdrDoctorProbe` built from
+`HerdrClientConfig::default()`, `herdr_configured.rs`,
+`presence_findings`, impl-count test, doctor JSON), pushed and reviewed
+by fenix in the PR before **stage 2**, which is exactly deliverables 1
+and 3 (the `herdr_config.rs` reader, composition wiring of the file
+config into the invoker and the adapter's probe, escalation extension)
+plus the lifecycle tests (a) to (k). The stage boundary is the
+deliverable boundary: nothing in deliverable 1 is stage 1, and the
+exact-two impl-count gate is green on the stage-1 push (AYS-R6-001,
+AYP-R7-002);
 quality-mgr reviews the finished sprint once. Rand's seven-sprint ruling
 holds; nothing is split out.
 
@@ -1291,23 +1313,34 @@ Deliverables:
    /// Reads the optional `[herdr]` table of `$HOME/.atm.toml`. No file or no table ->
    /// Ok(HerdrClientConfig::default()) (PATH lookup, no socket_path: the AX behaviour).
    /// Unresolvable home, unreadable file, malformed TOML, an unknown `[herdr]` key, or a
-   /// `HerdrClientConfig::validate` error -> Err(AtmError::config_invalid(..)) naming the
-   /// file and key; the daemon then fails startup exactly as it does for any other
+   /// `HerdrClientConfig::validate` error -> Err(AtmError::new(AtmErrorCode::ConfigParseFailed,
+   /// <detail naming file and key>).with_cause(<io/toml error>)) using only the existing
+   /// constructors (atm-storage error.rs:18,53; `AtmError::config_invalid` does not exist,
+   /// AYP-R7-003); the daemon then fails startup exactly as it does for any other
    /// invalid `.atm.toml` value (fail closed, never a silent default). Keys: `binary_path`,
    /// `socket_path`, both optional strings (AYS-R5-002).
    pub(crate) fn daemon_herdr_client_config(env: &dyn EnvSource) -> Result<HerdrClientConfig, AtmError>;
    ```
 
-   plus the
-   `HerdrEndpointDoctorAdapter` (replacing `HerdrPresenceDoctorAdapter`
-   and the `HerdrPresenceDoctor` port; its `impl` carries the ADR-001
-   `Sealed` marker and is the one production impl site permitted by
+   Composition also passes that `HerdrClientConfig` to the
+   `HerdrDoctorProbe` held by stage 1's `HerdrEndpointDoctorAdapter`
+   (deliverable 2), replacing the `HerdrClientConfig::default()` it is
+   built with in stage 1. Deliverable 1 is stage 2 in full (AYS-R6-001).
+   No probe, no wait, no launch, no version chosen at startup.
+2. Doctor `herdr` section (stage 1 in full, AYS-R6-001): the
+   `HerdrEndpointDoctor` port and DTOs in atm-core (code in "Failure
+   behaviour"); the `HerdrEndpointDoctorAdapter` in atm-daemon-bootstrap
+   (replacing `HerdrPresenceDoctorAdapter` and the `HerdrPresenceDoctor`
+   port; its `impl` carries the ADR-001 `Sealed` marker and is the one
+   production impl site permitted by
    `boundaries/atm-core/herdr-endpoint-doctor.toml` (P-E, first commit
    of AY.3) and its `docs/atm-core/boundaries.md` section, enforced by
-   the impl-count architecture test, AYP-R4-003) over `HerdrDoctorProbe`; the Herdr-configured predicate
-   (roster has at least one Herdr-backend member) defined once
-   in atm-core and exposed through `atm doctor --json` for AY.4. No
-   probe, no wait, no launch, no version chosen at startup.
+   the impl-count architecture test that lands in the same stage,
+   AYP-R4-003, AYP-R7-002) over a `HerdrDoctorProbe` built with
+   `HerdrClientConfig::default()` until deliverable 1 wires the file
+   config; the Herdr-configured predicate (roster has at least one
+   Herdr-backend member) defined once in atm-core and exposed through
+   `atm doctor --json` for AY.4:
 
    ```rust
    // crates/atm-core/src/herdr_configured.rs (new, one function, no state)
@@ -1330,16 +1363,17 @@ Deliverables:
    // `HerdrEndpointDoctor::observe`, so `configured` and `endpoints[]` never disagree
    // (AYS-R3-003). The dev names these types exactly, adds no new type.
    ```
-2. Doctor `herdr` section: the `HerdrEndpointDoctor` port and DTOs in
-   atm-core (code in "Failure behaviour"), one `HerdrEndpointObservation`
+
+   Then one `HerdrEndpointObservation`
    per distinct configured endpoint, each variant with its remedy;
    server version and protocol from `HerdrDoctorProbe::observe` (`herdr
    status server --json`) compared with `HERDR_MINIMUM_VERSION` inside
    atm-herdr; presence data is the `members` list of the same observation
    (the existing bounded `get` per Herdr-backend member under
    `BreakerPolicy::Bypass`, outcomes typed by atm-herdr, never cleared by
-   server state), rendered by `presence_findings` in atm-core with
-   byte-identical findings to the AX adapter (AYP-R5-001, AYP-R6-002);
+   server state), rendered by `presence_findings` in atm-core in roster
+   order with one global `HerdrUnavailable` Info, equal to the AX
+   adapter's `Vec<DoctorFinding>` (AYP-R5-001, AYP-R6-002, AYP-R7-001);
    `live_handoff: Option<bool>` is filled from
    `HerdrServerInfo.capabilities` whenever the server answered, including
    `BelowMinimum` and `ClientServerMismatch` (Herdr master
@@ -1401,13 +1435,18 @@ Acceptance criteria:
    impl-count test finds exactly two `HerdrEndpointDoctor` impls;
    `HerdrPresenceDoctor` no longer exists in the workspace (grep gate)
    (AYP-R4-003).
-8. `daemon_herdr_client_config` tests: no file, file without `[herdr]`,
-   both keys set, unknown key, malformed TOML, relative `socket_path`
-   (AYS-R5-002); the stage-1 push (boundary TOML plus deliverable 2) is
-   reviewed by fenix before stage 2 starts (AYS-R5-001).
-7. `presence_findings` zero-regression tests (visible in every
-   `AgentStatus`, not-visible, failed, infrastructure-failed) pass with
-   findings byte-identical to the AX adapter on the same recordings;
+7. `daemon_herdr_client_config` tests: no file, file without `[herdr]`,
+   both keys set, unknown key, malformed TOML, unresolvable home,
+   unreadable file, relative `socket_path`, relative `binary_path`; every
+   error case asserts `AtmErrorCode::ConfigParseFailed` (AYS-R5-002,
+   AYP-R7-003); the stage-1 push (boundary TOML plus deliverable 2) is
+   reviewed by fenix before stage 2 starts (AYS-R5-001, AYS-R6-001).
+8. `presence_findings` zero-regression tests (visible in every
+   `AgentStatus`, not-visible, failed, infrastructure-failed, and the
+   two-endpoint interleaved fixture with two distinct infrastructure
+   reasons) pass with the whole ordered `Vec<DoctorFinding>` equal to the
+   AX adapter's on the same recordings (roster order, one global
+   `HerdrUnavailable` Info, AYP-R7-001);
    `live_handoff` is `Some(true)` on a `ClientServerMismatch` fixture whose
    server advertises it (AYP-R6-001/002); `herdr_is_configured` tested
    against a roster with tmux, hermes and Herdr members (AYP-R5-002).
@@ -2160,3 +2199,18 @@ AX does not wait on any AY sprint.
   `HerdrPresenceOutcome` {Visible, NotVisible, Failed, Skipped}, mapped in
   atm-herdr, never cleared by state; `presence_findings` byte-identical
   to the AX adapter; `agent list` no longer used for presence).
+- r16 (2026-09-05): critical-plan-reviewer R7 (solar, on r15: 1 blocking,
+  2 important, 1 minor; AYP-R6-001 closed) and plan-scope r6 (AYS-R5-001/002
+  closed; 1 important, 1 minor). AYP-R7-001 (`HerdrPresenceOutcome` now
+  {Visible, Finding(DoctorFinding), Infrastructure{reason}} built by
+  atm-herdr's moved `presence_finding`; `HerdrRosterMember` ordinal;
+  `presence_findings` flattens, restores roster order, one global
+  HerdrUnavailable Info; two-endpoint interleaved fixture), AYP-R7-002 and
+  AYS-R6-001 (`HerdrEndpointDoctorAdapter` and `herdr_configured.rs`
+  moved into deliverable 2 = stage 1, over a default-config probe;
+  deliverable 1 = stage 2 wiring only; header, deliverables and AC 7 use
+  one wording), AYP-R7-003 (`validate -> Result<(), AtmError>` with
+  `ConfigParseFailed`; reader uses `AtmError::new(..).with_cause(..)`, no
+  `config_invalid`; fixtures for unresolvable home, unreadable file,
+  relative `binary_path`), AYP-R7-004 and AYS-R6-M1 (AY.3 AC 7/8 in
+  reading order).
