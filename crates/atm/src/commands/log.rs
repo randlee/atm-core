@@ -1103,7 +1103,9 @@ mod tests {
             "{}\n",
             serde_json::to_string_pretty(&snapshot).expect("serialize retained snapshot")
         );
-        let golden = include_str!("../../tests/fixtures/log-jsonl-default.json");
+        // The retained snapshot contract is byte-exact in its canonical LF
+        // form. Git may materialize the checked-in fixture as CRLF on Windows.
+        let golden = include_str!("../../tests/fixtures/log-jsonl-default.json").replace('\r', "");
         assert_eq!(rendered.as_bytes(), golden.as_bytes());
     }
 
