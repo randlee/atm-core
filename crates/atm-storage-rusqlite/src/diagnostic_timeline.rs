@@ -25,6 +25,28 @@ pub const DIAGNOSTIC_MAX_AGE_DAYS: i64 = 7;
 pub const DIAGNOSTIC_PRUNE_BATCH: usize = 1000;
 pub const DIAGNOSTIC_PRUNE_CHECK_EVERY: usize = 500;
 
+fn diagnostic_level_rank(level: &str) -> Option<i64> {
+    match level.to_ascii_lowercase().as_str() {
+        "trace" => Some(0),
+        "debug" => Some(1),
+        "info" => Some(2),
+        "warn" => Some(3),
+        "error" => Some(4),
+        _ => None,
+    }
+}
+
+fn diagnostic_level_rank(level: &str) -> Option<i64> {
+    match level.to_ascii_lowercase().as_str() {
+        "trace" => Some(0),
+        "debug" => Some(1),
+        "info" => Some(2),
+        "warn" => Some(3),
+        "error" => Some(4),
+        _ => None,
+    }
+}
+
 #[derive(Clone)]
 pub struct SqliteDiagnosticTimeline {
     db: Arc<SharedDb>,
@@ -97,6 +119,14 @@ impl DiagnosticTimelineStore for SqliteDiagnosticTimeline {
                 .cursor
                 .map(|cursor| (Some(cursor.ts_unix_ms), Some(cursor.id)))
                 .unwrap_or((None, None));
+            let level_at_least = query
+                .level_at_least
+                .as_deref()
+                .map(|level| {
+                    diagnostic_level_rank(level)
+                        .ok_or_else(|| AtmError::mailbox_read("unknown diagnostic level filter"))
+                })
+                .transpose()?;
             let mut statement = connection
                 .prepare(
                     "SELECT id, ts_unix_ms, level, component, code, correlation_id, origin, \
@@ -116,7 +146,7 @@ impl DiagnosticTimelineStore for SqliteDiagnosticTimeline {
                     params![
                         query.since,
                         query.until,
-                        query.level_at_least,
+                        level_at_least,
                         query.component_prefix,
                         cursor_ts,
                         cursor_id,
@@ -355,6 +385,51 @@ mod tests {
             seen_ids.len(),
             FIXTURE_ROWS as usize,
             "keyset pagination must visit every row exactly once, including same-timestamp ties"
+        );
+    }
+
+    #[test]
+    fn level_filter_uses_severity_rank_and_includes_higher_levels() {
+        let directory = tempdir().expect("temporary database directory");
+        let timeline = SqliteDiagnosticTimeline::open(directory.path().join("mail.db"))
+            .expect("timeline opens and migrates");
+        timeline
+            .db
+            .with_connection(|connection| {
+                for (timestamp, level) in [(1, "error"), (2, "warn"), (3, "info"), (4, "trace")] {
+                    connection
+                        .execute(
+                            "INSERT INTO diagnostic_events (ts_unix_ms, level, component, origin, message) VALUES (?1, ?2, 'level-test', 'test', 'fixture')",
+                            params![timestamp, level],
+                        )
+                        .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                }
+                Ok(())
+            })
+            .expect("seed level fixture");
+
+        let info = timeline
+            .query(&DiagnosticQuery {
+                level_at_least: Some("info".to_owned()),
+                limit: Some(10),
+                ..DiagnosticQuery::default()
+            })
+            .expect("query info threshold");
+        assert_eq!(
+            info.iter().map(|event| event.level.as_str()).collect::<Vec<_>>(),
+            vec!["info", "warn", "error"]
+        );
+
+        let warn = timeline
+            .query(&DiagnosticQuery {
+                level_at_least: Some("warn".to_owned()),
+                limit: Some(10),
+                ..DiagnosticQuery::default()
+            })
+            .expect("query warn threshold");
+        assert_eq!(
+            warn.iter().map(|event| event.level.as_str()).collect::<Vec<_>>(),
+            vec!["warn", "error"]
         );
     }
 }
