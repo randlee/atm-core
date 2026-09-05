@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-009>
+  a triage:Finding ;
+  triage:findingId "AX3-009" ;
+  triage:title "docs/requirements.md Task storage subsection landed in section 1 instead of section 22.1" ;
+  triage:description "Sprint AX.3 D7 requires the new Task storage subsection in docs/requirements.md section 22.1 (SQLite Mail And Roster Ownership). At 88c579a18 it sits in section 1 Product Definition (~line 75), right after the Phase-AC supersession note, and section 22.1 (line 3644+) has no TaskStore/task_store mention. Found by req-qa ATM-QA-006 on PR #1191 QA-1." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T06:06:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-009/AX3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-009/AX4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-009/AX3-1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 75 ;
+  triage:snippet "#### Task storage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/AX3/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-009/AX4-1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 75 ;
+  triage:snippet "#### Task storage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/AX4/88c579a18> .
+
+<urn:atm:triage:worktree/AX3/88c579a18>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AX4/88c579a18>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 4 .
