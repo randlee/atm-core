@@ -301,3 +301,8 @@ triage:r39 a triage:Resolution ;
 triage:c16 a triage:Completion ;
     triage:ofSprint triage:AX5 ;
     triage:at "2026-09-05T12:21:07Z"^^xsd:dateTime .
+
+triage:a17 a triage:Assignment ;
+    triage:ofSprint triage:AX5 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-05T12:47:37Z"^^xsd:dateTime .
