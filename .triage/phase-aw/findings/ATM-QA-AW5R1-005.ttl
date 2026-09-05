@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-AW5R1-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AW5R1-005" ;
+  triage:title "Sprint doc says pyo3 name = from but code uses getter(from); doc/comment drift only" ;
+  triage:description "qa-pr1184-r1 req-qa: crates/atm-graft-python/src/tool_types.rs uses #[getter(from)] where docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md literally specifies #[pyo3(name = from)]. Functionally equivalent. Fix by aligning the sprint doc wording (or a code comment) so the two agree. CLOSURE (2026-09-05T05:30:00Z): r2 verified fixed: req-qa confirms resolved at b7fbf54e64." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T04:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW5 ;
+  triage:foundAt "2026-09-05T04:38:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AW5R1-005/AW5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AW5R1-005/AW5-2> ;
+  triage:closedAt "2026-09-05T05:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-AW5R1-005/AW5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/tool_types.rs" ;
+  triage:line 1 ;
+  triage:snippet "getter(from)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .
+
+<urn:atm:triage:occurrence/ATM-QA-AW5R1-005/AW5-2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md" ;
+  triage:line 1 ;
+  triage:snippet "pyo3 name = from" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .
+
+<urn:atm:triage:worktree/AW5/3d1862c25>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw5-native-tool-parity" ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:orderIndex 5 .

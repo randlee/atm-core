@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW3-CI-002>
+  a triage:Finding ;
+  triage:findingId "AW3-CI-002" ;
+  triage:title "arch-gates al8 and av3 boundary tests fail on AW.3: replacement runtime maintenance registration no longer detected, and doctor read-handler allowlist rejects DiagnosticCounters/DiagnosticCountersSource" ;
+  triage:description "PR #1182 CI arch-gates (crates/atm-architecture/tests/boundary_enforcement.rs) fails two tests that PASS on integrate/phase-aw ffd78e16f: (1) boundary_enforcement.rs:3087 al8_replacement_runtime_registers_maintenance_for_every_composed_runtime_maintenance_implementer: start_replacement_runtime builds HttpRuntimeBuilder but never registers the router as the HttpRuntime maintenance object, so any RuntimeMaintenance implementer composed into StorageAndNudgeRouter (e.g. HerdrQueueWakePump) would silently never run; the AW.3 edit to crates/atm-daemon-bootstrap/src/lib.rs (91 lines changed) broke this composition or the pattern the gate matches. Verify the maintenance registration is really wired, not just re-matched. (2) boundary_enforcement.rs:4040 av3_post_cutover_read_handlers_reject_legacy_blocking_dependencies: read-handler doctor allowlist rejects unlisted types DiagnosticCounters, DiagnosticCountersSource. Either add the two types to the doctor read-handler allowlist in the gate (they are non-blocking counters) or route them so the doctor handler does not take them directly. Reproduce: cargo test -p atm-architecture --test boundary_enforcement -- al8_replacement av3_post_cutover." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-gate" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T04:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T03:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-002/AW3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-002/AW3-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-002/AW3-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW3-CI-002/AW3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "start_replacement_runtime composition changed by AW.3" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "a60594ff1" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/a60594ff1> .
+
+<urn:atm:triage:occurrence/AW3-CI-002/AW3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 3087 ;
+  triage:snippet "al8 gate: maintenance object never registered on HttpRuntime" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "a60594ff1" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/a60594ff1> .
+
+<urn:atm:triage:occurrence/AW3-CI-002/AW3-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 4040 ;
+  triage:snippet "av3 gate: doctor allowlist rejects DiagnosticCounters, DiagnosticCountersSource" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "a60594ff1" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/a60594ff1> .
+
+<urn:atm:triage:worktree/AW3/a60594ff1>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "a60594ff1" ;
+  triage:orderIndex 4 .

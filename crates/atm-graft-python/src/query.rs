@@ -143,7 +143,8 @@ impl PyGraftSession {
     }
 
     pub(super) fn peek_outcome(&self, query: PeekQuery) -> PyResult<AtmReadResult> {
-        self.peek_raw(query).and_then(AtmReadResult::from_outcome)
+        self.peek_raw(query)
+            .and_then(AtmReadResult::from_peek_outcome)
     }
 
     pub(super) fn list_outcome(&self, query: ListQuery) -> PyResult<AtmListResult> {

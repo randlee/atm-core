@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F101-AW3>
+  a triage:Finding ;
+  triage:findingId "RBQA-F101-AW3" ;
+  triage:title "/v1/diagnostics and /v1/health return runtime-private response types instead of the manifest-declared ApiResponse/AtmError contract" ;
+  triage:description "qa-pr1182-r2 ruthless-boundary-qa (quality-mgr msg 01M1QZ1W1KA2JM9M0YKMQ4XG1E, independently confirmed by quality-mgr). boundaries/atm-http-runtime/http-runtime.toml [contracts] (lines 37-41) states no runtime-private request, response, error, or persistence type is authorized, but diagnostics_route.rs ships DiagnosticsResponse/DiagnosticRecord/DiagnosticsError and health_route.rs ships HealthResponse as bespoke types; the TOML was not updated to match. Fix: either route the AW.3 read-only responses through the authorized atm-core ApiResponse/AtmError contract, or (if the sprint doc intends a dedicated read-only contract) declare it explicitly in the manifest with a quality-mgr-reviewed rationale. Fold into the AW3-QA-I1 remediation." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T05:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T05:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F101-AW3/AW3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F101-AW3/AW3-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F101-AW3/AW3-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F101-AW3/AW3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/diagnostics_route.rs" ;
+  triage:line 68 ;
+  triage:snippet "struct DiagnosticsResponse runtime-private, not ApiResponse" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "b41b1fcdb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/b41b1fcdb> .
+
+<urn:atm:triage:occurrence/RBQA-F101-AW3/AW3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/health_route.rs" ;
+  triage:line 66 ;
+  triage:snippet "impl From DiagnosticCounters for HealthResponse runtime-private" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "b41b1fcdb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/b41b1fcdb> .
+
+<urn:atm:triage:occurrence/RBQA-F101-AW3/AW3-3>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-http-runtime/http-runtime.toml" ;
+  triage:line 39 ;
+  triage:snippet "response_types = existing atm-core ApiResponse only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "b41b1fcdb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/b41b1fcdb> .
+
+<urn:atm:triage:worktree/AW3/b41b1fcdb>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "b41b1fcdb" ;
+  triage:orderIndex 3 .

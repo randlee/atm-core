@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW2-CI-002>
+  a triage:Finding ;
+  triage:findingId "AW2-CI-002" ;
+  triage:title "just lint pytests fails: smoke probe test still mocks two Path.is_file calls after d3a601ab0 removed the early return" ;
+  triage:description "feature/aw2-sqlite-diagnostic-timeline at d3a601ab0 (fix(smoke): rebuild sqlite writer probe per run, the AW2-QA-HARNESS-001 fix) deleted the if probe.is_file() early return in scripts/smoke/run_admission_capacity.py sqlite_writer_probe, but scripts/smoke/test_run_admission_capacity.py line 333 test_sqlite_probe_build_is_separate_from_the_released_daemon_pair still patches Path.is_file with side_effect [False, True]; the single remaining is_file call now receives False and the probe raises SmokeError no executable produced. Reproduced locally: 1 failed, 106 passed. Pushed without a full just lint run. Fix: update the test to the new single-call contract and make it assert the probe is rebuilt on every run (the behaviour AW2-QA-HARNESS-001 asked for), so the test proves the fix rather than the old caching path." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T05:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW2 ;
+  triage:foundAt "2026-09-05T05:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW2-CI-002/AW2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW2-CI-002/AW2-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW2-CI-002/AW2-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 333 ;
+  triage:snippet "mock.patch.object Path is_file side_effect False True expects two calls" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "0bd774c8f" ;
+  triage:occursIn <urn:atm:triage:worktree/AW2/0bd774c8f> .
+
+<urn:atm:triage:occurrence/AW2-CI-002/AW2-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 892 ;
+  triage:snippet "SmokeError no executable produced after single is_file call" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "0bd774c8f" ;
+  triage:occursIn <urn:atm:triage:worktree/AW2/0bd774c8f> .
+
+<urn:atm:triage:worktree/AW2/0bd774c8f>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "0bd774c8f" ;
+  triage:orderIndex 2 .

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW3-CI-004>
+  a triage:Finding ;
+  triage:findingId "AW3-CI-004" ;
+  triage:title "RULE-002 new hard violations on AW.3: build_replacement_handler 81 lines and HttpRuntime start 84 lines" ;
+  triage:description "PR #1182 Just lint function-length (run 33944237975, reproduced locally at a046246c3): RULE-002 new hard violations overlapping the diff: crates/atm-daemon-bootstrap/src/replacement_handler.rs:210-290 build_replacement_handler (81 lines) and crates/atm-http-runtime/src/lib.rs:511-594 start (84 lines). Both grew with the AW.3 maintenance/diagnostics wiring. Fix: extract the new composition steps into helpers so both are under 80 lines; verify with python3 scripts/check-function-length.py." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-lint" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T04:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T04:22:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-004/AW3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-004/AW3-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW3-CI-004/AW3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/replacement_handler.rs" ;
+  triage:line 210 ;
+  triage:snippet "build_replacement_handler 81 lines" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "a046246c3" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/a046246c3> .
+
+<urn:atm:triage:occurrence/AW3-CI-004/AW3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 511 ;
+  triage:snippet "start 84 lines" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "a046246c3" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/a046246c3> .
+
+<urn:atm:triage:worktree/AW3/a046246c3>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "a046246c3" ;
+  triage:orderIndex 4 .

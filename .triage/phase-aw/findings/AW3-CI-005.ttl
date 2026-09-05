@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW3-CI-005>
+  a triage:Finding ;
+  triage:findingId "AW3-CI-005" ;
+  triage:title "CI Test (ubuntu/windows) fails: cli_surface_matches_committed_baseline at b41b1fcdb" ;
+  triage:description "PR #1182 at b41b1fcdb, ci.yml run for that SHA, jobs 101250997106 (ubuntu) and 101250997094 (windows): crates/atm/tests/cli_surface.rs:236 cli_surface_matches_committed_baseline FAILS. The AW.3 CLI help surface (atm log --source / doctor output) changed without regenerating the committed cli_surface baseline. Fix: regenerate the baseline with the repo tool and commit it alongside the r3 fixes; run the full test suite on all three platforms in CI before calling the round complete. The macOS Test failure on the same run is AW1-CI-001 (tracing_bridge env race), owned by the feature/aw2 return push and closed here by merge-forward." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T05:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T04:57:13Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-005/AW3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW3-CI-005/AW3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/cli_surface.rs" ;
+  triage:line 236 ;
+  triage:snippet "cli_surface_matches_committed_baseline panicked, baseline stale" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "b41b1fcdb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/b41b1fcdb> .
+
+<urn:atm:triage:worktree/AW3/b41b1fcdb>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "b41b1fcdb" ;
+  triage:orderIndex 3 .

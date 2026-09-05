@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F102-AW3>
+  a triage:Finding ;
+  triage:findingId "RBQA-F102-AW3" ;
+  triage:title "health_route.rs From-impl hand-recomputes the same degraded-source classification as doctor_observability.rs degraded_sources with no shared owner or parity test" ;
+  triage:description "qa-pr1182-r2 ruthless-boundary-qa (quality-mgr msg 01M1QZ1W1KA2JM9M0YKMQ4XG1E, independently confirmed by quality-mgr). health_route.rs impl From DiagnosticCounters for HealthResponse (line 66) re-implements the degraded predicate that doctor_observability.rs degraded_sources (line 44) already owns; two hand-written copies of one predicate, no parity test between /v1/health output and atm doctor output for the same counters. Fix: one shared classifier used by both routes plus a parity test. Fold into the AW3-QA-I1 remediation." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T05:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T05:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F102-AW3/AW3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F102-AW3/AW3-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F102-AW3/AW3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/health_route.rs" ;
+  triage:line 66 ;
+  triage:snippet "From impl recomputes degraded classification" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "b41b1fcdb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/b41b1fcdb> .
+
+<urn:atm:triage:occurrence/RBQA-F102-AW3/AW3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/doctor_observability.rs" ;
+  triage:line 44 ;
+  triage:snippet "pub(crate) fn degraded_sources duplicates the predicate" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "b41b1fcdb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/b41b1fcdb> .
+
+<urn:atm:triage:worktree/AW3/b41b1fcdb>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "b41b1fcdb" ;
+  triage:orderIndex 3 .

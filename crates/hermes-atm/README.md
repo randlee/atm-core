@@ -84,8 +84,13 @@ public plugin API: `atm_send`, `atm_read`, `atm_list`, and `atm_ack`. They use
 the typed `atm-graft` client and the installed profile's identity, team, and
 workspace; tool arguments cannot override those profile settings. `atm_read`
 is read-only, `atm_list` returns bounded metadata, and `atm_ack` acknowledges
-one pending message through the canonical send path. Administrative and
-advanced CLI operations remain `atm` CLI operations.
+one pending message through the canonical send path. Successful tool results
+are the same canonical JSON outcome objects emitted by `atm --json`; the
+parity regression test covers list, read, send, and acknowledgement results.
+Administrative and advanced CLI operations remain `atm` CLI operations.
+
+List rows expose `row.from`. The older `row.from_agent` alias remains
+available for compatibility and emits one `DeprecationWarning` per process.
 
 For the reproducible native-tool proof, see [NATIVE_TOOLS_PROOF.md](NATIVE_TOOLS_PROOF.md).
 The implementation checklist and validation record are in [TASKLIST.md](TASKLIST.md).

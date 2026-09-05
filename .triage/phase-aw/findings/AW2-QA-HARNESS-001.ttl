@@ -15,21 +15,44 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW2 ;
   triage:foundAt "2026-09-05T03:41:10Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW2-QA-HARNESS-001/AW2-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
+
+# CLOSURE (qa-pr1179-r7, quality-mgr): dev's fix at d3a601ab0 removed the
+# stale-probe early-return in scripts/smoke/run_admission_capacity.py's
+# sqlite_writer_probe (now rebuilds unconditionally every call, closing the
+# staleness gap this finding described), but that same fix broke the
+# pre-existing mocked unit test
+# scripts/smoke/test_run_admission_capacity.py::
+# test_sqlite_probe_build_is_separate_from_the_released_daemon_pair (it
+# assumed the removed two-is_file()-call structure) -- a genuine CI-breaking
+# regression on Just-lint (ubuntu-latest, macos-latest), confirmed by
+# quality-mgr via CI run 33947118389 job 101255129239 and independently
+# confirmed by req-qa this round. At the subsequent merge-forward tip
+# f77ed7991e (feature/aw2-sqlite-diagnostic-timeline <- integrate/phase-aw),
+# a companion fix updated the test to return_value=True and assert
+# command.call_count == 2 (two sqlite_writer_probe() calls, each rebuilding),
+# matching the corrected single-is_file()-per-call production behavior.
+# quality-mgr independently re-ran
+# `python3 -m pytest scripts/smoke/test_run_admission_capacity.py -k
+# test_sqlite_probe_build_is_separate_from_the_released_daemon_pair` at
+# f77ed7991e in /tmp/verify-aw2-r7 and confirmed PASSED. Both the original
+# staleness defect and its own fix's regression are now closed.
 
 <urn:atm:triage:occurrence/AW2-QA-HARNESS-001/AW2-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 875 ;
   triage:snippet "only builds target/release/atm-daemon-benchmark when the file is missing" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
   triage:headSha "5a4bdefc7" ;
   triage:occursIn <urn:atm:triage:worktree/AW2/5a4bdefc7> .
