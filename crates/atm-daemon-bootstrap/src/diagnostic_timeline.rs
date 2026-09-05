@@ -30,6 +30,14 @@ pub(crate) fn register_bridge(bridge: Arc<atm_observability::TracingBridgeLayer>
     let _ = INSTALLED_BRIDGE.set(bridge);
 }
 
+/// Returns the process-owned retained-diagnostic counter projection after the
+/// SQLite timeline has been attached at bootstrap.
+pub(crate) fn active_counters() -> Option<Arc<dyn DiagnosticCountersSource>> {
+    ACTIVE_COUNTERS
+        .get()
+        .map(|counters| Arc::clone(counters) as Arc<dyn DiagnosticCountersSource>)
+}
+
 pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticTimeline>) {
     let Some(bridge) = INSTALLED_BRIDGE.get() else {
         return;

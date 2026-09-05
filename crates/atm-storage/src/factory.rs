@@ -4,8 +4,9 @@ use std::sync::Arc;
 
 use crate::{
     AsyncMailboxReader, AsyncMessageSearchStore, AsyncMessageStore, AtmError,
-    GraftReceiverEndpointStore, MessageSearchStore, MessageStore, NudgeTemplateOverrideStore,
-    PeerConfigStore, PendingNudgeStore, RosterStore, TemplateCatalogStore,
+    DiagnosticTimelineStore, GraftReceiverEndpointStore, MessageSearchStore, MessageStore,
+    NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, RosterStore,
+    TemplateCatalogStore,
 };
 
 /// Effective capacity settings for one reader lane, selected by the backend
@@ -38,6 +39,7 @@ pub struct StorageHandles {
     template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
     message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
     async_message_search_store: Arc<dyn AsyncMessageSearchStore + Send + Sync>,
+    diagnostic_timeline: Arc<dyn DiagnosticTimelineStore + Send + Sync>,
     effective_reader_lanes: Option<EffectiveReaderLanes>,
 }
 
@@ -59,6 +61,7 @@ pub struct StorageHandleParts {
     pub template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
     pub message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
     pub async_message_search_store: Arc<dyn AsyncMessageSearchStore + Send + Sync>,
+    pub diagnostic_timeline: Arc<dyn DiagnosticTimelineStore + Send + Sync>,
     pub effective_reader_lanes: Option<EffectiveReaderLanes>,
 }
 
@@ -100,6 +103,7 @@ impl StorageHandles {
             template_catalog_store: parts.template_catalog_store,
             message_search_store: parts.message_search_store,
             async_message_search_store: parts.async_message_search_store,
+            diagnostic_timeline: parts.diagnostic_timeline,
             effective_reader_lanes: parts.effective_reader_lanes,
         }
     }
@@ -158,6 +162,11 @@ impl StorageHandles {
     /// Returns the Tokio-safe companion for the same search semantics.
     pub fn async_message_search_store(&self) -> Arc<dyn AsyncMessageSearchStore + Send + Sync> {
         Arc::clone(&self.async_message_search_store)
+    }
+
+    /// Returns the bounded, read-only retained diagnostic timeline capability.
+    pub fn diagnostic_timeline(&self) -> Arc<dyn DiagnosticTimelineStore + Send + Sync> {
+        Arc::clone(&self.diagnostic_timeline)
     }
 
     /// Returns the effective reader-pool capacities selected by the backend,

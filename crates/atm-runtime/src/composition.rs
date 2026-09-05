@@ -12,8 +12,8 @@ use atm_core::error::AtmError;
 use atm_core::home::HostRuntimeScope;
 use atm_core::{LocalServiceRuntime, load_atm_config};
 use atm_storage::{
-    MessageStore as SharedMessageStore, PeerConfigStore, RosterStore as SharedRosterStore,
-    StorageFactory,
+    DiagnosticTimelineStore, MessageStore as SharedMessageStore, PeerConfigStore,
+    RosterStore as SharedRosterStore, StorageFactory,
 };
 
 use crate::legacy_storage_adapters::{
@@ -75,6 +75,8 @@ pub struct RuntimeAssembly {
     >,
     pub nudge_template_override_store: Arc<dyn boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+    /// Read-only retained diagnostic timeline supplied by the selected storage backend.
+    pub diagnostic_timeline: Arc<dyn DiagnosticTimelineStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
     pub reader_lanes: Option<ReaderLanesDoctorReport>,
     pub workflow_telemetry: WorkflowTelemetryRuntime,
@@ -92,6 +94,7 @@ impl fmt::Debug for RuntimeAssembly {
                 &"dyn NudgeTemplateOverrideStore",
             )
             .field("peer_config_store", &"dyn PeerConfigStore")
+            .field("diagnostic_timeline", &"dyn DiagnosticTimelineStore")
             .field("doctor_ports", &self.doctor_ports)
             .field("reader_lanes", &self.reader_lanes)
             .field("workflow_telemetry", &"WorkflowTelemetryRuntime")
@@ -177,6 +180,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     let pending_nudge_store = storage.pending_nudge_store();
     let graft_receiver_endpoint_store = storage.graft_receiver_endpoint_store();
     let peer_config_store = storage.peer_config_store();
+    let diagnostic_timeline = storage.diagnostic_timeline();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
         storage_backends.rosters.clone(),
@@ -202,6 +206,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         storage_backends,
         nudge_template_override_store,
         peer_config_store,
+        diagnostic_timeline,
         doctor_ports,
         reader_lanes,
         workflow_telemetry,

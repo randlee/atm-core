@@ -21,6 +21,7 @@ use atm_core::error::AtmError;
 use atm_core::graft_store_error;
 use atm_core::list::ListQuery;
 use atm_core::observability::ObservabilityPort;
+use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
 use atm_core::protocol::{
     CompatibilityVerdict, GraftReceiverRegistration, GraftReceiverUnregistration, ReleaseVersion,
     RequestEnvelope, RequestId, ResponseEnvelope, SendResponseEnvelope,
@@ -58,6 +59,43 @@ where
             }
         }
     }
+}
+
+fn append_observability_counter_finding(
+    findings: &mut Vec<atm_core::doctor::DoctorFinding>,
+    counters: DiagnosticCounters,
+) {
+    let degraded = counters.jsonl_dropped_queue_full_total > 0
+        || counters.jsonl_dropped_reentrant_total > 0
+        || counters.timeline_dropped_queue_full_total > 0
+        || counters.timeline_dropped_persist_error_total > 0;
+    let severity = if degraded {
+        atm_core::doctor::DoctorSeverity::Warning
+    } else {
+        atm_core::doctor::DoctorSeverity::Info
+    };
+    let code = if degraded {
+        atm_core::error::AtmErrorCode::WarningObservabilityHealthDegraded
+    } else {
+        atm_core::error::AtmErrorCode::ObservabilityHealthOk
+    };
+    findings.push(atm_core::doctor::DoctorFinding {
+        severity,
+        code,
+        message: format!(
+            "retained diagnostics: jsonl forwarded={} queue_full_dropped={} reentrant_dropped={}; timeline written={} queue_full_dropped={} persist_error_dropped={}",
+            counters.jsonl_forwarded_total,
+            counters.jsonl_dropped_queue_full_total,
+            counters.jsonl_dropped_reentrant_total,
+            counters.timeline_written_total,
+            counters.timeline_dropped_queue_full_total,
+            counters.timeline_dropped_persist_error_total,
+        ),
+        remediation: degraded.then(|| {
+            "Inspect retained-log queue pressure and timeline persistence; query /v1/health for the current counters."
+                .to_owned()
+        }),
+    });
 }
 
 /// Bounded bridge for synchronous core operations that are not storage-writer
@@ -216,6 +254,7 @@ pub struct StorageAndNudgeRouter {
     runtime_health: RuntimeHealth,
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
     daemon_context: Option<atm_core::doctor::DoctorExecutionContext>,
+    diagnostic_counters: Option<Arc<dyn DiagnosticCountersSource>>,
     direct_peer_port: NonZeroU16,
     peer_connection_pool: Option<PeerConnectionPool>,
     shared_direct_peer_client: Option<reqwest::Client>,
@@ -249,6 +288,7 @@ impl StorageAndNudgeRouter {
             runtime_health,
             doctor_ports: None,
             daemon_context: None,
+            diagnostic_counters: None,
             direct_peer_port: crate::direct_peer_port(),
             peer_connection_pool: None,
             shared_direct_peer_client: None,
@@ -297,6 +337,25 @@ impl StorageAndNudgeRouter {
         self.control_path_sync_bridge.runtime_health = runtime_health.clone();
         self.runtime_health = runtime_health;
         self.doctor_ports = Some(doctor_ports);
+        self
+    }
+
+    /// Installs the process-owned retained-diagnostic counter projection for
+    /// the doctor report. The runtime sees only the core snapshot contract.
+    #[must_use]
+    pub fn with_diagnostic_counters(mut self, counters: Arc<dyn DiagnosticCountersSource>) -> Self {
+        self.diagnostic_counters = Some(counters);
+        self
+    }
+
+    /// Installs the optional bootstrap diagnostic projection without forcing
+    /// focused runtime fixtures to construct a tracing bridge.
+    #[must_use]
+    pub fn with_diagnostic_counters_option(
+        mut self,
+        counters: Option<Arc<dyn DiagnosticCountersSource>>,
+    ) -> Self {
+        self.diagnostic_counters = counters;
         self
     }
 
@@ -673,6 +732,10 @@ impl StorageAndNudgeRouter {
         let runtime_health = self.runtime_health.clone();
         let bare_cli_queue_full_drops = self.bare_cli_queue_full_drops.clone();
         let daemon_context = self.daemon_context.clone();
+        let diagnostic_counters = self.diagnostic_counters.as_deref().map_or_else(
+            DiagnosticCounters::default,
+            DiagnosticCountersSource::snapshot,
+        );
         let mut initial_runtime_status = runtime_health.snapshot();
         initial_runtime_status.bare_cli_queue_full_drops_total =
             bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
@@ -700,6 +763,7 @@ impl StorageAndNudgeRouter {
             .expect("projection retains runtime status");
         report.herdr_queue_pump.last_tick_at = runtime_status.herdr_queue_last_tick_at;
         report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
+        append_observability_counter_finding(&mut report.findings, diagnostic_counters);
         Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
 

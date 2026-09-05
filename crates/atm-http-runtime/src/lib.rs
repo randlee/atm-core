@@ -43,6 +43,7 @@ use std::time::Duration;
 
 use atm_core::error::AtmError;
 use atm_core::local_http::LocalCapability;
+use atm_core::observability_counters::DiagnosticCountersSource;
 use tokio::net::TcpListener;
 #[cfg(unix)]
 use tokio::net::UnixListener;
@@ -51,6 +52,8 @@ use tokio::task::JoinHandle;
 
 mod bare_cli_fifo;
 mod client;
+mod diagnostics_route;
+mod health_route;
 mod herdr_queue_wake;
 mod http1_server;
 mod loopback_tcp;
@@ -406,6 +409,8 @@ pub struct HttpRuntimeBuilder {
     handler: Arc<dyn CanonicalWriteHandler>,
     health: RuntimeHealth,
     maintenance: Option<Arc<dyn RuntimeMaintenance>>,
+    diagnostic_counters: Option<Arc<dyn DiagnosticCountersSource>>,
+    diagnostic_timeline: Option<Arc<dyn atm_runtime::DiagnosticTimelineStore>>,
 }
 
 impl HttpRuntimeBuilder {
@@ -416,6 +421,8 @@ impl HttpRuntimeBuilder {
             handler,
             health: RuntimeHealth::default(),
             maintenance: None,
+            diagnostic_counters: None,
+            diagnostic_timeline: None,
         }
     }
 
@@ -434,6 +441,23 @@ impl HttpRuntimeBuilder {
         self
     }
 
+    /// Attaches the process-owned retained-diagnostic counter projection.
+    #[must_use]
+    pub fn with_diagnostic_counters(mut self, counters: Arc<dyn DiagnosticCountersSource>) -> Self {
+        self.diagnostic_counters = Some(counters);
+        self
+    }
+
+    /// Attaches the bounded, read-only retained diagnostic timeline.
+    #[must_use]
+    pub fn with_diagnostic_timeline(
+        mut self,
+        timeline: Arc<dyn atm_runtime::DiagnosticTimelineStore>,
+    ) -> Self {
+        self.diagnostic_timeline = Some(timeline);
+        self
+    }
+
     /// Validates all runtime-owned input without binding or publishing.
     ///
     /// # Errors
@@ -449,6 +473,8 @@ impl HttpRuntimeBuilder {
             handler: self.handler,
             health: self.health,
             maintenance: self.maintenance,
+            diagnostic_counters: self.diagnostic_counters,
+            diagnostic_timeline: self.diagnostic_timeline,
             state: Configured,
         })
     }
@@ -462,6 +488,8 @@ pub struct HttpRuntime<State> {
     handler: Arc<dyn CanonicalWriteHandler>,
     health: RuntimeHealth,
     maintenance: Option<Arc<dyn RuntimeMaintenance>>,
+    diagnostic_counters: Option<Arc<dyn DiagnosticCountersSource>>,
+    diagnostic_timeline: Option<Arc<dyn atm_runtime::DiagnosticTimelineStore>>,
     state: State,
 }
 
@@ -501,7 +529,14 @@ impl HttpRuntime<Configured> {
             AuthenticatedConnector::local(),
             self.config.limits,
             self.config.timeouts,
-        );
+        )
+        .merge(health_route::health_router(
+            self.health.clone(),
+            self.diagnostic_counters.clone(),
+        ))
+        .merge(diagnostics_route::diagnostics_router(
+            self.diagnostic_timeline.clone(),
+        ));
         let loopback_router = authenticated_loopback_router(canonical_router.clone(), capability);
         let direct_peer = build_direct_peer_server(
             direct_peer_listener,
@@ -542,6 +577,8 @@ impl HttpRuntime<Configured> {
             handler: self.handler,
             health: self.health,
             maintenance: self.maintenance,
+            diagnostic_counters: self.diagnostic_counters,
+            diagnostic_timeline: self.diagnostic_timeline,
             state: Running {
                 local_address,
                 direct_peer_address,
@@ -937,6 +974,8 @@ impl HttpRuntime<Running> {
             handler: self.handler,
             health: self.health,
             maintenance: self.maintenance,
+            diagnostic_counters: self.diagnostic_counters,
+            diagnostic_timeline: self.diagnostic_timeline,
             state: Draining {
                 server_task: self.state.server_task,
                 maintenance_task: self.state.maintenance_task,
@@ -993,6 +1032,8 @@ impl HttpRuntime<Draining> {
             handler: self.handler,
             health: self.health,
             maintenance: self.maintenance,
+            diagnostic_counters: self.diagnostic_counters,
+            diagnostic_timeline: self.diagnostic_timeline,
             state: Stopped,
         })
     }
