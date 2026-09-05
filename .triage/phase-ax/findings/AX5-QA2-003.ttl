@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA2-003>
+  a triage:Finding ;
+  triage:findingId "AX5-QA2-003" ;
+  triage:title "remind_open_tasks breaks out of the candidate loop on budget exhaustion, skipping the audit of Blocked candidates sorted after it (Property 7 regression)" ;
+  triage:description "AX.5 QA-2 (quality-mgr ax5-qa-r2, PR #1201 Final Quality Report 2026-09-05T14:22Z) at head fbee74ba8a9abf0b3e04b01bc157b8a65f194119. rust-qa-agent QA-002, disputed by rust-service-hardening-agent RSH-101, ruled a real defect by fenix: at crates/atm-http-runtime/src/herdr_queue_wake.rs:393-394 the over-budget check for a non-blocked candidate executes break, which also skips every later Blocked candidate in that tick's sort order even though Blocked candidates never consume the prompt budget and Property 7 requires them to be audited (Reminded row / blocked stat) on the same 60s cadence as idle assignees. The AX5-QA1-007 intent (no task-store reads for over-budget non-blocked candidates) is preserved by continue. Fix: replace break with continue (skip only that non-blocked candidate) and add a test with a blocked candidate sorted after a budget-exhausting non-blocked one." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RUST-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T14:23:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T14:22:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA2-003/AX5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA2-003/AX5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 393 ;
+  triage:snippet "if !candidate.blocked && stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:occursIn <urn:atm:triage:worktree/ax5-feature-ax5-task-reminder-cycle-fbee74ba> .
+
+<urn:atm:triage:worktree/ax5-feature-ax5-task-reminder-cycle-fbee74ba>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ax5-task-reminder-cycle" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:orderIndex 5 .

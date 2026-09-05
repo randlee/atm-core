@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA2-002>
+  a triage:Finding ;
+  triage:findingId "AX5-QA2-002" ;
+  triage:title "task_reminder_dispatch.rs builds the backendType metadata key inline instead of calling the shared test helper, tripping the ADR-054 nudge-taxonomy containment gate so just validate fails" ;
+  triage:description "AX.5 QA-2 (quality-mgr ax5-qa-r2, PR #1201 Final Quality Report 2026-09-05T14:22Z) at head fbee74ba8a9abf0b3e04b01bc157b8a65f194119. rust-qa-agent QA-001 (new critical regression): restoring the cfg gate on delivery_channel::test_backend_type_metadata (AX5-QA1-012) left crates/atm-core/tests/task_reminder_dispatch.rs:28 computing the backendType literal via [\"backend\", \"Type\"].concat() inline instead of calling the shared helper, which trips the ADR-054 containment-gate script (check-nudge-taxonomy.py) at the lint stage of just validate. task_state.rs in the same diff calls the helper correctly. Fix: call the shared helper (enable the test-utils feature for the test target if needed) and confirm just validate passes end to end (this also unblocks the RULE-003 line-count check, which did not run this round)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RUST-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T14:22:49Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T14:22:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA2-002/AX5-QA2-002-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA2-002/AX5-QA2-002-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/task_reminder_dispatch.rs" ;
+  triage:line 28 ;
+  triage:snippet "metadata_json.insert([\"backend\", \"Type\"].concat(), serde_json::json!(backend));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:occursIn <urn:atm:triage:worktree/AX5-FEATURE-AX5> .
+
+<urn:atm:triage:worktree/AX5-FEATURE-AX5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX5-feature" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
+  triage:orderIndex 5 .
