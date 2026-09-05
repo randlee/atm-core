@@ -14,7 +14,6 @@ use atm_observability::{
     SinkOffer, TracingBridgeStats,
 };
 use atm_storage::{DiagnosticEvent, DiagnosticRecordError, DiagnosticTimelineStore};
-use atm_storage_rusqlite::DIAGNOSTIC_DETAIL_MAX_BYTES;
 use atm_storage_rusqlite::DiagnosticTimelinePersistenceStats;
 use serde_json::{Map, Value};
 
@@ -419,22 +418,8 @@ fn retained_detail(fields: &[(&'static str, Value)]) -> Option<String> {
         return None;
     }
     let encoded = Value::Object(detail).to_string();
-    Some(truncate_utf8(&encoded, DIAGNOSTIC_DETAIL_MAX_BYTES))
-}
-
-fn truncate_utf8(value: &str, max_bytes: usize) -> String {
-    if value.len() <= max_bytes {
-        return value.to_owned();
-    }
-    let marker = "…";
-    let limit = max_bytes.saturating_sub(marker.len());
-    let end = value
-        .char_indices()
-        .take_while(|(index, _)| *index <= limit)
-        .map(|(index, _)| index)
-        .last()
-        .unwrap_or_default();
-    format!("{}{marker}", &value[..end])
+    // The storage adapter is the sole owner of UTF-8-safe detail truncation.
+    Some(encoded)
 }
 
 /// Rate-limited saturation state machine. The emitted timeline-origin events
