@@ -3894,7 +3894,10 @@ fn all_boundary_files() -> Vec<PathBuf> {
         .flat_map(|directory| {
             fs::read_dir(&directory)
                 .unwrap_or_else(|error| {
-                    panic!("boundary directory {} must be readable: {error}", directory.display())
+                    panic!(
+                        "boundary directory {} must be readable: {error}",
+                        directory.display()
+                    )
                 })
                 .filter_map(|entry| entry.ok().map(|entry| entry.path()))
                 .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("toml"))
@@ -3908,7 +3911,9 @@ fn all_boundary_files() -> Vec<PathBuf> {
 #[test]
 fn guarded_boundaries_include_every_boundary_record() {
     assert_eq!(
-        guarded_boundary_files().into_iter().collect::<BTreeSet<_>>(),
+        guarded_boundary_files()
+            .into_iter()
+            .collect::<BTreeSet<_>>(),
         all_boundary_files().into_iter().collect::<BTreeSet<_>>(),
         "the architecture guard must sweep every boundaries/*/*.toml record"
     );
