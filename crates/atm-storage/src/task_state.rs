@@ -114,15 +114,16 @@ pub fn admit(
         };
     };
 
-    if event == TaskEvent::Acked && row.state == TaskState::Assigned {
-        if let Some(other) = open.iter().find(|candidate| {
+    if event == TaskEvent::Acked
+        && row.state == TaskState::Assigned
+        && let Some(other) = open.iter().find(|candidate| {
             candidate.state == TaskState::Active && candidate.task_id != row.task_id
-        }) {
-            return Err(TaskRejected::new(format!(
-                "task {} is active; complete it first",
-                other.task_id
-            )));
-        }
+        })
+    {
+        return Err(TaskRejected::new(format!(
+            "task {} is active; complete it first",
+            other.task_id
+        )));
     }
 
     if event == TaskEvent::Completed && actor != &row.assignee && actor != &row.assigner {
