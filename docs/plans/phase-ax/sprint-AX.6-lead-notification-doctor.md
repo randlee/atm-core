@@ -78,13 +78,12 @@ escalate(body):
 
 Three layers, all pushed. **Lead**: the coordinating agent on the team.
 **Operator**: any roster member with the new `agent_type = operator`
-(D8), typically a hermes-bridged agent such as `pater` whose own harness
-relays to the human's phone; it may be graft-backed, so the message
-leaves the host over the graft queue channel like any other queued mail.
-**Screen**: the Herdr notification, which fires even when the team has
-neither lead nor operator. Nothing here depends on anyone running
-doctor or reading a mailbox. The daemon does not know or care how an
-operator agent reaches its human; that is the operator harness's job. `BLOCKED_NOTIFY_MS = 60_000`,
+(D8). It is an ordinary ATM recipient on whatever backend its roster row
+declares (tmux, Herdr, or graft), and the escalation is ordinary queued
+mail to it; how that recipient reaches a human, if at all, is outside
+ATM. **Screen**: the Herdr notification, which fires even when the team
+has neither lead nor operator. Nothing here depends on anyone running
+doctor or reading a mailbox. `BLOCKED_NOTIFY_MS = 60_000`,
 `BLOCKED_RENOTIFY_MS = 600_000`, both constants beside
 `TASK_REMINDER_INTERVAL_MS`. Nothing is ever sent to the blocked agent
 itself.
@@ -170,8 +169,8 @@ shape-only completion fails the sprint.
   (D3) adds the operator count; no new warning code, since an operator
   is optional and the Herdr notification is the floor. `docs/team-protocol.md`
   and `docs/user-documents/tasks.md` describe the three layers and how
-  to register an operator (example: `atm teams add-member atm-dev pater
-  --agent-type operator --harness hermes`).
+  to register an operator (`atm teams add-member <team> <name>
+  --agent-type operator ...` with the same backend flags as any member).
 
 ### Paths to delete
 

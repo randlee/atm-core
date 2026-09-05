@@ -184,10 +184,9 @@ cycle-1 hardening findings; binding unless Rand objects at plan review):
   every tenth task reminder, each produce queued mail from `atm-daemon`
   to the lead **and** a Herdr desktop notification through the sealed
   adapter (`herdr notification show`), repeated every 10 min while the
-  condition persists. A third layer reaches off-host: every roster member
-  with the new `agent_type = operator` (typically a hermes-bridged agent
-  such as `pater`, whose harness relays to the human's phone) receives
-  the same queued message. The notification fires even with no lead or
+  condition persists. A third layer: every roster member with the new
+  `agent_type = operator`, an ordinary ATM recipient on any backend,
+  receives the same queued message. The notification fires even with no lead or
   operator. Doctor codes remain the audit surface, not the alerting
   surface (AX.6).
 - Doctor gains five warning codes (AX.6): `ATM_ROSTER_NO_LEAD` (Rand; a
