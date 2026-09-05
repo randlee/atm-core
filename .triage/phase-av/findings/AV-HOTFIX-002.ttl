@@ -37,6 +37,35 @@
 # This note does not change triage:status/dispatchReady -- closure remains
 # quality-mgr's call once the remaining items are verified fixed.
 
+# RULINGS (Rand, relayed via fenix, 2026-09-05T19:05Z) -- approved fix scope,
+# still triage:dispatchReady false pending consolidation with other approved
+# cross-host items onto one fix branch (no per-finding worktrees):
+# 1. APPROVED: `atm peer trust add`/`replace` must validate the fingerprint
+#    is exactly 64 hex characters and reject anything else; `atm doctor`
+#    must flag any malformed fingerprint already present in the store. Live
+#    evidence for the bug: rand-m4's trust list holds host
+#    'peer.example.test' with fingerprint 'sha256:test-peer' -- not a valid
+#    64-hex value -- proving today's add/replace path accepts malformed
+#    fingerprints unvalidated.
+# 2. APPROVED: tests must never run against the live atm database. Use an
+#    in-RAM SQLite database for unit tests, or a test-owned temp directory
+#    with guaranteed delete hygiene; every test touching the trust store (or
+#    any store) must run under an isolated home. Find the specific
+#    test/smoke path that wrote 'peer.example.test' into the real ~/.atm
+#    store and add a guard so a fixture host can never land in the real
+#    store again.
+# 3. OUT OF SCOPE (for now): a doctor warning when advertise_host is a bare
+#    IP is not yet ruled on; leave out of scope unless Rand adds it later.
+# 4. Manual live cleanup on rand-m4 (revoke peer.example.test trust entry;
+#    change advertise_host from 192.168.128.82 to rand-m4.local) was
+#    assigned by Rand to team-lead@rand-m5, not this (rand-m4) session --
+#    tracked there, not duplicated here. Do NOT touch either host's
+#    localhost trust entry; it carries that host's own cert and is required
+#    for loopback.
+# Items 1-2 above are approved fix scope for code changes (fingerprint
+# validation + test isolation guard); dispatch remains held pending
+# consolidation onto one fix branch with other approved cross-host items.
+
 <urn:atm:triage:occurrence/AV-HOTFIX-002/AV-HOTFIX-002-1>
   a triage:Occurrence ;
   triage:file "docs/adr/ADR-040-peer-authority-resolution.md" ;
