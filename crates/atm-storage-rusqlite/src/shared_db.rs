@@ -226,10 +226,19 @@ impl SharedDb {
     }
 
     pub(crate) fn submit_upsert_message(&self, record: Message) -> Result<bool, AtmError> {
+        self.submit_upsert_message_with_provenance(record, atm_storage::MessageWriteOrigin::Local)
+    }
+
+    pub(crate) fn submit_upsert_message_with_provenance(
+        &self,
+        record: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<bool, AtmError> {
         validate_upsert_message_request(&record)?;
-        let result = self
-            .writer
-            .submit(WriteOp::UpsertMessage(Box::new(record)))?;
+        let result = self.writer.submit(WriteOp::UpsertMessage {
+            record: Box::new(record),
+            provenance,
+        })?;
         match result {
             WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
             WriteOpResult::ReadDisplayStateApplied
@@ -276,10 +285,25 @@ impl SharedDb {
         &self,
         record: Message,
     ) -> Result<Option<Message>, AtmError> {
+        self.submit_upsert_message_with_provenance_async(
+            record,
+            atm_storage::MessageWriteOrigin::Local,
+        )
+        .await
+    }
+
+    pub(crate) async fn submit_upsert_message_with_provenance_async(
+        &self,
+        record: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<Option<Message>, AtmError> {
         validate_upsert_message_request(&record)?;
         match self
             .writer
-            .submit_async(WriteOp::UpsertMessage(Box::new(record)))
+            .submit_async(WriteOp::UpsertMessage {
+                record: Box::new(record),
+                provenance,
+            })
             .await?
         {
             WriteOpResult::UpsertMessage { inserted: true, .. } => Ok(None),
@@ -422,6 +446,12 @@ impl SharedDb {
 
     pub(crate) fn mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
         Arc::clone(&self.mailbox_reader)
+    }
+
+    pub(crate) fn task_ledger_reader(
+        &self,
+    ) -> Arc<dyn atm_storage::AsyncTaskLedgerReader + Send + Sync> {
+        Arc::clone(&self.task_ledger_reader)
     }
 
     pub(crate) fn error(&self, message: impl Into<String>, source: RusqliteError) -> AtmError {
@@ -570,6 +600,7 @@ pub(crate) fn ensure_schema(
     )?;
     ensure_mail_message_states_nudge_columns(connection, target)?;
     crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
+    crate::task_store::ensure_schema(connection, target)?;
     ensure_column(
         connection,
         target,

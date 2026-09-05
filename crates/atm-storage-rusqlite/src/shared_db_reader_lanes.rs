@@ -4,17 +4,18 @@
 //! must not grow with reader-lane composition details.
 
 use crate::control_path_pool::ControlPathConnections;
-use crate::mailbox_reader::{MailboxReaderMetrics, start_mailbox_reader};
+use crate::mailbox_reader::{MailboxReaderMetrics, start_mailbox_reader_from_pool};
 #[cfg(test)]
 use crate::observability::NullSqliteObservability;
 use crate::observability::SqliteObservability;
-use crate::reader_pool::ReaderLanesConfig;
+use crate::reader_pool::{ReaderLanesConfig, ReaderPool};
 use crate::search_reader::SearchReader;
 #[cfg(test)]
 use crate::shared_db::record_opened_connection;
 use crate::shared_db::{SharedDbTarget, configure_connection, sqlite_error, sqlite_open_error};
+use crate::task_ledger_reader::start_task_ledger_reader_from_pool;
 use crate::writer::SqliteWriter;
-use atm_storage::{AsyncMailboxReader, AtmError};
+use atm_storage::{AsyncMailboxReader, AsyncTaskLedgerReader, AtmError};
 use rusqlite::{Connection, OpenFlags};
 use std::path::Path;
 use std::sync::Arc;
@@ -31,6 +32,7 @@ pub(crate) struct SharedDb {
     pub(crate) control_path: Arc<ControlPathConnections>,
     pub(crate) search_reader: Arc<SearchReader>,
     pub(crate) mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
+    pub(crate) task_ledger_reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
     pub(crate) mailbox_reader_metrics: MailboxReaderMetrics,
     pub(crate) observability: Arc<dyn SqliteObservability>,
 }
@@ -113,8 +115,10 @@ impl SharedDb {
             Arc::clone(&target),
             reader_lanes.search,
         )?);
+        let mailbox_pool = ReaderPool::start("mailbox", Arc::clone(&target), reader_lanes.mailbox)?;
         let (mailbox_reader, mailbox_reader_metrics) =
-            start_mailbox_reader(Arc::clone(&target), reader_lanes.mailbox)?;
+            start_mailbox_reader_from_pool(mailbox_pool.clone());
+        let task_ledger_reader = start_task_ledger_reader_from_pool(mailbox_pool);
         tracing::debug!(
             writer_handles = 1,
             path = %target.display(),
@@ -126,6 +130,7 @@ impl SharedDb {
             writer,
             search_reader,
             mailbox_reader,
+            task_ledger_reader,
             mailbox_reader_metrics,
             observability,
         })

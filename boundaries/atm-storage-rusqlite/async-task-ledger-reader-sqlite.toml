@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-AsyncTaskLedgerReader-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteAsyncTaskLedgerReaderAdapter"
+
+[public]
+trait = "AsyncTaskLedgerReader"
+
+[implementation]
+type = "TaskLedgerReader"
+module = "atm_storage_rusqlite::task_ledger_reader"
+visibility = "private"
+constructor = "private"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["sqlite", "bounded_read_submission", "read_only_connections"]
+io_forbidden = ["write_capable_connection", "writer_lane", "socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm -> atm-storage-rusqlite", "atm-daemon -> atm-storage-rusqlite", "atm-graft -> atm-storage-rusqlite", "atm-runtime -> atm-storage-rusqlite", "atm-storage-rusqlite -> atm-runtime"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["TaskLedgerReader"]
+
+[contracts]
+request_types = ["TeamName", "AgentName", "TaskId", "ReadDeadline"]
+response_types = ["TaskRow", "TaskEventRow"]
+error_types = ["ReadLaneError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+io_forbidden_source_modules = { write_capable_connection = ["atm_storage_rusqlite::shared_db_reader_lanes", "atm_storage_rusqlite::reader_pool"], writer_lane = ["atm_storage_rusqlite::reader_pool"], socket_io = ["atm_storage_rusqlite::task_ledger_reader", "atm_storage_rusqlite::shared_db_reader_lanes", "atm_storage_rusqlite::reader_pool"], process_spawn = ["atm_storage_rusqlite::task_ledger_reader", "atm_storage_rusqlite::shared_db_reader_lanes", "atm_storage_rusqlite::reader_pool"] }
+lint_rules = ["LINT-BOUNDARY-TASK-LEDGER-READER-SQLITE-EDGES"]
+review_gates = ["no_public_impl", "no_public_constructor", "no_public_reexport"]
+
+[status]
+state = "concrete_landed"
+notes = ["TaskLedgerReader owns bounded read-only SQLite worker connections through the shared reader pool."]

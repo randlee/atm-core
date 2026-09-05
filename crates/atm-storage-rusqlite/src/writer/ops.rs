@@ -1,5 +1,6 @@
 use super::ops_envelope::StorageEnvelope;
 use super::stmt_cache::WriterStatementCache;
+use super::task_ops::{apply_task_acknowledgement, apply_task_message};
 use crate::search_schema::{
     InsertedMessageProjection, sync_inserted_message_projection, sync_message_projection_by_key,
     sync_template_projection,
@@ -13,8 +14,8 @@ use atm_storage::error::AtmError;
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
-    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, TemplateMessageAdmission,
-    TemplateRegistration, TemplateRegistrationOutcome,
+    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, MessageWriteOrigin,
+    TemplateMessageAdmission, TemplateRegistration, TemplateRegistrationOutcome,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
@@ -42,7 +43,10 @@ pub(crate) enum WriteOp {
         message_ids: Vec<MessageKey>,
         seen_watermark: Option<IsoTimestamp>,
     },
-    UpsertMessage(Box<Message>),
+    UpsertMessage {
+        record: Box<Message>,
+        provenance: MessageWriteOrigin,
+    },
     /// A related group of immutable records that must either all become
     /// visible or none do.  AI.31 uses this for the ACK reply and the
     /// acknowledged source record.
@@ -69,7 +73,7 @@ impl std::fmt::Debug for WriteOp {
                 .field("message_ids", &message_ids.len())
                 .field("seen_watermark", seen_watermark)
                 .finish(),
-            Self::UpsertMessage(_) => formatter.write_str("UpsertMessage(..)"),
+            Self::UpsertMessage { .. } => formatter.write_str("UpsertMessage(..)"),
             Self::UpsertMessages(_) => formatter.write_str("UpsertMessages(..)"),
             Self::Acknowledge { source, .. } => formatter
                 .debug_struct("Acknowledge")
@@ -130,12 +134,18 @@ pub(crate) fn execute(
             cache,
             target,
         ),
-        WriteOp::UpsertMessage(request) => {
-            execute_upsert_message(request, connection, cache, target)
+        WriteOp::UpsertMessage { record, provenance } => {
+            execute_upsert_message(record, *provenance, connection, cache, target)
         }
         WriteOp::UpsertMessages(records) => {
             for record in records {
-                let _ = execute_upsert_message(record, connection, cache, target)?;
+                let _ = execute_upsert_message(
+                    record,
+                    MessageWriteOrigin::Local,
+                    connection,
+                    cache,
+                    target,
+                )?;
             }
             Ok(WriteOpResult::UpsertMessages)
         }
@@ -150,7 +160,13 @@ pub(crate) fn execute(
         }
         WriteOp::AdmitTemplateMessage(admission) => {
             admission.validate()?;
-            match execute_upsert_message(&admission.record, connection, cache, target)? {
+            match execute_upsert_message(
+                &admission.record,
+                admission.provenance,
+                connection,
+                cache,
+                target,
+            )? {
                 WriteOpResult::UpsertMessage {
                     inserted: false,
                     existing,
@@ -420,11 +436,16 @@ fn execute_acknowledgement(
     let source = load_pending_ack_source(source, connection, target)?;
     let reply = builder.build_reply(&source)?;
     let mut acknowledged_source = source.clone();
-    acknowledged_source.envelope.read = true;
-    acknowledged_source.envelope.pending_ack_at = None;
-    acknowledged_source.envelope.acknowledged_at = Some(IsoTimestamp::now());
-    let _ = execute_upsert_message(&reply, connection, cache, target)?;
-    let _ = execute_upsert_message(&acknowledged_source, connection, cache, target)?;
+    mark_source_acknowledged(&mut acknowledged_source, IsoTimestamp::now());
+    let _ = execute_upsert_message(&reply, MessageWriteOrigin::Local, connection, cache, target)?;
+    let _ = execute_upsert_message(
+        &acknowledged_source,
+        MessageWriteOrigin::Local,
+        connection,
+        cache,
+        target,
+    )?;
+    apply_task_acknowledgement(&source, &reply.envelope.from, connection, target)?;
     Ok(WriteOpResult::Acknowledged(Box::new(
         AcknowledgementCommit {
             reply,
@@ -433,7 +454,17 @@ fn execute_acknowledgement(
     )))
 }
 
-fn load_pending_ack_source(
+/// Applies the canonical acknowledged display state to a loaded source.
+///
+/// Completion-from-Assigned reuses this mutation before writing the source
+/// back through the same writer transaction.
+pub(super) fn mark_source_acknowledged(source: &mut Message, now: IsoTimestamp) {
+    source.envelope.read = true;
+    source.envelope.pending_ack_at = None;
+    source.envelope.acknowledged_at = Some(now);
+}
+
+pub(super) fn load_pending_ack_source(
     source: &AcknowledgementSource,
     connection: &Connection,
     target: &SharedDbTarget,
@@ -584,8 +615,9 @@ pub(crate) fn validate_upsert_message_request(record: &Message) -> Result<(), At
     Ok(())
 }
 
-fn execute_upsert_message(
+pub(super) fn execute_upsert_message(
     record: &Message,
+    provenance: MessageWriteOrigin,
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
@@ -645,6 +677,9 @@ fn execute_upsert_message(
     } else {
         Some(Box::new(load_existing_message(record, connection, target)?))
     };
+    if inserted && provenance == MessageWriteOrigin::Local {
+        apply_task_message(record, connection, cache, target)?;
+    }
     Ok(WriteOpResult::UpsertMessage { inserted, existing })
 }
 
@@ -762,7 +797,7 @@ fn message_classification(
     })
 }
 
-fn load_existing_message(
+pub(super) fn load_existing_message(
     requested: &Message,
     connection: &Connection,
     target: &SharedDbTarget,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 import sys
 import tempfile
@@ -1407,6 +1408,38 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
         self.assertTrue(declared)
         self.assertEqual(declared - set(IO_FORBIDDEN_SOURCE_PATTERNS), set())
         self.assertTrue(all(patterns for patterns in IO_FORBIDDEN_SOURCE_PATTERNS.values()))
+
+    def test_io_forbidden_source_pattern_keys_are_unique(self) -> None:
+        source = (JUST_DIR / "lint_boundaries.py").read_text(encoding="utf-8")
+        tree = ast.parse(source, filename="lint_boundaries.py")
+        assignment = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "IO_FORBIDDEN_SOURCE_PATTERNS"
+        )
+        self.assertIsInstance(assignment.value, ast.Dict)
+        keys = [key.value for key in assignment.value.keys if isinstance(key, ast.Constant)]
+        self.assertEqual(len(keys), len(set(keys)), "IO_FORBIDDEN_SOURCE_PATTERNS has duplicate keys")
+
+    def test_task_store_task_state_transition_tag_has_no_false_positive_on_real_repo(
+        self,
+    ) -> None:
+        """AX.3: BOUNDARY-TaskStore forbids task_state_transition; the sole
+        legitimate application site (writer/ops.rs, owned by
+        BOUNDARY-TaskStore-Sqlite) is not itself a TaskStore implementation,
+        so the pattern must not flag it or either DummyTaskStore/SqliteTaskStore
+        implementation file."""
+        records, parse_violations = parse_boundary_records(REPO_ROOT)
+        self.assertEqual(parse_violations, [])
+        rendered = [
+            violation.render()
+            for violation in collect_io_forbidden_source_violations(REPO_ROOT, records)
+        ]
+        self.assertFalse(
+            any("task_state_transition" in item for item in rendered), rendered
+        )
 
     def test_io_forbidden_mapping_catches_temporary_source_violation(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

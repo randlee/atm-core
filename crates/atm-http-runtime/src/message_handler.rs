@@ -795,6 +795,7 @@ mod tests {
     use atm_core::protocol::ResponseEnvelope;
     use atm_core::search::{SearchRequest, SearchResponse};
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
+    use atm_core::test_support as atm_storage;
     use atm_core::types::CommandAction;
     use atm_core::workflow_analytics::{WorkflowProjectionRequest, WorkflowSelector};
     use atm_core::{ApiResponse, AuthenticatedIngress, RequestDeadline};
@@ -1002,6 +1003,7 @@ mod tests {
                 message_id: atm_core::schema::AtmMessageId::new(),
                 requires_ack: false,
                 task_id: None,
+                task_complete: None,
                 summary: None,
                 message: Some("typed route fixture".to_owned()),
                 warnings: Vec::new(),

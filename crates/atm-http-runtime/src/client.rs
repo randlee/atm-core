@@ -1453,6 +1453,7 @@ mod tests {
             message_id: atm_core::schema::AtmMessageId::new(),
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             summary: None,
             message: None,
             warnings: Vec::new(),

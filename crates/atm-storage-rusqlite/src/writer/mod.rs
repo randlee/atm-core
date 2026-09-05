@@ -1,6 +1,7 @@
 mod ops;
 mod ops_envelope;
 mod stmt_cache;
+mod task_ops;
 
 pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
 
@@ -647,7 +648,7 @@ fn process_batch(
 /// retains the existing per-operation rollback and reply semantics; only an
 /// all-success group avoids redundant `SAVEPOINT` / `RELEASE` round trips.
 fn is_batchable_message_admission(queued: &QueuedWrite) -> bool {
-    matches!(&*queued.op, WriteOp::UpsertMessage(_))
+    matches!(&*queued.op, WriteOp::UpsertMessage { .. })
 }
 
 fn process_message_admission_group(
@@ -750,7 +751,17 @@ fn process_queued_write(
         ops::execute(&queued.op, &savepoint, cache, target)
     }));
     let reply = queued.reply;
-    (reply, finalize_queued_write(target, savepoint, result))
+    let result = match result {
+        Ok(Err(error)) => {
+            drop(savepoint);
+            match task_ops::append_rejected_task_event(&queued.op, transaction, target, &error) {
+                Ok(()) => Err(error),
+                Err(audit_error) => Err(audit_error),
+            }
+        }
+        result => finalize_queued_write(target, savepoint, result),
+    };
+    (reply, result)
 }
 
 fn finalize_queued_write(
@@ -794,7 +805,7 @@ mod tests {
     use super::*;
     use crate::observability::NullSqliteObservability;
     use crate::shared_db::{SharedDbTarget, ensure_schema, open_writer_connection_for_target};
-    use atm_storage::contract::{Message, MessageKey};
+    use atm_storage::contract::{Message, MessageKey, MessageWriteOrigin};
     use atm_storage::schema::MessageEnvelope;
     use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
     use chrono::Utc;
@@ -829,6 +840,7 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                task_complete: None,
                 extra: Map::new(),
             },
         }
@@ -840,7 +852,10 @@ mod tests {
         let (reply, receiver) = mpsc::sync_channel(1);
         (
             QueuedWrite {
-                op: Box::new(WriteOp::UpsertMessage(Box::new(message))),
+                op: Box::new(WriteOp::UpsertMessage {
+                    record: Box::new(message),
+                    provenance: MessageWriteOrigin::Local,
+                }),
                 reply: ReplyTx::Sync(reply),
             },
             receiver,

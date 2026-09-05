@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-TaskStore-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteTaskStore"
+
+[public]
+trait = "TaskStore"
+
+[implementation]
+type = "SqliteTaskStore"
+module = "atm_storage_rusqlite::task_store"
+visibility = "private"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["sqlite", "task_event_audit_append", "task_state_transition_in_writer_transaction"]
+io_forbidden = ["message_delivery", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SqliteTaskStore", "rusqlite::Connection"]
+
+[contracts]
+request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "MessageWriteOrigin"]
+response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>"]
+error_types = ["AtmError"]
+notes = ["writer/ops.rs applies transitions in the same transaction as the message insert or acknowledgement"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TASK-STORE-SQLITE"]
+review_gates = ["private_sqlite_impl", "no_cli_sqlite_lookup"]
+
+[status]
+state = "concrete_landed"
+notes = ["AX.3"]

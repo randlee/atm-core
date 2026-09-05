@@ -483,6 +483,7 @@ fn prepare_atomic_acknowledgement_write<
         })?,
         requires_ack: false,
         task_id: source_task_id.clone(),
+        task_complete: None,
         summary: reply.envelope.summary.clone(),
         message: Some(reply.envelope.text.clone()),
         warnings: Vec::new(),
@@ -528,6 +529,7 @@ fn prepare_persisted_write<
     delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
     let mut context = prepare_send_context(runtime, &request)?;
+    crate::send::validate_task_request(&request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
     let requires_ack = request_requires_ack(&request, &task_id);
@@ -597,6 +599,7 @@ async fn prepare_persisted_write_async(
     acknowledgement: Option<ResolvedAcknowledgement>,
 ) -> Result<PreparedWrite, AtmError> {
     let mut context = prepare_send_context(runtime, &request)?;
+    crate::send::validate_task_request(&request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
     let requires_ack = request_requires_ack(&request, &task_id);
@@ -656,7 +659,7 @@ async fn prepare_persisted_write_async(
     })
 }
 
-fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
+pub(crate) fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
     validate_write_provenance(
         WriteIngress::Canonical,
         WriteProvenance {

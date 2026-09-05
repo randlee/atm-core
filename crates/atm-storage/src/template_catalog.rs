@@ -267,6 +267,8 @@ pub struct DecomposedMessageAdmission {
 pub struct TemplateMessageAdmission {
     pub record: Message,
     pub decomposition: DecomposedMessageAdmission,
+    /// Peer receipts never mutate the local task ledger.
+    pub provenance: crate::MessageWriteOrigin,
 }
 
 impl TemplateMessageAdmission {

@@ -21,6 +21,7 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "atm-storage-rusqlite"),
     ("atm-daemon", "atm-runtime"),
     ("atm-daemon", "atm-storage-rusqlite"),
+    ("atm-http-runtime", "atm-storage"),
     ("atm-runtime", "atm-storage-rusqlite"),
     ("atm-storage", "atm-core"),
     ("atm-storage", "atm-daemon"),

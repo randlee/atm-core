@@ -26,6 +26,7 @@ pub mod send;
 pub(crate) mod send_fan_out;
 pub(crate) mod send_to;
 pub(crate) mod sender_roster;
+pub(crate) mod task_ledger;
 pub mod teams;
 pub mod templates;
 pub(crate) mod util;

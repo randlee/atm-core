@@ -133,6 +133,10 @@ pub struct SendCommand {
     #[arg(long = "task-id")]
     pub(super) task_id: Option<TaskId>,
 
+    /// Complete a previously assigned task as its assigner or assignee.
+    #[arg(long = "task-complete", conflicts_with = "task_id")]
+    pub(super) task_complete: Option<TaskId>,
+
     #[arg(long)]
     pub(super) dry_run: bool,
 
@@ -294,6 +298,10 @@ impl SendCommand {
             self.dry_run,
         )
         .map(|request| {
+            let request = match self.task_complete {
+                Some(task_id) => request.with_task_complete(task_id),
+                None => request,
+            };
             request
                 .with_caller_chat_id(caller_context.caller_chat_id)
                 .with_activity_observation(caller_context.activity_observation)
@@ -1000,6 +1008,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1385,6 +1394,44 @@ mod tests {
     }
 
     #[test]
+    fn cli_rejects_task_complete_with_task_id() {
+        crate::commands::Cli::try_parse_from([
+            "atm",
+            "send",
+            "recipient-a@test-team",
+            "--task-id",
+            "t-1",
+            "--task-complete",
+            "t-2",
+            "--stdin",
+        ])
+        .expect_err("task assignment and completion are mutually exclusive");
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_request_maps_task_complete_to_the_canonical_send_request() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(ROLE_TEAM_LEAD)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let mut command = send_command("recipient-a@test-team", None);
+        command.task_complete = Some("t-42".parse().expect("task id"));
+
+        let request = command
+            .build_request(".".into(), ".".into())
+            .expect("request");
+
+        assert_eq!(
+            request
+                .task_complete
+                .as_ref()
+                .map(|task_id| task_id.as_str()),
+            Some("t-42")
+        );
+    }
+
+    #[test]
     #[serial(env)]
     fn build_request_rejects_invalid_target_before_core() {
         let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(ROLE_TEAM_LEAD))]);
@@ -1407,6 +1454,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1441,6 +1489,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1481,6 +1530,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1505,6 +1555,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1555,6 +1606,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1785,6 +1837,7 @@ mod tests {
             summary: Some("summary".to_string()),
             requires_ack: true,
             task_id: Some("TASK-42".parse().expect("task id")),
+            task_complete: None,
             dry_run: true,
             json: true,
             attach: Vec::new(),
@@ -1841,6 +1894,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1881,6 +1935,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1911,6 +1966,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1953,6 +2009,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1991,6 +2048,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -2028,6 +2086,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             dry_run: false,
             json: false,
             attach: Vec::new(),

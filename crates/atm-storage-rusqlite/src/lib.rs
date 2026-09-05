@@ -29,6 +29,8 @@ mod shared_db;
 mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
 mod shared_db_support;
+mod task_ledger_reader;
+mod task_store;
 mod team_roster_schema;
 mod template_catalog_schema;
 mod template_catalog_store;
@@ -51,14 +53,14 @@ pub use crate::observability::{
 };
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMailboxReader,
-    AsyncMessageStore, GraftReceiverEndpointStore, MailboxBucketCounts, MailboxScope, Message,
-    MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    AsyncMessageStore, AsyncTaskLedgerReader, GraftReceiverEndpointStore, MailboxBucketCounts,
+    MailboxScope, Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 use atm_storage::schema::MessageEnvelope;
 #[cfg(test)]
 use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TemplateCatalogStore};
+use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TaskStore, TemplateCatalogStore};
 use atm_storage::{
     AtmError, EffectiveReaderLane, EffectiveReaderLanes, IsoTimestamp, StorageFactory,
     StorageHandleParts, StorageHandles,
@@ -279,6 +281,11 @@ struct SqlitePendingNudgeStore {
 }
 
 #[derive(Debug)]
+struct SqliteTaskStore {
+    db: Arc<SharedDb>,
+}
+
+#[derive(Debug)]
 struct SqlitePeerConfigStore {
     db: Arc<SharedDb>,
 }
@@ -390,6 +397,22 @@ impl MessageStore for SqliteMessageStore {
                 "sqlite writer reported an existing message key but the retained record could not be loaded",
             )
         }).map(Some)
+    }
+
+    fn save_message_if_absent_with_provenance(
+        &self,
+        message: &Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<Option<Message>, AtmError> {
+        if self
+            .db
+            .submit_upsert_message_with_provenance(message.clone(), provenance)?
+        {
+            return Ok(None);
+        }
+        self.load_message(&message.message_key)?.ok_or_else(|| AtmError::daemon_unavailable(
+            "sqlite writer reported an existing message key but the retained record could not be loaded",
+        )).map(Some)
     }
 
     fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError> {
@@ -643,6 +666,16 @@ impl AsyncMessageStore for SqliteMessageStore {
         self.db.submit_upsert_message_async(message).await
     }
 
+    async fn save_message_if_absent_with_provenance_async(
+        &self,
+        message: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<Option<Message>, AtmError> {
+        self.db
+            .submit_upsert_message_with_provenance_async(message, provenance)
+            .await
+    }
+
     async fn admit_template_message_async(
         &self,
         admission: atm_storage::TemplateMessageAdmission,
@@ -667,12 +700,14 @@ pub struct SqliteStorageBackend {
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     pending_nudge_store: Arc<SqlitePendingNudgeStore>,
+    task_store: Arc<SqliteTaskStore>,
     graft_receiver_endpoint_store: Arc<SqliteGraftReceiverEndpointStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
     template_catalog_store: Arc<dyn TemplateCatalogStore>,
     message_search_store: Arc<dyn MessageSearchStore>,
     async_message_search_store: Arc<dyn AsyncMessageSearchStore>,
     async_mailbox_reader: Arc<dyn AsyncMailboxReader>,
+    async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader>,
 }
 
 impl std::fmt::Debug for SqliteStorageBackend {
@@ -743,9 +778,11 @@ impl StorageFactory for SqliteStorageFactory {
             message_store: backend.message_store(),
             async_message_store: backend.async_message_store(),
             async_mailbox_reader: backend.async_mailbox_reader(),
+            async_task_ledger_reader: backend.async_task_ledger_reader(),
             roster_store: backend.roster_store(),
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
+            task_store: backend.task_store(),
             graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),
             peer_config_store: backend.peer_config_store(),
             template_catalog_store: backend.template_catalog_store(),
@@ -800,6 +837,7 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
+            task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -808,6 +846,7 @@ impl SqliteStorageBackend {
             message_search_store: search_store(Arc::clone(&db)),
             async_message_search_store: async_search_store(Arc::clone(&db)),
             async_mailbox_reader: db.mailbox_reader(),
+            async_task_ledger_reader: db.task_ledger_reader(),
         })
     }
 
@@ -821,6 +860,7 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
+            task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -829,6 +869,7 @@ impl SqliteStorageBackend {
             message_search_store: search_store(Arc::clone(&db)),
             async_message_search_store: async_search_store(Arc::clone(&db)),
             async_mailbox_reader: db.mailbox_reader(),
+            async_task_ledger_reader: db.task_ledger_reader(),
         })
     }
 
@@ -842,6 +883,10 @@ impl SqliteStorageBackend {
 
     pub fn async_mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
         self.async_mailbox_reader.clone()
+    }
+
+    pub fn async_task_ledger_reader(&self) -> Arc<dyn AsyncTaskLedgerReader + Send + Sync> {
+        self.async_task_ledger_reader.clone()
     }
 
     pub fn save_message_record(
@@ -871,6 +916,10 @@ impl SqliteStorageBackend {
 
     pub fn pending_nudge_store(&self) -> Arc<dyn atm_storage::PendingNudgeStore + Send + Sync> {
         self.pending_nudge_store.clone()
+    }
+
+    pub fn task_store(&self) -> Arc<dyn TaskStore + Send + Sync> {
+        self.task_store.clone()
     }
 
     pub fn graft_receiver_endpoint_store(
@@ -981,9 +1030,10 @@ mod tests {
     use atm_storage::types::{AgentName, IsoTimestamp, ModelName, TeamName};
     use atm_storage::{
         AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
-        DecomposedMessageRecord, InstanceTag, MergedVarsJson, MessageSearchQuery, SearchAtom,
-        SearchDeadline, SearchExpression, SearchGroupBy, SearchGroupField, SearchKey, SearchLimit,
-        SearchMetadataMatch, SearchValue, SimpleAggregate, StorageFactory, TemplateFirstSeen,
+        DecomposedMessageRecord, InstanceTag, MemberKey, MergedVarsJson, MessageSearchQuery,
+        MessageWriteOrigin, SearchAtom, SearchDeadline, SearchExpression, SearchGroupBy,
+        SearchGroupField, SearchKey, SearchLimit, SearchMetadataMatch, SearchValue,
+        SimpleAggregate, StorageFactory, TaskEvent, TaskEventKind, TaskState, TemplateFirstSeen,
         TemplateFrontmatter, TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
         TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
     };
@@ -1184,6 +1234,7 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                task_complete: None,
                 extra: Map::new(),
             },
         }
@@ -2540,6 +2591,7 @@ mod tests {
         let template = template_registration('b');
         let admission = TemplateMessageAdmission {
             record: message.clone(),
+            provenance: atm_storage::MessageWriteOrigin::Local,
             decomposition: DecomposedMessageAdmission {
                 template: template.clone(),
                 message: DecomposedMessageRecord {
@@ -3419,6 +3471,315 @@ mod tests {
                 .expect("load reply"),
             Some(committed.reply),
             "the reply derived from the transaction-loaded source is durable"
+        );
+    }
+
+    #[test]
+    fn task_messages_transition_locally_and_peer_receipts_do_not_create_rows() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let tasks = backend.task_store();
+        let task_id: atm_storage::TaskId = "AX.3".parse().expect("task id");
+        let lead: AgentName = "lead".parse().expect("lead");
+        let member = MemberKey::new(team(), agent());
+
+        let assignment_id = AtmMessageId::new();
+        let mut assignment = message(&format!("atm:{assignment_id}"), "first assignment");
+        assignment.envelope.message_id = Some(assignment_id);
+        assignment.envelope.from = lead.clone();
+        assignment.envelope.task_id = Some(task_id.clone());
+        assignment.envelope.requires_ack = true;
+        assignment.envelope.pending_ack_at = Some(IsoTimestamp::now());
+        store.save_message(&assignment).expect("assign task");
+
+        let assigned = tasks
+            .load_task(&member, &task_id)
+            .expect("load assigned task")
+            .expect("task row");
+        assert_eq!(assigned.state, TaskState::Assigned);
+        assert_eq!(assigned.assignment_message_id, assignment_id);
+
+        let resend_id = AtmMessageId::new();
+        let mut resend = message(&format!("atm:{resend_id}"), "refreshed assignment");
+        resend.envelope.message_id = Some(resend_id);
+        resend.envelope.from = lead.clone();
+        resend.envelope.task_id = Some(task_id.clone());
+        store.save_message(&resend).expect("resend task");
+        let refreshed = tasks
+            .load_task(&member, &task_id)
+            .expect("load refreshed task")
+            .expect("task row");
+        assert_eq!(refreshed.state, TaskState::Assigned);
+        assert_eq!(refreshed.assignment_message_id, resend_id);
+        assert_eq!(refreshed.description, "refreshed assignment");
+
+        let mut completion = message("atm:complete-task", "completed");
+        completion.envelope.from = lead;
+        completion.envelope.task_complete = Some(task_id.clone());
+        store
+            .save_message(&completion)
+            .expect("complete task as assigner");
+        let completed = tasks
+            .load_task(&member, &task_id)
+            .expect("load completed task")
+            .expect("task row");
+        assert_eq!(completed.state, TaskState::Complete);
+        assert!(
+            store
+                .load_message(&resend.message_key)
+                .expect("load refreshed assignment")
+                .expect("assignment")
+                .envelope
+                .acknowledged_at
+                .is_some()
+        );
+        let events = tasks
+            .list_task_events(&team(), &task_id, Some(&agent()))
+            .expect("task events");
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[1].event, TaskEventKind::Assigned);
+        assert_eq!(events[2].event, TaskEventKind::Completed);
+
+        let peer_task: atm_storage::TaskId = "AX.3-peer".parse().expect("peer task");
+        let mut peer = message("atm:peer-task", "peer receipt");
+        peer.envelope.task_id = Some(peer_task.clone());
+        store
+            .save_message_if_absent_with_provenance(&peer, MessageWriteOrigin::Peer)
+            .expect("persist peer receipt");
+        assert!(
+            tasks
+                .load_task(&member, &peer_task)
+                .expect("load peer task")
+                .is_none()
+        );
+
+        let events = tasks
+            .list_task_events(&team(), &task_id, Some(&agent()))
+            .expect("task events");
+        let replayed = events
+            .iter()
+            .filter_map(|event| match event.event {
+                TaskEventKind::Assigned => Some(TaskEvent::Assigned),
+                TaskEventKind::Acked => Some(TaskEvent::Acked),
+                TaskEventKind::Completed => Some(TaskEvent::Completed),
+                TaskEventKind::Rejected | TaskEventKind::Reminded | TaskEventKind::LeadNotified => {
+                    None
+                }
+            })
+            .try_fold(None, |state, event| {
+                atm_storage::transition(state, event).map(|transition| match transition {
+                    atm_storage::Transition::To(state) => Some(state),
+                    atm_storage::Transition::NoOp => state,
+                })
+            })
+            .expect("task event replay");
+        assert_eq!(replayed, Some(completed.state), "AC5 event replay");
+    }
+
+    #[test]
+    fn task_ack_guard_rolls_back_the_reply_and_keeps_the_second_task_pending() {
+        struct ReplyBuilder {
+            actor: AgentName,
+        }
+
+        impl AcknowledgementReplyBuilder for ReplyBuilder {
+            fn build_reply(&self, source: &Message) -> Result<Message, atm_storage::AtmError> {
+                let source_id = source
+                    .envelope
+                    .message_id
+                    .ok_or_else(|| atm_storage::AtmError::validation("source has no id"))?;
+                let reply_id = AtmMessageId::new();
+                let mut reply = source.clone();
+                reply.message_key = MessageKey::new(format!("atm:{reply_id}"))?;
+                reply.envelope.message_id = Some(reply_id);
+                reply.envelope.from = self.actor.clone();
+                reply.envelope.text = "acknowledged".to_owned();
+                reply.envelope.read = false;
+                reply.envelope.requires_ack = false;
+                reply.envelope.pending_ack_at = None;
+                reply.envelope.acknowledged_at = None;
+                reply.envelope.acknowledges_message_id = Some(source_id);
+                reply.envelope.task_id = None;
+                reply.envelope.task_complete = None;
+                Ok(reply)
+            }
+        }
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let tasks = backend.task_store();
+        let lead: AgentName = "lead".parse().expect("lead");
+        let member = MemberKey::new(team(), agent());
+        let first_id: atm_storage::TaskId = "AX.3-first".parse().expect("first task");
+        let second_id: atm_storage::TaskId = "AX.3-second".parse().expect("second task");
+
+        let assignment = |task_id: &atm_storage::TaskId| {
+            let message_id = AtmMessageId::new();
+            let mut message = message(&format!("atm:{message_id}"), "task assignment");
+            message.envelope.message_id = Some(message_id);
+            message.envelope.from = lead.clone();
+            message.envelope.task_id = Some(task_id.clone());
+            message.envelope.requires_ack = true;
+            message.envelope.pending_ack_at = Some(IsoTimestamp::now());
+            message
+        };
+        let first = assignment(&first_id);
+        let second = assignment(&second_id);
+        store.save_message(&first).expect("first assignment");
+        store.save_message(&second).expect("second assignment");
+
+        let first_message_id = first.envelope.message_id.expect("first id");
+        store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: first.team.clone(),
+                    agent: first.agent.clone(),
+                    message_id: first_message_id,
+                },
+                Arc::new(ReplyBuilder { actor: agent() }),
+            )
+            .expect("first acknowledgement");
+        assert_eq!(
+            tasks
+                .load_task(&member, &first_id)
+                .expect("first task")
+                .expect("first row")
+                .state,
+            TaskState::Active
+        );
+        let first_events = tasks
+            .list_task_events(&team(), &first_id, Some(&agent()))
+            .expect("first events");
+        assert_eq!(
+            first_events
+                .iter()
+                .map(|event| event.seq)
+                .collect::<Vec<_>>(),
+            vec![1, 2],
+            "task event sequences are gapless per task key"
+        );
+        assert_eq!(first_events[1].event, TaskEventKind::Acked);
+
+        let second_message_id = second.envelope.message_id.expect("second id");
+        let error = store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: second.team.clone(),
+                    agent: second.agent.clone(),
+                    message_id: second_message_id,
+                },
+                Arc::new(ReplyBuilder { actor: agent() }),
+            )
+            .expect_err("second acknowledgement must respect G1");
+        assert!(error.message().contains(first_id.as_str()));
+        assert_eq!(
+            tasks
+                .load_task(&member, &second_id)
+                .expect("second task")
+                .expect("second row")
+                .state,
+            TaskState::Assigned
+        );
+        assert!(
+            store
+                .load_message(&second.message_key)
+                .expect("second source")
+                .expect("second source row")
+                .envelope
+                .pending_ack_at
+                .is_some(),
+            "a rejected acknowledgement rolls back its source mutation"
+        );
+        let second_events = tasks
+            .list_task_events(&team(), &second_id, Some(&agent()))
+            .expect("second events");
+        assert_eq!(second_events.len(), 2);
+        assert_eq!(second_events[1].event, TaskEventKind::Rejected);
+        assert!(
+            second_events[1]
+                .detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains(first_id.as_str())),
+            "the rejection audit retains the user-facing guard detail"
+        );
+
+        let mut third_party_completion = message("atm:third-party-completion", "not allowed");
+        third_party_completion.envelope.from = "intruder".parse().expect("intruder");
+        third_party_completion.envelope.task_complete = Some(second_id.clone());
+        let third_party_error = store
+            .save_message(&third_party_completion)
+            .expect_err("G2 rejects a third-party completion");
+        assert!(third_party_error.message().contains(second_id.as_str()));
+        assert!(
+            store
+                .load_message(&third_party_completion.message_key)
+                .expect("load rejected G2 completion")
+                .is_none(),
+            "G2 rejection writes no completion message"
+        );
+
+        let missing_id: atm_storage::TaskId = "AX.3-missing".parse().expect("task");
+        let mut unknown_completion = message("atm:unknown-completion", "not a task");
+        unknown_completion.envelope.from = "intruder".parse().expect("intruder");
+        unknown_completion.envelope.task_complete = Some(missing_id.clone());
+        store
+            .save_message(&unknown_completion)
+            .expect_err("unknown completion must be rejected");
+        assert!(
+            store
+                .load_message(&unknown_completion.message_key)
+                .expect("load rejected completion")
+                .is_none(),
+            "a rejected completion writes no message"
+        );
+        let missing_events = tasks
+            .list_task_events(&team(), &missing_id, Some(&agent()))
+            .expect("missing-task events");
+        assert_eq!(missing_events.len(), 1);
+        assert_eq!(missing_events[0].event, TaskEventKind::Rejected);
+
+        let fanout_id: atm_storage::TaskId = "AX.3-fanout".parse().expect("fanout task");
+        let mut first_fanout = assignment(&fanout_id);
+        first_fanout.message_key = MessageKey::new("atm:fanout-first").expect("first key");
+        let mut second_fanout = assignment(&fanout_id);
+        second_fanout.agent = "other-recipient".parse().expect("other recipient");
+        second_fanout.message_key = MessageKey::new("atm:fanout-second").expect("second key");
+        store
+            .save_message(&first_fanout)
+            .expect("first fanout task");
+        store
+            .save_message(&second_fanout)
+            .expect("second fanout task");
+        assert_eq!(
+            tasks
+                .list_tasks(&team(), None)
+                .expect("fanout task rows")
+                .into_iter()
+                .filter(|row| row.task_id == fanout_id)
+                .count(),
+            2,
+            "a task fan-out creates one row per recipient"
+        );
+    }
+
+    #[tokio::test]
+    async fn peer_task_receipts_are_noops_through_the_async_writer_lane() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let tasks = backend.task_store();
+        let task_id: atm_storage::TaskId = "AX.3-async-peer".parse().expect("task id");
+        let mut peer = message("atm:async-peer-task", "peer receipt");
+        peer.envelope.task_id = Some(task_id.clone());
+
+        backend
+            .async_message_store()
+            .save_message_if_absent_with_provenance_async(peer, MessageWriteOrigin::Peer)
+            .await
+            .expect("persist peer receipt");
+        assert!(
+            tasks
+                .load_task(&MemberKey::new(team(), agent()), &task_id)
+                .expect("load peer task")
+                .is_none()
         );
     }
 

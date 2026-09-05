@@ -1,9 +1,6 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fmt;
-use std::net::SocketAddr;
-use std::num::NonZeroU16;
 use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -11,17 +8,14 @@ use std::time::Duration;
 
 use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
-use crate::types::{
-    AgentName, HostName, IsoTimestamp, LocalCapability, MemberKey, ModelName, OwnerGeneration,
-    PaneId, TaskId, TeamName,
-};
+use crate::types::{AgentName, IsoTimestamp, MemberKey, ModelName, PaneId, TaskId, TeamName};
 
 #[doc(hidden)]
 pub mod sealed {
     pub trait Sealed {}
 }
 
-fn require_non_blank(value: String, subject: &str) -> Result<String, AtmError> {
+pub(crate) fn require_non_blank(value: String, subject: &str) -> Result<String, AtmError> {
     if value.trim().is_empty() {
         return Err(AtmError::validation(format!("{subject} must not be blank")));
     }
@@ -85,49 +79,9 @@ impl AsRef<str> for MessageKey {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(transparent)]
-pub struct TaskState(String);
-
-impl TaskState {
-    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        require_non_blank(value.into(), "task state").map(Self)
-    }
-}
-
-impl AsRef<str> for TaskState {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl Deref for TaskState {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl fmt::Display for TaskState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_ref())
-    }
-}
-
-impl FromStr for TaskState {
-    type Err = AtmError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::new(value)
-    }
-}
-
-impl PartialEq<&str> for TaskState {
-    fn eq(&self, other: &&str) -> bool {
-        self.as_ref() == *other
-    }
-}
+pub use crate::peer_contract::*;
+pub use crate::task_state::{TaskEventRow, TaskRow};
+pub use crate::task_store::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(transparent)]
@@ -628,6 +582,17 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         self.save_message(message)?;
         Ok(None)
     }
+    /// Like [`Self::save_message_if_absent`], carrying the write origin so a
+    /// backend can apply task transitions only for local writes. The default
+    /// keeps existing stores as passive message stores.
+    fn save_message_if_absent_with_provenance(
+        &self,
+        message: &Message,
+        provenance: MessageWriteOrigin,
+    ) -> Result<Option<Message>, AtmError> {
+        let _ = provenance;
+        self.save_message_if_absent(message)
+    }
     /// Commits related immutable mailbox records as one durable unit.
     ///
     /// AI.31 uses this for an acknowledgement reply plus the acknowledged
@@ -695,6 +660,16 @@ pub trait AsyncMessageStore: MessageStore {
         self.save_message_if_absent(&message)
     }
 
+    /// Async companion to [`MessageStore::save_message_if_absent_with_provenance`].
+    async fn save_message_if_absent_with_provenance_async(
+        &self,
+        message: Message,
+        provenance: MessageWriteOrigin,
+    ) -> Result<Option<Message>, AtmError> {
+        let _ = provenance;
+        self.save_message_if_absent_async(message).await
+    }
+
     /// Atomically admits a mailbox record and its template decomposition on
     /// the backend-owned async writer lane.
     async fn admit_template_message_async(
@@ -755,257 +730,33 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
     ) -> Result<Option<IsoTimestamp>, ReadLaneError>;
 }
 
+/// Tokio-safe, read-only task-ledger capability.
+///
+/// Task rows and their append-only audit events are a separate durable
+/// projection from mailbox messages. Implementations must use a bounded
+/// storage-owned reader lane and must not enter the ordered writer lane.
+#[async_trait::async_trait]
+pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
+    async fn list_tasks(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError>;
+
+    async fn list_task_events(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        member: Option<AgentName>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskEventRow>, ReadLaneError>;
+}
+
 pub trait RosterStore: sealed::Sealed + Send + Sync {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
-}
-
-/// Registration payload for one loopback graft receiver lease.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftReceiverRegistration {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub endpoint: SocketAddr,
-    pub capability: LocalCapability,
-    pub owner_generation: OwnerGeneration,
-}
-
-/// Durable graft receiver endpoint and its liveness observations.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftReceiverLease {
-    pub endpoint: SocketAddr,
-    pub capability: LocalCapability,
-    pub owner_generation: OwnerGeneration,
-    pub registered_at: DateTime<Utc>,
-    pub last_seen_at: DateTime<Utc>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub unreachable_since: Option<DateTime<Utc>>,
-}
-
-/// Errors returned by the durable graft receiver endpoint store.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GraftEndpointStoreError {
-    /// Reserved for a future caller that cannot prove same-host exclusivity
-    /// (ADR-056): same-host callers instead prove exclusivity through the
-    /// receiver's flock and are never rejected by this variant today.
-    AlreadyActive,
-    /// The supplied owner generation does not own the stored lease.
-    NotOwner,
-    /// No lease row exists for this receiver.
-    Absent,
-    /// The backend could not complete the requested operation.
-    ///
-    /// Preserves the originating [`AtmError`]'s code and cause chain (RBP-F001)
-    /// instead of flattening it into an opaque string, so callers can
-    /// distinguish e.g. a caller-input constraint violation from a true
-    /// backend outage rather than collapsing every failure into one generic
-    /// presentation.
-    Storage {
-        code: crate::error_codes::AtmErrorCode,
-        message: String,
-        cause: Option<String>,
-    },
-}
-
-impl GraftEndpointStoreError {
-    /// Wraps a structured backend [`AtmError`] as a [`Self::Storage`]
-    /// variant, preserving its code and cause instead of flattening it into
-    /// an opaque string.
-    #[must_use]
-    pub fn storage(error: &AtmError) -> Self {
-        Self::Storage {
-            code: error.code(),
-            message: error.message().to_string(),
-            cause: error.cause().map(ToOwned::to_owned),
-        }
-    }
-}
-
-impl fmt::Display for GraftEndpointStoreError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::AlreadyActive => formatter.write_str("graft receiver lease is already active"),
-            Self::NotOwner => {
-                formatter.write_str("graft receiver lease is owned by another generation")
-            }
-            Self::Absent => formatter.write_str("graft receiver lease is absent"),
-            Self::Storage {
-                code,
-                message,
-                cause,
-            } => match cause {
-                Some(cause) => write!(
-                    formatter,
-                    "graft receiver endpoint storage failed ({code}): {message}: {cause}"
-                ),
-                None => write!(
-                    formatter,
-                    "graft receiver endpoint storage failed ({code}): {message}"
-                ),
-            },
-        }
-    }
-}
-
-/// Durable registry for same-host graft receiver endpoints.
-pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
-    fn register(
-        &self,
-        registration: &GraftReceiverRegistration,
-        now: DateTime<Utc>,
-    ) -> Result<(), GraftEndpointStoreError>;
-
-    fn refresh(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        owner_generation: &OwnerGeneration,
-        now: DateTime<Utc>,
-    ) -> Result<(), GraftEndpointStoreError>;
-
-    fn unregister(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        owner_generation: &OwnerGeneration,
-    ) -> Result<(), GraftEndpointStoreError>;
-
-    fn lookup(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError>;
-
-    fn mark_unreachable(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        owner_generation: &OwnerGeneration,
-        now: DateTime<Utc>,
-    ) -> Result<(), GraftEndpointStoreError>;
-}
-
-/// A non-empty, opaque certificate fingerprint. It cannot be confused with a
-/// private-key reference at storage and transport boundaries.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(try_from = "String", into = "String")]
-pub struct CertificateFingerprint(String);
-
-impl CertificateFingerprint {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for CertificateFingerprint {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.as_str())
-    }
-}
-
-impl FromStr for CertificateFingerprint {
-    type Err = AtmError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        require_non_blank(value.to_owned(), "certificate fingerprint").map(Self)
-    }
-}
-
-impl TryFrom<String> for CertificateFingerprint {
-    type Error = AtmError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        value.parse()
-    }
-}
-
-impl From<CertificateFingerprint> for String {
-    fn from(value: CertificateFingerprint) -> Self {
-        value.0
-    }
-}
-
-/// A non-empty opaque reference to locally held private-key material.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(try_from = "String", into = "String")]
-pub struct PrivateKeyRef(String);
-
-impl PrivateKeyRef {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for PrivateKeyRef {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.as_str())
-    }
-}
-
-impl FromStr for PrivateKeyRef {
-    type Err = AtmError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        require_non_blank(value.to_owned(), "certificate key reference").map(Self)
-    }
-}
-
-impl TryFrom<String> for PrivateKeyRef {
-    type Error = AtmError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        value.parse()
-    }
-}
-
-impl From<PrivateKeyRef> for String {
-    fn from(value: PrivateKeyRef) -> Self {
-        value.0
-    }
-}
-
-/// One durable HTTPS listener configuration. This is control-plane state only;
-/// it contains no delivery, retry, or mailbox data.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct HttpsInterface {
-    pub bind_addr: std::net::SocketAddr,
-    pub advertise_host: HostName,
-    pub enabled: bool,
-}
-
-/// Public identity of the local TLS certificate. The private key is referenced
-/// indirectly so doctor and callers cannot read secret material from storage.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct LocalCertificate {
-    pub fingerprint: CertificateFingerprint,
-    pub private_key_ref: PrivateKeyRef,
-}
-
-/// One exact, pinned peer allowed to use the cross-host HTTPS listener.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TrustedPeer {
-    pub host: HostName,
-    pub fingerprint: CertificateFingerprint,
-    pub enabled: bool,
-    pub https_port: NonZeroU16,
-}
-
-/// Backend-neutral durable cross-host configuration.
-///
-/// This boundary deliberately excludes transport state, retries, receipts,
-/// and mailbox state. HTTPS adapters consume this contract but never SQLite
-/// implementation types.
-pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
-    fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError>;
-    fn save_interface(&self, interface: &HttpsInterface) -> Result<(), AtmError>;
-    fn remove_interface(&self, bind_addr: std::net::SocketAddr) -> Result<bool, AtmError>;
-    fn local_certificate(&self) -> Result<Option<LocalCertificate>, AtmError>;
-    fn save_local_certificate(&self, certificate: &LocalCertificate) -> Result<(), AtmError>;
-    fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError>;
-    fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, AtmError>;
-    fn save_trusted_peer(&self, peer: &TrustedPeer) -> Result<(), AtmError>;
-    fn remove_trusted_peer(&self, host: &HostName) -> Result<bool, AtmError>;
 }
 
 pub trait StorageNotifier: sealed::Sealed + Send + Sync {
@@ -1365,6 +1116,7 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                task_complete: None,
                 extra: Map::new(),
             },
         };
@@ -1552,6 +1304,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: Some("AD.99".parse().expect("task")),
+            task_complete: None,
             extra: Map::new(),
         };
 

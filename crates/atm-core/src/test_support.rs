@@ -13,6 +13,12 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWrit
 #[cfg(any(test, feature = "test-utils"))]
 use crate::atm_temp::EnvSource;
 
+/// Test-only access to the canonical storage vocabulary for downstream
+/// adapter tests. Production adapters import storage contracts through the
+/// `atm_core::boundary` facade instead.
+#[doc(hidden)]
+pub use atm_storage::*;
+
 pub const TEST_TEAM: &str = "test-team";
 pub const TEST_SENDER: &str = "sender-a";
 pub const TEST_RECIPIENT: &str = "recipient";

@@ -21,7 +21,7 @@ pub use doctor_projection::{
 };
 pub use mailbox_runtime::{
     AsyncMailboxRuntime, HandoffConfig, StateHandoffDiagnostics, StateHandoffSupervisor,
-    SupervisorState,
+    SupervisorState, read_deadline,
 };
 pub use workflow_telemetry::{
     WorkflowTelemetryConfig, WorkflowTelemetryDiagnostics, WorkflowTelemetryRuntime,

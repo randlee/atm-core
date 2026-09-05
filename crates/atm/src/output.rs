@@ -977,6 +977,25 @@ mod tests {
     }
 
     #[test]
+    fn send_json_includes_task_completion_when_requested() {
+        let outcome: atm_core::send::SendOutcome = serde_json::from_value(json!({
+            "action": "send",
+            "team": "test-team",
+            "agent": "recipient",
+            "sender": "assigner",
+            "outcome": "sent",
+            "message_id": "01KX5TEST00000000000000001",
+            "requires_ack": false,
+            "task_complete": "t-42"
+        }))
+        .expect("completion send outcome");
+
+        let rendered = render_send_stdout(&outcome, true).expect("JSON stdout");
+        let parsed: serde_json::Value = serde_json::from_str(&rendered).expect("valid JSON");
+        assert_eq!(parsed["task_complete"], "t-42");
+    }
+
+    #[test]
     fn bootstrap_trace_section_renders_doctor_output_block() {
         let rendered = render_bootstrap_trace_section(&BootstrapTraceReport {
             daemon_connect: BootstrapConnectOutcome::Connected,

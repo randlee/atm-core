@@ -20,6 +20,7 @@ use crate::schema::AtmMessageId;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, ReadSelection, TaskId, TeamName};
+use atm_storage::contract::{TaskEventRow, TaskRow};
 
 const DEFAULT_LIST_LIMIT: usize = 200;
 const MAX_LIST_LIMIT: usize = 10_000;
@@ -38,6 +39,20 @@ pub struct ListQuery {
     pub timestamp_filter: Option<IsoTimestamp>,
     pub task_filter: Option<TaskId>,
     pub contains_filter: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_ledger: Option<TaskLedgerQuery>,
+}
+
+/// Storage-neutral selection for one task-ledger CLI surface.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TaskLedgerQuery {
+    Tasks {
+        member: Option<AgentName>,
+    },
+    Events {
+        task_id: TaskId,
+        member: Option<AgentName>,
+    },
 }
 
 impl ListQuery {
@@ -79,7 +94,15 @@ impl ListQuery {
             timestamp_filter,
             task_filter: task_filter.map(str::parse).transpose()?,
             contains_filter: normalize_contains_filter(contains_filter)?,
+            task_ledger: None,
         })
+    }
+
+    /// Selects a task-ledger view instead of the ordinary mailbox projection.
+    #[must_use]
+    pub fn with_task_ledger(mut self, task_ledger: TaskLedgerQuery) -> Self {
+        self.task_ledger = Some(task_ledger);
+        self
     }
 }
 
@@ -119,6 +142,10 @@ pub struct ListOutcome {
     pub count: usize,
     pub rows: Vec<ListRow>,
     pub bucket_counts: BucketCounts,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub task_rows: Vec<TaskRow>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub task_event_rows: Vec<TaskEventRow>,
 }
 
 /// Prepared, storage-neutral list command for the Tokio mailbox reader lane.
@@ -228,6 +255,91 @@ pub fn complete_async_list(
         count: rows.len(),
         rows,
         bucket_counts: selection.bucket_counts,
+        task_rows: Vec::new(),
+        task_event_rows: Vec::new(),
+    }
+}
+
+/// Reads one task-ledger view through the runtime-selected storage capability.
+///
+/// This is intentionally separate from the mailbox reader lane: task rows are
+/// a durable state projection, not mailbox metadata.
+pub fn list_task_ledger_with_runtime(
+    query: ListQuery,
+    runtime: &LocalServiceRuntime,
+) -> Result<ListOutcome, AtmError> {
+    let task_ledger = query
+        .task_ledger
+        .clone()
+        .ok_or_else(|| AtmError::validation("task ledger list requires a task-ledger selection"))?;
+    let store = runtime.task_store()?;
+    let (task_rows, task_event_rows) = match task_ledger {
+        TaskLedgerQuery::Tasks { member } => (
+            store.list_tasks(&query.caller_team, member.as_ref())?,
+            Vec::new(),
+        ),
+        TaskLedgerQuery::Events { task_id, member } => (
+            Vec::new(),
+            store.list_task_events(&query.caller_team, &task_id, member.as_ref())?,
+        ),
+    };
+    Ok(build_task_ledger_outcome(query, task_rows, task_event_rows))
+}
+
+/// Reads one task-ledger view through the bounded storage-owned async reader
+/// lane. This is the daemon/HTTP path; the synchronous sibling remains for
+/// the bare CLI runtime.
+pub async fn list_task_ledger_with_runtime_async(
+    query: ListQuery,
+    runtime: &LocalServiceRuntime,
+    deadline: atm_storage::ReadDeadline,
+) -> Result<ListOutcome, AtmError> {
+    let task_ledger = query
+        .task_ledger
+        .clone()
+        .ok_or_else(|| AtmError::validation("task ledger list requires a task-ledger selection"))?;
+    let reader = runtime.async_task_ledger_reader()?;
+    let (task_rows, task_event_rows) = match task_ledger {
+        TaskLedgerQuery::Tasks { member } => (
+            reader
+                .list_tasks(query.caller_team.clone(), member, deadline)
+                .await
+                .map_err(AtmError::from)?,
+            Vec::new(),
+        ),
+        TaskLedgerQuery::Events { task_id, member } => (
+            Vec::new(),
+            reader
+                .list_task_events(query.caller_team.clone(), task_id, member, deadline)
+                .await
+                .map_err(AtmError::from)?,
+        ),
+    };
+    Ok(build_task_ledger_outcome(query, task_rows, task_event_rows))
+}
+
+fn build_task_ledger_outcome(
+    query: ListQuery,
+    mut task_rows: Vec<TaskRow>,
+    mut task_event_rows: Vec<TaskEventRow>,
+) -> ListOutcome {
+    task_rows.sort_by(|left, right| right.assigned_at.cmp(&left.assigned_at));
+    task_event_rows.sort_by_key(|row| row.seq);
+    ListOutcome {
+        action: CommandAction::List,
+        team: query.caller_team,
+        agent: query.caller_identity,
+        selection_mode: query.selection_mode,
+        history_collapsed: false,
+        count: task_rows.len() + task_event_rows.len(),
+        rows: Vec::new(),
+        bucket_counts: BucketCounts {
+            unread: 0,
+            pending_ack: 0,
+            history: 0,
+        },
+        task_rows,
+        task_event_rows,
     }
 }
 
@@ -321,6 +433,8 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         count: rows.len(),
         rows,
         bucket_counts,
+        task_rows: Vec::new(),
+        task_event_rows: Vec::new(),
     })
 }
 
@@ -461,6 +575,7 @@ mod tests {
                 thread_mode,
                 expires_at: None,
                 task_id: None::<TaskId>,
+                task_complete: None,
                 extra: Map::new(),
             },
         }
@@ -699,6 +814,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            task_complete: None,
             extra: Map::new(),
         };
         (
