@@ -4663,6 +4663,107 @@ mod tests {
             .expect("remote direct peer runtime drains");
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn local_ack_returns_peer_delivery_failure_after_the_local_commit() {
+        let remote = fixture(true, None, None);
+        let remote_runtime = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
+            Arc::new(remote.router.clone()),
+        )
+        .build()
+        .expect("valid remote direct peer configuration")
+        .start()
+        .await
+        .expect("remote direct peer runtime starts");
+        let remote_port = remote_runtime
+            .direct_peer_address()
+            .expect("ephemeral remote direct peer listener is bound")
+            .port();
+
+        let mut local = fixture(true, None, None);
+        local.router = local
+            .router
+            .clone()
+            .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"));
+        let local_runtime = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&local, crate::DirectPeerTcpConfig::ephemeral_for_test()),
+            Arc::new(local.router.clone()),
+        )
+        .build()
+        .expect("valid local direct peer configuration")
+        .start()
+        .await
+        .expect("local direct peer runtime starts");
+        let local_port = local_runtime
+            .direct_peer_address()
+            .expect("ephemeral local direct peer listener is bound")
+            .port();
+
+        let received_id = AtmMessageId::new();
+        let mut incoming = write_request(remote.home_dir.clone(), remote.current_dir.clone())
+            .with_origin_metadata(received_id, atm_core::types::IsoTimestamp::now());
+        incoming.requires_ack = true;
+        let local_peer_client = direct_peer_tcp_client(
+            "127.0.0.1".parse().expect("loopback source host"),
+            std::num::NonZeroU16::new(local_port).expect("non-zero port"),
+            Duration::from_secs(5),
+        )
+        .expect("local direct peer client");
+        local_peer_client
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(incoming))))
+            .await
+            .expect("incoming required message reaches local daemon");
+
+        remote_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("remote direct peer runtime drains before acknowledgement");
+
+        let acknowledgement = atm_core::ack::AckRequest {
+            home_dir: local.home_dir.clone(),
+            current_dir: local.current_dir.clone(),
+            caller_identity: "recipient".parse().expect("recipient"),
+            caller_chat_id: None,
+            caller_team: "test-team".parse().expect("team"),
+            activity_observation: None,
+            message_id: received_id,
+            reply_body: "received".to_owned(),
+        }
+        .into_write_request();
+        let error = local
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+            )
+            .await
+            .expect_err("post-commit peer acknowledgement forwarding failure reaches the caller");
+        assert_eq!(
+            error.code(),
+            atm_core::error_codes::AtmErrorCode::RemoteDeliveryUnconfirmed,
+            "a committed acknowledgement still reports that peer acceptance was unconfirmed"
+        );
+        assert!(
+            local
+                .message_store
+                .load_message(&MessageKey::from(received_id))
+                .expect("read acknowledged local source")
+                .expect("received source remains durable")
+                .envelope
+                .acknowledged_at
+                .is_some(),
+            "the acknowledgement's local state transition commits before the failed peer forward"
+        );
+
+        local_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("local direct peer runtime drains");
+    }
+
     #[tokio::test]
     async fn direct_peer_hook_failure_keeps_the_write_successful_with_a_warning() {
         let fixture = fixture(

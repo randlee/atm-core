@@ -9,7 +9,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed — Phase AI target |
-| HTTP API SemVer | `1.0.0`; major is `/v1/atm` |
+| HTTP API SemVer | `1.1.0`; major is `/v1/atm` |
 | Authoritative ADR | ADR-033 |
 | Machine-readable publication | checked-in OpenAPI 3.1 and `atm api spec` |
 
@@ -122,7 +122,10 @@ OpenAPI document against route schemas and tests every documented route. The
 embedded document is published by `atm api spec --format json|yaml`; no daemon
 network endpoint is needed merely to retrieve documentation.
 
-The v1 resource paths are durable. Same-major additive fields, error details,
+The v1 resource paths are durable. The current `1.1.0` baseline adds the
+optional `peer_http_api_version` to cross-host write envelopes; receivers
+reject only a peer major-version mismatch and tolerate minor skew. Same-major
+additive fields, error details,
 and endpoints require a minor version: servers default omitted additive request
 fields and ignore unknown additive fields; clients tolerate additive response
 fields. Patch versions are corrective only. A new operation may require an
