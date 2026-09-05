@@ -8,28 +8,30 @@
   a triage:Finding ;
   triage:findingId "AW2-QA-I1" ;
   triage:title "AC9 writer-lane-priority test missing (10k primary ops plus a full diagnostic queue; primary completes first)" ;
-  triage:description "qa-pr1179-r3 (msg 01M1QQPCZVHYSQ37GQMXKKQMFS) at 0e825b75e: no test anywhere in atm-storage-rusqlite exercises sprint-AW.2 AC9 (primary lane completes first under 10k primary ops with the diagnostic queue full). Biased-select primary-first, try_send-only producer and no new lock/alloc on the primary path were code-verified in round 2; the acceptance test is the missing artifact." ;
+  triage:description "qa-pr1179-r3 (msg 01M1QQPCZVHYSQ37GQMXKKQMFS) at 0e825b75e: no test anywhere in atm-storage-rusqlite exercises sprint-AW.2 AC9 (primary lane completes first under 10k primary ops with the diagnostic queue full). Biased-select primary-first, try_send-only producer and no new lock/alloc on the primary path were code-verified in round 2; the acceptance test is the missing artifact. CLOSURE (qa-pr1179-r7, quality-mgr): req-qa, arch-qa, and rust-qa-agent all independently confirmed at d3a601ab0 (unchanged at tip f77ed7991e) that crates/atm-storage-rusqlite/src/writer/mod.rs:1043-1093 (queued_primary_work_drains_before_a_full_diagnostic_lane) genuinely satisfies AC9: queues 10_000 primary WriteOp::UpsertMessages via try_send, fills all DIAGNOSTIC_QUEUE_BATCHES diagnostic batch slots, then asserts all 10,000 primary items are returned via receive_next_work before the first diagnostic batch. quality-mgr independently re-read the test source and confirmed it passes. Finding closed." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
   triage:category "test-coverage" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T03:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW2 ;
   triage:foundAt "2026-09-05T02:57:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW2-QA-I1/AW2-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AW2-QA-I1/AW2-1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/writer/mod.rs" ;
   triage:line 1 ;
   triage:snippet "biased select" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
   triage:headSha "0e825b75e" ;
   triage:occursIn <urn:atm:triage:worktree/AW2/0e825b75e> .
