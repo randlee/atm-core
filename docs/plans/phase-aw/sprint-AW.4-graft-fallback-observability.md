@@ -81,7 +81,7 @@ parallel_safe: [AW.2]
    "atm-observability", "pydantic"]`; `response_types` gains
    `AtmAckResult` and `PyObservabilityPaths`; `request_types` gains
    `AtmAckRequest` (final lists are stated verbatim in AW.5 D4);
-   `.just/lint-config.toml` line 156 allowlist for
+   `.just/lint-config.toml` line 160 allowlist for
    `crates/atm-graft-python/Cargo.toml` gains `"atm-observability"`;
    `boundaries/atm-observability/tracing-bridge.toml` `allowed_dependents`
    gains `"atm-graft-python"` (this sprint, not AW.1, per the phase-plan
