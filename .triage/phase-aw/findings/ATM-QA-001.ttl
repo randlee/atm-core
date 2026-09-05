@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T06:55:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW3 ;
@@ -23,7 +23,12 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/AW3-1> ;
   triage:closedAt "2026-09-05T06:42:00Z"^^xsd:dateTime ;
   triage:closedBy "quality-mgr" ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
+
+# HYGIENE FIX (phase-aw integration review, quality-mgr): Finding-level
+# triage:status was left at "open" after closure even though the Occurrence
+# was correctly flipped to "fixed" -- caught during the phase-ending
+# integration review. Corrected to "fixed"; closure evidence unchanged.
 
 # CLOSURE (qa-pr1182-r5, quality-mgr): independently confirmed at 95230ff18
 # in /tmp/verify-aw3-r5 -- arch-ctm's fix (96edb1de9) added

@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T07:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW2 ;
@@ -23,7 +23,14 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AW2R9-001/AW2-1> ;
   triage:closedAt "2026-09-05T07:20:00Z"^^xsd:dateTime ;
   triage:closedBy "quality-mgr" ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
+
+# HYGIENE FIX (phase-aw integration review, quality-mgr): this record's
+# Finding-level triage:status was left at "open" after the r10 closure below
+# even though the Occurrence was correctly flipped to "fixed" -- a ledger
+# hygiene slip on my own part, caught during the phase-ending integration
+# review. Finding-level status corrected to "fixed" to match the Occurrence;
+# no re-verification needed, the underlying closure evidence is unchanged.
 
 # RE-VERIFY (qa-pr1179-r10, quality-mgr): PR #1179 tip moved 494f7c31a ->
 # 700bb7f1b (arch-ctm's AW2-CI-004, a Windows-CI CRLF-normalization fix to
