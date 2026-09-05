@@ -310,15 +310,34 @@ Deliverables:
    `HERDR_SESSION` set explicitly and inherited
    `HERDR_SOCKET_PATH`/`HERDR_CLIENT_SOCKET_PATH`/`HERDR_ENV` removed.
    Herdr runs one server per user per session on a machine, so the
-   daemon binds to exactly one session. At daemon launch, when the Herdr
-   backend is enabled, the daemon verifies that server is running by
-   executing `List` against the resolved endpoint with a bounded
-   deadline, and emits one structured startup diagnostic (endpoint,
-   transport kind, herdr version/protocol from the probe, reachable or
-   the `HerdrError`). Assumption to confirm with Rand: an unreachable
-   Herdr does not stop the daemon (mail must keep flowing); the breaker
-   starts open, doctor shows the failed probe verbatim, and the first
-   successful call clears it. Doctor herdr section reports transport
+   daemon binds to exactly one session.
+
+   Launch contract (Rand, 2026-09-05: Herdr must be running and
+   `HERDR_SOCKET_PATH` plus the other required variables set before the
+   daemon is launched, and the launch order must be deterministic):
+
+   - The daemon's launch environment, not a pane, carries
+     `HERDR_SOCKET_PATH`, `HERDR_SESSION`, and `HERDR_BIN_PATH`: on
+     macOS the launchd plist `EnvironmentVariables` block written by
+     daemon-switch; on Windows the service environment written by the
+     service installer. `[herdr]` config is the fallback only when the
+     environment is absent; environment wins and doctor says which was
+     used.
+   - Startup gate: with the Herdr backend enabled the daemon executes
+     `List` against the resolved endpoint with a bounded deadline
+     before it starts serving. Unreachable means the daemon exits with a
+     distinct non-zero status and one structured diagnostic (endpoint,
+     transport kind, herdr version/protocol if any, the `HerdrError`).
+     launchd `KeepAlive` and the Windows service recovery policy then
+     re-launch it; the daemon never serves ahead of Herdr, which is what
+     makes the order deterministic without relying on launchd job
+     ordering (launchd has none). Windows adds `depend=` on the Herdr
+     service where Herdr is installed as one.
+   - Herdr's own supervision (a `com.herdr.server` LaunchAgent / Windows
+     service or autostart) is a documented prerequisite of enabling the
+     backend; W1 ships the reference plist and service definition under
+     `docs/atm-herdr/` and daemon-switch gains the env keys.
+   - Backend disabled: no probe, no exit, mail unaffected. Doctor herdr section reports transport
    kind, resolved binary, resolved endpoint (the `\\.\pipe\` form on
    Windows), and the launch-probe result. Architecture tests: single
    construction site; single endpoint-resolution site; no
