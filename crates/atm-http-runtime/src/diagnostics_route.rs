@@ -178,11 +178,18 @@ mod tests {
     ///
     /// [`FixtureStore::query`] runs inside `tokio::task::spawn_blocking`, on
     /// a dedicated OS thread independent of the paused async-runtime clock,
-    /// so blocking that thread on a rendezvous channel does not stall the
+    /// so parking that thread on this explicitly bounded condition gate does
+    /// not stall the
     /// test's executor.
     struct QueryGate {
         entered: tokio::sync::Notify,
-        release: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+        state: std::sync::Mutex<QueryGateState>,
+        release: std::sync::Condvar,
+    }
+
+    #[derive(Debug, Default)]
+    struct QueryGateState {
+        released: bool,
     }
 
     impl std::fmt::Debug for QueryGate {
@@ -192,15 +199,12 @@ mod tests {
     }
 
     impl QueryGate {
-        fn new() -> (Arc<Self>, std::sync::mpsc::SyncSender<()>) {
-            let (release_tx, release_rx) = std::sync::mpsc::sync_channel(0);
-            (
-                Arc::new(Self {
-                    entered: tokio::sync::Notify::new(),
-                    release: std::sync::Mutex::new(release_rx),
-                }),
-                release_tx,
-            )
+        fn new() -> Arc<Self> {
+            Arc::new(Self {
+                entered: tokio::sync::Notify::new(),
+                state: std::sync::Mutex::new(QueryGateState::default()),
+                release: std::sync::Condvar::new(),
+            })
         }
 
         /// Called from the dedicated `spawn_blocking` thread: signals the
@@ -208,11 +212,22 @@ mod tests {
         /// thread (never the async executor) until the test releases it.
         fn enter_and_wait(&self) {
             self.entered.notify_one();
-            self.release
-                .lock()
-                .expect("query gate release channel lock")
-                .recv()
-                .expect("query gate released before the parked query returned");
+            let state = self.state.lock().expect("query gate state lock");
+            let (state, timeout) = self
+                .release
+                .wait_timeout_while(state, Duration::from_secs(1), |state| !state.released)
+                .expect("query gate state is not poisoned");
+            assert!(state.released, "query gate was released");
+            assert!(
+                !timeout.timed_out(),
+                "query gate release must arrive within the test's hard bound"
+            );
+        }
+
+        fn release(&self) {
+            let mut state = self.state.lock().expect("query gate state lock");
+            state.released = true;
+            self.release.notify_one();
         }
     }
 
@@ -375,7 +390,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn a_query_that_exceeds_its_deadline_is_reported_as_unavailable() {
-        let (gate, release) = QueryGate::new();
+        let gate = QueryGate::new();
         let deadline = Duration::from_millis(20);
         let store: std::sync::Arc<dyn DiagnosticTimelineStore> =
             std::sync::Arc::new(FixtureStore {
@@ -399,9 +414,7 @@ mod tests {
 
         // Let the parked fixture query thread return so it does not leak
         // past the end of the test.
-        release
-            .send(())
-            .expect("release the parked fixture query thread");
+        gate.release();
     }
 
     #[tokio::test]
