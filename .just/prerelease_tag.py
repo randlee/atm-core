@@ -252,6 +252,11 @@ def copy_tracked_files(repo_root: Path, destination: Path) -> None:
         source = repo_root / relative_path
         target = destination / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
+        if not source.exists() and not source.is_symlink():
+            # A candidate may be prepared from a worktree with staged or
+            # unstaged deletions. Those paths are absent from the candidate by
+            # design and will likewise be absent after the deletion commits.
+            continue
         if source.is_symlink():
             target.symlink_to(os.readlink(source))
         else:

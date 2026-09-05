@@ -263,7 +263,8 @@ def build_message(team: str, payload: dict[str, object] | None = None) -> str:
             return f'{base} kind="ack" task-id="{task_id}"/>'
         return f'{base} kind="ack"/>'
 
-    body = [f"{base}>", f"<action>read atm --team {team}</action>"]
+    read_action = f"atm read --message-id {message_id}" if message_id else "atm read"
+    body = [f"{base}>", f"<action>{read_action}</action>"]
     if requires_ack:
         body.append("<action>ack the message</action>")
     if task_id:

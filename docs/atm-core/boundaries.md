@@ -244,8 +244,11 @@ Notes:
 - the first concrete implementation remains `atm-storage-rusqlite`
 - [../adr/ADR-024-nudge-template-override-storage-ownership-relocation.md](../adr/ADR-024-nudge-template-override-storage-ownership-relocation.md)
   supersedes ADR-021's older `atm-core` ownership assumption
-- `atm` remains the owner of the six built-in product template bodies and the
-  bounded placeholder substitution/rendering policy.
+- `atm` remains the owner of the seven built-in product template bodies —
+  `delivery`, `delivery_ack`, `queue`, `queue_ack`, `task`, `acknowledge`, and
+  `acknowledge_task` — and the bounded placeholder substitution/rendering
+  policy. `NudgeKind` selects the delivery or queue family; task-tagged
+  messages select `task`.
 - Accepted row semantics are explicit:
   - no row => product default
   - override row => stored non-empty template body

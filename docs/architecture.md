@@ -2733,9 +2733,10 @@ Architectural rules:
   (ADR-054), and neither kind ever precedes persistence
 - the shipped default emitter path is the receiver-only
   `MessageReceivedHookEmitter` delivery path
-- the built-in renderer selects exactly one of six named template kinds:
-  `delivery`, `delivery_ack`, `delivery_task`, `delivery_task_ack`,
-  `acknowledge`, and `acknowledge_task`
+- the built-in renderer selects exactly one of seven named template kinds:
+  `delivery`, `delivery_ack`, `queue`, `queue_ack`, `task`, `acknowledge`,
+  and `acknowledge_task`; `NudgeKind` selects the delivery or queue family,
+  while task-tagged messages select `task`
 - any team-scoped built-in template override row must be resolved through the
   storage-neutral `NudgeTemplateOverrideStore` contract before the built-in
   emitter/render path runs; `atm` and `atm-core` must not perform direct

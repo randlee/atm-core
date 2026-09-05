@@ -2,7 +2,7 @@
 //! entry family, and persisted-write preparation.
 
 use super::*;
-use crate::send::NudgeMode;
+use crate::send::{NudgeMode, send_mode_for_task_request};
 
 /// Result of the one canonical write operation.
 ///
@@ -525,6 +525,7 @@ fn prepare_persisted_write<
     let mut context = prepare_send_context(runtime, &request)?;
     crate::send::validate_task_request(&request)?;
     let task_id = request.task_id.clone();
+    request.nudge_mode = send_mode_for_task_request(&request, &task_id);
     let requires_ack = request_requires_ack(&request, &task_id);
     let body = resolve_message_body(
         &request.message_source,
@@ -594,6 +595,7 @@ async fn prepare_persisted_write_async(
     let mut context = prepare_send_context(runtime, &request)?;
     crate::send::validate_task_request(&request)?;
     let task_id = request.task_id.clone();
+    request.nudge_mode = send_mode_for_task_request(&request, &task_id);
     let requires_ack = request_requires_ack(&request, &task_id);
     let verified_template =
         crate::send::async_persistence::verify_template_request(runtime, &request)?;
