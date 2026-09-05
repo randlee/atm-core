@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW3-QA-B6>
+  a triage:Finding ;
+  triage:findingId "AW3-QA-B6" ;
+  triage:title "RULE-003 file-size ceiling exceeded in an in-diff file not covered by AW3-QA-B5: atm-http-runtime client.rs (1297 non-test lines)" ;
+  triage:description "qa-pr1182-r3 (msg 01M1R214MSB951X2B06QCM5EA3, arch-qa) at db47e09c9: crates/atm-http-runtime/src/client.rs is at 1297 non-test lines (#[cfg(test)] mod tests boundary at line 1298 of 2108 total), against the 1000-line RULE-003 cap. quality-mgr independently confirmed via wc -l/grep, and confirmed the overage is pre-existing (already 1285 non-test lines / boundary at line 1286 of 2096 total back at the AW.3 round-1 tip 199a3bfeb) -- not introduced by the AW3-QA-B4/B5 fix round, but the file is touched in-diff this round (18 lines changed between 199a3bfeb and db47e09c9), so the zero-tolerance in-diff policy applies. This was not caught by the original AW3-QA-B5 sweep, which only named lib.rs and storage_and_nudge_router.rs. Fix: apply the same behavior-preserving module-extraction pattern used for AW3-QA-B5 to client.rs (e.g. split loopback/direct-peer/UDS client construction into separate files under src/), keeping the public re-export surface in lib.rs unchanged." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "reported" ;
+  triage:category "lint-file-size" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T05:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-B6/AW3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW3-QA-B6/AW3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 1 ;
+  triage:snippet "non-test lines 1297 > 1000" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "db47e09c9" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/db47e09c9> .
+
+<urn:atm:triage:worktree/AW3/db47e09c9>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "db47e09c9" ;
+  triage:orderIndex 5 .

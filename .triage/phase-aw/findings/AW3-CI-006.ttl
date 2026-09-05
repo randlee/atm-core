@@ -15,23 +15,35 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T05:58:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW3 ;
   triage:foundAt "2026-09-05T05:50:17Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-006/AW3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-006/AW3-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-006/AW3-3> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T06:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+# CLOSURE (qa-pr1182-r3, quality-mgr): arch-ctm's follow-up commit 99b83070a
+# (test(architecture): follow runtime listener modules) updated the al5_uds
+# and ao2_plaintext_baseline gates in boundary_enforcement.rs to read
+# runtime_listener.rs alongside lib.rs, assertions unchanged. Independently
+# verified at the final PR #1182 tip bb1feeaa7 (99b83070a is an ancestor):
+# cargo test -p atm-architecture --test boundary_enforcement -> 91 passed;
+# 0 failed. rust-qa-agent's qa-pr1182-r3 QA-001 finding against the
+# now-superseded db47e09c9 tip is resolved at the current tip. All three
+# occurrences closed.
 
 <urn:atm:triage:occurrence/AW3-CI-006/AW3-1>
   a triage:Occurrence ;
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 207 ;
   triage:snippet "ao2 gate splits lib.rs on bind_configured_direct_peer_listener and panics direct-peer listener implementation" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "db47e09c9" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/db47e09c9> .
@@ -41,8 +53,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 2769 ;
   triage:snippet "al5 gate reads lib.rs unix_socket http1_server client only and misses UDS lifecycle" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "db47e09c9" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/db47e09c9> .
@@ -52,8 +64,8 @@
   triage:file "crates/atm-http-runtime/src/runtime_listener.rs" ;
   triage:line 1 ;
   triage:snippet "listener code moved here from lib.rs by the AW3-QA-B5 module move" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "db47e09c9" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/db47e09c9> .
