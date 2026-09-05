@@ -139,6 +139,28 @@ def test_missing_qa_snapshot_does_not_hide_live_sprint_counts(tmp_path):
     assert "QA evidence master not found" in report["data_gaps"][0]
 
 
+def test_invalid_qa_verdict_is_report_error(tmp_path):
+    root, qa_path = _inputs(tmp_path)
+    master = json.loads(qa_path.read_text())
+    master["runs"][0]["verdict"] = "CLEAR"
+    qa_path.write_text(json.dumps(master))
+    with pytest.raises(triage_report.ReportError) as excinfo:
+        triage_report.build_report(root, "AICH", qa_path)
+    message = str(excinfo.value)
+    assert "CLEAR" in message
+    assert "'BLOCKING', 'FAIL', 'PASS', 'SUPERSEDED'" in message
+
+
+def test_valid_qa_verdicts_drive_icon_without_fuzzy_matching(tmp_path):
+    root, qa_path = _inputs(tmp_path)
+    report = triage_report.build_report(root, "AICH", qa_path)
+    first, second = report["rows"]
+    assert first["qa"]["verdict"] == "FAIL"
+    assert first["qa_icon"] == triage_report.ICONS["fail"]
+    assert second["qa"]["verdict"] == "PASS"
+    assert second["qa_icon"] == "✅"
+
+
 def test_in_progress_sprint_with_no_pr_yet_is_not_a_data_gap(tmp_path, monkeypatch):
     """An assigned-but-not-completed sprint has no QA run or PR/CI state to
     observe yet -- that is the normal in-flight state, not lost evidence, and
