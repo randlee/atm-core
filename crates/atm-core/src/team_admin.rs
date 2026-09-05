@@ -1721,6 +1721,32 @@ mod tests {
     }
 
     #[test]
+    fn set_nudge_template_override_round_trips_queue_ack_kind() {
+        let override_store = RecordingNudgeTemplateOverrideStore::default();
+        let outcome = set_nudge_template_override_with_store(
+            &override_store,
+            SetNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "queue_ack",
+                "<atm/>".to_string(),
+            )
+            .expect("request"),
+        )
+        .expect("save");
+
+        assert_eq!(outcome.kind, BuiltInNudgeTemplateKind::QueueAck);
+        let saved = override_store
+            .load_template_override(
+                &TEST_TEAM.parse().expect("team"),
+                BuiltInNudgeTemplateKind::QueueAck,
+            )
+            .expect("load")
+            .expect("saved row");
+        assert_eq!(saved.template_body(), Some("<atm/>"));
+    }
+
+    #[test]
     fn disable_nudge_template_override_saves_disabled_row_through_boundary() {
         let override_store = RecordingNudgeTemplateOverrideStore::default();
         let outcome = disable_nudge_template_override_with_store(

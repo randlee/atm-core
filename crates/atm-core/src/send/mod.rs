@@ -302,6 +302,17 @@ pub(crate) fn request_requires_ack(request: &SendRequest, task_id: &Option<TaskI
         )
 }
 
+pub(crate) fn send_mode_for_task_request(
+    request: &SendRequest,
+    task_id: &Option<TaskId>,
+) -> NudgeMode {
+    if task_id.is_some() {
+        NudgeMode::Deferred
+    } else {
+        request.nudge_mode
+    }
+}
+
 #[expect(
     clippy::too_many_arguments,
     reason = "Y.6 closeout keeps the explicit send outcome pieces visible at the sprint seam."
@@ -632,7 +643,11 @@ pub(crate) mod tests;
 
 #[cfg(test)]
 mod path_body_tests {
-    use super::looks_like_path_only_body;
+    use super::{
+        NudgeMode, SendMessageSource, WriteRequest, looks_like_path_only_body,
+        send_mode_for_task_request,
+    };
+    use crate::types::TeamName;
 
     #[test]
     fn detects_existing_relative_and_absolute_files() {
@@ -683,5 +698,50 @@ mod path_body_tests {
             root.path(),
             home.path()
         ));
+    }
+
+    #[test]
+    fn task_request_forces_deferred_mode_while_ordinary_request_is_unchanged() {
+        let home_dir = tempfile::tempdir().expect("temporary home");
+        let team: TeamName = "test-team".parse().expect("team");
+        let task_request = WriteRequest::new(
+            home_dir.path().to_path_buf(),
+            home_dir.path().to_path_buf(),
+            "sender".parse().expect("sender"),
+            "recipient@test-team",
+            team.clone(),
+            SendMessageSource::Inline("task".to_owned()),
+            None,
+            false,
+            Some("task-1".parse().expect("task id")),
+            false,
+        )
+        .expect("task request")
+        .with_nudge_mode(NudgeMode::Immediate);
+        let task_id = task_request.task_id.clone();
+        assert_eq!(
+            send_mode_for_task_request(&task_request, &task_id),
+            NudgeMode::Deferred
+        );
+
+        let ordinary_request = WriteRequest::new(
+            home_dir.path().to_path_buf(),
+            home_dir.path().to_path_buf(),
+            "sender".parse().expect("sender"),
+            "recipient@test-team",
+            team,
+            SendMessageSource::Inline("ordinary".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("ordinary request")
+        .with_nudge_mode(NudgeMode::Immediate);
+        let task_id = ordinary_request.task_id.clone();
+        assert_eq!(
+            send_mode_for_task_request(&ordinary_request, &task_id),
+            NudgeMode::Immediate
+        );
     }
 }

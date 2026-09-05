@@ -47,7 +47,8 @@ if is_ack:
     else:
         message = f'{base} kind="ack"/>'
 else:
-    parts = [f"{base}>", f"<action>read atm --team {team}</action>"]
+    read_action = f"atm read --message-id {message_id}" if message_id else "atm read"
+    parts = [f"{base}>", f"<action>{read_action}</action>"]
     if requires_ack:
         parts.append("<action>ack the message</action>")
     if task_id:
