@@ -85,3 +85,7 @@ triage:r6 a triage:Resolution ;
     triage:resolves <urn:atm:triage:finding/RSH-001> ;
     triage:resolvedAt "2026-09-05T06:52:23Z"^^xsd:dateTime .
 
+
+triage:c6 a triage:Completion ;
+    triage:ofSprint triage:AX3 ;
+    triage:at "2026-09-05T07:05:07Z"^^xsd:dateTime .
