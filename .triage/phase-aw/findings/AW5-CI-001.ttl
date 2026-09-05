@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW5-CI-001>
+  a triage:Finding ;
+  triage:findingId "AW5-CI-001" ;
+  triage:title "RULE-002 new hard violation on AW.5: classified_message_json in tool_types.rs is 112 lines" ;
+  triage:description "PR #1184 Just lint function-length (run 33944245665 at 3d1862c25, reproduced locally): RULE-002 new hard violation overlapping the diff: crates/atm-graft-python/src/tool_types.rs:725-836 classified_message_json (112 lines). Fix: split the per-kind envelope construction into helpers (under 80 lines each); verify with python3 scripts/check-function-length.py. Windows lint and the Test jobs were still pending when observed." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-lint" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T04:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW5 ;
+  triage:foundAt "2026-09-05T04:22:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW5-CI-001/AW5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW5-CI-001/AW5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/tool_types.rs" ;
+  triage:line 725 ;
+  triage:snippet "classified_message_json 112 lines" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .
+
+<urn:atm:triage:worktree/AW5/3d1862c25>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw5-native-tool-parity" ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:orderIndex 5 .

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW3-CI-003>
+  a triage:Finding ;
+  triage:findingId "AW3-CI-003" ;
+  triage:title "atm-daemon-bootstrap lib tests do not compile: start_replacement_runtime_for_test missing and E0282 type annotations in the AW.3 test module" ;
+  triage:description "PR #1182 CI Clippy and Just lint (run 33944237975 at 35a764539, still present locally at a046246c3): cargo check --tests -p atm-daemon-bootstrap fails with E0425 cannot find function start_replacement_runtime_for_test (crates/atm-daemon-bootstrap/src/lib.rs:914) and E0282 type annotations needed (lib.rs:1317, lib.rs:1334), plus unused import start_replacement_runtime. The AW3-CI-002 rewiring of start_replacement_runtime removed or renamed the test-only constructor without updating its callers. Fix: restore or rename the test helper and annotate the two inferred bindings; verify with cargo clippy --all-targets -p atm-daemon-bootstrap." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-build" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T04:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T04:22:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-003/AW3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-003/AW3-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW3-CI-003/AW3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 914 ;
+  triage:snippet "E0425 start_replacement_runtime_for_test not in scope" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "a046246c3" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/a046246c3> .
+
+<urn:atm:triage:occurrence/AW3-CI-003/AW3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 1317 ;
+  triage:snippet "E0282 type annotations needed" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "a046246c3" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/a046246c3> .
+
+<urn:atm:triage:worktree/AW3/a046246c3>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "a046246c3" ;
+  triage:orderIndex 4 .
