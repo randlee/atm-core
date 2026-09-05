@@ -1,101 +1,126 @@
 //! SQLite implementation of AW.2's lower-priority diagnostic timeline.
+//!
+//! Timeline writes deliberately reuse the durable state's one writer worker;
+//! opening an independent writer connection here would let best-effort
+//! telemetry contend with mailbox durability.
 
 use std::path::Path;
+use std::sync::Arc;
 
 use atm_storage::{AtmError, DiagnosticEvent, DiagnosticQuery, DiagnosticTimelineStore};
-use rusqlite::{Connection, params};
+use rusqlite::params;
+
+use crate::NullSqliteObservability;
+use crate::shared_db::SharedDb;
+use crate::writer::{DIAGNOSTIC_BATCH_MAX, DiagnosticBatchOffer};
 
 pub const DIAGNOSTIC_DETAIL_MAX_BYTES: usize = 1024;
 pub const DIAGNOSTIC_MAX_ROWS: usize = 20_000;
 pub const DIAGNOSTIC_MAX_AGE_DAYS: i64 = 7;
 pub const DIAGNOSTIC_PRUNE_BATCH: usize = 1000;
 
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct SqliteDiagnosticTimeline {
-    connection: std::sync::Mutex<Connection>,
+    db: Arc<SharedDb>,
+}
+
+impl std::fmt::Debug for SqliteDiagnosticTimeline {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SqliteDiagnosticTimeline")
+            .field("target", &self.db.target().display())
+            .finish_non_exhaustive()
+    }
 }
 
 impl SqliteDiagnosticTimeline {
+    /// Opens a stand-alone timeline using the same one-writer topology as the
+    /// storage backend. Production callers should use the backend accessor so
+    /// the timeline shares that backend's writer worker.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> {
-        let connection =
-            Connection::open(path).map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-        connection
-            .execute_batch(crate::shared_db::DB_MIGRATIONS)
-            .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-        Ok(Self {
-            connection: std::sync::Mutex::new(connection),
-        })
+        let db = Arc::new(SharedDb::open_with_observability(
+            path,
+            Arc::new(NullSqliteObservability),
+        )?);
+        Ok(Self { db })
+    }
+
+    pub(crate) fn from_shared_db(db: Arc<SharedDb>) -> Self {
+        Self { db }
+    }
+
+    fn offer_batch(&self, events: Vec<DiagnosticEvent>) -> Result<(), AtmError> {
+        match self.db.writer.try_record_diagnostics(events) {
+            DiagnosticBatchOffer::Accepted => Ok(()),
+            DiagnosticBatchOffer::QueueFull => Err(AtmError::daemon_unavailable(
+                "diagnostic timeline queue is full; batch dropped",
+            )),
+            DiagnosticBatchOffer::WriterClosed => Err(AtmError::daemon_unavailable(
+                "diagnostic timeline writer is unavailable; batch dropped",
+            )),
+            DiagnosticBatchOffer::InvalidBatch => Err(AtmError::mailbox_write(format!(
+                "diagnostic timeline batch must contain 1..={DIAGNOSTIC_BATCH_MAX} events",
+            ))),
+        }
     }
 }
 
 impl DiagnosticTimelineStore for SqliteDiagnosticTimeline {
     fn record_batch(&self, events: &[DiagnosticEvent]) -> Result<(), AtmError> {
-        let mut connection = self
-            .connection
-            .lock()
-            .map_err(|_| AtmError::mailbox_write("diagnostic timeline lock poisoned"))?;
-        let transaction = connection
-            .transaction()
-            .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-        for event in events {
-            let detail = event.detail.as_deref().map(truncate_detail);
-            transaction.execute(
-                "INSERT INTO diagnostic_events (ts_unix_ms, level, component, code, correlation_id, origin, message, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                params![event.ts_unix_ms, event.level, event.component, event.code, event.correlation_id, event.origin, event.message, detail],
-            ).map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-        }
-        transaction
-            .commit()
-            .map_err(|error| AtmError::mailbox_write(error.to_string()))
+        let events = events
+            .iter()
+            .cloned()
+            .map(|mut event| {
+                event.detail = event.detail.as_deref().map(truncate_detail);
+                event
+            })
+            .collect();
+        self.offer_batch(events)
     }
 
     fn query(&self, query: &DiagnosticQuery) -> Result<Vec<DiagnosticEvent>, AtmError> {
-        let connection = self
-            .connection
-            .lock()
-            .map_err(|_| AtmError::mailbox_read("diagnostic timeline lock poisoned"))?;
-        let limit = query.limit.unwrap_or(100).min(1_000) as i64;
-        let mut statement = connection.prepare("SELECT ts_unix_ms, level, component, code, correlation_id, origin, message, detail FROM diagnostic_events WHERE (?1 IS NULL OR ts_unix_ms >= ?1) AND (?2 IS NULL OR ts_unix_ms <= ?2) AND (?3 IS NULL OR level >= ?3) AND (?4 IS NULL OR component LIKE (?4 || '%')) ORDER BY ts_unix_ms DESC LIMIT ?5").map_err(|error| AtmError::mailbox_read(error.to_string()))?;
-        statement
-            .query_map(
-                params![
-                    query.since,
-                    query.until,
-                    query.level_at_least,
-                    query.component_prefix,
-                    limit
-                ],
-                |row| {
-                    Ok(DiagnosticEvent {
-                        ts_unix_ms: row.get(0)?,
-                        level: row.get(1)?,
-                        component: row.get(2)?,
-                        code: row.get(3)?,
-                        correlation_id: row.get(4)?,
-                        origin: row.get(5)?,
-                        message: row.get(6)?,
-                        detail: row.get(7)?,
-                    })
-                },
-            )
-            .map_err(|error| AtmError::mailbox_read(error.to_string()))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| AtmError::mailbox_read(error.to_string()))
+        self.db.with_connection(|connection| {
+            let limit = query.limit.unwrap_or(100).min(1_000) as i64;
+            let mut statement = connection.prepare("SELECT ts_unix_ms, level, component, code, correlation_id, origin, message, detail FROM diagnostic_events WHERE (?1 IS NULL OR ts_unix_ms >= ?1) AND (?2 IS NULL OR ts_unix_ms <= ?2) AND (?3 IS NULL OR level >= ?3) AND (?4 IS NULL OR component LIKE (?4 || '%')) ORDER BY ts_unix_ms DESC LIMIT ?5").map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+            statement
+                .query_map(
+                    params![
+                        query.since,
+                        query.until,
+                        query.level_at_least,
+                        query.component_prefix,
+                        limit
+                    ],
+                    |row| {
+                        Ok(DiagnosticEvent {
+                            ts_unix_ms: row.get(0)?,
+                            level: row.get(1)?,
+                            component: row.get(2)?,
+                            code: row.get(3)?,
+                            correlation_id: row.get(4)?,
+                            origin: row.get(5)?,
+                            message: row.get(6)?,
+                            detail: row.get(7)?,
+                        })
+                    },
+                )
+                .map_err(|error| AtmError::mailbox_read(error.to_string()))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| AtmError::mailbox_read(error.to_string()))
+        })
     }
 
     fn prune(&self, now_unix_ms: i64) -> Result<u64, AtmError> {
-        let connection = self
-            .connection
-            .lock()
-            .map_err(|_| AtmError::mailbox_write("diagnostic timeline lock poisoned"))?;
         let cutoff = now_unix_ms - DIAGNOSTIC_MAX_AGE_DAYS * 24 * 60 * 60 * 1_000;
-        let deleted_age = connection.execute("DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events WHERE ts_unix_ms < ?1 ORDER BY id LIMIT ?2)", params![cutoff, DIAGNOSTIC_PRUNE_BATCH]).map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-        let deleted_count = connection.execute("DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms DESC LIMIT -1 OFFSET ?1)", params![DIAGNOSTIC_MAX_ROWS]).map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-        Ok((deleted_age + deleted_count) as u64)
+        self.db.with_transaction(|transaction| {
+            let deleted_age = transaction.execute("DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events WHERE ts_unix_ms < ?1 ORDER BY id LIMIT ?2)", params![cutoff, DIAGNOSTIC_PRUNE_BATCH]).map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+            let deleted_count = transaction.execute("DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms DESC LIMIT -1 OFFSET ?1)", params![DIAGNOSTIC_MAX_ROWS]).map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+            Ok((deleted_age + deleted_count) as u64)
+        })
     }
 }
 
-fn truncate_detail(detail: &str) -> String {
+pub(crate) fn truncate_detail(detail: &str) -> String {
     if detail.len() <= DIAGNOSTIC_DETAIL_MAX_BYTES {
         return detail.to_owned();
     }

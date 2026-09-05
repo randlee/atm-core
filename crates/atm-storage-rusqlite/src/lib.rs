@@ -676,6 +676,7 @@ pub struct SqliteStorageBackend {
     message_search_store: Arc<dyn MessageSearchStore>,
     async_message_search_store: Arc<dyn AsyncMessageSearchStore>,
     async_mailbox_reader: Arc<dyn AsyncMailboxReader>,
+    diagnostic_timeline: Arc<SqliteDiagnosticTimeline>,
 }
 
 impl std::fmt::Debug for SqliteStorageBackend {
@@ -797,6 +798,9 @@ impl SqliteStorageBackend {
             reader_lanes,
         )?);
         Ok(Self {
+            diagnostic_timeline: Arc::new(SqliteDiagnosticTimeline::from_shared_db(Arc::clone(
+                &db,
+            ))),
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
             nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
@@ -818,6 +822,9 @@ impl SqliteStorageBackend {
     pub(crate) fn in_memory_for_test() -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_in_memory_for_test()?);
         Ok(Self {
+            diagnostic_timeline: Arc::new(SqliteDiagnosticTimeline::from_shared_db(Arc::clone(
+                &db,
+            ))),
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
             nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
@@ -845,6 +852,11 @@ impl SqliteStorageBackend {
 
     pub fn async_mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
         self.async_mailbox_reader.clone()
+    }
+
+    /// Best-effort diagnostic timeline sharing this backend's sole writer.
+    pub fn diagnostic_timeline(&self) -> Arc<SqliteDiagnosticTimeline> {
+        Arc::clone(&self.diagnostic_timeline)
     }
 
     pub fn save_message_record(

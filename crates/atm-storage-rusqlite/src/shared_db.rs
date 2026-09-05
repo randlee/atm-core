@@ -269,7 +269,8 @@ impl SharedDb {
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::DiagnosticsRecorded => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for message upsert",
             )),
         }
@@ -330,7 +331,8 @@ impl SharedDb {
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::DiagnosticsRecorded => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async message upsert",
             )),
         }
@@ -403,7 +405,8 @@ impl SharedDb {
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::DiagnosticsRecorded => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for atomic message commit",
             )),
         }
@@ -424,7 +427,8 @@ impl SharedDb {
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::DiagnosticsRecorded => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for acknowledgement admission",
             )),
         }
@@ -446,7 +450,8 @@ impl SharedDb {
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::DiagnosticsRecorded => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async acknowledgement admission",
             )),
         }

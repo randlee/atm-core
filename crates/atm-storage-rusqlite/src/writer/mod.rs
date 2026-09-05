@@ -11,7 +11,7 @@ use crate::shared_db::{
     SharedDbTarget, SqliteConnection, ensure_schema, open_writer_connection_for_target,
     sqlite_error,
 };
-use atm_storage::{AtmError, AtmErrorCode};
+use atm_storage::{AtmError, AtmErrorCode, DiagnosticEvent};
 use rusqlite::TransactionBehavior;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
@@ -20,6 +20,10 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 pub(crate) const CHANNEL_CAPACITY: usize = 256;
+/// A diagnostic producer owns at most one bounded batch at a time.
+pub(crate) const DIAGNOSTIC_BATCH_MAX: usize = 128;
+/// The diagnostic lane never holds more than eight batches behind the writer.
+pub(crate) const DIAGNOSTIC_QUEUE_BATCHES: usize = 8;
 // Coalesce writes that arrive immediately after the first admission so one
 // SQLite commit can durably acknowledge the concurrent burst. This is private
 // to the sole writer ingress: callers, HTTP, TLS, and benchmark modes cannot
@@ -56,6 +60,16 @@ enum WriterMessage {
     Shutdown,
 }
 
+/// Result of a non-blocking diagnostic-lane offer.  Diagnostic events must
+/// never backpressure or fail a primary durable-state operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DiagnosticBatchOffer {
+    Accepted,
+    QueueFull,
+    WriterClosed,
+    InvalidBatch,
+}
+
 struct QueuedWrite {
     op: Box<WriteOp>,
     reply: ReplyTx,
@@ -63,6 +77,7 @@ struct QueuedWrite {
 
 pub(crate) struct SqliteWriter {
     sender: Option<tokio::sync::mpsc::Sender<WriterMessage>>,
+    diagnostic_sender: Option<tokio::sync::mpsc::Sender<Vec<DiagnosticEvent>>>,
     worker: Option<JoinHandle<()>>,
     observability: Arc<dyn SqliteObservability>,
     write_op_deadline: Duration,
@@ -73,6 +88,10 @@ impl std::fmt::Debug for SqliteWriter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SqliteWriter")
             .field("sender_present", &self.sender.is_some())
+            .field(
+                "diagnostic_sender_present",
+                &self.diagnostic_sender.is_some(),
+            )
             .field("worker_present", &self.worker.is_some())
             .field("write_op_deadline", &self.write_op_deadline)
             .field("shutdown_join_deadline", &self.shutdown_join_deadline)
@@ -130,6 +149,8 @@ impl SqliteWriter {
         ensure_schema(&mut connection, target.as_ref())?;
 
         let (sender, receiver) = tokio::sync::mpsc::channel(channel_capacity);
+        let (diagnostic_sender, diagnostic_receiver) =
+            tokio::sync::mpsc::channel(DIAGNOSTIC_QUEUE_BATCHES);
         let worker_runtime = build_runtime().map_err(|error| {
             let error = AtmError::daemon_unavailable(format!(
                 "failed to initialize sqlite writer timer: {error}"
@@ -150,6 +171,7 @@ impl SqliteWriter {
                     target,
                     connection,
                     receiver,
+                    diagnostic_receiver,
                     worker_observability,
                     worker_runtime,
                 )
@@ -168,6 +190,7 @@ impl SqliteWriter {
             })?;
         Ok(Self {
             sender: Some(sender),
+            diagnostic_sender: Some(diagnostic_sender),
             worker: Some(worker),
             observability,
             write_op_deadline,
@@ -320,11 +343,34 @@ impl SqliteWriter {
                 error
             })?
     }
+
+    /// Offers a complete diagnostic batch without ever waiting for the SQLite
+    /// worker.  The caller owns queue-full accounting; persist errors are
+    /// deliberately isolated on the lower-priority worker lane.
+    pub(crate) fn try_record_diagnostics(
+        &self,
+        batch: Vec<DiagnosticEvent>,
+    ) -> DiagnosticBatchOffer {
+        if batch.is_empty() || batch.len() > DIAGNOSTIC_BATCH_MAX {
+            return DiagnosticBatchOffer::InvalidBatch;
+        }
+        let Some(sender) = self.diagnostic_sender.as_ref() else {
+            return DiagnosticBatchOffer::WriterClosed;
+        };
+        match sender.try_send(batch) {
+            Ok(()) => DiagnosticBatchOffer::Accepted,
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => DiagnosticBatchOffer::QueueFull,
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                DiagnosticBatchOffer::WriterClosed
+            }
+        }
+    }
 }
 
 impl Drop for SqliteWriter {
     fn drop(&mut self) {
         let sender = self.sender.take();
+        let diagnostic_sender = self.diagnostic_sender.take();
         let worker = self.worker.take();
 
         if let Some(sender) = sender {
@@ -347,6 +393,7 @@ impl Drop for SqliteWriter {
             }
             drop(sender);
         }
+        drop(diagnostic_sender);
 
         if let Some(handle) = worker {
             let (result_tx, result_rx) = mpsc::sync_channel(1);
@@ -479,30 +526,49 @@ fn writer_loop(
     target: Arc<SharedDbTarget>,
     mut connection: SqliteConnection,
     mut receiver: tokio::sync::mpsc::Receiver<WriterMessage>,
+    mut diagnostic_receiver: tokio::sync::mpsc::Receiver<Vec<DiagnosticEvent>>,
     observability: Arc<dyn SqliteObservability>,
     runtime: tokio::runtime::Runtime,
 ) {
     let mut cache = stmt_cache::WriterStatementCache;
     let mut shutting_down = false;
     loop {
-        let Some(first) = runtime.block_on(receive_first_message(&mut receiver, shutting_down))
-        else {
+        let Some(work) = runtime.block_on(receive_next_work(
+            &mut receiver,
+            &mut diagnostic_receiver,
+            shutting_down,
+        )) else {
             break;
         };
-        let mut batch = vec![first];
-        runtime.block_on(collect_batch(&mut receiver, &mut batch, &mut shutting_down));
-        process_batch(&target, &mut connection, &mut cache, batch);
+        match work {
+            WriterWork::Primary(first) => {
+                let mut batch = vec![first];
+                runtime.block_on(collect_batch(&mut receiver, &mut batch, &mut shutting_down));
+                process_batch(&target, &mut connection, &mut cache, batch);
+            }
+            WriterWork::Diagnostics(batch) => {
+                process_diagnostic_batch(&target, &mut connection, &mut cache, batch);
+            }
+        }
     }
     checkpoint_writer_connection(target.as_ref(), &mut connection, observability.as_ref());
 }
 
-async fn receive_first_message(
+enum WriterWork {
+    Primary(QueuedWrite),
+    Diagnostics(Vec<DiagnosticEvent>),
+}
+
+async fn receive_next_work(
     receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
+    diagnostic_receiver: &mut tokio::sync::mpsc::Receiver<Vec<DiagnosticEvent>>,
     shutting_down: bool,
-) -> Option<QueuedWrite> {
+) -> Option<WriterWork> {
     if shutting_down {
         match receiver.try_recv() {
-            Ok(WriterMessage::Submit { op, reply }) => Some(QueuedWrite { op, reply }),
+            Ok(WriterMessage::Submit { op, reply }) => {
+                Some(WriterWork::Primary(QueuedWrite { op, reply }))
+            }
             Ok(WriterMessage::Shutdown) => {
                 drain_submit_replies(receiver);
                 None
@@ -513,14 +579,60 @@ async fn receive_first_message(
             ) => None,
         }
     } else {
-        match receiver.recv().await {
-            Some(WriterMessage::Submit { op, reply }) => Some(QueuedWrite { op, reply }),
-            Some(WriterMessage::Shutdown) => {
+        match receiver.try_recv() {
+            Ok(WriterMessage::Submit { op, reply }) => {
+                Some(WriterWork::Primary(QueuedWrite { op, reply }))
+            }
+            Ok(WriterMessage::Shutdown) => {
                 drain_submit_replies(receiver);
                 None
             }
-            None => None,
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => None,
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                tokio::select! {
+                    biased;
+                    message = receiver.recv() => match message {
+                        Some(WriterMessage::Submit { op, reply }) => Some(WriterWork::Primary(QueuedWrite { op, reply })),
+                        Some(WriterMessage::Shutdown) => {
+                            drain_submit_replies(receiver);
+                            None
+                        }
+                        None => None,
+                    },
+                    batch = diagnostic_receiver.recv(), if receiver.is_empty() => batch.map(WriterWork::Diagnostics),
+                }
+            }
         }
+    }
+}
+
+fn process_diagnostic_batch(
+    target: &SharedDbTarget,
+    connection: &mut SqliteConnection,
+    cache: &mut stmt_cache::WriterStatementCache,
+    batch: Vec<DiagnosticEvent>,
+) {
+    let operation = WriteOp::RecordDiagnostics(batch);
+    let result = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to open diagnostic timeline transaction",
+                error,
+            )
+        })
+        .and_then(|transaction| {
+            let result = ops::execute(&operation, &transaction, cache, target);
+            match result {
+                Ok(_) => transaction.commit().map_err(|error| {
+                    sqlite_error(target, "failed to commit diagnostic timeline batch", error)
+                }),
+                Err(error) => Err(error),
+            }
+        });
+    if let Err(error) = result {
+        tracing::warn!(origin = "timeline", code = "ATM_DIAGNOSTIC_PERSIST_FAILED", error = %error, "diagnostic timeline batch dropped");
     }
 }
 

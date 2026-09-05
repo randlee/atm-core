@@ -13,8 +13,8 @@ use atm_storage::error::AtmError;
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
-    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, TemplateMessageAdmission,
-    TemplateRegistration, TemplateRegistrationOutcome,
+    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DiagnosticEvent,
+    TemplateMessageAdmission, TemplateRegistration, TemplateRegistrationOutcome,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
@@ -54,6 +54,8 @@ pub(crate) enum WriteOp {
     RegisterTemplate(Box<TemplateRegistration>),
     AdmitDecomposedMessage(Box<DecomposedMessageAdmission>),
     AdmitTemplateMessage(Box<TemplateMessageAdmission>),
+    /// Lower-priority callers submit bounded, already-redacted batches only.
+    RecordDiagnostics(Vec<DiagnosticEvent>),
 }
 
 impl std::fmt::Debug for WriteOp {
@@ -87,6 +89,10 @@ impl std::fmt::Debug for WriteOp {
                 .debug_tuple("AdmitTemplateMessage")
                 .field(&admission.record.message_key)
                 .finish(),
+            Self::RecordDiagnostics(events) => formatter
+                .debug_tuple("RecordDiagnostics")
+                .field(&events.len())
+                .finish(),
         }
     }
 }
@@ -109,6 +115,7 @@ pub(crate) enum WriteOpResult {
         inserted: bool,
         existing: Option<Box<Message>>,
     },
+    DiagnosticsRecorded,
 }
 
 pub(crate) fn execute(
@@ -173,6 +180,15 @@ pub(crate) fn execute(
                     "sqlite writer returned the wrong result while admitting a template message: {other:?}"
                 ))),
             }
+        }
+        WriteOp::RecordDiagnostics(events) => {
+            for event in events {
+                connection.execute(
+                    "INSERT INTO diagnostic_events (ts_unix_ms, level, component, code, correlation_id, origin, message, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    params![event.ts_unix_ms, event.level, event.component, event.code, event.correlation_id, event.origin, event.message, event.detail],
+                ).map_err(|error| sqlite_error(target, "failed to record diagnostic timeline batch", error))?;
+            }
+            Ok(WriteOpResult::DiagnosticsRecorded)
         }
     }
 }
