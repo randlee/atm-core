@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T20:02:30Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr AX.6 QA-4 recheck (QA-AX6-R4-1788638300) at head ba19d6236; fixed by arch-ctm fix pass GO-AX6-FIX3-1788637962 (Completion c23). Report: PR #1204 comment 5554428957. Sprint verdict remains FAIL on new finding AX6-QA4-001." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T19:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
@@ -32,8 +35,8 @@
   triage:file "crates/atm/tests/peer_cli.rs" ;
   triage:line 66 ;
   triage:snippet "let output = Command::new(env!(\"CARGO_BIN_EXE_atm\"))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b> .
@@ -43,8 +46,8 @@
   triage:file "crates/atm/tests/compose_passthrough.rs" ;
   triage:line 35 ;
   triage:snippet "Command::new(env!(\"CARGO_BIN_EXE_atm\"))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b> .
@@ -54,8 +57,8 @@
   triage:file "crates/atm/tests/peer_cli.rs" ;
   triage:line 66 ;
   triage:snippet "let output = Command::new(env!(\"CARGO_BIN_EXE_atm\"))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-live-proof" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2> .
@@ -65,8 +68,8 @@
   triage:file "crates/atm/tests/compose_passthrough.rs" ;
   triage:line 35 ;
   triage:snippet "Command::new(env!(\"CARGO_BIN_EXE_atm\"))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-live-proof" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2> .
@@ -76,8 +79,8 @@
   triage:file "crates/atm/tests/escalation_cli.rs" ;
   triage:line 7 ;
   triage:snippet "Command::new(env!(\"CARGO_BIN_EXE_atm\"))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-live-proof" ;
   triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2> .
