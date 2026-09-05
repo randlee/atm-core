@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
@@ -19,6 +20,8 @@ use crate::output;
 const DEFAULT_SNAPSHOT_LIMIT: usize = 50;
 // Tail mode polls the shared follow surface at a human-readable cadence.
 const DEFAULT_TAIL_POLL_INTERVAL_MS: u64 = 250;
+const MERGED_LOSS_NOTE: &str =
+    "sources are independently bounded; merged view is not lossless under overload";
 
 #[derive(Debug, Args)]
 /// Query or follow ATM retained observability records.
@@ -130,21 +133,7 @@ struct QueryArgs {
 impl QueryArgs {
     async fn run_timeline(&self, observability: &CliObservability) -> Result<()> {
         let records = self.records_for_source(observability).await?;
-        let note = "sources are independently bounded; merged view is not lossless under overload";
-        if self.json {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&TimelineOutput { note, records })?
-            );
-        } else {
-            println!("Note: {note}");
-            for event in records {
-                println!(
-                    "{} {} {} {} {}",
-                    event.ts_unix_ms, event.source, event.level, event.component, event.message
-                );
-            }
-        }
+        print!("{}", render_timeline_output(records, self.json)?);
         Ok(())
     }
 
@@ -152,13 +141,24 @@ impl QueryArgs {
         &self,
         observability: &CliObservability,
     ) -> Result<Vec<TimelineRecord>> {
+        let endpoint = atm_core::home::host_runtime_dir()?
+            .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
+        self.records_for_source_from_timeline_endpoint(observability, &endpoint)
+            .await
+    }
+
+    async fn records_for_source_from_timeline_endpoint(
+        &self,
+        observability: &CliObservability,
+        endpoint: &Path,
+    ) -> Result<Vec<TimelineRecord>> {
         if self.source == LogSource::Timeline {
-            return self.timeline_records().await;
+            return self.timeline_records_from_endpoint(endpoint).await;
         }
         let limit = self.limit.unwrap_or(DEFAULT_SNAPSHOT_LIMIT).min(5_000);
         let mut records = self.jsonl_records(observability)?;
         records.extend(self.graft_fallback_records()?);
-        records.extend(self.timeline_records().await?);
+        records.extend(self.timeline_records_from_endpoint(endpoint).await?);
         records.sort_by_key(|record| (record.ts_unix_ms, record.source_rank(), record.seq));
         records.truncate(limit);
         Ok(records)
@@ -204,7 +204,7 @@ impl QueryArgs {
             .collect())
     }
 
-    async fn timeline_records(&self) -> Result<Vec<TimelineRecord>> {
+    async fn timeline_records_from_endpoint(&self, endpoint: &Path) -> Result<Vec<TimelineRecord>> {
         let mut query = vec![format!(
             "limit={}",
             self.limit.unwrap_or(DEFAULT_SNAPSHOT_LIMIT).min(5_000)
@@ -218,8 +218,6 @@ impl QueryArgs {
         if let Some(component) = self.component.as_deref() {
             query.push(format!("component={}", percent_encode(component)));
         }
-        let endpoint = atm_core::home::host_runtime_dir()?
-            .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
         let body = atm_http_runtime::loopback_tcp_get_json(
             endpoint,
             format!("/v1/diagnostics?{}", query.join("&")),
@@ -298,6 +296,27 @@ impl QueryArgs {
 struct TimelineOutput {
     note: &'static str,
     records: Vec<TimelineRecord>,
+}
+
+fn render_timeline_output(records: Vec<TimelineRecord>, json: bool) -> Result<String> {
+    if json {
+        return Ok(format!(
+            "{}\n",
+            serde_json::to_string_pretty(&TimelineOutput {
+                note: MERGED_LOSS_NOTE,
+                records,
+            })?
+        ));
+    }
+
+    let mut output = format!("Note: {MERGED_LOSS_NOTE}\n");
+    for event in records {
+        output.push_str(&format!(
+            "{} {} {} {} {}\n",
+            event.ts_unix_ms, event.source, event.level, event.component, event.message
+        ));
+    }
+    Ok(output)
 }
 
 #[derive(Serialize)]
@@ -539,17 +558,21 @@ fn parse_relative_duration(raw: &str) -> Result<IsoTimestamp> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use std::sync::Mutex;
 
     use atm_core::error::AtmError;
+    use atm_core::local_http::{LocalCapability, LocalHttpEndpointRecord};
     use atm_core::observability::{
         AtmLogRecord, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
         CommandEvent, LogTailSession, ObservabilityPort,
     };
     use atm_core::observability::{LogFieldValue, LogLevelFilter, LogMode};
+    use atm_core::observability_counters::{DiagnosticTimelineRecord, DiagnosticTimelineResponse};
     use atm_core::test_support::{EnvGuard, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
     use serial_test::serial;
     use tempfile::TempDir;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     use super::{
         CliLogLevel, LogCommand, LogModeCommand, LogSource, QueryArgs, TimelineRecord,
@@ -562,6 +585,67 @@ mod tests {
             ("ATM_IDENTITY", Some(TEST_SENDER)),
             ("ATM_TEAM", Some(TEST_TEAM)),
         ])
+    }
+
+    async fn timeline_fixture_endpoint(
+        response: DiagnosticTimelineResponse,
+    ) -> (TempDir, PathBuf, tokio::task::JoinHandle<String>) {
+        let fixture = TempDir::new().expect("timeline fixture directory");
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("timeline fixture listener");
+        let capability = LocalCapability::generate().expect("fixture capability");
+        let instance_id = ulid::Ulid::new();
+        let endpoint = fixture.path().join("local-http.json");
+        std::fs::write(
+            fixture
+                .path()
+                .join(atm_core::home::HOST_RUNTIME_OWNER_LOCK_FILE),
+            format!("1:fixture:{instance_id}"),
+        )
+        .expect("fixture owner record");
+        std::fs::write(
+            &endpoint,
+            serde_json::to_vec(&LocalHttpEndpointRecord::active(
+                instance_id,
+                Some(listener.local_addr().expect("fixture address")),
+                None,
+                &capability,
+            ))
+            .expect("fixture endpoint record"),
+        )
+        .expect("write fixture endpoint record");
+
+        let body = serde_json::to_vec(&response).expect("fixture response");
+        let expected_capability = capability.to_base64url();
+        let request = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("fixture connection");
+            let mut bytes = Vec::new();
+            let mut chunk = [0_u8; 1024];
+            while !bytes.windows(4).any(|window| window == b"\r\n\r\n") {
+                let count = stream.read(&mut chunk).await.expect("read fixture request");
+                assert_ne!(count, 0, "fixture client closed before sending headers");
+                bytes.extend_from_slice(&chunk[..count]);
+            }
+            let request = String::from_utf8(bytes).expect("UTF-8 fixture request");
+            assert!(request.starts_with("GET /v1/diagnostics?limit=50 HTTP/1.1\r\n"));
+            assert!(request.to_ascii_lowercase().contains(
+                &format!("x-atm-local-capability: {}", expected_capability).to_ascii_lowercase()
+            ));
+            stream
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                        body.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .expect("write fixture headers");
+            stream.write_all(&body).await.expect("write fixture body");
+            request
+        });
+        (fixture, endpoint, request)
     }
 
     #[derive(Debug)]
@@ -722,6 +806,92 @@ mod tests {
         assert!(args.record_matches(&record, Some(42), Some(42)));
         assert!(!args.record_matches(&record, Some(43), None));
         assert!(!args.record_matches(&record, None, Some(41)));
+    }
+
+    #[test]
+    fn merged_output_carries_the_not_lossless_note_in_json_and_text_contracts() {
+        let json = super::render_timeline_output(Vec::new(), true).expect("JSON merged output");
+        let value: serde_json::Value = serde_json::from_str(&json).expect("parse JSON output");
+        assert_eq!(value["note"], super::MERGED_LOSS_NOTE);
+
+        let text = super::render_timeline_output(Vec::new(), false).expect("text merged output");
+        assert_eq!(text, format!("Note: {}\n", super::MERGED_LOSS_NOTE));
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn merged_source_reads_interleaved_jsonl_graft_and_timeline_fixture_records() {
+        let log_dir = TempDir::new().expect("graft log directory");
+        let _env = EnvGuard::set_many([(
+            "ATM_LOG_DIR",
+            Some(log_dir.path().to_str().expect("UTF-8 log directory")),
+        )]);
+        std::fs::write(
+            atm_observability::graft_fallback_log_path(log_dir.path()),
+            concat!(
+                r#"{"ts_unix_ms":100,"level":"warn","component":"graft.receiver","origin":"graft","message":"graft fixture"}"#,
+                "\n"
+            ),
+        )
+        .expect("write graft fixture");
+        let observability = CliObservability::from_test_port(StubObservability {
+            snapshot: Mutex::new(Some(Ok(AtmLogSnapshot {
+                records: vec![AtmLogRecord {
+                    timestamp: chrono::DateTime::from_timestamp_millis(100)
+                        .expect("fixture timestamp")
+                        .into(),
+                    level: LogLevelFilter::Info,
+                    service: atm_core::observability::service_name("atm").expect("fixture service"),
+                    target: Some("cli.command".to_owned()),
+                    action: None,
+                    message: Some("jsonl fixture".to_owned()),
+                    fields: Default::default(),
+                }],
+                truncated: false,
+            }))),
+        });
+        let (fixture, endpoint, request) = timeline_fixture_endpoint(DiagnosticTimelineResponse {
+            records: vec![DiagnosticTimelineRecord {
+                ts_unix_ms: 100,
+                level: "error".to_owned(),
+                component: "runtime.route".to_owned(),
+                code: Some("fixture".to_owned()),
+                correlation_id: None,
+                origin: "timeline".to_owned(),
+                message: "timeline fixture".to_owned(),
+                detail: None,
+            }],
+        })
+        .await;
+        let args = QueryArgs {
+            source: LogSource::Merged,
+            levels: Vec::new(),
+            matches: Vec::new(),
+            since: None,
+            until: None,
+            component: None,
+            limit: None,
+            json: true,
+        };
+
+        let records = args
+            .records_for_source_from_timeline_endpoint(&observability, &endpoint)
+            .await
+            .expect("merged fixture query");
+
+        assert_eq!(
+            records
+                .iter()
+                .map(|record| (record.source, record.message.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                ("jsonl", "jsonl fixture"),
+                ("graft", "graft fixture"),
+                ("timeline", "timeline fixture"),
+            ]
+        );
+        request.await.expect("fixture request task");
+        drop(fixture);
     }
 
     #[test]
