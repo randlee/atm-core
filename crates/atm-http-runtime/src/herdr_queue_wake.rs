@@ -398,36 +398,8 @@ impl HerdrQueueWakePump {
             .await
         {
             Ok(_) => {
-                // Herdr has accepted the prompt. Disarm before any cleanup
-                // await so cancellation cannot re-release an already
-                // delivered claim.
-                release.disarm();
-                #[cfg(test)]
-                await_handoff_cleanup_test_gate().await;
-                let runtime = self.service_runtime.clone();
-                let member_key = member.key.clone();
-                let message_id = claim.msg;
-                let health = self.runtime_health.clone();
-                let _ = run_blocking(move || {
-                    atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
-                        &runtime,
-                        &member_key,
-                        &message_id,
-                        || health.record_graft_queue_marker_clear_failure(),
-                    );
-                    Ok(())
-                })
-                .await;
-                self.reset_release_streak(&member.key);
-                stats.prompted += 1;
-                tracing::info!(
-                    event = "herdr_queue_poll_outcome",
-                    member = %member.key,
-                    msg_id = %claim.msg,
-                    queue_kind = NudgeKind::Queue.as_str(),
-                    outcome = "prompted",
-                    "Herdr queue prompt accepted"
-                );
+                self.complete_successful_claim(member, claim, release, stats)
+                    .await;
             }
             Err(error) => {
                 if error.code() == AtmErrorCode::HerdrUnavailable {
@@ -463,6 +435,44 @@ impl HerdrQueueWakePump {
                 );
             }
         }
+    }
+
+    async fn complete_successful_claim(
+        &self,
+        member: &HerdrCandidate,
+        claim: atm_core::boundary::NudgeClaim,
+        release: &mut ReleasePendingOnDrop,
+        stats: &mut HerdrQueueWakeStats,
+    ) {
+        // Herdr has accepted the prompt. Disarm before any cleanup await so
+        // cancellation cannot re-release an already delivered claim.
+        release.disarm();
+        #[cfg(test)]
+        await_handoff_cleanup_test_gate().await;
+        let runtime = self.service_runtime.clone();
+        let member_key = member.key.clone();
+        let message_id = claim.msg;
+        let health = self.runtime_health.clone();
+        let _ = run_blocking(move || {
+            atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+                &runtime,
+                &member_key,
+                &message_id,
+                || health.record_graft_queue_marker_clear_failure(),
+            );
+            Ok(())
+        })
+        .await;
+        self.reset_release_streak(&member.key);
+        stats.prompted += 1;
+        tracing::info!(
+            event = "herdr_queue_poll_outcome",
+            member = %member.key,
+            msg_id = %claim.msg,
+            queue_kind = NudgeKind::Queue.as_str(),
+            outcome = "prompted",
+            "Herdr queue prompt accepted"
+        );
     }
 
     #[must_use]
