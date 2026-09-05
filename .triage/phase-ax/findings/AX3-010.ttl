@@ -1,0 +1,229 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-010>
+  a triage:Finding ;
+  triage:findingId "AX3-010" ;
+  triage:title "D10 Pydantic-supersession grep gate fails: a third Pydantic mention remains at docs/architecture.md:165" ;
+  triage:description "D10's gate says grep -n Pydantic over the docs returns only lines inside the two superseded Phase-AC notes. At 88c579a18 docs/architecture.md:165 (inside the pre-existing, unrelated section 1.2 Phase-AA simplification note, untouched by the AX.3 diff) is a third mention, so the gate fails on a strict reading even though the amendment text at the two named locations (docs/requirements.md and docs/architecture.md:2872-2890) is complete. Fix: either extend the amendment to cover that note or tighten D10's gate wording to the two named blocks." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T06:06:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/2-arch165> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/2-req60> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/2-req69> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/2-arch2880> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/2-arch2886> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/2-plan280> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/2-plan286> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/2-plan291> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/4-arch165> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/4-req60> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/4-req69> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/4-arch2880> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/4-arch2886> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/4-plan280> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/4-plan286> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-010/4-plan291> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-010/2-arch165>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 165 ;
+  triage:snippet "Claude-code task schema plus Pydantic validation instead of inheriting any" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/2/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/2-req60>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 60 ;
+  triage:snippet "from Claude-code task schema plus Pydantic validation; SQLite may only sync" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/2/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/2-req69>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 69 ;
+  triage:snippet "atm-storage-rusqlite; the Claude-code-schema-plus-Pydantic direction is" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/2/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/2-arch2880>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2880 ;
+  triage:snippet "schema plus Pydantic validation rather than from preserved transition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/2/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/2-arch2886>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2886 ;
+  triage:snippet "atm-storage-rusqlite; the Claude-code-schema-plus-Pydantic direction is" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/2/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/2-plan280>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
+  triage:line 280 ;
+  triage:snippet "starts from Claude-code task schema plus Pydantic validation. Both" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/2/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/2-plan286>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
+  triage:line 286 ;
+  triage:snippet "the Claude-code-schema-plus-Pydantic direction is withdrawn because ATM" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/2/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/2-plan291>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
+  triage:line 291 ;
+  triage:snippet "the deleted scaffolding. Gate: grep -n Pydantic docs/requirements.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/2/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/4-arch165>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 165 ;
+  triage:snippet "Claude-code task schema plus Pydantic validation instead of inheriting any" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/4/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/4-req60>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 60 ;
+  triage:snippet "from Claude-code task schema plus Pydantic validation; SQLite may only sync" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/4/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/4-req69>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 69 ;
+  triage:snippet "atm-storage-rusqlite; the Claude-code-schema-plus-Pydantic direction is" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/4/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/4-arch2880>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2880 ;
+  triage:snippet "schema plus Pydantic validation rather than from preserved transition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/4/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/4-arch2886>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2886 ;
+  triage:snippet "atm-storage-rusqlite; the Claude-code-schema-plus-Pydantic direction is" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/4/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/4-plan280>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
+  triage:line 280 ;
+  triage:snippet "starts from Claude-code task schema plus Pydantic validation. Both" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/4/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/4-plan286>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
+  triage:line 286 ;
+  triage:snippet "the Claude-code-schema-plus-Pydantic direction is withdrawn because ATM" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/4/88c579a18> .
+
+<urn:atm:triage:occurrence/AX3-010/4-plan291>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
+  triage:line 291 ;
+  triage:snippet "the deleted scaffolding. Gate: grep -n Pydantic docs/requirements.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/4/88c579a18> .
+
+<urn:atm:triage:worktree/2/88c579a18>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/4/88c579a18>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 4 .

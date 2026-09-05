@@ -233,6 +233,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
     "writer_lane": (r"\bSqliteWriter\b", r"\b(?:writer|write)_lane\b"),
     "task_changed_notifications": (r"\btask_changed_notifications\b", r"\bTaskChanged(?:Notification|Event)?\b", r"\btask_changed\b"),
+    "task_state_transition": (
+        r"\btask_state_transition\b",
+        r"\bapply_task_(?:assignment|completion|acknowledgement)\s*\(",
+        r"\bUPDATE\s+tasks\s+SET\s+state\b",
+    ),
     "template_rendering": (r"\btemplate_rendering\b", r"\b(?:render|render_template)\s*\(", r"\bTemplateRenderer\b"),
     "tls_handshake": (r"\b(?:rustls|native_tls)::", r"\b(?:Client|Server)Connection\b", r"\b(?:tls|TLS)[^\n]*handshake\b"),
     "tmux_nudge_delivery": (r"\btmux_nudge_delivery\b", r"\btmux[^\n]*nudge\b", r"\b(?:send|emit)_tmux_nudge\s*\("),

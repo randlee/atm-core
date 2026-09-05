@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-058 |
-| Status | Proposed (Phase AQ lane A; dispatch precondition for AQ2.6, critical review B9/I16) |
+| Status | Accepted (Phase AX.2 amendment) |
 | Scope | `HerdrReceivedHook` (AQ2.6) and `HerdrQueueWakePump` (AQ2.7) process contract with the `herdr` CLI, implemented by the `atm-herdr` crate (`docs/atm-herdr/architecture.md`) |
 | Relates to | ADR-001, ADR-054, ADR-056, sprint-AQ2-6, sprint-AQ2-7, sprint-AQ6 (pin-latest preflight) |
 
@@ -166,12 +166,12 @@ atm-core; a fourth (`agent wait`) is documented for completeness but is
 **Immediate steer (AQ2.6, `HerdrReceivedHook`):**
 
 ```text
-herdr agent prompt <AgentName> "You have unread ATM messages. Run: atm read"
+herdr agent prompt <AgentName> <rendered built-in nudge template>
 ```
 
 - `<AgentName>` is argv[3] verbatim (no quoting layer; `src/cli/agent.rs:771-781`).
-- argv[4] is the fixed mailbox-read text. It must be non-empty
-  (`empty_agent_prompt`, `src/app/api/agents.rs:63-65`).
+- argv[4] is the caller-supplied rendered built-in nudge template. It must be
+  non-empty (`empty_agent_prompt`, `src/app/api/agents.rs:63-65`).
 - No `--wait`. Without `--wait`, `--until`/`--timeout` are usage errors
   (exit 2, `src/cli/agent.rs:824-831`), so the steer argv carries neither.
 
@@ -377,7 +377,7 @@ record this in events and the ADR-054 addendum.
 | `agent_target_ambiguous` | prompt, rename *(also reachable from `wait`, not invoked in Phase AQ)* | advisory failure, no retry (operator must fix names) | two or more terminals resolve to the same name (stale/duplicate `agent_name`) | operator renames the duplicate agent(s); atm-core has no automatic disambiguation |
 | `agent_not_ready` | prompt | advisory failure; `release_pending` when post-claim (AQ2.7) | agent still launching, or no longer the pane foreground process | AQ2.7 releases the claim for re-evaluation on the next tick; Steer has no retry mechanism and only logs a warning |
 | `timeout` | *(historical — Herdr's own `wait`-scoped error code; D2 documents it but atm-core does not invoke `wait` in Phase AQ)* | not reachable in Phase AQ | agent never reached `idle`/`done`/`blocked` within a `wait`'s `--timeout` | AQ2.7's own notion of "took too long" is the D10 external child-process bound on `list`/`prompt`, which routes to the D10.1 breaker, not this code |
-| `agent_prompt_failed`, `empty_agent_prompt`, `internal_error`, `server_unavailable` | prompt | advisory failure (`requeue_pending` for AQ2.6 immediate steer — no `PendingNudgeStore` claim exists on that path; `release_pending` for AQ2.7's post-claim prompt, since no input was injected) | PTY write failed; fixed prompt text was empty (should be impossible by construction); Herdr-internal error; server mid-shutdown | retry/re-evaluate; `empty_agent_prompt` specifically indicates an atm-core defect (D2's fixed text is never empty) and must also be logged as a bug |
+| `agent_prompt_failed`, `empty_agent_prompt`, `internal_error`, `server_unavailable` | prompt | advisory failure (`requeue_pending` for AQ2.6 immediate steer — no `PendingNudgeStore` claim exists on that path; `release_pending` for AQ2.7's post-claim prompt, since no input was injected) | PTY write failed; supplied prompt text was empty; Herdr-internal error; server mid-shutdown | retry/re-evaluate; `empty_agent_prompt` indicates an atm-core rendering defect and must also be logged as a bug |
 | `server_not_running`, `protocol_mismatch` | any, including `list` | advisory failure, health counter `herdr_unavailable`; for AQ2.6/AQ2.7 this is one of the three D10.1 breaker triggers (alongside the D10 external-timeout kill) — the breaker opens host-wide, not per-caller | no Herdr server at the resolved socket; or client/server `PROTOCOL_VERSION` mismatch | operator starts/restarts the Herdr server (restart required after a Herdr upgrade for `protocol_mismatch`); `atm doctor` surfaces the `herdr_unavailable` health counter and the D10.1 breaker state |
 | (exit 2, no JSON) | any | atm-core bug: argv construction error, must be impossible by construction | malformed argv (missing/extra positional, disallowed flag combination) | not operator-recoverable; a fixture/unit-test regression that must fail CI before reaching a real invocation |
 
@@ -660,3 +660,19 @@ Breaker rules:
   wall-clock attempts and the fourth attempt after `retry_after` succeeds
   and closes the breaker. One breaker implementation, exercised from both
   call sites.
+
+## Amendment — Phase AX.2 rendered prompt text (2026-09-05)
+
+The Herdr prompt contract now receives the rendered built-in nudge template
+from atm-core. `HerdrProcessAdapter::prompt` accepts `(agent, session, text,
+deadline)` and emits exactly `herdr agent prompt <AgentName> <text>`; the
+adapter never composes, interpolates, strips, or joins the text. The session
+continues to travel only through the `HERDR_SESSION` child environment.
+
+The text is the same team-resolved Delivery, Queue, or Task render supplied to
+the tmux and graft sinks. Empty or whitespace-only text is rejected before a
+child is spawned. The line-safety rule is normative: a multi-line rendered
+template remains one argv element byte-for-byte, with exactly four argv
+elements (`agent`, `prompt`, agent name, rendered text). This amendment records
+the operative contract implemented in `atm-core`, `atm-daemon-bootstrap`,
+`atm-http-runtime`, and `atm-herdr`.

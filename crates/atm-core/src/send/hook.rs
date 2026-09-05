@@ -45,10 +45,12 @@ where
         });
     }
     if delivery_snapshot.local_herdr_post_send {
+        let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event, kind)?;
         return Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
                 session: delivery_snapshot.herdr_session.clone(),
+                rendered_nudge,
             })),
             kind,
         });

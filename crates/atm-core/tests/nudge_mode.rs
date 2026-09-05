@@ -7,16 +7,67 @@
 use std::sync::{Arc, Mutex};
 
 use atm_core::boundary::{
-    MemberKey, NudgeClaim, NudgeKind, PendingNudgeStore, PostSendBuiltInTarget, PostSendHookEvent,
-    RosterHarness, RosterMemberKind, built_in_nudge_template_kind_from_post_send_event,
+    MemberKey, NudgeClaim, NudgeKind, PendingNudgeStore, PostSendBuiltInTarget, RosterHarness,
+    RosterMemberKind, built_in_nudge_template_kind_from_post_send_event,
 };
 use atm_core::error::AtmError;
+use atm_core::nudge_dispatch::rebuild_received_hook_dispatch;
 use atm_core::observability::NullObservability;
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{
     NudgeMode, SendMessageSource, WriteRequest, prepare_write_with_runtime, write_mail_with_runtime,
 };
 use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
+
+#[derive(Default)]
+struct InMemoryAsyncStore;
+
+impl atm_storage::contract::sealed::Sealed for InMemoryAsyncStore {}
+
+impl atm_storage::MessageStore for InMemoryAsyncStore {
+    fn save_message(&self, _message: &atm_storage::Message) -> Result<(), AtmError> {
+        Ok(())
+    }
+
+    fn save_messages_atomically(&self, _messages: &[atm_storage::Message]) -> Result<(), AtmError> {
+        Ok(())
+    }
+
+    fn load_message(
+        &self,
+        _key: &atm_storage::MessageKey,
+    ) -> Result<Option<atm_storage::Message>, AtmError> {
+        Ok(None)
+    }
+
+    fn list_messages(
+        &self,
+        _query: &atm_storage::MessageQuery,
+    ) -> Result<Vec<atm_storage::Message>, AtmError> {
+        Ok(Vec::new())
+    }
+
+    fn delete_message(&self, _key: &atm_storage::MessageKey) -> Result<(), AtmError> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl atm_storage::AsyncMessageStore for InMemoryAsyncStore {}
+
+/// Minimal executor matching the core's async admission tests. This fixture's
+/// in-memory async store never yields, so no Tokio runtime is needed.
+fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    let waker = std::task::Waker::noop();
+    let mut context = std::task::Context::from_waker(waker);
+    let mut future = std::pin::pin!(future);
+    loop {
+        match future.as_mut().poll(&mut context) {
+            std::task::Poll::Ready(output) => return output,
+            std::task::Poll::Pending => std::thread::yield_now(),
+        }
+    }
+}
 
 /// Records every `mark_pending` call; every other method is a trivial no-op
 /// since this suite never exercises the durable claim/requeue lifecycle.
@@ -106,29 +157,72 @@ fn setup_with_store(
     Arc<RecordingPendingNudgeStore>,
     TeamName,
 ) {
+    let team: TeamName = "test-team".parse().expect("team");
+    setup_with_roster(
+        fail_mark_pending,
+        vec![
+            roster_member(&team, "sender", None),
+            roster_member(
+                &team,
+                "recipient",
+                Some(PaneId::from_cli("%9").expect("pane")),
+            ),
+        ],
+        false,
+    )
+}
+
+fn setup_with_roster(
+    fail_mark_pending: bool,
+    members: Vec<atm_core::boundary::RosterEntry>,
+    register_graft: bool,
+) -> (
+    tempfile::TempDir,
+    atm_core::LocalServiceRuntime,
+    Arc<RecordingPendingNudgeStore>,
+    TeamName,
+) {
     let root = tempfile::tempdir().expect("temp root");
     let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(root.path())
         .expect("sqlite runtime");
+    let async_store = Arc::new(InMemoryAsyncStore);
     let recording_store = Arc::new(RecordingPendingNudgeStore {
         fail_mark_pending,
         ..RecordingPendingNudgeStore::default()
     });
-    let runtime = assembly
+    let mut runtime = assembly
         .service_runtime
+        .with_async_message_store(async_store)
         .with_pending_nudge_store(recording_store.clone());
     let team: TeamName = "test-team".parse().expect("team");
+    if register_graft {
+        let endpoint_store = atm_runtime_test_support::open_graft_receiver_endpoint_store(
+            root.path().join("runtime").join("mail.sqlite3"),
+        )
+        .expect("graft endpoint store");
+        endpoint_store
+            .register(
+                &atm_storage::GraftReceiverRegistration {
+                    team: team.clone(),
+                    agent: "graft-recipient".parse().expect("graft recipient"),
+                    endpoint: "127.0.0.1:9".parse().expect("endpoint"),
+                    capability: atm_core::local_http::LocalCapability::generate()
+                        .expect("capability"),
+                    owner_generation: atm_storage::OwnerGeneration::new(
+                        "01J00000000000000000000000",
+                    )
+                    .expect("owner generation"),
+                },
+                IsoTimestamp::now().into_inner(),
+            )
+            .expect("register graft recipient");
+        runtime = runtime.with_graft_receiver_endpoint_store(endpoint_store);
+    }
     runtime
         .shared_roster_store_arc()
         .save_roster(&atm_storage::RosterSnapshot {
             team_name: team.clone(),
-            members: vec![
-                roster_member(&team, "sender", None),
-                roster_member(
-                    &team,
-                    "recipient",
-                    Some(PaneId::from_cli("%9").expect("pane")),
-                ),
-            ],
+            members,
             refreshed_at: None,
         })
         .expect("seed roster");
@@ -152,6 +246,25 @@ fn roster_member(
     }
 }
 
+fn herdr_roster_member(team: &TeamName, agent: &str) -> atm_core::boundary::RosterEntry {
+    let mut metadata = atm_core::delivery_channel::test_backend_type_metadata("herdr");
+    metadata.insert("herdrSession".to_owned(), serde_json::json!("ax1-herdr"));
+    atm_core::boundary::RosterEntry {
+        team_name: team.clone(),
+        agent_name: agent.parse().expect("agent"),
+        member_kind: RosterMemberKind::Permanent,
+        harness: RosterHarness::CodexCli,
+        agent_type: atm_core::schema::AgentType::default(),
+        model: ModelName::default(),
+        recipient_pane_id: None,
+        metadata_json: metadata,
+    }
+}
+
+fn graft_roster_member(team: &TeamName) -> atm_core::boundary::RosterEntry {
+    roster_member(team, "graft-recipient", None)
+}
+
 fn write_request(
     home_dir: &std::path::Path,
     team: &TeamName,
@@ -159,20 +272,48 @@ fn write_request(
     message_id: AtmMessageId,
     timestamp: IsoTimestamp,
 ) -> WriteRequest {
+    write_request_for(
+        home_dir,
+        team,
+        "recipient",
+        WriteRequestOptions {
+            nudge_mode,
+            requires_ack: false,
+            task_id: None,
+        },
+        message_id,
+        timestamp,
+    )
+}
+
+struct WriteRequestOptions {
+    nudge_mode: NudgeMode,
+    requires_ack: bool,
+    task_id: Option<TaskId>,
+}
+
+fn write_request_for(
+    home_dir: &std::path::Path,
+    team: &TeamName,
+    recipient: &str,
+    options: WriteRequestOptions,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
+) -> WriteRequest {
     WriteRequest::new(
         home_dir.to_path_buf(),
         home_dir.to_path_buf(),
         "sender".parse::<AgentName>().expect("sender"),
-        "recipient@test-team",
+        &format!("{recipient}@{team}"),
         team.clone(),
         SendMessageSource::Inline("nudge mode fixture".to_owned()),
         None,
-        false,
-        None,
+        options.requires_ack,
+        options.task_id,
         false,
     )
     .expect("write request")
-    .with_nudge_mode(nudge_mode)
+    .with_nudge_mode(options.nudge_mode)
     .with_origin_metadata(message_id, timestamp)
 }
 
@@ -183,9 +324,18 @@ fn task_write_request(
     message_id: AtmMessageId,
     timestamp: IsoTimestamp,
 ) -> WriteRequest {
-    let mut request = write_request(home_dir, team, nudge_mode, message_id, timestamp);
-    request.task_id = Some("task-ax1".parse::<TaskId>().expect("task id"));
-    request
+    write_request_for(
+        home_dir,
+        team,
+        "recipient",
+        WriteRequestOptions {
+            nudge_mode,
+            requires_ack: false,
+            task_id: Some("task-ax1".parse::<TaskId>().expect("task id")),
+        },
+        message_id,
+        timestamp,
+    )
 }
 
 #[test]
@@ -475,8 +625,8 @@ fn task_tagged_sync_prepare_forces_deferred_mode() {
     );
 }
 
-#[tokio::test]
-async fn task_tagged_async_prepare_forces_deferred_mode() {
+#[test]
+fn task_tagged_async_prepare_forces_deferred_mode() {
     let (root, runtime, _recording_store, team) = setup();
     let home_dir = root.path().join("home");
     std::fs::create_dir_all(&home_dir).expect("home dir");
@@ -488,10 +638,12 @@ async fn task_tagged_async_prepare_forces_deferred_mode() {
         IsoTimestamp::now(),
     );
 
-    let prepared =
-        atm_core::send::prepare_write_with_async_runtime(request, &NullObservability, &runtime)
-            .await
-            .expect("prepare async write");
+    let prepared = block_on(atm_core::send::prepare_write_with_async_runtime(
+        request,
+        &NullObservability,
+        &runtime,
+    ))
+    .expect("prepare async write");
     assert_eq!(
         prepared.outbound_request().nudge_mode,
         NudgeMode::Deferred,
@@ -499,59 +651,258 @@ async fn task_tagged_async_prepare_forces_deferred_mode() {
     );
 }
 
-#[test]
-fn tmux_and_herdr_delivery_families_share_the_nudge_kind_table() {
-    let event = |requires_ack, task_id| PostSendHookEvent {
-        sender: "sender".parse().expect("sender"),
-        sender_chat_id: None,
-        sender_team: "test-team".parse().expect("sender team"),
-        sender_host: None,
-        recipient: "recipient".parse().expect("recipient"),
-        recipient_team: "test-team".parse().expect("recipient team"),
-        message_id: AtmMessageId::new(),
-        description: "fixture".to_owned(),
-        requires_ack,
-        is_ack: false,
-        task_id,
-        recipient_pane_id: None,
-    };
-    let task_id = Some("task-ax1".parse::<TaskId>().expect("task id"));
-    for backend in ["tmux", "herdr"] {
-        assert_eq!(
-            built_in_nudge_template_kind_from_post_send_event(
-                &event(false, None),
-                NudgeKind::Steer,
-            ),
-            atm_core::boundary::BuiltInNudgeTemplateKind::Delivery,
-            "{backend} Delivery"
-        );
-        assert_eq!(
-            built_in_nudge_template_kind_from_post_send_event(&event(true, None), NudgeKind::Steer,),
-            atm_core::boundary::BuiltInNudgeTemplateKind::DeliveryAck,
-            "{backend} DeliveryAck"
-        );
-        assert_eq!(
-            built_in_nudge_template_kind_from_post_send_event(
-                &event(false, None),
-                NudgeKind::Queue,
-            ),
-            atm_core::boundary::BuiltInNudgeTemplateKind::Queue,
-            "{backend} Queue"
-        );
-        assert_eq!(
-            built_in_nudge_template_kind_from_post_send_event(&event(true, None), NudgeKind::Queue,),
-            atm_core::boundary::BuiltInNudgeTemplateKind::QueueAck,
-            "{backend} QueueAck"
-        );
-        assert_eq!(
-            built_in_nudge_template_kind_from_post_send_event(
-                &event(true, task_id.clone()),
-                NudgeKind::Queue,
-            ),
-            atm_core::boundary::BuiltInNudgeTemplateKind::Task,
-            "{backend} task"
-        );
+fn assert_local_target(dispatch: &atm_core::boundary::BuiltInPostSendDispatch, herdr: bool) {
+    if herdr {
+        assert!(matches!(
+            dispatch.target,
+            PostSendBuiltInTarget::LocalSteer(atm_core::boundary::LocalSteerTarget::Herdr(_))
+        ));
+    } else {
+        assert!(matches!(
+            dispatch.target,
+            PostSendBuiltInTarget::LocalSteer(atm_core::boundary::LocalSteerTarget::Tmux(_))
+        ));
     }
+}
+
+fn assert_local_matrix(herdr: bool) {
+    let team: TeamName = "test-team".parse().expect("team");
+    let recipient = if herdr {
+        herdr_roster_member(&team, "recipient")
+    } else {
+        roster_member(
+            &team,
+            "recipient",
+            Some(PaneId::from_cli("%9").expect("pane")),
+        )
+    };
+    let (root, runtime, recording_store, _) = setup_with_roster(
+        false,
+        vec![roster_member(&team, "sender", None), recipient],
+        false,
+    );
+    let home_dir = root.path().join("home");
+    std::fs::create_dir_all(&home_dir).expect("home dir");
+
+    let immediate = |requires_ack, expected_kind| {
+        let mut prepared = prepare_write_with_runtime(
+            write_request_for(
+                &home_dir,
+                &team,
+                "recipient",
+                WriteRequestOptions {
+                    nudge_mode: NudgeMode::Immediate,
+                    requires_ack,
+                    task_id: None,
+                },
+                AtmMessageId::new(),
+                IsoTimestamp::now(),
+            ),
+            &NullObservability,
+            &runtime,
+        )
+        .expect("prepare immediate write");
+        let dispatches = prepared
+            .build_received_hook_dispatches(&runtime)
+            .expect("build immediate dispatch");
+        assert_eq!(dispatches.len(), 1);
+        assert_local_target(&dispatches[0], herdr);
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(
+                &dispatches[0].event,
+                dispatches[0].kind,
+            ),
+            expected_kind,
+        );
+        prepared
+            .finish(&runtime, &NullObservability)
+            .expect("finish immediate write");
+    };
+    immediate(
+        false,
+        atm_core::boundary::BuiltInNudgeTemplateKind::Delivery,
+    );
+    immediate(
+        true,
+        atm_core::boundary::BuiltInNudgeTemplateKind::DeliveryAck,
+    );
+
+    let queued = |requires_ack, expected_kind| {
+        let message_id = AtmMessageId::new();
+        let mut prepared = prepare_write_with_runtime(
+            write_request_for(
+                &home_dir,
+                &team,
+                "recipient",
+                WriteRequestOptions {
+                    nudge_mode: NudgeMode::Deferred,
+                    requires_ack,
+                    task_id: None,
+                },
+                message_id,
+                IsoTimestamp::now(),
+            ),
+            &NullObservability,
+            &runtime,
+        )
+        .expect("prepare queued write");
+        assert!(
+            prepared
+                .build_received_hook_dispatches(&runtime)
+                .expect("deferred local dispatch")
+                .is_empty()
+        );
+        prepared
+            .finish(&runtime, &NullObservability)
+            .expect("finish queued write");
+        prepared
+            .mark_pending_if_deferred(&runtime)
+            .expect("mark queued write");
+        let member = MemberKey::new(team.clone(), "recipient".parse().expect("recipient"));
+        let dispatch =
+            rebuild_received_hook_dispatch(&runtime, &member, message_id, NudgeKind::Queue)
+                .expect("rebuild queued dispatch")
+                .expect("queued dispatch");
+        assert_local_target(&dispatch, herdr);
+        assert_eq!(dispatch.kind, NudgeKind::Queue);
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&dispatch.event, dispatch.kind),
+            expected_kind,
+        );
+    };
+    queued(false, atm_core::boundary::BuiltInNudgeTemplateKind::Queue);
+    queued(true, atm_core::boundary::BuiltInNudgeTemplateKind::QueueAck);
+
+    let task = |mode| {
+        let message_id = AtmMessageId::new();
+        let mut prepared = prepare_write_with_runtime(
+            write_request_for(
+                &home_dir,
+                &team,
+                "recipient",
+                WriteRequestOptions {
+                    nudge_mode: mode,
+                    requires_ack: false,
+                    task_id: Some("task-ax1".parse().expect("task id")),
+                },
+                message_id,
+                IsoTimestamp::now(),
+            ),
+            &NullObservability,
+            &runtime,
+        )
+        .expect("prepare task write");
+        assert_eq!(
+            prepared.outbound_request().nudge_mode,
+            NudgeMode::Deferred,
+            "task writes are deferred for every local backend"
+        );
+        assert!(
+            prepared
+                .build_received_hook_dispatches(&runtime)
+                .expect("deferred task dispatch")
+                .is_empty()
+        );
+        prepared
+            .finish(&runtime, &NullObservability)
+            .expect("finish task write");
+        prepared
+            .mark_pending_if_deferred(&runtime)
+            .expect("mark task write");
+        let member = MemberKey::new(team.clone(), "recipient".parse().expect("recipient"));
+        let dispatch =
+            rebuild_received_hook_dispatch(&runtime, &member, message_id, NudgeKind::Queue)
+                .expect("rebuild task dispatch")
+                .expect("task dispatch");
+        assert_local_target(&dispatch, herdr);
+        assert_eq!(dispatch.kind, NudgeKind::Queue);
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&dispatch.event, dispatch.kind),
+            atm_core::boundary::BuiltInNudgeTemplateKind::Task,
+        );
+    };
+    task(NudgeMode::Immediate);
+    task(NudgeMode::Deferred);
+
+    assert_eq!(
+        recording_store.mark_pending_call_count(),
+        4,
+        "every deferred local write sets one durable marker"
+    );
+}
+
+#[test]
+fn actual_dispatch_matrix_covers_tmux_and_herdr_members() {
+    assert_local_matrix(false);
+    assert_local_matrix(true);
+}
+
+fn assert_graft_task_dispatch(async_path: bool) {
+    let team: TeamName = "test-team".parse().expect("team");
+    let (root, runtime, _recording_store, _) = setup_with_roster(
+        false,
+        vec![
+            roster_member(&team, "sender", None),
+            graft_roster_member(&team),
+        ],
+        true,
+    );
+    let home_dir = root.path().join("home");
+    std::fs::create_dir_all(&home_dir).expect("home dir");
+    let message_id = AtmMessageId::new();
+    let request = write_request_for(
+        &home_dir,
+        &team,
+        "graft-recipient",
+        WriteRequestOptions {
+            nudge_mode: NudgeMode::Immediate,
+            requires_ack: false,
+            task_id: Some("task-ax1".parse().expect("task id")),
+        },
+        message_id,
+        IsoTimestamp::now(),
+    );
+    let mut prepared = if async_path {
+        block_on(atm_core::send::prepare_write_with_async_runtime(
+            request,
+            &NullObservability,
+            &runtime,
+        ))
+        .expect("prepare async graft task write")
+    } else {
+        prepare_write_with_runtime(request, &NullObservability, &runtime)
+            .expect("prepare sync graft task write")
+    };
+    assert_eq!(
+        prepared.outbound_request().nudge_mode,
+        NudgeMode::Deferred,
+        "graft task writes are deferred before queue handoff"
+    );
+    let dispatches = prepared
+        .build_received_hook_dispatches(&runtime)
+        .expect("build graft task dispatch");
+    assert_eq!(dispatches.len(), 1);
+    assert!(matches!(
+        dispatches[0].target,
+        PostSendBuiltInTarget::Graft(_)
+    ));
+    assert_eq!(dispatches[0].kind, NudgeKind::Queue);
+    assert_eq!(
+        built_in_nudge_template_kind_from_post_send_event(&dispatches[0].event, dispatches[0].kind,),
+        atm_core::boundary::BuiltInNudgeTemplateKind::Task,
+    );
+    prepared
+        .finish(&runtime, &NullObservability)
+        .expect("finish graft task write");
+    prepared
+        .mark_pending_if_deferred(&runtime)
+        .expect("mark graft task write");
+}
+
+#[test]
+fn sync_and_async_graft_task_writes_use_the_queue_dispatch_kind() {
+    assert_graft_task_dispatch(false);
+    assert_graft_task_dispatch(true);
 }
 
 #[test]

@@ -1,0 +1,109 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX3-001>
+  a triage:Finding ;
+  triage:findingId "AX3-001" ;
+  triage:title "Pure transition()/admit() task state machine is never called by production code; writer/ops.rs reimplements the table in raw SQL string comparisons" ;
+  triage:description "crates/atm-storage-rusqlite/src/writer/ops.rs apply_task_assignment (~705), apply_task_completion (~797) and apply_task_acknowledgement (~857) never import or call atm_storage::task_state::{transition, admit}; workspace-wide, those functions are called only from task_state.rs unit tests. The writer reimplements the 12-cell transition table and G1/G2 guards with string literals (assigned/active/complete), including a transcription-drift residue: let next = if state == \"assigned\" { \"active\" } else { \"active\" }. The sprint's tested pure state machine therefore guarantees nothing about production behaviour. Fix: the three apply_task_* functions load the TaskRow, call transition/admit, and persist only the resulting Transition/TaskRejected; delete the SQL-literal reimplementation. Found independently by rust-best-practices-agent RBP-F001, arch-qa ARCH-001, rust-qa-agent QA-002, ruthless-boundary-qa RBQA-F001, req-qa ATM-QA-001 on PR #1191 QA-1 (commit 88c579a18)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-05T06:06:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-001/AX4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-001/AX4-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-001/AX4-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-001/AX4-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-001/AX4-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX3-001/AX4-6> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX3-001/AX4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 725 ;
+  triage:snippet "if state == \"complete\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4/88c579a18af28ff636452089a717425528f7157a> .
+
+<urn:atm:triage:occurrence/AX3-001/AX4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 818 ;
+  triage:snippet "if state == \"complete\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4/88c579a18af28ff636452089a717425528f7157a> .
+
+<urn:atm:triage:occurrence/AX3-001/AX4-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 826 ;
+  triage:snippet "let marker = if state == \"assigned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4/88c579a18af28ff636452089a717425528f7157a> .
+
+<urn:atm:triage:occurrence/AX3-001/AX4-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 878 ;
+  triage:snippet "if state == \"complete\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4/88c579a18af28ff636452089a717425528f7157a> .
+
+<urn:atm:triage:occurrence/AX3-001/AX4-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 881 ;
+  triage:snippet "if state == \"assigned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4/88c579a18af28ff636452089a717425528f7157a> .
+
+<urn:atm:triage:occurrence/AX3-001/AX4-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 892 ;
+  triage:snippet "let next = if state == \"assigned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:occursIn <urn:atm:triage:worktree/ax4/88c579a18af28ff636452089a717425528f7157a> .
+
+<urn:atm:triage:worktree/ax3/88c579a18af28ff636452089a717425528f7157a>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax3-task-state-machine" ;
+  triage:branch "feature/ax3-task-state-machine" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/ax4/88c579a18af28ff636452089a717425528f7157a>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax4-task-cli-and-docs" ;
+  triage:branch "feature/ax4-task-cli-and-docs" ;
+  triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
+  triage:orderIndex 4 .

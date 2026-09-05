@@ -64,7 +64,7 @@ impl SqliteTaskStore {
         Self { db }
     }
 
-    fn decode_row(row: &Row<'_>) -> rusqlite::Result<TaskRow> {
+    pub(crate) fn decode_row(row: &Row<'_>) -> rusqlite::Result<TaskRow> {
         let team: String = row.get(0)?;
         let task_id: String = row.get(1)?;
         let assignee: String = row.get(2)?;
@@ -119,6 +119,7 @@ impl SqliteTaskStore {
             .map_err(|error| self.db.error("failed to load task row", error))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn append_event(
         &self,
         connection: &Connection,

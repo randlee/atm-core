@@ -1,7 +1,7 @@
 mod ops;
 mod ops_envelope;
 mod stmt_cache;
-mod task_transitions;
+mod task_ops;
 
 pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
 
@@ -751,7 +751,17 @@ fn process_queued_write(
         ops::execute(&queued.op, &savepoint, cache, target)
     }));
     let reply = queued.reply;
-    (reply, finalize_queued_write(target, savepoint, result))
+    let result = match result {
+        Ok(Err(error)) => {
+            drop(savepoint);
+            match task_ops::append_rejected_task_event(&queued.op, transaction, target, &error) {
+                Ok(()) => Err(error),
+                Err(audit_error) => Err(audit_error),
+            }
+        }
+        result => finalize_queued_write(target, savepoint, result),
+    };
+    (reply, result)
 }
 
 fn finalize_queued_write(

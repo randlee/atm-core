@@ -127,6 +127,7 @@ async fn load_store_backed_mailbox_projection_async(
 /// only the storage transition is asynchronous. The future enqueues exactly
 /// one ordered record in the backend-owned write lane and awaits its durable
 /// reply, so no Tokio worker waits on SQLite or a blocking bridge.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn persist_message_with_async_admission(
     runtime: &LocalServiceRuntime,
     _home_dir: &Path,
@@ -206,6 +207,7 @@ fn load_store_backed_mailbox_projection(
     Ok(messages)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn mirror_message_to_store(
     runtime: &(impl RetainedMailboxRuntime + ?Sized),
     home_dir: &Path,
