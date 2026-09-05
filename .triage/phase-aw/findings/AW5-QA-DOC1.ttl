@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW5-QA-DOC1>
+  a triage:Finding ;
+  triage:findingId "AW5-QA-DOC1" ;
+  triage:title "docs/project-plan.md AW sprint-status table stalled at AW.1; AW.5 sprint doc frontmatter missing status:/worktree:" ;
+  triage:description "qa-pr1184-r1 (fenix dispatch, msg 01M1QWQ8K3PFPT54CFW34XYQH2) workflow step d requires: sprint doc frontmatter sets status: complete, branch:, worktree:, AND docs/project-plan.md includes the sprint entry, before QA can PASS. quality-mgr independently verified on integrate/phase-aw@c97650e36 (post AW.4 merge ffd78e16f, post AW.5 dev-complete c97650e36): docs/project-plan.md's AW table (line 1573) contains only the AW.1 row -- no rows for AW.2 (not yet merged, PR #1179 still gated), AW.3 (not yet merged, PR #1182), AW.4 (merged via ffd78e16f but never added its own row on that branch), or AW.5 (dev-complete per .sprints/AW/events.ttl triage:c5 but PR #1184 not yet merged and no row exists on the branch either). Checked each feature branch's own project-plan.md independently: feature/aw2-sqlite-diagnostic-timeline added an AW.2 row (062cbe9c2) but that commit is confirmed NOT an ancestor of integrate/phase-aw (git merge-base --is-ancestor 062cbe9c2 origin/integrate/phase-aw -> false), consistent with AW.2 not yet merging; feature/aw4-graft-fallback-observability's tip never added an AW.4 row at all, even though AW.4 fully merged. Root cause: this phase's authoritative sprint-completion ledger moved to .sprints/AW/events.ttl (Assignment/Completion/Resolution events), and docs/project-plan.md's markdown status table was not kept in sync as a parallel deliverable -- this is a stale-docs gap, not a functional defect, and every AW sprint since AW.1 has the same gap. Separately, the AW.5 sprint doc (docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md) frontmatter as read from origin/feature/aw5-native-tool-parity has no status: field and no worktree: field at all (only sprint/title/branch/base/issues/must_follow/parallel_safe). quality-mgr ruling: important, not blocking on AW.5's substantive native-tool-parity deliverables -- the gate-criteria doc requirements (frontmatter status:/worktree:, project-plan.md row) are real and must be added before final PASS is recorded for AW.5, but do not indicate any defect in the AW.5 code itself. Recommend AW.5 dev add its own project-plan.md row plus the missing frontmatter fields as part of closing this finding; recommend fenix/team-lead separately decide whether to backfill AW.2/AW.3/AW.4 rows once those PRs land, or formally retire the project-plan.md table in favor of .sprints/*/events.ttl." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs-process-gap" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW5 ;
+  triage:foundAt "2026-09-05T04:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW5-QA-DOC1/AW5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW5-QA-DOC1/AW5-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1573 ;
+  triage:snippet "AW.1" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .
+
+<urn:atm:triage:worktree/AW5/3d1862c25>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw5-native-tool-parity" ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:orderIndex 5 .
