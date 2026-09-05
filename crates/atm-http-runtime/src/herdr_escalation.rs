@@ -1,24 +1,104 @@
 //! Shared lead, recipient, and Herdr notification escalation behavior.
 
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::TaskStore;
+use atm_core::boundary::{MAX_ESCALATION_RECIPIENTS, MemberKey};
 use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
 use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
-use atm_core::types::{AgentName, TeamName};
+use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_herdr::HerdrProcessAdapter;
 
 use crate::herdr_queue_wake::run_blocking;
 
 pub(crate) const HERDR_NOTIFY_DEADLINE: Duration = Duration::from_secs(5);
-pub(crate) const ESCALATION_RECIPIENT_CAP: usize = 8;
+pub(crate) const ESCALATION_RECIPIENT_CAP: usize = MAX_ESCALATION_RECIPIENTS;
+pub(crate) const MAX_BLOCKED_ESCALATIONS_PER_TICK: usize = 8;
 pub(crate) const BLOCKED_NOTIFY_MS: u64 = 60_000;
 pub(crate) const BLOCKED_RENOTIFY_MS: u64 = 600_000;
+
+/// Pump-owned blocked episode state. Keeping this state with the escalation
+/// policy prevents the queue-wake file from becoming the owner of D6 data.
+#[derive(Clone, Default)]
+pub(crate) struct EscalationState {
+    pub(crate) blocked_since: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
+    pub(crate) last_blocked_notice: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
+    blocked_cursor: Arc<Mutex<usize>>,
+}
+
+impl EscalationState {
+    pub(crate) fn prune_blocked(&self, members: &HashSet<MemberKey>) {
+        self.blocked_since
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|member, _| members.contains(member));
+        self.last_blocked_notice
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|member, _| members.contains(member));
+    }
+
+    pub(crate) fn blocked_start(&self, member: &MemberKey, now: IsoTimestamp) -> IsoTimestamp {
+        let mut blocked_since = self
+            .blocked_since
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *blocked_since.entry(member.clone()).or_insert(now)
+    }
+
+    pub(crate) fn blocked_cooldown(&self, member: &MemberKey, now: IsoTimestamp) -> bool {
+        self.last_blocked_notice
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(member)
+            .is_some_and(|last| elapsed_millis(now, *last) < BLOCKED_RENOTIFY_MS)
+    }
+
+    pub(crate) fn stamp_blocked_notice(&self, member: &MemberKey, now: IsoTimestamp) {
+        self.last_blocked_notice
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(member.clone(), now);
+    }
+
+    pub(crate) fn next_blocked_batch(&self, members: &[MemberKey]) -> Vec<MemberKey> {
+        if members.is_empty() {
+            return Vec::new();
+        }
+        let mut cursor = self
+            .blocked_cursor
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let start = *cursor % members.len();
+        let count = members.len().min(MAX_BLOCKED_ESCALATIONS_PER_TICK);
+        let batch = (0..count)
+            .map(|offset| members[(start + offset) % members.len()].clone())
+            .collect();
+        *cursor = (start + count) % members.len();
+        batch
+    }
+}
+
+/// Herdr notification content is intentionally separate from queued mail.
+/// Callers may derive it from task metadata, but never pass the mail body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct EscalationNotification {
+    pub(crate) title: String,
+    pub(crate) body: String,
+}
+
+fn elapsed_millis(now: IsoTimestamp, since: IsoTimestamp) -> u64 {
+    now.into_inner()
+        .signed_duration_since(since.into_inner())
+        .num_milliseconds()
+        .max(0) as u64
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct EscalationOutcome {
@@ -39,18 +119,23 @@ impl EscalationOutcome {
 /// Delivers one escalation to the lead, configured recipients, and Herdr.
 /// Mail is deliberately written through the same canonical deferred path as
 /// `atm send`; the caller supplies the pump's blocking helper for every write.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "escalation keeps the runtime, storage, routing, notification, and outcome context explicit"
+)]
 pub(crate) async fn escalate(
     runtime: &LocalServiceRuntime,
     herdr_process: &dyn HerdrProcessAdapter,
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     daemon_home: &Path,
     team: &TeamName,
-    body: &str,
+    mail_body: &str,
+    notification: &EscalationNotification,
     kind: &str,
 ) -> EscalationOutcome {
     let targets = match load_escalation_targets(runtime, task_store, team).await {
         Ok(targets) => targets,
-        Err(()) => return notify_only(herdr_process, team, body, kind).await,
+        Err(()) => return notify_only(herdr_process, team, notification, kind).await,
     };
     let mut outcome = EscalationOutcome {
         lead: targets.lead,
@@ -60,12 +145,12 @@ pub(crate) async fn escalate(
         runtime,
         daemon_home,
         team,
-        body,
+        mail_body,
         targets.recipients,
         &mut outcome,
     )
     .await;
-    outcome.notify_ok = notify(herdr_process, body).await;
+    outcome.notify_ok = notify(herdr_process, notification).await;
     tracing::info!(
         event = "herdr_queue_poll_outcome",
         subsystem = "herdr_queue_wake",
@@ -211,10 +296,10 @@ async fn write_target_mail(
 async fn notify_only(
     herdr_process: &dyn HerdrProcessAdapter,
     team: &TeamName,
-    body: &str,
+    notification: &EscalationNotification,
     kind: &str,
 ) -> EscalationOutcome {
-    let notify_ok = notify(herdr_process, body).await;
+    let notify_ok = notify(herdr_process, notification).await;
     tracing::info!(
         event = "herdr_queue_poll_outcome",
         subsystem = "herdr_queue_wake",
@@ -233,12 +318,14 @@ async fn notify_only(
     }
 }
 
-async fn notify(herdr_process: &dyn HerdrProcessAdapter, body: &str) -> bool {
-    let (title, notification_body) = body.split_once('\n').map_or((body, ""), |parts| parts);
+async fn notify(
+    herdr_process: &dyn HerdrProcessAdapter,
+    notification: &EscalationNotification,
+) -> bool {
     match herdr_process
         .notify(
-            title,
-            notification_body,
+            &notification.title,
+            &notification.body,
             RequestDeadline::after(HERDR_NOTIFY_DEADLINE),
         )
         .await

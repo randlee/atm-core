@@ -93,6 +93,8 @@ The retained product surface is:
 
 Approved additive CLI feature for the Phase `Y` line:
 - `atm help`
+
+Approved additive CLI feature for the Phase `AX` line:
 - `atm escalation add|remove|list`
 
 The system must preserve the retained command behavior unless these
@@ -417,6 +419,7 @@ Satisfied by:
 - structured logging through `sc-observability`
 - log query and follow through `sc-observability`
 - local diagnostics through `atm doctor`
+- the Phase `AX` additive CLI feature `atm escalation`
 - local team discovery and recovery through `atm teams`
 - local roster verification through `atm members`
 - native agent/plugin notification interface
@@ -2184,11 +2187,11 @@ The obsolete config-identity finding must use:
 
 Phase AX.6 doctor findings must use these warning codes and actionable guidance:
 
-- `ATM_ROSTER_NO_LEAD` — designate exactly one roster member as lead
-- `ATM_ROSTER_MULTIPLE_LEADS` — remove the extra lead designation
-- `ATM_ROSTER_RESERVED_NAME` — rename the member; `atm-daemon` is reserved
-- `ATM_TASK_STALLED` — inspect or acknowledge the open task
-- `ATM_MEMBER_BLOCKED` — restore the member's runtime or inspect escalation
+- `ATM_ROSTER_NO_LEAD` — `assign one lead: atm teams update-member <team> <member> --agent-type lead`
+- `ATM_ROSTER_MULTIPLE_LEADS` — `keep one lead: atm teams update-member <team> <member> --agent-type <other type>`
+- `ATM_ROSTER_RESERVED_NAME` — `rename the member: atm-daemon is reserved for daemon-originated messages`
+- `ATM_TASK_STALLED` — `check the assignee or close the task: atm send <assignee> --task-complete <task_id> --stdin`
+- `ATM_MEMBER_BLOCKED` — `<member> is waiting for interactive input; attach to its Herdr agent and answer the prompt`
 
 Critical findings must cause a non-zero exit status.
 
@@ -2240,6 +2243,9 @@ Bare `atm teams` must:
 - persist the member's durable `home_dir` on the canonical ATM roster row and
   project that same `home_dir` into compatibility `config.json.members`
 - create any required local inbox state atomically with the roster update
+- reject the reserved member name `atm-daemon` with
+  `ATM_MESSAGE_VALIDATION_FAILED`; an existing legacy row may remain and is
+  reported by `atm doctor` as `ATM_ROSTER_RESERVED_NAME`
 
 `atm teams update-member` must:
 - validate that the target team exists

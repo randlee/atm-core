@@ -18,6 +18,12 @@ pub enum EscalationScope {
     Team(TeamName),
 }
 
+/// Reminder count at which an open task is considered stalled and escalated.
+pub const TASK_STALLED_REMINDER_THRESHOLD: u32 = 10;
+
+/// Maximum recipients retained for one daemon or team escalation scope.
+pub const MAX_ESCALATION_RECIPIENTS: usize = 8;
+
 impl EscalationScope {
     #[must_use]
     pub fn key(&self) -> String {
@@ -258,6 +264,11 @@ impl TaskStore for DummyTaskStore {
         let list = recipients.entry(scope.key()).or_default();
         if list.iter().any(|existing| existing == address) {
             return Ok(false);
+        }
+        if list.len() >= MAX_ESCALATION_RECIPIENTS {
+            return Err(AtmError::validation(format!(
+                "escalation recipient scope already has the maximum of {MAX_ESCALATION_RECIPIENTS} recipients"
+            )));
         }
         list.push(address.to_owned());
         Ok(true)

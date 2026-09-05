@@ -10,10 +10,14 @@ use atm_core::boundary::{
 };
 use atm_core::types::IsoTimestamp;
 
-use crate::herdr_escalation::{BLOCKED_NOTIFY_MS, BLOCKED_RENOTIFY_MS, escalate};
+use crate::herdr_escalation::{
+    BLOCKED_NOTIFY_MS, EscalationNotification, MAX_BLOCKED_ESCALATIONS_PER_TICK, escalate,
+};
 use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats, run_blocking};
 
 const TASK_READ_DEADLINE: Duration = Duration::from_secs(5);
+const MAX_BLOCKED_TASKS_IN_BODY: usize = 8;
+const MAX_BLOCKED_MAIL_BODY_BYTES: usize = 4_096;
 
 pub(crate) async fn maybe_escalate_task(
     pump: &HerdrQueueWakePump,
@@ -22,7 +26,10 @@ pub(crate) async fn maybe_escalate_task(
     now: IsoTimestamp,
     stats: &mut HerdrQueueWakeStats,
 ) {
-    let threshold = row.lead_notified_count.saturating_add(1).saturating_mul(10);
+    let threshold = row
+        .lead_notified_count
+        .saturating_add(1)
+        .saturating_mul(atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD);
     if row.reminder_count < threshold {
         return;
     }
@@ -41,6 +48,7 @@ pub(crate) async fn maybe_escalate_task(
         }
     };
     let body = task_escalation_body(row, now, &events);
+    let notification = task_escalation_notification(row, now);
     let outcome = escalate(
         &pump.service_runtime,
         pump.herdr_process.as_ref(),
@@ -48,6 +56,7 @@ pub(crate) async fn maybe_escalate_task(
         &pump.daemon_home,
         &row.team,
         &body,
+        &notification,
         "lead_notified",
     )
     .await;
@@ -93,6 +102,21 @@ fn task_escalation_body(row: &TaskRow, now: IsoTimestamp, events: &[TaskEventRow
         row.task_id,
         row.assignee,
     )
+}
+
+fn task_escalation_notification(row: &TaskRow, now: IsoTimestamp) -> EscalationNotification {
+    EscalationNotification {
+        title: "ATM task escalation".to_owned(),
+        body: format!(
+            "reason=lead_notified task_id={} member={} reminder_count={} last_reminded_at={} remediation=atm list --task-events {} --member {}",
+            row.task_id,
+            row.assignee,
+            row.reminder_count,
+            row.last_reminded_at.unwrap_or(now),
+            row.task_id,
+            row.assignee,
+        ),
+    }
 }
 
 async fn record_lead_audit(
@@ -150,7 +174,12 @@ pub(crate) async fn escalate_blocked(
             .cmp(right.team().as_str())
             .then_with(|| left.agent().as_str().cmp(right.agent().as_str()))
     });
-    for member in members {
+    for member in pump
+        .escalation_state
+        .next_blocked_batch(&members)
+        .into_iter()
+        .take(MAX_BLOCKED_ESCALATIONS_PER_TICK)
+    {
         escalate_one_blocked(pump, &member, reader, task_store, now, stats).await;
     }
 }
@@ -163,12 +192,15 @@ async fn escalate_one_blocked(
     now: IsoTimestamp,
     stats: &mut HerdrQueueWakeStats,
 ) {
-    let since = blocked_start(pump, member, now);
-    if elapsed_millis(now, since) < BLOCKED_NOTIFY_MS || blocked_cooldown(pump, member, now) {
+    let since = pump.escalation_state.blocked_start(member, now);
+    if elapsed_millis(now, since) < BLOCKED_NOTIFY_MS
+        || pump.escalation_state.blocked_cooldown(member, now)
+    {
         return;
     }
     let open_tasks = blocked_tasks(reader, member).await;
     let body = blocked_body(member, since, now, &open_tasks);
+    let notification = blocked_notification(member, since, now, &open_tasks);
     let outcome = escalate(
         &pump.service_runtime,
         pump.herdr_process.as_ref(),
@@ -176,33 +208,15 @@ async fn escalate_one_blocked(
         &pump.daemon_home,
         member.team(),
         &body,
+        &notification,
         "blocked_escalated",
     )
     .await;
     record_escalation_stats(stats, &outcome);
     if outcome.reached_anyone() {
-        pump.last_blocked_notice
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .insert(member.clone(), now);
+        pump.escalation_state.stamp_blocked_notice(member, now);
         stats.blocked_escalations += 1;
     }
-}
-
-fn blocked_start(pump: &HerdrQueueWakePump, member: &MemberKey, now: IsoTimestamp) -> IsoTimestamp {
-    let mut blocked_since = pump
-        .blocked_since
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    *blocked_since.entry(member.clone()).or_insert(now)
-}
-
-fn blocked_cooldown(pump: &HerdrQueueWakePump, member: &MemberKey, now: IsoTimestamp) -> bool {
-    pump.last_blocked_notice
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .get(member)
-        .is_some_and(|last| elapsed_millis(now, *last) < BLOCKED_RENOTIFY_MS)
 }
 
 async fn blocked_tasks(
@@ -259,6 +273,7 @@ fn blocked_body(
     } else {
         open_tasks
             .iter()
+            .take(MAX_BLOCKED_TASKS_IN_BODY)
             .map(|row| {
                 format!(
                     "{} (assigned by {}, {} reminders)",
@@ -268,14 +283,55 @@ fn blocked_body(
             .collect::<Vec<_>>()
             .join(" | ")
     };
-    format!(
+    truncate_body(format!(
         "{} has been waiting for interactive input since {} ({})\nopen tasks: {}\nAttach to its Herdr agent and answer the prompt. Run: atm members --team {}",
         member.agent(),
         since,
         format_age(elapsed_millis(now, since)),
         tasks,
         member.team(),
-    )
+    ))
+}
+
+fn blocked_notification(
+    member: &MemberKey,
+    since: IsoTimestamp,
+    now: IsoTimestamp,
+    open_tasks: &[TaskRow],
+) -> EscalationNotification {
+    let task_ids = open_tasks
+        .iter()
+        .take(MAX_BLOCKED_TASKS_IN_BODY)
+        .map(|row| row.task_id.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    EscalationNotification {
+        title: "ATM blocked member escalation".to_owned(),
+        body: format!(
+            "reason=blocked member={} age={} since={} task_ids={} remediation=atm members --team {}",
+            member.agent(),
+            format_age(elapsed_millis(now, since)),
+            since,
+            if task_ids.is_empty() {
+                "none"
+            } else {
+                &task_ids
+            },
+            member.team(),
+        ),
+    }
+}
+
+fn truncate_body(mut body: String) -> String {
+    if body.len() > MAX_BLOCKED_MAIL_BODY_BYTES {
+        let mut end = MAX_BLOCKED_MAIL_BODY_BYTES;
+        while !body.is_char_boundary(end) {
+            end -= 1;
+        }
+        body.truncate(end);
+        body.push('…');
+    }
+    body
 }
 
 fn format_age(milliseconds: u64) -> String {

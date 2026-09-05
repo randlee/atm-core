@@ -29,10 +29,10 @@ scope = "outside_owner_crate"
 forbidden = ["SqliteTaskStore", "rusqlite::Connection"]
 
 [contracts]
-request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "MessageWriteOrigin"]
-response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>"]
+request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "MessageWriteOrigin", "EscalationScope"]
+response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>", "Vec<String>", "bool"]
 error_types = ["AtmError"]
-notes = ["writer/ops.rs applies transitions in the same transaction as the message insert or acknowledgement"]
+notes = ["writer/ops.rs applies transitions in the same transaction as the message insert or acknowledgement", "D8 escalation recipient methods persist daemon/team scope rows in SQLite"]
 
 [testing]
 allowed_test_double_paths = []

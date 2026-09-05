@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{
-    AtmError, AtmMessageId, EscalationScope, MemberKey, ReminderOutcome, TaskActor, TaskEventKind,
-    TaskEventMarker, TaskEventRow, TaskRow, TaskState, TaskStore,
+    AtmError, AtmMessageId, EscalationScope, MAX_ESCALATION_RECIPIENTS, MemberKey, ReminderOutcome,
+    TaskActor, TaskEventKind, TaskEventMarker, TaskEventRow, TaskRow, TaskState, TaskStore,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -385,6 +385,29 @@ impl TaskStore for SqliteTaskStore {
     ) -> Result<bool, AtmError> {
         let scope_key = scope.key();
         self.db.with_connection(|connection| {
+            let already_present: bool = connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM escalation_recipients
+                      WHERE scope_key = ?1 AND address = ?2)",
+                    params![scope_key, address],
+                    |row| row.get(0),
+                )
+                .map_err(|error| self.db.error("failed to check escalation recipient", error))?;
+            if already_present {
+                return Ok(false);
+            }
+            let count: usize = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM escalation_recipients WHERE scope_key = ?1",
+                    [&scope_key],
+                    |row| row.get(0),
+                )
+                .map_err(|error| self.db.error("failed to count escalation recipients", error))?;
+            if count >= MAX_ESCALATION_RECIPIENTS {
+                return Err(AtmError::validation(format!(
+                    "escalation recipient scope already has the maximum of {MAX_ESCALATION_RECIPIENTS} recipients"
+                )));
+            }
             let inserted = connection
                 .execute(
                     "INSERT OR IGNORE INTO escalation_recipients(scope_key, address, added_at)
@@ -471,6 +494,7 @@ fn invalid(value: &str, subject: &str) -> rusqlite::Error {
         format!("invalid {subject}: {value}").into(),
     )
 }
+
 const fn state_name(value: TaskState) -> &'static str {
     match value {
         TaskState::Assigned => "assigned",
@@ -493,5 +517,79 @@ const fn outcome_name(value: ReminderOutcome) -> &'static str {
         ReminderOutcome::Emitted => "emitted",
         ReminderOutcome::Unrenderable => "unrenderable",
         ReminderOutcome::Blocked => "blocked",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SqliteStorageBackend;
+
+    #[test]
+    fn escalation_recipients_are_scoped_deduplicated_and_capped() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.task_store();
+        let daemon = EscalationScope::Daemon;
+        let team_name: TeamName = "ax6-team".parse().expect("team");
+        let team = EscalationScope::Team(team_name.clone());
+        let now = IsoTimestamp::now();
+
+        assert!(
+            store
+                .add_escalation_recipient(&daemon, "ops@atm-dev", now)
+                .expect("daemon add")
+        );
+        assert!(
+            !store
+                .add_escalation_recipient(&daemon, "ops@atm-dev", now)
+                .expect("duplicate add")
+        );
+        assert_eq!(
+            store
+                .list_escalation_recipients(&daemon)
+                .expect("daemon list"),
+            vec!["ops@atm-dev"]
+        );
+        assert_eq!(
+            store
+                .effective_escalation_recipients(&team_name)
+                .expect("daemon fallback"),
+            vec!["ops@atm-dev"]
+        );
+
+        assert!(
+            store
+                .add_escalation_recipient(&team, "team-ops@atm-dev", now)
+                .expect("team add")
+        );
+        assert_eq!(
+            store
+                .effective_escalation_recipients(&team_name)
+                .expect("team override"),
+            vec!["team-ops@atm-dev"]
+        );
+        assert!(
+            store
+                .remove_escalation_recipient(&team, "team-ops@atm-dev")
+                .expect("team remove")
+        );
+        assert_eq!(
+            store
+                .effective_escalation_recipients(&team_name)
+                .expect("fallback after remove"),
+            vec!["ops@atm-dev"]
+        );
+
+        for index in 0..MAX_ESCALATION_RECIPIENTS.saturating_sub(1) {
+            assert!(
+                store
+                    .add_escalation_recipient(&daemon, &format!("ops-{index}@atm-dev"), now,)
+                    .expect("recipient add")
+            );
+        }
+        let error = store
+            .add_escalation_recipient(&daemon, "overflow@atm-dev", now)
+            .expect_err("scope cap");
+        assert!(error.message().contains("maximum"));
     }
 }

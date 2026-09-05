@@ -12,11 +12,11 @@ pub fn scope(team: Option<&str>) -> Result<EscalationScope, AtmError> {
         .unwrap_or(Ok(EscalationScope::Daemon))
 }
 
-/// Validate an ADR-040 recipient while retaining the configured spelling.
-pub fn validate_address(address: &str) -> Result<(), AtmError> {
+/// Validate and canonicalize an ADR-040 recipient.
+pub fn validate_address(address: &str) -> Result<String, AtmError> {
     address
         .parse::<AgentAddress>()
-        .map(|_| ())
+        .map(|parsed| parsed.to_string())
         .map_err(|error| {
             AtmError::new(
                 crate::error_codes::AtmErrorCode::MessageValidationFailed,
@@ -34,8 +34,8 @@ pub fn add(
     address: &str,
     at: IsoTimestamp,
 ) -> Result<bool, AtmError> {
-    validate_address(address)?;
-    store.add_escalation_recipient(target, address, at)
+    let address = validate_address(address)?;
+    store.add_escalation_recipient(target, &address, at)
 }
 
 pub fn remove(
@@ -43,8 +43,8 @@ pub fn remove(
     target: &EscalationScope,
     address: &str,
 ) -> Result<bool, AtmError> {
-    validate_address(address)?;
-    store.remove_escalation_recipient(target, address)
+    let address = validate_address(address)?;
+    store.remove_escalation_recipient(target, &address)
 }
 
 pub fn list(
@@ -64,8 +64,8 @@ pub fn scope_label(target: &EscalationScope) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{scope, validate_address};
-    use atm_storage::EscalationScope;
+    use super::{add, list, remove, scope, validate_address};
+    use atm_storage::{DummyTaskStore, EscalationScope};
 
     #[test]
     fn scope_defaults_to_daemon() {
@@ -86,5 +86,19 @@ mod tests {
             error.code(),
             atm_storage::AtmErrorCode::MessageValidationFailed
         );
+    }
+
+    #[test]
+    fn recipient_mutations_store_canonical_addresses() {
+        let store = DummyTaskStore::default();
+        let target = EscalationScope::Daemon;
+        let timestamp = crate::types::IsoTimestamp::now();
+        assert!(add(&store, &target, " ops@atm-dev ", timestamp).expect("add recipient"));
+        assert_eq!(
+            list(&store, &target).expect("list recipients"),
+            vec!["ops@atm-dev"]
+        );
+        assert!(remove(&store, &target, " ops@atm-dev ").expect("remove recipient"));
+        assert!(list(&store, &target).expect("list recipients").is_empty());
     }
 }

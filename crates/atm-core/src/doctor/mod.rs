@@ -1,3 +1,4 @@
+mod ax6;
 pub mod health;
 pub mod report;
 
@@ -8,7 +9,9 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
 use crate::api::RequestDeadline;
-use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterStoreDoctor, TaskState};
+use crate::boundary::{
+    ConfigDoctor, DurableRosterStore, MailStoreDoctor, RosterStoreDoctor, TaskState, TaskStore,
+};
 use crate::config;
 use crate::delivery_channel::local_message_received_backend;
 use crate::error_codes::AtmErrorCode;
@@ -576,51 +579,133 @@ fn ax6_task_and_roster_findings(
     findings: &mut Vec<DoctorFinding>,
 ) -> EscalationRecipientsDoctorReport {
     let roster_store = runtime.shared_roster_store_arc();
+    let teams = ax6_doctor_teams(roster_store.as_ref(), resolved_team, findings);
+    let task_store = match runtime.task_store() {
+        Ok(store) => Some(store),
+        Err(error) => {
+            push_ax6_storage_failure(findings, "task store", error);
+            None
+        }
+    };
+    let daemon = ax6_daemon_recipients(task_store.as_ref(), findings);
+    let teams = teams
+        .into_iter()
+        .filter_map(|team| {
+            ax6_team_report(roster_store.as_ref(), task_store.as_ref(), team, findings)
+        })
+        .collect();
+    EscalationRecipientsDoctorReport { daemon, teams }
+}
+
+fn ax6_doctor_teams(
+    roster_store: &(dyn DurableRosterStore + Send + Sync),
+    resolved_team: Option<&TeamName>,
+    findings: &mut Vec<DoctorFinding>,
+) -> Vec<TeamName> {
     let mut teams = resolved_team.map_or_else(
-        || roster_store.list_teams().unwrap_or_default(),
+        || match roster_store.list_teams() {
+            Ok(teams) => teams,
+            Err(error) => {
+                push_ax6_storage_failure(findings, "team list", error);
+                Vec::new()
+            }
+        },
         |team| vec![team.clone()],
     );
     teams.sort_by(|left, right| left.as_str().cmp(right.as_str()));
     teams.dedup();
+    teams
+}
 
-    let task_store = runtime.task_store().ok();
-    let daemon = task_store
-        .as_ref()
-        .and_then(|store| {
-            store
-                .list_escalation_recipients(&EscalationScope::Daemon)
-                .ok()
-        })
-        .unwrap_or_default();
-    let mut team_reports = Vec::new();
-    for team in teams {
-        let Ok(roster) = roster_store.load_roster(&team) else {
-            continue;
-        };
-        let tasks = task_store
-            .as_ref()
-            .and_then(|store| store.list_tasks(&team, None).ok())
-            .unwrap_or_default();
-        ax6_team_findings(&team, &roster, &tasks, findings);
-        let team_scope = EscalationScope::Team(team.clone());
-        let own = task_store
-            .as_ref()
-            .and_then(|store| store.list_escalation_recipients(&team_scope).ok())
-            .unwrap_or_default();
-        team_reports.push(TeamEscalationRecipientsDoctorReport {
-            team,
-            source: if own.is_empty() {
-                "daemon default".to_owned()
-            } else {
-                "team".to_owned()
-            },
-            recipients: if own.is_empty() { daemon.clone() } else { own },
-        });
+fn ax6_daemon_recipients(
+    task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
+    findings: &mut Vec<DoctorFinding>,
+) -> Vec<String> {
+    match task_store {
+        Some(store) => match store.list_escalation_recipients(&EscalationScope::Daemon) {
+            Ok(recipients) => recipients,
+            Err(error) => {
+                push_ax6_storage_failure(findings, "daemon escalation recipients", error);
+                Vec::new()
+            }
+        },
+        None => Vec::new(),
     }
-    EscalationRecipientsDoctorReport {
-        daemon,
-        teams: team_reports,
-    }
+}
+
+fn ax6_team_report(
+    roster_store: &(dyn DurableRosterStore + Send + Sync),
+    task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
+    team: TeamName,
+    findings: &mut Vec<DoctorFinding>,
+) -> Option<TeamEscalationRecipientsDoctorReport> {
+    let roster = match roster_store.load_roster(&team) {
+        Ok(roster) => roster,
+        Err(error) => {
+            push_ax6_storage_failure(findings, "team roster", error);
+            return None;
+        }
+    };
+    let tasks = match task_store {
+        Some(store) => match store.list_tasks(&team, None) {
+            Ok(tasks) => tasks,
+            Err(error) => {
+                push_ax6_storage_failure(findings, "team task list", error);
+                Vec::new()
+            }
+        },
+        None => Vec::new(),
+    };
+    ax6_team_findings(&team, &roster, &tasks, findings);
+    let (own, effective) = ax6_team_recipients(task_store, &team, findings);
+    Some(TeamEscalationRecipientsDoctorReport {
+        team,
+        source: if own.is_empty() {
+            "daemon default".to_owned()
+        } else {
+            "team".to_owned()
+        },
+        recipients: effective,
+    })
+}
+
+fn ax6_team_recipients(
+    task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
+    team: &TeamName,
+    findings: &mut Vec<DoctorFinding>,
+) -> (Vec<String>, Vec<String>) {
+    let Some(store) = task_store else {
+        return (Vec::new(), Vec::new());
+    };
+    let scope = EscalationScope::Team(team.clone());
+    let own = match store.list_escalation_recipients(&scope) {
+        Ok(recipients) => recipients,
+        Err(error) => {
+            push_ax6_storage_failure(findings, "team escalation recipients", error);
+            Vec::new()
+        }
+    };
+    let effective = match store.effective_escalation_recipients(team) {
+        Ok(recipients) => recipients,
+        Err(error) => {
+            push_ax6_storage_failure(findings, "effective escalation recipients", error);
+            Vec::new()
+        }
+    };
+    (own, effective)
+}
+
+fn push_ax6_storage_failure(
+    findings: &mut Vec<DoctorFinding>,
+    subject: &str,
+    error: crate::error::AtmError,
+) {
+    findings.push(DoctorFinding {
+        severity: DoctorSeverity::Error,
+        code: error.code(),
+        message: format!("{subject} failed: {}", error.detail()),
+        remediation: Some(error.remediation().to_owned()),
+    });
 }
 
 fn ax6_team_findings(
@@ -656,10 +741,10 @@ fn ax6_team_findings(
         });
     }
     ax6_reserved_name_findings(team, roster, findings);
-    for task in tasks
-        .iter()
-        .filter(|task| task.state != TaskState::Complete && task.reminder_count >= 10)
-    {
+    for task in tasks.iter().filter(|task| {
+        task.state != TaskState::Complete
+            && task.reminder_count >= crate::boundary::TASK_STALLED_REMINDER_THRESHOLD
+    }) {
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Warning,
             code: AtmErrorCode::TaskStalled,
@@ -673,7 +758,7 @@ fn ax6_team_findings(
             ),
         });
     }
-    ax6_member_info_findings(team, roster, tasks, findings);
+    ax6::member_info_findings(team, roster, tasks, findings);
 }
 
 fn ax6_reserved_name_findings(
@@ -693,33 +778,6 @@ fn ax6_reserved_name_findings(
                 ),
             });
         }
-    }
-}
-
-fn ax6_member_info_findings(
-    team: &TeamName,
-    roster: &atm_storage::RosterSnapshot,
-    tasks: &[crate::boundary::TaskRow],
-    findings: &mut Vec<DoctorFinding>,
-) {
-    for member in &roster.members {
-        let assigned = tasks
-            .iter()
-            .filter(|task| task.assignee == member.agent_name && task.state == TaskState::Assigned)
-            .count();
-        let active = tasks
-            .iter()
-            .filter(|task| task.assignee == member.agent_name && task.state == TaskState::Active)
-            .count();
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Info,
-            code: AtmErrorCode::ObservabilityHealthOk,
-            message: format!(
-                "team {team} member {}: assigned={assigned}, active={active}",
-                member.agent_name
-            ),
-            remediation: None,
-        });
     }
 }
 
@@ -1041,8 +1099,9 @@ mod tests {
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
     use atm_storage::{
-        CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
-        PrivateKeyRef, TrustedPeer,
+        AgentType, CertificateFingerprint, HostName, HttpsInterface, LocalCertificate,
+        PeerConfigStore, PrivateKeyRef, RosterHarness, RosterMemberKind, RosterSnapshot, TaskRow,
+        TaskState, TrustedPeer,
     };
 
     enum StubHealth {
@@ -2145,6 +2204,135 @@ mod tests {
                 .as_ref()
                 .map(|finding| finding.code),
             Some(AtmErrorCode::PeerConfigValidationFailed)
+        );
+    }
+
+    #[test]
+    fn ax6_doctor_projects_all_roster_task_codes_and_team_counts() {
+        let team: TeamName = "ax6-doctor".parse().expect("team");
+        let worker: AgentName = "worker".parse().expect("worker");
+        let roster = RosterSnapshot {
+            team_name: team.clone(),
+            members: vec![
+                atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: "lead-one".parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Lead,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                },
+                atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: "lead-two".parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Lead,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                },
+                atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: "atm-daemon".parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Worker,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                },
+                atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: worker.clone(),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Worker,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                },
+            ],
+            refreshed_at: None,
+        };
+        let assigned_task = TaskRow {
+            team: team.clone(),
+            task_id: "ax6-stalled".parse().expect("task"),
+            assignee: worker.clone(),
+            assigner: "assigner".parse().expect("agent"),
+            state: TaskState::Assigned,
+            assignment_message_id: atm_storage::AtmMessageId::new(),
+            description: "stalled".to_owned(),
+            assigned_at: atm_storage::IsoTimestamp::now(),
+            updated_at: atm_storage::IsoTimestamp::now(),
+            last_reminded_at: None,
+            reminder_count: atm_storage::TASK_STALLED_REMINDER_THRESHOLD,
+            lead_notified_count: 0,
+        };
+        let mut findings = Vec::new();
+        super::ax6_team_findings(&team, &roster, &[assigned_task], &mut findings);
+        let codes: Vec<_> = findings.iter().map(|finding| finding.code).collect();
+        assert!(codes.contains(&AtmErrorCode::RosterMultipleLeads));
+        assert!(codes.contains(&AtmErrorCode::RosterReservedName));
+        assert!(codes.contains(&AtmErrorCode::TaskStalled));
+        let info = findings
+            .iter()
+            .find(|finding| finding.severity == DoctorSeverity::Info)
+            .expect("one team count finding");
+        assert!(info.message.contains("assigned:1"));
+        assert!(info.message.contains("active:0"));
+        assert_eq!(
+            findings
+                .iter()
+                .filter(|finding| finding.severity == DoctorSeverity::Info)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn ax6_doctor_projects_blocked_runtime_code_with_age() {
+        let now = crate::types::IsoTimestamp::now();
+        let snapshot = crate::protocol::RuntimeStatusSnapshot {
+            liveness: crate::protocol::RuntimeLivenessState::Running,
+            readiness: crate::protocol::RuntimeReadinessState::Ready,
+            detail: None,
+            singleton_owner_pid: None,
+            degraded_ingest: false,
+            member_counts: Default::default(),
+            members: vec![crate::protocol::RuntimeMemberObservation {
+                team: "ax6-doctor".parse().expect("team"),
+                member: "blocked".parse().expect("member"),
+                state: crate::protocol::RuntimeMemberState::Blocked,
+                session_id: None,
+                pid: None,
+                last_active_at: None,
+                state_changed_by: None,
+                state_changed_at: Some(now),
+                session_changed_by: None,
+                session_changed_at: None,
+            }],
+            graft_queue_handoff_failures_total: 0,
+            graft_queue_marker_clear_failures_total: 0,
+            bare_cli_queue_full_drops_total: 0,
+            queue_marker_set_failures_total: 0,
+            herdr_queue_last_tick_at: None,
+            queue_messages_drained_total: 0,
+            queue_drain_failures_total: 0,
+            blocking_core_bridge_stalls_total: 0,
+        };
+        let findings = super::runtime_condition_findings(&snapshot);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, AtmErrorCode::MemberBlocked);
+        assert!(findings[0].message.contains("blocked@ax6-doctor"));
+        assert!(
+            findings[0]
+                .remediation
+                .as_deref()
+                .unwrap_or_default()
+                .contains("interactive input")
         );
     }
 }

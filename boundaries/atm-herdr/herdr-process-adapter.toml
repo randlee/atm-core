@@ -53,6 +53,7 @@ forbidden = [
 request_types = ["HerdrPromptOutcome", "HerdrWaitOutcome", "HerdrGetOutcome", "HerdrListOutcome", "rendered built-in nudge text"]
 response_types = ["AgentSnapshot", "HerdrAgentStatus"]
 error_types = ["HerdrError"]
+notes = ["HerdrProcessAdapter::notify uses fixed notification argv, never targets a pane, and receives caller-composed member/task/age/remediation text rather than a message body (HR-SAFE-003)"]
 
 [testing]
 allowed_test_double_paths = ["atm_herdr::testing::FakeHerdrProcessAdapter"]
