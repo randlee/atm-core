@@ -8,28 +8,30 @@
   a triage:Finding ;
   triage:findingId "AW4-QA-B2" ;
   triage:title "AC7: no test exercises 4 concurrent graft sessions under induced daemon restart" ;
-  triage:description "qa-pr1181-r1 (msg 01M1QS4C69FTKB887D5K0V12Y8) at 9f4d3170e: req-qa: sprint-AW.4 AC7 requires a test proving fallback-line integrity and no lost outcomes with 4 concurrent graft sessions while the daemon is restarted; no such test exists." ;
+  triage:description "qa-pr1181-r1 (msg 01M1QS4C69FTKB887D5K0V12Y8) at 9f4d3170e: req-qa: sprint-AW.4 AC7 requires a test proving fallback-line integrity and no lost outcomes with 4 concurrent graft sessions while the daemon is restarted; no such test exists. CLOSURE (qa-cipher-fix, quality-mgr): Cipher's fd11bbeac added four_concurrent_sessions_survive_restart_without_corrupt_fallback_lines (crates/atm-graft-python/src/lib.rs, mod tests). Non-vacuous: 4 real OS threads synchronized via std::sync::Barrier hit an initial transport that always fails with daemon_unavailable, then a replacement transport that succeeds; asserts all 4 outcomes recover (outcomes == [0;4]), exact call counts (initial_calls==4, replacement_calls==4), and inspects the actual fallback JSONL file content: 12 lines (3 events x 4 sessions), each line individually well-formed (starts/ends correctly, no truncation/interleaving), and exact per-event-type counts (4 RECOVERY_ATTEMPT, 4 DAEMON_UNAVAILABLE, 4 RECOVERY_RESULT). quality-mgr ran the test directly at fd11bbeac: PASS. Finding closed." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
   triage:category "test-coverage" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T03:18:47Z"^^xsd:dateTime ;
   triage:foundIn triage:AW4 ;
   triage:foundAt "2026-09-05T03:12:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW4-QA-B2/AW4-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AW4-QA-B2/AW4-1>
   a triage:Occurrence ;
   triage:file "crates/atm-graft-python/src/observability.rs" ;
   triage:line 1 ;
   triage:snippet "GraftFallbackLogger" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw4-graft-fallback-observability" ;
   triage:headSha "9f4d3170e" ;
   triage:occursIn <urn:atm:triage:worktree/AW4/9f4d3170e> .
