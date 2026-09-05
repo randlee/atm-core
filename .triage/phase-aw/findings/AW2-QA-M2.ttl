@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW2-QA-M2>
+  a triage:Finding ;
+  triage:findingId "AW2-QA-M2" ;
+  triage:title "docs/project-plan.md still lists AW.2 as in progress" ;
+  triage:description "qa-pr1179-r4 (msg 01M1QS4C69FTKB887D5K0V12Y8) at d3eee516b: req-qa: the project-plan entry for AW.2 must read complete at the completion push." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T03:18:47Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW2 ;
+  triage:foundAt "2026-09-05T03:12:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW2-QA-M2/AW2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW2-QA-M2/AW2-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1 ;
+  triage:snippet "AW.2" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "d3eee516b" ;
+  triage:occursIn <urn:atm:triage:worktree/AW2/d3eee516b> .
+
+<urn:atm:triage:worktree/AW2/d3eee516b>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "d3eee516b" ;
+  triage:orderIndex 2 .

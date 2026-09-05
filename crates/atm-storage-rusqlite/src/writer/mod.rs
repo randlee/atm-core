@@ -454,59 +454,54 @@ impl Drop for SqliteWriter {
         }
         drop(diagnostic_sender);
 
-        if let Some(handle) = worker {
-            let (result_tx, result_rx) = mpsc::sync_channel(1);
-            let join_helper = thread::spawn(move || {
-                let _ = result_tx.send(handle.join());
-            });
-            match result_rx.recv_timeout(self.shutdown_join_deadline) {
-                Ok(Ok(())) => {
-                    let _ = join_helper.join();
-                }
-                Ok(Err(_)) => {
-                    let _ = join_helper.join();
-                    let detail = "sqlite writer thread panicked while shutting down; the durable write lane may have exited mid-drain";
-                    tracing::warn!("{detail}");
-                    self.observability
-                        .emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_shutdown_join",
-                            SqliteObservabilityOutcome::Failed,
-                            detail,
-                            Some(AtmErrorCode::DaemonUnavailable),
-                        ));
-                }
-                Err(RecvTimeoutError::Timeout) => {
-                    drop(join_helper);
-                    let detail = format!(
-                        "sqlite writer shutdown exceeded the bounded join deadline ({:?}); detaching join helper",
-                        self.shutdown_join_deadline
-                    );
-                    tracing::warn!(
-                        timeout_ms = self.shutdown_join_deadline.as_millis(),
-                        "{detail}"
-                    );
-                    self.observability
-                        .emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_shutdown_join",
-                            SqliteObservabilityOutcome::Timeout,
-                            detail,
-                            Some(AtmErrorCode::DaemonUnavailable),
-                        ));
-                }
-                Err(RecvTimeoutError::Disconnected) => {
-                    let _ = join_helper.join();
-                    let detail = "sqlite writer join helper disconnected before reporting the worker shutdown result";
-                    tracing::warn!("{detail}");
-                    self.observability
-                        .emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_shutdown_join",
-                            SqliteObservabilityOutcome::Failed,
-                            detail,
-                            Some(AtmErrorCode::DaemonUnavailable),
-                        ));
-                }
-            }
+        self.join_worker(worker);
+    }
+}
+
+impl SqliteWriter {
+    fn join_worker(&self, worker: Option<thread::JoinHandle<()>>) {
+        let Some(handle) = worker else { return };
+        let (result_tx, result_rx) = mpsc::sync_channel(1);
+        let join_helper = thread::spawn(move || {
+            let _ = result_tx.send(handle.join());
+        });
+        match result_rx.recv_timeout(self.shutdown_join_deadline) {
+            Ok(Ok(())) => { let _ = join_helper.join(); }
+            Ok(Err(_)) => self.finish_failed_join(join_helper, "sqlite writer thread panicked while shutting down; the durable write lane may have exited mid-drain"),
+            Err(RecvTimeoutError::Timeout) => self.finish_timed_out_join(join_helper),
+            Err(RecvTimeoutError::Disconnected) => self.finish_failed_join(join_helper, "sqlite writer join helper disconnected before reporting the worker shutdown result"),
         }
+    }
+
+    fn finish_failed_join(&self, join_helper: thread::JoinHandle<()>, detail: &'static str) {
+        let _ = join_helper.join();
+        tracing::warn!("{detail}");
+        self.observability
+            .emit_or_warn(SqliteObservabilityEvent::new(
+                "writer_shutdown_join",
+                SqliteObservabilityOutcome::Failed,
+                detail,
+                Some(AtmErrorCode::DaemonUnavailable),
+            ));
+    }
+
+    fn finish_timed_out_join(&self, join_helper: thread::JoinHandle<()>) {
+        drop(join_helper);
+        let detail = format!(
+            "sqlite writer shutdown exceeded the bounded join deadline ({:?}); detaching join helper",
+            self.shutdown_join_deadline
+        );
+        tracing::warn!(
+            timeout_ms = self.shutdown_join_deadline.as_millis(),
+            "{detail}"
+        );
+        self.observability
+            .emit_or_warn(SqliteObservabilityEvent::new(
+                "writer_shutdown_join",
+                SqliteObservabilityOutcome::Timeout,
+                detail,
+                Some(AtmErrorCode::DaemonUnavailable),
+            ));
     }
 }
 

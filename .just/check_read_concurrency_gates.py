@@ -28,6 +28,9 @@ ALLOWED_WRITE_OPS = {
     "AdmitDecomposedMessage",
     "AdmitTemplateMessage",
     "ApplyReadDisplayState",
+    # AW.2 sprint authorizes these lower-priority diagnostic-lane mutations.
+    "PruneDiagnostics",
+    "RecordDiagnostics",
 }
 HANDLER_LIST = Path(__file__).with_name("allowlists") / "read_concurrency_handlers.txt"
 READ_HANDLERS = tuple(

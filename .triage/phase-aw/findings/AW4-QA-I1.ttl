@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW4-QA-I1>
+  a triage:Finding ;
+  triage:findingId "AW4-QA-I1" ;
+  triage:title "AC1: observability_paths() untested for ATM_LOG_DIR / ATM_HOME / default branches" ;
+  triage:description "qa-pr1181-r1 (msg 01M1QS4C69FTKB887D5K0V12Y8) at 9f4d3170e: req-qa: implementation is correct but no test covers the three log_dir_source branches (env:ATM_LOG_DIR, env:ATM_HOME, default)." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T03:18:47Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW4 ;
+  triage:foundAt "2026-09-05T03:12:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW4-QA-I1/AW4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW4-QA-I1/AW4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/observability.rs" ;
+  triage:line 1 ;
+  triage:snippet "fn observability_paths" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw4-graft-fallback-observability" ;
+  triage:headSha "9f4d3170e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW4/9f4d3170e> .
+
+<urn:atm:triage:worktree/AW4/9f4d3170e>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw4-graft-fallback-observability" ;
+  triage:branch "feature/aw4-graft-fallback-observability" ;
+  triage:headSha "9f4d3170e" ;
+  triage:orderIndex 3 .
