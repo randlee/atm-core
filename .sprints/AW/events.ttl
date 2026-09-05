@@ -15,3 +15,65 @@ triage:a1 a triage:Assignment ;
 triage:c1 a triage:Completion ;
     triage:ofSprint triage:AW1 ;
     triage:at "2026-09-05T00:26:34Z"^^xsd:dateTime .
+
+# AW.2 / AW.4 dispatched in parallel on AW.1 dev completion (c1), per Rand
+# 2026-09-05 ("completed in short order", "work in parallel wherever possible").
+# Branches cut from feature/aw1-tracing-bridge @ 1106a5db4; merge-forward from
+# integrate/phase-aw when PR #1176 lands. Dispatch msgs 01M1QPDJ55MC130TMMYG54B1X4
+# (arch-ctm) and 01M1QPDJPC8VDWXMYQ81DJVVZH (cipher).
+triage:a2 a triage:Assignment ;
+    triage:ofSprint triage:AW2 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-05T02:33:00Z"^^xsd:dateTime .
+
+triage:a3 a triage:Assignment ;
+    triage:ofSprint triage:AW4 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-05T02:33:05Z"^^xsd:dateTime .
+
+# AW.2 first push: arch-ctm msg 01M1QPSEW3TTNQN5GM95BHBPKX, PR #1179 @ e61bb3588 (partial; dev continuing)
+# AW.2 push 0e825b75e (msg 01M1QQD7RMD8W569FYKNWRM1P4) and retention fix ac08c87bf (msg 01M1QQWV6MYCCN1ZHP6MXA7TFM); dev continuing (AC9 + benchmark).
+# AW.4 dev completion: cipher msg 01M1QQWQ8JCQ4GPHAB399A88EJ, feature/aw4-graft-fallback-observability @ 9f4d3170e.
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:AW4 ;
+    triage:at "2026-09-05T03:07:10Z"^^xsd:dateTime .
+# AW.5 (must_follow AW.4) dispatched on c2 to cipher; branch cut from feature/aw4 @ 9f4d3170e.
+triage:a4 a triage:Assignment ;
+    triage:ofSprint triage:AW5 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-05T02:56:43Z"^^xsd:dateTime .
+# AW.1 merged: PR #1176 -> integrate/phase-aw as 7a1346e16 (qa-pr1176-r4 PASS @ 846a2a6c9, CI 19/19).
+# AW.1 non-blocking findings: fixed on feature/aw1-tracing-bridge (quality-mgr closed all
+# records at integrate/phase-aw 08a39ef55, msg 01M1QPF2K3DHARNP0JJVAH004N; qa-pr1176-r4 PASS
+# at 846a2a6c9, msg 01M1QQ4FGGEJZGA8A94CYNZHCZ). Resolutions appended only after PR #1176
+# merged into integrate/phase-aw (7a1346e16), so every fix commit is an ancestor.
+triage:r1 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-RBP-F001> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+triage:r2 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-RBP-F002> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+triage:r3 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-RBQA-F002> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+triage:r4 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-RBP-F003> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+triage:r5 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-RBP-F004> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+triage:r6 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-QA-004> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+triage:r7 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AW1-QA-005> ;
+    triage:resolvedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+# AW.2 dev completion: arch-ctm msgs 01M1QR37EK18V3KFKMCJ4CH0HT (1af79f210) + 01M1QR4SM1685RQDWJJTR0JEW5 (d3eee516b); bench-smoke requested from fenix@rand-m5, qa-pr1179-r4 in flight.
+triage:c3 a triage:Completion ;
+    triage:ofSprint triage:AW2 ;
+    triage:at "2026-09-05T03:00:12Z"^^xsd:dateTime .
+# AW.3 (must_follow AW.2, AW.4) dispatched on c3 to arch-ctm; branch cut from integrate/phase-aw with aw2 @ d3eee516b and aw4 @ 9f4d3170e merged.
+triage:a5 a triage:Assignment ;
+    triage:ofSprint triage:AW3 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
