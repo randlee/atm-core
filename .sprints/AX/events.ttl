@@ -97,3 +97,27 @@ triage:c7 a triage:Completion ;
 triage:c8 a triage:Completion ;
     triage:ofSprint triage:AX4 ;
     triage:at "2026-09-05T07:25:21Z"^^xsd:dateTime .
+
+triage:r7 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX2-QA-004> ;
+    triage:resolvedAt "2026-09-05T07:37:02Z"^^xsd:dateTime .
+
+triage:r8 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX2-QA-005> ;
+    triage:resolvedAt "2026-09-05T07:37:02Z"^^xsd:dateTime .
+
+triage:r9 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX2-QA-006> ;
+    triage:resolvedAt "2026-09-05T07:37:02Z"^^xsd:dateTime .
+
+triage:r10 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX2-QA-007> ;
+    triage:resolvedAt "2026-09-05T07:37:02Z"^^xsd:dateTime .
+
+triage:r11 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX2-QA-008> ;
+    triage:resolvedAt "2026-09-05T07:37:02Z"^^xsd:dateTime .
+
+triage:r12 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AX2-QA-009> ;
+    triage:resolvedAt "2026-09-05T07:37:02Z"^^xsd:dateTime .
