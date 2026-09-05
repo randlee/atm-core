@@ -159,3 +159,36 @@
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "d9fa67fcc" ;
   triage:orderIndex 2 .
+
+# Developer follow-up for corrected C15 target, qa-pr1215-r2, 2026-09-05:
+# the two authoritative main.rs passthroughs are removed; call sites now use
+# atm_observability directly. The unrelated graft-python wrapper occurrence
+# above remains separately fixed. QA owns closure.
+<urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-c15-mainrs-qa-r3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/main.rs" ;
+  triage:line 303 ;
+  triage:snippet "LoggerConfig::default_for(service_name.clone(), logger_root_for_log_dir(log_dir)?)" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "f3345fa70" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/f3345fa70> .
+
+<urn:atm:triage:occurrence/AW-READY-O7/fix-aw-readiness-easy-c15-mainrs-level-qa-r3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/main.rs" ;
+  triage:line 344 ;
+  triage:snippet "with_max_level(atm_observability::logger_level_override()?.unwrap_or(SharedLevelFilter::Info))" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "f3345fa70" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/f3345fa70> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/f3345fa70>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "f3345fa70" ;
+  triage:orderIndex 3 .
