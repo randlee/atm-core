@@ -413,7 +413,9 @@ mod tests {
             })
             .expect("query info threshold");
         assert_eq!(
-            info.iter().map(|event| event.level.as_str()).collect::<Vec<_>>(),
+            info.iter()
+                .map(|event| event.level.as_str())
+                .collect::<Vec<_>>(),
             vec!["info", "warn", "error"]
         );
 
@@ -425,7 +427,9 @@ mod tests {
             })
             .expect("query warn threshold");
         assert_eq!(
-            warn.iter().map(|event| event.level.as_str()).collect::<Vec<_>>(),
+            warn.iter()
+                .map(|event| event.level.as_str())
+                .collect::<Vec<_>>(),
             vec!["warn", "error"]
         );
     }
