@@ -7,7 +7,7 @@
 <urn:atm:triage:finding/AW2-QA-I2>
   a triage:Finding ;
   triage:findingId "AW2-QA-I2" ;
-  triage:title "AC2/AC3/AC4/AC7 lack tests asserting their literal numeric/behavioural criteria" ;
+  triage:title "AC7 saturation test does not exercise the real overflow path (AC2/AC3/AC4 now closed)" ;
   triage:description "qa-pr1179-r4 (msg 01M1QS4C69FTKB887D5K0V12Y8) at d3eee516b: req-qa: implementations look correct but no test asserts the 25k-row prune bound (AC2), the exact saturation drop count with a single DEGRADED/RECOVERED pair (AC3), non-interference under forced diagnostic failure (AC4), and bridged-row-persists-to-SQLite (AC7). Important, not blocking r4, must not accumulate further." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
@@ -15,24 +15,90 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T03:18:47Z"^^xsd:dateTime ;
   triage:foundIn triage:AW2 ;
   triage:foundAt "2026-09-05T03:12:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW2-QA-I2/AW2-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T07:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "4" .
+
+# CLOSURE (qa-pr1195-r1, quality-mgr): arch-ctm's fix (57bedb0ce, PR #1195 ->
+# integrate/phase-aw) removes the PausedTimeline mock entirely
+# (crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs, -95 lines,
+# including ac7_offer_overflow_counts_the_paused_writer_excess) and replaces
+# it with ac7_real_diagnostic_channel_saturation_persists_a_bridged_row_after_drain
+# (crates/atm-storage-rusqlite/src/writer/mod.rs:1097). quality-mgr
+# independently confirmed in /tmp/verify-aw2-i2 at 57bedb0ce: the new test
+# fills the real bounded tokio::sync::mpsc diagnostic channel
+# (DIAGNOSTIC_QUEUE_BATCHES capacity) via try_send to a real
+# TrySendError::Full, then drives the real production selector
+# receive_next_work (writer/mod.rs:564) to pull the first batch, calls the
+# real process_diagnostic_batch, and asserts the bridged
+# ATM_BRIDGED_FIXTURE/tracing row is persisted via a real
+# `SELECT COUNT(*) FROM diagnostic_events` against SQLite -- this closes the
+# AC7 gap this finding was narrowed to (bridged-row-persists-to-SQLite under
+# real channel saturation), not a mock. cargo test -p atm-storage-rusqlite -p
+# atm-daemon-bootstrap: 134 passed, 0 failed, no regressions (includes
+# ac3_primary_mailbox_insert_completes_while_diagnostic_lane_is_full from
+# ATM-QA-AW2R9-001, still green alongside the new AC7 test). PR #1195 ->
+# integrate/phase-aw: required lint/clippy/format/hermes-wheel checks green;
+# Test (ubuntu/macos/windows-latest) and Just lint (macos/windows) still
+# IN_PROGRESS at review time -- CI is a merge gate only, not a QA-dispatch
+# gate, per standing merge policy; will flag if any of those come back red.
+# Forward-merged into feature/aw3-health-and-log-query @ 9be864e350a per
+# arch-ctm's notice, no separate re-verification needed there since it is a
+# clean fast-forward of the same commit onto an unrelated branch.
+
+# UPDATE (qa-pr1179-r9, quality-mgr): req-qa's round-9 full-AC audit (filed
+# as ATM-QA-AW2R9-002) independently confirmed the AC7 gap remains: the
+# PausedTimeline mock (diagnostic_timeline.rs:423-445) manufactures a canned
+# "queue is full" error after N accepted calls via
+# atm_runtime_test_support::diagnostic_queue_batches_for_test() rather than
+# exercising the real bounded tokio::sync::mpsc channel that lives in
+# crates/atm-storage-rusqlite/src/writer/mod.rs. quality-mgr independently
+# read the mock's implementation and confirms this characterization. Status
+# stays open/important; superseded in tracking terms by ATM-QA-AW2R9-002 but
+# this record is retained per append-only convention.
+
+# PARTIAL FIX (qa-pr1179-r8, quality-mgr): AW.2 round-8 (fee01b959) added
+# ac2_policy_selected_info_rows_reach_the_timeline,
+# ac3_diagnostic_persistence_failure_does_not_poison_later_offers
+# (crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs), and
+# ac4_prune_reduces_a_25k_fixture_to_the_documented_row_bound
+# (crates/atm-storage-rusqlite/src/diagnostic_timeline.rs), all independently
+# confirmed genuine by quality-mgr, req-qa, and rust-qa-agent -- these close
+# the AC2/AC3/AC4 portion of this finding. AC7's new test,
+# ac7_saturation_state_transitions_from_degraded_to_recovered_after_quiet_window
+# (crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs:496), only drives
+# DegradationMonitor::observe() directly with a manually backdated
+# degraded_since; it never exercises DiagnosticTimelineWriter::offer under a
+# real paused-writer/queue-full scenario, and asserts no
+# timeline_dropped_queue_full_total-equals-excess or single-emission
+# guarantee. Confirmed independently by quality-mgr and req-qa (filed as
+# req-qa's ATM-QA-AW2R8-001, Important); rust-qa-agent's pass did not flag
+# this gap and does not overrule the two independent confirmations. This
+# finding is narrowed to the remaining AC7 gap; status stays open/important.
 
 <urn:atm:triage:occurrence/AW2-QA-I2/AW2-1>
   a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
-  triage:line 1 ;
-  triage:snippet "DiagnosticTimelineWriter" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/mod.rs" ;
+  triage:line 1097 ;
+  triage:snippet "fn ac7_real_diagnostic_channel_saturation_persists_a_bridged_row_after_drain" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
-  triage:headSha "d3eee516b" ;
-  triage:occursIn <urn:atm:triage:worktree/AW2/d3eee516b> .
+  triage:headSha "57bedb0ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AW2/57bedb0ce> .
+
+<urn:atm:triage:worktree/AW2/57bedb0ce>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "57bedb0ce" ;
+  triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/AW2/d3eee516b>
   a triage:WorktreeSnapshot ;

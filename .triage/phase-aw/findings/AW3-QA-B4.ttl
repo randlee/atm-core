@@ -7,7 +7,7 @@
 <urn:atm:triage:finding/AW3-QA-B4>
   a triage:Finding ;
   triage:findingId "AW3-QA-B4" ;
-  triage:title "Zero test coverage for AC2 (jsonl byte-identity), AC3 (multi-source merge and tiebreak) and AC5 (not-lossless note substring)" ;
+  triage:title "Zero test coverage for AC2 (jsonl --source output byte-identical to pre-sprint output)" ;
   triage:description "qa-pr1182-r1 (msg 01M1QSQWFKBENPSW4ZP83SKMYS) at 199a3bfeb: req-qa ATM-QA-104: no test asserts jsonl output byte-identity with the pre-AW.3 output, the interleaved multi-source merge with (source_rank, seq) tiebreak, or the required note substring in both output modes. Add tests for all three, using fixture JSONL + graft-fallback + timeline inputs with identical timestamps to exercise the tiebreak." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
@@ -15,21 +15,50 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T03:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW3 ;
   triage:foundAt "2026-09-05T03:25:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-B4/AW3-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T06:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
+
+# CLOSURE (qa-pr1182-r4, quality-mgr): the remaining AC2 gap is closed.
+# default_jsonl_snapshot_matches_the_pre_aw3_golden_bytes
+# (crates/atm/src/commands/log.rs:1087) builds a real AtmLogSnapshot,
+# serializes it, and byte-compares against the checked-in fixture
+# crates/atm/tests/fixtures/log-jsonl-default.json. Independently confirmed
+# by quality-mgr, req-qa, and rust-qa-agent (all three ran the test and
+# inspected the fixture/assertion, not a placeholder).
+
+# PARTIAL FIX (qa-pr1182-r3, quality-mgr): arch-ctm's fix-aw3-r3 remediation
+# (feature/aw3-health-and-log-query @ db47e09c9) added
+# merged_records_sort_by_timestamp_source_then_sequence and
+# merged_source_reads_interleaved_jsonl_graft_and_timeline_fixture_records
+# (crates/atm/src/commands/log.rs), which genuinely satisfy AC3 (interleaved
+# jsonl/graft/timeline merge with (source_rank, seq) tiebreak at identical
+# timestamps) -- independently confirmed by quality-mgr, arch-qa, rust-qa-agent
+# and req-qa. It also added
+# merged_output_carries_the_not_lossless_note_in_json_and_text_contracts,
+# which genuinely satisfies AC5 (not-lossless note substring in both JSON and
+# text output) -- same four-way independent confirmation. AC2 (jsonl
+# --source output byte-identical to pre-sprint output for the same file)
+# remains UNCOVERED: the only new jsonl-source test,
+# run_snapshot_reads_real_retained_log_without_daemon, only asserts
+# command.run() succeeds with zero assertion on output content/bytes. This
+# finding's title and scope have been narrowed to the remaining AC2 gap only;
+# status remains open/blocking pending a byte-identity test against a
+# pre-AW.3 golden/fixture output.
 
 <urn:atm:triage:occurrence/AW3-QA-B4/AW3-1>
   a triage:Occurrence ;
   triage:file "crates/atm/src/commands/log.rs" ;
   triage:line 436 ;
   triage:snippet "since: None," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "199a3bfeb" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .

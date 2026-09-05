@@ -15,21 +15,25 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T04:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW3 ;
   triage:foundAt "2026-09-05T03:40:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-001/AW3-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T08:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+# CLOSURE (phase-aw integration review, quality-mgr): quality-mgr independently confirmed at integrate/phase-aw 517db2459 in /tmp/verify-aw-integration: `cargo check --tests -p agent-team-mail` compiles clean, no E0063 -- the QueryArgs test initializers were updated with component/source/until in a later round on feature/aw3-health-and-log-query before merge; the finding never got a closure recorded in the ledger.
 
 <urn:atm:triage:occurrence/AW3-CI-001/AW3-1>
   a triage:Occurrence ;
   triage:file "crates/atm/src/commands/log.rs" ;
   triage:line 445 ;
   triage:snippet "let args = QueryArgs { ... } without component/source/until" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "a60594ff1" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/a60594ff1> .

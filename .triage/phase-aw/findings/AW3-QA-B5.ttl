@@ -15,22 +15,44 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T03:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW3 ;
   triage:foundAt "2026-09-05T03:25:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-B5/AW3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-B5/AW3-2> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+# CLOSURE (qa-pr1182-r3, quality-mgr): arch-ctm's fix-aw3-r3 remediation
+# (feature/aw3-health-and-log-query @ db47e09c9, module-extraction into
+# router_support.rs/runtime_listener.rs/loopback_read.rs/doctor_observability.rs)
+# moved both files under the RULE-003 1000-non-test-line cap. Independently
+# confirmed via #[cfg(test)] mod tests boundary at db47e09c9: lib.rs boundary
+# at line 924 (923 non-test lines), storage_and_nudge_router.rs boundary at
+# line 979 (978 non-test lines). req-qa's qa-pr1182-r3 round additionally
+# recomputed true blank/comment-stripped production-line counts (~720/~867)
+# using .just/lint_common.py's classify_rust_test_scope, confirming an even
+# wider margin under cap. arch-qa and rust-qa-agent independently corroborated
+# the raw boundary-line counts at the current commit. Both occurrences closed.
+#
+# NOTE: arch-qa's qa-pr1182-r3 pass surfaced a separate, NEW RULE-003
+# violation not in this finding's original scope: crates/atm-http-runtime/src/client.rs
+# is at 1297 non-test lines (boundary at line 1298), confirmed by quality-mgr
+# to already be at 1285 non-test lines back at the AW.3 round-1 tip 199a3bfeb
+# (i.e. pre-existing, not introduced by this fix round, but touched in-diff
+# this round). Filed as a new finding and routed to team-lead triage
+# separately -- not folded into this record.
 
 <urn:atm:triage:occurrence/AW3-QA-B5/AW3-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/lib.rs" ;
   triage:line 1 ;
   triage:snippet "non-test lines 1041 > 1000" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "199a3bfeb" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .
@@ -40,8 +62,8 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 1 ;
   triage:snippet "non-test lines 1167 > 1000" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "199a3bfeb" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .
