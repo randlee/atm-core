@@ -235,6 +235,11 @@ impl ReaderLaneMetrics {
 #[derive(Clone)]
 pub(crate) struct ReaderPool {
     inner: Arc<PoolInner>,
+    // This Arc is owned only by public ReaderPool handles, unlike `inner`,
+    // which short-lived watchdogs may retain. That lets the last external
+    // owner synchronously close the reader workers even while a watchdog is
+    // winding down.
+    ownership: Arc<()>,
 }
 
 /// Bounded knobs for one independent read lane. AV.1b adds the doctor lane to
@@ -246,6 +251,7 @@ pub(crate) struct ReaderPoolConfig {
     pub(crate) queue_depth: NonZeroUsize,
     pub(crate) interrupt_grace: Duration,
     pub(crate) request_deadline: Duration,
+    pub(crate) shutdown_join_deadline: Duration,
     pub(crate) max_quarantined: NonZeroUsize,
 }
 
@@ -256,6 +262,7 @@ impl ReaderPoolConfig {
             queue_depth: NonZeroUsize::new(16).expect("non-zero mailbox queue depth"),
             interrupt_grace: Duration::from_millis(250),
             request_deadline: Duration::from_secs(10),
+            shutdown_join_deadline: Duration::from_secs(5),
             max_quarantined: NonZeroUsize::new(4).expect("non-zero mailbox quarantine budget"),
         }
     }
@@ -266,6 +273,7 @@ impl ReaderPoolConfig {
             queue_depth: NonZeroUsize::new(8).expect("non-zero search queue depth"),
             interrupt_grace: Duration::from_millis(250),
             request_deadline: Duration::from_secs(10),
+            shutdown_join_deadline: Duration::from_secs(5),
             max_quarantined: NonZeroUsize::new(2).expect("non-zero search quarantine budget"),
         }
     }
@@ -278,6 +286,7 @@ pub(crate) const DEFAULT_DOCTOR_READER_CONFIG: ReaderPoolConfig = ReaderPoolConf
     queue_depth: NonZeroUsize::new(16).expect("non-zero doctor queue depth"),
     interrupt_grace: Duration::from_millis(250),
     request_deadline: Duration::from_secs(10),
+    shutdown_join_deadline: Duration::from_secs(5),
     max_quarantined: NonZeroUsize::new(4).expect("non-zero doctor quarantine budget"),
 };
 
@@ -352,13 +361,16 @@ struct PoolInner {
     target: Arc<SharedDbTarget>,
     config: ReaderPoolConfig,
     queue_per_worker: usize,
-    workers: Mutex<Vec<Worker>>,
+    workers: Mutex<WorkerRegistry>,
+    shutting_down: AtomicBool,
     next_worker_index: AtomicUsize,
     next_worker_id: AtomicUsize,
     next_request: AtomicUsize,
     metrics: Arc<ReaderLaneMetrics>,
     #[cfg(test)]
     lifecycle_events: Mutex<Option<tokio::sync::mpsc::UnboundedSender<WorkerLifecycleEvent>>>,
+    #[cfg(test)]
+    worker_exit_count: Arc<AtomicUsize>,
 }
 
 #[cfg(test)]
@@ -370,9 +382,15 @@ enum WorkerLifecycleEvent {
 
 struct Worker {
     id: usize,
-    sender: tokio::sync::mpsc::Sender<Request>,
+    sender: tokio::sync::mpsc::Sender<WorkerMessage>,
     interrupt: Arc<InterruptHandle>,
     state: Arc<WorkerState>,
+    handle: thread::JoinHandle<()>,
+}
+
+struct WorkerRegistry {
+    active: Vec<Worker>,
+    retired: Vec<thread::JoinHandle<()>>,
 }
 
 struct WorkerState {
@@ -383,7 +401,7 @@ struct WorkerState {
 
 struct WorkerReservation {
     id: usize,
-    sender: tokio::sync::mpsc::Sender<Request>,
+    sender: tokio::sync::mpsc::Sender<WorkerMessage>,
     interrupt: Arc<InterruptHandle>,
     state: Arc<WorkerState>,
 }
@@ -393,6 +411,11 @@ struct Request {
     queued_at: Instant,
     deadline: Instant,
     run: Box<ReaderJob>,
+}
+
+enum WorkerMessage {
+    Request(Request),
+    Shutdown,
 }
 
 type ReaderJob = dyn FnOnce(&Connection, &SharedDbTarget, RequestDisposition) + Send;
@@ -429,18 +452,28 @@ impl ReaderPool {
             target,
             queue_per_worker: config.queue_depth.get().div_ceil(config.pool_size.get()),
             config,
-            workers: Mutex::new(Vec::with_capacity(config.pool_size.get())),
+            workers: Mutex::new(WorkerRegistry {
+                active: Vec::with_capacity(config.pool_size.get()),
+                retired: Vec::new(),
+            }),
+            shutting_down: AtomicBool::new(false),
             next_worker_index: AtomicUsize::new(0),
             next_worker_id: AtomicUsize::new(config.pool_size.get()),
             next_request: AtomicUsize::new(0),
             metrics: Arc::new(ReaderLaneMetrics::new(lane, config.pool_size.get())),
             #[cfg(test)]
             lifecycle_events: Mutex::new(None),
+            #[cfg(test)]
+            worker_exit_count: Arc::new(AtomicUsize::new(0)),
         });
+        let pool = Self {
+            inner,
+            ownership: Arc::new(()),
+        };
         for worker_id in 0..config.pool_size.get() {
-            inner.spawn_worker(worker_id)?;
+            pool.inner.spawn_worker(worker_id)?;
         }
-        Ok(Self { inner })
+        Ok(pool)
     }
 
     pub(crate) fn metrics(&self) -> ReaderLaneMetricsSnapshot {
@@ -489,7 +522,12 @@ impl ReaderPool {
             .queue_depth
             .fetch_add(1, Ordering::Relaxed);
         let remaining = expires_at.saturating_duration_since(Instant::now());
-        match tokio::time::timeout(remaining, reservation.sender.send(request)).await {
+        match tokio::time::timeout(
+            remaining,
+            reservation.sender.send(WorkerMessage::Request(request)),
+        )
+        .await
+        {
             Err(_) => {
                 self.inner
                     .metrics
@@ -557,9 +595,11 @@ impl ReaderPool {
                 .metrics
                 .queue_depth
                 .fetch_add(1, Ordering::Relaxed);
-            match reservation.sender.try_send(request) {
+            match reservation.sender.try_send(WorkerMessage::Request(request)) {
                 Ok(()) => break,
-                Err(tokio::sync::mpsc::error::TrySendError::Full(returned)) => {
+                Err(tokio::sync::mpsc::error::TrySendError::Full(WorkerMessage::Request(
+                    returned,
+                ))) => {
                     self.inner
                         .metrics
                         .queue_depth
@@ -575,6 +615,9 @@ impl ReaderPool {
                     }
                     request = returned;
                     thread::park_timeout(Duration::from_millis(2));
+                }
+                Err(tokio::sync::mpsc::error::TrySendError::Full(WorkerMessage::Shutdown)) => {
+                    unreachable!("reader submissions never send a shutdown message")
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
                     self.inner
@@ -610,7 +653,8 @@ impl ReaderPool {
             // A watchdog is exceptional cleanup, not a Tokio request task.
             // Park gives the thread no runnable work during its grace delay.
             thread::park_timeout(grace);
-            if reservation.state.active.load(Ordering::Acquire)
+            if !pool.shutting_down.load(Ordering::Acquire)
+                && reservation.state.active.load(Ordering::Acquire)
                 && RequestId::is_active(&reservation.state.active_request, request_id)
             {
                 pool.quarantine_if_still_active(reservation.id, request_id);
@@ -647,6 +691,14 @@ impl ReaderPool {
     }
 }
 
+impl Drop for ReaderPool {
+    fn drop(&mut self) {
+        if Arc::strong_count(&self.ownership) == 1 {
+            self.inner.shutdown_and_join();
+        }
+    }
+}
+
 fn deadline_at(deadline: Duration) -> Result<Instant, ReadLaneError> {
     Instant::now()
         .checked_add(deadline)
@@ -657,10 +709,19 @@ fn deadline_at(deadline: Duration) -> Result<Instant, ReadLaneError> {
 
 impl PoolInner {
     fn worker_count(&self) -> usize {
-        self.workers.lock().expect("reader pool lock").len()
+        self.workers.lock().expect("reader pool lock").active.len()
     }
 
     fn spawn_worker(self: &Arc<Self>, id: usize) -> Result<(), AtmError> {
+        // Hold the registry lock through registration so shutdown either sees
+        // this worker's handle or prevents it from being created at all.
+        let mut workers = self.workers.lock().expect("reader pool lock");
+        if self.shutting_down.load(Ordering::Acquire) {
+            return Err(AtmError::daemon_unavailable(format!(
+                "SQLite {} reader pool is shutting down",
+                self.lane
+            )));
+        }
         let connection = open_read_connection_for_target(self.target.as_ref())?;
         let interrupt = Arc::new(connection.get_interrupt_handle());
         let (sender, receiver) = tokio::sync::mpsc::channel(self.queue_per_worker);
@@ -674,7 +735,9 @@ impl PoolInner {
         let worker_metrics = Arc::clone(&self.metrics);
         let worker_target = Arc::clone(&self.target);
         let lane = self.lane;
-        thread::Builder::new()
+        #[cfg(test)]
+        let worker_exit_count = Arc::clone(&self.worker_exit_count);
+        let handle = thread::Builder::new()
             .name(format!("atm-sqlite-{lane}-reader-{id}"))
             .spawn(move || {
                 let retired = run_worker(
@@ -689,24 +752,33 @@ impl PoolInner {
                 if retired && let Some(pool) = Weak::upgrade(&weak) {
                     pool.retire_and_replace(id);
                 }
+                #[cfg(test)]
+                worker_exit_count.fetch_add(1, Ordering::Relaxed);
             })
             .map_err(|error| {
                 AtmError::daemon_unavailable(format!(
                     "failed to start SQLite {lane} reader worker {id}: {error}"
                 ))
             })?;
-        self.workers.lock().expect("reader pool lock").push(Worker {
+        workers.active.push(Worker {
             id,
             sender,
             interrupt,
             state,
+            handle,
         });
         Ok(())
     }
 
     fn reserve_worker(&self) -> Result<WorkerReservation, ReadLaneError> {
+        if self.shutting_down.load(Ordering::Acquire) {
+            return Err(ReadLaneError::Unavailable {
+                message: "reader pool is shutting down".to_owned(),
+            });
+        }
         let workers = self.workers.lock().expect("reader pool lock");
         let quarantined = workers
+            .active
             .iter()
             .filter(|worker| WorkerStatus::load(&worker.state.status) == WorkerStatus::Quarantined)
             .count();
@@ -719,7 +791,7 @@ impl PoolInner {
                 reason: "reader quarantine budget exhausted",
             });
         }
-        let count = workers.len();
+        let count = workers.active.len();
         if count == 0 {
             return Err(ReadLaneError::Unavailable {
                 message: "reader pool has no workers".to_owned(),
@@ -727,7 +799,7 @@ impl PoolInner {
         }
         let start = self.next_worker_index.fetch_add(1, Ordering::Relaxed);
         for offset in 0..count {
-            let worker = &workers[(start + offset) % count];
+            let worker = &workers.active[(start + offset) % count];
             if WorkerStatus::load(&worker.state.status) == WorkerStatus::Ready
                 && !worker.sender.is_closed()
                 && worker.sender.capacity() > 0
@@ -748,7 +820,7 @@ impl PoolInner {
 
     fn quarantine_if_still_active(&self, worker_id: usize, request_id: RequestId) {
         let workers = self.workers.lock().expect("reader pool lock");
-        let Some(worker) = workers.iter().find(|worker| worker.id == worker_id) else {
+        let Some(worker) = workers.active.iter().find(|worker| worker.id == worker_id) else {
             return;
         };
         if !worker.state.active.load(Ordering::Acquire)
@@ -757,6 +829,7 @@ impl PoolInner {
             return;
         }
         let existing = workers
+            .active
             .iter()
             .filter(|candidate| {
                 WorkerStatus::load(&candidate.state.status) == WorkerStatus::Quarantined
@@ -784,11 +857,18 @@ impl PoolInner {
     fn retire_and_replace(self: &Arc<Self>, worker_id: usize) {
         let was_quarantined = {
             let mut workers = self.workers.lock().expect("reader pool lock");
-            let Some(position) = workers.iter().position(|worker| worker.id == worker_id) else {
+            let Some(position) = workers
+                .active
+                .iter()
+                .position(|worker| worker.id == worker_id)
+            else {
                 return;
             };
-            let worker = workers.remove(position);
-            WorkerStatus::load(&worker.state.status) == WorkerStatus::Quarantined
+            let worker = workers.active.remove(position);
+            let was_quarantined =
+                WorkerStatus::load(&worker.state.status) == WorkerStatus::Quarantined;
+            workers.retired.push(worker.handle);
+            was_quarantined
         };
         if !was_quarantined {
             return;
@@ -800,6 +880,9 @@ impl PoolInner {
             .retired_replaced_workers
             .fetch_add(1, Ordering::Relaxed);
         self.metrics.pool_size.fetch_sub(1, Ordering::Relaxed);
+        if self.shutting_down.load(Ordering::Acquire) {
+            return;
+        }
         let replacement_id = self.next_worker_id.fetch_add(1, Ordering::Relaxed);
         if self.spawn_worker(replacement_id).is_err() {
             return;
@@ -820,16 +903,107 @@ impl PoolInner {
             let _ = sender.send(event);
         }
     }
+
+    fn shutdown_and_join(&self) {
+        if self.shutting_down.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let (active, mut handles) = {
+            let mut workers = self.workers.lock().expect("reader pool lock");
+            (
+                std::mem::take(&mut workers.active),
+                std::mem::take(&mut workers.retired),
+            )
+        };
+        for worker in &active {
+            worker.interrupt.interrupt();
+            match worker.sender.try_send(WorkerMessage::Shutdown) {
+                Ok(()) | Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {}
+                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                    tracing::warn!(
+                        lane = self.lane,
+                        worker_id = worker.id,
+                        "SQLite reader shutdown signal skipped because the bounded queue was full; relying on channel disconnect after queued work drains"
+                    );
+                }
+            }
+        }
+        handles.extend(active.into_iter().map(|worker| worker.handle));
+        self.join_workers(handles);
+    }
+
+    fn join_workers(&self, handles: Vec<thread::JoinHandle<()>>) {
+        let deadline = Instant::now()
+            .checked_add(self.config.shutdown_join_deadline)
+            .unwrap_or_else(Instant::now);
+        for handle in handles {
+            if handle.thread().id() == thread::current().id() {
+                tracing::warn!(
+                    lane = self.lane,
+                    "SQLite reader shutdown skipped a self-join; detaching worker handle"
+                );
+                continue;
+            }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                tracing::warn!(
+                    lane = self.lane,
+                    timeout_ms = self.config.shutdown_join_deadline.as_millis(),
+                    "SQLite reader shutdown exceeded the bounded join deadline; detaching worker handle"
+                );
+                continue;
+            }
+            let (result_tx, result_rx) = mpsc::sync_channel(1);
+            let join_helper = thread::spawn(move || {
+                let _ = result_tx.send(handle.join());
+            });
+            match result_rx.recv_timeout(remaining) {
+                Ok(Ok(())) => {
+                    let _ = join_helper.join();
+                }
+                Ok(Err(_)) => {
+                    let _ = join_helper.join();
+                    tracing::warn!(
+                        lane = self.lane,
+                        "SQLite reader worker panicked while shutting down"
+                    );
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    drop(join_helper);
+                    tracing::warn!(
+                        lane = self.lane,
+                        timeout_ms = self.config.shutdown_join_deadline.as_millis(),
+                        "SQLite reader shutdown exceeded the bounded join deadline; detaching join helper"
+                    );
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    let _ = join_helper.join();
+                    tracing::warn!(
+                        lane = self.lane,
+                        "SQLite reader join helper disconnected before reporting its worker result"
+                    );
+                }
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn worker_exit_count(&self) -> Arc<AtomicUsize> {
+        Arc::clone(&self.worker_exit_count)
+    }
 }
 
 fn run_worker(
     connection: Connection,
     target: Arc<SharedDbTarget>,
-    mut receiver: tokio::sync::mpsc::Receiver<Request>,
+    mut receiver: tokio::sync::mpsc::Receiver<WorkerMessage>,
     state: Arc<WorkerState>,
     metrics: Arc<ReaderLaneMetrics>,
 ) -> bool {
-    while let Some(request) = receiver.blocking_recv() {
+    while let Some(message) = receiver.blocking_recv() {
+        let WorkerMessage::Request(request) = message else {
+            return false;
+        };
         let now = Instant::now();
         metrics
             .queue_depth
@@ -920,6 +1094,7 @@ mod tests {
             queue_depth: NonZeroUsize::new(queue_depth).expect("non-zero test queue depth"),
             interrupt_grace,
             request_deadline: Duration::from_secs(10),
+            shutdown_join_deadline: Duration::from_secs(1),
             max_quarantined: NonZeroUsize::new(max_quarantined)
                 .expect("non-zero test quarantine budget"),
         }
@@ -948,6 +1123,18 @@ mod tests {
             expected
         );
         assert_eq!(DEFAULT_DOCTOR_READER_CONFIG.request_deadline, expected);
+    }
+
+    #[test]
+    fn dropping_the_last_reader_pool_handle_joins_all_workers() {
+        let pool = test_pool(test_config(2, 2, Duration::from_millis(20), 2));
+        let exited = pool.inner.worker_exit_count();
+        drop(pool);
+        assert_eq!(
+            exited.load(Ordering::Acquire),
+            2,
+            "pool drop must return only after every reader worker has exited"
+        );
     }
 
     #[test]
@@ -1192,6 +1379,13 @@ mod tests {
         assert_eq!(metrics.quarantined, 1);
         assert_eq!(metrics.interrupted_while_active, 1);
         assert_eq!(metrics.quarantine_exhausted_rejections, 1);
+        let exited = pool.inner.worker_exit_count();
+        drop(pool);
+        assert_eq!(
+            exited.load(Ordering::Acquire),
+            2,
+            "pool drop must also join a quarantined worker's retired handle and its replacement"
+        );
     }
 
     #[tokio::test]
