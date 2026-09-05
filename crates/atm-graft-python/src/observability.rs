@@ -12,7 +12,10 @@ use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use atm_observability::{RETAINED_FIELD_ALLOWLIST, graft_fallback_log_path};
+use atm_observability::{
+    RETAINED_FIELD_ALLOWLIST, graft_fallback_log_path, sanitize_retained_fields,
+};
+use serde_json::{Map, Value};
 
 pub const GRAFT_FALLBACK_MAX_BYTES: u64 = 2 * 1024 * 1024;
 pub const GRAFT_FALLBACK_KEEP_FILES: usize = 3;
@@ -72,9 +75,20 @@ impl GraftFallbackLogger {
         code: &'static str,
         fields: impl IntoIterator<Item = (&'static str, String)>,
     ) -> ObservabilityStatus {
-        let mut fields: Vec<_> = fields
-            .into_iter()
-            .filter(|(key, _)| *key != "code" && RETAINED_FIELD_ALLOWLIST.contains(key))
+        let mut retained = sanitize_retained_fields(
+            fields
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), Value::String(value)))
+                .collect::<Map<_, _>>(),
+        );
+        let mut fields: Vec<_> = RETAINED_FIELD_ALLOWLIST
+            .iter()
+            .filter_map(|key| {
+                (*key != "code")
+                    .then(|| retained.remove(*key))
+                    .flatten()
+                    .and_then(|value| value.as_str().map(|value| (*key, value.to_owned())))
+            })
             .collect();
         fields.insert(0, ("code", code.to_owned()));
         let (result, response) = mpsc::sync_channel(0);
@@ -222,7 +236,7 @@ mod tests {
             "ATM_GRAFT_DAEMON_UNAVAILABLE",
             [
                 ("code", "ATM_GRAFT_DAEMON_UNAVAILABLE".to_owned()),
-                ("detail", "safe \"detail\"".to_owned()),
+                ("command", "safe \"command\"".to_owned()),
                 ("body", "must not appear".to_owned()),
             ],
         );
@@ -230,7 +244,7 @@ mod tests {
         let text =
             fs::read_to_string(tempdir.path().join("atm-graft-fallback.jsonl")).expect("log");
         assert!(text.contains("\"origin\":\"graft\""));
-        assert!(text.contains("safe \\\"detail\\\""));
+        assert!(text.contains("safe \\\"command\\\""));
         assert!(!text.contains("must not appear"));
     }
 
@@ -241,7 +255,7 @@ mod tests {
         let logger = GraftFallbackLogger::new(path.clone());
         let detail = "x".repeat(GRAFT_FALLBACK_MAX_BYTES as usize / 2);
         for _ in 0..8 {
-            let _ = logger.record("TEST", [("detail", detail.clone())]);
+            let _ = logger.record("TEST", [("command", detail.clone())]);
         }
         let files = (0..GRAFT_FALLBACK_KEEP_FILES)
             .map(|index| {

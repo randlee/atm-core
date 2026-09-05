@@ -168,8 +168,7 @@ impl Default for DiagnosticPolicy {
 
 impl DiagnosticPolicy {
     pub fn permits(&self, event: &RetainedEvent<'_>) -> bool {
-        !matches!(event.level, sc_observability_types::Level::Info)
-            || self.info_targets.contains(event.component)
+        !event.level.is_info() || self.info_targets.contains(event.component)
     }
 }
 
@@ -390,7 +389,7 @@ fn diagnostic_event(event: &RetainedEvent<'_>) -> DiagnosticEvent {
     let detail = retained_detail(event.fields);
     DiagnosticEvent {
         ts_unix_ms: event.ts_unix_ms,
-        level: format!("{:?}", event.level).to_lowercase(),
+        level: event.level.as_str().to_owned(),
         component: event.component.to_owned(),
         code: event.code.map(str::to_owned),
         correlation_id: event.correlation_id.map(str::to_owned),
@@ -506,7 +505,9 @@ mod tests {
         BufferedEvents, DEGRADATION_RECOVERY_WINDOW_SECS, DegradationMonitor, DiagnosticPolicy,
         DiagnosticTimelineStats, DiagnosticTimelineWriter,
     };
-    use atm_observability::{DiagnosticSink, DropReason, RetainedEvent, SinkOffer};
+    use atm_observability::{
+        DiagnosticSink, DropReason, RetainedEvent, RetainedLevel, SinkOffer,
+    };
     use atm_storage::{
         AtmError, DiagnosticEvent, DiagnosticQuery, DiagnosticRecordError, DiagnosticTimelineStore,
     };
@@ -565,7 +566,7 @@ mod tests {
     fn info_event(component: &'static str) -> RetainedEvent<'static> {
         RetainedEvent {
             ts_unix_ms: 42,
-            level: sc_observability_types::Level::Info,
+            level: RetainedLevel::Info,
             component,
             code: Some("ATM_FIXTURE"),
             correlation_id: None,

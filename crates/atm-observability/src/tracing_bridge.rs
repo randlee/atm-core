@@ -61,10 +61,40 @@ pub fn sanitize_retained_fields(mut fields: Map<String, FieldValue>) -> Map<Stri
 /// JSON-compatible value carried to the optional AW.2 diagnostic timeline.
 pub type FieldValue = Value;
 
+/// ATM-owned severity vocabulary for retained diagnostics.
+///
+/// This is intentionally distinct from the observability backend's `Level`:
+/// consumers of the facade should not need that backend crate to evaluate a
+/// retained event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RetainedLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl RetainedLevel {
+    pub const fn is_info(self) -> bool {
+        matches!(self, Self::Info)
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Trace => "trace",
+            Self::Debug => "debug",
+            Self::Info => "info",
+            Self::Warn => "warn",
+            Self::Error => "error",
+        }
+    }
+}
+
 /// One allowlisted, already-redacted event as the bridge saw it.
 pub struct RetainedEvent<'a> {
     pub ts_unix_ms: i64,
-    pub level: Level,
+    pub level: RetainedLevel,
     pub component: &'a str,
     pub code: Option<&'a str>,
     pub correlation_id: Option<&'a str>,
@@ -267,7 +297,7 @@ impl TracingBridgeLayer {
             let event = RetainedEvent {
                 ts_unix_ms: retained.timestamp.into_inner().unix_timestamp_nanos() as i64
                     / 1_000_000,
-                level: retained.level,
+                level: retained_level(retained.level),
                 component: &retained.component,
                 code,
                 correlation_id: correlation_id.as_ref().map(|value| value.as_str()),
@@ -368,6 +398,16 @@ fn map_level(level: &TracingLevel) -> Level {
     }
 }
 
+fn retained_level(level: Level) -> RetainedLevel {
+    match level {
+        Level::Trace => RetainedLevel::Trace,
+        Level::Debug => RetainedLevel::Debug,
+        Level::Info => RetainedLevel::Info,
+        Level::Warn => RetainedLevel::Warn,
+        Level::Error => RetainedLevel::Error,
+    }
+}
+
 #[derive(Default)]
 struct RetainedVisitor {
     fields: BTreeMap<&'static str, FieldValue>,
@@ -422,6 +462,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
+    use serde_json::Value;
     use tempfile::TempDir;
     use tracing_subscriber::prelude::*;
 
@@ -573,6 +614,30 @@ mod tests {
         ] {
             assert!(!content.contains(secret), "secret leaked: {content}");
         }
+    }
+
+    #[test]
+    fn retained_jsonl_and_json_projection_exclude_secret_substrings() {
+        let (tempdir, bridge) = bridge();
+        with_bridge(
+            &bridge,
+            || tracing::warn!(target: "atm_http_runtime::delivery", command = "send", body = "body-secret", token = "token-secret", "free-text-secret"),
+        );
+
+        let jsonl = lines(&tempdir, 1);
+        let retained: Value =
+            serde_json::from_str(jsonl.lines().next().expect("retained JSONL row"))
+                .expect("valid retained JSONL");
+        let cli_json = serde_json::to_string(&retained).expect("serialize JSON projection");
+
+        for secret in ["body-secret", "token-secret", "free-text-secret"] {
+            assert!(!jsonl.contains(secret), "secret leaked to JSONL: {jsonl}");
+            assert!(
+                !cli_json.contains(secret),
+                "secret leaked to JSON projection: {cli_json}"
+            );
+        }
+        assert!(cli_json.contains("send"), "allowlisted command is retained");
     }
 
     #[test]

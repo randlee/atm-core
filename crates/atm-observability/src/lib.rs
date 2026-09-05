@@ -289,7 +289,7 @@ pub mod tracing_bridge;
 pub use tracing_bridge::{
     BridgeError, CANONICAL_LOG_FILE_NAME, DiagnosticSink, DropReason, FieldValue,
     GRAFT_FALLBACK_LOG_FILE_NAME, RETAINED_FIELD_ALLOWLIST, RETAINED_INFO_TARGETS, RetainedEvent,
-    SinkOffer, TracingBridgeLayer, TracingBridgeStats, sanitize_retained_fields,
+    RetainedLevel, SinkOffer, TracingBridgeLayer, TracingBridgeStats, sanitize_retained_fields,
 };
 
 pub const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
