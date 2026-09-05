@@ -86,8 +86,18 @@ def _git(cwd: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def discover_integration_root(cwd: Path) -> Path:
-    """Find the one current-phase integration worktree, fail closed if unclear."""
+def _normalise_phase(value: str) -> str:
+    phase = value.strip().lower()
+    return phase.removeprefix("phase-")
+
+
+def _accepted_phase_forms(value: str) -> str:
+    phase = _normalise_phase(value)
+    return f"accepted forms: {phase}, {phase.upper()}, phase-{phase}"
+
+
+def discover_integration_root(cwd: Path, phase: str | None = None) -> Path:
+    """Find the current integration worktree, scoped to ``phase`` when given."""
     cwd = Path(_git(cwd, "rev-parse", "--show-toplevel"))
     branch = _git(cwd, "branch", "--show-current")
     if re.fullmatch(r"integrate/phase-.+", branch):
@@ -104,13 +114,25 @@ def discover_integration_root(cwd: Path) -> Path:
             if current_path is not None and current_branch is not None:
                 worktrees.append((current_path, current_branch))
             current_path = current_branch = None
-    if len(worktrees) != 1:
-        names = ", ".join(str(path) for path, _ in worktrees) or "none"
+    candidates = worktrees
+    if phase:
+        requested = _normalise_phase(phase)
+        candidates = [
+            (path, branch)
+            for path, branch in worktrees
+            if branch.lower().startswith("integrate/phase-")
+            and _normalise_phase(branch.rsplit("/", 1)[-1]) == requested
+        ]
+    if len(candidates) != 1:
+        names = ", ".join(
+            f"{branch} ({path})" for path, branch in candidates
+        ) or "none"
+        phase_detail = f" for {_accepted_phase_forms(phase)}" if phase else ""
         raise ReportError(
-            "cannot determine a unique integrate/phase-* worktree; "
-            f"found {len(worktrees)} ({names}); pass --integration-root"
+            "cannot determine a unique integrate/phase-* worktree"
+            f"{phase_detail}; found {len(candidates)} ({names}); pass --integration-root"
         )
-    return worktrees[0][0]
+    return candidates[0][0]
 
 
 def _phase_dir(root: Path, requested: str | None) -> tuple[str, Path]:
@@ -776,7 +798,9 @@ def build_report(
     phase_name, requested_phase_path = _phase_dir(root, phase)
     runner = _graph_runner()
     try:
-        source = runner.resolve_phase_source(phase_name, str(requested_phase_path))
+        source = runner.resolve_phase_source(
+            phase_name, str(requested_phase_path), integration_root=root
+        )
     except Exception as exc:  # noqa: BLE001 - normalize shared source errors
         raise ReportError(f"could not resolve current integration phase source: {exc}") from exc
     root = source.root
@@ -1163,7 +1187,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="alias for --format json")
     args = parser.parse_args(argv)
     try:
-        root = args.integration_root or discover_integration_root(Path.cwd())
+        root = args.integration_root or discover_integration_root(Path.cwd(), args.phase)
         report = build_report(root, args.phase, args.qa_master)
     except ReportError as exc:
         print(

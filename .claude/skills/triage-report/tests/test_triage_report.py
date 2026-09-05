@@ -307,6 +307,92 @@ def test_missing_integration_worktree_is_structured_error(tmp_path, monkeypatch)
     assert result == 2
 
 
+@pytest.mark.parametrize(
+    "requested",
+    ["av", "AV", "phase-av"],
+)
+def test_phase_scoped_worktree_resolution_is_case_insensitive(
+    tmp_path, monkeypatch, requested
+):
+    root = tmp_path / "repo"
+    av = tmp_path / "av"
+    aw = tmp_path / "aw"
+    porcelain = "\n".join(
+        [
+            f"worktree {av}",
+            "HEAD 1111111",
+            "branch refs/heads/integrate/phase-AV",
+            "",
+            f"worktree {aw}",
+            "HEAD 2222222",
+            "branch refs/heads/integrate/phase-aw",
+            "",
+        ]
+    )
+
+    def fake_git(_cwd, *args):
+        if args == ("rev-parse", "--show-toplevel"):
+            return str(root)
+        if args == ("branch", "--show-current"):
+            return "develop"
+        if args == ("worktree", "list", "--porcelain"):
+            return porcelain
+        raise AssertionError(args)
+
+    monkeypatch.setattr(triage_report, "_git", fake_git)
+    assert triage_report.discover_integration_root(root, requested) == av
+
+
+def test_explicit_integration_root_skips_worktree_discovery(tmp_path, monkeypatch, capsys):
+    root, qa = _inputs(tmp_path)
+    monkeypatch.setattr(
+        triage_report,
+        "discover_integration_root",
+        lambda *_args: pytest.fail("explicit integration root must not discover worktrees"),
+    )
+
+    result = triage_report.main(
+        [
+            "--integration-root",
+            str(root),
+            "--phase",
+            "AICH",
+            "--qa-master",
+            str(qa),
+            "--format",
+            "vars",
+        ]
+    )
+    assert result == 0
+    assert "sprint_rows" in json.loads(capsys.readouterr().out)
+
+
+def test_phase_resolution_error_names_accepted_forms(tmp_path, monkeypatch, capsys):
+    root = tmp_path / "repo"
+    porcelain = "\n".join(
+        [
+            f"worktree {tmp_path / 'aw'}",
+            "HEAD 1111111",
+            "branch refs/heads/integrate/phase-aw",
+            "",
+        ]
+    )
+
+    def fake_git(_cwd, *args):
+        if args == ("rev-parse", "--show-toplevel"):
+            return str(root)
+        if args == ("branch", "--show-current"):
+            return "develop"
+        if args == ("worktree", "list", "--porcelain"):
+            return porcelain
+        raise AssertionError(args)
+
+    monkeypatch.setattr(triage_report, "_git", fake_git)
+    assert triage_report.main(["--phase", "AV"]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert "accepted forms: av, AV, phase-av" in payload["message"]
+
+
 def test_malformed_structure_is_report_error(tmp_path):
     root = tmp_path / "repo"
     phase = root / ".sprints" / "AICH"

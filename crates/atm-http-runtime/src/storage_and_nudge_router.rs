@@ -480,7 +480,17 @@ impl StorageAndNudgeRouter {
             .await?
             .into_inner()
         {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => Ok(()),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => {
+                tracing::info!(
+                    subsystem = "atm_core.peer",
+                    action = "peer_send",
+                    outcome = "delivered",
+                    peer_host = %host,
+                    message_id = %message_id,
+                    "host-qualified message delivered to peer"
+                );
+                Ok(())
+            }
             response => Err(AtmError::new(
                 atm_core::error_codes::AtmErrorCode::InternalError,
                 "cross-host daemon-owned delivery returned a non-write response",
