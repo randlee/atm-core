@@ -7,8 +7,8 @@
 <urn:atm:triage:finding/AV-HOTFIX-002>
   a triage:Finding ;
   triage:findingId "AV-HOTFIX-002" ;
-  triage:title "rand-m4 production trust store carries duplicate/stale host entries and a fixture host, violating the single-hostname trust-key requirement" ;
-  triage:description "rand-m4's trust store contains stale and fixture host entries that violate the documented single-hostname-per-peer requirement. Specifically: 'Rands-MacBook-M5.local' (fingerprint C7E35D64) is a stale leftover from before the M5 host rename (2026-08-03); 'rand-m5' (fingerprint BFCA33B6) is the correct live entry; 'localhost' is a fixture entry (production trust stores must not contain localhost); 'peer.example.test' is a fixture host. Cross-checked against rand-m5's own trust config: rand-m5 advertises as 'rand-m5.local' with correct fingerprint BFCA33B6, confirming rand-m4's 'rand-m5' entry is correct. Remediation: remove C7E35D64 (stale), remove localhost, remove peer.example.test, retain BFCA33B6 rand-m5." ;
+  triage:title "rand-m4 production trust store carries a stale duplicate host entry, a fixture host, and a LAN-IP advertised identity, violating the single-hostname trust-key requirement" ;
+  triage:description "rand-m4's trust store contains stale and fixture host entries that violate the documented single-hostname-per-peer requirement. Specifically: 'Rands-MacBook-M5.local' (fingerprint C7E35D64) is a stale leftover from before the M5 host rename (2026-08-03), already manually revoked by Rand on rand-m4 -- see correction note below; 'rand-m5' (fingerprint BFCA33B6) is the correct live entry; 'peer.example.test' is a fixture host that must not be present in a production trust store; rand-m4 also advertises its own identity via a LAN IP rather than a stable hostname, which independently violates ADR-040's stable-hostname requirement. Cross-checked against rand-m5's own trust config: rand-m5 advertises as 'rand-m5.local' with correct fingerprint BFCA33B6, confirming rand-m4's 'rand-m5' entry is correct. CORRECTED remediation (Rand, relayed via fenix, 2026-09-05T18:36Z): the 'localhost' entry on each host is REQUIRED for loopback delivery and must NOT be removed -- drop that item from the original remediation. Corrected remediation: remove C7E35D64 (stale, already done), remove peer.example.test (fixture), switch rand-m4's advertised identity from its LAN IP to a stable hostname, retain BFCA33B6 rand-m5 and localhost." ;
   triage:phaseId "phase-av" ;
   triage:triageMode "initial_pass" ;
   triage:category "documentation" ;
@@ -22,6 +22,20 @@
   triage:foundAt "2026-09-05T18:10:49Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AV-HOTFIX-002/AV-HOTFIX-002-1> ;
   triage:triageRecordVersion "1" .
+
+# NOTE (2026-09-05, team-lead, out-of-band manual action + correction):
+# (1) Rand directed fenix to manually revoke the stale
+# 'Rands-MacBook-M5.local' trust entry (fingerprint C7E35D64) on rand-m4's
+# live trust store, ahead of any code fix landing.
+# (2) CORRECTION (Rand, relayed via fenix, 2026-09-05T18:36Z): the
+# 'localhost' trust entry on each host is REQUIRED for loopback delivery
+# and must stay -- it was wrongly listed as a removal item in the original
+# triage pass. That item is superseded; see the corrected remediation in
+# the description field above. Remaining open items: peer.example.test
+# fixture removal, and rand-m4 advertising a LAN IP instead of a stable
+# hostname (new fact from Rand, no file/line occurrence yet identified).
+# This note does not change triage:status/dispatchReady -- closure remains
+# quality-mgr's call once the remaining items are verified fixed.
 
 <urn:atm:triage:occurrence/AV-HOTFIX-002/AV-HOTFIX-002-1>
   a triage:Occurrence ;
