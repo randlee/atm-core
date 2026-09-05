@@ -38,11 +38,9 @@ After every successful `record_reminder` in the AX.5 task step:
 
 ```
 if row.reminder_count >= 10 * (row.lead_notified_count + 1):          # due: one notification per ten reminders, none skipped
-    lead := the single roster member of row.team with agent_type == Lead
-    if lead is none or more than one: log at warn; continue          # visible via doctor
-    id := write queued message from DAEMON_ACTOR_NAME to lead, body C1, requires_ack = false, no task_id
-    if write failed: log; continue                                   # no LeadNotified row; still due on the next reminder (60 s)
-    record_lead_notified(row, now, lead, id)                         # increments lead_notified_count
+    outcome := escalate(row.team, C1 body for row)                    # lead mail + configured recipients + Herdr notification
+    if outcome.lead_write is none: continue                           # no LeadNotified row; still due on the next reminder (60 s)
+    record_lead_notified(row, now, outcome.lead, outcome.lead_write)  # increments lead_notified_count
 ```
 
 The message is ordinary queued mail: the lead's own pump or tmux queue
