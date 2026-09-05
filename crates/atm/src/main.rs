@@ -29,7 +29,7 @@ use atm_core::observability::{
 #[cfg(any(test, feature = "fault-injection"))]
 use atm_observability::retained_sink_fault_mode as shared_retained_sink_fault_mode;
 use atm_observability::{
-    logger_level_override as shared_logger_level_override,
+    RetainedLogLevel, logger_level_override as shared_logger_level_override,
     logger_root_for_log_dir as shared_logger_root_for_log_dir, prepare_retained_log,
 };
 use chrono::{DateTime, Utc};
@@ -359,7 +359,18 @@ fn init_tracing(stderr_logs: bool) -> Result<(), AtmError> {
 }
 
 fn logger_level_override() -> Result<Option<SharedLevelFilter>, AtmError> {
-    shared_logger_level_override()
+    shared_logger_level_override().map(|level| level.map(shared_level_filter))
+}
+
+fn shared_level_filter(level: RetainedLogLevel) -> SharedLevelFilter {
+    match level {
+        RetainedLogLevel::Trace => SharedLevelFilter::Trace,
+        RetainedLogLevel::Debug => SharedLevelFilter::Debug,
+        RetainedLogLevel::Info => SharedLevelFilter::Info,
+        RetainedLogLevel::Warn => SharedLevelFilter::Warn,
+        RetainedLogLevel::Error => SharedLevelFilter::Error,
+        RetainedLogLevel::Off => SharedLevelFilter::Off,
+    }
 }
 
 fn tracing_level_filter(level: SharedLevelFilter) -> TracingLevelFilter {
@@ -965,7 +976,7 @@ mod adapter_tests {
 
         assert_eq!(
             atm_observability::logger_level_override_from(&env).expect("override"),
-            Some(SharedLevelFilter::Debug)
+            Some(RetainedLogLevel::Debug)
         );
     }
 

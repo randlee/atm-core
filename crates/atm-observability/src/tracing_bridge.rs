@@ -430,7 +430,7 @@ mod tests {
     fn bridge() -> (TempDir, Arc<TracingBridgeLayer>) {
         let tempdir = TempDir::new().expect("tempdir");
         let logger = build_retained_logger(
-            sc_observability_types::ServiceName::new("atm").expect("service"),
+            "atm",
             &tempdir.path().join("logs"),
             RetainedLogPolicy {
                 rotation_max_bytes: 1024 * 1024,

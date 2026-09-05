@@ -5,17 +5,13 @@ use std::time::Duration;
 use atm_core::error::AtmError;
 use atm_core::home;
 use atm_core::observability::{
-    AtmLogQuery, AtmLogSnapshot, AtmMaintenanceHealthReport, AtmMaintenanceWorkerState,
-    AtmObservabilityDiagnostic, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
-    LogTailSession, ObservabilityPort, diagnostic_code,
+    AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
+    ObservabilityPort,
 };
 use atm_observability::{
     RetainedCommandEvent, RetainedLogOffer, RetainedLogPolicy, RetainedLogger,
     build_retained_logger_from_env,
 };
-
-type ServiceName = sc_observability_types::ServiceName;
-type TargetCategory = sc_observability_types::TargetCategory;
 
 const ATM_SERVICE_NAME: &str = "atm";
 const ATM_DAEMON_TARGET: &str = "atm.daemon";
@@ -32,8 +28,8 @@ const RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
 struct LoggerLifecycle(Arc<RetainedLogger>);
 
 impl LoggerLifecycle {
-    fn health(&self) -> sc_observability_types::LoggingHealthReport {
-        self.0.health()
+    fn health(&self, active_log_path: PathBuf) -> Result<AtmObservabilityHealth, AtmError> {
+        self.0.health_at(active_log_path)
     }
 }
 
@@ -42,16 +38,12 @@ pub(crate) struct DaemonObservability {
     // shutdown can coordinate a single transition into the stopped state.
     logger: Arc<Mutex<LoggerLifecycle>>,
     active_log_path: PathBuf,
-    service_name: ServiceName,
-    target_category: TargetCategory,
 }
 
 impl std::fmt::Debug for DaemonObservability {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DaemonObservability")
             .field("active_log_path", &self.active_log_path)
-            .field("service_name", &self.service_name)
-            .field("target_category", &self.target_category)
             .finish_non_exhaustive()
     }
 }
@@ -61,8 +53,6 @@ impl Clone for DaemonObservability {
         Self {
             logger: Arc::clone(&self.logger),
             active_log_path: self.active_log_path.clone(),
-            service_name: self.service_name.clone(),
-            target_category: self.target_category.clone(),
         }
     }
 }
@@ -99,22 +89,11 @@ impl DaemonObservability {
         log_dir: PathBuf,
         rotation_max_bytes: u64,
     ) -> Result<Self, AtmError> {
-        let service_name = ServiceName::new(ATM_SERVICE_NAME).map_err(|_source| {
-            AtmError::observability_bootstrap("failed to validate ATM daemon service name")
-        })?;
-        let target_category = TargetCategory::new(ATM_DAEMON_TARGET).map_err(|_source| {
-            AtmError::observability_bootstrap("failed to validate ATM daemon observability target")
-        })?;
-        let (logger, active_log_path) = build_logger(
-            &log_dir,
-            &service_name,
-            retained_log_policy(rotation_max_bytes),
-        )?;
+        let (logger, active_log_path) =
+            build_logger(&log_dir, retained_log_policy(rotation_max_bytes))?;
         Ok(Self {
             logger: Arc::new(Mutex::new(LoggerLifecycle(Arc::new(logger)))),
             active_log_path,
-            service_name,
-            target_category,
         })
     }
 
@@ -123,18 +102,10 @@ impl DaemonObservability {
         log_dir: PathBuf,
         retained_log_policy: RetainedLogPolicy,
     ) -> Result<Self, AtmError> {
-        let service_name = ServiceName::new(ATM_SERVICE_NAME).map_err(|_source| {
-            AtmError::observability_bootstrap("failed to validate ATM daemon service name")
-        })?;
-        let target_category = TargetCategory::new(ATM_DAEMON_TARGET).map_err(|_source| {
-            AtmError::observability_bootstrap("failed to validate ATM daemon observability target")
-        })?;
-        let (logger, active_log_path) = build_logger(&log_dir, &service_name, retained_log_policy)?;
+        let (logger, active_log_path) = build_logger(&log_dir, retained_log_policy)?;
         Ok(Self {
             logger: Arc::new(Mutex::new(LoggerLifecycle(Arc::new(logger)))),
             active_log_path,
-            service_name,
-            target_category,
         })
     }
 }
@@ -179,35 +150,16 @@ impl ObservabilityPort for DaemonObservability {
                 "failed to read daemon observability health because the logger lock was poisoned",
             )
         })?;
-        let report = logger.health();
-        let diagnostic = report.last_error.clone().map(map_diagnostic_summary);
-        let detail = build_observability_detail(&report, diagnostic.as_ref());
-        Ok(AtmObservabilityHealth {
-            active_log_path: Some(self.active_log_path.clone()),
-            logging_state: map_logging_state(report.state),
-            query_state: None,
-            maintenance: report
-                .maintenance
-                .clone()
-                .map(map_maintenance_report)
-                .transpose()?,
-            diagnostic,
-            jsonl: Default::default(),
-            timeline: Default::default(),
-            degraded: Vec::new(),
-            detail,
-        })
+        logger.health(self.active_log_path.clone())
     }
 }
 
 fn build_logger(
     log_dir: &Path,
-    service_name: &ServiceName,
     retained_log_policy: RetainedLogPolicy,
 ) -> Result<(RetainedLogger, PathBuf), AtmError> {
     let active_log_path = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
-    let logger =
-        build_retained_logger_from_env(service_name.clone(), log_dir, retained_log_policy)?;
+    let logger = build_retained_logger_from_env(ATM_SERVICE_NAME, log_dir, retained_log_policy)?;
     Ok((logger, active_log_path))
 }
 
@@ -219,115 +171,6 @@ fn retained_log_policy(rotation_max_bytes: u64) -> RetainedLogPolicy {
         maintenance_cadence: RETAINED_LOG_MAINTENANCE_CADENCE,
         writer_shutdown_timeout: RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT,
         maintenance_max_work_per_pass: Some(RETAINED_LOG_ROTATION_MAX_FILES),
-    }
-}
-
-fn build_observability_detail(
-    report: &sc_observability_types::LoggingHealthReport,
-    diagnostic: Option<&AtmObservabilityDiagnostic>,
-) -> Option<String> {
-    let mut parts = Vec::new();
-    if let Some(diagnostic) = diagnostic {
-        parts.push(diagnostic.message.clone());
-    }
-    parts.push(format!(
-        "writer_state={} queue_depth={} queue_capacity={} queue_high_water_mark={} queue_full_drops_total={}",
-        writer_state_label(report.writer_state),
-        report.queue_depth,
-        report.queue_capacity,
-        report.queue_high_water_mark,
-        report.queue_full_drops_total,
-    ));
-    if let Some(maintenance) = &report.maintenance {
-        let last_pass = maintenance
-            .last_pass_at
-            .map(|timestamp| timestamp.into_inner().to_string())
-            .unwrap_or_else(|| "never".to_string());
-        let mut summary = format!(
-            "maintenance state={} rotated_files_total={} pruned_files_total={} last_pass_at={last_pass}",
-            maintenance_state_label(maintenance.state),
-            maintenance.rotated_files_total,
-            maintenance.pruned_files_total,
-        );
-        if let Some(last_error) = &maintenance.last_error {
-            summary.push_str(&format!(" maintenance_last_error={}", last_error.message));
-        }
-        parts.push(summary);
-    }
-    (!parts.is_empty()).then(|| parts.join(" | "))
-}
-
-fn writer_state_label(state: sc_observability_types::WriterState) -> &'static str {
-    match state {
-        sc_observability_types::WriterState::Running => "running",
-        sc_observability_types::WriterState::Degraded => "degraded",
-        sc_observability_types::WriterState::Stopped => "stopped",
-    }
-}
-
-fn maintenance_state_label(state: sc_observability_types::MaintenanceWorkerState) -> &'static str {
-    match state {
-        sc_observability_types::MaintenanceWorkerState::Running => "running",
-        sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
-        sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
-    }
-}
-
-fn map_logging_state(
-    state: sc_observability_types::LoggingHealthState,
-) -> AtmObservabilityHealthState {
-    match state {
-        sc_observability_types::LoggingHealthState::Healthy => AtmObservabilityHealthState::Healthy,
-        sc_observability_types::LoggingHealthState::DegradedDropping => {
-            AtmObservabilityHealthState::Degraded
-        }
-        sc_observability_types::LoggingHealthState::Unavailable => {
-            AtmObservabilityHealthState::Unavailable
-        }
-    }
-}
-
-fn map_maintenance_report(
-    report: sc_observability_types::MaintenanceHealthReport,
-) -> Result<AtmMaintenanceHealthReport, AtmError> {
-    Ok(AtmMaintenanceHealthReport {
-        state: match report.state {
-            sc_observability_types::MaintenanceWorkerState::Running => {
-                AtmMaintenanceWorkerState::Running
-            }
-            sc_observability_types::MaintenanceWorkerState::Degraded => {
-                AtmMaintenanceWorkerState::Degraded
-            }
-            sc_observability_types::MaintenanceWorkerState::Stopped => {
-                AtmMaintenanceWorkerState::Stopped
-            }
-        },
-        rotated_files_total: report.rotated_files_total.as_usize() as u64,
-        pruned_files_total: report.pruned_files_total.as_usize() as u64,
-        last_pass_at: report
-            .last_pass_at
-            .map(|timestamp| {
-                chrono::DateTime::parse_from_rfc3339(&timestamp.to_string())
-                    .map(|datetime| datetime.with_timezone(&chrono::Utc).into())
-                    .map_err(|_source| {
-                        AtmError::observability_query(
-                            "shared maintenance timestamp could not be converted to chrono",
-                        )
-                    })
-            })
-            .transpose()?,
-    })
-}
-
-fn map_diagnostic_summary(
-    summary: sc_observability_types::DiagnosticSummary,
-) -> AtmObservabilityDiagnostic {
-    AtmObservabilityDiagnostic {
-        code: summary.code.map(|code| {
-            diagnostic_code(code.as_str().to_string())
-                .expect("shared diagnostic codes must be non-empty")
-        }),
-        message: summary.message,
     }
 }
 
