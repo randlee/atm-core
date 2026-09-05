@@ -53,11 +53,19 @@ pub(crate) fn active_counters() -> Option<Arc<dyn DiagnosticCountersSource>> {
 /// flush worker; every later call returns immediately so the original writer
 /// keeps draining on its cadence instead of being silently orphaned.
 pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticTimeline>) {
+    let _ = try_attach_timeline(store);
+}
+
+/// Attaches the timeline and reports whether this caller won the process-wide
+/// writer claim. The boolean is kept internal so bootstrap continues to expose
+/// an idempotent observer callback while concurrent-call tests can prove the
+/// real claim path rather than a stand-alone `OnceLock` helper.
+fn try_attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticTimeline>) -> bool {
     if ACTIVE_TIMELINE.get().is_some() {
-        return;
+        return false;
     }
     let Some(bridge) = INSTALLED_BRIDGE.get() else {
-        return;
+        return false;
     };
     let persistence_stats = store.persistence_stats();
     let store: Arc<dyn DiagnosticTimelineStore> = store;
@@ -82,11 +90,12 @@ pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticT
     if !claim_once(&ACTIVE_TIMELINE, Arc::clone(&writer)) {
         // Lost a race with a concurrent attach call; the winner already owns
         // the bridge sink and flush worker, so leave both untouched.
-        return;
+        return false;
     }
     let _ = ACTIVE_COUNTERS.set(counters);
     bridge.set_diagnostic_sink(writer);
     start_flush_worker();
+    true
 }
 
 fn start_flush_worker() {
@@ -793,14 +802,11 @@ mod tests {
         }
     }
 
-    /// C6/A7: a second `attach_timeline` call (a genuine re-attach attempt or
-    /// a race between concurrent bootstrap paths) must not replace the
-    /// active writer, swap the bridge's diagnostic sink, or spawn a second
-    /// flush thread that would leave the live writer never flushed on
-    /// cadence. This is the only test in this module that touches the
-    /// process-global `INSTALLED_BRIDGE`/`ACTIVE_TIMELINE` statics.
+    /// C6/A7/O6: concurrent bootstrap callers must leave one and only one
+    /// timeline writer and flush worker installed. This is the only test in
+    /// this module that touches the process-global bridge/timeline statics.
     #[test]
-    fn attach_timeline_second_call_does_not_replace_the_active_writer() {
+    fn concurrent_attach_timeline_has_one_writer_and_keeps_it_on_reattach() {
         let log_dir = tempfile::tempdir().expect("temp log dir");
         let logger = std::sync::Arc::new(
             atm_observability::build_retained_logger(
@@ -814,16 +820,46 @@ mod tests {
         let bridge = std::sync::Arc::new(atm_observability::TracingBridgeLayer::new(logger));
         super::register_bridge(std::sync::Arc::clone(&bridge));
 
-        let backend_a =
-            atm_storage_rusqlite::SqliteStorageBackend::new(log_dir.path().join("a.db"))
-                .expect("backend a opens");
-        super::attach_timeline(backend_a.diagnostic_timeline());
-        let first = super::ACTIVE_TIMELINE.get().cloned().expect("attached");
+        const CONTENDERS: usize = 8;
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(CONTENDERS));
+        let contenders = (0..CONTENDERS)
+            .map(|index| {
+                let barrier = std::sync::Arc::clone(&barrier);
+                let database_path = log_dir.path().join(format!("contender-{index}.db"));
+                std::thread::spawn(move || {
+                    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(database_path)
+                        .expect("contender backend opens");
+                    barrier.wait();
+                    super::try_attach_timeline(backend.diagnostic_timeline())
+                })
+            })
+            .collect::<Vec<_>>();
+        let winners = contenders
+            .into_iter()
+            .map(|contender| contender.join().expect("contender finishes"))
+            .filter(|won| *won)
+            .count();
 
-        let backend_b =
-            atm_storage_rusqlite::SqliteStorageBackend::new(log_dir.path().join("b.db"))
-                .expect("backend b opens");
-        super::attach_timeline(backend_b.diagnostic_timeline());
+        assert_eq!(
+            winners, 1,
+            "exactly one concurrent attach_timeline caller owns the writer"
+        );
+        assert!(
+            super::FLUSH_WORKER
+                .lock()
+                .expect("flush worker lock")
+                .is_some(),
+            "the one winning writer starts exactly one managed flush worker"
+        );
+
+        let first = super::ACTIVE_TIMELINE.get().cloned().expect("attached");
+        let backend =
+            atm_storage_rusqlite::SqliteStorageBackend::new(log_dir.path().join("reattach.db"))
+                .expect("reattach backend opens");
+        assert!(
+            !super::try_attach_timeline(backend.diagnostic_timeline()),
+            "a later re-attach does not claim a second writer"
+        );
         let second = super::ACTIVE_TIMELINE
             .get()
             .cloned()
@@ -833,34 +869,7 @@ mod tests {
             std::sync::Arc::ptr_eq(&first, &second),
             "a second attach_timeline call must not replace the active writer or its flush cadence"
         );
-    }
-
-    /// O6: the production claim helper must cover the losing `OnceLock::set`
-    /// path under concurrent bootstrap attempts, not merely a later sequential
-    /// no-op call.
-    #[test]
-    fn concurrent_timeline_claim_has_exactly_one_winner() {
-        let slot = std::sync::Arc::new(std::sync::OnceLock::new());
-        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
-        let contender_slot = std::sync::Arc::clone(&slot);
-        let contender_barrier = std::sync::Arc::clone(&barrier);
-        let contender = std::thread::spawn(move || {
-            contender_barrier.wait();
-            super::claim_once(&contender_slot, "contender")
-        });
-
-        barrier.wait();
-        let primary_won = super::claim_once(&slot, "primary");
-        let contender_won = contender.join().expect("contender finishes");
-
-        assert_ne!(
-            primary_won, contender_won,
-            "concurrent OnceLock::set claims must take exactly one winner path"
-        );
-        assert!(
-            slot.get().is_some(),
-            "the winning claim installs the timeline"
-        );
+        super::stop_flush_worker();
     }
 
     #[test]
