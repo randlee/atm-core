@@ -1,6 +1,15 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
+# quality-mgr note, 2026-09-05, re: fix/aw-readiness-api round-2 QA (qa-pr1211-r2):
+# the real fix for this finding (CASE-based severity rank replacing the lexical
+# compare) lands on the sibling branch fix/aw-readiness-easy (PR #1215), not on
+# fix/aw-readiness-api (PR #1211). arch-qa/ruthless-boundary-qa confirmed it closed
+# there. fix/aw-readiness-api adds only a client-side re-filter workaround in
+# crates/atm/src/commands/log.rs (comment: "not level-order-correct, tracked
+# separately") pending that merge. Status stays "open" here until PR #1215 merges
+# forward into this lineage and the workaround in log.rs is removed as dead code.
+
 # Persisted file/path values are repository-relative. Runtime checkout paths
 # belong in the agent input only and must not be copied into this record.
 
