@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T10:07:04Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r20 in .sprints/AX/events.ttl; final sprint verdict AX3-QA7 PASS (PR #1191 comment 5551705615)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T09:05:13Z"^^xsd:dateTime ;
   triage:foundIn triage:AX3 ;
@@ -30,8 +33,8 @@
   triage:file "crates/atm-core/tests/task_state.rs" ;
   triage:line 41 ;
   triage:snippet "recipient_pane_id: Some(PaneId::from_cli('%9').expect('pane'))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/AX3/116bd23b> .
@@ -41,8 +44,8 @@
   triage:file "crates/atm-core/tests/task_state.rs" ;
   triage:line 42 ;
   triage:snippet "metadata_json: serde_json::Map::new()," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/AX3/116bd23b> .
@@ -52,8 +55,8 @@
   triage:file "crates/atm-core/tests/task_state.rs" ;
   triage:line 149 ;
   triage:snippet "let (root, runtime, team) = setup(RosterHarness::Hermes);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/AX3/116bd23b> .

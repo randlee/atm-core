@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "deferred" ;
+  triage:status "waived" ;
+  triage:closedAt "2026-09-05T07:36:12Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:closureNote "Deferred out of Phase AX scope by fenix ruling to https://github.com/randlee/atm-core/issues/1193 (AX2-QA-003 not a merge-gate item; AX2-QA2 PASS 0/0/0 in scope, PR #1186 comment 5550327947)." ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T06:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX2 ;
@@ -31,8 +34,8 @@
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 635 ;
   triage:snippet "fn validate_prompt_text(text: &str) -> Result<(), HerdrError>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "waived" ;
+  triage:closed true ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
   triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
   triage:occursIn <urn:atm:triage:worktree/ax2-4f77d2fff> .
@@ -42,8 +45,8 @@
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 596 ;
   triage:snippet "return Err(HerdrError::ServerUnavailable);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "waived" ;
+  triage:closed true ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
   triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
   triage:occursIn <urn:atm:triage:worktree/ax2-4f77d2fff> .
@@ -53,8 +56,8 @@
   triage:file "crates/atm-core/src/nudge_dispatch.rs" ;
   triage:line 127 ;
   triage:snippet ".unwrap_or_else(|| message.envelope.text.clone())" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "waived" ;
+  triage:closed true ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
   triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
   triage:occursIn <urn:atm:triage:worktree/ax2-4f77d2fff> .

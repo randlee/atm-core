@@ -2,7 +2,7 @@
 phase: AX
 sprint: AX.7
 title: Live Herdr dogfood evidence on the integrate head
-branch: none (proof sprint on integrate/phase-ax)
+branch: feature/ax7-herdr-dogfood-evidence (stacked on feature/ax6-lead-notification-doctor, PR #1204; proof runs against the AX.6 head merged forward, PR targets the AX.6 branch via gh stack)
 integration_branch: integrate/phase-ax
 status: draft
 recommended_agent: none
@@ -14,7 +14,7 @@ dependency_relations:
   - prerequisite: AX.6
     dependent: AX.7
     relation: must_follow
-    rationale: proves AX.1 through AX.6 together on the merged integrate head.
+    rationale: proves AX.1 through AX.6 together; the AX.7 branch is stacked on the AX.6 branch so the proof can start once AX.6 has no open blocking findings, while the final AX.6 QA cycles complete in parallel. AX.7 merges only after AX.6.
 ---
 
 # AX.7 — Live Herdr dogfood evidence

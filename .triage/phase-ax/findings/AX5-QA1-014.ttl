@@ -15,7 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T15:11:27Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r49 in .sprints/AX/events.ttl; final sprint verdict AX5-QA4 PASS (PR #1201 comment 5552870450)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T12:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX5 ;
@@ -35,8 +38,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 172 ;
   triage:snippet "tracing::warn!(error = %error, \\\"Herdr queue wake skipped: pending store unavailable\\\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
   triage:occursIn <urn:atm:triage:worktree/AX5/da823baaa> .
@@ -46,8 +49,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 186 ;
   triage:snippet "tracing::warn!(error = %error, \\\"Herdr queue wake skipped: pending roster unavailable\\\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
   triage:occursIn <urn:atm:triage:worktree/AX5/da823baaa> .
@@ -57,8 +60,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 201 ;
   triage:snippet "tracing::warn!(error = %error, \\\"Herdr queue wake skipped: roster unavailable\\\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
   triage:occursIn <urn:atm:triage:worktree/AX5/da823baaa> .
@@ -68,8 +71,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 265 ;
   triage:snippet "tracing::warn!(session = ?session, error = ?error, \"Herdr queue wake list failed\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
   triage:occursIn <urn:atm:triage:worktree/AX5/da823baaa> .
@@ -79,8 +82,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 419 ;
   triage:snippet "tracing::warn!(error = %error, member = %candidate.member.key, \"Herdr task reminder read failed\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
   triage:occursIn <urn:atm:triage:worktree/AX5/da823baaa> .
@@ -90,8 +93,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 576 ;
   triage:snippet "tracing::warn!(error = ?error, \"Herdr task reminder step skipped: task store unavailable\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
   triage:occursIn <urn:atm:triage:worktree/AX5/da823baaa> .
@@ -101,8 +104,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 928 ;
   triage:snippet "tracing::warn!(error = %error, member = %self.member, \"failed to resolve Herdr queue claim\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
   triage:occursIn <urn:atm:triage:worktree/AX5/da823baaa> .
@@ -112,8 +115,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 937 ;
   triage:snippet "tracing::warn!(error = %error, member = %self.member, \"failed to requeue Herdr queue claim\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
   triage:occursIn <urn:atm:triage:worktree/AX5/da823baaa> .

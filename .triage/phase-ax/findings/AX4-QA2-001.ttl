@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T11:20:03Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Blocking finding closed by a later valid Completion and quality-mgr follow-up QA; final sprint verdict AX4-QA4 PASS 0/0/0 (PR #1194 comment 5551411069)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T10:26:45Z"^^xsd:dateTime ;
   triage:foundIn triage:AX4 ;
@@ -29,8 +32,8 @@
   triage:file "crates/atm/tests/task_ledger_cli.rs" ;
   triage:line 18 ;
   triage:snippet "const ASSIGNER: &str = \"fenix\";" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "193821c92835986b45070f382b4aa00a0f6ee688" ;
   triage:occursIn <urn:atm:triage:worktree/AX4/193821c9> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm/tests/task_ledger_cli.rs" ;
   triage:line 19 ;
   triage:snippet "const ASSIGNEE: &str = \"cipher\";" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "193821c92835986b45070f382b4aa00a0f6ee688" ;
   triage:occursIn <urn:atm:triage:worktree/AX4/193821c9> .

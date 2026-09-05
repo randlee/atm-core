@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T15:36:11Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Blocking finding closed by a later valid Completion and quality-mgr follow-up QA; final sprint verdict AX5-QA4 PASS 0/0/0 (PR #1201 comment 5552870450)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T14:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX5 ;
@@ -28,8 +31,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md" ;
   triage:line 255 ;
   triage:snippet "1. Two tasks to one idle Herdr member whose marker has already been drained: one reminder for the oldest on the first tick, none for the second..." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "fbee74ba8a9abf0b3e04b01bc157b8a65f194119" ;
   triage:occursIn <urn:atm:triage:worktree/AX5-AC1AC2AC4/fbee74ba8a9abf0b3e04b01bc157b8a65f194119> .

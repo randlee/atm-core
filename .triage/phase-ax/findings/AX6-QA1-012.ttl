@@ -1,0 +1,181 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA1-012>
+  a triage:Finding ;
+  triage:findingId "AX6-QA1-012" ;
+  triage:title "Doctor escalation/task/roster projection swallows store failures via .ok()/unwrap_or_default()" ;
+  triage:description "AX.6 QA-1 (quality-mgr QA-AX6-R1-1788626395, PR #1204 Final Quality Report 2026-09-05T16:56Z) at head 490a6c42a0f3283c251875d9a61fcf99b641c2a2. crates/atm-core/src/doctor/mod.rs:573-624 projects escalation recipients, tasks and roster with `.ok()...unwrap_or_default()` instead of the DoctorFinding / inspect_doctor_section pattern used by sibling sections, so a store failure is indistinguishable from nothing configured. Repeatable pattern within the file. Fix: surface store failures as doctor findings like the sibling sections." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices-agent" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T17:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T16:56:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-012/AX6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-012/AX6-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-012/AX6-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-012/AX6-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-012/AX6-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-012/AX6-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-012/AX7-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-012/AX7-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-012/AX7-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-012/AX7-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-012/AX7-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-012/AX7-6> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA1-012/AX6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 155 ;
+  triage:snippet ".map(|team| graft_receivers_doctor_report(...)).unwrap_or_default();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:occursIn <urn:atm:triage:worktree/AX.6/490a6c42a0f3283c251875d9a61fcf99b641c2a2> .
+
+<urn:atm:triage:occurrence/AX6-QA1-012/AX6-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 203 ;
+  triage:snippet ".map(|team| graft_receivers_doctor_report(...)).unwrap_or_default();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:occursIn <urn:atm:triage:worktree/AX.6/490a6c42a0f3283c251875d9a61fcf99b641c2a2> .
+
+<urn:atm:triage:occurrence/AX6-QA1-012/AX6-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 580 ;
+  triage:snippet "|| roster_store.list_teams().unwrap_or_default()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:occursIn <urn:atm:triage:worktree/AX.6/490a6c42a0f3283c251875d9a61fcf99b641c2a2> .
+
+<urn:atm:triage:occurrence/AX6-QA1-012/AX6-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 594 ;
+  triage:snippet ".unwrap_or_default();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:occursIn <urn:atm:triage:worktree/AX.6/490a6c42a0f3283c251875d9a61fcf99b641c2a2> .
+
+<urn:atm:triage:occurrence/AX6-QA1-012/AX6-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 603 ;
+  triage:snippet ".and_then(|store| store.list_tasks(...).ok()).unwrap_or_default();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:occursIn <urn:atm:triage:worktree/AX.6/490a6c42a0f3283c251875d9a61fcf99b641c2a2> .
+
+<urn:atm:triage:occurrence/AX6-QA1-012/AX6-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 609 ;
+  triage:snippet ".and_then(|store| store.list_escalation_recipients(...).ok()).unwrap_or_default();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:occursIn <urn:atm:triage:worktree/AX.6/490a6c42a0f3283c251875d9a61fcf99b641c2a2> .
+
+<urn:atm:triage:occurrence/AX6-QA1-012/AX7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 155 ;
+  triage:snippet ".map(|team| graft_receivers_doctor_report(...)).unwrap_or_default();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:occursIn <urn:atm:triage:worktree/AX.7/1931acea5> .
+
+<urn:atm:triage:occurrence/AX6-QA1-012/AX7-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 203 ;
+  triage:snippet ".map(|team| graft_receivers_doctor_report(...)).unwrap_or_default();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:occursIn <urn:atm:triage:worktree/AX.7/1931acea5> .
+
+<urn:atm:triage:occurrence/AX6-QA1-012/AX7-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 580 ;
+  triage:snippet "|| roster_store.list_teams().unwrap_or_default()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:occursIn <urn:atm:triage:worktree/AX.7/1931acea5> .
+
+<urn:atm:triage:occurrence/AX6-QA1-012/AX7-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 594 ;
+  triage:snippet ".unwrap_or_default();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:occursIn <urn:atm:triage:worktree/AX.7/1931acea5> .
+
+<urn:atm:triage:occurrence/AX6-QA1-012/AX7-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 603 ;
+  triage:snippet ".and_then(|store| store.list_tasks(...).ok()).unwrap_or_default();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:occursIn <urn:atm:triage:worktree/AX.7/1931acea5> .
+
+<urn:atm:triage:occurrence/AX6-QA1-012/AX7-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 609 ;
+  triage:snippet ".and_then(|store| store.list_escalation_recipients(...).ok()).unwrap_or_default();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:occursIn <urn:atm:triage:worktree/AX.7/1931acea5> .
+
+<urn:atm:triage:worktree/AX.6/490a6c42a0f3283c251875d9a61fcf99b641c2a2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX.6" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX.7/1931acea5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX.7" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:orderIndex 7 .

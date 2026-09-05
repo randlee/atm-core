@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T11:33:26Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r38 in .sprints/AX/events.ttl; final sprint verdict AX3-QA7 PASS (PR #1191 comment 5551705615)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T11:10:15Z"^^xsd:dateTime ;
   triage:foundIn triage:AX3 ;
@@ -29,8 +32,8 @@
   triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
   triage:line 197 ;
   triage:snippet "static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime>>> =" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "c6525fd1168da1080ad4aa02e253d833b32c4fe9" ;
   triage:occursIn <urn:atm:triage:worktree/AX3/c6525fd11> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
   triage:line 225 ;
   triage:snippet "impl Drop for SqliteRuntimeGuard {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "c6525fd1168da1080ad4aa02e253d833b32c4fe9" ;
   triage:occursIn <urn:atm:triage:worktree/AX3/c6525fd11> .

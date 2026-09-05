@@ -16,6 +16,9 @@
   triage:repeatable false ;
   triage:sweepScope "file" ;
   triage:status "fixed" ;
+  triage:closedAt "2026-09-05T07:37:02Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r12 in .sprints/AX/events.ttl; final sprint verdict AX2-QA2 PASS (PR #1186 comment 5550327947)." ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T07:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX2 ;
@@ -30,8 +33,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 17 ;
   triage:snippet "use syn::visit::Visit;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
   triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
   triage:occursIn <urn:atm:triage:worktree/ax2/e7d4d54535669339ca184c3eec978f19412d4ec7> .
@@ -41,8 +44,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 561 ;
   triage:snippet "syn::visit::visit_item_fn(self, node);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
   triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
   triage:occursIn <urn:atm:triage:worktree/ax2/e7d4d54535669339ca184c3eec978f19412d4ec7> .
@@ -52,8 +55,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 578 ;
   triage:snippet "syn::visit::visit_impl_item_fn(self, node);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
   triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
   triage:occursIn <urn:atm:triage:worktree/ax2/e7d4d54535669339ca184c3eec978f19412d4ec7> .

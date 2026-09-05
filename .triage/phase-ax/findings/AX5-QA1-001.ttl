@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T15:36:11Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Blocking finding closed by a later valid Completion and quality-mgr follow-up QA; final sprint verdict AX5-QA4 PASS 0/0/0 (PR #1201 comment 5552870450)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T12:38:08Z"^^xsd:dateTime ;
   triage:foundIn triage:AX5 ;
@@ -32,7 +35,7 @@
   triage:line 959 ;
   triage:snippet "fn ax5_01_one_reminder_surfaces_next_task (property 1: One reminder surfaces the next task)" ;
   triage:status "absent" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
   triage:occursIn <urn:atm:triage:worktree/ax5-task-reminder-cycle/da823baaa> .
@@ -43,7 +46,7 @@
   triage:line 959 ;
   triage:snippet "fn ax5_03_active_wins (property 3: Active wins)" ;
   triage:status "absent" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
   triage:occursIn <urn:atm:triage:worktree/ax5-task-reminder-cycle/da823baaa> .
@@ -54,7 +57,7 @@
   triage:line 959 ;
   triage:snippet "fn ax5_04_emit_failure_records_nothing (property 4: Emit failure records nothing)" ;
   triage:status "absent" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
   triage:occursIn <urn:atm:triage:worktree/ax5-task-reminder-cycle/da823baaa> .
@@ -65,7 +68,7 @@
   triage:line 959 ;
   triage:snippet "fn ax5_08_missing_task_store_disables_only_task_step (property 8: A missing TaskStore disables only the task step)" ;
   triage:status "absent" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
   triage:occursIn <urn:atm:triage:worktree/ax5-task-reminder-cycle/da823baaa> .

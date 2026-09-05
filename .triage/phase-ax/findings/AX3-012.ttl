@@ -15,7 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T07:40:19Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r17 in .sprints/AX/events.ttl; final sprint verdict AX3-QA7 PASS (PR #1191 comment 5551705615)." ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T06:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX3 ;
@@ -28,8 +31,8 @@
   triage:file "crates/atm-storage/src/task_state.rs" ;
   triage:line 117 ;
   triage:snippet "if event == TaskEvent::Acked && row.state == TaskState::Assigned {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "88c579a18" ;
   triage:occursIn <urn:atm:triage:worktree/ax4/88c579a18> .

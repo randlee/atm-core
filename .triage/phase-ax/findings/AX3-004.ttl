@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T12:10:20Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Blocking finding closed by a later valid Completion and quality-mgr follow-up QA; final sprint verdict AX3-QA7 PASS 0/0/0 (PR #1191 comment 5551705615)." ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T06:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX3 ;
@@ -29,8 +32,8 @@
   triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
   triage:line 3469 ;
   triage:snippet "fn task_messages_transition_locally_and_peer_receipts_do_not_create_rows()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
   triage:occursIn <urn:atm:triage:worktree/AX3/88c579a18> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
   triage:line 3469 ;
   triage:snippet "fn task_messages_transition_locally_and_peer_receipts_do_not_create_rows()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
   triage:occursIn <urn:atm:triage:worktree/AX4/88c579a18> .

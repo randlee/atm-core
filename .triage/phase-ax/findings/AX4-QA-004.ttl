@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T10:25:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r24 in .sprints/AX/events.ttl; final sprint verdict AX4-QA4 PASS (PR #1194 comment 5551411069)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T09:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX4 ;
@@ -29,8 +32,8 @@
   triage:file "release-findings.json" ;
   triage:line 5 ;
   triage:snippet "\"status\": \"fail\"," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04bfa26fdc3c277eff97d99927f971c0a7b> .
@@ -40,8 +43,8 @@
   triage:file "release-findings.json" ;
   triage:line 10 ;
   triage:snippet "\"summary\": \"just lint failed\"," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04bfa26fdc3c277eff97d99927f971c0a7b> .

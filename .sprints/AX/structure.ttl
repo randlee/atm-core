@@ -12,4 +12,4 @@ triage:AX2 a triage:Sprint ; triage:inPhase triage:PhaseAX ; triage:order 3 ; tr
 triage:AX4 a triage:Sprint ; triage:inPhase triage:PhaseAX ; triage:order 4 ; triage:branch "feature/ax4-task-cli-and-docs" ; triage:criteria "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" .
 triage:AX5 a triage:Sprint ; triage:inPhase triage:PhaseAX ; triage:order 5 ; triage:branch "feature/ax5-task-reminder-cycle" ; triage:criteria "docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md" .
 triage:AX6 a triage:Sprint ; triage:inPhase triage:PhaseAX ; triage:order 6 ; triage:branch "feature/ax6-lead-notification-doctor" ; triage:criteria "docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md" .
-triage:AX7 a triage:Sprint ; triage:inPhase triage:PhaseAX ; triage:order 7 ; triage:branch "integrate/phase-ax" ; triage:criteria "docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md" .
+triage:AX7 a triage:Sprint ; triage:inPhase triage:PhaseAX ; triage:order 7 ; triage:branch "feature/ax7-herdr-dogfood-evidence" ; triage:criteria "docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md" .

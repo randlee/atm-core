@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T10:25:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r26 in .sprints/AX/events.ttl; final sprint verdict AX4-QA4 PASS (PR #1194 comment 5551411069)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T09:17:24Z"^^xsd:dateTime ;
   triage:foundIn triage:AX4 ;
@@ -28,8 +31,8 @@
   triage:file "crates/atm/src/commands/list.rs" ;
   triage:line 152 ;
   triage:snippet "anyhow::bail!(\"--member requires --tasks or --task-events <TASK_ID>\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04bfa26fdc3c277eff97d99927f971c0a7b> .

@@ -16,6 +16,9 @@
   triage:repeatable false ;
   triage:sweepScope "file" ;
   triage:status "fixed" ;
+  triage:closedAt "2026-09-05T06:51:15Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Blocking finding closed by a later valid Completion and quality-mgr follow-up QA; final sprint verdict AX1-QA3 PASS 0/0/0 (PR #1185 comment 5550091028)." ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-05T06:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX1 ;

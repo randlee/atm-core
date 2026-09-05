@@ -15,7 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T11:20:54Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r36 in .sprints/AX/events.ttl; final sprint verdict AX4-QA4 PASS (PR #1194 comment 5551411069)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T09:20:54Z"^^xsd:dateTime ;
   triage:foundIn triage:AX4 ;
@@ -30,8 +33,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
   triage:line 21 ;
   triage:snippet "rationale: ... both edit docs/requirements.md (AX.1 lines 1094/1105/4496, AX.4 §6.5/§6.6/§15.4) ..." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .
@@ -41,8 +44,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
   triage:line 56 ;
   triage:snippet "D3 — docs: `docs/requirements.md` §6.5 (`atm send` flags) and §6.6 (`atm list` flags) list the new flags;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .
@@ -52,8 +55,8 @@
   triage:file "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" ;
   triage:line 119 ;
   triage:snippet "4. Requirements §6.5/§6.6/§15.4, team-protocol, and `tasks.md` merged;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax4-task-cli-and-docs" ;
   triage:headSha "aaf2e04bfa26fdc3c277eff97d99927f971c0a7b" ;
   triage:occursIn <urn:atm:triage:worktree/ax4-task-cli-and-docs/aaf2e04b> .

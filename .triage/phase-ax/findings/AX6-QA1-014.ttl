@@ -1,0 +1,109 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA1-014>
+  a triage:Finding ;
+  triage:findingId "AX6-QA1-014" ;
+  triage:title "blocked_since/last_blocked_notice remain fields on HerdrQueueWakePump instead of moving into herdr_escalation.rs (D6/D9)" ;
+  triage:description "AX.6 QA-1 (quality-mgr QA-AX6-R1-1788626395, PR #1204 Final Quality Report 2026-09-05T16:56Z) at head 490a6c42a0f3283c251875d9a61fcf99b641c2a2. crates/atm-http-runtime/src/herdr_queue_wake.rs:75-76 keeps blocked_since and last_blocked_notice on the HerdrQueueWakePump struct; D6/D9 text places the escalation state in herdr_escalation.rs. Fix: move the state into the escalation module (mind RULE-003: herdr_queue_wake.rs is at 994 production lines)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T17:00:52Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T16:56:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-014/AX6-76> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-014/AX6-102> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-014/AX6-456> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-014/AX7-76> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-014/AX7-102> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-014/AX7-456> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA1-014/AX6-76>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 76 ;
+  triage:snippet "pub(crate) last_blocked_notice: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c4" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/490a6c4> .
+
+<urn:atm:triage:occurrence/AX6-QA1-014/AX6-102>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 102 ;
+  triage:snippet "last_blocked_notice: Arc::new(Mutex::new(HashMap::new()))," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c4" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/490a6c4> .
+
+<urn:atm:triage:occurrence/AX6-QA1-014/AX6-456>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 456 ;
+  triage:snippet "self.last_blocked_notice" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c4" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/490a6c4> .
+
+<urn:atm:triage:occurrence/AX6-QA1-014/AX7-76>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 76 ;
+  triage:snippet "pub(crate) last_blocked_notice: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931ace" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/1931ace> .
+
+<urn:atm:triage:occurrence/AX6-QA1-014/AX7-102>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 102 ;
+  triage:snippet "last_blocked_notice: Arc::new(Mutex::new(HashMap::new()))," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931ace" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/1931ace> .
+
+<urn:atm:triage:occurrence/AX6-QA1-014/AX7-456>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 456 ;
+  triage:snippet "self.last_blocked_notice" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931ace" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/1931ace> .
+
+<urn:atm:triage:worktree/AX6/490a6c4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX6-490a6c4" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c4" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/1931ace>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX7-1931ace" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931ace" ;
+  triage:orderIndex 7 .

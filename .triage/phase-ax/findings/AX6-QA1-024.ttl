@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA1-024>
+  a triage:Finding ;
+  triage:findingId "AX6-QA1-024" ;
+  triage:title "D9 text names two files but the split shipped three modules; reconcile the sprint doc with the implementation" ;
+  triage:description "AX.6 QA-1 (quality-mgr QA-AX6-R1-1788626395, PR #1204 Final Quality Report 2026-09-05T16:56Z) at head 490a6c42a0f3283c251875d9a61fcf99b641c2a2. Disputed item ruled by fenix: req-qa (ATM-QA-005) read the undocumented third module crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs (264 production lines) as blocking implementation drift against D9's two-file text; arch-qa found D9's goal met (all files under the 1000-line cap: 994/276/264, thin call sites in herdr_queue_wake.rs). fenix rules with arch-qa: the three-module split is acceptable and does not block the merge gate; the discrepancy is recorded at minor severity as a documentation reconciliation — update D9 in the sprint doc to name the actual modules and their responsibilities. Note the RULE-003 risk: herdr_queue_wake.rs has 6 lines of margin." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T17:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T16:56:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-024/AX6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-024/AX7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA1-024/AX6-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md" ;
+  triage:line 220 ;
+  triage:snippet "D9 — pump file size (arch-qa RULE-003): `herdr_queue_wake.rs` is" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/490a6c42> .
+
+<urn:atm:triage:occurrence/AX6-QA1-024/AX7-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md" ;
+  triage:line 220 ;
+  triage:snippet "D9 — pump file size (arch-qa RULE-003): `herdr_queue_wake.rs` is" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/1931ace> .
+
+<urn:atm:triage:worktree/AX6/490a6c42>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX6" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/1931ace>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX7" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:orderIndex 7 .

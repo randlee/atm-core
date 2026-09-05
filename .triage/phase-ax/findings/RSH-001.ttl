@@ -20,6 +20,7 @@
   triage:triagedAt "2026-09-05T05:20:00Z"^^xsd:dateTime ;
   triage:closedAt "2026-09-05T06:30:00Z"^^xsd:dateTime ;
   triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r6 in .sprints/AX/events.ttl; final sprint verdict AX1-QA3 PASS (PR #1185 comment 5550091028)." ;
   triage:foundIn triage:AX1 ;
   triage:foundAt "2026-09-05T05:17:08Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/ax1-1452df008> ;
@@ -32,8 +33,8 @@
   triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
   triage:line 896 ;
   triage:snippet "let transaction = connection.transaction().map_err(|error| {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax1-queue-template-class" ;
   triage:headSha "1452df008fdde42bb6a152ba207fe4061c4fd5d6" ;
   triage:occursIn <urn:atm:triage:worktree/ax1-1452df008> .
@@ -43,8 +44,8 @@
   triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
   triage:line 956 ;
   triage:snippet "let transaction = connection.transaction().map_err(|error| {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "acfe3e556d14675b0ab5bef57eea7d7a02b9e370" ;
   triage:occursIn <urn:atm:triage:worktree/ax3-acfe3e556> .
@@ -54,8 +55,8 @@
   triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
   triage:line 896 ;
   triage:snippet "let transaction = connection.transaction().map_err(|error| {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax2-herdr-template-rendering" ;
   triage:headSha "e560bb1b69d9a38be5e0013e35752c2d6c7d4f28" ;
   triage:occursIn <urn:atm:triage:worktree/ax2-e560bb1b> .

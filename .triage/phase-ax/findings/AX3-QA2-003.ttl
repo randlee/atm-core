@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T10:07:04Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r21 in .sprints/AX/events.ttl; final sprint verdict AX3-QA7 PASS (PR #1191 comment 5551705615)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T09:05:43Z"^^xsd:dateTime ;
   triage:foundIn triage:AX3 ;
@@ -29,8 +32,8 @@
   triage:file "crates/atm-core/src/service_runtime.rs" ;
   triage:line 486 ;
   triage:snippet "pub fn task_store(&self) -> Result<std::sync::Arc<dyn TaskStore + Send + Sync>, AtmError>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/AX3/116bd23b0> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm-runtime/src/composition.rs" ;
   triage:line 178 ;
   triage:snippet "let task_store = storage.task_store();" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "116bd23b0c8ab2c406417f727e5e28753670bef6" ;
   triage:occursIn <urn:atm:triage:worktree/AX3/116bd23b0> .

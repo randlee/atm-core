@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T12:10:20Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Blocking finding closed by a later valid Completion and quality-mgr follow-up QA; final sprint verdict AX3-QA7 PASS 0/0/0 (PR #1191 comment 5551705615)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T10:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX3 ;
@@ -29,8 +32,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 609 ;
   triage:snippet "thread::spawn(move || {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "097dbd8b2581590db968a2d16c8288ea9b789658" ;
   triage:occursIn <urn:atm:triage:worktree/AX3/097dbd8> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 663 ;
   triage:snippet "fn spawn_worker(self: &Arc<Self>, id: usize) -> Result<(), AtmError> {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "097dbd8b2581590db968a2d16c8288ea9b789658" ;
   triage:occursIn <urn:atm:triage:worktree/AX3/097dbd8> .

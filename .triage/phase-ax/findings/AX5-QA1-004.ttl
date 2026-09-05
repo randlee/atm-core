@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T15:36:11Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Blocking finding closed by a later valid Completion and quality-mgr follow-up QA; final sprint verdict AX5-QA4 PASS 0/0/0 (PR #1201 comment 5552870450)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T12:38:08Z"^^xsd:dateTime ;
   triage:foundIn triage:AX5 ;
@@ -28,8 +31,8 @@
   triage:file "crates/atm-core/tests/task_reminder_dispatch.rs" ;
   triage:line 43 ;
   triage:snippet "fn reminder_dispatch_renders_from_a_task_row_without_assignment_mail" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax5-task-reminder-cycle" ;
   triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
   triage:occursIn <urn:atm:triage:worktree/ax5/da823baaa> .

@@ -15,7 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T10:07:04Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r19 in .sprints/AX/events.ttl; final sprint verdict AX3-QA7 PASS (PR #1191 comment 5551705615)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T06:11:56Z"^^xsd:dateTime ;
   triage:foundIn triage:AX3 ;
@@ -29,8 +32,8 @@
   triage:file "crates/atm-storage/src/task_state.rs" ;
   triage:line 83 ;
   triage:snippet "(None, TaskEvent::Completed) => Err(TaskRejected::new(\"no open task for actor\"))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
   triage:occursIn <urn:atm:triage:worktree/AX3/88c579a18af28ff636452089a717425528f7157a> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm-storage/src/task_state.rs" ;
   triage:line 111 ;
   triage:snippet "Err(TaskRejected::new(format!(\"no open task for {actor}\")))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax3-task-state-machine" ;
   triage:headSha "88c579a18af28ff636452089a717425528f7157a" ;
   triage:occursIn <urn:atm:triage:worktree/AX3/88c579a18af28ff636452089a717425528f7157a> .

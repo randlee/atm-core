@@ -1,0 +1,85 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA1-005>
+  a triage:Finding ;
+  triage:findingId "AX6-QA1-005" ;
+  triage:title "No doctor tests for the five new codes/info counts and no recipient-store tests" ;
+  triage:description "AX.6 QA-1 (quality-mgr QA-AX6-R1-1788626395, PR #1204 Final Quality Report 2026-09-05T16:56Z) at head 490a6c42a0f3283c251875d9a61fcf99b641c2a2. crates/atm-core/src/doctor/mod.rs has no tests for any of the five new doctor warning codes or the assigned/active info counts; crates/atm-storage-rusqlite/src/task_store.rs has no tests for the escalation-recipient store (scope keying, duplicate add, daemon fallback when the team list is empty). Fix: add both test groups." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T17:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T16:56:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-005/AX6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-005/AX6-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-005/AX7-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-005/AX7-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA1-005/AX6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "missing test coverage for five new doctor warning codes" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/490a6c42a0f3283c251875d9a61fcf99b641c2a2> .
+
+<urn:atm:triage:occurrence/AX6-QA1-005/AX6-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 1 ;
+  triage:snippet "missing test coverage for escalation-recipient store" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/490a6c42a0f3283c251875d9a61fcf99b641c2a2> .
+
+<urn:atm:triage:occurrence/AX6-QA1-005/AX7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "missing test coverage for five new doctor warning codes" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/1931acea5> .
+
+<urn:atm:triage:occurrence/AX6-QA1-005/AX7-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 1 ;
+  triage:snippet "missing test coverage for escalation-recipient store" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/1931acea5> .
+
+<urn:atm:triage:worktree/AX6/490a6c42a0f3283c251875d9a61fcf99b641c2a2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX6" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/1931acea5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX7" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:orderIndex 7 .
