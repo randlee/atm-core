@@ -12,3 +12,12 @@ triage:AW2 a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 2 ; tr
 triage:AW4 a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 3 ; triage:branch "feature/aw4-graft-fallback-observability" ; triage:criteria "docs/plans/phase-aw/sprint-AW.4-graft-fallback-observability.md" .
 triage:AW3 a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 4 ; triage:branch "feature/aw3-health-and-log-query" ; triage:criteria "docs/plans/phase-aw/sprint-AW.3-health-and-log-query.md" .
 triage:AW5 a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 5 ; triage:branch "feature/aw5-native-tool-parity" ; triage:criteria "docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md" .
+
+# Phase-level review passes (not feature sprints) referenced by
+# triage:foundIn on integration/phase-gate/readiness findings; declared here
+# so the report's foundIn validation resolves against a real Sprint
+# resource, per docs/triage/ttl-repair.md. All run on integrate/phase-aw
+# itself, after the feature sprints above.
+triage:AW-INTEGRATION-REVIEW a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 6 ; triage:branch "integrate/phase-aw" ; triage:criteria ".triage/phase-aw/post-mortem.md" .
+triage:AW-PHASE-GATE-REVIEW a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 7 ; triage:branch "integrate/phase-aw" ; triage:criteria ".triage/phase-aw/post-mortem.md" .
+triage:AWReadinessReview a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 8 ; triage:branch "integrate/phase-aw" ; triage:criteria ".triage/phase-aw/post-mortem.md" .
