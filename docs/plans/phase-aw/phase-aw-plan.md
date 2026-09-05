@@ -217,7 +217,7 @@ Phase-wide invariants (apply to every sprint):
   AW.3 D1) plus `trait DiagnosticCountersSource: Send + Sync { fn snapshot(&self)
   -> DiagnosticCounters; }`. AW.1 implements it for `TracingBridgeStats`,
   AW.2 for the combined bridge+timeline stats, and the bootstrap injects one
-  `Arc<dyn DiagnosticCountersSource>` into `RuntimeHealth` (AW.3) — so
+  `Arc<dyn DiagnosticCountersSource>` into the HTTP runtime builder (AW.3) — so
   `atm-http-runtime` gains no crate edge.
 - **`DiagnosticTimelineStore`** (defined in AW.2, `crates/atm-storage/src/diagnostics.rs`)
   is reached by AW.3 through `atm-runtime` router state exactly like the

@@ -20,7 +20,7 @@ parallel_safe: [AW.5]
    dropped_queue_full_total, dropped_persist_error_total }, degraded:
    ["jsonl"|"timeline"...] }` sourced from the
    `Arc<dyn DiagnosticCountersSource>` (phase plan §2) that
-   `atm-daemon-bootstrap` injects into `RuntimeHealth` via
+   `atm-daemon-bootstrap` injects into the HTTP runtime builder via
    `HttpRuntimeBuilder::with_diagnostic_counters(...)`; `atm-http-runtime`
    depends only on the `atm-core` snapshot type it already reaches — no new
    crate edge, no `.just/lint-config.toml` change. Doctor prints a WARN line
