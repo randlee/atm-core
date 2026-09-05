@@ -8,28 +8,30 @@
   a triage:Finding ;
   triage:findingId "AW1-QA-004" ;
   triage:title "AC9 doc-test compiling DiagnosticSink/RetainedEvent/SinkOffer/DropReason/DiagnosticCounters signatures is missing" ;
-  triage:description "req-qa ATM-QA-004: AC9 requires a doc-test that compiles the phase-plan §2 signatures for DiagnosticSink, RetainedEvent, SinkOffer, DropReason, DiagnosticCounters/DiagnosticCountersSource. No such doc-test exists on crates/atm-observability/src/tracing_bridge.rs (the DiagnosticSink trait has no ``` example block). Minor." ;
+  triage:description "req-qa ATM-QA-004: AC9 requires a doc-test that compiles the phase-plan §2 signatures for DiagnosticSink, RetainedEvent, SinkOffer, DropReason, DiagnosticCounters/DiagnosticCountersSource. No such doc-test exists on crates/atm-observability/src/tracing_bridge.rs (the DiagnosticSink trait has no ``` example block). Minor. Fix confirmed at feature/aw1-tracing-bridge@52c888ce1: added a compiling doc-test on the DiagnosticSink trait in crates/atm-observability/src/tracing_bridge.rs exercising DiagnosticSink/RetainedEvent/SinkOffer/DropReason/DiagnosticCounters signatures. quality-mgr independently verified CLOSED at 1106a5db4." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
   triage:category "AW1-QA" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-09-05T02:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-09-04T22:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW1 ;
   triage:foundAt "2026-09-05T00:43:44Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW1-QA-004/AW1-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AW1-QA-004/AW1-1>
   a triage:Occurrence ;
   triage:file "crates/atm-observability/src/tracing_bridge.rs" ;
   triage:line 78 ;
   triage:snippet "no AC9 doc-test" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw1-tracing-bridge" ;
   triage:headSha "3427357acc6cf4a61914c6f3cd7980557993ae12" ;
   triage:occursIn <urn:atm:triage:worktree/aw1-tracing-bridge/3427357acc> .
