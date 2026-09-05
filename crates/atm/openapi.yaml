@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ATM daemon API
-  version: v1
+  version: 1.1.0
   description: HTTP contract shared by local UDS and future peer HTTPS adapters.
 servers:
   - url: /v1/atm
@@ -155,6 +155,9 @@ components:
         body: { type: string }
         requires_ack: { type: boolean }
         acknowledges_message_id: { type: string }
+        peer_http_api_version:
+          type: string
+          description: Optional cross-host wire API version. The current baseline is 1.1.0; receivers reject only a major-version mismatch.
     PeekQuery:
       type: object
       description: Canonical inspect query; fields are validated by the daemon.

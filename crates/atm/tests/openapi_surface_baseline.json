@@ -487,6 +487,7 @@
         "body",
         "from",
         "message_id",
+        "peer_http_api_version",
         "requires_ack",
         "to"
       ],
