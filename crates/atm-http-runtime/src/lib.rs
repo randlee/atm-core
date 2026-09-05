@@ -57,6 +57,7 @@ mod doctor_observability;
 mod health_route;
 mod herdr_queue_wake;
 mod http1_server;
+mod loopback_read;
 mod loopback_tcp;
 mod message_handler;
 mod peer_connection_pool;
@@ -93,7 +94,7 @@ pub use bare_cli_fifo::{
 pub use client::unix_socket_client;
 pub use client::{
     DIRECT_PEER_TCP_PORT, SAME_HOST_REQUEST_DEADLINE, direct_peer_port, direct_peer_tcp_client,
-    loopback_tcp_client, preferred_local_client, selected_write_transport,
+    loopback_tcp_client, loopback_tcp_get_json, preferred_local_client, selected_write_transport,
     shared_direct_peer_client,
 };
 pub use herdr_queue_wake::{

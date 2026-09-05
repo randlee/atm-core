@@ -1,4 +1,5 @@
 use std::thread;
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use atm_core::observability::{
@@ -7,7 +8,7 @@ use atm_core::observability::{
 };
 use atm_core::types::IsoTimestamp;
 use clap::{Args, Subcommand, ValueEnum};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::commands::caller_context::{CallerContextOverrides, resolve_cli_caller_context};
 use crate::observability::CliObservability;
@@ -27,12 +28,12 @@ pub struct LogCommand {
 
 impl LogCommand {
     /// Execute the `atm log` command.
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let _caller_context = resolve_cli_caller_context(CallerContextOverrides::default())?;
         match self.mode {
             LogModeCommand::Snapshot(args) => {
                 if args.source != LogSource::Jsonl {
-                    return args.run_timeline();
+                    return args.run_timeline(observability).await;
                 }
                 let snapshot = observability.query(args.build_query(LogMode::Snapshot)?)?;
                 output::print_log_snapshot(&snapshot, args.json)
@@ -40,7 +41,7 @@ impl LogCommand {
             LogModeCommand::Filter(args) => {
                 args.ensure_filter_present()?;
                 if args.source != LogSource::Jsonl {
-                    return args.run_timeline();
+                    return args.run_timeline(observability).await;
                 }
                 let snapshot = observability.query(args.build_query(LogMode::Snapshot)?)?;
                 output::print_log_snapshot(&snapshot, args.json)
@@ -126,46 +127,127 @@ struct QueryArgs {
 }
 
 impl QueryArgs {
-    fn run_timeline(&self) -> Result<()> {
-        let runtime = atm_daemon_bootstrap::assemble_default_runtime()?;
-        let level = self.levels.first().map(|level| match level {
-            CliLogLevel::Trace => "trace",
-            CliLogLevel::Debug => "debug",
-            CliLogLevel::Info => "info",
-            CliLogLevel::Warn => "warn",
-            CliLogLevel::Error => "error",
-        });
-        let records = runtime
-            .diagnostic_timeline
-            .query(&atm_storage::DiagnosticQuery {
-                since: self.since.as_deref().map(parse_since_millis).transpose()?,
-                until: self.until.as_deref().map(parse_since_millis).transpose()?,
-                level_at_least: level.map(str::to_owned),
-                component_prefix: self.component.clone(),
-                limit: Some(self.limit.unwrap_or(DEFAULT_SNAPSHOT_LIMIT).min(5_000)),
-            })?;
+    async fn run_timeline(&self, observability: &CliObservability) -> Result<()> {
+        let records = self.records_for_source(observability).await?;
         let note = "sources are independently bounded; merged view is not lossless under overload";
         if self.json {
             println!(
                 "{}",
-                serde_json::to_string_pretty(&TimelineOutput {
-                    note,
-                    records: records
-                        .into_iter()
-                        .map(|event| TimelineRecord::from_event(event, self.source))
-                        .collect(),
-                })?
+                serde_json::to_string_pretty(&TimelineOutput { note, records })?
             );
         } else {
             println!("Note: {note}");
             for event in records {
                 println!(
-                    "{} {} {} {}",
-                    event.ts_unix_ms, event.level, event.component, event.message
+                    "{} {} {} {} {}",
+                    event.ts_unix_ms, event.source, event.level, event.component, event.message
                 );
             }
         }
         Ok(())
+    }
+
+    async fn records_for_source(
+        &self,
+        observability: &CliObservability,
+    ) -> Result<Vec<TimelineRecord>> {
+        if self.source == LogSource::Timeline {
+            return self.timeline_records().await;
+        }
+        let limit = self.limit.unwrap_or(DEFAULT_SNAPSHOT_LIMIT).min(5_000);
+        let mut records = self.jsonl_records(observability)?;
+        records.extend(self.graft_fallback_records()?);
+        records.extend(self.timeline_records().await?);
+        records.sort_by_key(|record| (record.ts_unix_ms, record.source_rank(), record.seq));
+        records.truncate(limit);
+        Ok(records)
+    }
+
+    fn jsonl_records(&self, observability: &CliObservability) -> Result<Vec<TimelineRecord>> {
+        let snapshot = observability.query(self.build_query(LogMode::Snapshot)?)?;
+        Ok(snapshot
+            .records
+            .into_iter()
+            .enumerate()
+            .filter(|(_, record)| {
+                self.component.as_ref().is_none_or(|component| {
+                    record
+                        .target
+                        .as_ref()
+                        .is_some_and(|target| target.starts_with(component))
+                })
+            })
+            .map(|(seq, record)| TimelineRecord::from_jsonl(record, seq))
+            .collect())
+    }
+
+    fn graft_fallback_records(&self) -> Result<Vec<TimelineRecord>> {
+        let path = atm_observability::graft_fallback_log_path(&atm_core::home::host_log_dir()?);
+        let contents = match std::fs::read_to_string(path) {
+            Ok(contents) => contents,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(error).context("read graft fallback retained diagnostics"),
+        };
+        Ok(contents
+            .lines()
+            .enumerate()
+            .filter_map(|(seq, line)| {
+                serde_json::from_str::<serde_json::Value>(line)
+                    .ok()
+                    .and_then(|value| TimelineRecord::from_graft_value(value, seq))
+            })
+            .filter(|record| self.record_matches(record))
+            .take(self.limit.unwrap_or(DEFAULT_SNAPSHOT_LIMIT).min(5_000))
+            .collect())
+    }
+
+    async fn timeline_records(&self) -> Result<Vec<TimelineRecord>> {
+        let mut query = vec![format!(
+            "limit={}",
+            self.limit.unwrap_or(DEFAULT_SNAPSHOT_LIMIT).min(5_000)
+        )];
+        if let Some(since) = self.since.as_deref() {
+            query.push(format!("since={}", parse_since_millis(since)?));
+        }
+        if let Some(until) = self.until.as_deref() {
+            query.push(format!("until={}", parse_since_millis(until)?));
+        }
+        if let Some(component) = self.component.as_deref() {
+            query.push(format!("component={}", percent_encode(component)));
+        }
+        let endpoint = atm_core::home::host_runtime_dir()?
+            .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
+        let body = atm_http_runtime::loopback_tcp_get_json(
+            endpoint,
+            format!("/v1/diagnostics?{}", query.join("&")),
+            Duration::from_secs(10),
+        )
+        .await?;
+        let response: DiagnosticsResponse = serde_json::from_slice(&body)
+            .context("daemon returned an invalid diagnostic timeline response")?;
+        Ok(response
+            .records
+            .into_iter()
+            .filter(|record| {
+                self.levels.is_empty()
+                    || self
+                        .levels
+                        .iter()
+                        .any(|level| level_name(*level) == record.level)
+            })
+            .map(|record| TimelineRecord::from_record(record, self.source))
+            .collect())
+    }
+
+    fn record_matches(&self, record: &TimelineRecord) -> bool {
+        self.component
+            .as_ref()
+            .is_none_or(|component| record.component.starts_with(component))
+            && (self.levels.is_empty()
+                || self
+                    .levels
+                    .iter()
+                    .any(|level| level_name(*level) == record.level))
     }
 
     fn build_query(&self, mode: LogMode) -> Result<AtmLogQuery> {
@@ -218,10 +300,12 @@ struct TimelineRecord {
     correlation_id: Option<String>,
     origin: String,
     message: String,
+    #[serde(skip)]
+    seq: usize,
 }
 
 impl TimelineRecord {
-    fn from_event(event: atm_storage::DiagnosticEvent, source: LogSource) -> Self {
+    fn from_record(event: DiagnosticRecord, source: LogSource) -> Self {
         Self {
             source: match source {
                 LogSource::Jsonl => "jsonl",
@@ -235,8 +319,108 @@ impl TimelineRecord {
             correlation_id: event.correlation_id,
             origin: event.origin,
             message: event.message,
+            seq: 0,
         }
     }
+
+    fn from_jsonl(event: atm_core::observability::AtmLogRecord, seq: usize) -> Self {
+        let fields = serde_json::to_value(&event.fields).unwrap_or_default();
+        Self {
+            source: "jsonl",
+            ts_unix_ms: event.timestamp.into_inner().timestamp_millis(),
+            level: serde_json::to_value(event.level)
+                .ok()
+                .and_then(|value| value.as_str().map(ToOwned::to_owned))
+                .unwrap_or_else(|| "info".to_owned()),
+            component: event.target.unwrap_or_else(|| event.service.to_string()),
+            code: fields
+                .get("code")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned),
+            correlation_id: fields
+                .get("correlation_id")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned),
+            origin: fields
+                .get("origin")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("jsonl")
+                .to_owned(),
+            message: event.message.unwrap_or_default(),
+            seq,
+        }
+    }
+
+    fn from_graft_value(value: serde_json::Value, seq: usize) -> Option<Self> {
+        let object = value.as_object()?;
+        Some(Self {
+            source: "graft",
+            ts_unix_ms: object.get("ts_unix_ms")?.as_i64()?,
+            level: object.get("level")?.as_str()?.to_owned(),
+            component: object.get("component")?.as_str()?.to_owned(),
+            code: object
+                .get("code")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned),
+            correlation_id: object
+                .get("correlation_id")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned),
+            origin: object
+                .get("origin")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("graft")
+                .to_owned(),
+            message: object.get("message")?.as_str()?.to_owned(),
+            seq,
+        })
+    }
+
+    fn source_rank(&self) -> u8 {
+        match self.source {
+            "jsonl" => 0,
+            "graft" => 1,
+            "timeline" => 2,
+            _ => unreachable!("merged source is constrained"),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct DiagnosticsResponse {
+    records: Vec<DiagnosticRecord>,
+}
+
+#[derive(Deserialize)]
+struct DiagnosticRecord {
+    ts_unix_ms: i64,
+    level: String,
+    component: String,
+    code: Option<String>,
+    correlation_id: Option<String>,
+    origin: String,
+    message: String,
+}
+
+fn level_name(level: CliLogLevel) -> &'static str {
+    match level {
+        CliLogLevel::Trace => "trace",
+        CliLogLevel::Debug => "debug",
+        CliLogLevel::Info => "info",
+        CliLogLevel::Warn => "warn",
+        CliLogLevel::Error => "error",
+    }
+}
+
+fn percent_encode(raw: &str) -> String {
+    raw.bytes()
+        .flat_map(|byte| match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                vec![char::from(byte)]
+            }
+            _ => format!("%{byte:02X}").chars().collect(),
+        })
+        .collect()
 }
 
 #[derive(Debug, Args)]
@@ -519,9 +703,9 @@ mod tests {
         assert_eq!(string.value, LogFieldValue::string("send".to_string()));
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn run_snapshot_succeeds_with_fake_observability_snapshot() {
+    async fn run_snapshot_succeeds_with_fake_observability_snapshot() {
         let _caller = caller_context_env();
         let command = LogCommand {
             mode: LogModeCommand::Snapshot(QueryArgs {
@@ -551,12 +735,12 @@ mod tests {
             }))),
         });
 
-        command.run(&observability).expect("snapshot run");
+        command.run(&observability).await.expect("snapshot run");
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn run_snapshot_surfaces_observability_query_error() {
+    async fn run_snapshot_surfaces_observability_query_error() {
         let _caller = caller_context_env();
         let command = LogCommand {
             mode: LogModeCommand::Snapshot(QueryArgs {
@@ -576,7 +760,7 @@ mod tests {
             )))),
         });
 
-        let error = command.run(&observability).expect_err("query error");
+        let error = command.run(&observability).await.expect_err("query error");
 
         assert_eq!(
             error.downcast_ref::<AtmError>().map(|atm| atm.code()),
@@ -584,9 +768,9 @@ mod tests {
         );
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn run_snapshot_reads_real_retained_log_without_daemon() {
+    async fn run_snapshot_reads_real_retained_log_without_daemon() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = EnvGuard::set_many([
             ("ATM_IDENTITY", Some(TEST_SENDER)),
@@ -626,12 +810,12 @@ mod tests {
             }),
         };
 
-        command.run(&observability).expect("snapshot run");
+        command.run(&observability).await.expect("snapshot run");
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn run_snapshot_fails_without_caller_context() {
+    async fn run_snapshot_fails_without_caller_context() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = EnvGuard::set_many([
             ("ATM_IDENTITY", None),
@@ -654,7 +838,10 @@ mod tests {
             }),
         };
 
-        let error = command.run(&observability).expect_err("missing identity");
+        let error = command
+            .run(&observability)
+            .await
+            .expect_err("missing identity");
 
         assert_eq!(
             error.downcast_ref::<AtmError>().map(|atm| atm.code()),

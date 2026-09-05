@@ -106,7 +106,7 @@ impl HttpRuntimeClientFailure {
         }
     }
 
-    fn into_atm_error(self) -> AtmError {
+    pub(crate) fn into_atm_error(self) -> AtmError {
         match self {
             Self::EndpointRecord(error) => error,
             Self::Connect(cause) => AtmError::daemon_unavailable(
@@ -168,6 +168,18 @@ pub fn loopback_tcp_client(
         Arc::new(connector),
         request_timeout,
     )))
+}
+
+/// Fetch one bounded JSON projection from the capability-authenticated
+/// loopback daemon.  This is deliberately a read-only escape hatch for
+/// runtime-owned auxiliary routes; consumers must not assemble daemon storage
+/// in-process to read those projections.
+pub async fn loopback_tcp_get_json(
+    endpoint_record_path: impl AsRef<Path>,
+    path: String,
+    request_timeout: Duration,
+) -> Result<Vec<u8>, AtmError> {
+    crate::loopback_read::get_json(endpoint_record_path.as_ref(), path, request_timeout).await
 }
 
 /// Builds the shared typed client for one explicitly configured direct peer.
@@ -329,7 +341,7 @@ pub fn preferred_local_client(
 /// it was built for, and is rebuilt -- discarding any pooled connections --
 /// whenever the freshly read record names a different generation.
 #[derive(Debug)]
-struct LoopbackTcpConnector {
+pub(crate) struct LoopbackTcpConnector {
     endpoint_record_path: PathBuf,
     transport: RwLock<Option<Arc<GenerationalReqwestClient>>>,
 }
@@ -704,7 +716,7 @@ pub(crate) fn peer_connect_deadline_failure(
 }
 
 impl LoopbackTcpConnector {
-    fn new(endpoint_record_path: &Path) -> Result<Self, AtmError> {
+    pub(crate) fn new(endpoint_record_path: &Path) -> Result<Self, AtmError> {
         // Build-and-discard once so a client construction error (for
         // example an unsupported TLS backend) still fails fast at connector
         // construction time instead of surfacing from the first `exchange`
