@@ -216,7 +216,6 @@ dependencies = [
  "chrono",
  "fs4",
  "peer-tls",
- "sc-observability",
  "sc-observability-types",
  "serde_json",
  "serial_test",
