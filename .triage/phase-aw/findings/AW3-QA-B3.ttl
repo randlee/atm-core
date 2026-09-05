@@ -8,28 +8,30 @@
   a triage:Finding ;
   triage:findingId "AW3-QA-B3" ;
   triage:title "CLI timeline/merged queries bypass the documented GET /v1/diagnostics daemon route and query the store in-process" ;
-  triage:description "qa-pr1182-r1 (msg 01M1QSQWFKBENPSW4ZP83SKMYS) at 199a3bfeb: req-qa ATM-QA-102: sprint-AW.3 D2 specifies timeline queries go through GET /v1/diagnostics on the daemon (capability-authenticated, same as /v1/health). The CLI instead calls atm_daemon_bootstrap::assemble_default_runtime() and queries the store in-process, never issuing an HTTP request. The route implementation in crates/atm-http-runtime/src/diagnostics_route.rs is correct and unaffected. Fix: route timeline and merged through the daemon HTTP client path (atm-daemon-client) like other daemon-backed CLI commands." ;
+  triage:description "qa-pr1182-r1 (msg 01M1QSQWFKBENPSW4ZP83SKMYS) at 199a3bfeb: req-qa ATM-QA-102: sprint-AW.3 D2 specifies timeline queries go through GET /v1/diagnostics on the daemon (capability-authenticated, same as /v1/health). The CLI instead calls atm_daemon_bootstrap::assemble_default_runtime() and queries the store in-process, never issuing an HTTP request. The route implementation in crates/atm-http-runtime/src/diagnostics_route.rs is correct and unaffected. Fix: route timeline and merged through the daemon HTTP client path (atm-daemon-client) like other daemon-backed CLI commands. CLOSURE (qa-pr1182-r2, quality-mgr): b41b1fcdb's timeline_records() now calls atm_http_runtime::loopback_tcp_get_json against /v1/diagnostics through the authenticated loopback client (crates/atm-http-runtime/src/loopback_read.rs), not atm_daemon_bootstrap::assemble_default_runtime(). Independently confirmed by req-qa and arch-qa; quality-mgr read log.rs:220-227 and loopback_read.rs directly. Finding closed." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
   triage:category "cli-log-query" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T03:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW3 ;
   triage:foundAt "2026-09-05T03:25:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-B3/AW3-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AW3-QA-B3/AW3-1>
   a triage:Occurrence ;
   triage:file "crates/atm/src/commands/log.rs" ;
   triage:line 125 ;
   triage:snippet "assemble_default_runtime" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "199a3bfeb" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .
