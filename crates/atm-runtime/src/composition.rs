@@ -337,6 +337,21 @@ mod tests {
     use crate::workflow_telemetry::WorkflowTelemetryDiagnostics;
 
     #[test]
+    fn composition_installs_the_task_store() {
+        let root = std::env::temp_dir().join(format!(
+            "atm-runtime-task-store-{}",
+            atm_storage::AtmMessageId::new()
+        ));
+        std::fs::create_dir_all(&root).expect("tempdir");
+        let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(&root)
+            .expect("compose sqlite runtime");
+
+        assert!(assembly.service_runtime.task_store().is_ok());
+        drop(assembly);
+        std::fs::remove_dir_all(root).expect("remove tempdir");
+    }
+
+    #[test]
     fn daemon_config_doctor_does_not_read_a_caller_workspace() {
         let nonce = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

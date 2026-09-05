@@ -87,11 +87,18 @@ pub enum Transition {
 }
 
 /// Applies the row-local task transition table without touching storage.
-pub fn transition(state: Option<TaskState>, event: TaskEvent) -> Result<Transition, TaskRejected> {
+pub fn transition(
+    state: Option<TaskState>,
+    event: TaskEvent,
+    task_id: &TaskId,
+    actor: &AgentName,
+) -> Result<Transition, TaskRejected> {
     match (state, event) {
         (None, TaskEvent::Assigned) => Ok(Transition::To(TaskState::Assigned)),
         (None, TaskEvent::Acked) => Ok(Transition::NoOp),
-        (None, TaskEvent::Completed) => Err(TaskRejected::new("no open task for actor")),
+        (None, TaskEvent::Completed) => Err(TaskRejected::new(format!(
+            "no open task {task_id} for {actor}"
+        ))),
         (Some(TaskState::Assigned), TaskEvent::Assigned) => Ok(Transition::To(TaskState::Assigned)),
         (Some(TaskState::Assigned), TaskEvent::Acked) => Ok(Transition::To(TaskState::Active)),
         (Some(TaskState::Assigned), TaskEvent::Completed) => {
@@ -100,13 +107,13 @@ pub fn transition(state: Option<TaskState>, event: TaskEvent) -> Result<Transiti
         (Some(TaskState::Active), TaskEvent::Assigned) => Ok(Transition::To(TaskState::Active)),
         (Some(TaskState::Active), TaskEvent::Acked) => Ok(Transition::To(TaskState::Active)),
         (Some(TaskState::Active), TaskEvent::Completed) => Ok(Transition::To(TaskState::Complete)),
-        (Some(TaskState::Complete), TaskEvent::Assigned) => {
-            Err(TaskRejected::new("task already complete; use a new id"))
-        }
+        (Some(TaskState::Complete), TaskEvent::Assigned) => Err(TaskRejected::new(format!(
+            "task {task_id} already complete; use a new id"
+        ))),
         (Some(TaskState::Complete), TaskEvent::Acked)
-        | (Some(TaskState::Complete), TaskEvent::Completed) => {
-            Err(TaskRejected::new("task already complete"))
-        }
+        | (Some(TaskState::Complete), TaskEvent::Completed) => Err(TaskRejected::new(format!(
+            "task {task_id} already complete"
+        ))),
     }
 }
 
@@ -115,11 +122,14 @@ pub fn admit(
     row: Option<&TaskRow>,
     open: &[TaskRow],
     event: TaskEvent,
+    task_id: &TaskId,
     actor: &AgentName,
 ) -> Result<(), TaskRejected> {
     let Some(row) = row else {
         return if event == TaskEvent::Completed {
-            Err(TaskRejected::new(format!("no open task for {actor}")))
+            Err(TaskRejected::new(format!(
+                "no open task {task_id} for {actor}"
+            )))
         } else {
             Ok(())
         };
@@ -216,6 +226,13 @@ mod tests {
     use crate::task_store::ReminderOutcome;
     use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
+    fn context() -> (TaskId, AgentName) {
+        (
+            "AX.3".parse::<TaskId>().expect("task"),
+            "assignee".parse::<AgentName>().expect("assignee"),
+        )
+    }
+
     #[test]
     fn task_ledger_names_match_serde_snake_case_output() {
         for (value, expected) in [
@@ -289,6 +306,7 @@ mod tests {
 
     #[test]
     fn transition_table_is_complete() {
+        let (task_id, actor) = context();
         let cases = [
             (
                 None,
@@ -333,15 +351,17 @@ mod tests {
         ];
 
         for (state, event, expected) in cases {
-            assert_eq!(transition(state, event).ok(), expected);
+            assert_eq!(transition(state, event, &task_id, &actor).ok(), expected);
         }
     }
 
     #[test]
     fn admission_guards_reject_missing_completion_and_second_active_task() {
         let assignee: AgentName = "assignee".parse().expect("assignee");
-        let missing = admit(None, &[], TaskEvent::Completed, &assignee).expect_err("missing task");
-        assert!(missing.detail.contains("no open task for assignee"));
+        let task_id: TaskId = "AX.3".parse().expect("task");
+        let missing =
+            admit(None, &[], TaskEvent::Completed, &task_id, &assignee).expect_err("missing task");
+        assert!(missing.detail.contains("no open task AX.3 for assignee"));
 
         let assigned = row("AX.3", TaskState::Assigned);
         let active = row("AX.2", TaskState::Active);
@@ -349,6 +369,7 @@ mod tests {
             Some(&assigned),
             &[assigned.clone(), active],
             TaskEvent::Acked,
+            &task_id,
             &assignee,
         )
         .expect_err("one active task guard");

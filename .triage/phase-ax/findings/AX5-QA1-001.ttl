@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA1-001>
+  a triage:Finding ;
+  triage:findingId "AX5-QA1-001" ;
+  triage:title "Missing per-property tests for properties 1, 3, 4 and 8 of the AX.5 Required validation" ;
+  triage:description "AX.5 QA-1 (quality-mgr ax5-qa-r1, PR #1201 Final Quality Report 2026-09-05T12:38Z) at head da823baaa0018933f8daac388733c51eb14e9335. req-qa: only the drain-first/cadence (ax5_01-style) and blocked (ax5_06-style) per-property tests exist of the 8 named per-property tests in the sprint doc's Required validation section (docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md:286ff). Properties 1, 3, 4 and 8 have no test. Fix: add the missing per-property tests in the crates/atm-http-runtime/src/herdr_queue_wake.rs tests module (or the crate's tests/ dir) following the clock-seam pattern of the existing cadence tests, one test per named property, deterministic (no sleeps)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T12:38:08Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T12:38:08Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA1-001/P1-missing> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA1-001/P3-missing> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA1-001/P4-missing> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA1-001/P8-missing> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA1-001/P1-missing>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 959 ;
+  triage:snippet "fn ax5_01_one_reminder_surfaces_next_task (property 1: One reminder surfaces the next task)" ;
+  triage:status "absent" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:occursIn <urn:atm:triage:worktree/ax5-task-reminder-cycle/da823baaa> .
+
+<urn:atm:triage:occurrence/AX5-QA1-001/P3-missing>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 959 ;
+  triage:snippet "fn ax5_03_active_wins (property 3: Active wins)" ;
+  triage:status "absent" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:occursIn <urn:atm:triage:worktree/ax5-task-reminder-cycle/da823baaa> .
+
+<urn:atm:triage:occurrence/AX5-QA1-001/P4-missing>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 959 ;
+  triage:snippet "fn ax5_04_emit_failure_records_nothing (property 4: Emit failure records nothing)" ;
+  triage:status "absent" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:occursIn <urn:atm:triage:worktree/ax5-task-reminder-cycle/da823baaa> .
+
+<urn:atm:triage:occurrence/AX5-QA1-001/P8-missing>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 959 ;
+  triage:snippet "fn ax5_08_missing_task_store_disables_only_task_step (property 8: A missing TaskStore disables only the task step)" ;
+  triage:status "absent" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:occursIn <urn:atm:triage:worktree/ax5-task-reminder-cycle/da823baaa> .
+
+<urn:atm:triage:worktree/ax5-task-reminder-cycle/da823baaa>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax5-task-reminder-cycle" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:orderIndex 5 .

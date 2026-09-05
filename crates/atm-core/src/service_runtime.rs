@@ -1025,6 +1025,111 @@ mod tests {
     const RACE_ATTEMPTS: usize = 64;
     use tempfile::tempdir;
 
+    struct UnusedRuntimeStore;
+
+    impl atm_storage::contract::sealed::Sealed for UnusedRuntimeStore {}
+
+    #[allow(
+        deprecated,
+        reason = "the task-store absence test only constructs the retained runtime"
+    )]
+    impl atm_storage::MessageStore for UnusedRuntimeStore {
+        fn save_message(
+            &self,
+            _message: &atm_storage::Message,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("task-store absence test does not write messages")
+        }
+
+        fn save_messages_atomically(
+            &self,
+            _messages: &[atm_storage::Message],
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("task-store absence test does not write messages")
+        }
+
+        fn load_message(
+            &self,
+            _key: &atm_storage::MessageKey,
+        ) -> Result<Option<atm_storage::Message>, crate::error::AtmError> {
+            unreachable!("task-store absence test does not read messages")
+        }
+
+        fn list_messages(
+            &self,
+            _query: &atm_storage::MessageQuery,
+        ) -> Result<Vec<atm_storage::Message>, crate::error::AtmError> {
+            unreachable!("task-store absence test does not list messages")
+        }
+
+        fn delete_message(
+            &self,
+            _key: &atm_storage::MessageKey,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("task-store absence test does not delete messages")
+        }
+    }
+
+    #[allow(
+        deprecated,
+        reason = "the task-store absence test only constructs the retained runtime"
+    )]
+    impl atm_storage::RosterStore for UnusedRuntimeStore {
+        fn load_roster(
+            &self,
+            _team: &TeamName,
+        ) -> Result<atm_storage::RosterSnapshot, crate::error::AtmError> {
+            unreachable!("task-store absence test does not read rosters")
+        }
+
+        fn save_roster(
+            &self,
+            _roster: &atm_storage::RosterSnapshot,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("task-store absence test does not write rosters")
+        }
+
+        fn list_teams(&self) -> Result<Vec<TeamName>, crate::error::AtmError> {
+            unreachable!("task-store absence test does not list teams")
+        }
+    }
+
+    impl crate::boundary::NudgeTemplateOverrideStore for UnusedRuntimeStore {
+        fn load_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, crate::error::AtmError>
+        {
+            unreachable!("task-store absence test does not read nudge templates")
+        }
+
+        fn save_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+            _template_body: &str,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
+            unreachable!("task-store absence test does not write nudge templates")
+        }
+
+        fn disable_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
+            unreachable!("task-store absence test does not write nudge templates")
+        }
+
+        fn clear_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<bool, crate::error::AtmError> {
+            unreachable!("task-store absence test does not write nudge templates")
+        }
+    }
+
     fn message() -> InboxMessage {
         InboxMessage {
             from: "sender".parse::<AgentName>().expect("sender"),
@@ -1100,6 +1205,28 @@ mod tests {
         assert!(error.message().contains("exceeded"));
         assert!(error.message().contains("Recovery:"));
         assert!(!output_path.exists());
+    }
+
+    #[test]
+    fn task_store_reports_the_not_installed_error() {
+        let runtime = super::LocalServiceRuntime::new_with_delivery_boundaries(
+            Arc::new(UnusedRuntimeStore),
+            Arc::new(UnusedRuntimeStore),
+            Arc::new(UnusedRuntimeStore),
+            Arc::new(super::LocalFileNonClaudeOutbound::new()),
+        );
+
+        let error = match runtime.task_store() {
+            Ok(_) => panic!("task store is not installed"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert!(
+            error
+                .message()
+                .starts_with("the task store was not installed in this runtime")
+        );
     }
 
     #[test]

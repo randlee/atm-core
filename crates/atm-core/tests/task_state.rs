@@ -31,6 +31,17 @@ fn setup(harness: RosterHarness) -> (tempfile::TempDir, atm_core::LocalServiceRu
 }
 
 fn member(team: &TeamName, agent: &str, harness: RosterHarness) -> RosterEntry {
+    let (recipient_pane_id, metadata_json) = match harness {
+        RosterHarness::Hermes => {
+            let mut metadata = atm_core::delivery_channel::test_backend_type_metadata("herdr");
+            metadata.insert("herdrSession".to_owned(), serde_json::json!("ax3-herdr"));
+            (None, metadata)
+        }
+        _ => (
+            Some(PaneId::from_cli("%9").expect("pane")),
+            serde_json::Map::new(),
+        ),
+    };
     RosterEntry {
         team_name: team.clone(),
         agent_name: agent.parse().expect("agent"),
@@ -38,8 +49,8 @@ fn member(team: &TeamName, agent: &str, harness: RosterHarness) -> RosterEntry {
         harness,
         agent_type: atm_core::schema::AgentType::default(),
         model: ModelName::default(),
-        recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
-        metadata_json: serde_json::Map::new(),
+        recipient_pane_id,
+        metadata_json,
     }
 }
 
@@ -147,6 +158,19 @@ fn synchronous_tmux_task_write_acknowledgement_and_completion_reach_the_task_sto
 #[test]
 fn deferred_herdr_prepare_persists_the_same_task_assignment() {
     let (root, runtime, team) = setup(RosterHarness::Hermes);
+    let roster = runtime
+        .shared_roster_store_arc()
+        .load_roster(&team)
+        .expect("load roster");
+    let recipient = roster
+        .members
+        .iter()
+        .find(|member| member.agent_name.as_str() == "recipient")
+        .expect("recipient roster member");
+    assert!(matches!(
+        atm_core::delivery_channel::local_message_received_backend(recipient),
+        Some(atm_core::delivery_channel::LocalMessageReceivedBackend::Herdr { .. })
+    ));
     let home = root.path().join("home");
     std::fs::create_dir_all(&home).expect("home");
     let task_id: TaskId = "AX3-ASYNC".parse().expect("task id");

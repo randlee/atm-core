@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX5-QA1-010>
+  a triage:Finding ;
+  triage:findingId "AX5-QA1-010" ;
+  triage:title "record_task_reminder collapses the durable write Result to a bare bool via .is_ok(), discarding the error cause without logging" ;
+  triage:description "AX.5 QA-1 (quality-mgr ax5-qa-r1, PR #1201 Final Quality Report 2026-09-05T12:38Z) at head da823baaa0018933f8daac388733c51eb14e9335. rust-best-practices-agent RBP-F001 and rust-qa-agent QA-002 (independently, same line): record_task_reminder (crates/atm-http-runtime/src/herdr_queue_wake.rs:524) returns .is_ok() (crates/atm-http-runtime/src/herdr_queue_wake.rs:537) on the durable write result, discarding the AtmError cause with no logging before returning false. Fix: propagate or log the error (warn with member/task/error) before mapping to the boolean outcome; consider returning Result to the caller. Crate-wide repeatable sweep for literal pattern .is_ok() in crates/atm-http-runtime found 10 additional textual matches (client.rs:1811,1815; http1_server.rs:390; lib.rs:861,863; peer_connection_pool.rs:433; peer_dial.rs:483,505,632; storage_and_nudge_router.rs:1950); all were inspected at head da823baaa0018933f8daac388733c51eb14e9335 and are test assertions or result-preserving branches (peer_connection_pool.rs:433 retains and returns the underlying Result) rather than instances of this defect shape, so no additional occurrences are recorded." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T12:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-05T12:38:08Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX5-QA1-010/AX5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX5-QA1-010/AX5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 537 ;
+  triage:snippet ".is_ok()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:occursIn <urn:atm:triage:worktree/ax5/da823baaa0018933f8daac388733c51eb14e9335> .
+
+<urn:atm:triage:worktree/ax5/da823baaa0018933f8daac388733c51eb14e9335>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax5-task-reminder-cycle" ;
+  triage:branch "feature/ax5-task-reminder-cycle" ;
+  triage:headSha "da823baaa0018933f8daac388733c51eb14e9335" ;
+  triage:orderIndex 5 .
