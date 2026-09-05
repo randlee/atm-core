@@ -179,3 +179,7 @@ triage:r22 a triage:Resolution ;
 triage:r23 a triage:Resolution ;
     triage:resolves <urn:atm:triage:finding/AX3-QA2-005> ;
     triage:resolvedAt "2026-09-05T10:07:04Z"^^xsd:dateTime .
+
+triage:c10 a triage:Completion ;
+    triage:ofSprint triage:AX4 ;
+    triage:at "2026-09-05T10:10:09Z"^^xsd:dateTime .
