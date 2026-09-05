@@ -861,7 +861,7 @@ contracts, artifacts and ownership.
 |---|---|---|---|---|---|---|---|
 | AY.1 | Herdr audit, version table, requirement and ADR text | S | Docs | (P-A, P-B) | AY.2 | any | Cipher-311d/fast |
 | AY.2 | Private transport enum, CLI transport pure motion, portable fake-herdr with per-version recordings | M | Core | (P-A, P-B) | AY.1 | macOS/Linux | arch-ctm/deep-reasoning |
-| AY.3 | Startup/failure model: config wiring, doctor states, breaker-open lead notification, lifecycle tests | M | Core | AY.2 | none | macOS/Linux | arch-ctm/deep-reasoning |
+| AY.3 | Startup/failure model: doctor port + boundary record, config wiring, breaker-open lead notification, lifecycle tests | L | Core | AY.2 | none | macOS/Linux | arch-ctm/deep-reasoning |
 | AY.4 | Installer: REQ-P-DAEMON-SWITCH-002 / ADR-053 addendum, `daemon-switch herdr-entry`, `--restart-herdr` (restart only) | L | Core | AY.3 | AY.6 | macOS/Linux | arch-ctm/deep-reasoning |
 | AY.5 | Windows process correctness, per-user installer, live Windows evidence | M | Windows | AY.4 (+ P-C, P-D) | AY.6 | FastPC4 | named Windows dev agent (P-D) |
 | AY.6 | Direct socket/pipe transport: code, fake socket server, compatibility matrix (no cutover, no composition change) | L | Socket | AY.1, AY.2, AY.3 (+ P-E) | AY.4, AY.5 | macOS/Linux (Windows lane in CI) | arch-ctm/deep-reasoning |
@@ -1111,6 +1111,13 @@ Deliverables:
        pub binary_path: Option<PathBuf>,  // file or directory; None = PATH lookup by name, resolved on every spawn
        pub socket_path: Option<PathBuf>,  // Herdr's HERDR_SOCKET_PATH override; absolute; a per-call session outranks it
    }
+   impl HerdrClientConfig {
+       /// Default::default() = PATH lookup, no socket_path (the AX behaviour).
+       /// Pure validation, no I/O (AYS-R5-002): Err on a relative `socket_path` or a relative
+       /// `binary_path`; the message names the key. Tested in AY.2 without any file; AY.3's
+       /// `herdr_config.rs` reader calls it after parsing and maps Err into AtmError.
+       pub fn validate(&self) -> Result<(), String>;
+   }
    /// One Herdr operation as the adapter already expresses it (argv builders at
    /// lib.rs:631-657 keep producing the CLI form; the socket form is AY.6).
    pub(crate) enum HerdrOp<'a> {
@@ -1214,7 +1221,8 @@ Acceptance criteria:
    public item list equals the AX list plus `HerdrClientConfig` and
    `HerdrDoctorProbe` (architecture test; AY.6 amends it to add its three
    items, AYS-R3-002).
-6. `socket_path`: relative path rejected at config load; child env has
+6. `socket_path`: relative path rejected by `HerdrClientConfig::validate`
+   (pure, no file I/O; the file reader is AY.3, AYS-R5-002); child env has
    exactly one of `HERDR_SESSION` / `HERDR_SOCKET_PATH` per call (tests).
 7. Official benchmark shows no hot-path regression (see Validation 3).
 8. Boundary TOML io_owns unchanged.
@@ -1232,13 +1240,23 @@ Validation:
 Out of scope: composition changes, doctor, installer, Windows-specific
 code, socket transport.
 
-## Sprint AY.3: startup/failure model (size M)
+## Sprint AY.3: startup/failure model (size L)
 
 Branch `feature/ay3-herdr-startup-failure-model`, created from
 `feature/ay2-herdr-transport-seam` (stacked). Dependencies: must_follow
 AY.2 (uses `HerdrClientConfig`, `HerdrIo`, `HerdrDoctorProbe`, fake-herdr);
 parallel_safe none (AY.6 must_follow AY.3, AYP-R3-011: both edit
 `boundary_enforcement.rs`). recommended_agent arch-ctm/deep-reasoning.
+Size L (AYS-R5-001; the boundary record, the doctor port and DTOs, the
+presence correlation and the config reader were added by the review
+rounds) with the same internal order AY.4 uses (AYS-R2-005): **stage 1**,
+the P-E(a) boundary TOML as the first commit, then deliverable 2 (port,
+DTOs, `herdr_configured.rs`, `presence_findings`, impl-count test,
+doctor JSON), is pushed and reviewed by fenix in the PR before **stage
+2**, deliverables 1 and 3 (the `herdr_config.rs` reader, composition
+wiring, escalation extension) and the lifecycle tests (a) to (k), starts;
+quality-mgr reviews the finished sprint once. Rand's seven-sprint ruling
+holds; nothing is split out.
 
 Deliverables:
 
@@ -1248,7 +1266,22 @@ Deliverables:
    optional `[herdr]` section of `$HOME/.atm.toml` (`binary_path`,
    `socket_path`), read by a new `herdr_config.rs` beside the existing
    `atm_temp_config.rs` reader in atm-daemon-bootstrap (AYP-R5-002;
-   sessions stay per member, per call, from roster data as in AX), plus the
+   sessions stay per member, per call, from roster data as in AX):
+
+   ```rust
+   // crates/atm-daemon-bootstrap/src/herdr_config.rs (AY.3), same shape as
+   // atm_temp_config.rs::daemon_atm_config(env: &dyn EnvSource) -> Option<AtmConfig>.
+   /// Reads the optional `[herdr]` table of `$HOME/.atm.toml`. No file or no table ->
+   /// Ok(HerdrClientConfig::default()) (PATH lookup, no socket_path: the AX behaviour).
+   /// Unresolvable home, unreadable file, malformed TOML, an unknown `[herdr]` key, or a
+   /// `HerdrClientConfig::validate` error -> Err(AtmError::config_invalid(..)) naming the
+   /// file and key; the daemon then fails startup exactly as it does for any other
+   /// invalid `.atm.toml` value (fail closed, never a silent default). Keys: `binary_path`,
+   /// `socket_path`, both optional strings (AYS-R5-002).
+   pub(crate) fn daemon_herdr_client_config(env: &dyn EnvSource) -> Result<HerdrClientConfig, AtmError>;
+   ```
+
+   plus the
    `HerdrEndpointDoctorAdapter` (replacing `HerdrPresenceDoctorAdapter`
    and the `HerdrPresenceDoctor` port; its `impl` carries the ADR-001
    `Sealed` marker and is the one production impl site permitted by
@@ -1346,6 +1379,10 @@ Acceptance criteria:
    impl-count test finds exactly two `HerdrEndpointDoctor` impls;
    `HerdrPresenceDoctor` no longer exists in the workspace (grep gate)
    (AYP-R4-003).
+8. `daemon_herdr_client_config` tests: no file, file without `[herdr]`,
+   both keys set, unknown key, malformed TOML, relative `socket_path`
+   (AYS-R5-002); the stage-1 push (boundary TOML plus deliverable 2) is
+   reviewed by fenix before stage 2 starts (AYS-R5-001).
 7. `presence_findings` zero-regression tests (visible, missing,
    non-running, infrastructure-failed) pass; `herdr_is_configured` tested
    against a roster with tmux, hermes and Herdr members (AYP-R5-001/002).
@@ -2077,3 +2114,11 @@ AX does not wait on any AY sprint.
   (refusal by endpoint provenance, mixed fixture; only the socket_path
   endpoint lacks an entry), AYP-R5-006 (one `herdr_entry_identifier`
   helper, asserted on three platforms).
+- r14 (2026-09-05): plan-scope r5 (AYS-R4-001 closed; AYS-R5-001 blocking,
+  AYS-R5-002 important). AY.3 resized to L with AY.4's internal order
+  (stage 1: P-E(a) TOML, port, DTOs, predicate, presence correlation,
+  impl-count test; stage 2: reader, wiring, escalation, lifecycle tests);
+  `herdr_config.rs` given its contract (`daemon_herdr_client_config(env)
+  -> Result<HerdrClientConfig, AtmError>`, missing table = default, fail
+  closed otherwise) and relative-path validation moved to the pure
+  `HerdrClientConfig::validate` so AY.2 acceptance 6 needs no file I/O.
