@@ -141,7 +141,7 @@ impl TracingBridgeLayer {
     fn install_inner(self) -> Result<Arc<Self>, BridgeError> {
         let bridge = Arc::new(self);
         tracing::subscriber::set_global_default(Registry::default().with((*bridge).clone()))
-        .map_err(|_| BridgeError::AlreadyInstalled)?;
+            .map_err(|_| BridgeError::AlreadyInstalled)?;
         Ok(bridge)
     }
 
@@ -171,47 +171,14 @@ impl TracingBridgeLayer {
         }
         let _reset = Reset;
 
-        let mut visitor = RetainedVisitor::default();
-        event.record(&mut visitor);
-        let component = event.metadata().target().to_string();
-        let origin = visitor
-            .take_string("origin")
-            .unwrap_or_else(|| "tracing".to_string());
-        let message = visitor.message.take().unwrap_or_default();
-        let fields = visitor.into_fields(&component, &origin);
-        let code = fields
-            .iter()
-            .find(|(key, _)| *key == "code")
-            .and_then(|(_, value)| value.as_str());
-        let correlation_id = fields
-            .iter()
-            .find(|(key, _)| *key == "correlation_id")
-            .and_then(|(_, value)| value.as_str());
-        let level = map_level(event.metadata().level());
-        let mut json_fields = Map::new();
-        for (key, value) in &fields {
-            json_fields.insert((*key).to_string(), value.clone());
-        }
-        let timestamp = Timestamp::now_utc();
-        let log_event = LogEvent {
-            version: SchemaVersion::new(sc_observability_types::OBSERVATION_ENVELOPE_VERSION)
-                .expect("literal schema version"),
-            timestamp,
-            level,
-            service: ServiceName::new("atm").expect("literal service name"),
-            target: TargetCategory::new("atm.tracing").expect("literal target category"),
-            action: ActionName::new("tracing.event").expect("literal action"),
-            message: (!message.is_empty()).then_some(message.clone()),
-            identity: ProcessIdentity::default(),
-            trace: None,
-            request_id: None,
-            correlation_id: correlation_id
-                .and_then(|value| CorrelationId::new(value.to_owned()).ok()),
-            outcome: None,
-            diagnostic: None,
-            state_transition: None,
-            fields: json_fields,
-        };
+        let retained = RetainedTracingEvent::from_event(event);
+        self.forward_retained(retained);
+    }
+
+    fn forward_retained(&self, retained: RetainedTracingEvent) {
+        let code = retained.field_string("code");
+        let correlation_id = retained.field_string("correlation_id");
+        let log_event = retained.log_event(correlation_id);
         match self.logger.try_log(log_event) {
             Ok(()) => self.stats.forwarded_total.fetch_add(1, Ordering::Relaxed),
             Err(sc_observability::TryLogError::QueueFull(_)) => {
@@ -222,27 +189,88 @@ impl TracingBridgeLayer {
             }
             Err(_) => return,
         };
-        if origin != "sqlite" && origin != "timeline" {
-            if let Ok(slot) = self.sink.read() {
-                if let Some(sink) = slot.as_ref() {
-                    let retained = RetainedEvent {
-                        ts_unix_ms: timestamp.into_inner().unix_timestamp_nanos() as i64
-                            / 1_000_000,
-                        level,
-                        component: &component,
-                        code,
-                        correlation_id,
-                        origin: &origin,
-                        message: &message,
-                        fields: &fields,
-                    };
-                    if matches!(sink.offer(&retained), SinkOffer::Dropped(_)) {
-                        self.stats
-                            .sink_dropped_total
-                            .fetch_add(1, Ordering::Relaxed);
-                    }
-                }
+        if retained.origin != "sqlite"
+            && retained.origin != "timeline"
+            && let Ok(slot) = self.sink.read()
+            && let Some(sink) = slot.as_ref()
+        {
+            let event = RetainedEvent {
+                ts_unix_ms: retained.timestamp.into_inner().unix_timestamp_nanos() as i64
+                    / 1_000_000,
+                level: retained.level,
+                component: &retained.component,
+                code,
+                correlation_id,
+                origin: &retained.origin,
+                message: &retained.message,
+                fields: &retained.fields,
+            };
+            if matches!(sink.offer(&event), SinkOffer::Dropped(_)) {
+                self.stats
+                    .sink_dropped_total
+                    .fetch_add(1, Ordering::Relaxed);
             }
+        }
+    }
+}
+
+struct RetainedTracingEvent {
+    timestamp: Timestamp,
+    level: Level,
+    component: String,
+    origin: String,
+    message: String,
+    fields: Vec<(&'static str, FieldValue)>,
+}
+
+impl RetainedTracingEvent {
+    fn from_event(event: &Event<'_>) -> Self {
+        let mut visitor = RetainedVisitor::default();
+        event.record(&mut visitor);
+        let component = event.metadata().target().to_string();
+        let origin = visitor
+            .take_string("origin")
+            .unwrap_or_else(|| "tracing".to_string());
+        let message = visitor.message.take().unwrap_or_default();
+        let fields = visitor.into_fields(&component, &origin);
+        Self {
+            timestamp: Timestamp::now_utc(),
+            level: map_level(event.metadata().level()),
+            component,
+            origin,
+            message,
+            fields,
+        }
+    }
+    fn field_string(&self, name: &str) -> Option<&str> {
+        self.fields
+            .iter()
+            .find(|(key, _)| *key == name)
+            .and_then(|(_, value)| value.as_str())
+    }
+    fn log_event(&self, correlation_id: Option<&str>) -> LogEvent {
+        let mut json_fields = Map::new();
+        for (key, value) in &self.fields {
+            json_fields.insert((*key).to_string(), value.clone());
+        }
+        LogEvent {
+            version: SchemaVersion::new(sc_observability_types::OBSERVATION_ENVELOPE_VERSION)
+                .expect("literal schema version"),
+            timestamp: self.timestamp,
+            level: self.level,
+            service: ServiceName::new("atm").expect("literal service name"),
+            target: TargetCategory::new("atm.tracing").expect("literal target category"),
+            action: ActionName::new("tracing.event").expect("literal action"),
+            message: (!self.message.is_empty()).then_some(self.message.clone()),
+            identity: ProcessIdentity::default(),
+            trace: None,
+            request_id: None,
+            correlation_id: correlation_id
+                .and_then(|value| CorrelationId::new(value.to_owned()).ok()),
+            outcome: None,
+            diagnostic: None,
+            state_transition: None,
+            fields: json_fields,
         }
     }
 }
