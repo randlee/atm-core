@@ -157,6 +157,52 @@ Today `crates/atm-herdr` has no version constant and a mismatch surfaces
 only as `HerdrError::ProtocolMismatch`. AY.1 lands rules 1 to 5 for the
 CLI transport; AY.3 extends the same matrix to the direct socket client.
 
+### Mechanism: versioned protocol adapters, selected per call (Rand's question, 2026-09-05)
+
+Version handling is a second seam next to the transport, not a set of
+`if version >= x` branches scattered through the client:
+
+- **Two traits.** `HerdrTransport` moves bytes (CLI child process today,
+  socket/pipe in AY.3). `HerdrProtocolAdapter` gives those bytes their
+  meaning for one Herdr behaviour epoch: request -> argv/NDJSON,
+  response -> `AgentSnapshot`/`HerdrError`, and the `--wait` outcome
+  rules. One adapter per epoch, not per patch release: `v0_8_0` (0.8.0
+  through 0.8.2 semantics) and `v0_8_3` (master after 8633a398/7916be16)
+  today; a new adapter is added only when the drift check finds a
+  behaviour atm must absorb. Adapters are ordinary injectable
+  implementations, so a test can inject a fake adapter or a fake
+  transport independently.
+- **All supported adapters are compiled into one daemon build** (rule 1)
+  and registered in a `HerdrAdapterRegistry` at composition time. What is
+  injected at startup is the registry and a `HerdrVersionResolver`, not
+  a chosen version.
+- **Selection is per call, from the live Herdr.** Every call already
+  spawns a fresh `herdr` process (or, in AY.3, opens a fresh connection
+  and pings), so there is no session state that would pin a version.
+  CLI transport: the version is the resolved binary's `herdr --version`,
+  which equals the server's whenever a call can succeed at all (Herdr's
+  own CLI/server equality check, see "PROTOCOL_VERSION and
+  compatibility"); it is re-read whenever the resolved binary path or
+  its mtime changes, after any `protocol_mismatch`, and on every breaker
+  half-open transition, otherwise cached. Socket transport: `ping.version`
+  on each connection. The resolver maps the version to the newest
+  adapter whose epoch floor it meets; a version below
+  `HERDR_MINIMUM_VERSION` is a `ServerUnavailable`-class failure with the
+  version in the cause and a doctor finding.
+- **Consequence for upgrades:** Herdr upgrading, or downgrading, while
+  the daemon runs requires **no daemon restart**. The next call after the
+  change selects the matching adapter; the only visible effect is the
+  transient `protocol_mismatch` window Herdr itself creates when the CLI
+  binary and the still-running old server differ, which the breaker and
+  doctor already cover. A Herdr release newer than every known epoch is
+  served by the newest adapter (additive adoption, rule 3); the drift
+  check, not the daemon, decides whether a new epoch is needed.
+- **Tests (AY.1):** the conformance suite runs every adapter against its
+  per-version fake (rule 4); a lifecycle test switches the fake Herdr's
+  reported version between two calls with the daemon running and asserts
+  the adapter changes with no restart and no breaker trip; a
+  below-minimum fake asserts the doctor finding and the failure class.
+
 Windows note: 0.8.0 is the minimum for macOS and Linux. `herdr.exe` is a
 released artifact from v0.8.2 onward (9fac5172 "make Windows generally
 available", 2026-08-18, `release.yml` `x86_64-pc-windows-msvc`,
@@ -375,8 +421,11 @@ installed, doctor prints one line "herdr: not configured".
 
 - The daemon builds the Herdr traits from configuration and roster data
   at composition time (the single `HerdrProcessInvoker::new` site in
-  `atm-daemon-bootstrap/src/replacement_handler.rs` today). No probe, no
-  wait, no launch. Readiness does not depend on Herdr in any way.
+  `atm-daemon-bootstrap/src/replacement_handler.rs` today), including the
+  adapter registry for every supported Herdr epoch. No probe, no wait, no
+  launch, and no version is chosen at startup: the adapter is selected
+  per call from the live Herdr, so a Herdr upgrade while the daemon runs
+  needs no daemon restart. Readiness does not depend on Herdr in any way.
 - Normal case: Herdr started at login and owns the default session
   socket; the daemon starts under launchd afterwards in the same user
   session with no Herdr variables in its environment; the `herdr` client
@@ -500,7 +549,17 @@ Deliverables:
        fn kind(&self) -> HerdrTransportKind;            // Cli | Socket
        fn config(&self) -> &HerdrClientConfig;
        async fn execute(&self, request: &HerdrRequest, deadline: Deadline) -> Result<HerdrRawResponse, HerdrError>;
+       async fn observed_version(&self) -> Result<HerdrVersion, HerdrError>; // `herdr --version` (Cli) / ping.version (Socket)
    }
+   /// One implementation per Herdr behaviour epoch; all compiled in, selected per call.
+   pub trait HerdrProtocolAdapter: Send + Sync {
+       fn epoch_floor(&self) -> HerdrVersion;           // v0_8_0: 0.8.0, v0_8_3: first release after 8633a398
+       fn encode(&self, request: &HerdrRequest) -> HerdrEncodedRequest;      // argv or NDJSON line
+       fn decode_snapshot(&self, raw: &HerdrRawResponse) -> Result<AgentSnapshot, HerdrError>;
+       fn decode_wait(&self, raw: &HerdrRawResponse) -> Result<WaitOutcome, HerdrError>; // epoch-specific --wait rules
+   }
+   pub struct HerdrAdapterRegistry { adapters: Vec<Box<dyn HerdrProtocolAdapter>> } // newest epoch whose floor <= version
+   pub const HERDR_MINIMUM_VERSION: HerdrVersion = HerdrVersion::new(0, 8, 0);
    // HerdrError: the existing closed enum in lib.rs, unchanged
    // (AgentBlocked, AgentNotFound, AgentNotReady, AgentTargetAmbiguous, AgentNotRunning,
    //  AgentPromptStalled, ServerNotRunning, ProtocolMismatch, Timeout, InvalidAgentName,
@@ -509,7 +568,9 @@ Deliverables:
 
    `HerdrRequest -> argv` (today's builders at lib.rs:631-657) and
    `HerdrRawResponse -> AgentSnapshot / HerdrError` (parsers at 675-770)
-   stay in lib.rs, transport-independent. The io::Error to `HerdrError`
+   move into the `v0_8_0` adapter unchanged (pure motion) and stay
+   transport-independent; the `v0_8_3` adapter differs only in
+   `decode_wait`. The io::Error to `HerdrError`
    translation lives in the transport. Notify has no sound field: the
    argv stays exactly `notification show <title> --body <body> --sound
    request` (HR-CORE-010, boundary note). Shape mirrors `Http1Acceptor`
@@ -540,7 +601,9 @@ Deliverables:
    deadlines, hard bounds, nothing may block forever.
 4. **Startup/failure model.** Implements the normative section: one
    `HerdrCliTransport` construction site in `build_replacement_handler`
-   fed by `HerdrClientConfig`; `daemon-switch` Herdr start-at-login
+   fed by `HerdrClientConfig`, alongside the `HerdrAdapterRegistry` and
+   `HerdrVersionResolver` (all epochs registered; selection per call, no
+   restart on Herdr upgrade); `daemon-switch` Herdr start-at-login
    entry (install/remove, per-user only, refuse session-0/service on
    Windows); doctor `herdr` section as specified; lifecycle tests (a)-(d)
    as real-startup integration tests with negative proof, per the
@@ -850,6 +913,10 @@ AX does not wait on any AY sprint.
   conformance fixture per supported version; `schema-reviewer` (PR #1218)
   checks this at plan and phase-end review. Landed in AY.1 (rules 1-5),
   extended by AY.3.
+- Rand, 2026-09-05 (questions on API change management): answered by
+  "Mechanism: versioned protocol adapters, selected per call": registry
+  of epoch adapters injected at composition, version observed per call,
+  no daemon restart on Herdr upgrade.
 - Rand, 2026-09-05: plan not approved yet; startup and environment
   concerns; atm must not own Herdr; no hard gate; launchd installs Herdr
   entry only when configured, mirrored in daemon-switch; late Herdr
