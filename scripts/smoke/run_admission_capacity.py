@@ -59,6 +59,7 @@ from scripts.smoke.benchmark_policy import classify_status, profile_median_admis
 from scripts.smoke.benchmark_account import (
     BenchmarkAccount,
     BenchmarkAccountError,
+    account_home,
     bootstrap_benchmark_account,
     require_benchmark_account,
 )
@@ -72,9 +73,6 @@ from scripts.smoke.benchmark_snapshot import (
     restore_verified_snapshot,
     verify_active_snapshot,
 )
-
-if os.name != "nt":
-    import pwd
 
 try:
     import resource
@@ -827,13 +825,17 @@ def run_lifecycle_phase(
 
 
 def os_account_home() -> Path:
-    """Match ADR-026's OS-account root instead of trusting a shell HOME override."""
-    if os.name == "nt":
-        profile = os.environ.get("USERPROFILE", "").strip()
-        if not profile:
-            raise SmokeError("could not resolve the Windows OS-user profile for capacity smoke")
-        return Path(profile)
-    return Path(pwd.getpwuid(os.geteuid()).pw_dir)
+    """Match ADR-026's OS-account root instead of trusting a shell HOME override.
+
+    Delegates to ``benchmark_account.account_home`` so Windows resolves the
+    executing token's profile directory rather than a caller-controlled
+    ``USERPROFILE`` value; the durable-root safety check must key on the same
+    identity the benchmark-account manifest is bound to.
+    """
+    try:
+        return account_home()
+    except BenchmarkAccountError as error:
+        raise SmokeError(f"could not resolve the OS-account home for capacity smoke: {error}") from error
 
 
 def validate_capacity_home(path: Path) -> Path:
