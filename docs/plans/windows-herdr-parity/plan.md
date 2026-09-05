@@ -746,8 +746,10 @@ Common preconditions:
 - P-B: this plan is approved by Rand (dated line in this file).
 - P-C: the FastPC4 Windows `atm-dev` team exists with Herdr installed via
   the official installer and its parked reporter agent has delivered one
-  round-trip report to rand-m4 or rand-m5. Owner: Rand. Target date: set
-  by Rand in this line when known.
+  round-trip report to rand-m4 or rand-m5. Owner: Rand. Rand can bring
+  up the VPN to FastPC4 at any time on request (2026-09-05), so the
+  readiness proof can be produced on demand once the team is installed;
+  target date: set by Rand in this line when known.
 - P-D: the Windows dev agent is named here (ATM identity on the FastPC4
   team, agent kind) by Rand. Dispatch path (Rand, 2026-09-05): Rand
   establishes the VPN connection; fenix (the atm team on rand-m5) then
