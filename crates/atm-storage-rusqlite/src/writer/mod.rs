@@ -1094,6 +1094,82 @@ mod tests {
         assert_eq!(persisted, 1);
     }
 
+    #[test]
+    fn ac7_real_diagnostic_channel_saturation_persists_a_bridged_row_after_drain() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("test runtime");
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:writer-ac7-saturation-{}?mode=memory&cache=shared",
+                NEXT_TEST_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_writer_connection_for_target(&target).expect("writer connection");
+        ensure_schema(&mut connection, &target).expect("schema");
+        let mut cache = stmt_cache::WriterStatementCache;
+        let diagnostic_stats = DiagnosticTimelinePersistenceStats::default();
+        let mut rows_since_prune = 0;
+
+        let (_primary_sender, mut primary_receiver) = tokio::sync::mpsc::channel(1);
+        let (diagnostic_sender, mut diagnostic_receiver) =
+            tokio::sync::mpsc::channel(DIAGNOSTIC_QUEUE_BATCHES);
+        let bridged = DiagnosticEvent {
+            ts_unix_ms: 42,
+            level: "warn".to_owned(),
+            component: "tracing.bridge.fixture".to_owned(),
+            code: Some("ATM_BRIDGED_FIXTURE".to_owned()),
+            correlation_id: None,
+            origin: "tracing".to_owned(),
+            message: "bridged diagnostic".to_owned(),
+            detail: None,
+        };
+        diagnostic_sender
+            .try_send(DiagnosticWriterMessage::Records(vec![bridged.clone()]))
+            .expect("enqueue bridged diagnostic on the real lower-priority channel");
+        for _ in 1..DIAGNOSTIC_QUEUE_BATCHES {
+            diagnostic_sender
+                .try_send(DiagnosticWriterMessage::Records(vec![bridged.clone()]))
+                .expect("fill the real bounded diagnostic channel");
+        }
+        assert!(matches!(
+            diagnostic_sender.try_send(DiagnosticWriterMessage::Records(vec![bridged])),
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_))
+        ));
+
+        let Some(WriterWork::Diagnostics(DiagnosticWriterMessage::Records(batch))) = runtime
+            .block_on(receive_next_work(
+                &mut primary_receiver,
+                &mut diagnostic_receiver,
+                false,
+            ))
+        else {
+            panic!("the real saturated diagnostic channel must yield its first batch when idle");
+        };
+        process_diagnostic_batch(
+            &target,
+            &mut connection,
+            &mut cache,
+            batch,
+            &mut rows_since_prune,
+            &diagnostic_stats,
+        );
+
+        assert_eq!(
+            diagnostic_receiver.len(),
+            DIAGNOSTIC_QUEUE_BATCHES - 1,
+            "draining one real bounded-channel batch leaves the remaining backlog intact"
+        );
+        let persisted: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM diagnostic_events WHERE code = ?1 AND origin = ?2",
+                params!["ATM_BRIDGED_FIXTURE", "tracing"],
+                |row| row.get(0),
+            )
+            .expect("count persisted bridged row");
+        assert_eq!(persisted, 1);
+    }
+
     static NEXT_TEST_DB_ID: AtomicU64 = AtomicU64::new(1);
 
     fn message(key: &str) -> Message {
