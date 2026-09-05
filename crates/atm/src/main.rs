@@ -330,10 +330,6 @@ fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(
     Ok(())
 }
 
-fn logger_root_for_log_dir(log_dir: &Path) -> Result<PathBuf, AtmError> {
-    shared_logger_root_for_log_dir(log_dir)
-}
-
 #[cfg(any(test, feature = "fault-injection"))]
 fn fault_injection_log_path(log_dir: &Path) -> PathBuf {
     log_dir.join("atm-fault-injection.log.jsonl")
