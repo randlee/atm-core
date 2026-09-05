@@ -263,8 +263,20 @@ AY.1; this plan does not assume it.
 5. Merge collision with AX.2/AX.6: order W1 first.
 6. Hot-path regression: official benchmark run before merge.
 
-## Windows machine
+## Windows machine and team (Rand, 2026-09-05)
 
-Sprint dev and validation need a Windows box running a Herdr session.
-Candidate: FastPC4 via Rand (cwin is routed through Rand). Provisioning
-decision is Rand's.
+- Windows testing runs on **FastPC4**. Rand will set up a Windows
+  `atm-dev` team on FastPC4; sprint dev, the six fixture ports, and the
+  AY.1 live-evidence deliverable execute there, inside a Herdr session.
+- Cross-host messaging from FastPC4 has been unreliable because of VPN
+  issues. Design: park one agent on the FastPC4 team whose only job is
+  to report back regularly (on a fixed cadence and on every sprint
+  event) to either this team (`atm-dev` on rand-m4) or the M5 team,
+  whichever is reachable, so work continues even when a direct
+  cross-host session is down. Reports carry SHA, test results, and
+  evidence paths; the FastPC4 team is the source of truth for Windows
+  evidence.
+- The Windows CI job stays the merge gate; FastPC4 evidence is the
+  release-readiness gate for Windows Herdr parity.
+- cwin remains routed through Rand; nothing is dispatched to FastPC4
+  directly from this team until the FastPC4 team exists.
