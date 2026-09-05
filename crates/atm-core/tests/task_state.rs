@@ -1,7 +1,11 @@
 //! End-to-end task state coverage through the public core write pipeline.
 
 use atm_core::ack::{AckRequest, ack_mail_with_runtime};
-use atm_core::boundary::{RosterEntry, RosterHarness, RosterMemberKind};
+use atm_core::boundary::{
+    LocalSteerTarget, NudgeKind, PostSendBuiltInTarget, RosterEntry, RosterHarness,
+    RosterMemberKind,
+};
+use atm_core::nudge_dispatch::rebuild_received_hook_dispatch;
 use atm_core::observability::NullObservability;
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{
@@ -60,12 +64,22 @@ fn task_write_request(
     sender: &str,
     task_id: TaskId,
 ) -> (WriteRequest, AtmMessageId) {
+    task_write_request_with_mode(home, team, sender, task_id, NudgeMode::Immediate)
+}
+
+fn task_write_request_with_mode(
+    home: &std::path::Path,
+    team: &TeamName,
+    sender: &str,
+    task_id: TaskId,
+    nudge_mode: NudgeMode,
+) -> (WriteRequest, AtmMessageId) {
     let message_id = AtmMessageId::new();
     let request = WriteRequest::new(
         home.to_path_buf(),
         home.to_path_buf(),
         sender.parse::<AgentName>().expect("sender"),
-        "recipient@task-state-team",
+        &format!("recipient@{team}"),
         team.clone(),
         SendMessageSource::Inline("complete the end-to-end task test".to_owned()),
         None,
@@ -74,11 +88,57 @@ fn task_write_request(
         false,
     )
     .expect("request")
-    .with_nudge_mode(NudgeMode::Immediate)
+    .with_nudge_mode(nudge_mode)
     .with_origin_metadata(message_id, IsoTimestamp::now());
     let mut request = request;
     request.task_id = Some(task_id);
     (request, message_id)
+}
+
+fn assert_task_send_surface(harness: RosterHarness, nudge_mode: NudgeMode, task_id: &str) {
+    let (root, runtime, team) = setup(harness);
+    let home = root.path().join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    let task_id = task_id.parse::<TaskId>().expect("task id");
+    let (request, _) =
+        task_write_request_with_mode(&home, &team, "sender", task_id.clone(), nudge_mode);
+    let outcome =
+        write_mail_with_runtime(request, &NullObservability, &runtime).expect("task write");
+
+    assert_eq!(
+        task_row(&runtime, &team, &task_id).state,
+        TaskState::Assigned
+    );
+    let member = atm_storage::MemberKey::new(
+        team.clone(),
+        "recipient".parse::<AgentName>().expect("recipient"),
+    );
+    assert!(
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .list_pending_members()
+            .expect("pending members")
+            .contains(&member)
+    );
+
+    let dispatch = rebuild_received_hook_dispatch(
+        &runtime,
+        &member,
+        outcome.persisted_message_id(),
+        NudgeKind::Queue,
+    )
+    .expect("rebuild task dispatch")
+    .expect("task dispatch");
+    assert_eq!(dispatch.event.task_id, Some(task_id.clone()));
+    let rendered = match &dispatch.target {
+        PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(target)) => {
+            &target.rendered_nudge
+        }
+        PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(target)) => &target.rendered_nudge,
+        target => panic!("unexpected task target: {target:?}"),
+    };
+    assert!(rendered.contains(&format!("<task id=\"{}\">", task_id.as_str())));
 }
 
 fn ack_request(home: &std::path::Path, team: &TeamName, message_id: AtmMessageId) -> AckRequest {
@@ -193,4 +253,40 @@ fn deferred_herdr_prepare_persists_the_same_task_assignment() {
     )
     .expect("task acknowledgement");
     assert_eq!(task_row(&runtime, &team, &task_id).state, TaskState::Active);
+}
+
+#[test]
+fn ac03_send_task_to_herdr_sets_marker_and_renders_task_body() {
+    assert_task_send_surface(
+        RosterHarness::Hermes,
+        NudgeMode::Immediate,
+        "AX5-SEND-HERDR",
+    );
+}
+
+#[test]
+fn ac03_queue_task_to_herdr_sets_marker_and_renders_task_body() {
+    assert_task_send_surface(
+        RosterHarness::Hermes,
+        NudgeMode::Deferred,
+        "AX5-QUEUE-HERDR",
+    );
+}
+
+#[test]
+fn ac03_send_task_to_tmux_sets_marker_and_renders_task_body() {
+    assert_task_send_surface(
+        RosterHarness::ClaudeCode,
+        NudgeMode::Immediate,
+        "AX5-SEND-TMUX",
+    );
+}
+
+#[test]
+fn ac03_queue_task_to_tmux_sets_marker_and_renders_task_body() {
+    assert_task_send_surface(
+        RosterHarness::ClaudeCode,
+        NudgeMode::Deferred,
+        "AX5-QUEUE-TMUX",
+    );
 }
