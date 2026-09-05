@@ -24,10 +24,16 @@ use atm_core::types::{AgentName, ChatId, IsoTimestamp, ReadSelection, TeamName};
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 
+mod observability;
 mod query;
+mod recovery;
 mod tool_types;
 
-pub use tool_types::{AtmListResult, AtmListRow, AtmReadResult, AtmSendResult, AtmToolError};
+pub use tool_types::AtmSendResult as AtmAckResult;
+pub use tool_types::{
+    AtmListResult, AtmListRow, AtmReadResult, AtmSendResult, AtmToolError, PyObservability,
+    PyObservabilityPaths,
+};
 
 fn python_extension_runtime() -> PyResult<&'static Mutex<tokio::runtime::Runtime>> {
     // Python calls may arrive from arbitrary host threads. Serialize the one
@@ -219,11 +225,12 @@ enum DaemonRecoveryPolicy {
 }
 
 enum DaemonRecovery<T> {
-    Completed(T),
+    Completed(T, observability::ObservabilityStatus),
     Failed {
         error: PyErr,
         refreshed: bool,
         refresh_error: Option<PyErr>,
+        observability: observability::ObservabilityStatus,
     },
 }
 
@@ -413,12 +420,45 @@ pub struct PyGraftSession {
     // mutable lifecycle handles therefore need real synchronization.
     client: Mutex<Option<GraftClient>>,
     receiver: Mutex<Option<GraftSession>>,
+    fallback_logger: Arc<observability::GraftFallbackLogger>,
     #[cfg(test)]
     reconnect_replacement: Mutex<Option<GraftClient>>,
     #[cfg(test)]
     reconnect_attempts: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
     reconnect_fallback_attempts: std::sync::atomic::AtomicUsize,
+}
+
+fn observability_log_dir() -> PyResult<(std::path::PathBuf, &'static str)> {
+    if std::env::var_os("ATM_LOG_DIR").is_some_and(|value| !value.is_empty()) {
+        return atm_core::home::host_log_dir()
+            .map(|path| (path, "env:ATM_LOG_DIR"))
+            .map_err(atm_error);
+    }
+    if std::env::var_os("ATM_HOME").is_some_and(|value| !value.is_empty()) {
+        let home = atm_home().map_err(atm_error)?;
+        return Ok((
+            atm_core::home::host_log_dir_from_home(&home),
+            "env:ATM_HOME",
+        ));
+    }
+    atm_core::home::host_log_dir()
+        .map(|path| (path, "default"))
+        .map_err(atm_error)
+}
+
+#[pyfunction]
+fn observability_paths() -> PyResult<PyObservabilityPaths> {
+    let (log_dir, source) = observability_log_dir()?;
+    Ok(PyObservabilityPaths {
+        canonical_log_path: log_dir
+            .join(atm_observability::CANONICAL_LOG_FILE_NAME)
+            .display()
+            .to_string(),
+        fallback_log_path: observability::fallback_path(&log_dir).display().to_string(),
+        log_dir: log_dir.display().to_string(),
+        log_dir_source: source.to_owned(),
+    })
 }
 
 impl PyGraftSession {
@@ -454,7 +494,7 @@ impl PyGraftSession {
             }
         }
 
-        // Re-resolve the one selected daemon endpoint.  A managed restart may
+        // Re-resolve the one selected daemon endpoint. A managed restart may
         // replace its Unix socket and invalidate a long-lived embedded host's
         // pooled transport; this never starts a competing daemon.
         #[cfg(test)]
@@ -569,76 +609,42 @@ impl PyGraftSession {
             .map_err(atm_error)
     }
 
-    /// Execute one native operation and recover a stale local client exactly
-    /// once when the managed daemon has cycled.  Writes are never replayed;
-    /// read-only operations may retry once on the refreshed client.
-    fn with_daemon_recovery<T: Send>(
+    fn emit_graft_event(
         &self,
-        py: Python<'_>,
-        policy: DaemonRecoveryPolicy,
-        mut operation: impl FnMut() -> PyResult<T> + Send,
-    ) -> DaemonRecovery<T> {
-        let error = match py.detach(&mut operation) {
-            Ok(value) => return DaemonRecovery::Completed(value),
-            Err(error) => error,
-        };
-        if !AtmToolError::from_native_error(py, &error).is_daemon_unavailable() {
-            return DaemonRecovery::Failed {
-                error,
-                refreshed: false,
-                refresh_error: None,
-            };
-        }
-
-        match py.detach(|| self.reconnect_client()) {
-            Err(refresh_error) => DaemonRecovery::Failed {
-                error,
-                refreshed: false,
-                refresh_error: Some(refresh_error),
-            },
-            Ok(()) if matches!(policy, DaemonRecoveryPolicy::RefreshOnly) => {
-                DaemonRecovery::Failed {
-                    error,
-                    refreshed: true,
-                    refresh_error: None,
-                }
-            }
-            Ok(()) => match py.detach(&mut operation) {
-                Ok(value) => DaemonRecovery::Completed(value),
-                Err(error) => DaemonRecovery::Failed {
-                    error,
-                    refreshed: true,
-                    refresh_error: None,
-                },
-            },
-        }
+        code: &'static str,
+        fields: impl IntoIterator<Item = (&'static str, String)>,
+    ) -> observability::ObservabilityStatus {
+        self.fallback_logger.record(code, fields)
     }
 
+    #[allow(clippy::result_large_err)]
     fn tool_error_from_recovery<T>(
         py: Python<'_>,
         policy: DaemonRecoveryPolicy,
         recovery: DaemonRecovery<T>,
-    ) -> Result<T, AtmToolError> {
+    ) -> Result<(T, observability::ObservabilityStatus), AtmToolError> {
         match recovery {
-            DaemonRecovery::Completed(value) => Ok(value),
+            DaemonRecovery::Completed(value, status) => Ok((value, status)),
             DaemonRecovery::Failed {
                 error,
                 refreshed: true,
                 refresh_error: None,
+                observability,
             } if matches!(policy, DaemonRecoveryPolicy::RefreshOnly) => {
                 Err(AtmToolError::from_native_error(py, &error).with_recovery(
                     "the native ATM session was refreshed after a transient failure; retry this send once. The failed send was not replayed to avoid duplicate delivery",
-                ))
+                ).with_observability(observability))
             }
             DaemonRecovery::Failed {
                 error,
                 refresh_error: Some(refresh_error),
+                observability,
                 ..
             } => Err(AtmToolError::from_native_error(py, &error).with_recovery(format!(
                 "the native ATM session could not reconnect; verify the managed daemon is healthy, then retry ({refresh_error})"
-            ))),
-            DaemonRecovery::Failed { error, .. } => {
-                Err(AtmToolError::from_native_error(py, &error))
+            )).with_observability(observability)),
+            DaemonRecovery::Failed { error, observability, .. } => {
+                Err(AtmToolError::from_native_error(py, &error).with_observability(observability))
             }
         }
     }
@@ -648,12 +654,14 @@ impl PyGraftSession {
 impl PyGraftSession {
     #[new]
     fn new(caller: PyAgentAddress) -> PyResult<Self> {
+        let (log_dir, _) = observability_log_dir()?;
         Ok(Self {
             caller: caller.to_typed()?,
             // A Python-embedded host must attach to the one runtime already
             // selected for this machine; it must never auto-start another one.
             client: Mutex::new(Some(GraftClient::connect_existing().map_err(atm_error)?)),
             receiver: Mutex::new(None),
+            fallback_logger: observability::new_logger(&log_dir),
             #[cfg(test)]
             reconnect_replacement: Mutex::new(None),
             #[cfg(test)]
@@ -674,22 +682,23 @@ impl PyGraftSession {
         let to = to.to_typed()?.to_string();
         // `detach` is PyO3 0.29's replacement for `allow_threads`: all
         // runtime blocking happens without holding the Python GIL.
-        match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RefreshOnly, || {
+        match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RefreshOnly, "send", || {
             self.send_outcome(Some(to.clone()), body.clone(), requires_ack, None)
         }) {
-            DaemonRecovery::Completed(outcome) => Ok(outcome),
+            DaemonRecovery::Completed(outcome, status) => Ok(outcome.with_observability(status)),
             DaemonRecovery::Failed { error, .. } => Err(error),
         }
     }
 
     fn read(&self, py: Python<'_>) -> PyResult<Vec<PyMessage>> {
         let query = self.build_read_query(true)?;
-        let outcome = match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, || {
-            self.read_outcome(query.clone())
-        }) {
-            DaemonRecovery::Completed(outcome) => outcome,
-            DaemonRecovery::Failed { error, .. } => return Err(error),
-        };
+        let outcome =
+            match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, "read", || {
+                self.read_outcome(query.clone())
+            }) {
+                DaemonRecovery::Completed(outcome, status) => outcome.with_observability(status),
+                DaemonRecovery::Failed { error, .. } => return Err(error),
+            };
         outcome
             .message
             .map_or_else(|| Ok(Vec::new()), |message| Ok(vec![message]))
@@ -697,11 +706,11 @@ impl PyGraftSession {
 
     fn list(&self, py: Python<'_>) -> PyResult<usize> {
         let query = self.build_list_query("actionable", None, None, None, None, None)?;
-        match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, || {
+        match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, "list", || {
             self.list_outcome(query.clone())
                 .map(|outcome| outcome.count)
         }) {
-            DaemonRecovery::Completed(count) => Ok(count),
+            DaemonRecovery::Completed(count, _) => Ok(count),
             DaemonRecovery::Failed { error, .. } => Err(error),
         }
     }
@@ -727,18 +736,35 @@ impl PyGraftSession {
         match Self::tool_error_from_recovery(
             py,
             DaemonRecoveryPolicy::RefreshOnly,
-            self.with_daemon_recovery(py, DaemonRecoveryPolicy::RefreshOnly, || {
-                self.send_outcome(
-                    to.clone(),
-                    body.clone(),
-                    requires_ack,
-                    acknowledges_message_id.clone(),
-                )
-            }),
+            self.with_daemon_recovery(
+                py,
+                DaemonRecoveryPolicy::RefreshOnly,
+                if acknowledges_message_id.is_some() {
+                    "ack"
+                } else {
+                    "send"
+                },
+                || {
+                    self.send_outcome(
+                        to.clone(),
+                        body.clone(),
+                        requires_ack,
+                        acknowledges_message_id.clone(),
+                    )
+                },
+            ),
         ) {
-            Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
+            Ok((outcome, status)) => {
+                Ok(Py::new(py, outcome.with_observability(status))?.into_any())
+            }
             Err(error) => Ok(Py::new(py, error)?.into_any()),
         }
+    }
+
+    /// Native acknowledgement tool; acknowledgements remain canonical sends
+    /// carrying `acknowledges_message_id`.
+    fn ack_tool(&self, py: Python<'_>, message_id: String, reply: String) -> PyResult<Py<PyAny>> {
+        self.send_tool(py, None, reply, false, Some(message_id))
     }
 
     #[pyo3(signature = (selection="actionable", message_id=None, task=None, contains=None, since=None, from_agent=None))]
@@ -764,11 +790,13 @@ impl PyGraftSession {
         match Self::tool_error_from_recovery(
             py,
             DaemonRecoveryPolicy::RetryOnce,
-            self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, || {
+            self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, "read", || {
                 self.peek_outcome(query.clone())
             }),
         ) {
-            Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
+            Ok((outcome, status)) => {
+                Ok(Py::new(py, outcome.with_observability(status))?.into_any())
+            }
             Err(error) => Ok(Py::new(py, error)?.into_any()),
         }
     }
@@ -796,25 +824,27 @@ impl PyGraftSession {
         match Self::tool_error_from_recovery(
             py,
             DaemonRecoveryPolicy::RetryOnce,
-            self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, || {
+            self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, "list", || {
                 self.list_outcome(query.clone())
             }),
         ) {
-            Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
+            Ok((outcome, status)) => {
+                Ok(Py::new(py, outcome.with_observability(status))?.into_any())
+            }
             Err(error) => Ok(Py::new(py, error)?.into_any()),
         }
     }
 
     fn mailbox_work_counts(&self, py: Python<'_>) -> PyResult<PyMailboxWorkCounts> {
         let query = self.build_read_query(false)?;
-        match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, || {
+        match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, "read", || {
             self.read_raw(query.clone())
                 .map(|outcome| PyMailboxWorkCounts {
                     unread: outcome.bucket_counts.unread,
                     pending_ack: outcome.bucket_counts.pending_ack,
                 })
         }) {
-            DaemonRecovery::Completed(counts) => Ok(counts),
+            DaemonRecovery::Completed(counts, _) => Ok(counts),
             DaemonRecovery::Failed { error, .. } => Err(error),
         }
     }
@@ -884,10 +914,14 @@ impl PyGraftSession {
 #[pymodule]
 fn _atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("AtmGraftError", m.py().get_type::<AtmGraftError>())?;
+    m.add_function(wrap_pyfunction!(observability_paths, m)?)?;
+    m.add_class::<PyObservability>()?;
+    m.add_class::<PyObservabilityPaths>()?;
     m.add_class::<PyAgentAddress>()?;
     m.add_class::<PyGraftSessionOptions>()?;
     m.add_class::<PyMessage>()?;
     m.add_class::<AtmSendResult>()?;
+    m.add("AtmAckResult", m.py().get_type::<AtmSendResult>())?;
     m.add_class::<AtmReadResult>()?;
     m.add_class::<AtmListRow>()?;
     m.add_class::<AtmListResult>()?;
@@ -904,6 +938,7 @@ mod tests {
     use super::{
         _atm_graft, AtmGraftError, AtmToolError, PyAgentAddress, PyGraftSession,
         PyGraftSessionOptions, PyMailboxWorkCounts, PyNudge, PythonNudgeInjector, atm_error,
+        observability, observability_paths,
     };
     use atm_core::boundary::{NudgeKind, PostSendHookEvent};
     use atm_core::error::{AtmError, AtmErrorCode};
@@ -911,13 +946,15 @@ mod tests {
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
     use atm_core::read::{BucketCounts, ReadOutcome};
     use atm_core::send::{SendCommandOutcome, SendOutcome};
+    use atm_core::test_support::EnvGuard;
     use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AgentName, ChatId, CommandAction, ReadSelection, TeamName};
     use atm_graft::{GraftClient, HostNudge, HostNudgeInjector, MailboxWorkCounts};
     use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Barrier, Mutex};
+    use std::thread;
     use tempfile::TempDir;
 
     const TEST_RECIPIENT: &str = "test-recipient";
@@ -988,11 +1025,165 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(initial))),
             receiver: Mutex::new(None),
+            fallback_logger: observability::new_logger(
+                &std::env::temp_dir().join("atm-graft-python-tests"),
+            ),
             reconnect_replacement: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
                 replacement,
             ))),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
+        }
+    }
+
+    fn test_session_with_fallback_path(
+        initial: Arc<FakeClientTransport>,
+        replacement: Arc<FakeClientTransport>,
+        fallback_path: &std::path::Path,
+        sender: String,
+    ) -> PyGraftSession {
+        let caller = PyAgentAddress::new(sender, TEST_TEAM.to_string(), None).expect("caller");
+        PyGraftSession {
+            caller: caller.to_typed().expect("typed caller"),
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(initial))),
+            receiver: Mutex::new(None),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                fallback_path.to_owned(),
+            )),
+            reconnect_replacement: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
+                replacement,
+            ))),
+            reconnect_attempts: AtomicUsize::new(0),
+            reconnect_fallback_attempts: AtomicUsize::new(0),
+        }
+    }
+
+    #[test]
+    fn four_concurrent_sessions_survive_restart_without_corrupt_fallback_lines() {
+        Python::initialize();
+        let tempdir = TempDir::new().expect("fallback log directory");
+        let fallback_path = tempdir.path().join("atm-graft-fallback.jsonl");
+        let initial_calls = Arc::new(AtomicUsize::new(0));
+        let replacement_calls = Arc::new(AtomicUsize::new(0));
+        let start = Arc::new(Barrier::new(4));
+        let sessions = (0..4)
+            .map(|index| {
+                let initial_calls = Arc::clone(&initial_calls);
+                let replacement_calls = Arc::clone(&replacement_calls);
+                let initial = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                    assert!(matches!(request, RequestEnvelope::List(_)));
+                    initial_calls.fetch_add(1, Ordering::SeqCst);
+                    Err(AtmError::daemon_unavailable("induced daemon restart"))
+                })));
+                let replacement = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                    assert!(matches!(request, RequestEnvelope::List(_)));
+                    replacement_calls.fetch_add(1, Ordering::SeqCst);
+                    Ok(ResponseEnvelope::List(list_outcome()))
+                })));
+                test_session_with_fallback_path(
+                    initial,
+                    replacement,
+                    &fallback_path,
+                    format!("{TEST_SENDER}-{index}"),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let outcomes = thread::scope(|scope| {
+            sessions
+                .into_iter()
+                .map(|session| {
+                    let start = Arc::clone(&start);
+                    scope.spawn(move || {
+                        start.wait();
+                        Python::attach(|py| session.list(py).map_err(|error| error.to_string()))
+                    })
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|handle| handle.join().expect("concurrent graft session"))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .expect("all four primary outcomes survive the induced restart");
+
+        assert_eq!(outcomes, vec![0; 4]);
+        assert_eq!(initial_calls.load(Ordering::SeqCst), 4);
+        assert_eq!(replacement_calls.load(Ordering::SeqCst), 4);
+
+        let text = std::fs::read_to_string(&fallback_path).expect("fallback events");
+        let lines = text.lines().collect::<Vec<_>>();
+        assert_eq!(lines.len(), 12, "each recovered session emits three events");
+        for line in &lines {
+            assert!(line.starts_with("{\"origin\":\"graft\",\"ts\":\""));
+            assert!(line.ends_with('}'), "event line is complete: {line}");
+            assert!(line.contains("\"code\":\"ATM_GRAFT_"));
+            assert!(line.contains("\"correlation_id\":\"graft-"));
+        }
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("\"code\":\"ATM_GRAFT_RECOVERY_ATTEMPT\""))
+                .count(),
+            4
+        );
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("\"code\":\"ATM_GRAFT_DAEMON_UNAVAILABLE\""))
+                .count(),
+            4
+        );
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("\"code\":\"ATM_GRAFT_RECOVERY_RESULT\""))
+                .count(),
+            4
+        );
+    }
+
+    #[test]
+    fn observability_paths_reports_each_log_directory_source() {
+        let tempdir = TempDir::new().expect("observability path fixtures");
+        let log_dir = tempdir.path().join("explicit-logs");
+        let atm_home = tempdir.path().join("atm-home");
+        let log_dir_text = log_dir.to_str().expect("utf8 log path");
+        let atm_home_text = atm_home.to_str().expect("utf8 ATM home");
+
+        {
+            let _env = EnvGuard::set_many([
+                ("ATM_LOG_DIR", Some(log_dir_text)),
+                ("ATM_HOME", Some(atm_home_text)),
+            ]);
+            let paths = observability_paths().expect("ATM_LOG_DIR paths");
+            assert_eq!(paths.log_dir, log_dir.display().to_string());
+            assert_eq!(paths.log_dir_source, "env:ATM_LOG_DIR");
+            assert!(paths.canonical_log_path.starts_with(&paths.log_dir));
+            assert!(paths.fallback_log_path.starts_with(&paths.log_dir));
+        }
+
+        {
+            let _env =
+                EnvGuard::set_many([("ATM_LOG_DIR", None), ("ATM_HOME", Some(atm_home_text))]);
+            let paths = observability_paths().expect("ATM_HOME paths");
+            let expected = atm_home.join(".atm").join("logs");
+            assert_eq!(paths.log_dir, expected.display().to_string());
+            assert_eq!(paths.log_dir_source, "env:ATM_HOME");
+            assert!(paths.canonical_log_path.starts_with(&paths.log_dir));
+            assert!(paths.fallback_log_path.starts_with(&paths.log_dir));
+        }
+
+        {
+            let _env = EnvGuard::set_many([("ATM_LOG_DIR", None), ("ATM_HOME", None)]);
+            let paths = observability_paths().expect("default paths");
+            let expected = atm_core::home::host_log_dir()
+                .expect("default host log directory")
+                .display()
+                .to_string();
+            assert_eq!(paths.log_dir, expected);
+            assert_eq!(paths.log_dir_source, "default");
+            assert!(paths.canonical_log_path.starts_with(&paths.log_dir));
+            assert!(paths.fallback_log_path.starts_with(&paths.log_dir));
         }
     }
 
@@ -1124,7 +1315,7 @@ mod tests {
     }
 
     #[test]
-    fn python_session_exposes_typed_native_tools_but_not_acknowledge() {
+    fn python_session_exposes_typed_native_tools_and_acknowledgement() {
         Python::initialize();
         Python::attach(|py| {
             let module = PyModule::new(py, "_atm_graft").expect("python module");
@@ -1142,8 +1333,11 @@ mod tests {
             assert!(module.getattr("AtmSendResult").is_ok());
             assert!(module.getattr("AtmReadResult").is_ok());
             assert!(module.getattr("AtmListResult").is_ok());
+            assert!(module.getattr("AtmAckResult").is_ok());
+            assert!(module.getattr("PyObservability").is_ok());
+            assert!(module.getattr("PyObservabilityPaths").is_ok());
             assert!(module.getattr("AtmToolError").is_ok());
-            assert!(session_type.getattr("acknowledge").is_err());
+            assert!(session_type.getattr("ack_tool").is_ok());
         });
     }
 
@@ -1158,6 +1352,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
+            fallback_logger: observability::new_logger(
+                &std::env::temp_dir().join("atm-graft-python-tests"),
+            ),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1358,6 +1555,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
+            fallback_logger: observability::new_logger(
+                &std::env::temp_dir().join("atm-graft-python-tests"),
+            ),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1393,6 +1593,52 @@ mod tests {
                 "native_client"
             );
         });
+    }
+
+    #[test]
+    fn ack_tool_preserves_cli_code_for_a_non_pending_message() {
+        Python::initialize();
+        let message_id = "01KZSSREKYM7G39237P0YQ3CW3".to_owned();
+        let expected_id = message_id.parse().expect("message id");
+        let session = test_session(
+            Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                let RequestEnvelope::Write(request) = request else {
+                    panic!("ack must use the canonical write path")
+                };
+                assert_eq!(request.acknowledges_message_id, Some(expected_id));
+                Err(AtmError::validation(
+                    "acknowledgement source is not pending acknowledgement",
+                ))
+            }))),
+            Arc::new(FakeClientTransport::new(Box::new(|_| {
+                panic!("validation failure must not refresh the session")
+            }))),
+        );
+
+        Python::attach(|py| {
+            let result = session
+                .ack_tool(py, message_id, "already handled".to_owned())
+                .expect("ack returns a typed error result");
+            let result = result.bind(py);
+            assert!(result.is_instance_of::<AtmToolError>());
+            assert_eq!(
+                result
+                    .getattr("code")
+                    .expect("error code")
+                    .extract::<String>()
+                    .expect("string error code"),
+                AtmErrorCode::MessageValidationFailed.as_str()
+            );
+            assert!(
+                result
+                    .getattr("message")
+                    .expect("error message")
+                    .extract::<String>()
+                    .expect("string error message")
+                    .contains("not pending acknowledgement")
+            );
+        });
+        assert_eq!(session.reconnect_attempts.load(Ordering::SeqCst), 0);
     }
 
     #[test]
@@ -1658,6 +1904,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
+            fallback_logger: observability::new_logger(
+                &std::env::temp_dir().join("atm-graft-python-tests"),
+            ),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1757,6 +2006,9 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(transport))),
             receiver: Mutex::new(None),
+            fallback_logger: observability::new_logger(
+                &std::env::temp_dir().join("atm-graft-python-tests"),
+            ),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1817,6 +2069,9 @@ mod tests {
                 })),
             )))),
             receiver: Mutex::new(None),
+            fallback_logger: observability::new_logger(
+                &std::env::temp_dir().join("atm-graft-python-tests"),
+            ),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),

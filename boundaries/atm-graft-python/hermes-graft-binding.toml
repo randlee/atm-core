@@ -22,7 +22,7 @@ io_forbidden = ["database_io", "direct_socket_io", "recipient_routing"]
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core", "atm-graft", "pydantic"]
+allowed_dependencies = ["atm-core", "atm-graft", "atm-observability", "pydantic"]
 forbidden_edges = [
   "atm-graft-python -> atm-daemon",
   "atm-graft-python -> atm-storage-rusqlite",
@@ -36,8 +36,8 @@ scope = "inside_owner_crate"
 forbidden = ["rusqlite::Connection", "reqwest::Client", "hyper::Client", "axum::Router"]
 
 [contracts]
-request_types = ["PyAgentAddress", "PyGraftSessionOptions", "AtmSendRequest", "AtmReadRequest", "AtmListRequest"]
-response_types = ["PyMessage", "PyMailboxWorkCounts", "PyNudge", "AtmSendResult", "AtmReadResult", "AtmListRow", "AtmListResult"]
+request_types = ["PyAgentAddress", "PyGraftSessionOptions", "AtmSendRequest", "AtmReadRequest", "AtmListRequest", "AtmAckRequest"]
+response_types = ["PyMessage", "PyMailboxWorkCounts", "PyNudge", "AtmSendResult", "AtmReadResult", "AtmListRow", "AtmListResult", "AtmAckResult", "PyObservabilityPaths"]
 error_types = ["AtmGraftError", "AtmToolError"]
 notes = ["The binding delegates all mailbox state and transport to atm-graft; it neither stores mail nor chooses a host chat route."]
 
