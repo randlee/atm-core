@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T04:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW3 ;
@@ -23,15 +23,19 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-002/AW3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-002/AW3-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-002/AW3-3> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T08:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+# CLOSURE (phase-aw integration review, quality-mgr): quality-mgr independently confirmed at integrate/phase-aw 517db2459 in /tmp/verify-aw-integration: `cargo test -p atm-architecture --test boundary_enforcement -- al8_replacement av3_post_cutover`: 2 passed, 0 failed -- both arch-gates pass on the current tip; fixed in a later round before merge, never recorded as closed.
 
 <urn:atm:triage:occurrence/AW3-CI-002/AW3-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
   triage:line 1 ;
   triage:snippet "start_replacement_runtime composition changed by AW.3" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "a60594ff1" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/a60594ff1> .
@@ -41,8 +45,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 3087 ;
   triage:snippet "al8 gate: maintenance object never registered on HttpRuntime" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "a60594ff1" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/a60594ff1> .
@@ -52,8 +56,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 4040 ;
   triage:snippet "av3 gate: doctor allowlist rejects DiagnosticCounters, DiagnosticCountersSource" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "a60594ff1" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/a60594ff1> .

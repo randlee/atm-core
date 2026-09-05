@@ -15,22 +15,26 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T04:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW3 ;
   triage:foundAt "2026-09-05T04:22:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-003/AW3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-003/AW3-2> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-05T08:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+# CLOSURE (phase-aw integration review, quality-mgr): quality-mgr independently confirmed at integrate/phase-aw 517db2459 in /tmp/verify-aw-integration: `cargo check --tests -p atm-daemon-bootstrap` compiles clean, no E0425/E0282 -- fixed in a later round before merge, never recorded as closed.
 
 <urn:atm:triage:occurrence/AW3-CI-003/AW3-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
   triage:line 914 ;
   triage:snippet "E0425 start_replacement_runtime_for_test not in scope" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "a046246c3" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/a046246c3> .
@@ -40,8 +44,8 @@
   triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
   triage:line 1317 ;
   triage:snippet "E0282 type annotations needed" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "a046246c3" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/a046246c3> .
