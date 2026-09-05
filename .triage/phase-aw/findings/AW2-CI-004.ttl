@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW2-CI-004>
+  a triage:Finding ;
+  triage:findingId "AW2-CI-004" ;
+  triage:title "Test (windows-latest) fails at 1d43815c6: ac8 NullSqliteObservability source-contract test searches for an LF-only cfg(test) marker and misfires on CRLF checkouts" ;
+  triage:description "PR #1179 at 1d43815c6, Test (windows-latest): observability::tests::ac8_null_sqlite_observability_is_test_only_in_the_source_contract panics with non-test NullSqliteObservability reference in analyst_query.rs:484. That reference is inside mod tests (cfg(test) at line 457-458), but the test locates the test module with source.find of the literal #[cfg(test)] newline mod tests, which never matches on the Windows runner because the checkout has CRLF line endings (no .gitattributes in the repo). Same cross-platform class as docs/cross-platform-guidelines.md Line Endings. Fix: normalize the source text (strip carriage returns) before the marker search and line indexing, or derive the boundary from lines() rather than a byte search; do not weaken the contract. Run cargo test -p atm-storage-rusqlite and full just lint before pushing." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW2 ;
+  triage:foundAt "2026-09-05T06:48:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW2-CI-004/AW2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW2-CI-004/AW2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/observability.rs" ;
+  triage:line 116 ;
+  triage:snippet "source.find of cfg(test) newline mod tests never matches CRLF source so in_test_module is always false on Windows" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "1d43815c6" ;
+  triage:occursIn <urn:atm:triage:worktree/AW2/1d43815c6> .
+
+<urn:atm:triage:worktree/AW2/1d43815c6>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "1d43815c6" ;
+  triage:orderIndex 2 .
