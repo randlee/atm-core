@@ -45,9 +45,17 @@ pub const RETAINED_FIELD_ALLOWLIST: &[&str] = &[
     "refresh_error_code",
     "error_layer",
     "origin",
-    "message",
-    "detail",
 ];
+
+/// Applies the one retained-data policy to a structured event payload.
+///
+/// Free-form text is deliberately not a retained field.  Callers keep stable
+/// codes and enum-like context here; request data and interpolated diagnostics
+/// must remain on the live stderr/tracing path only.
+pub fn sanitize_retained_fields(mut fields: Map<String, FieldValue>) -> Map<String, FieldValue> {
+    fields.retain(|key, _| RETAINED_FIELD_ALLOWLIST.contains(&key.as_str()));
+    fields
+}
 
 /// JSON-compatible value carried to the optional AW.2 diagnostic timeline.
 pub type FieldValue = Value;
@@ -290,7 +298,7 @@ impl RetainedTracingEvent {
         event.record(&mut visitor);
         let component = event.metadata().target().to_string();
         let origin = EventOrigin::from_field(visitor.take_string("origin"));
-        let message = visitor.message.take().unwrap_or_default();
+        let message = String::new();
         let fields = visitor.into_fields(&component, origin.as_str());
         Self {
             timestamp: Timestamp::now_utc(),
@@ -361,14 +369,11 @@ fn map_level(level: &TracingLevel) -> Level {
 
 #[derive(Default)]
 struct RetainedVisitor {
-    message: Option<String>,
     fields: BTreeMap<&'static str, FieldValue>,
 }
 impl RetainedVisitor {
     fn keep(&mut self, field: &Field, value: FieldValue) {
-        if field.name() == "message" {
-            self.message = value.as_str().map(ToOwned::to_owned);
-        } else if let Some(key) = RETAINED_FIELD_ALLOWLIST
+        if let Some(key) = RETAINED_FIELD_ALLOWLIST
             .iter()
             .copied()
             .find(|key| *key == field.name())
@@ -567,6 +572,25 @@ mod tests {
         ] {
             assert!(!content.contains(secret), "secret leaked: {content}");
         }
+    }
+
+    #[test]
+    fn retained_free_text_never_persists_even_when_it_contains_a_secret() {
+        let (tempdir, bridge) = bridge();
+        with_bridge(
+            &bridge,
+            || tracing::warn!(target: "atm_http_runtime::delivery", "delivery failed for token=free-text-secret"),
+        );
+
+        let content = lines(&tempdir, &bridge, 1);
+        assert!(
+            !content.contains("free-text-secret"),
+            "secret leaked: {content}"
+        );
+        assert!(
+            !content.contains("delivery failed"),
+            "message leaked: {content}"
+        );
     }
 
     #[test]

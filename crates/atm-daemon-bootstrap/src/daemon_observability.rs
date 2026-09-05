@@ -12,6 +12,7 @@ use atm_core::observability::{
 };
 use atm_observability::{
     RetainedLogOffer, RetainedLogPolicy, RetainedLogger, build_retained_logger_from_env,
+    sanitize_retained_fields,
 };
 use serde_json::Map;
 
@@ -162,25 +163,9 @@ impl ObservabilityPort for DaemonObservability {
             outcome: OutcomeLabel::new(event.outcome.as_str()).map_err(|_source| {
                 AtmError::observability_emit("failed to validate ATM daemon command outcome")
             })?,
-            message: Some(format!(
-                "ATM daemon handled {} with outcome {}",
-                event.command, event.outcome
-            )),
-            request_id: event
-                .message_id
-                .map(|value| CorrelationId::new(value.to_string()))
-                .transpose()
-                .map_err(|_source| {
-                    AtmError::observability_emit("failed to validate ATM daemon request id")
-                })?,
-            correlation_id: event
-                .task_id
-                .as_ref()
-                .map(|value| CorrelationId::new(value.as_str().to_string()))
-                .transpose()
-                .map_err(|_source| {
-                    AtmError::observability_emit("failed to validate ATM daemon correlation id")
-                })?,
+            message: None,
+            request_id: None,
+            correlation_id: None,
             fields,
         })
     }
@@ -225,57 +210,14 @@ impl ObservabilityPort for DaemonObservability {
 }
 
 fn command_event_fields(event: &CommandEvent) -> Map<String, serde_json::Value> {
-    let mut fields = Map::from_iter([
-        (
-            "command".to_string(),
-            serde_json::Value::String(event.command.to_string()),
-        ),
-        (
-            "team".to_string(),
-            serde_json::Value::String(event.team.to_string()),
-        ),
-        (
-            "agent".to_string(),
-            serde_json::Value::String(event.agent.to_string()),
-        ),
-        (
-            "sender".to_string(),
-            serde_json::Value::String(event.sender.to_string()),
-        ),
-        (
-            "requires_ack".to_string(),
-            serde_json::Value::Bool(event.requires_ack),
-        ),
-        (
-            "dry_run".to_string(),
-            serde_json::Value::Bool(event.dry_run),
-        ),
-    ]);
-    if let Some(message_id) = event.message_id {
-        fields.insert(
-            "message_id".to_string(),
-            serde_json::Value::String(message_id.to_string()),
-        );
-    }
-    if let Some(task_id) = &event.task_id {
-        fields.insert(
-            "task_id".to_string(),
-            serde_json::Value::String(task_id.to_string()),
-        );
-    }
+    let mut fields = Map::new();
     if let Some(error_code) = event.error_code {
         fields.insert(
-            "error_code".to_string(),
+            "code".to_string(),
             serde_json::Value::String(error_code.to_string()),
         );
     }
-    if let Some(error_message) = &event.error_message {
-        fields.insert(
-            "error_message".to_string(),
-            serde_json::Value::String(error_message.clone()),
-        );
-    }
-    fields
+    sanitize_retained_fields(fields)
 }
 
 // Keep validated correlation identifiers typed at this internal boundary so

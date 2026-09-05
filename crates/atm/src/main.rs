@@ -617,55 +617,13 @@ fn map_maintenance_report(
 
 fn build_command_event_fields(event: &CommandEvent) -> Map<String, serde_json::Value> {
     let mut fields = Map::new();
-    fields.insert(
-        "command".to_string(),
-        serde_json::Value::String(event.command.to_string()),
-    );
-    fields.insert(
-        "team".to_string(),
-        serde_json::Value::String(event.team.to_string()),
-    );
-    fields.insert(
-        "agent".to_string(),
-        serde_json::Value::String(event.agent.to_string()),
-    );
-    fields.insert(
-        "sender".to_string(),
-        serde_json::Value::String(event.sender.to_string()),
-    );
-    fields.insert(
-        "requires_ack".to_string(),
-        serde_json::Value::Bool(event.requires_ack),
-    );
-    fields.insert(
-        "dry_run".to_string(),
-        serde_json::Value::Bool(event.dry_run),
-    );
-    if let Some(message_id) = event.message_id {
-        fields.insert(
-            "message_id".to_string(),
-            serde_json::Value::String(message_id.to_string()),
-        );
-    }
-    if let Some(task_id) = &event.task_id {
-        fields.insert(
-            "task_id".to_string(),
-            serde_json::Value::String(task_id.to_string()),
-        );
-    }
     if let Some(error_code) = event.error_code {
         fields.insert(
-            "error_code".to_string(),
+            "code".to_string(),
             serde_json::Value::String(error_code.to_string()),
         );
     }
-    if let Some(error_message) = &event.error_message {
-        fields.insert(
-            "error_message".to_string(),
-            serde_json::Value::String(error_message.clone()),
-        );
-    }
-    fields
+    atm_observability::sanitize_retained_fields(fields)
 }
 
 fn map_command_event(
@@ -678,21 +636,6 @@ fn map_command_event(
             .map_err(|_source| {
                 AtmError::observability_emit("failed to validate ATM observability schema version")
             })?;
-    let request_id = event
-        .message_id
-        .map(|value| CorrelationId::new(value.to_string()))
-        .transpose()
-        .map_err(|_source| {
-            AtmError::observability_emit("failed to validate ATM observability request id")
-        })?;
-    let correlation_id = event
-        .task_id
-        .as_deref()
-        .map(CorrelationId::new)
-        .transpose()
-        .map_err(|_source| {
-            AtmError::observability_emit("failed to validate ATM observability correlation id")
-        })?;
     let fields = build_command_event_fields(&event);
     let action = ActionName::new(event.action.as_str()).map_err(|_source| {
         AtmError::observability_emit("failed to validate ATM observability action")
@@ -707,14 +650,11 @@ fn map_command_event(
         service: service_name.clone(),
         target: target_category.clone(),
         action,
-        message: Some(format!(
-            "ATM command {} completed with outcome {}",
-            event.command, event.outcome
-        )),
+        message: None,
         identity: ProcessIdentity::default(),
         trace: None,
-        request_id,
-        correlation_id,
+        request_id: None,
+        correlation_id: None,
         outcome: Some(outcome),
         diagnostic: None,
         state_transition: None,
