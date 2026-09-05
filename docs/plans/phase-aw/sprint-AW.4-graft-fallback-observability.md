@@ -2,7 +2,9 @@
 sprint: AW.4
 title: "Graft fallback observability on the atm-graft-python binding"
 branch: feature/aw4-graft-fallback-observability
+worktree: atm-core-worktrees/feature/aw4-graft-fallback-observability
 base: integrate/phase-aw
+status: complete
 issues: "#904 ids 904-1, 904-2, 904-3, 904-5, 904-6, 904-7, 904-8"
 must_follow: [AW.1]
 parallel_safe: [AW.2]

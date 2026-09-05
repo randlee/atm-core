@@ -29,6 +29,7 @@ extension-module = ["pyo3/extension-module"]
 [dependencies]
 atm-graft.workspace = true
 atm-core.workspace = true
+atm-observability.workspace = true
 pyo3 = "0.29"
 tokio.workspace = true
 
