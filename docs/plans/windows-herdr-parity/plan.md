@@ -232,14 +232,53 @@ Sprint AY.1, branch `feature/ay1-windows-herdr-cli-parity` off
 run on a Windows machine inside a Herdr session; the dev agent is itself
 a Herdr-backed roster member on that box.
 
+Blocking preconditions (no dispatch until all three are recorded in the
+sprint doc with a date):
+
+- P-A: `integrate/phase-ay` exists, cut from develop after
+  `integrate/phase-ax` has merged (see Ordering with phase AX).
+- P-B: the FastPC4 Windows `atm-dev` team exists, has Herdr v0.8.2
+  installed via the official installer, and its parked reporter agent
+  has delivered one round-trip report to rand-m4 or M5 (see Windows
+  machine and team). Deliverable 7 cannot be produced without it.
+- P-C: deliverable 0 (the audit) is merged or in the same PR.
+
 Deliverables:
 
-1. **Transport seam.** New `crates/atm-herdr/src/transport.rs` with
-   `trait HerdrTransport` (`execute(request, deadline) -> HerdrRawResponse`),
-   `HerdrRequest`, `HerdrRawResponse`, and the single io::Error to
-   `HerdrError` translation. Shape mirrors `Http1Acceptor`
-   (atm-http-runtime/src/http1_server.rs:49-75): one trait, all policy
-   generic over it.
+0. **Herdr source audit** (`docs/atm-herdr/windows-process-audit.md`):
+   the step-0 table described above, completed at tag v0.8.2, with the
+   remaining W1 rows answered (pipe from `HERDR_SESSION`, CRLF, exit
+   codes) and the facts sections of this plan folded in. Also corrects
+   `docs/atm-herdr/requirements.md` HR-CORE-003 to milliseconds and
+   ADR-058's PROTOCOL_VERSION pin to 20 / v0.8.2.
+
+1. **Transport seam.** New `crates/atm-herdr/src/transport.rs`:
+
+   ```rust
+   pub struct HerdrEndpoint { pub session: HerdrSession, pub socket_path: PathBuf }
+   pub enum HerdrRequest {
+       Prompt { agent: AgentName, text: NudgeText },
+       Wait { agent: AgentName, until: Vec<HerdrAgentStatus>, timeout: Duration },
+       Get { agent: AgentName },
+       List,
+       Notify { title: NotifyTitle, body: NotifyBody, sound: NotifySound },
+   }
+   pub struct HerdrRawResponse { pub stdout_json: String, pub stderr_json: Option<String>, pub exit: HerdrExit }
+   pub enum HerdrExit { Ok, ServerError, Usage, Other(i32) }
+   #[async_trait]
+   pub trait HerdrTransport: Send + Sync {
+       fn kind(&self) -> HerdrTransportKind;            // Cli | Socket
+       fn endpoint(&self) -> &HerdrEndpoint;
+       async fn execute(&self, request: &HerdrRequest, deadline: Deadline) -> Result<HerdrRawResponse, HerdrError>;
+   }
+   ```
+
+   `HerdrRequest -> argv` (today's builders at lib.rs:631-657) and
+   `HerdrRawResponse -> AgentSnapshot / HerdrError` (parsers at
+   675-770) stay in lib.rs, transport-independent. The single io::Error
+   to `HerdrError` translation lives in the transport. Shape mirrors
+   `Http1Acceptor` (atm-http-runtime/src/http1_server.rs:49-75): one
+   trait, all policy generic over it.
 2. **CLI transport.** `transport_cli.rs`: today's `run_command_with_binary`
    (lib.rs:555-625) moved verbatim. This commit is pure motion and must
    pass the entire ADR-058 fixture suite on macOS and Linux with zero
@@ -262,11 +301,28 @@ Deliverables:
    tolerate a trailing `\r` regardless of the audit result. HR-TEST-006 ("CI never depends on Herdr being
    installed") still holds. No-flaky rule: deterministic fake, injected
    deadlines, hard bounds, nothing may block forever.
-5. **Composition and doctor.** One `HerdrCliTransport` construction site
-   in `build_replacement_handler`; doctor herdr section reports transport
-   kind and resolved binary/endpoint. Architecture tests: single
-   construction site; no `cfg(unix|windows)` in atm-herdr outside the
-   transport modules.
+5. **Composition, endpoint ownership, launch verification, doctor.**
+   One `HerdrCliTransport` construction site in
+   `build_replacement_handler`. The daemon owns the endpoint (Rand,
+   2026-09-05): `HerdrEndpoint` is resolved once at startup from the
+   configured `HerdrSession` (optional explicit `socket_path` override)
+   using Herdr's own rules; every child gets `HERDR_SOCKET_PATH` and
+   `HERDR_SESSION` set explicitly and inherited
+   `HERDR_SOCKET_PATH`/`HERDR_CLIENT_SOCKET_PATH`/`HERDR_ENV` removed.
+   Herdr runs one server per user per session on a machine, so the
+   daemon binds to exactly one session. At daemon launch, when the Herdr
+   backend is enabled, the daemon verifies that server is running by
+   executing `List` against the resolved endpoint with a bounded
+   deadline, and emits one structured startup diagnostic (endpoint,
+   transport kind, herdr version/protocol from the probe, reachable or
+   the `HerdrError`). Assumption to confirm with Rand: an unreachable
+   Herdr does not stop the daemon (mail must keep flowing); the breaker
+   starts open, doctor shows the failed probe verbatim, and the first
+   successful call clears it. Doctor herdr section reports transport
+   kind, resolved binary, resolved endpoint (the `\\.\pipe\` form on
+   Windows), and the launch-probe result. Architecture tests: single
+   construction site; single endpoint-resolution site; no
+   `cfg(unix|windows)` in atm-herdr outside the transport modules.
 6. **Docs.** Delete the three scope-out statements; add parity
    requirement HR-PLAT-001 (identical command set, error table and
    breaker semantics on all platforms; transport differences never
@@ -277,32 +333,71 @@ Deliverables:
    architecture.md, HR-TEST-006, boundary TOML; mark AQ2.6 deliverable 5
    superseded (do not delete history).
 7. **Live Windows evidence** (acceptance gate, AX.7 template):
-   `atm doctor` herdr section; prompt/wait/get/list round trips with
-   observed argv and JSON; end-to-end nudge from another host with
+   `atm doctor` herdr section including the launch probe;
+   prompt/wait/get/list/notify (HR-CORE-010) round trips with observed
+   argv and JSON; end-to-end nudge from another host with
    timestamps at both ends; transport-boundary structured logs; negative
    cases live (Herdr stopped, breaker opens/recovers, agent not found,
    agent blocked, slow command hits the 5s cap with no orphan in
    tasklist); nudge latency sample; explicit confirmation no console
    window flashes.
 
-Acceptance: all seven deliverables; windows-latest CI leg executes the
+Acceptance: deliverables 0 through 7; windows-latest CI leg executes the
 process-behaviour suite; official zero-regression benchmark run on the
 hot path before merge (the diff should not touch it; prove it);
 quality-mgr PASS with flaky-test-qa deployed.
 
-## Sprint W2 (AY.2): direct socket/pipe client (size L, blocked on Herdr facts)
+## Sprint W2 (AY.2): direct socket/pipe client (size L)
 
-`transport_socket.rs` implementing `HerdrTransport` with no child
-process: `tokio::net::UnixStream` on unix, `tokio::net::windows::named_pipe`
-on Windows (tokio is already an allowed dependency; no new crate edge).
-Implements ADR-058 D3 in our code (fresh connection per command,
-protocol ping, one NDJSON request, strict PROTOCOL_VERSION equality) with
-an explicit bounded read deadline that Herdr's own client lacks.
-Prove byte-equivalence by running the whole ADR-058 fixture suite through
-both transports; add a Herdr PROTOCOL_VERSION compatibility matrix; flip
-the composition-root default with the CLI transport retained one release
-as documented fallback. Not started until the pipe framing and ACL model
-are read from Herdr source.
+Prerequisites: W1 merged; the boundary revision below approved by
+boundary-guard before code (io_owns drops `tokio_process_spawn` and
+`herdr_argv_construction`, adds `herdr_local_socket_client`; the
+Windows API pipe has no DACL, so the revision records that any local
+user can reach it).
+
+Deliverables:
+
+1. **Socket transport.** `crates/atm-herdr/src/transport_socket.rs`
+   implementing `HerdrTransport` with no child process:
+   `tokio::net::UnixStream` on unix, `tokio::net::windows::named_pipe`
+   on Windows (tokio already allowed; no new crate edge). Endpoint comes
+   from the same `HerdrEndpoint` W1 resolved.
+2. **Protocol.** ADR-058 D3 in our code: fresh connection per command,
+   ping, PROTOCOL_VERSION equality against a supported set, one NDJSON
+   request line, one response line, explicit bounded read deadline
+   (Herdr's own client has none). Request ids `atm:agent:<cmd>`.
+3. **Compatibility matrix.** Supported Herdr releases and protocol
+   numbers (starts at v0.8.2 / 20) with a fast actionable
+   `protocol_mismatch` failure and a doctor row.
+4. **Equivalence.** The whole ADR-058 fixture suite plus W1's fake
+   binary tests run through both transports with identical assertions;
+   a fake Herdr socket/pipe server fixture (test-only) mirrors the fake
+   binary's modes.
+5. **Cutover.** Composition-root default flips to the socket transport;
+   CLI transport retained one release as a documented, explicit config
+   fallback (never silent).
+6. **Live evidence** on macOS and Windows, same set as W1 deliverable 7.
+
+Acceptance: all six deliverables; boundary revision merged; W1
+zero-regression oracle green on both transports; official benchmark run
+on the hot path; quality-mgr PASS with flaky-test-qa and boundary-guard
+deployed.
+
+## Phase AY exit gate (W2 disposition)
+
+Phase AY is not complete until a dated decision on W2 is recorded here
+and in `docs/project-plan.md`, chosen by Rand from exactly these:
+
+- **Ship**: W2 merged, acceptance above met.
+- **Defer with re-approval**: W2 deferred to a named phase, ADR-058 D3
+  amended to say the CLI transport is the supported design until then,
+  and the deferral acknowledged by Rand in this file (date, initials).
+- **Cancel**: W2 dropped, ADR-058 D3 rewritten to make the CLI transport
+  the permanent design, the W2 sections here marked superseded.
+
+quality-mgr's phase-ending gate must refuse the integrate/phase-ay to
+develop PR while this section has no dated decision. This is the
+forcing function that AQ2.6 and ADR-058 lacked (see AW-READY-W1).
 
 ## Request set the transport must carry (from phase AX contract, fenix@rand-m5 2026-09-05)
 
@@ -348,26 +443,30 @@ failure), not the socket code.
 ## Ordering with phase AX
 
 Status 2026-09-05 (fenix@rand-m5): AX.1 through AX.5 are merged into
-integrate/phase-ax, AX.2 included; AX.6 merges as soon as its QA gate
-clears; then the single PR integrate/phase-ax -> develop follows AX.7 and
-the phase-ending review. The AY.1-before-AX.2 ordering is therefore
-moot. Default path: AY.1 takes the AX contract as its baseline, so
-integrate/phase-ay branches from develop after integrate/phase-ax
-merges, or AY.1 merges integrate/phase-ax forward before the Windows
-evidence is captured. The AX.6 notify command (HR-CORE-010) is then in
-scope for the platform-neutral argv contract test and the Windows
-evidence set in a single round. AX.7's evidence scope is widened to a
-Windows Herdr run once AY.1 lands. Only Rand can rule that AX waits on
-AY.1; this plan does not assume it.
+integrate/phase-ax; AX.6 merges when its QA gate clears; then one PR
+integrate/phase-ax -> develop follows AX.7 and the phase-ending review.
+
+Decision (default, stands unless Rand overrides): AY does not start
+until integrate/phase-ax has merged to develop; `integrate/phase-ay` is
+then cut from develop (precondition P-A). AY.1 therefore takes the AX
+contract, including HR-CORE-010 notify, as its baseline with no
+merge-forward juggling. AX does not wait on AY.1. AX.7's evidence
+scope is widened to a Windows Herdr run once AY.1 lands. If Rand wants
+AY.1 to start earlier, the alternative is to cut `integrate/phase-ay`
+from `integrate/phase-ax` and retarget after AX merges; that is a
+documented exception, not the plan.
 
 ## Risks
 
-1. Herdr facts never materialise: W1 still delivers parity without them.
+1. Herdr facts drift after v0.8.2: the audit pins v0.8.2 and the
+   compatibility matrix (W2.3) makes later versions an explicit decision.
 2. Transport extraction silently changes macOS/Linux behaviour: pure-motion
    commit, unedited fixtures.
 3. Orphaned herdr.exe after timeout: explicit live-verified test.
 4. Console flash per nudge: CREATE_NO_WINDOW plus visual confirmation.
-5. Merge collision with AX.2/AX.6: order W1 first.
+5. Merge collision with AX: AY starts after phase-ax merges (P-A).
+7. W2 quietly dropped again: the Phase AY exit gate requires a dated
+   Ship/Defer/Cancel decision before the phase PR.
 6. Hot-path regression: official benchmark run before merge.
 
 ## Windows machine and team (Rand, 2026-09-05)
