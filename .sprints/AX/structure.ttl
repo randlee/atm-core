@@ -1,0 +1,15 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAX a triage:Phase .
+
+# Order follows the plan's tracks: A (AX.1, AX.2) and B (AX.3, AX.4) run in parallel from
+# integrate/phase-ax; C (AX.5, AX.6) after A and B merge; D (AX.7) on the integrate head.
+# must_follow edges: AX.1->AX.2, AX.3->AX.4, AX.2->AX.5, AX.4->AX.5, AX.5->AX.6, AX.6->AX.7.
+triage:AX1 a triage:Sprint ; triage:inPhase triage:PhaseAX ; triage:order 1 ; triage:branch "feature/ax1-queue-template-class" ; triage:criteria "docs/plans/phase-ax/sprint-AX.1-queue-template-class.md" .
+triage:AX3 a triage:Sprint ; triage:inPhase triage:PhaseAX ; triage:order 2 ; triage:branch "feature/ax3-task-state-machine" ; triage:criteria "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" .
+triage:AX2 a triage:Sprint ; triage:inPhase triage:PhaseAX ; triage:order 3 ; triage:branch "feature/ax2-herdr-template-rendering" ; triage:criteria "docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md" .
+triage:AX4 a triage:Sprint ; triage:inPhase triage:PhaseAX ; triage:order 4 ; triage:branch "feature/ax4-task-cli-and-docs" ; triage:criteria "docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md" .
+triage:AX5 a triage:Sprint ; triage:inPhase triage:PhaseAX ; triage:order 5 ; triage:branch "feature/ax5-task-reminder-cycle" ; triage:criteria "docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md" .
+triage:AX6 a triage:Sprint ; triage:inPhase triage:PhaseAX ; triage:order 6 ; triage:branch "feature/ax6-lead-notification-doctor" ; triage:criteria "docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md" .
+triage:AX7 a triage:Sprint ; triage:inPhase triage:PhaseAX ; triage:order 7 ; triage:branch "integrate/phase-ax" ; triage:criteria "docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md" .
