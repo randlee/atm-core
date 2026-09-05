@@ -52,6 +52,29 @@ pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticT
     let _ = ACTIVE_COUNTERS.set(counters);
     let _ = ACTIVE_TIMELINE.set(Arc::clone(&writer));
     bridge.set_diagnostic_sink(writer);
+    start_flush_worker();
+}
+
+fn start_flush_worker() {
+    let _ = std::thread::Builder::new()
+        .name("atm-diagnostic-timeline-flush".to_owned())
+        .spawn(|| {
+            loop {
+                std::thread::park_timeout(Duration::from_millis(DIAGNOSTIC_FLUSH_INTERVAL_MS));
+                let Some(writer) = ACTIVE_TIMELINE.get() else {
+                    return;
+                };
+                writer.flush_due();
+                if let Some(counters) = ACTIVE_COUNTERS.get()
+                    && let Some(monitor) = DEGRADATION_MONITOR.get()
+                {
+                    monitor.observe(
+                        "timeline",
+                        counters.snapshot().timeline_dropped_queue_full_total,
+                    );
+                }
+            }
+        });
 }
 
 /// Explicit selection policy for retained INFO diagnostics. WARN and ERROR

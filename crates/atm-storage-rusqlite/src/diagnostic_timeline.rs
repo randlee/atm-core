@@ -18,6 +18,7 @@ pub const DIAGNOSTIC_DETAIL_MAX_BYTES: usize = 1024;
 pub const DIAGNOSTIC_MAX_ROWS: usize = 20_000;
 pub const DIAGNOSTIC_MAX_AGE_DAYS: i64 = 7;
 pub const DIAGNOSTIC_PRUNE_BATCH: usize = 1000;
+pub const DIAGNOSTIC_PRUNE_CHECK_EVERY: usize = 500;
 
 #[derive(Clone)]
 pub struct SqliteDiagnosticTimeline {
@@ -113,9 +114,18 @@ impl DiagnosticTimelineStore for SqliteDiagnosticTimeline {
     fn prune(&self, now_unix_ms: i64) -> Result<u64, AtmError> {
         let cutoff = now_unix_ms - DIAGNOSTIC_MAX_AGE_DAYS * 24 * 60 * 60 * 1_000;
         self.db.with_transaction(|transaction| {
-            let deleted_age = transaction.execute("DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events WHERE ts_unix_ms < ?1 ORDER BY id LIMIT ?2)", params![cutoff, DIAGNOSTIC_PRUNE_BATCH]).map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-            let deleted_count = transaction.execute("DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms DESC LIMIT -1 OFFSET ?1)", params![DIAGNOSTIC_MAX_ROWS]).map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-            Ok((deleted_age + deleted_count) as u64)
+            let mut deleted = 0_u64;
+            loop {
+                let rows = transaction.execute("DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events WHERE ts_unix_ms < ?1 ORDER BY id LIMIT ?2)", params![cutoff, DIAGNOSTIC_PRUNE_BATCH]).map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                deleted += rows as u64;
+                if rows < DIAGNOSTIC_PRUNE_BATCH { break; }
+            }
+            loop {
+                let rows = transaction.execute("DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms ASC LIMIT ?1 OFFSET ?2)", params![DIAGNOSTIC_PRUNE_BATCH, DIAGNOSTIC_MAX_ROWS]).map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                deleted += rows as u64;
+                if rows == 0 { break; }
+            }
+            Ok(deleted)
         })
     }
 }
@@ -137,7 +147,11 @@ pub(crate) fn truncate_detail(detail: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{DIAGNOSTIC_DETAIL_MAX_BYTES, truncate_detail};
+    use std::time::{Duration, Instant};
+
+    use super::{DIAGNOSTIC_DETAIL_MAX_BYTES, SqliteDiagnosticTimeline, truncate_detail};
+    use atm_storage::{DiagnosticEvent, DiagnosticQuery, DiagnosticTimelineStore};
+    use tempfile::tempdir;
 
     #[test]
     fn detail_truncation_is_utf8_safe_and_bounded() {
@@ -145,5 +159,38 @@ mod tests {
         let truncated = truncate_detail(&value);
         assert!(truncated.len() <= DIAGNOSTIC_DETAIL_MAX_BYTES);
         assert!(truncated.ends_with('…'));
+    }
+
+    #[test]
+    fn fresh_database_migrates_and_writer_lane_persists_a_diagnostic() {
+        let directory = tempdir().expect("temporary database directory");
+        let timeline = SqliteDiagnosticTimeline::open(directory.path().join("mail.db"))
+            .expect("timeline opens and migrates");
+        timeline
+            .record_batch(&[DiagnosticEvent {
+                ts_unix_ms: 42,
+                level: "warn".to_owned(),
+                component: "timeline-test".to_owned(),
+                code: Some("ATM_TEST".to_owned()),
+                correlation_id: None,
+                origin: "tracing".to_owned(),
+                message: "bounded diagnostic".to_owned(),
+                detail: None,
+            }])
+            .expect("non-blocking diagnostic offer");
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let rows = timeline
+                .query(&DiagnosticQuery::default())
+                .expect("timeline query");
+            if rows
+                .iter()
+                .any(|row| row.code.as_deref() == Some("ATM_TEST"))
+            {
+                break;
+            }
+            assert!(Instant::now() < deadline, "diagnostic writer did not drain");
+            std::thread::yield_now();
+        }
     }
 }

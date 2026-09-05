@@ -11,6 +11,10 @@ use crate::shared_db::{
     SharedDbTarget, SqliteConnection, ensure_schema, open_writer_connection_for_target,
     sqlite_error,
 };
+use crate::{
+    DIAGNOSTIC_MAX_AGE_DAYS, DIAGNOSTIC_MAX_ROWS, DIAGNOSTIC_PRUNE_BATCH,
+    DIAGNOSTIC_PRUNE_CHECK_EVERY,
+};
 use atm_storage::{AtmError, AtmErrorCode, DiagnosticEvent};
 use rusqlite::TransactionBehavior;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -532,6 +536,7 @@ fn writer_loop(
 ) {
     let mut cache = stmt_cache::WriterStatementCache;
     let mut shutting_down = false;
+    let mut diagnostic_rows_since_prune = 0_usize;
     loop {
         let Some(work) = runtime.block_on(receive_next_work(
             &mut receiver,
@@ -547,7 +552,13 @@ fn writer_loop(
                 process_batch(&target, &mut connection, &mut cache, batch);
             }
             WriterWork::Diagnostics(batch) => {
-                process_diagnostic_batch(&target, &mut connection, &mut cache, batch);
+                process_diagnostic_batch(
+                    &target,
+                    &mut connection,
+                    &mut cache,
+                    batch,
+                    &mut diagnostic_rows_since_prune,
+                );
             }
         }
     }
@@ -611,7 +622,11 @@ fn process_diagnostic_batch(
     connection: &mut SqliteConnection,
     cache: &mut stmt_cache::WriterStatementCache,
     batch: Vec<DiagnosticEvent>,
+    diagnostic_rows_since_prune: &mut usize,
 ) {
+    let batch_len = batch.len();
+    let should_prune =
+        diagnostic_rows_since_prune.saturating_add(batch_len) >= DIAGNOSTIC_PRUNE_CHECK_EVERY;
     let operation = WriteOp::RecordDiagnostics(batch);
     let result = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -625,15 +640,49 @@ fn process_diagnostic_batch(
         .and_then(|transaction| {
             let result = ops::execute(&operation, &transaction, cache, target);
             match result {
-                Ok(_) => transaction.commit().map_err(|error| {
-                    sqlite_error(target, "failed to commit diagnostic timeline batch", error)
-                }),
+                Ok(_) => {
+                    if should_prune {
+                        prune_diagnostic_rows(
+                            &transaction,
+                            chrono::Utc::now().timestamp_millis(),
+                            target,
+                        )?;
+                    }
+                    transaction.commit().map_err(|error| {
+                        sqlite_error(target, "failed to commit diagnostic timeline batch", error)
+                    })
+                }
                 Err(error) => Err(error),
             }
         });
     if let Err(error) = result {
         tracing::warn!(origin = "timeline", code = "ATM_DIAGNOSTIC_PERSIST_FAILED", error = %error, "diagnostic timeline batch dropped");
+    } else if should_prune {
+        *diagnostic_rows_since_prune = 0;
+    } else {
+        *diagnostic_rows_since_prune += batch_len;
     }
+}
+
+fn prune_diagnostic_rows(
+    transaction: &rusqlite::Transaction<'_>,
+    now_unix_ms: i64,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    let cutoff = now_unix_ms - DIAGNOSTIC_MAX_AGE_DAYS * 24 * 60 * 60 * 1_000;
+    transaction
+        .execute(
+            "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events WHERE ts_unix_ms < ?1 ORDER BY id LIMIT ?2)",
+            rusqlite::params![cutoff, DIAGNOSTIC_PRUNE_BATCH],
+        )
+        .map_err(|error| sqlite_error(target, "failed to prune expired diagnostic events", error))?;
+    transaction
+        .execute(
+            "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms ASC LIMIT ?1 OFFSET ?2)",
+            rusqlite::params![DIAGNOSTIC_PRUNE_BATCH, DIAGNOSTIC_MAX_ROWS],
+        )
+        .map_err(|error| sqlite_error(target, "failed to prune excess diagnostic events", error))?;
+    Ok(())
 }
 
 async fn collect_batch(
