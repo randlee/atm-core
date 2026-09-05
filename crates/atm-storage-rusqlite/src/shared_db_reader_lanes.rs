@@ -13,7 +13,7 @@ use crate::search_reader::SearchReader;
 #[cfg(test)]
 use crate::shared_db::record_opened_connection;
 use crate::shared_db::{SharedDbTarget, configure_connection, sqlite_error, sqlite_open_error};
-use crate::task_ledger_reader::TaskLedgerReader;
+use crate::task_ledger_reader::start_task_ledger_reader_from_pool;
 use crate::writer::SqliteWriter;
 use atm_storage::{AsyncMailboxReader, AsyncTaskLedgerReader, AtmError};
 use rusqlite::{Connection, OpenFlags};
@@ -118,7 +118,7 @@ impl SharedDb {
         let mailbox_pool = ReaderPool::start("mailbox", Arc::clone(&target), reader_lanes.mailbox)?;
         let (mailbox_reader, mailbox_reader_metrics) =
             start_mailbox_reader_from_pool(mailbox_pool.clone());
-        let task_ledger_reader = Arc::new(TaskLedgerReader::from_pool(mailbox_pool));
+        let task_ledger_reader = start_task_ledger_reader_from_pool(mailbox_pool);
         tracing::debug!(
             writer_handles = 1,
             path = %target.display(),

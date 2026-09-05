@@ -9,19 +9,26 @@ use atm_storage::{
     TaskRow, TeamName,
 };
 use rusqlite::{Connection, params};
+use std::sync::Arc;
 
 use crate::SqliteTaskStore;
 use crate::reader_pool::ReaderPool;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 
-pub(crate) struct TaskLedgerReader {
+struct TaskLedgerReader {
     pool: ReaderPool,
 }
 
 impl TaskLedgerReader {
-    pub(crate) fn from_pool(pool: ReaderPool) -> Self {
+    fn from_pool(pool: ReaderPool) -> Self {
         Self { pool }
     }
+}
+
+pub(crate) fn start_task_ledger_reader_from_pool(
+    pool: ReaderPool,
+) -> Arc<dyn AsyncTaskLedgerReader + Send + Sync> {
+    Arc::new(TaskLedgerReader::from_pool(pool))
 }
 
 impl atm_storage::contract::sealed::Sealed for TaskLedgerReader {}

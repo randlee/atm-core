@@ -11,12 +11,13 @@ use atm_core::list::{ListQuery, TaskLedgerQuery, list_task_ledger_with_runtime};
 use atm_core::observability::NullObservability;
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
+use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER};
 use atm_core::types::{AgentName, IsoTimestamp, ModelName, ReadSelection, TaskId, TeamName};
 use atm_runtime_test_support::open_isolated_sqlite_boundary;
 use atm_storage::{RosterSnapshot, TaskEventKind, TaskState};
 
-const ASSIGNER: &str = "fenix";
-const ASSIGNEE: &str = "cipher";
+const ASSIGNER: &str = TEST_SENDER;
+const ASSIGNEE: &str = TEST_RECIPIENT;
 
 struct Fixture {
     root: tempfile::TempDir,

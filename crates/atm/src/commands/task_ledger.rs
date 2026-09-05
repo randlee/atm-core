@@ -1,7 +1,7 @@
 use anyhow::Result;
 use atm_core::list::{ListOutcome, TaskLedgerQuery};
-use atm_storage::TaskActor;
 use atm_storage::contract::{TaskEventRow, TaskRow};
+use atm_storage::{DAEMON_ACTOR_NAME, TaskActor};
 use chrono::SecondsFormat;
 
 pub(super) fn print_task_ledger(
@@ -80,7 +80,7 @@ fn render_task_events(rows: &[TaskEventRow]) -> String {
 fn task_actor_name(actor: &TaskActor) -> &str {
     match actor {
         TaskActor::Member(member) => member.as_str(),
-        TaskActor::Daemon => "atm-daemon",
+        TaskActor::Daemon => DAEMON_ACTOR_NAME,
     }
 }
 
