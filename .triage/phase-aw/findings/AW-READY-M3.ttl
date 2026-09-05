@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T18:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T16:52:20Z"^^xsd:dateTime ;
   triage:foundIn triage:AW2 ;
@@ -24,13 +26,19 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M3/AW2-2> ;
   triage:triageRecordVersion "1" .
 
+# quality-mgr, 2026-09-05, qa-pr1212-r2: start_flush_worker now calls
+# writer.prune_for_maintenance() on every DIAGNOSTIC_FLUSH_INTERVAL_MS tick,
+# independent of write volume (diagnostic_timeline.rs:71-93, doc comment at
+# :220-236 states this explicitly). Independently confirmed by req-qa on
+# fix/aw-readiness-arch at 8af276eb3.
+
 <urn:atm:triage:occurrence/AW-READY-M3/AW2-1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
   triage:line 23 ;
   triage:snippet "pub const DIAGNOSTIC_PRUNE_CHECK_EVERY: usize = 500;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:occursIn <urn:atm:triage:worktree/aw-integrate-1/7e61ad87e> .
@@ -40,8 +48,8 @@
   triage:file "crates/atm-storage-rusqlite/src/writer/mod.rs" ;
   triage:line 621 ;
   triage:snippet "diagnostic_rows_since_prune.saturating_add(batch_len) >= DIAGNOSTIC_PRUNE_CHECK_EVERY;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:occursIn <urn:atm:triage:worktree/aw-integrate-1/7e61ad87e> .
