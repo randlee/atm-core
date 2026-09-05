@@ -8,28 +8,30 @@
   a triage:Finding ;
   triage:findingId "AW4-QA-B3" ;
   triage:title "AC10 ack parity claim not satisfiable by AtmAckResult subset; sprint doc self-contradicts" ;
-  triage:description "qa-pr1181-r1 (msg 01M1QS4C69FTKB887D5K0V12Y8) at 9f4d3170e: req-qa: AtmAckResult/_send_result expose only {message_id, requires_ack, outcome, observability}, a strict subset of AckOutcome's documented fields (action, team, agent, source message id, task_id, reply_disposition, reply text, warnings), so the doc's literal key-for-key parity with atm ack --json cannot hold; the doc's own Out-of-scope line defers envelope parity to AW.5. Resolve by either narrowing AC10 wording to what AW.4 delivers (full parity deferred to AW.5, which is implementing exactly this) or implementing the full projection with a live-daemon fixture test. Since AW.5 (cipher, in flight) owns the full projection, the expected resolution is the wording fix plus an explicit cross-reference to AW.5 D1/D2." ;
+  triage:description "qa-pr1181-r1 (msg 01M1QS4C69FTKB887D5K0V12Y8) at 9f4d3170e: req-qa: AtmAckResult/_send_result expose only {message_id, requires_ack, outcome, observability}, a strict subset of AckOutcome's documented fields (action, team, agent, source message id, task_id, reply_disposition, reply text, warnings), so the doc's literal key-for-key parity with atm ack --json cannot hold; the doc's own Out-of-scope line defers envelope parity to AW.5. Resolve by either narrowing AC10 wording to what AW.4 delivers (full parity deferred to AW.5, which is implementing exactly this) or implementing the full projection with a live-daemon fixture test. Since AW.5 (cipher, in flight) owns the full projection, the expected resolution is the wording fix plus an explicit cross-reference to AW.5 D1/D2. CLOSURE (qa-cipher-fix, quality-mgr): f0ead4828 does exactly the prescribed remedy -- AC10 now reads 'the delivered acknowledgement subset (message_id, requires_ack, and outcome) matches ... for those keys' with 'Full key-for-key projection parity ... is owned by AW.5 D1/D2 and its parity test (AC6); AW.4 does not implement that projection.' Verified via direct diff read: this is a scope-narrowing to what AtmAckResult/_send_result actually expose, not an overclaim -- matches this finding's own literal suggested fix. Finding closed." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
   triage:category "spec-consistency" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T03:18:47Z"^^xsd:dateTime ;
   triage:foundIn triage:AW4 ;
   triage:foundAt "2026-09-05T03:12:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW4-QA-B3/AW4-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AW4-QA-B3/AW4-1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-aw/sprint-AW.4-graft-fallback-observability.md" ;
   triage:line 1 ;
   triage:snippet "AC10" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw4-graft-fallback-observability" ;
   triage:headSha "9f4d3170e" ;
   triage:occursIn <urn:atm:triage:worktree/AW4/9f4d3170e> .

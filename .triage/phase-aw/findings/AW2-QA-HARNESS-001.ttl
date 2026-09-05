@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW2-QA-HARNESS-001>
+  a triage:Finding ;
+  triage:findingId "AW2-QA-HARNESS-001" ;
+  triage:title "run_admission_capacity.py silently reuses a stale target/release/atm-daemon-benchmark probe across commits" ;
+  triage:description "fenix (qa-pr1179-r6 bench-smoke run, msg 01M1QTFT87SNFXNTZZ4MR7GK1R) on rand-m5/atmbench: scripts/smoke/run_admission_capacity.py:875 only builds target/release/atm-daemon-benchmark when the file is missing, not when it is stale relative to the commit under test. Observed once here (Aug 23 stale probe vs 5a4bdefc7 target) as a hard usage-mismatch failure, so this instance did not silently corrupt a result -- but a probe binary that happens to remain command-line-compatible across commits would be silently reused and would benchmark the wrong writer code, producing a false parity/regression verdict. fenix worked around it this run by rebuilding the probe per commit before measuring. quality-mgr ruling: important, not blocking -- this run's 5a4bdefc7 vs 1106a5db4 parity result (sqlite p50 46838 vs 46402 +0.9%, uds p50 21577 vs 21576 flat) is valid because the workaround (explicit per-commit rebuild) was applied and confirmed before measuring. Per the benchmark-infra freeze, this is a behavioral-rule fix (always rebuild/verify probe freshness against the commit under test, e.g. compare probe mtime or embedded build sha vs HEAD before running), not new benchmark harness machinery; does not require a new sprint. Tracked as a standing repeatable-pattern risk for every future bench-smoke/official run using this script until fixed." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "reported" ;
+  triage:category "test-infra" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW2 ;
+  triage:foundAt "2026-09-05T03:41:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW2-QA-HARNESS-001/AW2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW2-QA-HARNESS-001/AW2-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 875 ;
+  triage:snippet "only builds target/release/atm-daemon-benchmark when the file is missing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "5a4bdefc7" ;
+  triage:occursIn <urn:atm:triage:worktree/AW2/5a4bdefc7> .
+
+<urn:atm:triage:worktree/AW2/5a4bdefc7>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "5a4bdefc7" ;
+  triage:orderIndex 4 .

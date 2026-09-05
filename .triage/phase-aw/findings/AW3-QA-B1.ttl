@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW3-QA-B1>
+  a triage:Finding ;
+  triage:findingId "AW3-QA-B1" ;
+  triage:title "atm log --source merged is not implemented: Timeline and Merged both route through run_timeline (SQLite only), no JSONL/graft-fallback read, no (source_rank, seq) tiebreak, source hardcoded to timeline" ;
+  triage:description "qa-pr1182-r1 (msg 01M1QSQWFKBENPSW4ZP83SKMYS) at 199a3bfeb: req-qa ATM-QA-101 and ruthless-boundary-qa RBQA-F001 (critical) independently confirmed LogSource::Timeline and LogSource::Merged both call run_timeline(), which only queries the SQLite timeline. JSONL and the graft-fallback satellite are never read, there is no ascending-ts sort with the documented (source_rank, seq) tiebreak (jsonl=0 graft=1 timeline=2), and TimelineRecord::from_event hardcodes source='timeline' even in merged mode, mislabeling provenance. Fails AC3 and the core D2-CLI deliverable of sprint-AW.3." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cli-log-query" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T03:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T03:25:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-B1/AW3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-B1/AW3-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-B1/AW3-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW3-QA-B1/AW3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/log.rs" ;
+  triage:line 33 ;
+  triage:snippet "return args.run_timeline();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "199a3bfeb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .
+
+<urn:atm:triage:occurrence/AW3-QA-B1/AW3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/log.rs" ;
+  triage:line 125 ;
+  triage:snippet "fn run_timeline(&self)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "199a3bfeb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .
+
+<urn:atm:triage:occurrence/AW3-QA-B1/AW3-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/log.rs" ;
+  triage:line 216 ;
+  triage:snippet "TimelineRecord::from_event" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "199a3bfeb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .
+
+<urn:atm:triage:worktree/AW3/199a3bfeb>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "199a3bfeb" ;
+  triage:orderIndex 4 .

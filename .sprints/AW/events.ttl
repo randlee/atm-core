@@ -77,3 +77,7 @@ triage:a5 a triage:Assignment ;
     triage:ofSprint triage:AW3 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-09-05T03:07:52Z"^^xsd:dateTime .
+# AW.3 dev completion: arch-ctm msg 01M1QS8V7808H9JYM1FZCC3AC0, feature/aw3-health-and-log-query @ 199a3bfeb (PR #1182).
+triage:c4 a triage:Completion ;
+    triage:ofSprint triage:AW3 ;
+    triage:at "2026-09-05T03:19:53Z"^^xsd:dateTime .
