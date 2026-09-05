@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-AW5R1-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AW5R1-002" ;
+  triage:title "CLI parity test never runs in CI: test_cli_parity.py is pytest gated on ATM_CLI_PARITY_FIXTURE and ci.yml has no pytest job or fixture for it" ;
+  triage:description "qa-pr1184-r1 req-qa (quality-mgr msg 01M1QXMHJAHK8JXHGQRAM606ZG, confirmed): crates/atm-graft-python/tests/test_cli_parity.py is gated on the ATM_CLI_PARITY_FIXTURE env var; .github/workflows/ci.yml has no reference to that var or to pytest, and the only Python matrix job runs unittest discover on crates/hermes-atm/tests. AC1/AC6 are therefore unverified by any actual run. Fix: run the parity test in CI with a real fixture (generate it in-job from the CLI, or commit a fixture) so it executes on every PR; keep the env-gated skip only for local runs without the fixture." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T04:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW5 ;
+  triage:foundAt "2026-09-05T04:38:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AW5R1-002/AW5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AW5R1-002/AW5-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-AW5R1-002/AW5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_cli_parity.py" ;
+  triage:line 1 ;
+  triage:snippet "skips unless ATM_CLI_PARITY_FIXTURE is set" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .
+
+<urn:atm:triage:occurrence/ATM-QA-AW5R1-002/AW5-2>
+  a triage:Occurrence ;
+  triage:file ".github/workflows/ci.yml" ;
+  triage:line 1 ;
+  triage:snippet "no pytest or ATM_CLI_PARITY_FIXTURE reference" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .
+
+<urn:atm:triage:worktree/AW5/3d1862c25>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw5-native-tool-parity" ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:orderIndex 5 .

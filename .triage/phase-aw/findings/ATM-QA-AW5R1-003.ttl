@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-AW5R1-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AW5R1-003" ;
+  triage:title "Ack parity case is a conditional pass-through on an optional fixture field, not the twin-message requires_ack scenario deliverable 3 / AC6 requires" ;
+  triage:description "qa-pr1184-r1 req-qa (confirmed): the ack case in crates/atm-graft-python/tests/test_cli_parity.py is only: ack_message_id = fixture.get(ack_message_id); if not None then ack. Nothing creates a second identity, sends a requires_ack message, makes a twin, or asserts pending_ack absence afterwards, contrary to deliverable 3 and AC6 in docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md. Fix: implement the full scenario and the pending_ack-absence assertion." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T04:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW5 ;
+  triage:foundAt "2026-09-05T04:38:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AW5R1-003/AW5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-AW5R1-003/AW5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_cli_parity.py" ;
+  triage:line 1 ;
+  triage:snippet "ack case is fixture.get(ack_message_id) guard only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:occursIn <urn:atm:triage:worktree/AW5/3d1862c25> .
+
+<urn:atm:triage:worktree/AW5/3d1862c25>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw5-native-tool-parity" ;
+  triage:branch "feature/aw5-native-tool-parity" ;
+  triage:headSha "3d1862c25" ;
+  triage:orderIndex 5 .
