@@ -282,6 +282,31 @@ def _parity_enabled() -> bool:
 class CliParityTests(unittest.TestCase):
     """Compare native tool JSON with CLI JSON on one disposable daemon."""
 
+    @staticmethod
+    def _assert_debug_native_scope(environment: dict[str, str]) -> None:
+        """Reject a release extension before it can connect outside the fixture."""
+
+        runtime_home = environment.get("ATM_TEST_RUNTIME_HOME")
+        if not runtime_home:
+            raise RuntimeError("generated parity fixture requires ATM_TEST_RUNTIME_HOME")
+
+        import atm_graft._atm_graft as extension
+
+        try:
+            actual_runtime_root = Path(extension._debug_runtime_scope()).resolve()
+        except AttributeError as error:
+            raise RuntimeError(
+                "CLI/native parity requires a debug atm-graft extension; "
+                "a release wheel ignores ATM_TEST_RUNTIME_HOME"
+            ) from error
+
+        expected_runtime_root = (Path(runtime_home) / ".atm" / "daemon").resolve()
+        if actual_runtime_root != expected_runtime_root:
+            raise RuntimeError(
+                "CLI/native parity native runtime is outside the disposable fixture: "
+                f"expected {expected_runtime_root}, got {actual_runtime_root}"
+            )
+
     @classmethod
     def setUpClass(cls) -> None:
         fixture_path = os.environ.get("ATM_CLI_PARITY_FIXTURE")
@@ -303,6 +328,9 @@ class CliParityTests(unittest.TestCase):
         cls._prior_environment = os.environ.copy()
         os.environ.clear()
         os.environ.update(cls.environment)
+
+        if cls._generated is not None:
+            cls._assert_debug_native_scope(cls.environment)
 
         from hermes_atm import native_tools
 

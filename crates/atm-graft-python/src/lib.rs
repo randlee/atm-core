@@ -418,6 +418,19 @@ fn observability_paths() -> PyResult<PyObservabilityPaths> {
     })
 }
 
+/// Return the debug runtime root selected for process-pair integration tests.
+///
+/// This private diagnostic is deliberately compiled only into debug extension
+/// artifacts. The CLI/native parity fixture uses it to fail before opening a
+/// native session when a release wheel would ignore its isolated test scope.
+#[cfg(debug_assertions)]
+#[pyfunction]
+fn _debug_runtime_scope() -> PyResult<String> {
+    atm_core::home::current_host_runtime_scope()
+        .map(|scope| scope.runtime_root.as_ref().display().to_string())
+        .map_err(atm_error)
+}
+
 impl PyGraftSession {
     fn client(&self) -> PyResult<GraftClient> {
         self.client
@@ -866,6 +879,8 @@ impl PyGraftSession {
 fn _atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("AtmGraftError", m.py().get_type::<AtmGraftError>())?;
     m.add_function(wrap_pyfunction!(observability_paths, m)?)?;
+    #[cfg(debug_assertions)]
+    m.add_function(wrap_pyfunction!(_debug_runtime_scope, m)?)?;
     m.add_class::<PyObservability>()?;
     m.add_class::<PyObservabilityPaths>()?;
     m.add_class::<PyAgentAddress>()?;
