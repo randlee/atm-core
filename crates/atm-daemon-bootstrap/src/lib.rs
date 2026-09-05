@@ -437,6 +437,8 @@ async fn run_replacement_daemon_with_selector(
         start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
+    let diagnostic_timeline = Arc::clone(&assembly.diagnostic_timeline);
+    let diagnostic_counters = diagnostic_timeline::active_counters();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
     let (handler, recovery_sweep) = build_replacement_handler(
         assembly,
@@ -450,6 +452,7 @@ async fn run_replacement_daemon_with_selector(
                 pool_config: peer_pool_config,
             },
             runtime_health: runtime_health.clone(),
+            diagnostic_counters: diagnostic_counters.clone(),
             bare_cli,
             herdr_process,
         },
@@ -467,7 +470,14 @@ async fn run_replacement_daemon_with_selector(
         peer_wire_mode,
         &peer_stream_adapter,
     );
-    let running = start_replacement_runtime(config, handler.clone(), runtime_health).await?;
+    let running = start_replacement_runtime_with_diagnostics(
+        config,
+        handler.clone(),
+        runtime_health,
+        diagnostic_timeline,
+        diagnostic_counters,
+    )
+    .await?;
     run_until_shutdown(
         running,
         handler,
@@ -512,10 +522,42 @@ async fn run_until_shutdown(
     .await
 }
 
+#[cfg(test)]
+async fn start_replacement_runtime_for_test(
+    config: HttpRuntimeConfig,
+    handler: Arc<StorageAndNudgeRouter>,
+    runtime_health: RuntimeHealth,
+) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
+    start_replacement_runtime(config, handler, runtime_health, None, None).await
+}
+
+async fn start_replacement_runtime_with_diagnostics(
+    config: HttpRuntimeConfig,
+    handler: Arc<StorageAndNudgeRouter>,
+    runtime_health: RuntimeHealth,
+    diagnostic_timeline: Arc<dyn atm_runtime::DiagnosticTimelineStore>,
+    diagnostic_counters: Option<
+        Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
+    >,
+) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
+    start_replacement_runtime(
+        config,
+        handler,
+        runtime_health,
+        Some(diagnostic_timeline),
+        diagnostic_counters,
+    )
+    .await
+}
+
 async fn start_replacement_runtime(
     config: HttpRuntimeConfig,
     handler: Arc<StorageAndNudgeRouter>,
     runtime_health: RuntimeHealth,
+    diagnostic_timeline: Option<Arc<dyn atm_runtime::DiagnosticTimelineStore>>,
+    diagnostic_counters: Option<
+        Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
+    >,
 ) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
     // `StorageAndNudgeRouter` forwards `RuntimeMaintenance::start` to the
     // `HerdrQueueWakePump` composed in `build_replacement_handler`. Without
@@ -524,12 +566,16 @@ async fn start_replacement_runtime(
     // wake pump silently never starts in production.
     let maintenance = Arc::clone(&handler) as Arc<dyn atm_http_runtime::RuntimeMaintenance>;
     let runtime_handler: Arc<dyn atm_http_runtime::CanonicalWriteHandler> = handler;
-    HttpRuntimeBuilder::new(config, runtime_handler)
+    let mut builder = HttpRuntimeBuilder::new(config, runtime_handler)
         .with_runtime_health(runtime_health)
-        .with_maintenance(maintenance)
-        .build()?
-        .start()
-        .await
+        .with_maintenance(maintenance);
+    if let Some(timeline) = diagnostic_timeline {
+        builder = builder.with_diagnostic_timeline(timeline);
+    }
+    if let Some(counters) = diagnostic_counters {
+        builder = builder.with_diagnostic_counters(counters);
+    }
+    builder.build()?.start().await
 }
 
 async fn await_runtime_or_shutdown(
@@ -865,7 +911,7 @@ mod replacement_runtime_tests {
         SelectedPeerAdapterSelection, ShutdownSignal, assemble_host_runtime_with_template_composer,
         build_replacement_handler, legacy_literal_ip_policy_from_value, parse_direct_peer_port,
         parse_peer_wire_mode, peer_stream_adapter_for_mode,
-        replacement_runtime_config_with_direct_peer, start_replacement_runtime,
+        replacement_runtime_config_with_direct_peer, start_replacement_runtime_for_test,
         write_ready_signal_if_requested,
     };
     use peer_tls::LegacyLiteralIpPolicy;
@@ -1138,6 +1184,7 @@ mod replacement_runtime_tests {
                     pool_config: PeerPoolConfig::default(),
                 },
                 runtime_health: runtime_health.clone(),
+                diagnostic_counters: None,
                 bare_cli: Default::default(),
                 herdr_process: None,
             },
@@ -1249,6 +1296,7 @@ mod replacement_runtime_tests {
                     pool_config: PeerPoolConfig::default(),
                 },
                 runtime_health: runtime_health.clone(),
+                diagnostic_counters: None,
                 bare_cli: Default::default(),
                 herdr_process: None,
             },
@@ -1266,7 +1314,7 @@ mod replacement_runtime_tests {
             PeerPoolConfig::default(),
         );
 
-        let running = start_replacement_runtime(config, handler, runtime_health.clone())
+        let running = start_replacement_runtime_for_test(config, handler, runtime_health.clone())
             .await
             .expect("start the real replacement runtime entry point");
 

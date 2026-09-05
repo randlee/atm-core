@@ -168,6 +168,9 @@ impl ObservabilityPort for HealthyObservability {
             query_state: Some(AtmObservabilityHealthState::Healthy),
             maintenance: None,
             diagnostic: None,
+            jsonl: Default::default(),
+            timeline: Default::default(),
+            degraded: Vec::new(),
             detail: None,
         })
     }

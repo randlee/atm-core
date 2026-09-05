@@ -704,6 +704,7 @@ impl StorageFactory for SqliteStorageFactory {
             template_catalog_store: backend.template_catalog_store(),
             message_search_store: backend.message_search_store(),
             async_message_search_store: backend.async_message_search_store(),
+            diagnostic_timeline: backend.diagnostic_timeline(),
             effective_reader_lanes: Some(effective_reader_lanes),
         }))
     }

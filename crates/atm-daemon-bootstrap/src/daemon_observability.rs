@@ -216,6 +216,9 @@ impl ObservabilityPort for DaemonObservability {
                 .map(map_maintenance_report)
                 .transpose()?,
             diagnostic,
+            jsonl: Default::default(),
+            timeline: Default::default(),
+            degraded: Vec::new(),
             detail,
         })
     }

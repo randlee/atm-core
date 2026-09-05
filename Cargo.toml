@@ -50,7 +50,7 @@ tokio-rustls = "0.26"
 x509-parser = "0.16"
 zeroize = "1"
 tokio = { version = "1.48", default-features = false, features = ["io-util", "macros", "net", "process", "rt", "rt-multi-thread", "signal", "sync", "test-util", "time"] }
-axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio"] }
 hyper = { version = "1.8", default-features = false, features = ["client", "server", "http1"] }
 hyper-util = { version = "0.1", default-features = false, features = ["server", "service", "tokio"] }
 http-body-util = "0.1"

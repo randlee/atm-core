@@ -678,6 +678,17 @@
         {
           "args": [
             {
+              "has_default": false,
+              "id": "component",
+              "long": "component",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
               "has_default": true,
               "id": "json",
               "long": "json",
@@ -734,11 +745,33 @@
             },
             {
               "has_default": true,
+              "id": "source",
+              "long": "source",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
               "id": "stderr_logs",
               "long": "stderr-logs",
               "num_args": {
                 "max": 0,
                 "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "until",
+              "long": "until",
+              "num_args": {
+                "max": 1,
+                "min": 1
               },
               "required": false,
               "short": null
@@ -750,6 +783,17 @@
         {
           "args": [
             {
+              "has_default": false,
+              "id": "component",
+              "long": "component",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
               "has_default": true,
               "id": "json",
               "long": "json",
@@ -806,11 +850,33 @@
             },
             {
               "has_default": true,
+              "id": "source",
+              "long": "source",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
               "id": "stderr_logs",
               "long": "stderr-logs",
               "num_args": {
                 "max": 0,
                 "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "until",
+              "long": "until",
+              "num_args": {
+                "max": 1,
+                "min": 1
               },
               "required": false,
               "short": null
@@ -821,6 +887,17 @@
         },
         {
           "args": [
+            {
+              "has_default": false,
+              "id": "component",
+              "long": "component",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
             {
               "has_default": true,
               "id": "json",
@@ -889,11 +966,33 @@
             },
             {
               "has_default": true,
+              "id": "source",
+              "long": "source",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
               "id": "stderr_logs",
               "long": "stderr-logs",
               "num_args": {
                 "max": 0,
                 "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "until",
+              "long": "until",
+              "num_args": {
+                "max": 1,
+                "min": 1
               },
               "required": false,
               "short": null

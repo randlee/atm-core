@@ -1,7 +1,36 @@
-# ATM Daemon Logging Contract
+# ATM Daemon Retained-Log Contract
 
-This document is the Phase S.9 logging contract for ATM-owned retained logs.
-It is a planning/specification document until the S.9 implementation lands.
+This is the active retained-log contract for the Tokio/Axum daemon and its
+CLI and graft consumers.
+
+## Guarantees
+
+Every ATM `warn!` and `error!` event is eligible for retention. INFO is
+additionally retained only for `atm_daemon_bootstrap::lifecycle`,
+`atm_http_runtime::listener`, and `atm_storage_rusqlite::maintenance`. The
+bridge permits only `RETAINED_FIELD_ALLOWLIST`, so retained records never
+contain message bodies, recipients, tokens, raw environment/configuration, or
+absolute user paths.
+
+## Exceptions and origin rules
+
+`PRE_BOOTSTRAP_STDERR_ALLOWLIST` is empty. A future pre-bootstrap stderr
+exception must be named in that allowlist; after bootstrap, runtime code uses
+the tracing bridge. `origin` records diagnostic provenance (`tracing`,
+`sqlite`, `timeline`, or a documented adapter value), not user input.
+
+## Loss and degradation
+
+The JSONL logger and SQLite timeline are independently bounded, non-blocking
+sinks. `dropped_queue_full_total`, `dropped_reentrant_total`, and
+`dropped_persist_error_total` are durable degradation evidence. Timeline
+transitions use `ATM_LOG_SINK_DEGRADED` and `ATM_LOG_SINK_RECOVERED`; its
+batch maximum is `DIAGNOSTIC_BATCH_MAX = 128`, its flush interval is
+`DIAGNOSTIC_FLUSH_INTERVAL_MS = 250`, and the degradation recovery and
+transition rate-limit windows are `DEGRADATION_RECOVERY_WINDOW_SECS = 60` and
+`DEGRADATION_RATE_LIMIT_SECS = 60`. A merged view is therefore not lossless
+under overload. See [graft observability](../graft-observability.md) for the
+fallback satellite contract.
 
 ## Default Retained Log Path
 

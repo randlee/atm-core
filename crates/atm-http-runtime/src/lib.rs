@@ -43,6 +43,7 @@ use std::time::Duration;
 
 use atm_core::error::AtmError;
 use atm_core::local_http::LocalCapability;
+use atm_core::observability_counters::DiagnosticCountersSource;
 use tokio::net::TcpListener;
 #[cfg(unix)]
 use tokio::net::UnixListener;
@@ -51,15 +52,21 @@ use tokio::task::JoinHandle;
 
 mod bare_cli_fifo;
 mod client;
+mod diagnostics_route;
+mod doctor_observability;
+mod health_route;
 mod herdr_queue_wake;
 mod http1_server;
+mod loopback_read;
 mod loopback_tcp;
 mod message_handler;
 mod peer_connection_pool;
 mod peer_dial;
 mod peer_stream;
 mod private_staging;
+mod router_support;
 mod runtime_health;
+mod runtime_listener;
 mod runtime_maintenance;
 mod runtime_setup;
 mod storage_and_nudge_router;
@@ -89,7 +96,7 @@ pub use bare_cli_fifo::{
 pub use client::unix_socket_client;
 pub use client::{
     DIRECT_PEER_TCP_PORT, SAME_HOST_REQUEST_DEADLINE, direct_peer_port, direct_peer_tcp_client,
-    loopback_tcp_client, preferred_local_client, selected_write_transport,
+    loopback_tcp_client, loopback_tcp_get_json, preferred_local_client, selected_write_transport,
     shared_direct_peer_client,
 };
 pub use herdr_queue_wake::{
@@ -406,6 +413,8 @@ pub struct HttpRuntimeBuilder {
     handler: Arc<dyn CanonicalWriteHandler>,
     health: RuntimeHealth,
     maintenance: Option<Arc<dyn RuntimeMaintenance>>,
+    diagnostic_counters: Option<Arc<dyn DiagnosticCountersSource>>,
+    diagnostic_timeline: Option<Arc<dyn atm_runtime::DiagnosticTimelineStore>>,
 }
 
 impl HttpRuntimeBuilder {
@@ -416,6 +425,8 @@ impl HttpRuntimeBuilder {
             handler,
             health: RuntimeHealth::default(),
             maintenance: None,
+            diagnostic_counters: None,
+            diagnostic_timeline: None,
         }
     }
 
@@ -434,6 +445,23 @@ impl HttpRuntimeBuilder {
         self
     }
 
+    /// Attaches the process-owned retained-diagnostic counter projection.
+    #[must_use]
+    pub fn with_diagnostic_counters(mut self, counters: Arc<dyn DiagnosticCountersSource>) -> Self {
+        self.diagnostic_counters = Some(counters);
+        self
+    }
+
+    /// Attaches the bounded, read-only retained diagnostic timeline.
+    #[must_use]
+    pub fn with_diagnostic_timeline(
+        mut self,
+        timeline: Arc<dyn atm_runtime::DiagnosticTimelineStore>,
+    ) -> Self {
+        self.diagnostic_timeline = Some(timeline);
+        self
+    }
+
     /// Validates all runtime-owned input without binding or publishing.
     ///
     /// # Errors
@@ -449,6 +477,8 @@ impl HttpRuntimeBuilder {
             handler: self.handler,
             health: self.health,
             maintenance: self.maintenance,
+            diagnostic_counters: self.diagnostic_counters,
+            diagnostic_timeline: self.diagnostic_timeline,
             state: Configured,
         })
     }
@@ -462,6 +492,8 @@ pub struct HttpRuntime<State> {
     handler: Arc<dyn CanonicalWriteHandler>,
     health: RuntimeHealth,
     maintenance: Option<Arc<dyn RuntimeMaintenance>>,
+    diagnostic_counters: Option<Arc<dyn DiagnosticCountersSource>>,
+    diagnostic_timeline: Option<Arc<dyn atm_runtime::DiagnosticTimelineStore>>,
     state: State,
 }
 
@@ -480,28 +512,27 @@ impl HttpRuntime<Configured> {
     /// the authenticated loopback listener.
     pub async fn start(self) -> Result<HttpRuntime<Running>, AtmError> {
         ensure_process_descriptor_limit();
-        let (listener, local_address) = bind_loopback_listener(&self.config, &self.health).await?;
+        let (listener, local_address) =
+            runtime_listener::bind_loopback_listener(&self.config, &self.health).await?;
         // Every enabled listener must be bound before publishing the loopback
         // endpoint record.  Otherwise a client could observe a Ready-looking
         // record while the additive UDS adapter still fails to start.
         let direct_peer_listener =
-            bind_configured_direct_peer_listener(&self.config, &self.health).await?;
+            runtime_listener::bind_configured_direct_peer_listener(&self.config, &self.health)
+                .await?;
         let direct_peer_address = direct_peer_listener
             .as_ref()
             .and_then(|listener| listener.local_addr().ok());
         #[cfg(unix)]
-        let unix_listener = bind_configured_unix_listener(&self.config, &self.health).await?;
+        let unix_listener =
+            runtime_listener::bind_configured_unix_listener(&self.config, &self.health).await?;
         let (capability, endpoint_record) =
-            publish_loopback_endpoint(&self.config, local_address, &self.health).await?;
+            runtime_listener::publish_loopback_endpoint(&self.config, local_address, &self.health)
+                .await?;
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let maintenance_shutdown_rx = shutdown_rx.clone();
         let (server_stopped_tx, server_stopped_rx) = watch::channel(false);
-        let canonical_router = canonical_api_router(
-            Arc::clone(&self.handler),
-            AuthenticatedConnector::local(),
-            self.config.limits,
-            self.config.timeouts,
-        );
+        let canonical_router = self.canonical_router();
         let loopback_router = authenticated_loopback_router(canonical_router.clone(), capability);
         let direct_peer = build_direct_peer_server(
             direct_peer_listener,
@@ -542,6 +573,8 @@ impl HttpRuntime<Configured> {
             handler: self.handler,
             health: self.health,
             maintenance: self.maintenance,
+            diagnostic_counters: self.diagnostic_counters,
+            diagnostic_timeline: self.diagnostic_timeline,
             state: Running {
                 local_address,
                 direct_peer_address,
@@ -555,136 +588,22 @@ impl HttpRuntime<Configured> {
     }
 }
 
-async fn bind_configured_direct_peer_listener(
-    config: &HttpRuntimeConfig,
-    _health: &RuntimeHealth,
-) -> Result<Option<TcpListener>, AtmError> {
-    let Some(peer) = config.direct_peer_tcp.as_ref() else {
-        return Ok(None);
-    };
-    let bind_address = SocketAddr::from(([0, 0, 0, 0], peer.port()));
-    match TcpListener::bind(bind_address).await {
-        Ok(listener) => Ok(Some(listener)),
-        Err(error) => {
-            // Local IPC remains usable when the optional cross-host listener
-            // cannot claim its fixed port.  Do not let a port collision or an
-            // interface transition take down the daemon; a cross-host smoke
-            // will surface this listener as unavailable.
-            tracing::warn!(
-                %bind_address,
-                error = %error,
-                "replacement direct peer listener is unavailable; continuing with local listeners"
-            );
-            Ok(None)
-        }
-    }
-}
-
-async fn bind_loopback_listener(
-    config: &HttpRuntimeConfig,
-    health: &RuntimeHealth,
-) -> Result<(TcpListener, SocketAddr), AtmError> {
-    let listener = TcpListener::bind(config.loopback_tcp.bind_address)
-        .await
-        .map_err(|source| {
-            let error = AtmError::daemon_unavailable(format!(
-                "failed to bind replacement HTTP runtime at {}",
-                config.loopback_tcp.bind_address
-            ))
-            .with_cause(source);
-            health.mark_not_ready(error.to_string());
-            error
-        })?;
-    let local_address = listener.local_addr().map_err(|source| {
-        let error = AtmError::daemon_unavailable("failed to read replacement HTTP runtime address")
-            .with_cause(source);
-        health.mark_not_ready(error.to_string());
-        error
-    })?;
-    if !local_address.ip().is_loopback() {
-        let error = AtmError::local_http_endpoint_non_loopback(
-            "replacement HTTP runtime bound a non-loopback TCP address",
-        );
-        health.mark_not_ready(error.to_string());
-        return Err(error);
-    }
-    Ok((listener, local_address))
-}
-
-#[cfg(unix)]
-async fn bind_configured_unix_listener(
-    config: &HttpRuntimeConfig,
-    health: &RuntimeHealth,
-) -> Result<Option<(UnixListener, UnixSocketPathGuard)>, AtmError> {
-    let Some(socket) = config.unix_socket.clone() else {
-        return Ok(None);
-    };
-    let lock_socket = socket.clone();
-    let startup_lock =
-        match tokio::task::spawn_blocking(move || UnixSocketStartupLock::acquire(&lock_socket))
-            .await
-        {
-            Ok(Ok(lock)) => lock,
-            Ok(Err(error)) => {
-                health.mark_not_ready(error.to_string());
-                return Err(error);
-            }
-            Err(source) => {
-                let error = AtmError::daemon_unavailable(
-                    "replacement Unix HTTP socket lock task ended unexpectedly",
-                )
-                .with_cause(source);
-                health.mark_not_ready(error.to_string());
-                return Err(error);
-            }
-        };
-    if let Err(error) = reclaim_stale_unix_socket(&socket).await {
-        health.mark_not_ready(error.to_string());
-        return Err(error);
-    }
-    let result = match tokio::task::spawn_blocking(move || bind_unix_listener(&socket)).await {
-        Ok(Ok(listener)) => Ok(Some(listener)),
-        Ok(Err(error)) => {
-            health.mark_not_ready(error.to_string());
-            Err(error)
-        }
-        Err(source) => {
-            let error = AtmError::daemon_unavailable(
-                "replacement Unix HTTP socket setup task ended unexpectedly",
-            )
-            .with_cause(source);
-            health.mark_not_ready(error.to_string());
-            Err(error)
-        }
-    };
-    drop(startup_lock);
-    result
-}
-
-async fn publish_loopback_endpoint(
-    config: &HttpRuntimeConfig,
-    local_address: SocketAddr,
-    health: &RuntimeHealth,
-) -> Result<(LocalCapability, LoopbackEndpointRecordGuard), AtmError> {
-    let capability = LocalCapability::generate()
-        .inspect_err(|error| health.mark_not_ready(error.to_string()))?;
-    let record_config = config.loopback_tcp.clone();
-    let record_capability = capability.clone();
-    let publication = tokio::task::spawn_blocking(move || {
-        publish_loopback_endpoint_record(&record_config, local_address, &record_capability)
-    })
-    .await
-    .map_err(|source| {
-        let error = AtmError::daemon_unavailable(
-            "replacement loopback endpoint publication task ended unexpectedly",
+impl HttpRuntime<Configured> {
+    fn canonical_router(&self) -> axum::Router {
+        canonical_api_router(
+            Arc::clone(&self.handler),
+            AuthenticatedConnector::local(),
+            self.config.limits,
+            self.config.timeouts,
         )
-        .with_cause(source);
-        health.mark_not_ready(error.to_string());
-        error
-    })?;
-    let endpoint_record =
-        publication.inspect_err(|error| health.mark_not_ready(error.to_string()))?;
-    Ok((capability, endpoint_record))
+        .merge(health_route::health_router(
+            self.health.clone(),
+            self.diagnostic_counters.clone(),
+        ))
+        .merge(diagnostics_route::diagnostics_router(
+            self.diagnostic_timeline.clone(),
+        ))
+    }
 }
 
 struct ServerTaskInputs {
@@ -937,6 +856,8 @@ impl HttpRuntime<Running> {
             handler: self.handler,
             health: self.health,
             maintenance: self.maintenance,
+            diagnostic_counters: self.diagnostic_counters,
+            diagnostic_timeline: self.diagnostic_timeline,
             state: Draining {
                 server_task: self.state.server_task,
                 maintenance_task: self.state.maintenance_task,
@@ -993,6 +914,8 @@ impl HttpRuntime<Draining> {
             handler: self.handler,
             health: self.health,
             maintenance: self.maintenance,
+            diagnostic_counters: self.diagnostic_counters,
+            diagnostic_timeline: self.diagnostic_timeline,
             state: Stopped,
         })
     }

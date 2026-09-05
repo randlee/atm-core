@@ -30,6 +30,14 @@ pub(crate) fn register_bridge(bridge: Arc<atm_observability::TracingBridgeLayer>
     let _ = INSTALLED_BRIDGE.set(bridge);
 }
 
+/// Returns the process-owned retained-diagnostic counter projection after the
+/// SQLite timeline has been attached at bootstrap.
+pub(crate) fn active_counters() -> Option<Arc<dyn DiagnosticCountersSource>> {
+    ACTIVE_COUNTERS
+        .get()
+        .map(|counters| Arc::clone(counters) as Arc<dyn DiagnosticCountersSource>)
+}
+
 pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticTimeline>) {
     let Some(bridge) = INSTALLED_BRIDGE.get() else {
         return;
@@ -525,6 +533,31 @@ mod tests {
             assert_eq!(writer.offer(&event), SinkOffer::Accepted);
         }
         assert_eq!(store.batches.lock().expect("fixture batches").len(), 1);
+    }
+
+    #[test]
+    fn ac6_logging_contract_constants_match_the_timeline_source() {
+        let logging_contract = include_str!("../../../docs/atm-daemon/logging.md");
+        for (name, value) in [
+            ("DIAGNOSTIC_BATCH_MAX", super::DIAGNOSTIC_BATCH_MAX),
+            (
+                "DIAGNOSTIC_FLUSH_INTERVAL_MS",
+                super::DIAGNOSTIC_FLUSH_INTERVAL_MS as usize,
+            ),
+            (
+                "DEGRADATION_RECOVERY_WINDOW_SECS",
+                super::DEGRADATION_RECOVERY_WINDOW_SECS as usize,
+            ),
+            (
+                "DEGRADATION_RATE_LIMIT_SECS",
+                super::DEGRADATION_RATE_LIMIT_SECS as usize,
+            ),
+        ] {
+            assert!(
+                logging_contract.contains(&format!("`{name} = {value}`")),
+                "docs/atm-daemon/logging.md must document {name} from diagnostic_timeline.rs"
+            );
+        }
     }
 
     #[test]

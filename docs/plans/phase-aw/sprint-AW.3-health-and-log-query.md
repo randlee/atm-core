@@ -1,7 +1,9 @@
 ---
 sprint: AW.3
 title: "Health counters, atm log query modes, retained-log contract docs"
+status: complete
 branch: feature/aw3-health-and-log-query
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aw3-health-and-log-query
 base: integrate/phase-aw
 issues: "#905 ids 905-6 (health), 905-7, 905-8 (merge/order), 905-9; #904 ids 904-4, 904-7 (merge/order)"
 must_follow: [AW.2, AW.4]
