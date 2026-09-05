@@ -108,6 +108,10 @@ struct QueryArgs {
     #[arg(long)]
     since: Option<String>,
 
+    /// Inclusive upper time bound as RFC3339 or a relative duration.
+    #[arg(long)]
+    until: Option<String>,
+
     /// Restrict timeline records to a component prefix.
     #[arg(long)]
     component: Option<String>,
@@ -134,8 +138,8 @@ impl QueryArgs {
         let records = runtime
             .diagnostic_timeline
             .query(&atm_storage::DiagnosticQuery {
-                since: None,
-                until: None,
+                since: self.since.as_deref().map(parse_since_millis).transpose()?,
+                until: self.until.as_deref().map(parse_since_millis).transpose()?,
                 level_at_least: level.map(str::to_owned),
                 component_prefix: self.component.clone(),
                 limit: Some(self.limit.unwrap_or(DEFAULT_SNAPSHOT_LIMIT).min(5_000)),
@@ -179,14 +183,18 @@ impl QueryArgs {
                 .map(|raw| parse_match_expression(raw))
                 .collect::<Result<Vec<_>>>()?,
             since: self.since.as_deref().map(parse_since).transpose()?,
-            until: None,
+            until: self.until.as_deref().map(parse_since).transpose()?,
             limit,
             order: LogOrder::NewestFirst,
         })
     }
 
     fn ensure_filter_present(&self) -> Result<()> {
-        if self.matches.is_empty() && self.levels.is_empty() && self.since.is_none() {
+        if self.matches.is_empty()
+            && self.levels.is_empty()
+            && self.since.is_none()
+            && self.until.is_none()
+        {
             bail!("atm log filter requires at least one of --match, --level, or --since");
         }
 
@@ -310,6 +318,10 @@ fn parse_match_value(raw: &str) -> LogFieldValue {
 
 fn parse_since(raw: &str) -> Result<IsoTimestamp> {
     parse_rfc3339(raw).or_else(|_| parse_relative_duration(raw))
+}
+
+fn parse_since_millis(raw: &str) -> Result<i64> {
+    Ok(parse_since(raw)?.into_inner().timestamp_millis())
 }
 
 fn parse_rfc3339(raw: &str) -> Result<IsoTimestamp> {
