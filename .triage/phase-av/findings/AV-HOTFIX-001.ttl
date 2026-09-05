@@ -43,6 +43,18 @@
 # Rulings for the AV-HOTFIX-001 code paths beyond this design decision
 # (bugs 2-4) are still pending and will follow one at a time.
 
+# INTERIM-RULE ADDENDUM (Rand, relayed via fenix, 2026-09-05T18:45Z; still
+# dispatch_ready=false): until the durable outbox design above is actually
+# implemented, the interim behavior is an ERROR, not local persistence.
+# Rand's own words: "if we do not have that design in place, there should
+# be an error, not add it to the local mailbox and confuse agents with an
+# errored self-send." Concretely: a host-qualified write must NOT be
+# inserted into the local recipient's mailbox at all; if peer delivery
+# fails, the CLI surfaces the error and nothing is left behind locally --
+# no echo into the local same-named agent's inbox. This interim rule is
+# the fix to dispatch now/first; the durable outbox is the follow-on
+# design once approved.
+
 <urn:atm:triage:occurrence/AV-HOTFIX-001/AV-001-persist>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
