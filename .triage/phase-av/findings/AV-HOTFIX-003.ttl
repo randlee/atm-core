@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AV-HOTFIX-003>
+  a triage:Finding ;
+  triage:findingId "AV-HOTFIX-003" ;
+  triage:title "Client/daemon compatibility preflight is dead code and the peer path has no version check" ;
+  triage:description "atm-daemon-client/src/compatibility.rs verify_connection_compatibility is pub-exported from lib.rs:33 but has zero production callers in crates/atm, atm-daemon-client, or atm-graft-python (confirmed via rg across crates, non-test); the only trace in the CLI is the exit-code mapping for ClientDaemonVersionIncompatible in crates/atm/src/main.rs:138. So no CLI-to-daemon mismatch is ever flagged. Also the constants have been CLI_SCHEMA_VERSION=1 and HTTP_API_VERSION=1.0.0 since before 1.4.13 (same at prerelease/v1.4.13, v1.5.0, and integrate/phase-aw), so even a live preflight would call 1.4.13 and 1.5.1 compatible -- the version-skew detection has never actually been exercised. The peer client (client.rs, peer_connection_pool.rs) sends no preflight and no version field at all; a wire-format drift between hosts would surface as a parse error on the receiving daemon rather than a clear compatibility diagnostic." ;
+  triage:phaseId "phase-av" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-gate" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T18:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AV4 ;
+  triage:foundAt "2026-09-05T18:20:58Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-HOTFIX-003/AV4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-HOTFIX-003/AV4-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-HOTFIX-003/AV4-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AV-HOTFIX-003/AV4-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AV-HOTFIX-003/AV4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/compatibility.rs" ;
+  triage:line 95 ;
+  triage:snippet "pub fn verify_connection_compatibility(endpoint: &DaemonLocalIpcEndpoint, preflight: CompatibilityPreflight, request_deadline: Duration) -> Result<Connection<VersionVerified>, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "7b7f8ce8f8c7ac9c78730a2a8461c764c8096533" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-av/7b7f8ce8> .
+
+<urn:atm:triage:occurrence/AV-HOTFIX-003/AV4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 33 ;
+  triage:snippet "pub use compatibility::{Connection, Unverified, VersionVerified, verify_connection_compatibility};" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "7b7f8ce8f8c7ac9c78730a2a8461c764c8096533" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-av/7b7f8ce8> .
+
+<urn:atm:triage:occurrence/AV-HOTFIX-003/AV4-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/main.rs" ;
+  triage:line 138 ;
+  triage:snippet "| AtmErrorCode::ClientDaemonVersionIncompatible" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "7b7f8ce8f8c7ac9c78730a2a8461c764c8096533" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-av/7b7f8ce8> .
+
+<urn:atm:triage:occurrence/AV-HOTFIX-003/AV4-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 602 ;
+  triage:snippet "fn build_opaque_peer_request(request: HttpRequest) -> Result<axum::http::Request<Body>, HttpRuntimeClientFailure>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "7b7f8ce8f8c7ac9c78730a2a8461c764c8096533" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-av/7b7f8ce8> .
+
+<urn:atm:triage:worktree/integrate-av/7b7f8ce8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-av" ;
+  triage:branch "integrate/phase-av" ;
+  triage:headSha "7b7f8ce8f8c7ac9c78730a2a8461c764c8096533" ;
+  triage:orderIndex 1 .
