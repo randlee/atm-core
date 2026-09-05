@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T08:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW3 ;
@@ -24,15 +24,33 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-I1/AW3-QA-I1-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-I1/AW3-QA-I1-3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-I1/AW3-QA-I1-4> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-I1/PR1196-1> ;
+  triage:closedAt "2026-09-05T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+# CLOSURE (qa-pr1196-r1, quality-mgr): PR #1196 at d9ef17ca3 adds
+# crates/atm-http-runtime/src/doctor_observability.rs::project_counter_health
+# which populates a structured report.observability field (jsonl{forwarded_total,
+# dropped_queue_full_total,dropped_reentrant_total}, timeline{written_total,
+# dropped_queue_full_total,dropped_persist_error_total}, degraded: Vec<String>)
+# identical in shape to /v1/health's RetainedObservabilityHealthResponse
+# (crates/atm-core/src/observability_counters.rs:26-51), wired into the real
+# doctor dispatch path at storage_and_nudge_router.rs:566. New test
+# doctor_observability_fields_match_health_projection
+# (storage_and_nudge_router.rs:2203) drives the real dispatch() path and
+# asserts field-for-field parity. Independently confirmed by quality-mgr,
+# req-qa, and rust-qa-agent (566+92+200 tests green, 0 clippy warnings).
+# `cargo test -p atm-http-runtime doctor_observability_fields_match_health_projection`:
+# 1 passed. This closes the structural gap this finding was filed for.
 
 <urn:atm:triage:occurrence/AW3-QA-I1/AW3-QA-I1-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/doctor_observability.rs" ;
   triage:line 7 ;
   triage:snippet "append_counter_finding: unstructured message only" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw3-health-and-log-query" ;
   triage:headSha "d9ef17ca3" ;
   triage:occursIn <urn:atm:triage:worktree/AW3/d9ef17ca3> .
@@ -42,8 +60,8 @@
   triage:file "crates/atm-http-runtime/src/doctor_observability.rs" ;
   triage:line 7 ;
   triage:snippet "append_counter_finding: unstructured message only" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw4-graft-fallback-observability" ;
   triage:headSha "bf8252ebd" ;
   triage:occursIn <urn:atm:triage:worktree/AW4/bf8252ebd> .
@@ -53,8 +71,8 @@
   triage:file "crates/atm-http-runtime/src/doctor_observability.rs" ;
   triage:line 7 ;
   triage:snippet "append_counter_finding: unstructured message only" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw5-native-tool-parity" ;
   triage:headSha "b7fbf54e6" ;
   triage:occursIn <urn:atm:triage:worktree/AW5/b7fbf54e6> .
@@ -64,11 +82,29 @@
   triage:file "crates/atm-http-runtime/src/doctor_observability.rs" ;
   triage:line 7 ;
   triage:snippet "append_counter_finding: unstructured message only" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "4b8726b59" ;
   triage:occursIn <urn:atm:triage:worktree/AW-INTEG/4b8726b59> .
+
+<urn:atm:triage:occurrence/AW3-QA-I1/PR1196-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/doctor_observability.rs" ;
+  triage:line 8 ;
+  triage:snippet "project_counter_health populates report.observability{jsonl,timeline,degraded}" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "d9ef17ca3" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/d9ef17ca3-PR1196> .
+
+<urn:atm:triage:worktree/AW3/d9ef17ca3-PR1196>
+  a triage:WorktreeSnapshot ;
+  triage:path "verify-pr1196" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "d9ef17ca3" ;
+  triage:orderIndex 7 .
 
 <urn:atm:triage:worktree/AW3/d9ef17ca3>
   a triage:WorktreeSnapshot ;

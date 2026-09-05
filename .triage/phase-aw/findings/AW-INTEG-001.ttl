@@ -15,24 +15,64 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "boundary_enforcement.rs - new test gate required" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T08:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW5 ;
   triage:foundAt "2026-09-05T07:51:15Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-INTEG-001/AW-INTEG-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-INTEG-001/PR1196-1> ;
+  triage:closedAt "2026-09-05T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+# CLOSURE (qa-pr1196-r1, quality-mgr): PR #1196 at d9ef17ca3 adds
+# aw_diagnostics_composition_stays_behind_the_timeline_store_contract
+# (crates/atm-architecture/tests/boundary_enforcement.rs:4171-4223), which
+# asserts (a) atm-daemon-bootstrap erases to Arc<dyn DiagnosticTimelineStore>
+# at the composition seam, (b) diagnostics_route.rs/doctor_observability.rs
+# never name SqliteDiagnosticTimeline/atm_storage_rusqlite/SharedDb, and
+# (c) exactly one production SqliteDiagnosticTimeline::from_shared_db call
+# site. Independently confirmed by quality-mgr, arch-qa, and req-qa via
+# direct source read; `cargo test -p atm-architecture --test
+# boundary_enforcement`: 92 passed, 0 failed (diff vs base is additions-only,
+# no existing gate weakened). This closes the "zero coverage" gap this
+# finding was filed for. arch-qa and req-qa both independently flagged that
+# the "exactly one construction path" check is scoped by a first-match
+# string split and is blind to production code after the first
+# #[cfg(test)] marker in the same impl block -- filed separately and more
+# narrowly as AW-INTEG-003 (minor, non-blocking test-hygiene hardening), not
+# a reason to leave this finding open since today's assertions are accurate
+# and the original "zero coverage" gap is gone.
 
 <urn:atm:triage:occurrence/AW-INTEG-001/AW-INTEG-1>
   a triage:Occurrence ;
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 4508 ;
   triage:snippet "no test pins the atm-daemon-bootstrap -> atm-http-runtime -> atm-storage-rusqlite diagnostics composition path" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "4b8726b59" ;
   triage:occursIn <urn:atm:triage:worktree/AW-INTEG/4b8726b59> .
+
+<urn:atm:triage:occurrence/AW-INTEG-001/PR1196-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 4171 ;
+  triage:snippet "aw_diagnostics_composition_stays_behind_the_timeline_store_contract" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "d9ef17ca3" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-INTEG/d9ef17ca3-001> .
+
+<urn:atm:triage:worktree/AW-INTEG/d9ef17ca3-001>
+  a triage:WorktreeSnapshot ;
+  triage:path "verify-pr1196" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "d9ef17ca3" ;
+  triage:orderIndex 7 .
 
 <urn:atm:triage:worktree/AW1/846a2a6c9>
   a triage:WorktreeSnapshot ;

@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-INTEG-003>
+  a triage:Finding ;
+  triage:findingId "AW-INTEG-003" ;
+  triage:title "aw_diagnostics_composition_stays_behind_the_timeline_store_contract's 'exactly one production construction path' check is blind to code after the first #[cfg(test)] marker in the impl block" ;
+  triage:description "qa-pr1196-r1 (req-qa and arch-qa, independently converging, at feature/aw3-health-and-log-query d9ef17ca3): the AW-INTEG-001 fix's new gate (crates/atm-architecture/tests/boundary_enforcement.rs:4180-4187) extracts the 'production' region of impl SqliteStorageBackend via sqlite_backend_implementation.split(\"\\n    #[cfg(test)]\").next() -- i.e. it truncates at the FIRST #[cfg(test)] marker in the impl block. That marker occurs at crates/atm-storage-rusqlite/src/lib.rs:760 (start of in_memory_for_test), but the impl block continues for ~2750 more lines after that (file is 3516 lines total), including real production methods such as diagnostic_timeline() at :797. quality-mgr independently confirmed via grep: no SqliteDiagnosticTimeline construction currently exists after line 760, so today's 'exactly one production construction path' assertion passes correctly, but only by coincidence of current file layout, not by design. A future PR adding a second SqliteDiagnosticTimeline::from_shared_db(...) call or a raw SqliteDiagnosticTimeline { ... } literal anywhere in this impl block after line 760 would silently defeat the guarantee AW-INTEG-001 was filed to establish (a second independent SQLite diagnostics writer would not be caught). Not a live violation today -- a test-hygiene/robustness gap in the new gate itself. Fix: scope the production-code extraction per-function (e.g. parse with syn and filter out only functions carrying #[cfg(test)], matching the is_test_configuration_attribute pattern already used elsewhere in this same file) instead of a single first-match string split, so later production code in the same impl block stays covered." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "integration_review" ;
+  triage:category "arch-gate" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T08:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW-INTEGRATION-REVIEW ;
+  triage:foundAt "2026-09-05T08:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-INTEG-003/INTEG-1> .
+
+<urn:atm:triage:occurrence/AW-INTEG-003/INTEG-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 4180 ;
+  triage:snippet "sqlite_backend_implementation.split(\"\\n    #[cfg(test)]\").next() -- blind to production code after the first #[cfg(test)] marker in the impl block" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "d9ef17ca3" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-INTEG/d9ef17ca3> .
+
+<urn:atm:triage:worktree/AW-INTEG/d9ef17ca3>
+  a triage:WorktreeSnapshot ;
+  triage:path "verify-pr1196" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "d9ef17ca3" ;
+  triage:orderIndex 1 .

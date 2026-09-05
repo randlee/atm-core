@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-INTEG-004>
+  a triage:Finding ;
+  triage:findingId "AW-INTEG-004" ;
+  triage:title "atm doctor emits AtmErrorCode::ObservabilityHealthOk/WarningObservabilityHealthDegraded from two independently-owned classifiers, so the machine-readable code cannot disambiguate log-sink health from retained-diagnostics counter health" ;
+  triage:description "qa-pr1196-r1 (ruthless-boundary-qa, independently confirmed by quality-mgr, at feature/aw3-health-and-log-query d9ef17ca3): crates/atm-core/src/doctor/health.rs:69-99 observability_finding() classifies the shared logging sink's logging_state (Healthy/Degraded/Unavailable) and pushes AtmErrorCode::ObservabilityHealthOk or WarningObservabilityHealthDegraded into report.findings. Separately, crates/atm-http-runtime/src/doctor_observability.rs:15-49 append_counter_finding() classifies an unrelated fact -- whether the retained-diagnostics jsonl/timeline drop counters are degraded -- and reuses the exact same two AtmErrorCode values. Both run in the same doctor request (crates/atm-http-runtime/src/storage_and_nudge_router.rs: doctor_projection.project(...) triggers the health.rs finding internally, then line 567 calls append_counter_finding(&mut report.findings, diagnostic_counters) directly after), so a single doctor --json response can carry two findings with the identical code for two different underlying conditions. A doctor --json consumer or alerting rule keyed on ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED cannot tell whether the log sink is unhealthy or the diagnostic queue is dropping events. quality-mgr independently confirmed both call sites and the shared-code reuse by direct source read. Not a functional bug (the WARN line and remediation text are each individually correct) -- a doctor API-contract/ownership violation: two independently-owned decisions collapsed onto one shared machine-readable code with no single owner, matching the repo's 'every important decision has exactly one owner' boundary guideline. Fix: mint distinct AtmErrorCode variants for the retained-diagnostics counter finding (e.g. RetainedDiagnosticsHealthOk / WarningRetainedDiagnosticsDegraded) and wire append_counter_finding to use them instead of borrowing the logging-sink codes." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "integration_review" ;
+  triage:category "arch-gate" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T08:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW-INTEGRATION-REVIEW ;
+  triage:foundAt "2026-09-05T08:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-INTEG-004/INTEG-1> .
+
+<urn:atm:triage:occurrence/AW-INTEG-004/INTEG-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/doctor_observability.rs" ;
+  triage:line 27 ;
+  triage:snippet "append_counter_finding reuses AtmErrorCode::ObservabilityHealthOk / WarningObservabilityHealthDegraded, already owned by atm-core/src/doctor/health.rs::observability_finding for an unrelated logging_state decision" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "d9ef17ca3" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-INTEG/d9ef17ca3-004> .
+
+<urn:atm:triage:worktree/AW-INTEG/d9ef17ca3-004>
+  a triage:WorktreeSnapshot ;
+  triage:path "verify-pr1196" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "d9ef17ca3" ;
+  triage:orderIndex 1 .
