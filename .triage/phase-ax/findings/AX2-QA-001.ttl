@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX2-QA-001>
+  a triage:Finding ;
+  triage:findingId "AX2-QA-001" ;
+  triage:title "Shutdown-cancellation race in HerdrQueueWakePump::emit_claim can re-release/requeue a Herdr message that was already accepted" ;
+  triage:description "crates/atm-http-runtime/src/herdr_queue_wake.rs emit_claim (~341-380): on Ok(_) from emitter.emit_received_message (~354, Herdr has accepted the prompt) the function awaits a second async step run_blocking(clear_queue_marker_after_handoff) (~359-368) BEFORE release.disarm() (~370). start() (~77-98) races shutdown.changed() against tick_once() in tokio::select! and drops the losing future at any await point. If shutdown fires between the Ok(_) match and disarm(), the still-armed ReleasePendingOnDrop guard's Drop (~610-613) calls release_without_input(), releasing/requeueing the marker for a message Herdr already durably accepted; the next poll re-claims and re-prompts it, a duplicate agent nudge. No test covers this window: cancel_inflight_prompt (~886-919, behind ac04 and ac11) cancels during the in-flight prompt call, before Ok(_) is matched. Fix: call release.disarm() immediately after Ok(_) is matched and run the marker-clear as an independent cleanup step that does not guard delivery success with a drop-based release; add a test that cancels in the post-success/pre-disarm window and asserts no re-release. Reported by rust-service-hardening-agent RSH-002 (critical), confirmed by quality-mgr on PR #1186 QA-1 (head 4f77d2fff)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:33:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX2 ;
+  triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-001/AX2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX2-QA-001/AX2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 370 ;
+  triage:snippet "release.disarm();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:occursIn <urn:atm:triage:worktree/AX2/4f77d2fff0b384b60d5297e1dbfa0981a0192419> .
+
+<urn:atm:triage:worktree/AX2/4f77d2fff0b384b60d5297e1dbfa0981a0192419>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:orderIndex 3 .

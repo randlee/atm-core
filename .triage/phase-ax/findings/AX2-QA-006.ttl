@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX2-QA-006>
+  a triage:Finding ;
+  triage:findingId "AX2-QA-006" ;
+  triage:title "ac08_dispatch_selector_is_used_by_tick_once was not updated to assert the rendered text on the Herdr target as the sprint doc instructs" ;
+  triage:description "Sprint AX.2 Required validation: ac08 in crates/atm-http-runtime/src/herdr_queue_wake.rs is 'updated to assert the rendered text carried on the Herdr target'. At 4f77d2fff ac08 only asserts a Prompt call occurred, the marker cleared, and the agent key matched; the rendered-text assertion was added to ac01_fifo_per_member_via_claim instead. Behaviour is proven but the doc's test placement was not followed. Fix: add the text assertion to ac08 directly (preferred) or amend the sprint doc to attribute it to ac01. Reported by req-qa ATM-QA-003 and rust-qa-agent QA-001 on PR #1186 QA-1." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX2 ;
+  triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-006/AX2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX2-QA-006/AX2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1229 ;
+  triage:snippet "async fn ac08_dispatch_selector_is_used_by_tick_once()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/ax2-herdr-template-rendering/4f77d2fff> .
+
+<urn:atm:triage:worktree/feature/ax2-herdr-template-rendering/4f77d2fff>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:orderIndex 3 .

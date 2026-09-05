@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX2-QA-008>
+  a triage:Finding ;
+  triage:findingId "AX2-QA-008" ;
+  triage:title "run_command_with_binary drains the Herdr child's stdout/stderr with unbounded read_to_end" ;
+  triage:description "crates/atm-herdr/src/lib.rs ~616-627 run_command_with_binary reads a spawned herdr child's pipes to completion with no size cap, so a verbose or misbehaving herdr CLI is buffered fully into memory. Fix: apply an explicit byte cap when draining stdout/stderr (take(N) or equivalent) and surface truncation. Reported by rust-service-hardening-agent RSH-003 (minor) on PR #1186 QA-1 (head 4f77d2fff). In your notes, state whether this code predates the AX.2 diff (compare git show origin/feature/ax1-queue-template-class:crates/atm-herdr/src/lib.rs) so the orchestrator can judge scope." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX2 ;
+  triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-008/AX2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-008/AX2-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX2-QA-008/AX2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 619 ;
+  triage:snippet "let _ = pipe.read_to_end(&mut stdout).await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:occursIn <urn:atm:triage:worktree/AX2-ax2/4f77d2fff0b384b60d5297e1dbfa0981a0192419> .
+
+<urn:atm:triage:occurrence/AX2-QA-008/AX2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 622 ;
+  triage:snippet "let _ = pipe.read_to_end(&mut stderr).await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:occursIn <urn:atm:triage:worktree/AX2-ax2/4f77d2fff0b384b60d5297e1dbfa0981a0192419> .
+
+<urn:atm:triage:worktree/AX2-ax2/4f77d2fff0b384b60d5297e1dbfa0981a0192419>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "4f77d2fff0b384b60d5297e1dbfa0981a0192419" ;
+  triage:orderIndex 3 .
