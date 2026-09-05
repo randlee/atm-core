@@ -8,28 +8,30 @@
   a triage:Finding ;
   triage:findingId "AW4-QA-M1" ;
   triage:title "docs/graft-observability.md omits the emitted action field on with_daemon_recovery events; D5 cites lint-config.toml line 156 but entry is at 159-161" ;
-  triage:description "qa-pr1181-r1 (msg 01M1QS4C69FTKB887D5K0V12Y8) at 9f4d3170e: req-qa: the doc omits the action field every with_daemon_recovery event emits; sprint doc D5 line reference drifted (non-functional)." ;
+  triage:description "qa-pr1181-r1 (msg 01M1QS4C69FTKB887D5K0V12Y8) at 9f4d3170e: req-qa: the doc omits the action field every with_daemon_recovery event emits; sprint doc D5 line reference drifted (non-functional). CLOSURE (qa-cipher-fix, quality-mgr): dc16c6bc8 added `action` to all three docs/graft-observability.md event rows (ATM_GRAFT_DAEMON_UNAVAILABLE, ATM_GRAFT_RECOVERY_ATTEMPT, ATM_GRAFT_RECOVERY_RESULT) plus a defining sentence, and corrected the sprint doc's D5 reference from '.just/lint-config.toml line 156' to 'line 160'. quality-mgr confirmed directly: .just/lint-config.toml:160 is exactly the atm-graft-python manifest_dependency_allowlists entry. Finding closed." ;
   triage:phaseId "phase-aw" ;
   triage:triageMode "initial_pass" ;
   triage:category "docs" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T03:18:47Z"^^xsd:dateTime ;
   triage:foundIn triage:AW4 ;
   triage:foundAt "2026-09-05T03:12:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW4-QA-M1/AW4-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AW4-QA-M1/AW4-1>
   a triage:Occurrence ;
   triage:file "docs/graft-observability.md" ;
   triage:line 1 ;
   triage:snippet "with_daemon_recovery" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/aw4-graft-fallback-observability" ;
   triage:headSha "9f4d3170e" ;
   triage:occursIn <urn:atm:triage:worktree/AW4/9f4d3170e> .

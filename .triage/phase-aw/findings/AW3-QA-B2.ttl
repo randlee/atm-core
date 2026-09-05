@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW3-QA-B2>
+  a triage:Finding ;
+  triage:findingId "AW3-QA-B2" ;
+  triage:title "--source timeline/merged silently drop --since and all but the first --level value" ;
+  triage:description "qa-pr1182-r1 (msg 01M1QSQWFKBENPSW4ZP83SKMYS) at 199a3bfeb: req-qa ATM-QA-103 and RBQA-F002 (important): DiagnosticQuery is built with since: None, until: None and only self.levels.first() is honored. sprint-AW.3 D2 requires --since, --level (all values) and --limit to apply to every source. Fix: thread --since/--until and the full level set through DiagnosticQuery for timeline and merged modes." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cli-log-query" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T03:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T03:25:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-B2/AW3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-B2/AW3-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW3-QA-B2/AW3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/log.rs" ;
+  triage:line 127 ;
+  triage:snippet "self.levels.first()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "199a3bfeb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .
+
+<urn:atm:triage:occurrence/AW3-QA-B2/AW3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/log.rs" ;
+  triage:line 137 ;
+  triage:snippet "since: None," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "199a3bfeb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .
+
+<urn:atm:triage:worktree/AW3/199a3bfeb>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "199a3bfeb" ;
+  triage:orderIndex 4 .
