@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-INTEG-002>
+  a triage:Finding ;
+  triage:findingId "AW-INTEG-002" ;
+  triage:title "AW.5 test_cli_parity.py runs on one Python version in CI, not the 3.11-3.14 matrix the sprint doc promises" ;
+  triage:description "phase-aw integration review (req-qa, at integrate/phase-aw 7845164e5): docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md:61-62 states 'The test lives in crates/atm-graft-python/tests/test_cli_parity.py and is in the 3.11-3.14 matrix.' Independently confirmed false in .github/workflows/ci.yml: test_cli_parity.py is only run by the 'test' job (ci.yml:358, python -m unittest discover -s crates/atm-graft-python/tests -p test_cli_parity.py) which installs a single fixed interpreter (python-version: '3.14.7', ci.yml:220). The only job that actually matrices Python 3.11-3.14 is hermes-atm-abi3-compat (ci.yml:517-518), and that job's test step (ci.yml:539) discovers tests only from crates/hermes-atm/tests, never crates/atm-graft-python/tests -- it never runs test_cli_parity.py at all. So the CLI-parity test proving AC1/AC6 runs on exactly one Python version in CI, not the 3.11-3.14 range the sprint doc claims verifies it. Not a duplicate of ATM-QA-AW5R1-002 (closed), which only addressed 'the parity test never runs in CI at all' -- that closure's evidence does not mention a version-matrix requirement. Fix: either add test_cli_parity.py to the hermes-atm-abi3-compat job's matrix run (or an equivalent matrixed job), or correct the sprint doc's deliverable-3 text to state the actual single-version CI scope, with a QA pass on whichever correction is chosen." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "integration_review" ;
+  triage:category "ci" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T08:25:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW-INTEGRATION-REVIEW ;
+  triage:foundAt "2026-09-05T08:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-INTEG-002/INTEG-1> .
+
+<urn:atm:triage:occurrence/AW-INTEG-002/INTEG-1>
+  a triage:Occurrence ;
+  triage:file ".github/workflows/ci.yml" ;
+  triage:line 358 ;
+  triage:snippet "python -m unittest discover -s crates/atm-graft-python/tests -p \"test_cli_parity.py\" -- runs under fixed python-version 3.14.7, not the 3.11-3.14 matrix the sprint doc claims" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7845164e5" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-INTEG/7845164e5-002> .
+
+<urn:atm:triage:worktree/AW-INTEG/7845164e5-002>
+  a triage:WorktreeSnapshot ;
+  triage:path "verify-aw-integration" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7845164e5" ;
+  triage:orderIndex 1 .
