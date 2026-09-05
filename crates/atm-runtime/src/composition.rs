@@ -345,6 +345,7 @@ mod tests {
             .expect("compose sqlite runtime");
 
         assert!(assembly.service_runtime.task_store().is_ok());
+        drop(assembly);
         std::fs::remove_dir_all(root).expect("remove tempdir");
     }
 
