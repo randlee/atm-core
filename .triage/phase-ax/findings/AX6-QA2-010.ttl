@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA2-010>
+  a triage:Finding ;
+  triage:findingId "AX6-QA2-010" ;
+  triage:title "TOCTOU in add_escalation_recipient: duplicate/cap check runs under with_connection instead of with_transaction, so concurrent callers can exceed the 8-recipient cap" ;
+  triage:description "AX.6 QA-2 (quality-mgr QA-AX6-R2-1788630712, PR #1204 report 2026-09-05T19:01Z, rust-qa-agent QA-2-002) at head c3268df8a3dfa5c84f4465459c5d2ba86df1c857. crates/atm-storage-rusqlite/src/task_store.rs:380-416 add_escalation_recipient performs its duplicate and cap check inside with_connection; the control-path pool hands out up to 8 connections, so two concurrent callers can each observe count < 8 before either inserts. Sibling check-then-mutate writers in the same file (record_reminder, record_lead_notified) already use with_transaction. Fix: move the check and insert into one with_transaction and add a test that proves the cap holds under two interleaved adds." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T19:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T19:01:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-010/AX6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-010/AX7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA2-010/AX6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 387 ;
+  triage:snippet "self.db.with_connection(|connection| {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "c3268df8a3dfa5c84f4465459c5d2ba86df1c857" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/c3268df8a3dfa5c84f4465459c5d2ba86df1c857> .
+
+<urn:atm:triage:occurrence/AX6-QA2-010/AX7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 387 ;
+  triage:snippet "self.db.with_connection(|connection| {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
+
+<urn:atm:triage:worktree/AX6/c3268df8a3dfa5c84f4465459c5d2ba86df1c857>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ax6" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "c3268df8a3dfa5c84f4465459c5d2ba86df1c857" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/d101fee2e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ax7" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e" ;
+  triage:orderIndex 7 .

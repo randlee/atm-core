@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA2-006>
+  a triage:Finding ;
+  triage:findingId "AX6-QA2-006" ;
+  triage:title "Doctor RosterNoLead finding code is never asserted by any test (re-assessment of AX6-QA1-005)" ;
+  triage:description "AX.6 QA-2 (quality-mgr QA-AX6-R2-1788630712, PR #1204 report 2026-09-05T19:01Z, req-qa) at head c3268df8a3dfa5c84f4465459c5d2ba86df1c857. Re-assessment of AX6-QA1-005: the escalation-recipient store half is now fully covered, but the RosterNoLead doctor code (crates/atm-core/src/doctor/mod.rs:2211-2337 test region; production emit in doctor/ax6.rs) is never asserted by any doctor test; a repo-wide grep finds it only in production code. Fix: add a doctor test for a Herdr team with no lead that asserts the RosterNoLead code and its aggregated single-finding shape." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T19:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T19:01:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-006/AX6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-006/AX7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA2-006/AX6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 725 ;
+  triage:snippet "code: AtmErrorCode::RosterNoLead," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "c3268df8a3dfa5c84f4465459c5d2ba86df1c857" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/c3268df8a3> .
+
+<urn:atm:triage:occurrence/AX6-QA2-006/AX7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 725 ;
+  triage:snippet "code: AtmErrorCode::RosterNoLead," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e2> .
+
+<urn:atm:triage:worktree/AX6/c3268df8a3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ax6-lead-notification-doctor" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "c3268df8a3dfa5c84f4465459c5d2ba86df1c857" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/d101fee2e2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ax7-herdr-dogfood-evidence" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:orderIndex 7 .

@@ -533,6 +533,31 @@
       "minor": 4,
       "count_basis": "headline/reviewer (1 critical counted as blocking)",
       "evidence": "Sprint AX.6 QA-1: FAIL (1 critical + 8 blocking / 10 important / 4 minor), PR #1204 @ 490a6c42a. Final Quality Report: https://github.com/randlee/atm-core/pull/1204#issuecomment-5553344183. 0/9 deliverables at 100%; critical AX6-QA1-001 notify() forwards escalation body halves into Herdr argv (HR-SAFE-003); required ax6_01/02/03 test suites largely absent; D9 three-file split disputed (req-qa blocking vs arch-qa reconciliation) pending fenix ruling."
+    },
+    {
+      "run_id": "AX6-QA2",
+      "aich_sprint": "AX6",
+      "phase_sprint": "AX.6",
+      "pass": "QA-2",
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-05T17:53:06Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M1SB7ADPG5FAD3EQ024RE10Y",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "QA-AX6-R2-1788630712 dispatched by fenix via qa-template.xml.j2 for PR #1204 at head c3268df8a (QA-2 reviewer rule: core three in full, QA-1-only reviewers recheck own findings); re-sent 18:45Z after quality-mgr pane stalled on an approval prompt",
+      "result_time_utc": "2026-09-05T19:01:51Z",
+      "result_time_pst": null,
+      "result_message_id": "01M1SF5MWEK6J31E4SX67F2Q71",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 5,
+      "important": 4,
+      "minor": 2,
+      "count_basis": "headline/reviewer",
+      "evidence": "Sprint AX.6 QA-2: FAIL (5 blocking / 4 important / 2 minor), PR #1204 @ c3268df8a. Final Quality Report: https://github.com/randlee/atm-core/pull/1204#issuecomment-5554091903. 22/25 carry-forward findings CLOSED (AX6-QA1-001,004,006-024, AX5-QA4-001); STILL OPEN 002 (partial), 003, 005 (partial). New: ARCH-001/002 RULE-008 atm-dev literals, ARCH-003 RULE-011 run_atm lacks ATM_CONFIG_HOME, ATM-QA-005 cli-reference not regenerated, QA-2-001 vacuous HR-SAFE-003 guard, ATM-QA-004 project-plan row, QA-2-002 TOCTOU cap check. RULE-003 confirmed by fenix with .just/check_line_counts.py at c3268df8a: herdr_queue_wake.rs 997 prod lines (pass). CI: windows-latest Test FAILURE (escalation_cli exit 5 vs 3)."
     }
   ],
   "coverage_gaps": [

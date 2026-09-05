@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T19:01:51Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr AX.6 QA-2 recheck (QA-AX6-R2-1788630712) at head c3268df8a3dfa5c84f4465459c5d2ba86df1c857; fixed by cipher fix pass GO-AX6-FIX1 (Completion c21). Report: PR #1204 comment 5554091903. Sprint verdict remains FAIL on other findings." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T17:00:52Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
@@ -33,8 +36,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 76 ;
   triage:snippet "pub(crate) last_blocked_notice: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "490a6c4" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/490a6c4> .
@@ -44,8 +47,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 102 ;
   triage:snippet "last_blocked_notice: Arc::new(Mutex::new(HashMap::new()))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "490a6c4" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/490a6c4> .
@@ -55,8 +58,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 456 ;
   triage:snippet "self.last_blocked_notice" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ax6-lead-notification-doctor" ;
   triage:headSha "490a6c4" ;
   triage:occursIn <urn:atm:triage:worktree/AX6/490a6c4> .
@@ -66,8 +69,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 76 ;
   triage:snippet "pub(crate) last_blocked_notice: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-herdr-dogfood-evidence" ;
   triage:headSha "1931ace" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/1931ace> .
@@ -77,8 +80,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 102 ;
   triage:snippet "last_blocked_notice: Arc::new(Mutex::new(HashMap::new()))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-herdr-dogfood-evidence" ;
   triage:headSha "1931ace" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/1931ace> .
@@ -88,8 +91,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 456 ;
   triage:snippet "self.last_blocked_notice" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "feature/ax7-herdr-dogfood-evidence" ;
   triage:headSha "1931ace" ;
   triage:occursIn <urn:atm:triage:worktree/AX7/1931ace> .
