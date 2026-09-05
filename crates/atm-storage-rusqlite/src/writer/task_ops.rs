@@ -6,11 +6,15 @@
 //! `atm_storage::task_state` defines the pure, backend-neutral transition
 //! table this module's SQL mirrors; nothing here changes that table's rules.
 
+use super::ops::{execute_upsert_message, load_existing_message, mark_source_acknowledged};
+use super::stmt_cache::WriterStatementCache;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
+use atm_storage::MessageWriteOrigin;
 use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
 use atm_storage::schema::AtmMessageId;
-use atm_storage::types::AgentName;
+use atm_storage::task_state::{TaskEvent, TaskRow, TaskState, Transition, admit, transition};
+use atm_storage::types::{AgentName, TaskId, TeamName};
 use rusqlite::{Connection, OptionalExtension, params};
 
 const TASK_RECOVERY: &str = "Run: atm list --task-events <task_id> --member <assignee>";
@@ -19,12 +23,67 @@ fn task_rejected(detail: impl std::fmt::Display) -> AtmError {
     AtmError::validation(format!("{detail}; {TASK_RECOVERY}"))
 }
 
+fn load_task_row(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    team: &TeamName,
+    task_id: &TaskId,
+    assignee: &AgentName,
+) -> Result<Option<TaskRow>, AtmError> {
+    connection
+        .query_row(
+            "SELECT team, task_id, assignee, assigner, state, assignment_message_id,
+                    description, assigned_at, updated_at, last_reminded_at, reminder_count,
+                    lead_notified_count
+               FROM tasks WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
+            params![team.as_str(), task_id.as_str(), assignee.as_str()],
+            crate::SqliteTaskStore::decode_row,
+        )
+        .optional()
+        .map_err(|error| sqlite_error(target, "failed to load task row", error))
+}
+
+fn load_open_task_rows(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    team: &TeamName,
+    assignee: &AgentName,
+) -> Result<Vec<TaskRow>, AtmError> {
+    let mut statement = connection
+        .prepare(
+            "SELECT team, task_id, assignee, assigner, state, assignment_message_id,
+                    description, assigned_at, updated_at, last_reminded_at, reminder_count,
+                    lead_notified_count
+               FROM tasks WHERE team = ?1 AND assignee = ?2 AND state <> 'complete'",
+        )
+        .map_err(|error| sqlite_error(target, "failed to prepare open task lookup", error))?;
+    statement
+        .query_map(
+            params![team.as_str(), assignee.as_str()],
+            crate::SqliteTaskStore::decode_row,
+        )
+        .map_err(|error| sqlite_error(target, "failed to load open tasks", error))?
+        .map(|row| row.map_err(|error| sqlite_error(target, "failed to decode open task", error)))
+        .collect()
+}
+
+fn transition_for(
+    row: Option<&TaskRow>,
+    open: &[TaskRow],
+    event: TaskEvent,
+    actor: &AgentName,
+) -> Result<Transition, AtmError> {
+    admit(row, open, event, actor).map_err(|error| error.into_atm_error())?;
+    transition(row.map(|task| task.state), event).map_err(|error| error.into_atm_error())
+}
+
 /// Applies the only local message-insert task transitions. This function runs
 /// on the writer's transaction connection, so message, task row, and audit
 /// event either commit together or roll back together.
 pub(super) fn apply_task_message(
     record: &Message,
     connection: &Connection,
+    cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     if record.envelope.task_id.is_some() && record.envelope.task_complete.is_some() {
@@ -36,25 +95,9 @@ pub(super) fn apply_task_message(
         return apply_task_assignment(record, task_id.as_str(), connection, target);
     }
     if let Some(task_id) = record.envelope.task_complete.as_ref() {
-        return apply_task_completion(record, task_id.as_str(), connection, target);
+        return apply_task_completion(record, task_id.as_str(), connection, cache, target);
     }
     Ok(())
-}
-
-fn load_existing_assignment_state(
-    record: &Message,
-    task_id: &str,
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<Option<String>, AtmError> {
-    connection
-        .query_row(
-            "SELECT state FROM tasks WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-            params![record.team.as_str(), task_id, record.agent.as_str()],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|error| sqlite_error(target, "failed to resolve task assignment", error))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -67,11 +110,6 @@ fn refresh_task_assignment(
     at: &str,
     message_id: AtmMessageId,
 ) -> Result<(), AtmError> {
-    if state == "complete" {
-        return Err(task_rejected(format!(
-            "task {task_id} already complete; use a new id"
-        )));
-    }
     connection
         .execute(
             "UPDATE tasks SET assignment_message_id = ?4, description = ?5, updated_at = ?6
@@ -152,17 +190,52 @@ fn apply_task_assignment(
     connection: &Connection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
-    let existing = load_existing_assignment_state(record, task_id, connection, target)?;
+    let typed_task_id = task_id
+        .parse::<TaskId>()
+        .map_err(|error| task_rejected(format!("invalid task id: {error}")))?;
+    let row = load_task_row(
+        connection,
+        target,
+        &record.team,
+        &typed_task_id,
+        &record.agent,
+    )?;
+    let open = load_open_task_rows(connection, target, &record.team, &record.agent)?;
+    let next = transition_for(
+        row.as_ref(),
+        &open,
+        TaskEvent::Assigned,
+        &record.envelope.from,
+    )?;
     let at = record.envelope.timestamp.to_string();
     let message_id = record
         .envelope
         .message_id
         .ok_or_else(|| task_rejected("task assignment is missing message id"))?;
-    match existing {
-        Some(state) => {
-            refresh_task_assignment(record, task_id, connection, target, &state, &at, message_id)
+    match (row, next) {
+        (Some(row), Transition::To(_)) => refresh_task_assignment(
+            record,
+            task_id,
+            connection,
+            target,
+            state_name(row.state),
+            &at,
+            message_id,
+        ),
+        (None, Transition::To(TaskState::Assigned)) => {
+            insert_task_assignment(record, task_id, connection, target, &at, message_id)
         }
-        None => insert_task_assignment(record, task_id, connection, target, &at, message_id),
+        (_, Transition::NoOp) | (None, Transition::To(_)) => Err(task_rejected(
+            "task assignment did not produce an assigned state",
+        )),
+    }
+}
+
+const fn state_name(state: TaskState) -> &'static str {
+    match state {
+        TaskState::Assigned => "assigned",
+        TaskState::Active => "active",
+        TaskState::Complete => "complete",
     }
 }
 
@@ -170,45 +243,64 @@ fn apply_task_completion(
     record: &Message,
     task_id: &str,
     connection: &Connection,
+    cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
-    let actor = record.envelope.from.as_str();
-    let found: Option<(String, String, String)> = connection.query_row(
-        "SELECT assignee, assigner, state FROM tasks WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-        params![record.team.as_str(), task_id, actor], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-    ).optional().map_err(|error| sqlite_error(target, "failed to resolve assignee task completion", error))?;
-    let found = match found {
-        Some(found) => Some(found),
-        None => connection.query_row(
-        "SELECT assignee, assigner, state FROM tasks WHERE team = ?1 AND task_id = ?2 AND assignee = ?3 AND assigner = ?4",
-        params![record.team.as_str(), task_id, record.agent.as_str(), actor], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-    ).optional().map_err(|error| sqlite_error(target, "failed to resolve assigner task completion", error))?,
+    let typed_task_id = task_id
+        .parse::<TaskId>()
+        .map_err(|error| task_rejected(format!("invalid task id: {error}")))?;
+    let direct = load_task_row(
+        connection,
+        target,
+        &record.team,
+        &typed_task_id,
+        &record.envelope.from,
+    )?;
+    let row = match direct {
+        Some(row) => Some(row),
+        None => load_task_row(
+            connection,
+            target,
+            &record.team,
+            &typed_task_id,
+            &record.agent,
+        )?,
     };
-    let Some((assignee, _assigner, state)) = found else {
-        return Err(task_rejected(format!("no open task {task_id} for {actor}")));
+    let Some(row) = row else {
+        return Err(task_rejected(format!(
+            "no open task {task_id} for {}",
+            record.envelope.from
+        )));
     };
-    if state == "complete" {
-        return Err(task_rejected(format!("task {task_id} already complete")));
-    }
+    let next = transition_for(Some(&row), &[], TaskEvent::Completed, &record.envelope.from)?;
+    let Transition::To(next_state) = next else {
+        return Err(task_rejected("task completion did not produce a state"));
+    };
     let at = record.envelope.timestamp.to_string();
     connection.execute(
-        "UPDATE tasks SET state = 'complete', updated_at = ?4 WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-        params![record.team.as_str(), task_id, assignee, at],
+        "UPDATE tasks SET state = ?4, updated_at = ?5 WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
+        params![record.team.as_str(), task_id, row.assignee.as_str(), state_name(next_state), at],
     ).map_err(|error| sqlite_error(target, "failed to complete task", error))?;
     let marker = acknowledge_completed_assignment(
-        connection, target, record, task_id, &assignee, &state, &at,
+        connection,
+        cache,
+        target,
+        record,
+        task_id,
+        row.assignee.as_str(),
+        row.state,
     )?;
     append_task_event(
         connection,
         target,
         record.team.as_str(),
         task_id,
-        &assignee,
+        row.assignee.as_str(),
         &at,
         "completed",
-        Some(&state),
-        Some("complete"),
-        actor,
+        Some(state_name(row.state)),
+        Some(state_name(next_state)),
+        record.envelope.from.as_str(),
         record.envelope.message_id,
         None,
         marker,
@@ -223,25 +315,49 @@ fn apply_task_completion(
 #[allow(clippy::too_many_arguments)]
 fn acknowledge_completed_assignment(
     connection: &Connection,
+    cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
     record: &Message,
     task_id: &str,
     assignee: &str,
-    state: &str,
-    at: &str,
+    state: TaskState,
 ) -> Result<Option<&'static str>, AtmError> {
-    if state != "assigned" {
+    if state != TaskState::Assigned {
         return Ok(None);
     }
-    let changed = connection.execute(
-        "UPDATE mail_message_states SET read = 1, pending_ack_at = NULL, acknowledged_at = ?4, updated_at = ?4
-          WHERE team = ?1 AND agent = ?2 AND message_key = (
-              SELECT message_key FROM mail_messages WHERE team = ?1 AND agent = ?2
-                AND message_id = (SELECT assignment_message_id FROM tasks WHERE team = ?1 AND task_id = ?3 AND assignee = ?2)
-          )",
-        params![record.team.as_str(), assignee, task_id, at],
-    ).map_err(|error| sqlite_error(target, "failed to acknowledge completed task assignment", error))?;
-    Ok((changed == 0).then_some("assignment_missing"))
+    let message_key: Option<String> = connection
+        .query_row(
+            "SELECT mail_messages.message_key FROM mail_messages
+              WHERE team = ?1 AND agent = ?2
+                AND message_id = (SELECT assignment_message_id FROM tasks WHERE team = ?1 AND task_id = ?3 AND assignee = ?2)",
+            params![record.team.as_str(), assignee, task_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| sqlite_error(target, "failed to load completed task assignment", error))?;
+    let Some(message_key) = message_key else {
+        return Ok(Some("assignment_missing"));
+    };
+    let requested = Message {
+        team: record.team.clone(),
+        agent: assignee
+            .parse()
+            .map_err(|error| task_rejected(format!("invalid task assignee: {error}")))?,
+        message_key: message_key
+            .parse()
+            .map_err(|error| task_rejected(format!("invalid assignment message key: {error}")))?,
+        envelope: record.envelope.clone(),
+    };
+    let mut assignment = load_existing_message(&requested, connection, target)?;
+    mark_source_acknowledged(&mut assignment, record.envelope.timestamp);
+    let _ = execute_upsert_message(
+        &assignment,
+        MessageWriteOrigin::Local,
+        connection,
+        cache,
+        target,
+    )?;
+    Ok(None)
 }
 
 pub(super) fn apply_task_acknowledgement(
@@ -253,67 +369,36 @@ pub(super) fn apply_task_acknowledgement(
     let Some(task_id) = source.envelope.task_id.as_ref() else {
         return Ok(());
     };
-    let task_id = task_id.as_str();
-    let state: Option<String> = connection
-        .query_row(
-            "SELECT state FROM tasks WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-            params![source.team.as_str(), task_id, source.agent.as_str()],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|error| sqlite_error(target, "failed to resolve acknowledged task", error))?;
-    let Some(state) = state else {
+    let row = load_task_row(connection, target, &source.team, task_id, &source.agent)?;
+    let Some(row) = row else {
         return Ok(());
     };
-    if state == "complete" {
-        return Err(task_rejected(format!("task {task_id} already complete")));
-    }
-    reject_if_another_task_is_active(connection, target, source, task_id, &state)?;
+    let open = load_open_task_rows(connection, target, &source.team, &source.agent)?;
+    let next = transition_for(Some(&row), &open, TaskEvent::Acked, actor)?;
+    let Transition::To(next_state) = next else {
+        return Ok(());
+    };
     let at = atm_storage::types::IsoTimestamp::now().to_string();
     connection.execute(
-        "UPDATE tasks SET state = 'active', updated_at = ?4 WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-        params![source.team.as_str(), task_id, source.agent.as_str(), at],
+        "UPDATE tasks SET state = ?4, updated_at = ?5 WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
+        params![source.team.as_str(), task_id.as_str(), source.agent.as_str(), state_name(next_state), at],
     ).map_err(|error| sqlite_error(target, "failed to activate acknowledged task", error))?;
     append_task_event(
         connection,
         target,
         source.team.as_str(),
-        task_id,
+        task_id.as_str(),
         source.agent.as_str(),
         &at,
         "acked",
-        Some(&state),
-        Some("active"),
+        Some(state_name(row.state)),
+        Some(state_name(next_state)),
         actor.as_str(),
         source.envelope.message_id,
         None,
         None,
         None,
     )
-}
-
-/// Admit guard G1: an assignee acking an `Assigned` row may not already hold
-/// a different `Active` row in the same team.
-fn reject_if_another_task_is_active(
-    connection: &Connection,
-    target: &SharedDbTarget,
-    source: &Message,
-    task_id: &str,
-    state: &str,
-) -> Result<(), AtmError> {
-    if state != "assigned" {
-        return Ok(());
-    }
-    let other: Option<String> = connection.query_row(
-        "SELECT task_id FROM tasks WHERE team = ?1 AND assignee = ?2 AND state = 'active' AND task_id <> ?3 LIMIT 1",
-        params![source.team.as_str(), source.agent.as_str(), task_id], |row| row.get(0),
-    ).optional().map_err(|error| sqlite_error(target, "failed to check active task guard", error))?;
-    if let Some(other) = other {
-        return Err(task_rejected(format!(
-            "task {other} is active; complete it first"
-        )));
-    }
-    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]

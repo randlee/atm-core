@@ -436,9 +436,7 @@ fn execute_acknowledgement(
     let source = load_pending_ack_source(source, connection, target)?;
     let reply = builder.build_reply(&source)?;
     let mut acknowledged_source = source.clone();
-    acknowledged_source.envelope.read = true;
-    acknowledged_source.envelope.pending_ack_at = None;
-    acknowledged_source.envelope.acknowledged_at = Some(IsoTimestamp::now());
+    mark_source_acknowledged(&mut acknowledged_source, IsoTimestamp::now());
     let _ = execute_upsert_message(&reply, MessageWriteOrigin::Local, connection, cache, target)?;
     let _ = execute_upsert_message(
         &acknowledged_source,
@@ -454,6 +452,16 @@ fn execute_acknowledgement(
             source: acknowledged_source,
         },
     )))
+}
+
+/// Applies the canonical acknowledged display state to a loaded source.
+///
+/// Completion-from-Assigned reuses this mutation before writing the source
+/// back through the same writer transaction.
+pub(super) fn mark_source_acknowledged(source: &mut Message, now: IsoTimestamp) {
+    source.envelope.read = true;
+    source.envelope.pending_ack_at = None;
+    source.envelope.acknowledged_at = Some(now);
 }
 
 fn load_pending_ack_source(
@@ -607,7 +615,7 @@ pub(crate) fn validate_upsert_message_request(record: &Message) -> Result<(), At
     Ok(())
 }
 
-fn execute_upsert_message(
+pub(super) fn execute_upsert_message(
     record: &Message,
     provenance: MessageWriteOrigin,
     connection: &Connection,
@@ -670,7 +678,7 @@ fn execute_upsert_message(
         Some(Box::new(load_existing_message(record, connection, target)?))
     };
     if inserted && provenance == MessageWriteOrigin::Local {
-        apply_task_message(record, connection, target)?;
+        apply_task_message(record, connection, cache, target)?;
     }
     Ok(WriteOpResult::UpsertMessage { inserted, existing })
 }
@@ -789,7 +797,7 @@ fn message_classification(
     })
 }
 
-fn load_existing_message(
+pub(super) fn load_existing_message(
     requested: &Message,
     connection: &Connection,
     target: &SharedDbTarget,

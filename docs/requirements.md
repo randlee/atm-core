@@ -72,13 +72,6 @@ daemon, the write path has no Python, and a Claude Code task list is a
 per-session harness artifact rather than a cross-host record. The AC.6
 deletion stands: ADR-061 revives none of that scaffolding.
 
-#### Task storage
-
-`TaskStore` is the sealed, backend-neutral task-ledger capability. SQLite owns
-the `tasks` and append-only `task_events` tables; `MessageWriteOrigin`
-distinguishes local task-bearing messages from peer receipts so only local
-writer admission and acknowledgements apply task transitions.
-
 The retained product surface is:
 - `atm send`
 - `atm list`
@@ -3642,6 +3635,13 @@ The release-complete target is elimination of mailbox-lock dependence from ATM
 mail correctness.
 
 ### 22.1 SQLite Mail And Roster Ownership
+
+#### Task storage
+
+`TaskStore` is the sealed, backend-neutral task-ledger capability. SQLite owns
+the `tasks` and append-only `task_events` tables; `MessageWriteOrigin`
+distinguishes local task-bearing messages from peer receipts so only local
+writer admission and acknowledgements apply task transitions.
 
 - `REQ-CORE-RUNTIME-001` ATM mail and team roster state must move to SQLite as
   the authoritative source of truth.

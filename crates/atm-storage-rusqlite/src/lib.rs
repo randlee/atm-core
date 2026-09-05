@@ -280,7 +280,7 @@ struct SqlitePendingNudgeStore {
 }
 
 #[derive(Debug)]
-struct SqliteTaskStore {
+pub(crate) struct SqliteTaskStore {
     db: Arc<SharedDb>,
 }
 

@@ -64,7 +64,7 @@ impl SqliteTaskStore {
         Self { db }
     }
 
-    fn decode_row(row: &Row<'_>) -> rusqlite::Result<TaskRow> {
+    pub(crate) fn decode_row(row: &Row<'_>) -> rusqlite::Result<TaskRow> {
         let team: String = row.get(0)?;
         let task_id: String = row.get(1)?;
         let assignee: String = row.get(2)?;

@@ -288,9 +288,9 @@ shape-only completion fails the sprint.
   path is Rust with no Python in it, and a Claude Code task list is a
   per-session harness artifact rather than a cross-host record. The
   `AC.6` deletion stands: ADR-061 is a fresh design and revives none of
-  the deleted scaffolding. Gate: `grep -n Pydantic docs/requirements.md
-  docs/architecture.md` returns only lines inside the two superseded
-  notes, each followed by the Phase-AX amendment.
+  the deleted scaffolding. Gate: the `Pydantic` references in the two named
+  Phase-AC notes each have the Phase-AX amendment; the unrelated historical
+  Phase-AA note is outside this sprint's scope.
 - [ ] D9 — `crates/atm-storage/src/contract.rs` decomposition (arch-qa
   RULE-003): the file is already 1133 non-test lines (tests start at
   line 1134) and AX.1, AX.3 and AX.6 all add to it. Extract the graft

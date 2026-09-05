@@ -1143,7 +1143,7 @@ mod tests {
     };
     use atm_storage::{
         MessageKey, MessageQuery, MessageStore, RosterSnapshot, RosterStore as StorageRosterStore,
-        TemplateFrontmatter, TemplateSha,
+        TaskStore, TemplateFrontmatter, TemplateSha,
     };
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, LOCATION};
@@ -1399,6 +1399,7 @@ mod tests {
         router: StorageAndNudgeRouter,
         message_store: Arc<dyn MessageStore + Send + Sync>,
         pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+        task_store: Arc<dyn TaskStore + Send + Sync>,
         received_hook: Arc<RecordingReceivedHook>,
         runtime_health: RuntimeHealth,
         database_path: PathBuf,
@@ -1516,6 +1517,10 @@ mod tests {
             .service_runtime
             .pending_nudge_store()
             .expect("sqlite pending-nudge store");
+        let task_store = assembly
+            .service_runtime
+            .task_store()
+            .expect("sqlite task store");
         let pending_nudge_store_for_runtime =
             pending_store_with_failures(&pending_nudge_store, pending_marker_failures);
         let received_hook = Arc::new(RecordingReceivedHook {
@@ -1539,6 +1544,7 @@ mod tests {
             attach_graft_receiver_store(service_runtime, &database_path, with_recipient);
         let service_runtime =
             service_runtime.with_pending_nudge_store(pending_nudge_store_for_runtime);
+        let service_runtime = service_runtime.with_task_store(Arc::clone(&task_store));
         let router = StorageAndNudgeRouter::new(
             service_runtime,
             Arc::new(NullObservability),
@@ -1551,6 +1557,7 @@ mod tests {
             router,
             message_store,
             pending_nudge_store,
+            task_store,
             received_hook,
             runtime_health: health,
             database_path,
