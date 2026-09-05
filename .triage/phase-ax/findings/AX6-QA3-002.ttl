@@ -1,0 +1,97 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA3-002>
+  a triage:Finding ;
+  triage:findingId "AX6-QA3-002" ;
+  triage:title "RULE-011: peer_mutations_reject_missing_yes_before_touching_durable_configuration in crates/atm/tests/peer_cli.rs spawns the atm subprocess without isolated ATM_HOME/ATM_CONFIG_HOME" ;
+  triage:description "The test peer_mutations_reject_missing_yes_before_touching_durable_configuration at crates/atm/tests/peer_cli.rs:66 spawns the atm subprocess with only ATM_LOG_DIR set and no ATM_HOME or ATM_CONFIG_HOME, unlike the sibling escalation_cli.rs test fixed in this sprint. It is currently masked by an early --yes guard that rejects before any config read, but it is not isolated per docs/cross-platform-guidelines.md section Test Subprocess Isolation. Similar isolation gaps exist in compose_passthrough.rs:35 and as a regression in AX7 escalation_cli.rs:7." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-qa" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T19:45:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-002/AX6-peer-cli-66> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-002/AX6-compose-passthrough-35> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-002/AX7-peer-cli-66> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-002/AX7-compose-passthrough-35> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-002/AX7-escalation-cli-7> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA3-002/AX6-peer-cli-66>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/peer_cli.rs" ;
+  triage:line 66 ;
+  triage:snippet "let output = Command::new(env!(\"CARGO_BIN_EXE_atm\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b> .
+
+<urn:atm:triage:occurrence/AX6-QA3-002/AX6-compose-passthrough-35>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/compose_passthrough.rs" ;
+  triage:line 35 ;
+  triage:snippet "Command::new(env!(\"CARGO_BIN_EXE_atm\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b> .
+
+<urn:atm:triage:occurrence/AX6-QA3-002/AX7-peer-cli-66>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/peer_cli.rs" ;
+  triage:line 66 ;
+  triage:snippet "let output = Command::new(env!(\"CARGO_BIN_EXE_atm\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2> .
+
+<urn:atm:triage:occurrence/AX6-QA3-002/AX7-compose-passthrough-35>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/compose_passthrough.rs" ;
+  triage:line 35 ;
+  triage:snippet "Command::new(env!(\"CARGO_BIN_EXE_atm\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2> .
+
+<urn:atm:triage:occurrence/AX6-QA3-002/AX7-escalation-cli-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/escalation_cli.rs" ;
+  triage:line 7 ;
+  triage:snippet "Command::new(env!(\"CARGO_BIN_EXE_atm\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2> .
+
+<urn:atm:triage:worktree/AX6/43e1d40b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX6" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/d101fee2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX7" ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:orderIndex 7 .

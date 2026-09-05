@@ -464,3 +464,8 @@ triage:r78 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA2
 triage:r79 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA2-008> ; triage:resolvedAt "2026-09-05T19:45:51Z"^^xsd:dateTime .
 triage:r80 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA2-009> ; triage:resolvedAt "2026-09-05T19:45:51Z"^^xsd:dateTime .
 triage:r81 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX6-QA2-010> ; triage:resolvedAt "2026-09-05T19:45:51Z"^^xsd:dateTime .
+
+triage:a24 a triage:Assignment ;
+    triage:ofSprint triage:AX6 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-05T19:52:40Z"^^xsd:dateTime .
