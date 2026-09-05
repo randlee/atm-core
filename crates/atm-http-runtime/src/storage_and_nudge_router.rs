@@ -586,6 +586,22 @@ impl StorageAndNudgeRouter {
         query: ListQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
+        if query.task_ledger.is_some() {
+            if deadline.expired() {
+                return Err(AtmError::daemon_unavailable(
+                    "request deadline expired before task-ledger inspection",
+                ));
+            }
+            let read_deadline = atm_runtime::read_deadline(deadline)?;
+            return atm_core::list::list_task_ledger_with_runtime_async(
+                query,
+                &self.service_runtime,
+                read_deadline,
+            )
+            .await
+            .map(ResponseEnvelope::List)
+            .map(ApiResponse::new);
+        }
         let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "async mailbox runtime was not installed at daemon startup",
@@ -1143,8 +1159,8 @@ mod tests {
         open_graft_receiver_endpoint_store, open_sqlite_boundary,
     };
     use atm_storage::{
-        MessageKey, MessageQuery, MessageStore, RosterSnapshot, RosterStore as StorageRosterStore,
-        TaskStore, TemplateFrontmatter, TemplateSha,
+        AsyncTaskLedgerReader, MessageKey, MessageQuery, MessageStore, RosterSnapshot,
+        RosterStore as StorageRosterStore, TaskStore, TemplateFrontmatter, TemplateSha,
     };
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, LOCATION};
@@ -1401,6 +1417,7 @@ mod tests {
         message_store: Arc<dyn MessageStore + Send + Sync>,
         pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
         task_store: Arc<dyn TaskStore + Send + Sync>,
+        async_task_ledger_reader: Arc<atm_runtime_test_support::InMemoryTaskLedgerReader>,
         received_hook: Arc<RecordingReceivedHook>,
         runtime_health: RuntimeHealth,
         database_path: PathBuf,
@@ -1522,6 +1539,8 @@ mod tests {
             .service_runtime
             .task_store()
             .expect("sqlite task store");
+        let async_task_ledger_reader =
+            Arc::new(atm_runtime_test_support::InMemoryTaskLedgerReader::default());
         let pending_nudge_store_for_runtime =
             pending_store_with_failures(&pending_nudge_store, pending_marker_failures);
         let received_hook = Arc::new(RecordingReceivedHook {
@@ -1545,7 +1564,11 @@ mod tests {
             attach_graft_receiver_store(service_runtime, &database_path, with_recipient);
         let service_runtime =
             service_runtime.with_pending_nudge_store(pending_nudge_store_for_runtime);
-        let service_runtime = service_runtime.with_task_store(Arc::clone(&task_store));
+        let async_reader_for_runtime: Arc<dyn AsyncTaskLedgerReader + Send + Sync> =
+            async_task_ledger_reader.clone();
+        let service_runtime = service_runtime
+            .with_task_store(Arc::clone(&task_store))
+            .with_async_task_ledger_reader(async_reader_for_runtime);
         let router = StorageAndNudgeRouter::new(
             service_runtime,
             Arc::new(NullObservability),
@@ -1559,6 +1582,7 @@ mod tests {
             message_store,
             pending_nudge_store,
             task_store,
+            async_task_ledger_reader,
             received_hook,
             runtime_health: health,
             database_path,
@@ -1567,15 +1591,19 @@ mod tests {
         }
     }
 
-    #[test]
-    fn router_fixture_retains_the_composed_task_store() {
+    #[tokio::test]
+    async fn router_fixture_retains_the_composed_async_task_ledger_reader() {
         let fixture = fixture(false, None, None);
-        let team: TeamName = "test-team".parse().expect("team");
         assert!(
             fixture
-                .task_store
-                .list_tasks(&team, None)
-                .expect("task-store list")
+                .async_task_ledger_reader
+                .list_tasks(
+                    "test-team".parse().expect("team"),
+                    None,
+                    atm_storage::ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+                )
+                .await
+                .expect("task-ledger reader list")
                 .is_empty()
         );
     }
@@ -2541,6 +2569,87 @@ mod tests {
                 "{handler} must not acquire the global blocking bridge"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn sqlite_runtime_composes_the_async_task_ledger_reader() {
+        let root = tempfile::tempdir().expect("temporary runtime root");
+        let assembly = open_sqlite_boundary(root.path().join("mail.sqlite"))
+            .expect("assemble SQLite boundary");
+        let reader = assembly
+            .service_runtime
+            .async_task_ledger_reader()
+            .expect("installed async task-ledger reader");
+        let tasks = reader
+            .list_tasks(
+                "test-team".parse().expect("team"),
+                None,
+                atm_storage::ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("task-ledger reader list");
+        assert!(tasks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn task_ledger_list_uses_the_installed_async_reader_without_mailbox_runtime() {
+        let fixture = fixture(true, None, None);
+        let mut write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        write.task_id = Some("t-42".parse().expect("task id"));
+        write.requires_ack = true;
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("seed task through canonical write path");
+        let team: TeamName = "test-team".parse().expect("team");
+        fixture.async_task_ledger_reader.replace_rows(
+            fixture
+                .task_store
+                .list_tasks(&team, Some(&"recipient".parse().expect("member")))
+                .expect("task-store list"),
+            Vec::new(),
+        );
+
+        let query = atm_core::list::ListQuery::new(
+            fixture.home_dir.clone(),
+            fixture.current_dir.clone(),
+            "sender".parse().expect("caller"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::Actionable,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query")
+        .with_task_ledger(atm_core::list::TaskLedgerQuery::Tasks {
+            member: Some("recipient".parse().expect("member")),
+        });
+        let listed = fixture
+            .router
+            .dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    query,
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("list task ledger through task store")
+            .into_inner();
+
+        assert!(matches!(listed, ResponseEnvelope::List(outcome)
+            if outcome.task_rows.len() == 1
+                && outcome.task_rows[0].task_id.as_str() == "t-42"
+                && outcome.task_rows[0].state == atm_storage::TaskState::Assigned));
     }
 
     #[tokio::test]

@@ -3,9 +3,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::{
-    AsyncMailboxReader, AsyncMessageSearchStore, AsyncMessageStore, AtmError,
-    GraftReceiverEndpointStore, MessageSearchStore, MessageStore, NudgeTemplateOverrideStore,
-    PeerConfigStore, PendingNudgeStore, RosterStore, TaskStore, TemplateCatalogStore,
+    AsyncMailboxReader, AsyncMessageSearchStore, AsyncMessageStore, AsyncTaskLedgerReader,
+    AtmError, GraftReceiverEndpointStore, MessageSearchStore, MessageStore,
+    NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, RosterStore, TaskStore,
+    TemplateCatalogStore,
 };
 
 /// Effective capacity settings for one reader lane, selected by the backend
@@ -30,6 +31,7 @@ pub struct StorageHandles {
     message_store: Arc<dyn MessageStore + Send + Sync>,
     async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
     async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
+    async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
     roster_store: Arc<dyn RosterStore + Send + Sync>,
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
@@ -52,6 +54,7 @@ pub struct StorageHandleParts {
     pub message_store: Arc<dyn MessageStore + Send + Sync>,
     pub async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
     pub async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
+    pub async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
     pub roster_store: Arc<dyn RosterStore + Send + Sync>,
     pub nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pub pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
@@ -69,6 +72,7 @@ impl fmt::Debug for StorageHandles {
         f.debug_struct("StorageHandles")
             .field("message_store", &"dyn MessageStore")
             .field("async_message_store", &"dyn AsyncMessageStore")
+            .field("async_task_ledger_reader", &"dyn AsyncTaskLedgerReader")
             .field("roster_store", &"dyn RosterStore")
             .field(
                 "nudge_template_override_store",
@@ -95,6 +99,7 @@ impl StorageHandles {
             message_store: parts.message_store,
             async_message_store: parts.async_message_store,
             async_mailbox_reader: parts.async_mailbox_reader,
+            async_task_ledger_reader: parts.async_task_ledger_reader,
             roster_store: parts.roster_store,
             nudge_template_override_store: parts.nudge_template_override_store,
             pending_nudge_store: parts.pending_nudge_store,
@@ -120,6 +125,11 @@ impl StorageHandles {
     /// Returns the bounded read-only mailbox lane selected by composition.
     pub fn async_mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
         Arc::clone(&self.async_mailbox_reader)
+    }
+
+    /// Returns the bounded read-only task-ledger lane selected by composition.
+    pub fn async_task_ledger_reader(&self) -> Arc<dyn AsyncTaskLedgerReader + Send + Sync> {
+        Arc::clone(&self.async_task_ledger_reader)
     }
 
     pub fn roster_store(&self) -> Arc<dyn RosterStore + Send + Sync> {

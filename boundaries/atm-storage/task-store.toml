@@ -40,7 +40,9 @@ notes = [
 ]
 
 [testing]
-allowed_test_double_paths = ["crate::contract::DummyTaskStore"]
+allowed_test_double_paths = [
+    "crate::task_store::DummyTaskStore",
+]
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]
@@ -48,5 +50,5 @@ lint_rules = ["LINT-BOUNDARY-TASK-STORE-REFERENCES"]
 review_gates = ["no_cli_sqlite_lookup", "no_backend_to_core_edge_for_task_store", "no_task_state_write_outside_writer_transaction"]
 
 [status]
-state = "planned"
+state = "concrete_landed"
 notes = ["AX.3 introduces the trait, the rusqlite implementation and the schema in one sprint", "AX.4 (atm list), AX.5 (record_reminder) and AX.6 (record_lead_notified, doctor) consume it"]

@@ -80,6 +80,7 @@ impl AsRef<str> for MessageKey {
 }
 
 pub use crate::peer_contract::*;
+pub use crate::task_state::{TaskEventRow, TaskRow};
 pub use crate::task_store::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -727,6 +728,29 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
         scope: MailboxScope,
         deadline: ReadDeadline,
     ) -> Result<Option<IsoTimestamp>, ReadLaneError>;
+}
+
+/// Tokio-safe, read-only task-ledger capability.
+///
+/// Task rows and their append-only audit events are a separate durable
+/// projection from mailbox messages. Implementations must use a bounded
+/// storage-owned reader lane and must not enter the ordered writer lane.
+#[async_trait::async_trait]
+pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
+    async fn list_tasks(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError>;
+
+    async fn list_task_events(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        member: Option<AgentName>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskEventRow>, ReadLaneError>;
 }
 
 pub trait RosterStore: sealed::Sealed + Send + Sync {

@@ -448,6 +448,12 @@ impl SharedDb {
         Arc::clone(&self.mailbox_reader)
     }
 
+    pub(crate) fn task_ledger_reader(
+        &self,
+    ) -> Arc<dyn atm_storage::AsyncTaskLedgerReader + Send + Sync> {
+        Arc::clone(&self.task_ledger_reader)
+    }
+
     pub(crate) fn error(&self, message: impl Into<String>, source: RusqliteError) -> AtmError {
         sqlite_error(self.target.as_ref(), message, source)
     }

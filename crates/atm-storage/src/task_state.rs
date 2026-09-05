@@ -21,6 +21,17 @@ pub enum TaskState {
     Complete,
 }
 
+impl TaskState {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Assigned => "assigned",
+            Self::Active => "active",
+            Self::Complete => "complete",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskEvent {
@@ -157,11 +168,35 @@ pub enum TaskEventKind {
     LeadNotified,
 }
 
+impl TaskEventKind {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Assigned => "assigned",
+            Self::Acked => "acked",
+            Self::Completed => "completed",
+            Self::Rejected => "rejected",
+            Self::Reminded => "reminded",
+            Self::LeadNotified => "lead_notified",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskEventMarker {
     Resend,
     AssignmentMissing,
+}
+
+impl TaskEventMarker {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Resend => "resend",
+            Self::AssignmentMissing => "assignment_missing",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -183,8 +218,12 @@ pub struct TaskEventRow {
 
 #[cfg(test)]
 mod tests {
-    use super::{TaskEvent, TaskRow, TaskState, Transition, admit, transition};
+    use super::{
+        TaskEvent, TaskEventKind, TaskEventMarker, TaskRow, TaskState, Transition, admit,
+        transition,
+    };
     use crate::schema::AtmMessageId;
+    use crate::task_store::ReminderOutcome;
     use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
     fn context() -> (TaskId, AgentName) {
@@ -192,6 +231,56 @@ mod tests {
             "AX.3".parse::<TaskId>().expect("task"),
             "assignee".parse::<AgentName>().expect("assignee"),
         )
+    }
+
+    #[test]
+    fn task_ledger_names_match_serde_snake_case_output() {
+        for (value, expected) in [
+            (TaskState::Assigned, "assigned"),
+            (TaskState::Active, "active"),
+            (TaskState::Complete, "complete"),
+        ] {
+            assert_eq!(
+                serde_json::to_string(&value).unwrap(),
+                format!("\"{expected}\"")
+            );
+            assert_eq!(value.as_str(), expected);
+        }
+        for (value, expected) in [
+            (TaskEventKind::Assigned, "assigned"),
+            (TaskEventKind::Acked, "acked"),
+            (TaskEventKind::Completed, "completed"),
+            (TaskEventKind::Rejected, "rejected"),
+            (TaskEventKind::Reminded, "reminded"),
+            (TaskEventKind::LeadNotified, "lead_notified"),
+        ] {
+            assert_eq!(
+                serde_json::to_string(&value).unwrap(),
+                format!("\"{expected}\"")
+            );
+            assert_eq!(value.as_str(), expected);
+        }
+        for (value, expected) in [
+            (TaskEventMarker::Resend, "resend"),
+            (TaskEventMarker::AssignmentMissing, "assignment_missing"),
+        ] {
+            assert_eq!(
+                serde_json::to_string(&value).unwrap(),
+                format!("\"{expected}\"")
+            );
+            assert_eq!(value.as_str(), expected);
+        }
+        for (value, expected) in [
+            (ReminderOutcome::Emitted, "emitted"),
+            (ReminderOutcome::Unrenderable, "unrenderable"),
+            (ReminderOutcome::Blocked, "blocked"),
+        ] {
+            assert_eq!(
+                serde_json::to_string(&value).unwrap(),
+                format!("\"{expected}\"")
+            );
+            assert_eq!(value.as_str(), expected);
+        }
     }
 
     fn row(task_id: &str, state: TaskState) -> TaskRow {

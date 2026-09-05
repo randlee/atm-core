@@ -1195,6 +1195,7 @@ Write one message into one target inbox.
 - `--from <name>`
 - `--requires-ack`
 - `--task-id <id>`
+- `--task-complete <id>`
 
 Retired from the current implementation:
 - `--offline-action`
@@ -1323,6 +1324,11 @@ If `--task-id` is present:
 - treat the message as task-linked mail
 - imply `--requires-ack`
 
+`--task-complete <id>` records completion of the open task identified by
+`id`. It is mutually exclusive with `--task-id`; the assigner or assignee may
+complete the task, and an unknown or already-complete task fails without
+writing a message.
+
 ### 6.6 Output Contract
 
 Human output must include:
@@ -1338,6 +1344,7 @@ JSON output must include:
 - `message_id`
 - `requires_ack`
 - `task_id`
+- `task_complete` when a completion was requested
 
 Dry-run JSON output must include:
 - `action = "send"`
@@ -1347,6 +1354,7 @@ Dry-run JSON output must include:
 - `dry_run = true`
 - `requires_ack`
 - `task_id`
+- `task_complete` when a completion was requested
 
 ## 7. Queue Inspection Surfaces (`atm list`, `atm peek`, and `atm read`)
 
@@ -1440,6 +1448,14 @@ Legacy `atm read` flag migration:
 
 Additional supported flags:
 - `--limit <n>`
+- `--tasks [--member <name>]` lists durable task rows for the selected team
+- `--task-events <task-id> [--member <name>]` lists append-only audit rows
+  for one task
+
+`--tasks` and `--task-events` are mutually exclusive and each conflicts with
+every mailbox filter, including `--task`; `--member` is only valid with one of
+those task-ledger surfaces. Their JSON results are bare arrays of `TaskRow` or
+`TaskEventRow`, respectively, rather than the mailbox-list envelope.
 
 Required behavior:
 - load the mailbox/query surface through a bounded metadata-first query path
@@ -2638,6 +2654,14 @@ Required rules:
 - a task-linked message remains actionable until acknowledged
 - a task-linked message must continue to appear in `atm read` until acknowledged
 - a task-linked message must never be removed by `atm clear` before acknowledgement
+- task state is `assigned`, `active`, then `complete`; acknowledgement moves
+  an assigned task to active only when the assignee has no other active task
+- the assigner or assignee completes an open task with
+  `atm send <assignee> --task-complete <id> --stdin`; completion from assigned
+  acknowledges the assignment in the same transaction so it cannot remain
+  pending acknowledgement
+- every transition, rejection, resend, and reminder is append-only audit data;
+  the durable tables and replay contract are defined by ADR-061
 
 ## 16. Observability Requirements
 

@@ -35,7 +35,7 @@ pub mod roles {
 pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
-    AcknowledgementSource, AgentType, AsyncMailboxReader, AsyncMessageStore,
+    AcknowledgementSource, AgentType, AsyncMailboxReader, AsyncMessageStore, AsyncTaskLedgerReader,
     BuiltInNudgeTemplateKind, CertificateFingerprint, GraftEndpointStoreError,
     GraftReceiverEndpointStore, GraftReceiverLease, GraftReceiverRegistration, HttpsInterface,
     LocalCertificate, MAX_NUDGE_ATTEMPTS, MailMessageState, MailboxBucketCounts, MailboxScope,

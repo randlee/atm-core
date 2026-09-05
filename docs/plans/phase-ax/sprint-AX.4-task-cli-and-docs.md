@@ -5,7 +5,7 @@ title: Task completion and inspection CLI
 branch: feature/ax4-task-cli-and-docs
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ax4-task-cli-and-docs
 integration_branch: integrate/phase-ax
-status: draft
+status: complete
 recommended_agent: Cipher-311d
 recommended_model: fast
 execution_track: B
@@ -18,7 +18,7 @@ dependency_relations:
   - prerequisite: AX.1
     dependent: AX.4
     relation: parallel_safe
-    rationale: no functional dependency; both edit docs/requirements.md (AX.1 lines 1094/1105/4496, AX.4 §6.5/§6.6/§15.4) and docs/user-documents/nudge-templates.md (AX.1 rewrites the kind inventory, AX.4 adds one ADR-061 cross-reference) in different sections; resolved by AX.4 merging integrate/phase-ax forward after track A lands and before opening its PR, the same rule AX.3 follows.
+    rationale: no functional dependency; both edit docs/requirements.md (AX.1 lines 1094/1105/4496, AX.4 §6.5/§7.3/§7.12/§15.4) and docs/user-documents/nudge-templates.md (AX.1 rewrites the kind inventory, AX.4 adds one ADR-061 cross-reference) in different sections; resolved by AX.4 merging integrate/phase-ax forward after track A lands and before opening its PR, the same rule AX.3 follows.
   - prerequisite: AX.4
     dependent: AX.5
     relation: must_follow
@@ -38,13 +38,13 @@ This is the authoritative deliverable checklist. Every listed deliverable
 lands production-ready for the scope this sprint claims; partial or
 shape-only completion fails the sprint.
 
-- [ ] D1 — `atm send --task-complete <TASK_ID>`
+- [x] D1 — `atm send --task-complete <TASK_ID>`
   (`crates/atm/src/commands/send.rs`, clap `conflicts_with = "task_id"`),
   mapped to `SendRequest::with_task_complete`. `atm queue` inherits the
   flag through the flattened `SendCommand` in
   `crates/atm/src/commands/queue.rs`; no separate change. `--json`
   output shows `task_complete` (AX.3 C8).
-- [ ] D2 — `atm list --tasks [--member <name>]` and
+- [x] D2 — `atm list --tasks [--member <name>]` and
   `atm list --task-events <TASK_ID> [--member <name>]`
   (`crates/atm/src/commands/list.rs`, which owns parsing and rendering),
   reading through `LocalServiceRuntime::task_store()` and importing
@@ -53,7 +53,7 @@ shape-only completion fails the sprint.
   sanctioned path `nudge-template-override-store.toml` grants `atm`);
   `conflicts_with_all` against every mailbox filter including the
   existing `--task <id>`; human and `--json` output per code contract C1.
-- [ ] D3 — docs: `docs/requirements.md` §6.5 (`atm send` flags) and §6.6
+- [x] D3 — docs: `docs/requirements.md` §6.5 (`atm send` flags) and §7.3/§7.12
   (`atm list` flags) list the new flags; §15.4 "Task Metadata Rule"
   extended with the state machine summary, the ack gate,
   `--task-complete`, the completion-from-Assigned acknowledgement rule,
@@ -64,7 +64,7 @@ shape-only completion fails the sprint.
   the `task` kind; a new `docs/user-documents/tasks.md` documents the
   three states, the two flags, and the two list surfaces with the C1
   examples.
-- [ ] D4 — tests listed under Required validation.
+- [x] D4 — tests listed under Required validation.
 
 ### Paths to delete
 
@@ -116,7 +116,7 @@ every existing `atm list` filter.
    unknown id exits 3 and writes no message; `--task-complete` together
    with `--task-id` exits 2.
 3. `atm list --tasks --task t-1` and `--task-events t-1 --unread` exit 2.
-4. Requirements §6.5/§6.6/§15.4, team-protocol, and `tasks.md` merged;
+4. Requirements §6.5/§7.3/§7.12/§15.4, team-protocol, and `tasks.md` merged;
    `just validate` green.
 
 ## Required validation

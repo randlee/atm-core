@@ -971,6 +971,8 @@ mod tests {
             history_collapsed: false,
             count: 0,
             rows: Vec::new(),
+            task_rows: Vec::new(),
+            task_event_rows: Vec::new(),
             bucket_counts: BucketCounts {
                 unread: 2,
                 pending_ack: 3,

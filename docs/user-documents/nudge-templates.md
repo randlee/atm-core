@@ -32,7 +32,7 @@ ATM ships exactly seven built-in template kinds:
 
 `NudgeKind` selects the delivery (`delivery`, `delivery_ack`) or queue
 (`queue`, `queue_ack`) family. Task-tagged messages always use `task` and are
-always queued. The `acknowledge*` forms are intentionally compact
+always queued; their durable state and event audit are defined in ADR-061. The `acknowledge*` forms are intentionally compact
 acknowledgement nudges.
 
 ## Supported Placeholders

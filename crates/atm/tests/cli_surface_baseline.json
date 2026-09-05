@@ -579,6 +579,17 @@
           "short": null
         },
         {
+          "has_default": false,
+          "id": "member",
+          "long": "member",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
           "has_default": true,
           "id": "pending_ack",
           "long": "pending-ack",
@@ -629,6 +640,28 @@
           "num_args": {
             "max": 1,
             "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "task_events",
+          "long": "task-events",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "tasks",
+          "long": "tasks",
+          "num_args": {
+            "max": 0,
+            "min": 0
           },
           "required": false,
           "short": null
@@ -1833,6 +1866,17 @@
         },
         {
           "has_default": false,
+          "id": "task_complete",
+          "long": "task-complete",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
           "id": "task_id",
           "long": "task-id",
           "num_args": {
@@ -2711,6 +2755,17 @@
           "has_default": false,
           "id": "tag",
           "long": "tag",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "task_complete",
+          "long": "task-complete",
           "num_args": {
             "max": 1,
             "min": 1

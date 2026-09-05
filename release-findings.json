@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-08-27T23:52:44.266827Z",
-  "branch": "chore/changelog-1.4.4",
-  "version": "1.4.4",
+  "generatedAt": "2026-09-05T11:05:59.548097Z",
+  "branch": "feature/ax4-task-cli-and-docs",
+  "version": "1.5.0",
   "status": "pass",
   "findings": [
     {

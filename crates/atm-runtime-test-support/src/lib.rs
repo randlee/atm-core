@@ -20,6 +20,7 @@ use atm_storage::{
 };
 use atm_storage_rusqlite::SqliteStorageFactory;
 
+pub use atm_storage::testing::InMemoryTaskLedgerReader;
 pub use atm_storage_rusqlite::{TemplateAdmissionMessage, TemplateAdmissionSnapshot};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
