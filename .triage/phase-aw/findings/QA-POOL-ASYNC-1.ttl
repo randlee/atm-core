@@ -15,12 +15,14 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T20:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:phase-aw-gate-closeout ;
   triage:foundAt "2026-09-06T18:53:31Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-POOL-ASYNC-1/R1> ;
+  triage:closedAt "2026-09-06T21:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/QA-POOL-ASYNC-1/R1>
@@ -28,8 +30,8 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 785 ;
   triage:snippet "self.control_path_sync_bridge.run(deadline, move || {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "develop" ;
   triage:headSha "dba42148d" ;
   triage:occursIn <urn:atm:triage:worktree/develop/dba42148d> .
@@ -40,3 +42,12 @@
   triage:branch "develop" ;
   triage:headSha "dba42148d" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/QA-POOL-ASYNC-1/r1>
+  a triage:Resolution ;
+  triage:findingId "QA-POOL-ASYNC-1" ;
+  triage:resolutionNote "quality-mgr closure at PR #1261 (fix/aw-pool-graft-lookup-async -> develop, head 09495c629). graft_receiver_lookup (crates/atm-http-runtime/src/storage_and_nudge_router.rs:774-796, verified by direct read) now calls store.lookup_with_deadline_async(&team, &agent, remaining).await directly through a new AsyncGraftReceiverEndpointStore companion trait (crates/atm-storage/src/contract.rs:987-1002), modeled on the existing AsyncMessageStore supertrait/default-error layering convention (contract.rs:686-731). The SQLite implementation (graft_receiver_endpoint_store.rs:339-357) routes through SharedDb::read_with_deadline_async (shared_db.rs:243-257) into ReaderPool::submit (reader_pool.rs:428-539) -- the genuine async lane with persistent worker threads, mpsc dispatch, and tokio::time::timeout on both enqueue and reply legs, distinct from the sync read_with_deadline/submit_blocking path. No spawn_blocking or control_path_sync_bridge remains on this call path (confirmed by direct read and repo-wide grep). A deadline-expiry test (async_lookup_returns_hit_miss_and_deadline_error_from_reader_pool, graft_receiver_endpoint_store.rs:469-499) exercises a real Duration::ZERO timeout producing a DeadlineExpired error, not a stub. A new function-scoped regression guard (crates/atm-architecture/tests/boundary_enforcement.rs:2017-2036) source-slices graft_receiver_lookup's body and asserts presence of lookup_with_deadline_async plus absence of spawn_blocking/control_path_sync_bridge. Ripple touches in atm-core/service_runtime.rs, atm-storage/factory.rs, atm-storage/testing.rs, atm-runtime-test-support/lib.rs, atm-graft/runtime/mod.rs are narrow trait-type substitutions required for end-to-end wiring, not unrelated changes. Verified by four independent reviewers (req-qa, arch-qa, ruthless-boundary-qa, rust-qa-agent: fmt/clippy/test all green) plus my own direct read of the call site and grep sweep; diff does not touch crates/atm-daemon (legacy sync daemon, frozen Phase-AM deletion target). ruthless-boundary-qa raised one separate Important finding (RBQA-AW-POOL-ASYNC1-F001: no boundary TOML record exists for the new AsyncGraftReceiverEndpointStore trait, unlike its AsyncMessageStore precedent) -- independently confirmed via python3 .just/lint_boundaries.py passing green despite the gap; this is a real governance-coverage gap but does not regress or bear on QA-POOL-ASYNC-1's original ask and is routed to team-lead as a new finding for separate triage, not folded into this closure." ;
+  triage:resolvedAt "2026-09-06T21:15:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "09495c629" ;
+  triage:resolvedBranch "fix/aw-pool-graft-lookup-async" .

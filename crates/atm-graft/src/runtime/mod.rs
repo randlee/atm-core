@@ -1720,7 +1720,7 @@ mod tests {
         // `atm-http-runtime`'s own replacement-router tests use to reach a
         // real SQLite-backed store: `atm-graft` may not depend on
         // `atm-storage-rusqlite` directly (repository boundary lint).
-        let store: Arc<Mutex<Arc<dyn atm_core::GraftReceiverEndpointStore + Send + Sync>>> =
+        let store: Arc<Mutex<Arc<dyn atm_core::AsyncGraftReceiverEndpointStore + Send + Sync>>> =
             Arc::new(Mutex::new(
                 atm_runtime_test_support::open_graft_receiver_endpoint_store(&db_path)
                     .expect("open sqlite-backed graft receiver endpoint store"),
@@ -1766,15 +1766,16 @@ mod tests {
 
         let team = TeamName::from_validated(TEST_TEAM);
         let agent = AgentName::from_validated(TEST_QA);
-        let lookup =
-            |store: &Arc<Mutex<Arc<dyn atm_core::GraftReceiverEndpointStore + Send + Sync>>>| {
-                store
-                    .lock()
-                    .expect("store")
-                    .lookup(&team, &agent)
-                    .ok()
-                    .flatten()
-            };
+        let lookup = |store: &Arc<
+            Mutex<Arc<dyn atm_core::AsyncGraftReceiverEndpointStore + Send + Sync>>,
+        >| {
+            store
+                .lock()
+                .expect("store")
+                .lookup(&team, &agent)
+                .ok()
+                .flatten()
+        };
         assert!(
             wait_until(Duration::from_secs(3), || lookup(&store).is_some()),
             "the initial announce must persist a lease before any daemon restart"
