@@ -90,6 +90,8 @@ async fn query_diagnostics(
         .map(DiagnosticCursor::decode)
         .transpose()
         .map_err(|_| diagnostics_error(StatusCode::BAD_REQUEST, "cursor is invalid"))?;
+    let query_deadline = state.query_deadline;
+    let query_workers = Arc::clone(&state.query_workers);
     let store = state.store.ok_or_else(|| {
         diagnostics_error(
             StatusCode::SERVICE_UNAVAILABLE,
@@ -106,37 +108,8 @@ async fn query_diagnostics(
         limit: Some(limit + 1),
         cursor,
     };
-    let worker_permit = state
-        .query_workers
-        .clone()
-        .try_acquire_owned()
-        .map_err(|_| {
-            diagnostics_error(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "diagnostic timeline query admission is saturated",
-            )
-        })?;
-    let query_future = tokio::task::spawn_blocking(move || {
-        // Keep this permit in the blocking closure so a deadline response
-        // cannot release capacity while the synchronous SQLite query lives.
-        let _worker_permit = worker_permit;
-        store.query(&storage_query)
-    });
-    let mut events = tokio::time::timeout(state.query_deadline, query_future)
-        .await
-        .map_err(|_| {
-            diagnostics_error(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "diagnostic timeline query exceeded its bounded deadline",
-            )
-        })?
-        .map_err(|_| {
-            diagnostics_error(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "diagnostic timeline query worker stopped",
-            )
-        })?
-        .map_err(|error| diagnostics_error(StatusCode::SERVICE_UNAVAILABLE, error.to_string()))?;
+    let mut events =
+        run_bounded_diagnostics_query(query_deadline, query_workers, store, storage_query).await?;
     let truncated = events.len() > limit;
     events.truncate(limit);
     let next_cursor = truncated.then(|| {
@@ -154,6 +127,44 @@ async fn query_diagnostics(
         truncated,
         next_cursor,
     }))
+}
+
+/// Admit, execute, and bound one diagnostics query against the storage
+/// backend: acquire a worker permit, run the query on the blocking pool, and
+/// enforce the caller's overall deadline across that whole hop.
+async fn run_bounded_diagnostics_query(
+    query_deadline: Duration,
+    query_workers: Arc<tokio::sync::Semaphore>,
+    store: Arc<dyn DiagnosticTimelineStore>,
+    storage_query: atm_runtime::DiagnosticQuery,
+) -> Result<Vec<atm_runtime::DiagnosticEvent>, axum::response::Response> {
+    let worker_permit = query_workers.try_acquire_owned().map_err(|_| {
+        diagnostics_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "diagnostic timeline query admission is saturated",
+        )
+    })?;
+    let query_future = tokio::task::spawn_blocking(move || {
+        // Keep this permit in the blocking closure so a deadline response
+        // cannot release capacity while the synchronous SQLite query lives.
+        let _worker_permit = worker_permit;
+        store.query(&storage_query)
+    });
+    tokio::time::timeout(query_deadline, query_future)
+        .await
+        .map_err(|_| {
+            diagnostics_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "diagnostic timeline query exceeded its bounded deadline",
+            )
+        })?
+        .map_err(|_| {
+            diagnostics_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "diagnostic timeline query worker stopped",
+            )
+        })?
+        .map_err(|error| diagnostics_error(StatusCode::SERVICE_UNAVAILABLE, error.to_string()))
 }
 
 fn diagnostic_record(event: atm_runtime::DiagnosticEvent) -> DiagnosticTimelineRecord {
