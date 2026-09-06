@@ -725,6 +725,21 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
         deadline: ReadDeadline,
     ) -> Result<Vec<Message>, ReadLaneError>;
 
+    /// Runs a bounded exploratory mailbox list through the tool-class slice
+    /// of the shared reader pool.
+    ///
+    /// Implementations that do not distinguish reader-pool classes retain
+    /// the ordinary read-only behavior. SQLite overrides this so operator and
+    /// CLI enumeration cannot consume every reader worker.
+    async fn list_messages_for_tool(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        self.list_messages(scope, query, deadline).await
+    }
+
     async fn load_message(
         &self,
         scope: MailboxScope,

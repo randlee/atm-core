@@ -207,7 +207,7 @@ impl SqliteMessageStore {
     }
 
     fn load_message_state_row(
-        &self,
+        db: &SharedDb,
         connection: &Connection,
         team: &TeamName,
         agent: &AgentName,
@@ -229,10 +229,7 @@ impl SqliteMessageStore {
                 },
             )
             .optional()
-            .map_err(|error| {
-                self.db
-                    .error("failed to load sqlite message-state row", error)
-            })?
+            .map_err(|error| db.error("failed to load sqlite message-state row", error))?
             .map(|(read, pending_ack_at, acknowledged_at, expires_at)| {
                 Ok(StoredMailMessageState {
                     read: read != 0,
@@ -302,13 +299,16 @@ impl MessageStore for SqliteMessageStore {
     }
 
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError> {
-        let record = self.db.with_connection(|connection| {
+        let key = key.clone();
+        let query_key = key.clone();
+        let db = Arc::clone(&self.db);
+        let record = self.db.read(move |connection| {
             let loaded = connection
                 .query_row(
                     "SELECT team, agent, envelope_json
                      FROM mail_messages
                      WHERE message_key = ?1;",
-                    params![key.as_ref()],
+                    params![query_key.as_ref()],
                     |row| {
                         Ok((
                             row.get::<_, String>(0)?,
@@ -318,20 +318,21 @@ impl MessageStore for SqliteMessageStore {
                     },
                 )
                 .optional()
-                .map_err(|error| self.db.error("failed to load sqlite message", error))?;
+                .map_err(|error| db.error("failed to load sqlite message", error))?;
 
             if let Some((team, agent, envelope_json)) = loaded {
                 let team: TeamName = team.parse().map_err(|error| {
                     AtmError::validation(format!(
-                        "failed to parse sqlite team for message {key}: {error}"
+                        "failed to parse sqlite team for message {query_key}: {error}"
                     ))
                 })?;
                 let agent: AgentName = agent.parse().map_err(|error| {
                     AtmError::validation(format!(
-                        "failed to parse sqlite agent for message {key}: {error}"
+                        "failed to parse sqlite agent for message {query_key}: {error}"
                     ))
                 })?;
-                let state = self.load_message_state_row(connection, &team, &agent, key)?;
+                let state =
+                    Self::load_message_state_row(&db, connection, &team, &agent, &query_key)?;
                 Ok(Some((team, agent, envelope_json, state)))
             } else {
                 Ok(None)
@@ -353,7 +354,9 @@ impl MessageStore for SqliteMessageStore {
     }
 
     fn list_messages(&self, query: &MessageQuery) -> Result<Vec<Message>, AtmError> {
-        self.db.with_connection(|connection| {
+        let query = query.clone();
+        let db = Arc::clone(&self.db);
+        self.db.read(move |connection| {
             let limit = query
                 .limit
                 // The shared contract accepts usize, but SQLite LIMIT is i64.
@@ -381,7 +384,7 @@ impl MessageStore for SqliteMessageStore {
                      ORDER BY mail_messages.message_at DESC, mail_messages.message_key DESC
                      LIMIT ?5;",
                 )
-                .map_err(|error| self.db.error("failed to prepare sqlite message list query", error))?;
+                .map_err(|error| db.error("failed to prepare sqlite message list query", error))?;
             let rows = statement
                 .query_map(
                     params![
@@ -393,12 +396,12 @@ impl MessageStore for SqliteMessageStore {
                     ],
                     |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
                 )
-                .map_err(|error| self.db.error("failed to execute sqlite message list query", error))?;
+                .map_err(|error| db.error("failed to execute sqlite message list query", error))?;
 
             let mut messages = Vec::new();
             for row in rows {
                 let (message_key, envelope_json) =
-                    row.map_err(|error| self.db.error("failed to decode sqlite message row", error))?;
+                    row.map_err(|error| db.error("failed to decode sqlite message row", error))?;
                 let message_key = MessageKey::new(message_key).map_err(|error| {
                     AtmError::validation(format!(
                         "failed to parse sqlite message key during list: {error}"
@@ -406,7 +409,13 @@ impl MessageStore for SqliteMessageStore {
 
                 })?;
                 let state =
-                    self.load_message_state_row(connection, &query.team, &query.agent, &message_key)?;
+                    Self::load_message_state_row(
+                        &db,
+                        connection,
+                        &query.team,
+                        &query.agent,
+                        &message_key,
+                    )?;
                 let envelope: MessageEnvelope =
                     deserialize_json(&envelope_json, "sqlite message envelope")?;
                 let envelope = Self::apply_loaded_state(envelope, state.as_ref());
@@ -426,7 +435,10 @@ impl MessageStore for SqliteMessageStore {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Option<MailboxBucketCounts>, AtmError> {
-        self.db.with_connection(|connection| {
+        let team = team.clone();
+        let agent = agent.clone();
+        let db = Arc::clone(&self.db);
+        self.db.read(move |connection| {
             let sql = "WITH visible AS (
                     SELECT
                         mail_messages.message_id,
@@ -480,8 +492,7 @@ impl MessageStore for SqliteMessageStore {
                     Ok((row.get(0)?, row.get(1)?, row.get(2)?))
                 })
                 .map_err(|error| {
-                    self.db
-                        .error("failed to aggregate sqlite mailbox bucket counts", error)
+                    db.error("failed to aggregate sqlite mailbox bucket counts", error)
                 })?;
             Ok(Some(MailboxBucketCounts {
                 unread: usize::try_from(unread).map_err(|_| {
@@ -964,8 +975,9 @@ mod tests {
         DecomposedMessageRecord, InstanceTag, MergedVarsJson, MessageSearchQuery, SearchAtom,
         SearchDeadline, SearchExpression, SearchGroupBy, SearchGroupField, SearchKey, SearchLimit,
         SearchMetadataMatch, SearchValue, SimpleAggregate, StorageFactory, TemplateFirstSeen,
-        TemplateFrontmatter, TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
-        TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
+        TemplateFrontmatter, TemplateListFilter, TemplateMessageAdmission, TemplateOutputFormat,
+        TemplateRegistration, TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission,
+        WorkflowScopeId,
     };
     use chrono::Utc;
     use rusqlite::{Connection, OptionalExtension, params};
@@ -2211,6 +2223,21 @@ mod tests {
         assert_eq!(loaded.content_bytes, template.content_bytes);
         assert_eq!(loaded.content_text, template.content_text);
         assert_eq!(
+            catalog
+                .load_for_tool(&template.sha)
+                .expect("tool-capped load")
+                .expect("template exists")
+                .sha,
+            template.sha
+        );
+        assert_eq!(
+            catalog
+                .list_for_tool(TemplateListFilter::default())
+                .expect("tool-capped list")
+                .len(),
+            1
+        );
+        assert_eq!(
             loaded
                 .frontmatter
                 .template_tags
@@ -3188,6 +3215,21 @@ mod tests {
         assert_eq!(listed.len(), 2);
         assert!(listed.contains(&first));
         assert!(listed.contains(&second));
+        let tool_listed = reader
+            .list_messages_for_tool(
+                scope.clone(),
+                MessageQuery {
+                    team: team(),
+                    agent: agent(),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                },
+                deadline,
+            )
+            .await
+            .expect("tool-class reader list");
+        assert_eq!(tool_listed, listed);
         assert_eq!(
             reader
                 .load_message(scope.clone(), first.message_key.clone(), deadline)

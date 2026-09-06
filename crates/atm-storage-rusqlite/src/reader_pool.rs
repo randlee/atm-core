@@ -577,6 +577,27 @@ impl ReaderPool {
         self.submit_blocking_with_class_at(expires_at, Some(permit), operation)
     }
 
+    /// Submits a synchronous compatibility read through the shared pool.
+    ///
+    /// Older sealed storage contracts are synchronous, but their pure reads
+    /// must still never borrow the serial writer connection. This path keeps
+    /// the same bounded queue and deadline behavior as async agent reads.
+    pub(crate) fn submit_blocking<T, F>(
+        &self,
+        deadline: Duration,
+        operation: F,
+    ) -> Result<T, ReadLaneError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
+    {
+        self.submit_blocking_with_class_at(deadline_at(deadline)?, None, operation)
+    }
+
+    pub(crate) fn request_deadline(&self) -> Duration {
+        self.inner.config.request_deadline
+    }
+
     fn submit_blocking_with_class_at<T, F>(
         &self,
         expires_at: Instant,
@@ -1003,6 +1024,22 @@ mod tests {
             ReaderPoolConfig::shared_defaults().request_deadline,
             expected,
         );
+    }
+
+    #[test]
+    fn synchronous_compatibility_reads_run_on_a_reader_worker() {
+        let pool = test_pool(test_config(1, 1, Duration::from_millis(20), 1));
+        let answer = pool
+            .submit_blocking(Duration::from_secs(1), |connection, _| {
+                connection
+                    .query_row("SELECT 1;", [], |row| row.get::<_, i64>(0))
+                    .map_err(|error| atm_storage::ReadLaneError::Unavailable {
+                        message: error.to_string(),
+                    })
+            })
+            .expect("bounded compatibility read");
+        assert_eq!(answer, 1);
+        assert_eq!(pool.metrics().lane, "test");
     }
 
     #[test]

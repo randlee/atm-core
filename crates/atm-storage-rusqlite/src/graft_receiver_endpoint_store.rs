@@ -103,16 +103,19 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
             })
             .map_err(storage_error)?;
         if changed == 0 {
+            let lookup_team = team.clone();
+            let lookup_agent = agent.clone();
+            let db = Arc::clone(&self.db);
             let present: bool = self
                 .db
-                .with_connection(|connection| {
+                .read(move |connection| {
                     connection
                         .query_row(
                             "SELECT EXISTS(SELECT 1 FROM graft_receiver_endpoints WHERE team = ?1 AND agent = ?2)",
-                            params![team.as_str(), agent.as_str()],
+                            params![lookup_team.as_str(), lookup_agent.as_str()],
                             |row| row.get(0),
                         )
-                        .map_err(|error| self.db.error("failed to inspect graft receiver lease", error))
+                        .map_err(|error| db.error("failed to inspect graft receiver lease", error))
                 })
                 .map_err(storage_error)?;
             return Err(if present {
@@ -175,8 +178,11 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+        let team = team.clone();
+        let agent = agent.clone();
+        let db = Arc::clone(&self.db);
         self.db
-            .with_connection(|connection| {
+            .read(move |connection| {
                 connection
                     .query_row(
                         "SELECT endpoint, capability, owner_generation,
@@ -222,10 +228,7 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
                         },
                     )
                     .optional()
-                    .map_err(|error| {
-                        self.db
-                            .error("failed to look up graft receiver endpoint", error)
-                    })
+                    .map_err(|error| db.error("failed to look up graft receiver endpoint", error))
             })
             .map_err(storage_error)
     }
