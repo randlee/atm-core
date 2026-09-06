@@ -134,7 +134,10 @@ pub use api::{
     MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline,
 };
 pub use atm_storage::derive_ack_requirement;
-pub use atm_storage::{GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease};
+pub use atm_storage::{
+    AsyncGraftReceiverEndpointStore, GraftEndpointStoreError, GraftReceiverEndpointStore,
+    GraftReceiverLease,
+};
 pub use atm_storage::{TemplateFrontmatter, TemplateSha};
 pub use atm_temp::{
     AtmTemp, AtmTempError, EnvSource, ProcessEnvSource, resolve_atm_temp, send_to_staging_dir,
