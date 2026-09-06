@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY2-QA-008>
+  a triage:Finding ;
+  triage:findingId "AY2-QA-008" ;
+  triage:title "atm-herdr fixture test suite never executes in CI on any OS lane (test-utils feature never enabled)" ;
+  triage:description "quality-mgr (qa-pr1269-r3, https://github.com/randlee/atm-core/pull/1269#issuecomment-5563041731, independently confirmed by req-qa ATM-QA-001). AY2-QA-007's fix (transport_fixture.rs file-level #![cfg(feature = \"test-utils\")] gating) correctly fixes bare `cargo test -p atm-herdr` compiling, but converts the visible compile failure into a silent CI-coverage gap: .github/workflows/ci.yml's only cargo-test invocation for this crate (line 342, `cargo test --workspace --exclude atm-daemon --verbose`) never passes --all-features or --features test-utils, on any OS lane including windows-latest (which is in that job's matrix). atm-herdr's test-utils feature has no [features] default entry, so it is off unless explicitly requested. Result: the four new fixture tests (production_transport_tolerates_unknown_fields_and_crlf, replay_runs_twice_through_one_production_invoker, every_manifest_drives_its_declared_mode_and_delta, production_transport_round_trips_argv_and_two_sessions) pass locally with --all-features but never compile or run under any CI job, ever. This directly falsifies the sprint's AC1 (\"entire ADR-058 suite green on macOS and Linux\"), AC2 (\"windows-latest CI lane executes, rather than cfg-skips, every process-behaviour test\"), and AC3 (manifest-driven replay CI-proof) as CI-verified claims -- they are proven only by an uncited local run. The sprint doc's own required-validation line (docs/plans/phase-ay/sprint-AY.2-herdr-transport-seam.md:269, `cargo test -p atm-herdr --all-features`) diverges from what CI actually enforces." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope ".github/workflows/ci.yml, crates/atm-herdr/Cargo.toml, crates/atm-herdr/tests/transport_fixture.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T23:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY2 ;
+  triage:foundAt "2026-09-06T23:16:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-008/AY2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY2-QA-008/AY2-1>
+  a triage:Occurrence ;
+  triage:file ".github/workflows/ci.yml" ;
+  triage:line 342 ;
+  triage:snippet "cargo test --workspace --exclude atm-daemon --verbose" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "6021aa630" ;
+  triage:occursIn <urn:atm:triage:worktree/AY2/6021aa630> .
+
+<urn:atm:triage:worktree/AY2/6021aa630>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1269-r3" ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "6021aa630" ;
+  triage:orderIndex 0 .

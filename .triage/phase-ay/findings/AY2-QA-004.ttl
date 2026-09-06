@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-herdr/src/**/*.rs" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T23:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY2 ;
@@ -30,6 +30,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY3-3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY3-4> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY3-5> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY2-QA-004/1> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY2-QA-004/AY2-1>
@@ -37,10 +38,10 @@
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 5 ;
   triage:snippet "#[cfg(any())] use std::process::Stdio;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay2-herdr-transport-seam" ;
-  triage:headSha "9839b90c5" ;
+  triage:headSha "6021aa630" ;
   triage:occursIn <urn:atm:triage:worktree/ay2/9839b90c5> .
 
 <urn:atm:triage:occurrence/AY2-QA-004/AY2-2>
@@ -48,10 +49,10 @@
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 13 ;
   triage:snippet "#[cfg(any())] use serde_json::Value;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay2-herdr-transport-seam" ;
-  triage:headSha "9839b90c5" ;
+  triage:headSha "6021aa630" ;
   triage:occursIn <urn:atm:triage:worktree/ay2/9839b90c5> .
 
 <urn:atm:triage:occurrence/AY2-QA-004/AY2-3>
@@ -59,10 +60,10 @@
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 15 ;
   triage:snippet "#[cfg(any())] use tokio::io::AsyncReadExt;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay2-herdr-transport-seam" ;
-  triage:headSha "9839b90c5" ;
+  triage:headSha "6021aa630" ;
   triage:occursIn <urn:atm:triage:worktree/ay2/9839b90c5> .
 
 <urn:atm:triage:occurrence/AY2-QA-004/AY2-4>
@@ -70,10 +71,10 @@
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 554 ;
   triage:snippet "#[cfg(any())] mod legacy_process_oracle {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay2-herdr-transport-seam" ;
-  triage:headSha "9839b90c5" ;
+  triage:headSha "6021aa630" ;
   triage:occursIn <urn:atm:triage:worktree/ay2/9839b90c5> .
 
 <urn:atm:triage:occurrence/AY2-QA-004/AY2-5>
@@ -81,10 +82,10 @@
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 803 ;
   triage:snippet "#[cfg(any())] mod legacy_parser_oracle {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay2-herdr-transport-seam" ;
-  triage:headSha "9839b90c5" ;
+  triage:headSha "6021aa630" ;
   triage:occursIn <urn:atm:triage:worktree/ay2/9839b90c5> .
 
 <urn:atm:triage:occurrence/AY2-QA-004/AY3-1>
@@ -162,3 +163,12 @@
   triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
   triage:headSha "0b0bfa304" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/AY2-QA-004/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-06T23:45:00Z"^^xsd:dateTime ;
+  triage:fixCommit "6021aa630" ;
+  triage:fixBranch "feature/ay2-herdr-transport-seam" ;
+  triage:verifiedInRound "qa-pr1269-r3" ;
+  triage:resolutionNote "On feature/ay2-herdr-transport-seam only (cipher): legacy_process_oracle, legacy_parser_oracle, and their three orphaned #[cfg(any())] imports fully deleted from crates/atm-herdr/src/lib.rs. Confirmed by unanimous zero-hit grep sweep across arch-qa and req-qa (full crate/workspace search for cfg(any()), legacy_process_oracle, legacy_parser_oracle -- only remaining hits are inside this triage record itself). Finding-level status stays fixed_partial: the feature/ay3-herdr-endpoint-doctor-config occurrences remain open pending merge-forward." .

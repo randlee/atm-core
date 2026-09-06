@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-herdr/tests/, crates/atm-herdr/src/transport.rs, crates/atm-herdr/src/transport_cli.rs, docs/plans/phase-ay/sprint-AY.2-*.md D5/AC6" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T23:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY2 ;
@@ -23,6 +23,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-002/integrate-0-ay2qa002> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-002/ay2-1-ay2qa002> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-002/ay3-2-ay2qa002> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY2-QA-002/1> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY2-QA-002/integrate-0-ay2qa002>
@@ -41,11 +42,12 @@
   triage:file "crates/atm-herdr/src/transport_cli.rs" ;
   triage:line 162 ;
   triage:snippet "fn decode_envelope - missing transport-seam tests" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay2-herdr-transport-seam" ;
-  triage:headSha "9839b90c5" ;
-  triage:occursIn <urn:atm:triage:worktree/ay2-9839b90c5> .
+  triage:headSha "6021aa630" ;
+  triage:occursIn <urn:atm:triage:worktree/ay2-9839b90c5> ;
+  triage:note "Code-correctness fixed: transport_fixture.rs now drives every manifest through the real HerdrProcessInvoker/CliIo/decode_envelope path with mode-specific assertions (qa-pr1269-r3). CI-execution of these tests is tracked separately as AY2-QA-008 (never enabled in ci.yml)." .
 
 <urn:atm:triage:occurrence/AY2-QA-002/ay3-2-ay2qa002>
   a triage:Occurrence ;
@@ -78,3 +80,19 @@
   triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
   triage:headSha "0b0bfa304" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AY2/6021aa630>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1269-r3" ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "6021aa630" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/AY2-QA-002/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-06T23:40:00Z"^^xsd:dateTime ;
+  triage:fixCommit "6021aa630" ;
+  triage:fixBranch "feature/ay2-herdr-transport-seam" ;
+  triage:verifiedInRound "qa-pr1269-r3" ;
+  triage:resolutionNote "On feature/ay2-herdr-transport-seam only (arch-ctm AY2-FIX-R3): transport_fixture.rs's fixture tests now thread each manifest's declared mode/delta into FAKE_HERDR_MODE/FAKE_HERDR_DELTA and drive the real HerdrProcessInvoker/CliIo/decode_envelope path, asserting mode-specific outcomes rather than bare success. Confirmed by req-qa (direct read of transport_fixture.rs:51-153). Finding-level status stays fixed_partial: the integrate/phase-ay and feature/ay3-herdr-endpoint-doctor-config occurrences have not merged this fix forward. Note: passing locally does not mean these tests run in CI -- see AY2-QA-008 (new, Blocking) for the separate CI-coverage gap." .

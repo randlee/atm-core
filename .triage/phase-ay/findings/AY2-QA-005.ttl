@@ -15,13 +15,14 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-herdr/src/transport.rs, crates/atm-herdr/src/transport_cli.rs, crates/atm-herdr/src/lib.rs HerdrError definition" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T23:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY2 ;
   triage:foundAt "2026-09-06T23:05:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-005/AY2-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-005/AY3-1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY2-QA-005/1> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY2-QA-005/AY2-1>
@@ -29,10 +30,10 @@
   triage:file "crates/atm-herdr/src/transport.rs" ;
   triage:line 177 ;
   triage:snippet "let _ = (&error.message, error.retry_after_ms);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay2-herdr-transport-seam" ;
-  triage:headSha "9839b90c5" ;
+  triage:headSha "6021aa630" ;
   triage:occursIn <urn:atm:triage:worktree/ay2/9839b90c5> .
 
 <urn:atm:triage:occurrence/AY2-QA-005/AY3-1>
@@ -66,3 +67,12 @@
   triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
   triage:headSha "0b0bfa304" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/AY2-QA-005/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-06T23:45:00Z"^^xsd:dateTime ;
+  triage:fixCommit "6021aa630" ;
+  triage:fixBranch "feature/ay2-herdr-transport-seam" ;
+  triage:verifiedInRound "qa-pr1269-r3" ;
+  triage:resolutionNote "On feature/ay2-herdr-transport-seam only (cipher): message threaded into HerdrError::ServerUnavailable/InternalError/Advisory variants and surfaced in recovery text; retry_after_ms threaded into ServerUnavailable.retry_after and consumed by breaker_retry_after()/record_infrastructure_failure_with_retry_after. Confirmed by req-qa (crates/atm-herdr/src/transport.rs:173-201, crates/atm-herdr/src/lib.rs:98-113,149-225,590-591); accompanying crates/atm-http-runtime/src/herdr_queue_wake.rs change only touches atm-herdr's existing public surface (arch-qa, req-qa). Finding-level status stays fixed_partial pending merge-forward to feature/ay3-herdr-endpoint-doctor-config." .

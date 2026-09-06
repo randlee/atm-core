@@ -15,13 +15,14 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-herdr/Cargo.toml" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T23:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY2 ;
   triage:foundAt "2026-09-06T23:05:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-006/AY2-F1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-006/AY3-F1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY2-QA-006/1> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY2-QA-006/AY2-F1>
@@ -29,10 +30,10 @@
   triage:file "crates/atm-herdr/Cargo.toml" ;
   triage:line 21 ;
   triage:snippet "name = fake-herdr" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay2-herdr-transport-seam" ;
-  triage:headSha "9839b90c5" ;
+  triage:headSha "6021aa630" ;
   triage:occursIn <urn:atm:triage:worktree/AY2/9839b90c5> .
 
 <urn:atm:triage:occurrence/AY2-QA-006/AY3-F1>
@@ -66,3 +67,12 @@
   triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
   triage:headSha "0b0bfa304" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/AY2-QA-006/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-06T23:45:00Z"^^xsd:dateTime ;
+  triage:fixCommit "6021aa630" ;
+  triage:fixBranch "feature/ay2-herdr-transport-seam" ;
+  triage:verifiedInRound "qa-pr1269-r3" ;
+  triage:resolutionNote "On feature/ay2-herdr-transport-seam only (cipher): required-features = [\"test-utils\"] added to the fake-herdr [[bin]] entry. Confirmed by ruthless-boundary-qa and req-qa (crates/atm-herdr/Cargo.toml:20-25). Finding-level status stays fixed_partial pending merge-forward to feature/ay3-herdr-endpoint-doctor-config." .
