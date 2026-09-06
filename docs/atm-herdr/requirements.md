@@ -19,8 +19,10 @@ emitter/selector wiring, or `atm-http-runtime` queue-pump orchestration.
 
 This crate is introduced by Phase AQ (sprints AQ2.6 and AQ2.7) and is
 governed by [ADR-058](../adr/ADR-058-herdr-local-steer-backend-contract.md),
-which pins the Herdr release and records every argv, exit-code, and
-error-code claim this crate relies on. Where any other document disagrees
+which records every argv, exit-code, and error-code claim this crate relies
+on. Release compatibility is governed by the ledger in
+[`herdr-versions.md`](herdr-versions.md) under ADR-061; ADR-058 remains
+authoritative for the operation contract. Where any other document disagrees
 with ADR-058 on Herdr's own behavior, ADR-058 is authoritative; this
 document cites it by decision id (`D1`-`D10.1`).
 
@@ -29,11 +31,12 @@ document cites it by decision id (`D1`-`D10.1`).
 `atm-herdr` owns:
 
 - the `HerdrProcessAdapter` trait: the async `prompt` / `wait` / `get` /
-  `list` contract consumed by the immediate steer path and the AQ2.7
-  queue-tick pump
+  `list` / `notify` contract consumed by immediate steer, the AQ2.7
+  queue-tick pump, and lead escalation notification paths
 - `HerdrProcessInvoker`, the concrete `tokio::process`-backed
   implementation: argv construction for every `herdr agent ...` shape this
-  crate emits (`prompt`, `wait`, `get`, `list`), `HERDR_SESSION` set on the
+  crate emits (`prompt`, `wait`, `get`, `list`) and the `notification show`
+  shape emitted by `notify`, `HERDR_SESSION` set on the
   **child process environment, per invocation**, only when the calling
   member's roster row (or, for `list`, the caller-supplied session)
   carries a `Some` session (ADR-058 D1's per-member model; the daemon's
@@ -59,9 +62,10 @@ document cites it by decision id (`D1`-`D10.1`).
 - a fake `HerdrProcessAdapter` implementation behind a `test-utils` Cargo
   feature, recording every call for assertion, for use by every consumer
   crate's tests
-- the Herdr version/protocol pin: `herdr` `0.8.2`, wire protocol `20`
-  (ADR-058 "Pinned Herdr revision"), and the fixture-currency obligation
-  that keeps this crate's parsing in step with a pin bump
+- the Herdr compatibility policy: every Herdr release at or above
+  `HERDR_MINIMUM_VERSION` (`0.8.0`) is supported simultaneously by one ATM
+  build; v0.8.2 is the current design/recording target and
+  `PROTOCOL_VERSION` is recorded as a secondary fact in `herdr-versions.md`
 
 `atm-herdr` does not own:
 
@@ -105,10 +109,10 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
 ### 3.1 Functional Requirements
 
 - `HR-CORE-001` `atm-herdr` owns the `HerdrProcessAdapter` trait with
-  `prompt`, `wait`, `get`, and `list` methods, each returning a typed
-  outcome or `HerdrError` over an injected external deadline. This is the
-  only cross-crate contract point; no consumer constructs `herdr` argv
-  itself.
+  `prompt`, `wait`, `get`, `list`, and `notify` methods. The agent methods
+  return typed outcomes and `notify` returns `()` or `HerdrError`, all over
+  an injected external deadline. This is the only cross-crate contract
+  point; no consumer constructs `herdr` argv itself.
 - `HR-CORE-002` `HerdrProcessInvoker::prompt` emits exactly
   `herdr agent prompt <AgentName> <text>` (ADR-058 D2) with no `--wait` and
   no other flag. `<text>` is the caller-supplied rendered built-in nudge
@@ -184,6 +188,16 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
   always runs under `BreakerPolicy::Bypass` (`HR-SAFE-007`) and is
   therefore outside this sharing: it never opens, closes, or is blocked by
   the breaker.
+
+- `HR-PLAT-001` ATM exposes the same Herdr command set, typed errors, and
+  breaker semantics on macOS, Linux, and Windows. UDS versus named-pipe
+  transport is an implementation detail and MUST NOT create a
+  platform-specific feature set.
+- `HR-LIFE-001` The ATM daemon never depends on Herdr for startup or
+  readiness, never starts or stops Herdr, and does not restart for a Herdr
+  upgrade. Missing, late, unreachable, or crashed Herdr is reported as a
+  bounded per-call failure on the Herdr harness while ATM messaging, tmux,
+  Hermes, and doctor remain up.
 
 ### 3.2 Safety Requirements
 
@@ -283,17 +297,19 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
 
 - `HR-TEST-001` A fake `HerdrProcessAdapter` implementation, gated behind
   the `test-utils` Cargo feature, records every `prompt` / `wait` / `get` /
-  `list` call (agent, session, and — for `wait` — the requested `--until`
-  set and timeout) for assertion and is configurable to return any
+  `list` / `notify` call (agent/session for agent calls, title/body for
+  `notify`, and — for `wait` — the requested `--until` set and timeout) for
+  assertion and is configurable to return any
   `HerdrError` variant or outcome. It is the sole test double any
   consumer crate uses below the adapter boundary (precedent: AQ2.6/AQ2.7's
   `forbidden_test_bypasses` rule forbidding a real `HerdrProcessInvoker` in
   non-live test paths).
 - `HR-TEST-002` Argv-construction tests assert byte-for-byte equality
   against `herdr-cli-contract-fixture.md`'s F1/F2/F3 argv rows for every
-  emitted shape (`prompt`, `wait`, `get`, `list`), including the `--until`
-  ordering and the millisecond `--timeout` value, so a future refactor
-  cannot silently drift from the pinned contract.
+  emitted agent shape (`prompt`, `wait`, `get`, `list`), including the
+  `--until` ordering and the millisecond `--timeout` value; `notify` is
+  asserted against HR-CORE-010's notification argv. A future refactor
+  cannot silently drift from the contract.
 - `HR-TEST-003` Stderr-parsing tests cover every row of ADR-058 D8's
   error-code table plus F1.8/F2.8/F3.5's argv-construction-bug rows
   (asserted unreachable by construction, never merely "not tested"), each
@@ -320,16 +336,21 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
   failure counter (ADR-058 D10.1 "Required evidence").
 - `HR-TEST-006` No test in this crate, or in any consumer crate's test
   suite, invokes a live `herdr` binary or a live Herdr server. CI never
-  depends on Herdr being installed. Live validation is a separate,
-  manually-run transcript procedure (ADR-058 "Required evidence";
-  `herdr-cli-contract-fixture.md` §F5) outside the automated test suite.
+  depends on Herdr being installed. The portable fake-Herdr fixture replays
+  the recorded v0.8.2 operation set and the v0.8.0 and newer-version delta
+  modes for every supported release; each replay runs on every CI lane.
+  Live validation is a separate, manually-run transcript procedure (ADR-058
+  "Required evidence"; `herdr-cli-contract-fixture.md` §F5) outside the
+  automated test suite.
 
 ### 3.5 Version and Pin Policy
 
-- `HR-VER-001` `atm-herdr` targets Herdr `0.8.2`, wire protocol `20`
-  (ADR-058 "Pinned Herdr revision"). This crate's argv and parsing logic
-  are derived from the Herdr source at checkout `d79fd746`, verified
-  byte-identical to tag `v0.8.2` for every cited surface.
+- `HR-VER-001` `atm-herdr` supports every Herdr release at or above
+  `HERDR_MINIMUM_VERSION` (`0.8.0`) under ADR-061. The design and recording
+  target is Herdr `0.8.2`; its wire protocol `20` is recorded in
+  `herdr-versions.md` as a secondary fact. This crate's argv and parsing
+  logic are derived from the recorded v0.8.2 source revision and must remain
+  compatible with the v0.8.0 and master deltas in that ledger.
 - `HR-VER-002` A Herdr release that changes any row of ADR-058's
   exit-code or error-code tables is a fix-forward event for this crate —
   never a silent pin bump. AQ6's ecosystem preflight re-runs
@@ -373,9 +394,10 @@ The `atm-herdr` crate docs must remain aligned with:
 - `atm-herdr` does not run or wrap `agent start` or `agent rename`.
   These are operator/launch-convention commands (ADR-058 D6); the
   external team launcher runs them directly, not through this crate.
-- `atm-herdr` does not support Herdr on Windows in Phase AQ (ADR-058
-  "Explicitly NOT relied upon": named-pipe transport exists in Herdr but
-  is out of scope here).
+- Windows uses Herdr's named-pipe transport and has the same command,
+  error, and lifecycle contract as macOS/Linux. AY.7 owns Windows-specific
+  process correctness and CI evidence; this crate's portable contract does
+  not depend on live Windows evidence.
 - `atm-herdr` does not retry a lifecycle-shaped failure
   (`agent_blocked`, `agent_not_found`, `agent_not_ready`,
   `agent_target_ambiguous`) itself; retry/requeue/release policy for
@@ -394,14 +416,15 @@ The `atm-herdr` crate docs must remain aligned with:
 
 `req-qa` should treat these as fail-closed presence checks:
 
-- `HR-CORE-001`–`HR-CORE-005`
-  - `HerdrProcessAdapter` exists with exactly `prompt`, `wait`, `get`,
-    `list` methods; a grep for `herdr` argv literals or Herdr JSON field
+- `HR-CORE-001`–`HR-CORE-005`, `HR-CORE-010`
+  - `HerdrProcessAdapter` exists with `prompt`, `wait`, `get`, `list`, and
+    `notify` methods; a grep for `herdr` argv literals or Herdr JSON field
     names (`agent_status`, `error.code`, `agent_blocked`, …) outside
     `crates/atm-herdr` fails the source-audit gate (see
     `boundaries.md`)
-  - argv-equality tests exist for all four emitted shapes and match
-    `herdr-cli-contract-fixture.md` verbatim
+  - argv-equality tests exist for all four agent shapes and the notification
+    shape, matching `herdr-cli-contract-fixture.md` and HR-CORE-010
+    respectively
   - a grep of `atm-http-runtime`'s `HerdrQueueWakePump` confirms it calls
     `list` and `prompt`, never `wait`, in Phase AQ
 - `HR-CORE-006`

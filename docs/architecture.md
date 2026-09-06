@@ -134,6 +134,17 @@ Phase-S portability note:
   contract
 - Phase S planning is tracked in [`docs/plans/phase-S/plan-phase-S.md`](./plan-phase-S.md)
 
+### 1.4 Herdr local steer backend
+
+The Herdr local-steer client is documented in
+[`docs/atm-herdr/architecture.md`](./atm-herdr/architecture.md), especially
+section 12's Phase AY compatibility and platform contract. Its normative
+requirements, including the cross-platform command/error/lifecycle contract,
+are in [`docs/atm-herdr/requirements.md`](./atm-herdr/requirements.md).
+The Phase AQ2-6 Windows deferral is superseded: AY.7 owns Windows process
+correctness and release-readiness owns live Windows proof, while the supported
+Herdr contract remains shared across macOS, Linux, and Windows.
+
 Phase-AA simplification note:
 - the current daemon composition root and daemon-routed doctor model are not
   the intended steady-state architecture

@@ -219,6 +219,14 @@ pub trait HerdrProcessAdapter: Send + Sync {
         session: Option<&'a atm_core::HerdrSession>,
         deadline: atm_core::RequestDeadline,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<HerdrListOutcome, HerdrError>> + Send + 'a>>;
+
+    /// Shows a desktop notification without targeting a Herdr pane.
+    fn notify<'a>(
+        &'a self,
+        title: &'a str,
+        body: &'a str,
+        deadline: atm_core::RequestDeadline,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), HerdrError>> + Send + 'a>>;
 }
 
 // -- breaker ------------------------------------------------------------------
@@ -275,6 +283,7 @@ pub mod testing {
         Wait { agent: String, session: Option<atm_core::HerdrSession>, until: Vec<super::HerdrAgentStatus>, timeout: std::time::Duration },
         Get { agent: String, session: Option<atm_core::HerdrSession>, breaker_policy: super::BreakerPolicy },
         List { session: Option<atm_core::HerdrSession> },
+        Notify { title: String, body: String },
     }
 
     /// Records every call for assertion; configurable per-call outcome.
@@ -289,6 +298,7 @@ pub mod testing {
         pub fn queue_wait_result(&self, result: Result<super::HerdrWaitOutcome, super::HerdrError>) { /* .. */ }
         pub fn queue_get_result(&self, result: Result<super::HerdrGetOutcome, super::HerdrError>) { /* .. */ }
         pub fn queue_list_result(&self, result: Result<super::HerdrListOutcome, super::HerdrError>) { /* .. */ }
+        pub fn queue_notify_result(&self, result: Result<(), super::HerdrError>) { /* .. */ }
     }
 
     impl super::HerdrProcessAdapter for FakeHerdrProcessAdapter { /* .. */ }
@@ -566,3 +576,61 @@ following are not true:
 - exactly one `HerdrSpawnBreaker::new(` and one `HerdrProcessInvoker::new(`
   call site exist in the workspace, both inside
   `atm-daemon-bootstrap::build_replacement_handler` (finding 101, §9)
+
+## 12. Phase AY compatibility and platform contract
+
+Phase AY carries the Herdr client from the CLI process boundary toward native
+IPC: Unix-domain sockets on macOS/Linux and a named pipe on Windows. The
+transport difference is internal. The ATM-visible command set, typed errors,
+breaker semantics, bounded per-call failure model, and optional-dependency
+behaviour remain the same on all three platforms.
+
+The daemon does not own Herdr. Herdr owns its server, endpoint, session, and
+restart lifecycle; the ATM daemon neither launches Herdr nor waits for it at
+startup. A missing, late, unreachable, or crashed Herdr produces a bounded
+failure on the Herdr harness only. ATM messaging, tmux, Hermes, and doctor
+remain available. This rule applies to both the legacy CLI adapter during the
+AY transition and the native socket adapter; it does not authorize changes to
+the frozen synchronous daemon.
+
+### 12.1 Version-agnostic compatibility
+
+`HERDR_MINIMUM_VERSION` is the release floor and is owned by
+`crates/atm-herdr`; it is currently 0.8.0 under ADR-061. One ATM build
+supports every Herdr release at or above that floor. v0.8.2 is the design and
+recording target, while Herdr's integer `PROTOCOL_VERSION` is only a
+secondary bincode-client fact and is not the NDJSON compatibility floor.
+
+The single client implementation is deliberately version-agnostic:
+
+- new capabilities are additive or detected from `ping.version` and
+  `ping.capabilities`;
+- parsers key on stable error codes, tolerate unknown JSON fields, and never
+  match mutable error-message text;
+- the compatibility ledger at
+  [`herdr-versions.md`](herdr-versions.md) records the six operations,
+  per-release protocol facts, source drift, and the AY.2 recording-manifest
+  path (`crates/atm-herdr/tests/fixtures/herdr-versions/manifest.json`);
+- a release adds a recording set only when drift changes an ATM operation;
+  an unabsorbable change is escalated to Rand for a minimum-version decision
+  or an approved second implementation.
+
+### 12.2 Platform ownership and evidence
+
+The Herdr client contract does not claim live Windows evidence. AY.7 owns
+Windows-specific process correctness: console suppression, per-spawn binary
+resolution, CRLF-tolerant decoding, named-pipe handling, and kill-then-reap
+behaviour. Release readiness owns live Windows proof and the official
+benchmark. AY.1 records the audit and compatibility contract; it does not
+invent a Windows pass result.
+
+The former Phase AQ statement that Windows was outside scope is superseded.
+The supported-platform rule is instead recorded by HR-PLAT-001 and
+HR-LIFE-001 in `docs/atm-herdr/requirements.md` and by the Phase AY amendment
+to ADR-058. The three ATM-owned layers remain separate:
+
+```text
+Herdr lifecycle and endpoint ownership  ->  Herdr
+ATM transport/client + bounded failures ->  atm-herdr
+ATM startup, messaging, doctor policy   ->  atm-http-runtime / composition root
+```
