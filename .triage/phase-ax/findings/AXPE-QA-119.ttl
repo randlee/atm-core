@@ -1,0 +1,55 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AXPE-RECHECK-FIX-R1-1788718441 (QA-1 on PR #1255) observed in a full-workspace test run; pre-existing on integrate/phase-ax; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1255#issuecomment-5561237864 Native id: ATM-QA-206.
+
+<urn:atm:triage:finding/AXPE-QA-119>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-119" ;
+  triage:title "Intermittent failure of atm_temp not_writable_io_error_is_logged_not_discarded (tracing-capture race)" ;
+  triage:description "rust-qa-agent's full `cargo test --workspace` failed atm_temp::tests::unix_only::not_writable_io_error_is_logged_not_discarded (crates/atm-core/src/atm_temp.rs:580 at the integrate head) in 1 of 2 full-workspace runs while 4 isolated agent-team-mail-core runs passed 583/583. Suspected cause: a race in the tracing-capture helper in crates/atm-core/src/test_support.rs (global tracing subscriber shared across concurrently running tests, so a capture can miss or receive another test's events). The capture_tracing function uses a process-global subscriber installed via set_global_default at line 287, with per-thread buffers keyed by ThreadId. In cargo test parallelism, two concurrent tests on the same thread (or thread reuse by the test harness) can interleave: the first test's capture_tracing call removes its buffer at line 296, runs the test, and collects logs; but if the thread is reused or events from other tests fire between removal and collection, the capture can miss events or receive another test's tracing output. Unrelated to PR #1255's diff; pre-existing. Per the no-flaky-tolerance rule this needs a root cause and a deterministic fix (e.g. per-test subscriber scoping with tracing::subscriber::with_default, or serializing the tests that install a global capture), not a rerun. Remediation must make the test deterministic under `cargo test --workspace` parallelism and must not weaken the assertion. The helper is capture_tracing at crates/atm-core/src/test_support.rs:210, which delegates to tracing_capture::capture; the actual race is in ensure_installed at line 280-288 where set_global_default is called exactly once via std::sync::Once, installing GlobalCaptureProxy. The fix should either use with_default per-scope (accepting the known with_default cache-rebuild cost documented in the comment at lines 188-205) and testing it does not regress with concurrent loads, or implement true per-test subscriber isolation." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "qa_round" ;
+  triage:category "rust-qa-agent" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T18:28:13Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T18:25:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-119/INTEGRATE-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-119/INTEGRATE-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-119/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/atm_temp.rs" ;
+  triage:line 580 ;
+  triage:snippet "fn not_writable_io_error_is_logged_not_discarded()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c2dce3b5897a6e8c1e9e9dc26f1efe4c05cbd318" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/c2dce3b5897a6e8c1e9e9dc26f1efe4c05cbd318> .
+
+<urn:atm:triage:occurrence/AXPE-QA-119/INTEGRATE-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/test_support.rs" ;
+  triage:line 210 ;
+  triage:snippet "pub fn capture_tracing<T>(f: impl FnOnce() -> T) -> (T, String)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c2dce3b5897a6e8c1e9e9dc26f1efe4c05cbd318" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/c2dce3b5897a6e8c1e9e9dc26f1efe4c05cbd318> .
+
+<urn:atm:triage:worktree/INTEGRATE/c2dce3b5897a6e8c1e9e9dc26f1efe4c05cbd318>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c2dce3b5897a6e8c1e9e9dc26f1efe4c05cbd318" ;
+  triage:orderIndex 12 .
