@@ -356,10 +356,8 @@ visibility (public).
    escalation whose lead write, every recipient write and `notify` all
    fail leaves `last_blocked_notice` unset and is retried on the next
    tick; one that reaches anyone is stamped.
-8. `awk '/^#\[cfg\(test\)\]/{exit} {n++} END{exit n>1000}'` passes for
-   `crates/atm-http-runtime/src/herdr_queue_wake.rs` and
-   `crates/atm-http-runtime/src/herdr_escalation.rs`; `docs/requirements.md`
-   §1 lists `atm escalation` as the Phase `AX` additive CLI feature.
+8. `python3 .just/check_line_counts.py` passes; `docs/requirements.md` §1
+   lists `atm escalation` as the Phase `AX` additive CLI feature.
 
 ## Required validation
 
