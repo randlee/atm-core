@@ -678,6 +678,14 @@ impl StorageFactory for SqliteStorageFactory {
             pool_size: self.read_pool_config.pool.pool_size.get(),
             queue_depth: self.read_pool_config.pool.queue_depth.get(),
             tool_class_max_in_flight: self.read_pool_config.pool.tool_class_max_in_flight,
+            mailbox: EffectiveReaderLane {
+                pool_size: self.read_pool_config.pool.pool_size.get(),
+                queue_depth: self.read_pool_config.pool.queue_depth.get(),
+            },
+            search: EffectiveReaderLane {
+                pool_size: self.read_pool_config.pool.pool_size.get(),
+                queue_depth: self.read_pool_config.pool.queue_depth.get(),
+            },
         };
         let backend = SqliteStorageBackend::new_with_observability_and_read_pool_config(
             self.database_path(durable_state_root),
