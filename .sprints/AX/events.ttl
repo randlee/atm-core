@@ -536,3 +536,5 @@ triage:c25 a triage:Completion ; triage:ofSprint triage:AX6 ; triage:at "2026-09
 triage:a27 a triage:Assignment ; triage:ofSprint triage:AX6 ; triage:assignedTo "cipher" ; triage:assignedAt "2026-09-06T18:05:47Z"^^xsd:dateTime .
 # GO-AX-PHASE-END-RECHECK-FIX-1788717947 (cipher) completed 2026-09-06T18:12:31Z: fix/ax-phase-end-recheck-fixes 6dd403525, PR #1255 -> integrate/phase-ax (AXPE-QA-117, RSH-003, RBP-003, RBP-004).
 triage:c26 a triage:Completion ; triage:ofSprint triage:AX6 ; triage:at "2026-09-06T18:13:59Z"^^xsd:dateTime .
+# QA-AXPE-RECHECK-FIX-R1 on PR #1255 (6dd403525) FAIL 0/1/1: AXPE-QA-117/RBP-003/RBP-004 fixed; AXPE-RSH-003 partial -> AXPE-QA-118 (important, subsystem value); AXPE-QA-119 (minor, pre-existing flaky atm_temp test). Round 2 GO-AX-PHASE-END-RECHECK-FIX2-1788719298 to cipher on fix/ax-phase-end-recheck-fixes.
+triage:a28 a triage:Assignment ; triage:ofSprint triage:AX6 ; triage:assignedTo "cipher" ; triage:assignedAt "2026-09-06T18:28:50Z"^^xsd:dateTime .
