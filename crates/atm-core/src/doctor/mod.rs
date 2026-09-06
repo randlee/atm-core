@@ -443,13 +443,7 @@ fn graft_receivers_doctor_report(
     team: &TeamName,
     findings: &mut Vec<DoctorFinding>,
 ) -> GraftReceiversDoctorReport {
-    let roster = match runtime.load_team_roster(team) {
-        Ok(roster) => roster,
-        Err(error) => {
-            push_doctor_error(findings, DoctorSeverity::Error, error);
-            return GraftReceiversDoctorReport::default();
-        }
-    };
+    let roster = runtime.load_team_roster(team);
     let now = chrono::Utc::now();
     let receivers = roster
         .into_iter()
@@ -728,16 +722,9 @@ fn load_member_roster(
         push_doctor_error(findings, DoctorSeverity::Error, error);
         return None;
     }
-    let members = match runtime.load_team_roster(team) {
-        Ok(roster) => {
-            push_mixed_local_backend_warning(team, &roster, findings);
-            ordered_roster_member_summaries(&roster, caller_identity, live_cwd)
-        }
-        Err(error) => {
-            push_doctor_error(findings, DoctorSeverity::Error, error);
-            return None;
-        }
-    };
+    let roster = runtime.load_team_roster(team);
+    push_mixed_local_backend_warning(team, &roster, findings);
+    let members = ordered_roster_member_summaries(&roster, caller_identity, live_cwd);
 
     Some(MembersList {
         team: team.clone(),
@@ -1344,9 +1331,15 @@ mod tests {
     }
 
     fn test_runtime_with_roster(members: &[&str]) -> LocalServiceRuntime {
+        let (roster_store, roster_runtime_mirror) =
+            atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(roster_store(
+                members,
+            )))
+            .expect("write-through roster fixture hydrates from the in-memory fake");
         LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
-            Arc::new(roster_store(members)),
+            roster_store,
+            roster_runtime_mirror,
             Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
         )
@@ -1779,11 +1772,17 @@ mod tests {
             HOME_DIR_METADATA_KEY.to_string(),
             serde_json::json!("/repo/roster"),
         );
+        let (roster_store, roster_runtime_mirror) =
+            atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(
+                TestRosterStore {
+                    members: vec![roster_member],
+                },
+            ))
+            .expect("write-through roster fixture hydrates from the in-memory fake");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
-            Arc::new(TestRosterStore {
-                members: vec![roster_member],
-            }),
+            roster_store,
+            roster_runtime_mirror,
             Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
         );

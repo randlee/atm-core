@@ -5,8 +5,8 @@ use std::sync::Arc;
 use crate::{
     AsyncMailboxReader, AsyncMessageSearchStore, AsyncMessageStore, AtmError,
     DiagnosticTimelineStore, GraftReceiverEndpointStore, MessageSearchStore, MessageStore,
-    NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, RosterStore,
-    TemplateCatalogStore,
+    NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, RosterRuntimeMirror,
+    RosterStore, TemplateCatalogStore,
 };
 
 /// Effective capacity settings for one reader lane, selected by the backend
@@ -32,6 +32,10 @@ pub struct StorageHandles {
     async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
     async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     roster_store: Arc<dyn RosterStore + Send + Sync>,
+    /// Runtime-owned, write-through RAM roster mirror paired with
+    /// `roster_store`. Every roster consumer reads through this handle
+    /// after startup hydration; see [`RosterRuntimeMirror`].
+    roster_runtime_mirror: Arc<dyn RosterRuntimeMirror + Send + Sync>,
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
     graft_receiver_endpoint_store: Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
@@ -54,6 +58,9 @@ pub struct StorageHandleParts {
     pub async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
     pub async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     pub roster_store: Arc<dyn RosterStore + Send + Sync>,
+    /// Runtime-owned, write-through RAM roster mirror paired with
+    /// `roster_store`. See [`RosterRuntimeMirror`].
+    pub roster_runtime_mirror: Arc<dyn RosterRuntimeMirror + Send + Sync>,
     pub nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pub pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
     pub graft_receiver_endpoint_store: Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
@@ -71,6 +78,7 @@ impl fmt::Debug for StorageHandles {
             .field("message_store", &"dyn MessageStore")
             .field("async_message_store", &"dyn AsyncMessageStore")
             .field("roster_store", &"dyn RosterStore")
+            .field("roster_runtime_mirror", &"dyn RosterRuntimeMirror")
             .field(
                 "nudge_template_override_store",
                 &"dyn NudgeTemplateOverrideStore",
@@ -96,6 +104,7 @@ impl StorageHandles {
             async_message_store: parts.async_message_store,
             async_mailbox_reader: parts.async_mailbox_reader,
             roster_store: parts.roster_store,
+            roster_runtime_mirror: parts.roster_runtime_mirror,
             nudge_template_override_store: parts.nudge_template_override_store,
             pending_nudge_store: parts.pending_nudge_store,
             graft_receiver_endpoint_store: parts.graft_receiver_endpoint_store,
@@ -124,6 +133,13 @@ impl StorageHandles {
 
     pub fn roster_store(&self) -> Arc<dyn RosterStore + Send + Sync> {
         Arc::clone(&self.roster_store)
+    }
+
+    /// Returns the write-through RAM roster mirror paired with
+    /// [`Self::roster_store`]. Every roster consumer reads through this
+    /// handle after startup hydration.
+    pub fn roster_runtime_mirror(&self) -> Arc<dyn RosterRuntimeMirror + Send + Sync> {
+        Arc::clone(&self.roster_runtime_mirror)
     }
 
     pub fn nudge_template_override_store(

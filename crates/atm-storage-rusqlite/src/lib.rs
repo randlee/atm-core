@@ -23,6 +23,7 @@ mod observability;
 mod peer_config_store;
 mod pending_nudge_store;
 mod reader_pool;
+pub mod roster_runtime;
 mod roster_store;
 mod schema_support;
 mod search_reader;
@@ -692,11 +693,18 @@ impl StorageFactory for SqliteStorageFactory {
         if let Some(observer) = &self.timeline_observer {
             observer(backend.diagnostic_timeline());
         }
+        // The write-through roster seam hydrates its RAM mirror here, fail
+        // closed: a durable roster read failure at startup aborts backend
+        // construction instead of silently starting with an incomplete RAM
+        // roster for the process lifetime.
+        let (roster_store, roster_runtime_mirror) =
+            roster_runtime::build_write_through_roster(backend.roster_store())?;
         Ok(StorageHandles::from_parts(StorageHandleParts {
             message_store: backend.message_store(),
             async_message_store: backend.async_message_store(),
             async_mailbox_reader: backend.async_mailbox_reader(),
-            roster_store: backend.roster_store(),
+            roster_store,
+            roster_runtime_mirror,
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
             graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),

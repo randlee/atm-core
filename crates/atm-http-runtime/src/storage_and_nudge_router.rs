@@ -802,7 +802,7 @@ impl StorageAndNudgeRouter {
         // with every durable mutation; this re-hydration is not the
         // synchronization mechanism, it only re-derives RAM from durable
         // state for the rare case of an out-of-band durable change.
-        self.service_runtime.reload_roster_from_durable_store();
+        self.service_runtime.reload_roster_from_durable_store()?;
         Ok(ApiResponse::new(ResponseEnvelope::RuntimeViewReloaded))
     }
 }
@@ -982,7 +982,7 @@ pub(crate) fn validate_heartbeat_member(
     team: &atm_core::types::TeamName,
     member: &atm_core::types::AgentName,
 ) -> Result<(), AtmError> {
-    if runtime.load_roster_member(team, member)?.is_none() {
+    if runtime.load_roster_member(team, member).is_none() {
         return Err(AtmError::agent_not_found(member.as_str(), team.as_str()));
     }
     Ok(())
@@ -1002,7 +1002,7 @@ pub(crate) fn validate_graft_receiver_member(
     team: &atm_core::types::TeamName,
     agent: &atm_core::types::AgentName,
 ) -> Result<(), AtmError> {
-    if runtime.load_roster_member(team, agent)?.is_none() {
+    if runtime.load_roster_member(team, agent).is_none() {
         return Err(AtmError::agent_not_found(agent.as_str(), team.as_str()));
     }
     Ok(())

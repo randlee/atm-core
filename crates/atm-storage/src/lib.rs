@@ -39,9 +39,10 @@ pub use contract::{
     LocalCertificate, MAX_NUDGE_ATTEMPTS, MailMessageState, MailboxBucketCounts, MailboxScope,
     Message, MessageFingerprint, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore,
     NudgeClaim, NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, PrivateKeyRef,
-    ReadDeadline, ReadLaneError, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
-    RosterSnapshot, RosterStore, StorageNotifier, TaskState, TeamNudgeTemplateOverrideMode,
-    TeamNudgeTemplateOverrideRow, TrustedPeer, derive_ack_requirement,
+    ReadDeadline, ReadLaneError, RosterChangedEvent, RosterHarness, RosterMember,
+    RosterMemberEphemeralState, RosterMemberKind, RosterRuntimeMirror, RosterSnapshot, RosterStore,
+    StorageNotifier, TaskState, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+    TrustedPeer, derive_ack_requirement,
 };
 pub use diagnostics::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,

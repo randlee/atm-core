@@ -172,6 +172,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         messages: storage.message_store(),
         rosters: storage.roster_store(),
     };
+    let roster_runtime_mirror = storage.roster_runtime_mirror();
     let async_message_store = storage.async_message_store();
     let async_mailbox_reader = storage.async_mailbox_reader();
     let async_message_search_store = storage.async_message_search_store();
@@ -184,6 +185,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
         storage_backends.rosters.clone(),
+        roster_runtime_mirror,
         Arc::clone(&nudge_template_override_store),
         inputs.non_claude_outbound,
     )

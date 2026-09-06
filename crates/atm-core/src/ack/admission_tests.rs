@@ -418,9 +418,13 @@ impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideSt
 }
 
 fn local_runtime(store: Arc<InMemoryAsyncStore>, attach_async_store: bool) -> LocalServiceRuntime {
+    let (roster_store, roster_runtime_mirror) =
+        atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(SingleMemberRoster))
+            .expect("write-through roster fixture hydrates from the in-memory fake");
     let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         store.clone(),
-        Arc::new(SingleMemberRoster),
+        roster_store,
+        roster_runtime_mirror,
         Arc::new(NoopNudgeTemplateOverrideStore),
         Arc::new(crate::LocalFileNonClaudeOutbound::new()),
     );

@@ -16,7 +16,7 @@ use atm_runtime::mailbox_runtime::StorageAsyncMailboxRuntime;
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage::{
     AsyncMailboxReader, AsyncMessageStore, IsoTimestamp, MailboxScope, Message, MessageKey,
-    MessageQuery, MessageStore,
+    MessageQuery, MessageStore, RosterStore,
 };
 use atm_storage_rusqlite::SqliteStorageFactory;
 
@@ -268,6 +268,24 @@ pub fn open_graft_receiver_endpoint_store(
 /// a transaction in the same process.
 pub fn open_isolated_sqlite_boundary(root: impl AsRef<Path>) -> Result<RuntimeAssembly, AtmError> {
     open_sqlite_boundary(root.as_ref().join("runtime").join("mail.sqlite3"))
+}
+
+/// Builds the paired write-through roster handles (`RosterStore` decorator
+/// plus its RAM mirror) that `LocalServiceRuntime::new_with_delivery_boundaries`
+/// requires, for tests that construct a runtime directly instead of going
+/// through [`assemble_runtime`]. This wraps
+/// `atm_storage_rusqlite::roster_runtime::build_write_through_roster`, which
+/// is the only authorized construction site (boundary
+/// `BOUNDARY-RosterStore-Sqlite-WriteThrough`); no caller outside this crate
+/// or `atm-daemon-bootstrap` may build an equivalent wrapper by hand.
+///
+/// # Errors
+/// Fails closed: propagates a durable roster read failure encountered while
+/// hydrating the RAM mirror from `durable`.
+pub fn build_write_through_roster_for_test(
+    durable: Arc<dyn RosterStore + Send + Sync>,
+) -> Result<atm_storage_rusqlite::roster_runtime::WriteThroughRosterHandles, AtmError> {
+    atm_storage_rusqlite::roster_runtime::build_write_through_roster(durable)
 }
 
 /// Install the current test's isolated runtime path before composing a
