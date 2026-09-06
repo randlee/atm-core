@@ -22,3 +22,4 @@ name = "fake-herdr"
 path = "tests/support/fake_herdr/main.rs"
 test = false
 bench = false
+required-features = ["test-utils"]
