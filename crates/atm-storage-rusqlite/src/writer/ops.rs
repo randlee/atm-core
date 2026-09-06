@@ -548,10 +548,13 @@ fn load_acknowledgement_source_row(
             crate::shared_db::sqlite_error(target, "failed to load acknowledgement source", error)
         })?
         .ok_or_else(|| {
-            AtmError::validation(format!(
-                "message {} was not found in {}@{}",
-                source.message_id, source.agent, source.team
-            ))
+            AtmError::validation_with_recovery(
+                format!(
+                    "message {} was not found in {}@{}; it is unknown or not addressed to the caller",
+                    source.message_id, source.agent, source.team
+                ),
+                "verify the message ID belongs to the caller's mailbox before retrying `atm ack`",
+            )
         })
 }
 
@@ -607,10 +610,10 @@ fn decode_pending_acknowledgement_source(
         } else {
             "not pending acknowledgement"
         };
-        return Err(AtmError::validation(format!(
-            "message {} is {state}",
-            source.message_id
-        )));
+        return Err(AtmError::validation_with_recovery(
+            format!("message {} is {state}", source.message_id),
+            "only messages with a pending acknowledgement can be acknowledged; use `atm read --pending-ack` to inspect them",
+        ));
     }
     Ok(Message {
         team: source.team.clone(),

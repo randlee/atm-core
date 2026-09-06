@@ -13,6 +13,13 @@ use serde_json::Value;
 use tokio::io::AsyncReadExt;
 
 pub const HERDR_WAKE_TEXT: &str = "You have unread ATM messages. Run: atm read";
+/// Oldest Herdr release this daemon supports (ADR-061). Keyed on the Herdr
+/// release version reported by `ping.version`, not on Herdr's bincode-only
+/// `PROTOCOL_VERSION`. Every Herdr release at or above this value must keep
+/// working from one daemon build; raising it is a breaking change that needs
+/// Rand's recorded approval and sign-off. Set to 0.8.0 by Rand on 2026-09-05
+/// from the M5 drift review of v0.8.0..v0.8.2.
+pub const HERDR_MINIMUM_VERSION: &str = "0.8.0";
 const HERDR_PROCESS_CAP: Duration = Duration::from_secs(5);
 const BREAKER_MAX_BACKOFF: Duration = Duration::from_secs(30);
 
@@ -992,6 +999,26 @@ pub mod testing {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn herdr_minimum_version_is_three_part_semver_at_least_0_8_0() {
+        let parts: Vec<u64> = super::HERDR_MINIMUM_VERSION
+            .split('.')
+            .map(|part| {
+                part.parse()
+                    .expect("HERDR_MINIMUM_VERSION parts are integers")
+            })
+            .collect();
+        assert_eq!(
+            parts.len(),
+            3,
+            "HERDR_MINIMUM_VERSION must be MAJOR.MINOR.PATCH"
+        );
+        assert!(
+            (parts[0], parts[1], parts[2]) >= (0, 8, 0),
+            "HERDR_MINIMUM_VERSION may only be raised with Rand's recorded approval (ADR-061)"
+        );
+    }
+
     use super::*;
 
     /// A manually controlled clock used by tests that assert on the

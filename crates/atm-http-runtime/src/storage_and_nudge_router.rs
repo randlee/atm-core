@@ -35,7 +35,10 @@ use crate::PeerConnectionPool;
 use crate::RuntimeHealth;
 use crate::bare_cli_fifo::{BareCliFifo, BareCliQueueFullDrops, drain_bare_cli_messages};
 use crate::doctor_observability::{append_counter_finding, project_counter_health};
-use crate::router_support::{ControlPathSyncBridge, DetachedReceivedHooks, retry_deferred_marker};
+use crate::router_support::{
+    ControlPathSyncBridge, DetachedReceivedHooks, append_warnings, hook_warning,
+    retry_deferred_marker, write_response,
+};
 
 /// The replacement implementation of the canonical write operation.
 ///
@@ -291,11 +294,11 @@ impl StorageAndNudgeRouter {
         })
     }
 
-    /// Delivers one locally admitted host-qualified write using the daemon's
-    /// selected peer-wire mode. The record is already durable at this point;
-    /// this method creates neither a second application route nor delivery
-    /// recovery state. Per ADR-057, connection reuse can redial only before
-    /// exchange; it never retries a request after handing it to the sender.
+    /// Delivers a host-qualified write through the selected peer-wire mode.
+    ///
+    /// Cross-host writes are intentionally not admitted into the local mailbox:
+    /// without the durable outbox design, a failed peer exchange must leave no
+    /// misleading local echo or local nudge behind.
     async fn dispatch_resolved_peer_write(
         &self,
         request: &atm_core::send::WriteRequest,
@@ -303,9 +306,11 @@ impl StorageAndNudgeRouter {
         timestamp: atm_core::types::IsoTimestamp,
         deadline: RequestDeadline,
         _request_id: RequestId,
-    ) -> Result<(), AtmError> {
+    ) -> Result<WriteOutcome, AtmError> {
         let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
-            return Ok(());
+            return Err(AtmError::validation(
+                "cross-host delivery requires a host-qualified recipient",
+            ));
         };
         let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::daemon_unavailable(
@@ -333,19 +338,63 @@ impl StorageAndNudgeRouter {
                 )?,
             },
         };
-        let request = request.clone().with_origin_metadata(message_id, timestamp);
+        let request = request
+            .clone()
+            .with_origin_metadata(message_id, timestamp)
+            .with_peer_http_api_version();
         match client
             .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
             .await?
             .into_inner()
         {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => Ok(()),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+                tracing::info!(
+                    subsystem = "atm_core.peer",
+                    action = "peer_send",
+                    outcome = "delivered",
+                    peer_host = %host,
+                    message_id = %message_id,
+                    "host-qualified message delivered to peer"
+                );
+                Ok(WriteOutcome::Sent(outcome))
+            }
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+                Ok(WriteOutcome::Acknowledged(outcome))
+            }
+            ResponseEnvelope::Error(error) => Err(error),
             response => Err(AtmError::new(
                 atm_core::error_codes::AtmErrorCode::InternalError,
                 "cross-host daemon-owned delivery returned a non-write response",
             )
             .with_cause(format!("received response: {response:?}"))),
         }
+    }
+
+    /// Routes a raw local host-qualified write before local admission.
+    ///
+    /// Prepared ACK replies are different: they acquire their recipient only
+    /// after commit and are handled by the post-commit branch in
+    /// `write_with_request_id`.
+    async fn dispatch_raw_host_qualified_local_write(
+        &self,
+        request: &atm_core::send::WriteRequest,
+        ingress: &AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Result<Option<WriteOutcome>, AtmError> {
+        if *ingress != AuthenticatedIngress::Local
+            || request
+                .to
+                .as_ref()
+                .and_then(|recipient| recipient.host())
+                .is_none()
+        {
+            return Ok(None);
+        }
+        let (message_id, timestamp) = atm_core::schema::AtmMessageId::new_with_timestamp();
+        self.dispatch_resolved_peer_write(request, message_id, timestamp, deadline, request_id)
+            .await
+            .map(Some)
     }
 
     async fn emit_received_hook(
@@ -807,7 +856,17 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             // shared writer uses them for its state and file-policy paths.
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
+            if let Some(outcome) = self
+                .dispatch_raw_host_qualified_local_write(&request, &ingress, deadline, request_id)
+                .await?
+            {
+                return Ok(ApiResponse::new(write_response(outcome)));
+            }
             let mut committed = self.commit_write(request, deadline).await?;
+            // ACK replies may acquire their host-qualified recipient while the
+            // write is prepared.  These must be forwarded after their local
+            // durable record is created; raw host-qualified sends returned
+            // above and therefore never reach this post-commit path.
             let is_remote_recipient = ingress == AuthenticatedIngress::Local
                 && committed
                     .canonical_request
@@ -816,14 +875,15 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                     .and_then(|recipient| recipient.host())
                     .is_some();
             if committed.newly_persisted && is_remote_recipient {
-                self.dispatch_resolved_peer_write(
-                    &committed.canonical_request,
-                    committed.message_id,
-                    committed.persisted_timestamp,
-                    deadline,
-                    request_id,
-                )
-                .await?;
+                let _ = self
+                    .dispatch_resolved_peer_write(
+                        &committed.canonical_request,
+                        committed.message_id,
+                        committed.persisted_timestamp,
+                        deadline,
+                        request_id,
+                    )
+                    .await?;
             }
             if committed.newly_persisted && !is_remote_recipient {
                 // A host-qualified local admission has already been handed to
@@ -942,30 +1002,6 @@ pub(crate) fn validate_graft_receiver_member(
         return Err(AtmError::agent_not_found(agent.as_str(), team.as_str()));
     }
     Ok(())
-}
-
-fn append_warnings(outcome: &mut WriteOutcome, warnings: Vec<WarningEntry>) {
-    match outcome {
-        WriteOutcome::Sent(outcome) => outcome.warnings.extend(warnings),
-        WriteOutcome::Acknowledged(outcome) => outcome.warnings.extend(warnings),
-    }
-}
-
-fn write_response(outcome: WriteOutcome) -> ResponseEnvelope {
-    match outcome {
-        WriteOutcome::Sent(outcome) => ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)),
-        WriteOutcome::Acknowledged(outcome) => {
-            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-        }
-    }
-}
-
-pub(crate) fn hook_warning(error: AtmError) -> WarningEntry {
-    WarningEntry::with_code(
-        error.code(),
-        format!("message received successfully, but its receiver hook did not run: {error}"),
-        Some("inspect the receiver hook endpoint or harness, then continue normally"),
-    )
 }
 
 #[cfg(test)]
@@ -4263,6 +4299,20 @@ mod tests {
                 .is_empty(),
             "the sender must not run a receiver hook for a remote recipient"
         );
+        assert!(
+            local
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("agent"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("read local recipient mailbox")
+                .is_empty(),
+            "a host-qualified send must not leave a local mailbox echo"
+        );
         assert_eq!(
             remote
                 .message_store
@@ -4276,7 +4326,7 @@ mod tests {
                 .expect("read remote recipient mailbox")
                 .len(),
             1,
-            "the peer listener receives exactly the locally admitted canonical write"
+            "the peer listener receives exactly one canonical write"
         );
         remote_runtime
             .begin_shutdown()
@@ -4540,6 +4590,107 @@ mod tests {
             .finish()
             .await
             .expect("remote direct peer runtime drains");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn local_ack_returns_peer_delivery_failure_after_the_local_commit() {
+        let remote = fixture(true, None, None);
+        let remote_runtime = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
+            Arc::new(remote.router.clone()),
+        )
+        .build()
+        .expect("valid remote direct peer configuration")
+        .start()
+        .await
+        .expect("remote direct peer runtime starts");
+        let remote_port = remote_runtime
+            .direct_peer_address()
+            .expect("ephemeral remote direct peer listener is bound")
+            .port();
+
+        let mut local = fixture(true, None, None);
+        local.router = local
+            .router
+            .clone()
+            .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"));
+        let local_runtime = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&local, crate::DirectPeerTcpConfig::ephemeral_for_test()),
+            Arc::new(local.router.clone()),
+        )
+        .build()
+        .expect("valid local direct peer configuration")
+        .start()
+        .await
+        .expect("local direct peer runtime starts");
+        let local_port = local_runtime
+            .direct_peer_address()
+            .expect("ephemeral local direct peer listener is bound")
+            .port();
+
+        let received_id = AtmMessageId::new();
+        let mut incoming = write_request(remote.home_dir.clone(), remote.current_dir.clone())
+            .with_origin_metadata(received_id, atm_core::types::IsoTimestamp::now());
+        incoming.requires_ack = true;
+        let local_peer_client = direct_peer_tcp_client(
+            "127.0.0.1".parse().expect("loopback source host"),
+            std::num::NonZeroU16::new(local_port).expect("non-zero port"),
+            Duration::from_secs(5),
+        )
+        .expect("local direct peer client");
+        local_peer_client
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(incoming))))
+            .await
+            .expect("incoming required message reaches local daemon");
+
+        remote_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("remote direct peer runtime drains before acknowledgement");
+
+        let acknowledgement = atm_core::ack::AckRequest {
+            home_dir: local.home_dir.clone(),
+            current_dir: local.current_dir.clone(),
+            caller_identity: "recipient".parse().expect("recipient"),
+            caller_chat_id: None,
+            caller_team: "test-team".parse().expect("team"),
+            activity_observation: None,
+            message_id: received_id,
+            reply_body: "received".to_owned(),
+        }
+        .into_write_request();
+        let error = local
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+            )
+            .await
+            .expect_err("post-commit peer acknowledgement forwarding failure reaches the caller");
+        assert_eq!(
+            error.code(),
+            atm_core::error_codes::AtmErrorCode::RemoteDeliveryUnconfirmed,
+            "a committed acknowledgement still reports that peer acceptance was unconfirmed"
+        );
+        assert!(
+            local
+                .message_store
+                .load_message(&MessageKey::from(received_id))
+                .expect("read acknowledged local source")
+                .expect("received source remains durable")
+                .envelope
+                .acknowledged_at
+                .is_some(),
+            "the acknowledgement's local state transition commits before the failed peer forward"
+        );
+
+        local_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("local direct peer runtime drains");
     }
 
     #[tokio::test]
