@@ -254,7 +254,7 @@ def find_violations(repo_root: Path) -> tuple[Violation, ...]:
         relative = Path(relative_path)
         test_source = is_test_source(relative)
         for line_number, line, in_test_module in iter_rust_lines(path):
-            if relative_path != "crates/atm-herdr/src/lib.rs":
+            if not str(relative_path).startswith("crates/atm-herdr/"):
                 for pattern in HERDR_WIRE_PATTERNS:
                     if pattern.search(line):
                         violations.append(

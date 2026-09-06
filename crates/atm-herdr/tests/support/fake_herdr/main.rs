@@ -1,7 +1,6 @@
 //! Portable deterministic stand-in for the published Herdr CLI.
 
 use std::io::Write;
-use std::time::Duration;
 
 fn main() {
     let mode = std::env::var("FAKE_HERDR_MODE").unwrap_or_else(|_| "exit-success".to_owned());
@@ -16,7 +15,7 @@ fn main() {
             r#"{"result":{"agent":{"name":"fake","agent_status":"working","unknown":"ignored"}}}"#,
         ),
         "sleep-past-deadline" => {
-            std::thread::sleep(Duration::from_secs(30));
+            std::thread::park();
             stdout(r#"{"result":{}}"#);
         }
         "echo-argv-and-herdr-session" => {

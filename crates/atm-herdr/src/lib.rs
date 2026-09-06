@@ -1309,7 +1309,10 @@ mod tests {
     #[tokio::test]
     async fn empty_prompt_is_rejected_before_process_spawn() {
         let agent: AgentName = "alice".parse().expect("agent");
-        let invoker = HerdrProcessInvoker::new(Arc::new(HerdrSpawnBreaker::default()));
+        let invoker = HerdrProcessInvoker {
+            breaker: Arc::new(HerdrSpawnBreaker::default()),
+            io: HerdrIo::default(),
+        };
         assert_eq!(
             invoker
                 .prompt(
