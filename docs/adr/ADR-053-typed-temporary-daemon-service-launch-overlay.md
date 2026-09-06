@@ -70,9 +70,9 @@ Platform adapters provide the same contract while preserving native ownership:
 - **macOS:** read/hash the controlled source LaunchAgent plist, write an owned
   overlay copy with one typed `ProgramArguments` addition, bootstrap that
   overlay, and bootstrap the untouched original plist on restore.
-- **Windows:** capture the named SCM service's exact `BINARY_PATH_NAME`, use a
-  round-trip-tested Windows argv codec to form an owned typed overlay, and
-  restore the exact captured scalar through SCM.
+- **Windows:** no temporary-launch backend (amended 2026-09-05, see below).
+  `temporary-launch` on Windows fails closed with an explicit error; it must
+  not substitute an SCM service for the per-user scheduled task.
 - **Linux:** accept only an unambiguous systemd `--user` unit command shape,
   install an owned drop-in that resets/replaces `ExecStart` with one typed
   addition, and remove only that owned drop-in on restoration.
@@ -97,8 +97,9 @@ Apple Development signing checks remain mandatory before lifecycle mutation.
   normal daemon launch remains mTLS.
 - A crash is diagnosable and safe to recover; it cannot silently replace an
   operator's current service configuration with a synthesized default.
-- macOS, Windows, and Linux share product semantics but may reject a service
+- macOS and Linux share product semantics but may reject a service
   configuration that their narrow adapter cannot preserve losslessly.
+  Windows has no temporary-launch adapter.
 - Lifecycle/setup work stays outside benchmark samples, preserving the
   plaintext admission pipeline and its performance evidence.
 
@@ -126,16 +127,36 @@ Apple Development signing checks remain mandatory before lifecycle mutation.
 
 - Unit/failure-injection tests prove journal-before-mutation, exact restoration,
   and refusal of a second session/normal mutation while recovery is pending.
-- macOS plist, Windows argv/SCM, and Linux unit/drop-in contract tests reject
+- macOS plist and Linux unit/drop-in contract tests reject
   malformed, ambiguous, duplicate-mode, and changed-source configurations
   before service mutation.
 - Each supported operating system has a real managed-service proof using the
   selected signed release pair: mTLS begin/restore and plaintext-test
   begin/restore both pass doctor, curl receiver, CLI loopback, and same-host
-  send/read checks.  Windows and Linux are not considered complete on fake
-  boundaries alone.
+  send/read checks.  Linux is not considered complete on fake boundaries
+  alone.  Windows is out of scope for this evidence.
 - Architecture evidence proves this feature is absent from `atm-http-runtime`,
   router, persistence, direct-peer connector, and benchmark `run_profile`.
 - Session evidence records selected pair identity, adapter, mode, phase timing,
   redacted configuration digests, and recovery disposition.  It records no
   primary-database mutation.
+
+## Amendment 2026-09-05 — Windows removed from the temporary-launch scope
+
+Rand's ruling: `daemon-switch` is a tool that switches the daemon and CLI
+pair; what it switches to depends on the situation (benchmarks run on a
+dedicated fixture, integration testing runs in Colima).  It was carrying too
+many requirements.  The Windows managed daemon is a per-user scheduled task
+(`windows-provision`, PR #1223), not an SCM service; an SCM service would run
+under a different account, so the exact `BINARY_PATH_NAME` round trip this
+ADR originally required no longer describes a supported backend.
+
+Effect:
+
+- The typed temporary-launch overlay is a macOS LaunchAgent and Linux systemd
+  `--user` capability only.
+- On Windows, `temporary-launch` fails closed with an explicit `SwitchError`
+  and never creates or edits an SCM service as a fallback.
+- `REQ-P-DAEMON-SWITCH-001` is narrowed to match.  The Windows argv codec
+  remains in the codebase only as a tested utility; it carries no service
+  contract.

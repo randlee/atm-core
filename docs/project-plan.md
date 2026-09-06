@@ -1624,6 +1624,18 @@ Phase AX sprint status:
 | `AX.6` | C | after AX.5 | `complete` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
 | `AX.7` | D | after AX.6 merges | `planned` | none (proof on `integrate/phase-ax`) | `docs/plans/phase-ax/ax7-live-proof.md` |
 
+## Daemon-Switch Scope Reduction
+
+Rand's 2026-09-05 scope ruling keeps `daemon-switch` to two operator modes:
+selecting a published release, or selecting a release build from an exactly
+prerelease-tagged worktree for dogfooding. Temporary-launch, quiesce, and
+signing behavior remain independently scoped; no daemon runtime work belongs
+to this line.
+
+| Sprint | Status | Branch | Worktree | Artifacts |
+| --- | --- | --- | --- | --- |
+| `DAEMON-SWITCH-MODES-1` | `in progress` | `fix/daemon-switch-release-and-tagged-modes` | `../atm-core-worktrees/fix/daemon-switch-release-and-tagged-modes` | `REQ-P-DAEMON-SWITCH-002`, ADR-053 amendment, daemon-switch skill/tests |
+
 ## Publishing Improvements
 
 Implementation Branches:

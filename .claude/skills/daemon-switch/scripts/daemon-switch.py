@@ -9,14 +9,15 @@ import os
 from pathlib import Path
 import platform
 import re
-import shutil
 import signal
 import stat
 import subprocess
 import sys
 import tempfile
 import time
-from typing import Protocol, Sequence
+import shutil
+from typing import Protocol
+from xml.etree import ElementTree
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -27,14 +28,41 @@ DAEMON_SWITCH_SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
 if str(DAEMON_SWITCH_SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(DAEMON_SWITCH_SCRIPTS_DIRECTORY))
 
-from macos_development_signing import (  # noqa: E402
-    CLI_IDENTIFIER,
-    DAEMON_IDENTIFIER,
-    SigningIdentity,
-    SigningIdentityError,
-    resolve_apple_development_identity,
-    verify_signing_identity,
+from release_resolution import (  # noqa: E402
+    GITHUB_RELEASES_API,
+    PRERELEASE_TAG_PREFIX,
+    STABLE_VERSION,
+    SwitchError,
+    binary_release_version,
+    command_path,
+    executable_name,
+    exact_prerelease_tag,
+    extract_linux_release_archive,
+    github_json,
+    homebrew_pair,
+    homebrew_release_metadata,
+    latest_published_release_version,
+    macos_binary_has_development_signature,
+    macos_development_signing_identity_available,
+    pair_from_root,
+    prepare_worktree_pair,
+    release_archive_triple,
+    release_install_roots,
+    release_is_published,
+    require_executable,
+    require_homebrew_release_provenance,
+    require_macos_development_signatures,
+    require_macos_restore_provenance,
+    require_pair_version,
+    resolve_release_pair,
+    run,
+    load_state,
+    save_default_pair,
+    state_path,
+    version,
+    workspace_version,
 )
+import service_control as _service_control_module  # noqa: E402
 from temporary_launch import (  # noqa: E402
     CapturedLaunchSpec,
     OverlayLaunchSpec,
@@ -48,14 +76,12 @@ from temporary_launch import (  # noqa: E402
 )
 from temporary_launch_macos import MacosLaunchAgentAdapter  # noqa: E402
 from temporary_launch_windows import (  # noqa: E402
-    WindowsScmAdapter,
-    parse_windows_command_line,
-    quote_windows_command_line,
+    parse_windows_command_line,  # noqa: F401 - tested compatibility codec re-export.
+    quote_windows_command_line,  # noqa: F401 - tested compatibility codec re-export.
 )
 from temporary_launch_linux import LinuxSystemdUserAdapter  # noqa: E402
 
 
-WINDOWS_SERVICE_NOT_FOUND = 1060
 LIVE_PAIR_READINESS_ATTEMPTS = 200
 MACOS_LAUNCH_AGENT_PATH = re.compile(r"^path = (.+)$")
 # [cass: helpful starter-rust-logging] - retains the bounded readiness state
@@ -66,10 +92,6 @@ The daemon owns durable storage and may need more than five seconds to
 complete startup on a real host.  Retrying this bounded probe is safer than
 rolling selectors back while the new daemon is still becoming ready.
 """
-
-
-class SwitchError(RuntimeError):
-    """A precondition that protects the singleton daemon was not met."""
 
 
 class TemporaryLaunchAdapter(Protocol):
@@ -121,7 +143,10 @@ def temporary_launch_adapter(_args: argparse.Namespace) -> TemporaryLaunchAdapte
             temporary_launch_journal().path.parent / "temporary-launch-overlays"
         )
     if platform.system() == "Windows":
-        return WindowsScmAdapter(lambda command, timeout: run(command, timeout=timeout))
+        raise SwitchError(
+            "temporary-launch is not supported by the Windows per-user scheduled-task backend; "
+            "do not substitute an SCM service because it would run under a different account"
+        )
     if platform.system() == "Linux":
         return LinuxSystemdUserAdapter(
             systemd_user_config_directory(),
@@ -147,346 +172,43 @@ def require_no_active_temporary_launch_session() -> None:
         raise SwitchError(str(error)) from error
 
 
-def executable_name(name: str) -> str:
-    return f"{name}.exe" if os.name == "nt" else name
-
-
-def run(
-    args: Sequence[str], *, timeout: float = 10.0, cwd: Path | None = None
-) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        args,
-        text=True,
-        capture_output=True,
-        timeout=timeout,
-        check=False,
-        cwd=cwd,
-    )
-
-
-def version(path: Path) -> str | None:
-    try:
-        result = run([str(path), "--version"], timeout=5.0)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    return result.stdout.strip() or result.stderr.strip() or None
-
-
-def command_path(name: str, override: str | None, option: str) -> Path:
-    raw = override or shutil.which(executable_name(name))
-    if raw is None:
-        raise SwitchError(f"cannot find {executable_name(name)} on PATH; pass {option}")
-    return Path(raw).expanduser().absolute()
-
-
-def require_executable(path: Path, label: str) -> Path:
-    resolved = path.expanduser().resolve()
-    if not resolved.is_file():
-        raise SwitchError(f"{label} does not exist: {path}")
-    if not os.access(resolved, os.X_OK):
-        raise SwitchError(f"{label} is not executable: {resolved}")
-    return resolved
-
-
-def macos_development_signing_identity_available() -> bool:
-    """Return whether the required Apple Development identity is usable."""
-    if platform.system() != "Darwin":
-        return False
-    try:
-        resolve_apple_development_identity()
-    except (OSError, subprocess.SubprocessError, SigningIdentityError):
-        return False
-    return True
-
-
-def macos_binary_has_development_signature(
-    binary: Path,
-    identifier: str,
-    identity: SigningIdentity,
-) -> bool:
-    """Prove one managed binary carries its selected stable signing identity."""
-    try:
-        return verify_signing_identity(str(binary), identifier, identity)
-    except (OSError, subprocess.SubprocessError):
-        return False
-
-
-def require_macos_development_signatures(cli: Path, daemon: Path) -> None:
-    """Fail closed before any managed-pair lifecycle mutation on macOS."""
-    system = platform.system()
-    if system == "Windows":
-        print("warning: Windows signing not yet implemented; skipping ATM signature gate.", file=sys.stderr)
-        return
-    if system != "Darwin":
-        return
-    try:
-        identity = resolve_apple_development_identity()
-    except (OSError, subprocess.SubprocessError, SigningIdentityError) as error:
-        raise SwitchError(f"Apple Development signing preflight failed: {error}") from error
-    for label, binary, identifier in (
-        ("CLI", cli, CLI_IDENTIFIER),
-        ("daemon", daemon, DAEMON_IDENTIFIER),
-    ):
-        if not macos_binary_has_development_signature(binary, identifier, identity):
-            raise SwitchError(
-                f"{label} target is not strictly signed by the required signing identity: "
-                f"{binary}. "
-                "Build with `just build` or run `python3 .just/sign_daemon_dev.py` before daemon-switch."
-            )
-
-
-def homebrew_release_metadata() -> dict[str, object]:
-    """Return the installed ATM formula metadata used for release provenance."""
-    brew = shutil.which("brew")
-    if brew is None:
-        raise SwitchError("cannot verify Homebrew release provenance: brew is not installed")
-    try:
-        result = run([brew, "info", "--json=v2", "--installed", "atm"], timeout=10.0)
-    except (OSError, subprocess.TimeoutExpired) as error:
-        raise SwitchError(f"cannot verify Homebrew release provenance: {error}") from error
-    if result.returncode != 0:
-        detail = (result.stderr or result.stdout).strip()
-        raise SwitchError(f"cannot verify Homebrew release provenance: {detail or 'brew info failed'}")
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError as error:
-        raise SwitchError("cannot verify Homebrew release provenance: brew info returned invalid JSON") from error
-    formulae = payload.get("formulae") if isinstance(payload, dict) else None
-    if not isinstance(formulae, list):
-        raise SwitchError("cannot verify Homebrew release provenance: ATM formula metadata is missing")
-    # Homebrew returns every installed formula when --installed is present,
-    # even when a formula name is supplied. Select ATM explicitly instead of
-    # assuming the response contains one item.
-    atm_formulae = [
-        formula
-        for formula in formulae
-        if isinstance(formula, dict)
-        and (
-            formula.get("name") == "atm"
-            or (
-                isinstance(formula.get("full_name"), str)
-                and formula["full_name"].rsplit("/", maxsplit=1)[-1] == "atm"
-            )
-        )
-    ]
-    if len(atm_formulae) != 1:
-        raise SwitchError("cannot verify Homebrew release provenance: ATM formula metadata is missing")
-    return atm_formulae[0]
-
-
-def require_homebrew_release_provenance(cli: Path, daemon: Path) -> None:
-    """Accept an ad-hoc Homebrew pair only when Homebrew proves its release origin.
-
-    Homebrew verifies the release archive checksum before installing it.  The
-    formula metadata is therefore the provenance boundary for the extracted
-    binaries: it must identify this project, the same release version in both
-    installed and stable metadata, the v-tagged GitHub Release asset, and a
-    valid SHA-256 checksum.  This gate is intentionally restore-only; source
-    switches continue to require the Apple Development identity.
-    """
-    if platform.system() != "Darwin":
-        return
-    cli = require_executable(cli, "Homebrew atm CLI")
-    daemon = require_executable(daemon, "Homebrew atm daemon")
-    brew = shutil.which("brew")
-    if brew is None:
-        raise SwitchError("cannot verify Homebrew release provenance: brew is not installed")
-    try:
-        prefix_result = run([brew, "--prefix", "atm"], timeout=10.0)
-    except (OSError, subprocess.TimeoutExpired) as error:
-        raise SwitchError(f"cannot verify Homebrew release provenance: {error}") from error
-    if prefix_result.returncode != 0:
-        raise SwitchError("cannot verify Homebrew release provenance: brew prefix failed")
-    try:
-        prefix = Path(prefix_result.stdout.strip()).expanduser().resolve()
-    except (OSError, RuntimeError) as error:
-        raise SwitchError(f"cannot verify Homebrew release provenance: invalid formula prefix: {error}") from error
-    expected_bin_dir = (prefix / "bin").resolve()
-    for label, binary in (("CLI", cli), ("daemon", daemon)):
-        try:
-            binary.relative_to(expected_bin_dir)
-        except ValueError as error:
-            raise SwitchError(
-                f"{label} target is not the installed Homebrew ATM binary under {expected_bin_dir}: {binary}"
-            ) from error
-
-    formula = homebrew_release_metadata()
-    if formula.get("homepage") != "https://github.com/randlee/atm-core":
-        raise SwitchError("Homebrew ATM formula has an unexpected project homepage")
-    # atm-daemon has no side-effect-free --version mode: while the singleton
-    # is running, probing it attempts startup and returns the owner-lock error.
-    # Both binaries are extracted from Homebrew's one checksummed release
-    # archive, so the CLI version plus formula provenance establishes pairing
-    # without probing the live daemon.
-    cli_version = selected_release_version(cli)
-    versions = formula.get("versions")
-    installed = formula.get("installed")
-    if not isinstance(versions, dict) or versions.get("stable") != cli_version:
-        raise SwitchError("Homebrew ATM formula stable version does not match the selected binaries")
-    if (
-        not isinstance(installed, list)
-        or len(installed) != 1
-        or not isinstance(installed[0], dict)
-        or installed[0].get("version") != cli_version
-    ):
-        raise SwitchError("Homebrew ATM installed version does not match the selected binaries")
-    urls = formula.get("urls")
-    stable = urls.get("stable") if isinstance(urls, dict) else None
-    release_url = stable.get("url") if isinstance(stable, dict) else None
-    checksum = stable.get("checksum") if isinstance(stable, dict) else None
-    expected_prefix = f"https://github.com/randlee/atm-core/releases/download/v{cli_version}/"
-    if not isinstance(release_url, str) or not release_url.startswith(expected_prefix):
-        raise SwitchError("Homebrew ATM formula does not point at the matching GitHub Release asset")
-    if not isinstance(checksum, str) or re.fullmatch(r"[0-9a-fA-F]{64}", checksum) is None:
-        raise SwitchError("Homebrew ATM formula has no valid SHA-256 release asset checksum")
-
-
-def require_macos_restore_provenance(cli: Path, daemon: Path) -> None:
-    """Validate restore targets as either a verified Homebrew release or dev pair."""
-    if platform.system() != "Darwin":
-        return
-    brew_pair = homebrew_pair()
-    try:
-        selected = (cli.expanduser().resolve(), daemon.expanduser().resolve())
-    except (OSError, RuntimeError) as error:
-        raise SwitchError(f"cannot resolve restore targets: {error}") from error
-    if brew_pair is not None and selected == brew_pair:
-        require_homebrew_release_provenance(*brew_pair)
-        return
-    # A non-Homebrew restore remains a development restore and keeps the
-    # original strict signing policy. Only the managed Homebrew release gets
-    # the ad-hoc-signature exception.
-    require_macos_development_signatures(cli, daemon)
-
-
-def homebrew_pair() -> tuple[Path, Path] | None:
-    brew = shutil.which("brew")
-    if brew is None:
-        return None
-    result = run([brew, "--prefix", "atm"], timeout=10.0)
-    if result.returncode != 0:
-        return None
-    prefix = Path(result.stdout.strip())
-    cli = prefix / "bin" / executable_name("atm")
-    daemon = prefix / "bin" / executable_name("atm-daemon")
-    if cli.is_file() and daemon.is_file():
-        return cli.resolve(), daemon.resolve()
-    return None
-
-
-def state_path() -> Path:
-    if os.name == "nt":
-        root = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
-    else:
-        root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    return root / "atm" / "daemon-switch.json"
-
-
 def systemd_user_config_directory() -> Path:
-    """Return the current account's only user-service configuration root."""
-    root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    return root / "systemd" / "user"
+    return _service_control().systemd_user_config_directory()
 
 
-def load_state() -> dict[str, str]:
-    path = state_path()
-    if not path.is_file():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def save_default_pair(cli: Path, daemon: Path) -> None:
-    path = state_path()
-    data = load_state()
-    data.setdefault("default_cli", str(cli))
-    data.setdefault("default_daemon", str(daemon))
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+def _service_control() -> object:
+    """Bind test seams at dispatch time without changing service behaviour."""
+    _service_control_module.run = run
+    _service_control_module.platform = platform
+    _service_control_module.os = os
+    _service_control_module.time = time
+    _service_control_module.require_executable = require_executable
+    return _service_control_module
 
 
 def service_commands(args: argparse.Namespace, action: str) -> list[str]:
-    system = platform.system()
-    if not args.service:
-        raise SwitchError("--service is required; never switch an unmanaged daemon")
-    if system == "Darwin":
-        if not args.launch_agent_plist:
-            raise SwitchError("macOS requires --launch-agent-plist for controlled singleton restart")
-        domain = f"gui/{os.getuid()}"
-        if action == "stop":
-            return ["launchctl", "bootout", f"{domain}/{args.service}"]
-        plist = str(Path(args.launch_agent_plist).expanduser())
-        return ["launchctl", "bootstrap", domain, plist]
-    if system == "Windows":
-        return ["sc.exe", action, args.service]
-    return ["systemctl", "--user", action, args.service]
-
-
-def windows_service_missing(result: subprocess.CompletedProcess[str]) -> bool:
-    """Recognize only SCM's missing-service result for an optional stop."""
-    if result.returncode == WINDOWS_SERVICE_NOT_FOUND:
-        return True
-    output = f"{result.stdout}\n{result.stderr}".lower()
-    return "1060" in output and "openservice" in output
-
-
+    return _service_control().service_commands(args, action)
+def windows_task_missing(result: subprocess.CompletedProcess[str]) -> bool:
+    return _service_control().windows_task_missing(result)
+def windows_task_status(task: str) -> dict[str, object]:
+    return _service_control().windows_task_status(task)
+def require_windows_task_selector(args: argparse.Namespace) -> None:
+    _service_control().require_windows_task_selector(args, selected_links)
+def provision_windows_task(args: argparse.Namespace) -> None:
+    _service_control().provision_windows_task(args, selected_links)
+def systemd_unit_missing(detail: str) -> bool:
+    return _service_control().systemd_unit_missing(detail)
 def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = False) -> None:
-    command = service_commands(args, action)
-    if platform.system() != "Darwin":
-        result = run(command, timeout=20.0)
-        if result.returncode == 0 or (
-            allow_absent
-            and action == "stop"
-            and (
-                platform.system() != "Windows"
-                or windows_service_missing(result)
-            )
-        ):
-            return
-        detail = (result.stderr or result.stdout).strip()
-        raise SwitchError(f"service {action} failed: {' '.join(command)}: {detail}")
-
-    domain = f"gui/{os.getuid()}"
-    service = f"{domain}/{args.service}"
-    if action == "stop":
-        result = run(command, timeout=20.0)
-        if result.returncode != 0 and not allow_absent:
-            detail = (result.stderr or result.stdout).strip()
-            raise SwitchError(f"service stop failed: {' '.join(command)}: {detail}")
-        for _ in range(20):
-            if run(["launchctl", "print", service], timeout=2.0).returncode != 0:
-                return
-            time.sleep(0.1)
-        if args.repair_orphan:
-            # `bootout` has already prevented a replacement process. A
-            # blocked daemon can still keep the job loaded long enough to
-            # defeat the normal polling window. The HTTP runtime may not own
-            # the legacy UDS pathname, so identify the singleton through its
-            # lock as well as through the UDS before a verified repair.
-            repair_macos_orphan(macos_daemon_owner_pids())
-            for _ in range(20):
-                if run(["launchctl", "print", service], timeout=2.0).returncode != 0:
-                    return
-                time.sleep(0.1)
-        raise SwitchError("LaunchAgent remained loaded after controlled stop")
-
-    expected_plist = Path(args.launch_agent_plist).expanduser().resolve()
-    last_detail = ""
-    for _ in range(10):
-        result = run(command, timeout=20.0)
-        loaded_plist = macos_loaded_launch_agent_plist(service)
-        if loaded_plist == expected_plist:
-            return
-        if loaded_plist is not None:
-            raise SwitchError(
-                f"service start retained {loaded_plist} instead of requested {expected_plist}"
-            )
-        last_detail = (result.stderr or result.stdout).strip()
-        time.sleep(0.2)
-    raise SwitchError(f"service start failed: {' '.join(command)}: {last_detail}")
+    _service_control().run_service(
+        args,
+        action,
+        allow_absent=allow_absent,
+        selected_links=selected_links,
+        macos_loaded_launch_agent_plist=macos_loaded_launch_agent_plist,
+        macos_daemon_owner_pids=macos_daemon_owner_pids,
+        repair_macos_orphan=repair_macos_orphan,
+        windows_task_status_fn=windows_task_status,
+    )
 
 
 def macos_loaded_launch_agent_plist(service: str) -> Path | None:
@@ -1041,10 +763,37 @@ def context_version(payload: object, context: str) -> str | None:
 
 
 def selected_release_version(cli: Path) -> str:
-    value = version(cli)
-    if not value:
-        raise SwitchError(f"cannot determine selected ATM CLI version: {cli}")
-    return value.rsplit(maxsplit=1)[-1]
+    return binary_release_version(cli, "selected ATM CLI")
+
+
+def pair_is_in_release_install_root(cli: Path, daemon: Path) -> bool:
+    """Recognize only platform-owned release directories as safe stable-version targets."""
+    for root in release_install_roots():
+        try:
+            cli.resolve().relative_to(root.resolve())
+            daemon.resolve().relative_to(root.resolve())
+        except ValueError:
+            continue
+        return True
+    return False
+
+
+def validate_raw_pair_mode(cli: Path, daemon: Path, *, allow_release_version: bool) -> None:
+    """Keep raw paths useful for fixtures while preventing an untagged release-looking build."""
+    cli_version = binary_release_version(cli, "raw-path ATM CLI")
+    daemon_version = binary_release_version(daemon, "raw-path ATM daemon")
+    print(json.dumps({"raw_path_pair": {"cli_version": cli_version, "daemon_version": daemon_version}}))
+    if cli_version != daemon_version:
+        raise SwitchError(
+            f"raw-path CLI/daemon versions must match; found cli={cli_version}, daemon={daemon_version}"
+        )
+    if allow_release_version or pair_is_in_release_install_root(cli, daemon):
+        return
+    if release_is_published(cli_version):
+        raise SwitchError(
+            f"raw-path targets outside the platform release install root report published version {cli_version}; "
+            "use --worktree with an exact prerelease tag or pass --allow-release-version explicitly"
+        )
 
 
 def macos_daemon_executable(pid: int) -> Path | None:
@@ -1110,33 +859,13 @@ def wait_for_live_pair(cli: Path, daemon: Path | None = None) -> tuple[bool, str
     return False, detail
 
 
-def windows_service_status(service: str) -> dict[str, object]:
-    """Expose SCM state so status cannot imply an absent service is managed."""
-    result = run(["sc.exe", "query", service], timeout=5.0)
-    output = (result.stdout or "") + (result.stderr or "")
-    if result.returncode != 0:
-        return {
-            "installed": False,
-            "state": "absent" if windows_service_missing(result) else "unknown",
-            "detail": output.strip() or f"sc.exe exited with {result.returncode}",
-        }
-
-    state = "unknown"
-    for line in output.splitlines():
-        if "STATE" not in line or ":" not in line:
-            continue
-        state = line.split(":", 1)[1].strip().split(maxsplit=1)[-1].lower()
-        break
-    return {"installed": True, "state": state}
-
-
 def status(args: argparse.Namespace) -> None:
     cli, daemon = selected_links(args)
     service = {"platform": platform.system(), "service": args.service}
     if platform.system() == "Darwin" and args.service:
         service["launch_agent_plist"] = args.launch_agent_plist
     if platform.system() == "Windows" and args.service:
-        service["windows"] = windows_service_status(args.service)
+        service["windows_task"] = windows_task_status(args.service)
     result: dict[str, object] = {
         "atm": {"selector": str(cli), "target": str(cli.resolve()), "version": version(cli)},
         "atm_daemon": {"selector": str(daemon), "target": str(daemon.resolve())},
@@ -1158,7 +887,10 @@ def parser() -> argparse.ArgumentParser:
     selectors = argparse.ArgumentParser(add_help=False)
     selectors.add_argument("--cli-link", help="system selector symlink for atm")
     selectors.add_argument("--daemon-link", help="system selector symlink for atm-daemon")
-    selectors.add_argument("--service", help="LaunchAgent label or system service name")
+    selectors.add_argument(
+        "--service",
+        help="LaunchAgent label, systemd unit, or Windows scheduled-task name",
+    )
     selectors.add_argument("--launch-agent-plist", help="macOS LaunchAgent plist used to restart the singleton")
     selectors.add_argument(
         "--repair-orphan",
@@ -1169,8 +901,16 @@ def parser() -> argparse.ArgumentParser:
     status_parser = sub.add_parser("status", parents=[selectors])
     status_parser.add_argument("--doctor", action="store_true", help="query the live daemon through the selected CLI")
     switch = sub.add_parser("switch", parents=[selectors])
-    switch.add_argument("--cli", required=True, help="branch/release atm binary")
-    switch.add_argument("--daemon", required=True, help="matching branch/release atm-daemon binary")
+    switch.add_argument("--cli", help="raw-path ATM binary (fixture escape hatch)")
+    switch.add_argument("--daemon", help="matching raw-path ATM daemon (fixture escape hatch)")
+    switch.add_argument("--release", metavar="VERSION|latest", help="switch to a published release without paths")
+    switch.add_argument("--worktree", help="switch to a prerelease-tagged git worktree build")
+    switch.add_argument("--bump", action="store_true", help="tag and build --worktree before switching")
+    switch.add_argument(
+        "--allow-release-version",
+        action="store_true",
+        help="allow raw paths outside a release root that report a published version",
+    )
     switch.add_argument("--yes", action="store_true")
     switch.add_argument("--dry-run", action="store_true")
     restore = sub.add_parser("restore", parents=[selectors])
@@ -1196,6 +936,8 @@ def parser() -> argparse.ArgumentParser:
         command = temporary_sub.add_parser(name)
         command.add_argument("--session", required=True)
         command.add_argument("--yes", action="store_true")
+    windows_provision = sub.add_parser("windows-provision", parents=[selectors])
+    windows_provision.add_argument("--yes", action="store_true")
     return result
 
 
@@ -1205,7 +947,24 @@ def main() -> int:
         if args.command == "status":
             status(args)
         elif args.command == "switch":
-            switch_pair(args, Path(args.cli), Path(args.daemon))
+            modes = sum((args.release is not None, args.worktree is not None, args.cli is not None or args.daemon is not None))
+            if modes != 1:
+                raise SwitchError("switch requires exactly one mode: --release, --worktree, or paired --cli/--daemon")
+            if args.release is not None:
+                if args.bump:
+                    raise SwitchError("--bump is valid only with --worktree")
+                cli, daemon, _expected = resolve_release_pair(args.release)
+                require_macos_restore_provenance(cli, daemon)
+                switch_pair(args, cli, daemon, require_development_signature=False)
+            elif args.worktree is not None:
+                cli, daemon, _expected = prepare_worktree_pair(Path(args.worktree), args.bump)
+                switch_pair(args, cli, daemon)
+            else:
+                if not args.cli or not args.daemon:
+                    raise SwitchError("raw-path switch requires both --cli and --daemon")
+                cli, daemon = Path(args.cli), Path(args.daemon)
+                validate_raw_pair_mode(cli, daemon, allow_release_version=args.allow_release_version)
+                switch_pair(args, cli, daemon)
         elif args.command == "restore":
             cli, daemon = restore_pair(args)
             require_macos_restore_provenance(cli, daemon)
@@ -1221,6 +980,8 @@ def main() -> int:
                 restart_temporary_launch(args)
             else:
                 restore_temporary_launch(args, recovery=args.temporary_command == "recover")
+        elif args.command == "windows-provision":
+            provision_windows_task(args)
         else:
             quiesce(args)
     except SwitchError as error:
