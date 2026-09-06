@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-herdr/src/**/*.rs" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T23:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY2 ;
@@ -31,6 +31,9 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY3-4> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY3-5> ;
   triage:hasResolution <urn:atm:triage:resolution/AY2-QA-004/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY2-QA-004/2> ;
+  triage:closedAt "2026-09-06T23:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY2-QA-004/AY2-1>
@@ -93,55 +96,55 @@
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 5 ;
   triage:snippet "#[cfg(any())] use std::process::Stdio;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
-  triage:headSha "0b0bfa304" ;
-  triage:occursIn <urn:atm:triage:worktree/ay3/0b0bfa304> .
+  triage:headSha "086319459" ;
+  triage:occursIn <urn:atm:triage:worktree/ay3/086319459> .
 
 <urn:atm:triage:occurrence/AY2-QA-004/AY3-2>
   a triage:Occurrence ;
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 13 ;
   triage:snippet "#[cfg(any())] use serde_json::Value;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
-  triage:headSha "0b0bfa304" ;
-  triage:occursIn <urn:atm:triage:worktree/ay3/0b0bfa304> .
+  triage:headSha "086319459" ;
+  triage:occursIn <urn:atm:triage:worktree/ay3/086319459> .
 
 <urn:atm:triage:occurrence/AY2-QA-004/AY3-3>
   a triage:Occurrence ;
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 15 ;
   triage:snippet "#[cfg(any())] use tokio::io::AsyncReadExt;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
-  triage:headSha "0b0bfa304" ;
-  triage:occursIn <urn:atm:triage:worktree/ay3/0b0bfa304> .
+  triage:headSha "086319459" ;
+  triage:occursIn <urn:atm:triage:worktree/ay3/086319459> .
 
 <urn:atm:triage:occurrence/AY2-QA-004/AY3-4>
   a triage:Occurrence ;
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 554 ;
   triage:snippet "#[cfg(any())] mod legacy_process_oracle {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
-  triage:headSha "0b0bfa304" ;
-  triage:occursIn <urn:atm:triage:worktree/ay3/0b0bfa304> .
+  triage:headSha "086319459" ;
+  triage:occursIn <urn:atm:triage:worktree/ay3/086319459> .
 
 <urn:atm:triage:occurrence/AY2-QA-004/AY3-5>
   a triage:Occurrence ;
   triage:file "crates/atm-herdr/src/lib.rs" ;
   triage:line 803 ;
   triage:snippet "#[cfg(any())] mod legacy_parser_oracle {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
-  triage:headSha "0b0bfa304" ;
-  triage:occursIn <urn:atm:triage:worktree/ay3/0b0bfa304> .
+  triage:headSha "086319459" ;
+  triage:occursIn <urn:atm:triage:worktree/ay3/086319459> .
 
 <urn:atm:triage:worktree/ay-integrate/d084bb2ff>
   a triage:WorktreeSnapshot ;
@@ -172,3 +175,19 @@
   triage:fixBranch "feature/ay2-herdr-transport-seam" ;
   triage:verifiedInRound "qa-pr1269-r3" ;
   triage:resolutionNote "On feature/ay2-herdr-transport-seam only (cipher): legacy_process_oracle, legacy_parser_oracle, and their three orphaned #[cfg(any())] imports fully deleted from crates/atm-herdr/src/lib.rs. Confirmed by unanimous zero-hit grep sweep across arch-qa and req-qa (full crate/workspace search for cfg(any()), legacy_process_oracle, legacy_parser_oracle -- only remaining hits are inside this triage record itself). Finding-level status stays fixed_partial: the feature/ay3-herdr-endpoint-doctor-config occurrences remain open pending merge-forward." .
+
+<urn:atm:triage:worktree/ay3/086319459>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ay3" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "086319459" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/AY2-QA-004/2>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-06T23:55:00Z"^^xsd:dateTime ;
+  triage:fixCommit "086319459" ;
+  triage:fixBranch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:verifiedInRound "qa-pr1269-r3" ;
+  triage:resolutionNote "feature/ay3-herdr-endpoint-doctor-config was rebased by gh stack sync onto #1269's current head, carrying feature/ay2-herdr-transport-seam's fix forward. Verified via git merge-base --is-ancestor origin/feature/ay2-herdr-transport-seam origin/feature/ay3-herdr-endpoint-doctor-config (YES at ay3 head 086319459) plus direct grep of ay3's lib.rs (zero hits for cfg(any()), legacy_process_oracle, legacy_parser_oracle). All five AY3 occurrences closed; Finding-level status is now fixed." .
