@@ -73,15 +73,6 @@ enum LogModeCommand {
     Tail(TailArgs),
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum CliLogLevel {
-    Trace,
-    Debug,
-    Info,
-    Warn,
-    Error,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum LogSource {
     /// The canonical retained JSONL file (the compatibility default).
@@ -92,26 +83,14 @@ enum LogSource {
     Merged,
 }
 
-impl From<CliLogLevel> for LogLevelFilter {
-    fn from(value: CliLogLevel) -> Self {
-        match value {
-            CliLogLevel::Trace => LogLevelFilter::Trace,
-            CliLogLevel::Debug => LogLevelFilter::Debug,
-            CliLogLevel::Info => LogLevelFilter::Info,
-            CliLogLevel::Warn => LogLevelFilter::Warn,
-            CliLogLevel::Error => LogLevelFilter::Error,
-        }
-    }
-}
-
 #[derive(Debug, Args)]
 struct QueryArgs {
     /// Select the retained-log source. JSONL is the byte-compatible default.
     #[arg(long, value_enum, default_value_t = LogSource::Jsonl)]
     source: LogSource,
     /// Restrict results to one or more severity levels.
-    #[arg(long = "level", value_enum)]
-    levels: Vec<CliLogLevel>,
+    #[arg(long = "level", value_parser = parse_log_level_filter)]
+    levels: Vec<LogLevelFilter>,
 
     /// Match one structured ATM field exactly, for example command=send.
     #[arg(long = "match", value_name = "KEY=VALUE")]
@@ -227,9 +206,8 @@ impl QueryArgs {
                 level_at_least: self
                     .levels
                     .iter()
-                    .map(|level| level_name(*level))
-                    .min_by_key(|level| diagnostic_level_rank(level))
-                    .map(str::to_owned),
+                    .min_by_key(|level| level.severity_rank())
+                    .map(|level| level.as_str().to_owned()),
                 component_prefix: self.component.clone(),
                 limit: Some(limit),
                 cursor: None,
@@ -257,7 +235,7 @@ impl QueryArgs {
                 || self
                     .levels
                     .iter()
-                    .any(|level| level_name(*level) == record.level))
+                    .any(|level| level.as_str() == record.level))
             && since.is_none_or(|timestamp| record.ts_unix_ms >= timestamp)
             && until.is_none_or(|timestamp| record.ts_unix_ms <= timestamp)
     }
@@ -270,7 +248,7 @@ impl QueryArgs {
 
         Ok(AtmLogQuery {
             mode,
-            levels: self.levels.iter().copied().map(Into::into).collect(),
+            levels: self.levels.clone(),
             field_matches: self
                 .matches
                 .iter()
@@ -296,14 +274,16 @@ impl QueryArgs {
     }
 }
 
-fn diagnostic_level_rank(level: &str) -> u8 {
-    match level {
-        "trace" => 0,
-        "debug" => 1,
-        "info" => 2,
-        "warn" => 3,
-        "error" => 4,
-        _ => unreachable!("CliLogLevel always maps to a known diagnostic level"),
+fn parse_log_level_filter(raw: &str) -> Result<LogLevelFilter, String> {
+    match raw {
+        "trace" => Ok(LogLevelFilter::Trace),
+        "debug" => Ok(LogLevelFilter::Debug),
+        "info" => Ok(LogLevelFilter::Info),
+        "warn" => Ok(LogLevelFilter::Warn),
+        "error" => Ok(LogLevelFilter::Error),
+        _ => Err(format!(
+            "invalid log level {raw:?}; expected trace, debug, info, warn, or error"
+        )),
     }
 }
 
@@ -427,16 +407,6 @@ impl TimelineRecord {
             "timeline" => 2,
             _ => unreachable!("merged source is constrained"),
         }
-    }
-}
-
-fn level_name(level: CliLogLevel) -> &'static str {
-    match level {
-        CliLogLevel::Trace => "trace",
-        CliLogLevel::Debug => "debug",
-        CliLogLevel::Info => "info",
-        CliLogLevel::Warn => "warn",
-        CliLogLevel::Error => "error",
     }
 }
 
@@ -579,8 +549,8 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     use super::{
-        CliLogLevel, LogCommand, LogModeCommand, LogSource, QueryArgs, TimelineRecord,
-        parse_match_expression, parse_relative_duration,
+        LogCommand, LogModeCommand, LogSource, QueryArgs, TimelineRecord,
+        parse_log_level_filter, parse_match_expression, parse_relative_duration,
     };
     use crate::observability::{CliObservability, CliObservabilityOptions};
 
@@ -593,6 +563,7 @@ mod tests {
 
     async fn timeline_fixture_endpoint(
         response: DiagnosticTimelineResponse,
+        expected_path: String,
     ) -> (TempDir, PathBuf, tokio::task::JoinHandle<String>) {
         let fixture = TempDir::new().expect("timeline fixture directory");
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -632,10 +603,7 @@ mod tests {
                 bytes.extend_from_slice(&chunk[..count]);
             }
             let request = String::from_utf8(bytes).expect("UTF-8 fixture request");
-            assert!(request.starts_with(&format!(
-                "GET /v1/diagnostics?limit={} HTTP/1.1\r\n",
-                atm_http_runtime::DEFAULT_DIAGNOSTICS_LIMIT
-            )));
+            assert!(request.starts_with(&format!("GET {expected_path} HTTP/1.1\r\n")));
             assert!(request.to_ascii_lowercase().contains(
                 &format!("x-atm-local-capability: {}", expected_capability).to_ascii_lowercase()
             ));
@@ -857,20 +825,26 @@ mod tests {
                 truncated: false,
             }))),
         });
-        let (fixture, endpoint, request) = timeline_fixture_endpoint(DiagnosticTimelineResponse {
-            records: vec![DiagnosticTimelineRecord {
-                ts_unix_ms: 100,
-                level: "error".to_owned(),
-                component: "runtime.route".to_owned(),
-                code: Some("fixture".to_owned()),
-                correlation_id: None,
-                origin: "timeline".to_owned(),
-                message: "timeline fixture".to_owned(),
-                detail: None,
-            }],
-            truncated: false,
-            next_cursor: None,
-        })
+        let (fixture, endpoint, request) = timeline_fixture_endpoint(
+            DiagnosticTimelineResponse {
+                records: vec![DiagnosticTimelineRecord {
+                    ts_unix_ms: 100,
+                    level: "error".to_owned(),
+                    component: "runtime.route".to_owned(),
+                    code: Some("fixture".to_owned()),
+                    correlation_id: None,
+                    origin: "timeline".to_owned(),
+                    message: "timeline fixture".to_owned(),
+                    detail: None,
+                }],
+                truncated: false,
+                next_cursor: None,
+            },
+            format!(
+                "/v1/diagnostics?limit={}",
+                atm_http_runtime::DEFAULT_DIAGNOSTICS_LIMIT
+            ),
+        )
         .await;
         let args = QueryArgs {
             source: LogSource::Merged,
@@ -903,11 +877,55 @@ mod tests {
         drop(fixture);
     }
 
+    #[tokio::test]
+    async fn timeline_source_forwards_the_shared_severity_threshold() {
+        let args = QueryArgs {
+            source: LogSource::Timeline,
+            levels: vec![LogLevelFilter::Info],
+            matches: Vec::new(),
+            since: None,
+            until: None,
+            component: None,
+            limit: None,
+            json: false,
+        };
+        let (fixture, endpoint, request) = timeline_fixture_endpoint(
+            DiagnosticTimelineResponse {
+                records: Vec::new(),
+                truncated: false,
+                next_cursor: None,
+            },
+            format!(
+                "/v1/diagnostics?limit={}&level=info",
+                atm_http_runtime::DEFAULT_DIAGNOSTICS_LIMIT
+            ),
+        )
+        .await;
+
+        let records = args
+            .timeline_records_from_endpoint(&endpoint)
+            .await
+            .expect("query timeline fixture");
+
+        assert!(records.is_empty());
+        request.await.expect("fixture request task");
+        drop(fixture);
+    }
+
+    #[test]
+    fn cli_log_levels_parse_into_the_shared_filter_contract() {
+        assert_eq!(
+            parse_log_level_filter("warn").expect("parse warn"),
+            LogLevelFilter::Warn
+        );
+        assert!(parse_log_level_filter("warning").is_err());
+    }
+
     #[test]
     fn snapshot_query_defaults_limit_and_orders_newest_first() {
         let args = QueryArgs {
             source: LogSource::Jsonl,
-            levels: vec![CliLogLevel::Info],
+            levels: vec![LogLevelFilter::Info],
             matches: vec!["command=send".to_string()],
             since: None,
             until: None,
@@ -1079,7 +1097,7 @@ mod tests {
         let command = LogCommand {
             mode: LogModeCommand::Snapshot(QueryArgs {
                 source: LogSource::Jsonl,
-                levels: vec![CliLogLevel::Info],
+                levels: vec![LogLevelFilter::Info],
                 matches: vec!["command=send".to_string()],
                 since: None,
                 until: None,
@@ -1133,7 +1151,7 @@ mod tests {
         let command = LogCommand {
             mode: LogModeCommand::Snapshot(QueryArgs {
                 source: LogSource::Jsonl,
-                levels: vec![CliLogLevel::Info],
+                levels: vec![LogLevelFilter::Info],
                 matches: vec!["command=send".to_string()],
                 since: None,
                 until: None,
