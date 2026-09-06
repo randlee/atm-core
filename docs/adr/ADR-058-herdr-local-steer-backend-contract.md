@@ -573,7 +573,10 @@ the adapter, `atm-herdr`) is normatively documented in
 - `--wait`, `agent_prompt_stalled`, `agent send-keys`, `pane send-keys`,
   `pane send-input`, `events.subscribe`/`events.wait`, `herdr api snapshot`.
 - Any Herdr-side queue, per-turn tracking, or idempotency of repeated prompts.
-- Herdr on Windows (named-pipe transport exists but is out of AQ scope).
+- Live Windows evidence is not part of the Phase AQ contract; AY.7 owns
+  Windows process correctness and release readiness owns live platform proof.
+  The named-pipe transport remains part of the supported cross-platform
+  Herdr implementation.
 - Text of `error.message`, `AgentInfo` fields other than `agent_status`,
   and the ordering of JSON keys.
 
@@ -692,3 +695,32 @@ never emits `send-keys`, `send_input`, tmux, or a pane id for this path. The
 adapter applies the caller's bounded deadline and reports a non-zero Herdr
 exit as a typed failure. Lead and configured-recipient mail remain independent
 delivery attempts, so a notification failure does not erase their outcomes.
+
+## Amendment — Phase AY compatibility and Windows scope (2026-09-06)
+
+This amendment supersedes the earlier pin and scope wording while preserving
+the original decision history above.
+
+1. **Cross-platform contract.** D3 specifies Unix-domain sockets on macOS and
+   Linux and Herdr's named pipe on Windows. The transport is an implementation
+   detail: ATM exposes the same command set, typed errors, and breaker
+   semantics on all three platforms. Windows-specific process correctness and
+   CI evidence belong to AY.7; live platform proof belongs to release
+   readiness. The former Windows scope-out is deleted.
+2. **Minimum version.** The former `d79fd746` / protocol-21 pin is replaced by
+   `HERDR_MINIMUM_VERSION` under ADR-061. The current minimum is 0.8.0, and
+   one ATM build supports every Herdr release at or above that floor. v0.8.2
+   is the current design/recording target. Herdr `PROTOCOL_VERSION` remains a
+   secondary bincode-client fact, not the NDJSON compatibility floor; the
+   per-release facts and recordings live in
+   [`docs/atm-herdr/herdr-versions.md`](../atm-herdr/herdr-versions.md).
+3. **Drift and parsing.** New capabilities are additive or runtime-detected;
+   parsers key on stable error codes and tolerate unknown fields, never
+   message text. The v0.8.0 blocked-prompt behaviour and the newer
+   `agent_prompt --wait` outcome are replayed as version deltas without a
+   speculative version adapter.
+4. **AI.11 clarification.** The retired-listener ban governs ATM's own IPC
+   listener. AY.8 may exempt only
+   `crates/atm-herdr/src/transport_socket.rs` for the Herdr client. The
+   `named_pipe` / `NamedPipe` symbols remain banned everywhere else under
+   `crates/`; this amendment does not authorize legacy daemon remodeling.
