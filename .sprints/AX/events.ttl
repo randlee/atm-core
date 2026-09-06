@@ -591,3 +591,29 @@ triage:r123 a triage:Resolution ;
 triage:r124 a triage:Resolution ;
     triage:resolves <urn:atm:triage:finding/AXPE-RBP-005> ;
     triage:resolvedAt "2026-09-06T20:28:23Z"^^xsd:dateTime .
+# Post-recheck2 CI-blocking fixes on integrate/phase-ax @ 046c9abd9 (develop-resync merge):
+# RULE-003 introduced by the resync (herdr_queue_wake.rs 1006 prod lines > 1000 cap), found by
+# fenix's CI heartbeat. GO-AX-HERDR-QUEUE-WAKE-LINE-CAP (arch-ctm) completed 2026-09-06T21:28:35Z:
+# fix/ax-herdr-queue-wake-line-cap 2222163e0, PR #1266 -> integrate/phase-ax (pure private extraction
+# of the reminder/escalation half into herdr_queue_wake_reminders.rs; byte-identical code move, no new
+# public API; RULE-003 satisfied at 735/287 prod lines).
+triage:a31 a triage:Assignment ;
+    triage:ofSprint triage:AX6 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-06T21:20:17Z"^^xsd:dateTime .
+triage:c30 a triage:Completion ;
+    triage:ofSprint triage:AX6 ;
+    triage:at "2026-09-06T21:28:35Z"^^xsd:dateTime .
+# QA-AX-1266 PASS 0/0/0 at 2026-09-06T21:34:52Z, report:
+# https://github.com/randlee/atm-core/pull/1266#issuecomment-5562331974 . Confirmed byte-identical
+# extraction, no behavioral drift, ControlPathSyncBridge residual call-site count (7, unaffected by
+# this PR; superseded from 8 by develop's PR #1254 2bc491f9a, confirmed by fenix and independently by
+# all three reviewers) unaffected.
+#
+# GO-AX-PREMERGE-M4-BENCH-SMOKE-1788721967 (arch-ctm, rand-m4 host, pre-handoff): fix/ax-premerge-benchmark-remediation
+# 46a796d91, PR #1262 -> integrate/phase-ax (benchmark harness fix: doctor check after roster setup,
+# disposable roster-lead provisioning, launched-daemon probe). QA-AX-1262 PASS 0/0/0, report:
+# https://github.com/randlee/atm-core/pull/1262#issuecomment-5562100041 .
+triage:c31 a triage:Completion ;
+    triage:ofSprint triage:AX6 ;
+    triage:at "2026-09-06T21:34:52Z"^^xsd:dateTime .
