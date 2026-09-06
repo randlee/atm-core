@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, MutexGuard, RwLock};
 use std::time::{Duration, Instant};
 
 use atm_storage::{
@@ -77,6 +77,32 @@ impl Default for GraftReceiverLeaseCache {
 }
 
 impl GraftReceiverLeaseCache {
+    fn wait_for_in_flight_load<'entry>(
+        entry: &'entry GraftReceiverLeaseEntry,
+        mut state: MutexGuard<'entry, GraftReceiverLeaseState>,
+        expires_at: Instant,
+    ) -> Result<MutexGuard<'entry, GraftReceiverLeaseState>, AtmError> {
+        while matches!(*state, GraftReceiverLeaseState::Loading) {
+            let remaining = expires_at.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(AtmError::daemon_unavailable(
+                    "graft receiver lease lookup exceeded its deadline",
+                ));
+            }
+            let (next_state, timeout) = entry
+                .changed
+                .wait_timeout(state, remaining)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state = next_state;
+            if timeout.timed_out() && matches!(*state, GraftReceiverLeaseState::Loading) {
+                return Err(AtmError::daemon_unavailable(
+                    "graft receiver lease lookup exceeded its deadline",
+                ));
+            }
+        }
+        Ok(state)
+    }
+
     fn entry(&self, key: &(TeamName, AgentName)) -> Arc<GraftReceiverLeaseEntry> {
         {
             let entries = self
@@ -150,25 +176,7 @@ impl GraftReceiverLeaseCache {
                     return Ok(cached.lease.clone());
                 }
                 GraftReceiverLeaseState::Loading => {
-                    while matches!(*state, GraftReceiverLeaseState::Loading) {
-                        let remaining = expires_at.saturating_duration_since(Instant::now());
-                        if remaining.is_zero() {
-                            return Err(AtmError::daemon_unavailable(
-                                "graft receiver lease lookup exceeded its deadline",
-                            ));
-                        }
-                        let (next_state, timeout) = entry
-                            .changed
-                            .wait_timeout(state, remaining)
-                            .unwrap_or_else(|poisoned| poisoned.into_inner());
-                        state = next_state;
-                        if timeout.timed_out() && matches!(*state, GraftReceiverLeaseState::Loading)
-                        {
-                            return Err(AtmError::daemon_unavailable(
-                                "graft receiver lease lookup exceeded its deadline",
-                            ));
-                        }
-                    }
+                    drop(Self::wait_for_in_flight_load(&entry, state, expires_at)?);
                 }
                 GraftReceiverLeaseState::Cached(_) | GraftReceiverLeaseState::Empty => {
                     // Only this key's entry lock is held while loading. Other
