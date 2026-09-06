@@ -5,13 +5,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::boundary::{
-    AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TaskEventRow, TaskRow,
-    TaskState,
+    AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TaskEventKind, TaskEventRow,
+    TaskRow, TaskState,
 };
 use atm_core::types::IsoTimestamp;
 
 use crate::herdr_escalation::{
-    BLOCKED_NOTIFY_MS, EscalationNotification, MAX_BLOCKED_ESCALATIONS_PER_TICK, escalate,
+    BLOCKED_NOTIFY_MS, EscalationKind, EscalationNotification, MAX_BLOCKED_ESCALATIONS_PER_TICK,
+    escalate,
 };
 use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats, run_blocking};
 
@@ -64,7 +65,7 @@ pub(crate) async fn maybe_escalate_task(
         &row.team,
         &body,
         &notification,
-        "lead_notified",
+        EscalationKind::LeadNotified,
     )
     .await;
     record_escalation_stats(stats, &outcome);
@@ -93,13 +94,13 @@ async fn reminder_events(
 fn task_escalation_body(row: &TaskRow, now: IsoTimestamp, events: &[TaskEventRow]) -> String {
     let first = events
         .iter()
-        .find(|event| event.event.as_str() == "reminded")
+        .find(|event| event.event == TaskEventKind::Reminded)
         .map(|event| event.at)
         .unwrap_or(row.assigned_at);
     let outcome = events
         .iter()
         .rev()
-        .find(|event| event.event.as_str() == "reminded")
+        .find(|event| event.event == TaskEventKind::Reminded)
         .and_then(|event| event.outcome)
         .map(ReminderOutcome::as_str)
         .unwrap_or("unknown");
@@ -222,7 +223,7 @@ async fn escalate_one_blocked(
         member.team(),
         &body,
         &notification,
-        "blocked_escalated",
+        EscalationKind::BlockedEscalated,
     )
     .await;
     record_escalation_stats(stats, &outcome);

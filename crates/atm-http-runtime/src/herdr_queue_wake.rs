@@ -2033,7 +2033,7 @@ mod tests {
             &team,
             "mail body is separate",
             &notification,
-            "lead_notified",
+            crate::herdr_escalation::EscalationKind::LeadNotified,
         )
         .await;
         assert_eq!(outcome.recipients_written, 1);

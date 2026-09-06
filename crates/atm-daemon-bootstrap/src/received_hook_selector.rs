@@ -442,7 +442,7 @@ impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
                 }
                 Err(error) => {
                     let outcome = error.emission_outcome();
-                    tracing::warn!(backend = "herdr", member = %dispatch.event.recipient, error = ?error, outcome, "Herdr wake-up was not accepted");
+                    tracing::warn!(subsystem = "received_hook_selector", action = "herdr_prompt", backend = "herdr", member = %dispatch.event.recipient, error = ?error, outcome, "Herdr wake-up was not accepted");
                     return Err(error.into());
                 }
             }
