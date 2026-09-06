@@ -104,7 +104,7 @@ where
         ));
     };
     if runtime
-        .load_roster_member(recipient_team, recipient)?
+        .load_roster_member(recipient_team, recipient)
         .is_none()
     {
         return Err(AtmError::new(
@@ -1045,19 +1045,12 @@ mod tests {
             Ok(())
         }
 
-        fn load_roster_member(
-            &self,
-            team: &TeamName,
-            agent: &AgentName,
-        ) -> Result<Option<RosterEntry>, AtmError> {
-            Ok(Some(roster_entry(team, agent)))
+        fn load_roster_member(&self, team: &TeamName, agent: &AgentName) -> Option<RosterEntry> {
+            Some(roster_entry(team, agent))
         }
 
-        fn load_team_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
-            Ok(vec![roster_entry(
-                team,
-                &AgentName::from_validated(TEST_QA),
-            )])
+        fn load_team_roster(&self, team: &TeamName) -> Vec<RosterEntry> {
+            vec![roster_entry(team, &AgentName::from_validated(TEST_QA))]
         }
     }
 

@@ -371,7 +371,10 @@ impl atm_storage::RosterStore for SingleMemberRoster {
     }
 
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
-        unreachable!("admission entry tests never enumerate teams")
+        // Runtime construction hydrates the RAM roster from the durable
+        // store exactly once at startup, exercising `list_teams` even though
+        // admission tests otherwise never enumerate teams themselves.
+        Ok(vec![TeamName::from_validated(TEST_TEAM)])
     }
 }
 
@@ -415,9 +418,13 @@ impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideSt
 }
 
 fn local_runtime(store: Arc<InMemoryAsyncStore>, attach_async_store: bool) -> LocalServiceRuntime {
+    let (roster_store, roster_runtime_mirror) =
+        atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(SingleMemberRoster))
+            .expect("write-through roster fixture hydrates from the in-memory fake");
     let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         store.clone(),
-        Arc::new(SingleMemberRoster),
+        roster_store,
+        roster_runtime_mirror,
         Arc::new(NoopNudgeTemplateOverrideStore),
         Arc::new(crate::LocalFileNonClaudeOutbound::new()),
     );
