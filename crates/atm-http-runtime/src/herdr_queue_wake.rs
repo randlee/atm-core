@@ -473,7 +473,7 @@ impl HerdrQueueWakePump {
                 let Some(row) = self.read_due_task(reader.as_ref(), &candidate, now).await else {
                     continue;
                 };
-                self.emit_task_reminder(task_store, candidate, row, now, stats)
+                self.emit_task_reminder(reader.as_ref(), task_store, candidate, row, now, stats)
                     .await;
             }
         }
@@ -521,6 +521,7 @@ impl HerdrQueueWakePump {
 
     async fn emit_task_reminder(
         &self,
+        reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
         task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
         candidate: TaskCandidate,
         row: TaskRow,
@@ -529,6 +530,7 @@ impl HerdrQueueWakePump {
     ) {
         if candidate.blocked {
             self.record_task_outcome(
+                reader,
                 task_store,
                 &candidate.member.key,
                 &row,
@@ -555,6 +557,7 @@ impl HerdrQueueWakePump {
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_render", outcome = "unrenderable", error = %error, member = %candidate.member.key, "Herdr task reminder could not render");
                 self.record_task_outcome(
+                    reader,
                     task_store,
                     &candidate.member.key,
                     &row,
@@ -576,6 +579,7 @@ impl HerdrQueueWakePump {
         {
             Ok(_) => {
                 self.record_task_outcome(
+                    reader,
                     task_store,
                     &candidate.member.key,
                     &row,
@@ -596,6 +600,7 @@ impl HerdrQueueWakePump {
 
     async fn record_task_outcome(
         &self,
+        reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
         task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
         member: &MemberKey,
         row: &TaskRow,
@@ -616,7 +621,7 @@ impl HerdrQueueWakePump {
         }
         self.stamp_task_attempt(member, now);
         if let Ok(recorded_row) = recorded_row {
-            self.maybe_escalate_task(task_store, &recorded_row, now, stats)
+            self.maybe_escalate_task(reader, task_store, &recorded_row, now, stats)
                 .await;
         }
     }
@@ -649,13 +654,16 @@ impl HerdrQueueWakePump {
 
     async fn maybe_escalate_task(
         &self,
+        reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
         task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
         row: &TaskRow,
         now: IsoTimestamp,
         stats: &mut HerdrQueueWakeStats,
     ) {
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(self, task_store, row, now, stats)
-            .await;
+        crate::herdr_queue_wake_escalation::maybe_escalate_task(
+            self, reader, task_store, row, now, stats,
+        )
+        .await;
     }
 
     async fn escalate_blocked(
@@ -1766,6 +1774,10 @@ mod tests {
 
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump,
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &row,
             timestamp,
@@ -1817,6 +1829,10 @@ mod tests {
         tenth.reminder_count = 10;
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump,
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &tenth,
             timestamp,
@@ -1829,6 +1845,10 @@ mod tests {
         nineteenth.lead_notified_count = 1;
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump,
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &nineteenth,
             timestamp,
@@ -1840,6 +1860,10 @@ mod tests {
         twentieth.reminder_count = 20;
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump,
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &twentieth,
             timestamp,
@@ -1881,6 +1905,10 @@ mod tests {
 
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump.clone().with_daemon_home(root.path().join("home")),
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &tenth,
             timestamp,
@@ -1894,6 +1922,10 @@ mod tests {
         let mut retry_stats = HerdrQueueWakeStats::default();
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump.with_daemon_home(root.path().join("home")),
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &eleventh,
             timestamp,
@@ -1924,6 +1956,10 @@ mod tests {
 
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump,
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &row,
             timestamp,
@@ -1948,6 +1984,10 @@ mod tests {
             .expect("roster");
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump,
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &row,
             timestamp,

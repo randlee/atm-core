@@ -20,6 +20,8 @@ use atm_storage::types::{AgentName, TaskId, TeamName};
 use atm_storage::{AtmErrorCode, MessageWriteOrigin};
 use rusqlite::{Connection, OptionalExtension, params};
 
+use crate::task_sql;
+
 const TASK_RECOVERY: &str = "Run: atm list --task-events <task_id> --member <assignee>";
 
 fn task_rejected(detail: impl std::fmt::Display) -> AtmError {
@@ -33,16 +35,7 @@ fn load_task_row(
     task_id: &TaskId,
     assignee: &AgentName,
 ) -> Result<Option<TaskRow>, AtmError> {
-    connection
-        .query_row(
-            "SELECT team, task_id, assignee, assigner, state, assignment_message_id,
-                    description, assigned_at, updated_at, last_reminded_at, reminder_count,
-                    lead_notified_count
-               FROM tasks WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-            params![team.as_str(), task_id.as_str(), assignee.as_str()],
-            crate::SqliteTaskStore::decode_row,
-        )
-        .optional()
+    task_sql::select_task_row(connection, team, task_id, assignee)
         .map_err(|error| sqlite_error(target, "failed to load task row", error))
 }
 
@@ -52,22 +45,8 @@ fn load_open_task_rows(
     team: &TeamName,
     assignee: &AgentName,
 ) -> Result<Vec<TaskRow>, AtmError> {
-    let mut statement = connection
-        .prepare(
-            "SELECT team, task_id, assignee, assigner, state, assignment_message_id,
-                    description, assigned_at, updated_at, last_reminded_at, reminder_count,
-                    lead_notified_count
-               FROM tasks WHERE team = ?1 AND assignee = ?2 AND state <> 'complete'",
-        )
-        .map_err(|error| sqlite_error(target, "failed to prepare open task lookup", error))?;
-    statement
-        .query_map(
-            params![team.as_str(), assignee.as_str()],
-            crate::SqliteTaskStore::decode_row,
-        )
-        .map_err(|error| sqlite_error(target, "failed to load open tasks", error))?
-        .map(|row| row.map_err(|error| sqlite_error(target, "failed to decode open task", error)))
-        .collect()
+    task_sql::select_open_tasks_for_member(connection, team, assignee)
+        .map_err(|error| sqlite_error(target, "failed to load open tasks", error))
 }
 
 fn transition_for(

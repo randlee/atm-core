@@ -315,7 +315,7 @@ MemberBlocked,       // "ATM_MEMBER_BLOCKED"
 
 `TaskStore` methods introduced by AX.3 (this sprint adds the three C5
 methods); the AX.5 reminder cadence and pseudo-rule (this
-sprint adds `record_lead_notified` and `list_task_events` calls inside
+sprint adds `record_lead_notified` and an async task-ledger `list_task_events` read inside
 the task step, which AX.5 property 6 already permits); roster schema;
 `AgentType` enum; every existing doctor code; `HerdrProcessAdapter`
 visibility (public).
@@ -363,7 +363,7 @@ visibility (public).
 
 - `crates/atm-http-runtime/src/herdr_queue_wake.rs` tests (`ax6_01_*`
   naming): the AX.5 property-6 test extended to assert that
-  `record_lead_notified` and `list_task_events` are the only additional
+  `record_lead_notified` and the async task-ledger `list_task_events` read are the only additional
   `TaskStore` calls and that no state transition occurs; AC 1 scenarios,
   including no-lead and two-lead teams
   (no message, warn log, no `LeadNotified` row).
