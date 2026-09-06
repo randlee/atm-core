@@ -6,6 +6,7 @@ import importlib.util
 import io
 import argparse
 import json
+import os
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 import plistlib
@@ -21,8 +22,16 @@ SPEC = importlib.util.spec_from_file_location("daemon_switch", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 DAEMON_SWITCH = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(DAEMON_SWITCH)
+import release_resolution as RELEASE_RESOLUTION
 
 
+POSIX_ONLY = unittest.skipUnless(
+    os.name == "posix",
+    "launchd/systemd/AF_UNIX backends and POSIX permission bits do not exist on Windows",
+)
+
+
+@POSIX_ONLY
 class StaleSocketCleanupTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -66,6 +75,7 @@ class StaleSocketCleanupTests(unittest.TestCase):
         self.assertTrue(self.socket_path.is_file())
 
 
+@POSIX_ONLY
 class QuiesceTests(unittest.TestCase):
     def test_requires_explicit_confirmation(self) -> None:
         with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "--yes"):
@@ -118,7 +128,120 @@ class QuiesceTests(unittest.TestCase):
                 DAEMON_SWITCH.run_service(args, "start")
 
 
+class WindowsScheduledTaskTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.args = argparse.Namespace(
+            service="atm-daemon",
+            cli_link=r"C:\atm-active\atm.exe",
+            daemon_link=r"C:\atm-active\atm-daemon.exe",
+            yes=True,
+        )
+        self.selector = Path(self.args.daemon_link)
+        self.xml = """<?xml version=\"1.0\"?><Task xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\"><Actions><Exec><Command>C:\\atm-active\\atm-daemon.exe</Command></Exec></Actions></Task>"""
+
+    def test_task_status_reads_one_executable_action_and_running_state(self) -> None:
+        with mock.patch.object(
+            DAEMON_SWITCH,
+            "run",
+            side_effect=[
+                subprocess.CompletedProcess(["schtasks.exe"], 0, self.xml, ""),
+                subprocess.CompletedProcess(["schtasks.exe"], 0, "Status: Running\n", ""),
+            ],
+        ):
+            self.assertEqual(
+                DAEMON_SWITCH.windows_task_status("atm-daemon"),
+                {
+                    "registered": True,
+                    "state": "running",
+                    "command": r"C:\atm-active\atm-daemon.exe",
+                },
+            )
+
+    def test_task_status_reports_absent_task(self) -> None:
+        missing = subprocess.CompletedProcess(
+            ["schtasks.exe"], 1, "", "ERROR: The system cannot find the file specified."
+        )
+        with mock.patch.object(DAEMON_SWITCH, "run", return_value=missing):
+            self.assertEqual(DAEMON_SWITCH.windows_task_status("atm-daemon")["state"], "absent")
+
+    def test_optional_stop_does_not_hide_a_denied_task_query(self) -> None:
+        denied = subprocess.CompletedProcess(["schtasks.exe"], 1, "", "ERROR: Access is denied.")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            mock.patch.object(DAEMON_SWITCH, "run", return_value=denied),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "Access is denied"):
+                DAEMON_SWITCH.run_service(self.args, "stop", allow_absent=True)
+
+    def test_optional_stop_skips_only_an_absent_task(self) -> None:
+        missing = subprocess.CompletedProcess(
+            ["schtasks.exe"], 1, "", "ERROR: The system cannot find the file specified."
+        )
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            mock.patch.object(DAEMON_SWITCH, "run", return_value=missing),
+        ):
+            DAEMON_SWITCH.run_service(self.args, "stop", allow_absent=True)
+
+    def test_linux_optional_stop_does_not_hide_a_denied_unit(self) -> None:
+        args = argparse.Namespace(service="atm-daemon")
+        denied = subprocess.CompletedProcess(["systemctl"], 1, "", "Failed to stop atm-daemon.service: Access denied")
+        missing = subprocess.CompletedProcess(["systemctl"], 5, "", "Failed to stop atm-daemon.service: Unit atm-daemon.service not loaded.")
+        with mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Linux"):
+            with mock.patch.object(DAEMON_SWITCH, "run", return_value=denied):
+                with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "Access denied"):
+                    DAEMON_SWITCH.run_service(args, "stop", allow_absent=True)
+            with mock.patch.object(DAEMON_SWITCH, "run", return_value=missing):
+                DAEMON_SWITCH.run_service(args, "stop", allow_absent=True)
+
+    def test_start_requires_the_task_to_launch_the_daemon_selector(self) -> None:
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            mock.patch.object(
+                DAEMON_SWITCH,
+                "windows_task_status",
+                return_value={"registered": True, "state": "ready", "command": r"C:\old\atm-daemon.exe"},
+            ),
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(Path(self.args.cli_link), self.selector)),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "not the daemon selector"):
+                DAEMON_SWITCH.run_service(self.args, "start")
+
+    def test_start_runs_only_after_task_selector_validation(self) -> None:
+        completed = subprocess.CompletedProcess(["schtasks.exe"], 0, "SUCCESS", "")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            mock.patch.object(
+                DAEMON_SWITCH,
+                "windows_task_status",
+                return_value={"registered": True, "state": "ready", "command": str(self.selector)},
+            ),
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(Path(self.args.cli_link), self.selector)),
+            mock.patch.object(DAEMON_SWITCH, "run", return_value=completed) as run,
+        ):
+            DAEMON_SWITCH.run_service(self.args, "start")
+
+        self.assertEqual(run.call_args.args[0], ["schtasks.exe", "/Run", "/TN", "atm-daemon"])
+
+    def test_temporary_launch_rejects_windows_scm_fallback(self) -> None:
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "scheduled-task backend"),
+        ):
+            DAEMON_SWITCH.temporary_launch_adapter(self.args)
+
+
 class MacosDevelopmentSigningTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        """Exercise extracted release checks at their canonical module boundary."""
+        cls.switcher = DAEMON_SWITCH
+        globals()["DAEMON_SWITCH"] = RELEASE_RESOLUTION
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        globals()["DAEMON_SWITCH"] = cls.switcher
+
     def test_identity_discovery_uses_the_shared_apple_resolver(self) -> None:
         with (
             mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
@@ -394,17 +517,18 @@ class MacosDevelopmentSigningTests(unittest.TestCase):
             self.assertEqual(probed, [cli.resolve()])
 
     def test_restore_dispatch_uses_provenance_gate_and_skips_dev_gate(self) -> None:
+        switcher = self.switcher
         args = argparse.Namespace(command="restore")
         cli = Path("/release/atm")
         daemon = Path("/release/atm-daemon")
         argument_parser = mock.Mock(parse_args=mock.Mock(return_value=args))
         with (
-            mock.patch.object(DAEMON_SWITCH, "parser", return_value=argument_parser),
-            mock.patch.object(DAEMON_SWITCH, "restore_pair", return_value=(cli, daemon)),
-            mock.patch.object(DAEMON_SWITCH, "require_macos_restore_provenance") as provenance,
-            mock.patch.object(DAEMON_SWITCH, "switch_pair") as switch,
+            mock.patch.object(switcher, "parser", return_value=argument_parser),
+            mock.patch.object(switcher, "restore_pair", return_value=(cli, daemon)),
+            mock.patch.object(switcher, "require_macos_restore_provenance") as provenance,
+            mock.patch.object(switcher, "switch_pair") as switch,
         ):
-            self.assertEqual(DAEMON_SWITCH.main(), 0)
+            self.assertEqual(switcher.main(), 0)
 
         provenance.assert_called_once_with(cli, daemon)
         switch.assert_called_once_with(args, cli, daemon, require_development_signature=False)
@@ -594,6 +718,7 @@ class ReadinessAndRollbackTests(unittest.TestCase):
         development.assert_called_once_with(candidate_cli, candidate_daemon)
 
 
+@POSIX_ONLY
 class TemporaryLaunchJournalTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -834,6 +959,7 @@ class TemporaryLaunchControlPlaneTests(unittest.TestCase):
         )
 
 
+@POSIX_ONLY
 class MacosTemporaryLaunchAdapterTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -1001,62 +1127,7 @@ class MacosTemporaryLaunchAdapterTests(unittest.TestCase):
         self.assertIsNone(journal.load())
 
 
-class WindowsTemporaryLaunchAdapterTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
-        self.cli = self.root / "atm.exe"
-        self.daemon = self.root / "atm-daemon.exe"
-        for binary in (self.cli, self.daemon):
-            binary.write_bytes(binary.name.encode("utf-8"))
-            binary.chmod(0o700)
-        self.args = argparse.Namespace(
-            yes=True,
-            service="atm-daemon-test",
-            peer_wire_security=DAEMON_SWITCH.PeerWireSecurity.PLAINTEXT_TEST,
-            repair_orphan=False,
-        )
-        self.current = DAEMON_SWITCH.quote_windows_command_line(
-            [str(self.daemon), "--log-format", "json"]
-        )
-        self.commands: list[list[str]] = []
-        self.before_config: object | None = None
-        self.adapter = DAEMON_SWITCH.WindowsScmAdapter(self.run_sc)
-
-    def tearDown(self) -> None:
-        self.temporary.cleanup()
-
-    def run_sc(self, command: object, _timeout: float) -> object:
-        values = list(command)
-        self.commands.append(values)
-        if values[1] == "qc":
-            return subprocess.CompletedProcess(values, 0, f"BINARY_PATH_NAME   : {self.current}\n", "")
-        if values[1] == "config":
-            if callable(self.before_config):
-                self.before_config()
-            self.current = values[4]
-            return subprocess.CompletedProcess(values, 0, "SUCCESS\n", "")
-        raise AssertionError(f"unexpected SCM command: {values}")
-
-    def captured_session(self) -> object:
-        captured = self.adapter.capture(
-            self.args,
-            self.cli,
-            self.daemon,
-            self.args.peer_wire_security,
-        )
-        return DAEMON_SWITCH.TemporaryLaunchSession.captured(
-            peer_wire_security=self.args.peer_wire_security,
-            platform="Windows",
-            account_id="user:benchmark",
-            service=self.args.service,
-            cli_path=self.cli,
-            cli_digest=DAEMON_SWITCH.sha256_file(self.cli),
-            daemon_path=self.daemon,
-            daemon_digest=DAEMON_SWITCH.sha256_file(self.daemon),
-            launch_spec=captured,
-        )
-
+class WindowsCommandLineCodecTests(unittest.TestCase):
     def test_windows_argv_codec_round_trips_quoted_arguments(self) -> None:
         argv = [
             r"C:\\Program Files\\ATM\\atm-daemon.exe",
@@ -1066,74 +1137,15 @@ class WindowsTemporaryLaunchAdapterTests(unittest.TestCase):
             'quote " and trailing slash\\',
             "",
         ]
-
-        self.assertEqual(DAEMON_SWITCH.parse_windows_command_line(DAEMON_SWITCH.quote_windows_command_line(argv)), argv)
-
-    def test_overlay_is_journaled_before_exact_scm_mutation_then_restored(self) -> None:
-        session = self.captured_session().transition(DAEMON_SWITCH.TemporaryLaunchPhase.STOPPED)
-        overlay_spec = self.adapter.apply_overlay(self.args, session)
-        session = session.with_overlay(overlay_spec)
-        original = self.current
-
-        self.assertEqual(self.current, original)
-        self.adapter.activate_overlay(self.args, session)
-        self.assertEqual(self.current, overlay_spec.overlay_reference)
         self.assertEqual(
-            DAEMON_SWITCH.parse_windows_command_line(self.current)[-2:],
-            ["--peer-wire-security", "plaintext-test"],
+            DAEMON_SWITCH.parse_windows_command_line(
+                DAEMON_SWITCH.quote_windows_command_line(argv)
+            ),
+            argv,
         )
 
-        self.adapter.restore_exact(self.args, session)
-        self.adapter.restore_exact(self.args, session)
 
-        self.assertEqual(self.current, original)
-
-    def test_begin_persists_overlay_before_scm_config_at_fake_service_boundary(self) -> None:
-        journal = DAEMON_SWITCH.TemporaryLaunchJournal(self.root / "state" / "temporary-launch.json")
-
-        def assert_durable_overlay() -> None:
-            active = journal.load()
-            assert active is not None
-            self.assertEqual(active.phase, DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_APPLIED)
-            self.assertIsNotNone(active.overlay_reference)
-            self.assertIsNotNone(active.overlay_digest)
-
-        self.before_config = assert_durable_overlay
-        with (
-            mock.patch.object(DAEMON_SWITCH, "temporary_launch_journal", return_value=journal),
-            mock.patch.object(DAEMON_SWITCH, "selected_matched_pair", return_value=(self.cli, self.daemon)),
-            mock.patch.object(DAEMON_SWITCH, "temporary_launch_adapter", return_value=self.adapter),
-            mock.patch.object(DAEMON_SWITCH, "account_identifier", return_value="user:benchmark"),
-            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
-            mock.patch.object(DAEMON_SWITCH, "run_service"),
-            mock.patch.object(DAEMON_SWITCH, "require_stopped_daemon"),
-            mock.patch.object(DAEMON_SWITCH, "wait_for_temporary_launch", return_value=(True, "ready")),
-            redirect_stdout(io.StringIO()),
-        ):
-            DAEMON_SWITCH.begin_temporary_launch(self.args)
-
-        active = journal.load()
-        assert active is not None
-        self.assertEqual(active.phase, DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_STARTED)
-
-    def test_capture_rejects_preexisting_peer_wire_security(self) -> None:
-        self.current = DAEMON_SWITCH.quote_windows_command_line(
-            [str(self.daemon), "--peer-wire-security", "mutual-tls"]
-        )
-
-        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "already selects"):
-            self.adapter.capture(self.args, self.cli, self.daemon, self.args.peer_wire_security)
-
-    def test_restore_refuses_operator_changed_binary_path(self) -> None:
-        session = self.captured_session().transition(DAEMON_SWITCH.TemporaryLaunchPhase.STOPPED)
-        session = session.with_overlay(self.adapter.apply_overlay(self.args, session))
-        self.adapter.activate_overlay(self.args, session)
-        self.current = DAEMON_SWITCH.quote_windows_command_line([str(self.daemon), "--operator-change"])
-
-        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "changed; refusing restore"):
-            self.adapter.restore_exact(self.args, session)
-
-
+@POSIX_ONLY
 class LinuxTemporaryLaunchAdapterTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -1291,6 +1303,272 @@ class LinuxTemporaryLaunchAdapterTests(unittest.TestCase):
         active = journal.load()
         assert active is not None
         self.assertEqual(active.phase, DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_STARTED)
+
+
+class SwitchModeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        """Keep resolution tests coupled to the extracted pure-resolution module."""
+        cls.switcher = DAEMON_SWITCH
+        globals()["DAEMON_SWITCH"] = RELEASE_RESOLUTION
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        globals()["DAEMON_SWITCH"] = cls.switcher
+
+    def test_latest_release_uses_the_github_release_api(self) -> None:
+        releases = [{"draft": False, "prerelease": False, "tag_name": "v1.5.1"}]
+        with mock.patch.object(DAEMON_SWITCH, "github_json", return_value=releases) as request:
+            self.assertEqual(DAEMON_SWITCH.latest_published_release_version(), "1.5.1")
+        request.assert_called_once_with("")
+
+    def test_release_resolution_uses_platform_owned_pair_and_verifies_both_versions(self) -> None:
+        cli = Path("/release/bin/atm")
+        daemon = Path("/release/bin/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            mock.patch.object(DAEMON_SWITCH, "release_install_roots", return_value=[Path("/release")]),
+            mock.patch.object(DAEMON_SWITCH, "pair_from_root", return_value=(cli, daemon)),
+            mock.patch.object(DAEMON_SWITCH, "require_pair_version") as versions,
+        ):
+            self.assertEqual(
+                DAEMON_SWITCH.resolve_release_pair("1.5.1"),
+                (cli, daemon, "1.5.1"),
+            )
+        versions.assert_called_once_with(cli, daemon, "1.5.1")
+
+    def test_macos_release_resolution_uses_the_homebrew_pair(self) -> None:
+        cli = Path("/opt/homebrew/opt/atm/bin/atm")
+        daemon = Path("/opt/homebrew/opt/atm/bin/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "release_install_roots", return_value=[cli.parent]),
+            mock.patch.object(DAEMON_SWITCH, "pair_from_root", return_value=(cli, daemon)),
+            mock.patch.object(DAEMON_SWITCH, "require_pair_version"),
+        ):
+            self.assertEqual(
+                DAEMON_SWITCH.resolve_release_pair("1.5.1"),
+                (cli, daemon, "1.5.1"),
+            )
+
+    def test_linux_release_resolution_downloads_only_after_package_roots_miss(self) -> None:
+        cli = Path("/cache/bin/atm")
+        daemon = Path("/cache/bin/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Linux"),
+            mock.patch.object(DAEMON_SWITCH, "release_install_roots", return_value=[Path("/usr/bin")]),
+            mock.patch.object(DAEMON_SWITCH, "pair_from_root", return_value=None),
+            mock.patch.object(DAEMON_SWITCH, "extract_linux_release_archive", return_value=(cli, daemon)) as download,
+            mock.patch.object(DAEMON_SWITCH, "require_pair_version") as versions,
+        ):
+            self.assertEqual(
+                DAEMON_SWITCH.resolve_release_pair("1.5.1"),
+                (cli, daemon, "1.5.1"),
+            )
+        download.assert_called_once_with("1.5.1")
+        versions.assert_called_once_with(cli, daemon, "1.5.1")
+
+    def test_pair_version_refuses_a_mismatch_before_selector_mutation(self) -> None:
+        cli = Path("/candidate/atm")
+        daemon = Path("/candidate/atm-daemon")
+        with mock.patch.object(DAEMON_SWITCH, "binary_release_version", side_effect=["1.5.1", "1.5.0"]):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "both equal 1.5.1"):
+                DAEMON_SWITCH.require_pair_version(cli, daemon, "1.5.1")
+
+    def test_worktree_requires_exact_prerelease_tag_at_head_with_remedy(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            worktree = Path(temporary)
+            (worktree / "Cargo.toml").write_text(
+                '[workspace.package]\nversion = "1.5.1"\n', encoding="utf-8"
+            )
+            with mock.patch.object(
+                DAEMON_SWITCH,
+                "run",
+                return_value=subprocess.CompletedProcess([], 0, "prerelease/v1.5.0\n", ""),
+            ):
+                with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "prerelease_tag.py"):
+                    DAEMON_SWITCH.exact_prerelease_tag(worktree)
+
+    def test_worktree_pair_requires_tag_and_binary_versions_before_switch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            worktree = Path(temporary)
+            (worktree / ".git").write_text("gitdir: elsewhere\n", encoding="utf-8")
+            release = worktree / "target" / "release"
+            release.mkdir(parents=True)
+            cli = release / DAEMON_SWITCH.executable_name("atm")
+            daemon = release / DAEMON_SWITCH.executable_name("atm-daemon")
+            for binary in (cli, daemon):
+                binary.write_text("fixture", encoding="utf-8")
+                binary.chmod(0o700)
+            with (
+                mock.patch.object(DAEMON_SWITCH, "exact_prerelease_tag", return_value="1.5.1"),
+                mock.patch.object(DAEMON_SWITCH, "require_pair_version") as versions,
+            ):
+                self.assertEqual(
+                    DAEMON_SWITCH.prepare_worktree_pair(worktree, False),
+                    (cli.resolve(), daemon.resolve(), "1.5.1"),
+                )
+            versions.assert_called_once_with(cli.resolve(), daemon.resolve(), "1.5.1")
+
+    def test_raw_path_rejects_published_version_outside_release_root_without_opt_out(self) -> None:
+        switcher = self.switcher
+        cli = Path("/worktree/target/release/atm")
+        daemon = Path("/worktree/target/release/atm-daemon")
+        with (
+            mock.patch.object(switcher, "binary_release_version", side_effect=["1.5.0", "1.5.0"]),
+            mock.patch.object(switcher, "pair_is_in_release_install_root", return_value=False),
+            mock.patch.object(switcher, "release_is_published", return_value=True),
+            redirect_stdout(io.StringIO()),
+        ):
+            with self.assertRaisesRegex(switcher.SwitchError, "--allow-release-version"):
+                switcher.validate_raw_pair_mode(cli, daemon, allow_release_version=False)
+
+    def test_switch_parser_exposes_only_the_three_supported_modes(self) -> None:
+        parsed = self.switcher.parser().parse_args(["switch", "--release", "latest", "--yes"])
+        self.assertEqual(parsed.release, "latest")
+        self.assertIsNone(parsed.worktree)
+        self.assertFalse(parsed.bump)
+
+
+class LegacyDaemonSwitchRegressionTests(unittest.TestCase):
+    """Keep every lifecycle assertion from the retired `.just` test canonical."""
+
+    def setUp(self) -> None:
+        self.module = DAEMON_SWITCH
+        self.cli_link, self.daemon_link = Path("/selectors/atm"), Path("/selectors/atm-daemon")
+        self.old_cli, self.old_daemon = Path("/installed/atm"), Path("/installed/atm-daemon")
+        self.new_cli, self.new_daemon = Path("/candidate/atm"), Path("/candidate/atm-daemon")
+        self.args = argparse.Namespace(cli_link=None, daemon_link=None, yes=True, dry_run=False, service="atm-daemon", launch_agent_plist="/tmp/atm-daemon.plist", repair_orphan=False)
+
+    def switch_inputs(self):
+        return mock.patch.multiple(self.module, selected_links=mock.DEFAULT, validate_selectors=mock.DEFAULT, require_executable=mock.DEFAULT, save_default_pair=mock.DEFAULT, replace_link=mock.DEFAULT, run_service=mock.DEFAULT, live_pair_matches=mock.DEFAULT, require_stopped_daemon=mock.DEFAULT, require_macos_development_signatures=mock.DEFAULT)
+
+    def test_switch_rejects_unsigned_target_before_touching_selectors_or_service(self) -> None:
+        with self.switch_inputs() as patched:
+            patched["selected_links"].return_value = self.cli_link, self.daemon_link
+            patched["require_executable"].side_effect = [self.old_cli, self.old_daemon, self.new_cli, self.new_daemon]
+            patched["require_macos_development_signatures"].side_effect = self.module.SwitchError("unsigned CLI")
+            with self.assertRaisesRegex(self.module.SwitchError, "unsigned CLI"):
+                self.module.switch_pair(self.args, self.new_cli, self.new_daemon)
+        patched["run_service"].assert_not_called()
+        patched["replace_link"].assert_not_called()
+
+    def test_restart_rejects_unsigned_selected_pair_before_stopping_service(self) -> None:
+        with (mock.patch.object(self.module, "selected_links", return_value=(self.old_cli, self.old_daemon)), mock.patch.object(self.module, "require_executable", side_effect=[self.old_cli, self.old_daemon]), mock.patch.object(self.module, "require_macos_development_signatures", side_effect=self.module.SwitchError("unsigned CLI")), mock.patch.object(self.module, "run_service") as service):
+            with self.assertRaisesRegex(self.module.SwitchError, "unsigned CLI"):
+                self.module.restart(argparse.Namespace(yes=True))
+        service.assert_not_called()
+
+    def test_signature_gate_rejects_signed_cli_with_unsigned_daemon(self) -> None:
+        identity = type("Identity", (), {"team_identifier": "TEAMID"})()
+        with (mock.patch.object(RELEASE_RESOLUTION.platform, "system", return_value="Darwin"), mock.patch.object(RELEASE_RESOLUTION, "resolve_apple_development_identity", return_value=identity), mock.patch.object(RELEASE_RESOLUTION, "macos_binary_has_development_signature", side_effect=[True, False]) as verify):
+            with self.assertRaisesRegex(RELEASE_RESOLUTION.SwitchError, "daemon target is not strictly signed"):
+                RELEASE_RESOLUTION.require_macos_development_signatures(self.new_cli, self.new_daemon)
+        self.assertEqual(verify.call_count, 2)
+
+    def test_switch_pair_stops_then_replaces_both_selectors_then_starts(self) -> None:
+        with self.switch_inputs() as patched:
+            patched["selected_links"].return_value = self.cli_link, self.daemon_link
+            patched["require_executable"].side_effect = [self.old_cli, self.old_daemon, self.new_cli, self.new_daemon]
+            patched["live_pair_matches"].return_value = True, "matched"
+            self.module.switch_pair(self.args, self.new_cli, self.new_daemon)
+        self.assertEqual(patched["run_service"].call_args_list, [mock.call(self.args, "stop", allow_absent=True), mock.call(self.args, "start")])
+        self.assertEqual(patched["replace_link"].call_args_list, [mock.call(self.cli_link, self.new_cli), mock.call(self.daemon_link, self.new_daemon)])
+
+    def test_switch_pair_rolls_back_both_selectors_and_restarts_after_replace_failure(self) -> None:
+        with self.switch_inputs() as patched:
+            patched["selected_links"].return_value = self.cli_link, self.daemon_link
+            patched["require_executable"].side_effect = [self.old_cli, self.old_daemon, self.new_cli, self.new_daemon]
+            patched["live_pair_matches"].return_value = True, "matched"
+            patched["replace_link"].side_effect = [None, OSError("replace failed"), None, None]
+            with self.assertRaises(OSError):
+                self.module.switch_pair(self.args, self.new_cli, self.new_daemon)
+        self.assertEqual(patched["replace_link"].call_count, 4)
+        self.assertEqual(patched["run_service"].call_args_list[-1], mock.call(self.args, "start"))
+
+    def test_switch_pair_repairs_dangling_selectors_only_with_explicit_repair(self) -> None:
+        self.args.repair_orphan = True
+        with self.switch_inputs() as patched:
+            patched["selected_links"].return_value = self.cli_link, self.daemon_link
+            patched["require_executable"].side_effect = [self.module.SwitchError("missing"), self.new_cli, self.new_daemon]
+            patched["live_pair_matches"].return_value = True, "matched"
+            self.module.switch_pair(self.args, self.new_cli, self.new_daemon)
+        patched["save_default_pair"].assert_not_called()
+        patched["require_stopped_daemon"].assert_called_once_with(self.args, self.cli_link)
+
+    def test_invalid_selector_is_rejected_before_service_stop(self) -> None:
+        with self.switch_inputs() as patched:
+            patched["selected_links"].return_value = self.cli_link, self.daemon_link
+            patched["validate_selectors"].side_effect = self.module.SwitchError("not symlinks")
+            with self.assertRaisesRegex(self.module.SwitchError, "not symlinks"):
+                self.module.switch_pair(self.args, self.new_cli, self.new_daemon)
+        patched["run_service"].assert_not_called()
+
+    def test_switch_pair_rolls_back_when_live_doctor_reports_the_old_daemon(self) -> None:
+        with self.switch_inputs() as patched:
+            patched["selected_links"].return_value = self.cli_link, self.daemon_link
+            patched["require_executable"].side_effect = [self.old_cli, self.old_daemon, self.new_cli, self.new_daemon]
+            patched["live_pair_matches"].return_value = False, "selected beta.29, daemon beta.24"
+            with self.assertRaisesRegex(self.module.SwitchError, "split CLI/daemon pair"):
+                self.module.switch_pair(self.args, self.new_cli, self.new_daemon)
+        self.assertEqual(patched["replace_link"].call_count, 4)
+
+    def test_reachable_daemon_requires_explicit_orphan_repair(self) -> None:
+        with (mock.patch.object(self.module, "macos_daemon_owner_pids", return_value=[42]), mock.patch.object(self.module.platform, "system", return_value="Darwin")):
+            with self.assertRaisesRegex(self.module.SwitchError, "refuse a split pair"):
+                self.module.require_stopped_daemon(argparse.Namespace(repair_orphan=False), self.old_cli)
+
+    def test_restart_requires_a_single_live_pair_after_controlled_stop(self) -> None:
+        args = argparse.Namespace(yes=True)
+        with (mock.patch.object(self.module, "selected_links", return_value=(self.old_cli, self.old_daemon)), mock.patch.object(self.module, "require_executable", side_effect=[self.old_cli, self.old_daemon]), mock.patch.object(self.module, "require_macos_development_signatures"), mock.patch.object(self.module, "run_service") as service, mock.patch.object(self.module, "require_stopped_daemon") as stopped, mock.patch.object(self.module, "live_pair_matches", return_value=(True, "matched"))):
+            self.module.restart(args)
+        stopped.assert_called_once_with(args, self.old_cli)
+        self.assertEqual(service.call_args_list, [mock.call(args, "stop", allow_absent=True), mock.call(args, "start")])
+
+    def test_restore_prefers_homebrew_then_explicit_then_saved_state(self) -> None:
+        explicit = argparse.Namespace(default_cli="/explicit/atm", default_daemon="/explicit/atm-daemon")
+        with mock.patch.object(self.module, "homebrew_pair", return_value=(self.old_cli, self.old_daemon)):
+            self.assertEqual(self.module.restore_pair(explicit), (self.old_cli, self.old_daemon))
+        with mock.patch.object(self.module, "homebrew_pair", return_value=None):
+            self.assertEqual(self.module.restore_pair(explicit), (Path("/explicit/atm"), Path("/explicit/atm-daemon")))
+        with (mock.patch.object(self.module, "homebrew_pair", return_value=None), mock.patch.object(self.module, "load_state", return_value={"default_cli": "/saved/atm", "default_daemon": "/saved/atm-daemon"})):
+            self.assertEqual(self.module.restore_pair(argparse.Namespace(default_cli=None, default_daemon=None)), (Path("/saved/atm"), Path("/saved/atm-daemon")))
+
+    def test_documented_post_subcommand_service_options_parse(self) -> None:
+        parsed = self.module.parser().parse_args(["switch", "--cli", "/candidate/atm", "--daemon", "/candidate/atm-daemon", "--yes", "--service", "atm-daemon", "--launch-agent-plist", "/tmp/atm-daemon.plist"])
+        self.assertEqual((parsed.service, parsed.launch_agent_plist), ("atm-daemon", "/tmp/atm-daemon.plist"))
+
+    def test_windows_status_reports_absent_task(self) -> None:
+        missing = subprocess.CompletedProcess(["schtasks.exe"], 1, "", "ERROR: The system cannot find the file specified.\r\n")
+        with mock.patch.object(self.module, "run", return_value=missing) as run:
+            self.assertEqual(self.module.windows_task_status("atm-daemon")["state"], "absent")
+        run.assert_called_once_with(["schtasks.exe", "/Query", "/TN", "atm-daemon", "/XML"], timeout=5.0)
+
+    def test_windows_optional_stop_does_not_hide_access_denied(self) -> None:
+        denied = subprocess.CompletedProcess(["schtasks.exe"], 1, "", "ERROR: Access is denied.")
+        with (mock.patch.object(self.module.platform, "system", return_value="Windows"), mock.patch.object(self.module, "run", return_value=denied)):
+            with self.assertRaisesRegex(self.module.SwitchError, "Access is denied"):
+                self.module.run_service(argparse.Namespace(service="atm-daemon"), "stop", allow_absent=True)
+
+    def test_macos_start_retries_bootstrap_after_unload_race(self) -> None:
+        args = argparse.Namespace(service="atm-daemon", launch_agent_plist="/tmp/atm-daemon.plist")
+        results = [subprocess.CompletedProcess([], 5, "", "Bootstrap failed: 5"), subprocess.CompletedProcess([], 1, "", "not loaded"), subprocess.CompletedProcess([], 0, "", ""), subprocess.CompletedProcess([], 0, "path = /tmp/atm-daemon.plist\n", "")]
+        with (mock.patch.object(self.module.platform, "system", return_value="Darwin"), mock.patch.object(self.module.os, "getuid", return_value=501, create=True), mock.patch.object(self.module, "run", side_effect=results), mock.patch.object(self.module.time, "sleep")):
+            self.module.run_service(args, "start")
+
+    def test_macos_stop_repairs_one_verified_orphan_after_bootout(self) -> None:
+        args = argparse.Namespace(service="atm-daemon", launch_agent_plist="/tmp/atm-daemon.plist", repair_orphan=True)
+        loaded, unloaded = subprocess.CompletedProcess([], 0, "", ""), subprocess.CompletedProcess([], 1, "", "not loaded")
+        with (mock.patch.object(self.module.platform, "system", return_value="Darwin"), mock.patch.object(self.module.os, "getuid", return_value=501, create=True), mock.patch.object(self.module, "run", side_effect=[subprocess.CompletedProcess([], 0, "", ""), *([loaded] * 20), unloaded]), mock.patch.object(self.module, "macos_daemon_owner_pids", return_value=[42]), mock.patch.object(self.module, "repair_macos_orphan") as repair, mock.patch.object(self.module.time, "sleep")):
+            self.module.run_service(args, "stop", allow_absent=True)
+        repair.assert_called_once_with([42])
+
+    def test_live_pair_doctor_uses_a_home_directory_not_the_calling_worktree(self) -> None:
+        report = {"client_context": {"version": "1.3.2-beta.29"}, "daemon_context": {"version": "1.3.2-beta.29"}}
+        with (mock.patch.object(self.module, "selected_release_version", return_value="1.3.2-beta.29"), mock.patch.object(self.module, "run", return_value=subprocess.CompletedProcess([], 0, json.dumps(report), "")) as run):
+            matched, _detail = self.module.live_pair_matches(self.new_cli)
+        self.assertTrue(matched)
+        self.assertEqual(run.call_args.kwargs["cwd"], Path.home())
 
 
 if __name__ == "__main__":

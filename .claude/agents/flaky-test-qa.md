@@ -44,6 +44,25 @@ Analyze tests for:
 - fixed file, lock, socket, or runtime paths
 - environment mutation without scoped restoration
 - nondeterministic ordering assumptions
+- unbounded waits: any wait, read, join, or poll with no hard deadline, so
+  the test can block forever instead of failing
+- masking fixes: retry loops, widened or padded timeouts, busy-poll loops, or
+  other compensating logic added to make a flaky test pass instead of removing
+  the nondeterminism
+
+## Fix Standard
+
+A flaky test is fixed only by redesign with explicit synchronization
+(channels, notify/oneshot signals, readiness handshakes, injected clocks or
+fake timers) and a hard bounded deadline that fails with a clear message.
+Report as a finding any change that:
+- adds retries, sleeps, timeout widening, or compensating branches around a
+  race instead of removing it
+- leaves any path on which the test can block forever
+- grows test logic to accommodate nondeterminism the production code should
+  not have (route that to the production-code owner)
+When the design cannot be made deterministic, the correct fix is to rewrite or
+split the test, and the finding must say so.
 
 ## Review Process
 
@@ -69,7 +88,7 @@ Return fenced JSON only.
         "file": "crates/atm/tests/send.rs",
         "line": 42,
         "test": "test_name",
-        "mechanism": "fixed_sleep | timing_assertion | shared_state | parallel_race | spawn_without_readiness | missing_reap | fixed_runtime_path | env_leak | nondeterministic_order",
+        "mechanism": "fixed_sleep | timing_assertion | shared_state | parallel_race | spawn_without_readiness | missing_reap | fixed_runtime_path | env_leak | nondeterministic_order | unbounded_wait | masking_fix",
         "issue": "Concrete intermittent failure mechanism.",
         "recommendation": "Specific deterministic fix direction.",
         "evidence": "Code evidence for the finding."

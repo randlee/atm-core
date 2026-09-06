@@ -201,6 +201,11 @@ impl SendCommand {
             nudge_mode,
             attachment_note,
         )?;
+        let peer_host = request
+            .to
+            .as_ref()
+            .and_then(|recipient| recipient.host())
+            .cloned();
         let composition = CliComposition::bootstrap(
             command_name,
             observability,
@@ -215,7 +220,10 @@ impl SendCommand {
             outcome.warnings.push(warning);
         }
 
-        output::print_send_result(&outcome, json)
+        match peer_host.as_ref() {
+            Some(peer_host) => output::print_send_result_to_peer(&outcome, json, peer_host),
+            None => output::print_send_result(&outcome, json),
+        }
     }
 
     /// Lands this invocation's `--attach` files (if any) for the single

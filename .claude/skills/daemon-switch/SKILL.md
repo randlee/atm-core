@@ -1,12 +1,14 @@
 ---
 name: daemon-switch
-description: Safely inspect or switch the system-wide ATM CLI and daemon as one matched release pair. Use before daemon smoke testing, after daemon incompatibility or missing-daemon failures, and to restore the installed release afterward.
+description: Safely switch the system-wide ATM CLI and daemon as one matched pair: either a published release or an exactly prerelease-tagged worktree build.
 ---
 
 # Daemon Switch
 
 Use `scripts/daemon-switch.py`; never point a system LaunchAgent/service at a
-worktree binary directly.
+worktree binary directly. The tool has two ordinary situations: return to a
+published release, or dogfood one tagged worktree build. Raw binary paths are
+only the fixture/Colima escape hatch.
 
 ## Rules
 
@@ -14,8 +16,8 @@ worktree binary directly.
 2. Switch `atm` and `atm-daemon` together, then restart exactly one managed
    service. The script refuses an unpaired or unmanaged switch.
 3. Verify native `atm doctor --json` after every switch.
-4. After smoke completes or aborts, run `restore` to select the latest installed
-   release and repeat the doctor check.
+4. After smoke completes or aborts, run `switch --release latest` to select the
+   latest published release and repeat the doctor check.
 5. If recovery fixes a missing or incompatible daemon, notify the team after it
    is healthy again.
 6. When peer-interface or trust configuration changes, use `restart` to reload
@@ -45,9 +47,29 @@ python3 .claude/skills/daemon-switch/scripts/daemon-switch.py status --doctor
 launchctl list | rg 'com\.atm\.daemon'
 find ~/Library/LaunchAgents -maxdepth 1 -name 'com.atm.daemon*.plist' -print
 
-# Switch both Homebrew links to a branch build, controlled-restart one daemon.
+# Switch to the latest published release without supplying binary paths. The
+# command resolves `latest` through GitHub Releases, proves the installed pair
+# has exactly that version, then switches/restarts/proves the managed pair.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --release latest --yes \
+  --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
+
+# Switch to a specific published release already installed for this platform.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --release 1.5.1 --yes \
+  --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
+
+# Dogfood an exact prerelease-tagged worktree build. HEAD must carry
+# `prerelease/vX.Y.Z`, the workspace version must be X.Y.Z, and both release
+# binaries must report X.Y.Z. Use --bump to run prerelease_tag.py and build the
+# release pair when that worktree is intentionally ready to be tagged.
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch \
-  --cli target/release/atm --daemon target/release/atm-daemon --yes \
+  --worktree ../atm-core-worktrees/feature-example --yes \
+  --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
+
+# Raw paths remain only for fixtures/Colima. A raw pair which reports a
+# published version outside the platform release root is refused by default;
+# the opt-out is intentionally explicit.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch \
+  --cli target/release/atm --daemon target/release/atm-daemon --allow-release-version --yes \
   --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
 
 # If the checked label was unloaded but `status --doctor` still reaches an old
@@ -55,10 +77,6 @@ python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch \
 # a split pair. After verifying the label/plist above, rerun the same command
 # with `--repair-orphan`; it SIGTERMs exactly one proven `atm-daemon` owner of
 # the ATM socket, then starts the selected managed service.
-
-# Restore the latest Homebrew formula targets, not a Cellar path.
-python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restore --yes \
-  --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
 
 # Reload changed peer configuration without switching the selected pair.
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restart --yes \
@@ -90,22 +108,36 @@ binary identifier and certificate common name. A changed or mismatched leaf
 fails closed. Apple-issued `Apple Development` identities continue to use the
 team-identifier verification path.
 
-## Windows selector provisioning
+## Windows selector and task provisioning
 
-The script never replaces ordinary `.exe` files. Provision two user-writable
-selector symlinks named `atm.exe` and `atm-daemon.exe` in one directory placed
-before the installed release directory on `PATH`, then pass them explicitly:
+The script never replaces ordinary `.exe` files. Windows uses one
+**interactive-user Scheduled Task**, not an SCM service: SCM services commonly
+run as `LocalSystem` and would select a different `ATM_HOME` and durable store.
+Provision two user-writable selector symlinks named `atm.exe` and
+`atm-daemon.exe` in one directory placed before the installed release directory
+on `PATH`, then register the task to invoke the daemon selector:
 
 ```powershell
+python .claude/skills/daemon-switch/scripts/daemon-switch.py windows-provision `
+  --cli-link C:\\atm-active\\atm.exe --daemon-link C:\\atm-active\\atm-daemon.exe `
+  --service atm-daemon --yes
+
 python .claude/skills/daemon-switch/scripts/daemon-switch.py switch `
   --cli-link C:\\atm-active\\atm.exe --daemon-link C:\\atm-active\\atm-daemon.exe `
   --cli target\\release\\atm.exe --daemon target\\release\\atm-daemon.exe --yes `
   --service atm-daemon
 ```
 
-Creating those symlinks may require Developer Mode or an elevated shell. If
-they are unavailable, the script fails closed; do not replace installed
-executables or introduce a second daemon.
+`windows-provision` creates an on-logon, interactive-user task whose only
+executable action is `C:\\atm-active\\atm-daemon.exe`. `switch`, `restart`,
+and `quiesce` refuse a task whose action names a worktree or any other direct
+binary. Corporate policy may require running only `windows-provision` from an
+elevated terminal; do not work around that policy by registering an SCM service
+or launching a second daemon.
+
+The typed `temporary-launch` overlay is not supported by this task backend.
+It fails closed instead of modifying a task action outside its scoped
+pair-switch contract.
 
 ## Default scratch root (ADR-055)
 

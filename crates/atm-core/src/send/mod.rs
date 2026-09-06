@@ -134,6 +134,11 @@ pub struct WriteRequest {
     /// persists an inbound record. It is not trusted from wire JSON.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authenticated_source_host: Option<HostName>,
+    /// Schema version attached by a locally admitted cross-host sender. Peer
+    /// ingress validates only the major version; absent values remain
+    /// compatible with the deployed 1.x baseline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_http_api_version: Option<crate::protocol::HttpApiVersion>,
     /// The immutable identity assigned by the origin canonical writer.
     /// Authenticated peer ingress preserves it so both hosts store one ULID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -195,6 +200,7 @@ impl WriteRequest {
             caller_team,
             activity_observation: None,
             authenticated_source_host: None,
+            peer_http_api_version: None,
             origin_message_id: None,
             origin_timestamp: None,
             to: Some(to.parse()?),
@@ -259,6 +265,12 @@ impl WriteRequest {
     #[must_use]
     pub fn with_origin_message_id(mut self, message_id: AtmMessageId) -> Self {
         self.origin_message_id = Some(message_id);
+        self
+    }
+
+    #[must_use]
+    pub fn with_peer_http_api_version(mut self) -> Self {
+        self.peer_http_api_version = Some(crate::protocol::HttpApiVersion::current());
         self
     }
 
