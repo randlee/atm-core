@@ -37,3 +37,12 @@
   triage:branch "fix/aw-ram-roster" ;
   triage:headSha "98cea18d7" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AW-RAM-I2/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-RAM-I2" ;
+  triage:resolutionNote "quality-mgr phase-end gate @94e29a586, fenix ledger hygiene: herdr_queue_wake.rs now calls service_runtime.set_roster_herdr_wake_pending at lines 292 and 629 (confirmed by direct grep of current file); test ac13_herdr_wake_pending_ephemeral_state_tracks_the_in_flight_claim exercises it." ;
+  triage:resolvedAt "2026-09-06T06:46:36Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "5b3f4692829e" ;
+  triage:resolvedBranch "integrate/phase-aw" .

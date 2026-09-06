@@ -49,3 +49,12 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "ac1088c82" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AW-POOL-V1/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V1" ;
+  triage:resolutionNote "quality-mgr phase-end gate @94e29a586, fenix ledger hygiene: persistence.rs now has zero \"template\" references (grep-confirmed); inline template/schema-validation reads were eliminated from the write transaction by the on-demand render refactor (read/render.rs), so the writer path holds no validation read." ;
+  triage:resolvedAt "2026-09-06T06:46:36Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "c325a346055f" ;
+  triage:resolvedBranch "integrate/phase-aw" .

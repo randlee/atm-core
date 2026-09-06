@@ -37,3 +37,12 @@
   triage:branch "fix/aw-ram-roster" ;
   triage:headSha "98cea18d7" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AW-RAM-B2/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-RAM-B2" ;
+  triage:resolutionNote "quality-mgr phase-end gate @94e29a586, fenix ledger hygiene: commit message states service_runtime.rs drops from 1153 to 812 non-test lines after relocating the roster subsystem out of it (later growth to current 1421 total lines is from unrelated subsequent work, not a reopening of this finding)." ;
+  triage:resolvedAt "2026-09-06T06:46:36Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "5b3f4692829e" ;
+  triage:resolvedBranch "integrate/phase-aw" .

@@ -61,3 +61,12 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "ac1088c82" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AW-PROD-R2-002/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-PROD-R2-002" ;
+  triage:resolutionNote "quality-mgr phase-end gate @94e29a586, fenix ledger hygiene: OpenAPI /diagnostics path added to docs/atm-http-runtime/openapi.yaml, storage-schema documented in docs/atm-rusqlite/architecture.md, and rollback-on-populated-DB test a_failed_diagnostic_transaction_preserves_a_populated_migrated_database exists and was independently re-verified this gate. No separate \"AW-PROD-R2-002-Minor\" record exists in this worktree." ;
+  triage:resolvedAt "2026-09-06T06:46:36Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "f1d2832747954" ;
+  triage:resolvedBranch "integrate/phase-aw" .
