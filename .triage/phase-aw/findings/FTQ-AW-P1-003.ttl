@@ -40,3 +40,17 @@
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "450f36b91" ;
   triage:orderIndex 1 .
+
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: reconfirmed
+# still open, unchanged, at integrate/phase-aw@062cb44dd by two independent
+# reviewers this round (req-qa, flaky-test-qa) and by fenix's own separate
+# production-readiness lanes A and B. No fix has landed and no deferral is
+# recorded. This is test-only infrastructure (#[cfg(test)] Gate helper), not
+# a production-path defect, and the fix is small and well-scoped (bounded
+# wait_timeout_while + assert !timed_out, or a Drop-based release-on-panic
+# guard). quality-mgr verdict: carry-forward as an open minor finding on
+# integrate/phase-aw with a scoped fix recommended in the next fix round
+# (not a phase-ay deferral candidate -- unlike W1, this has no cross-phase
+# ownership complication). Not blocking #1199 -> develop merge or the 1.5.x
+# dogfood build. Disposition communicated to fenix/team-lead for fix-dispatch
+# decision; quality-mgr does not implement fixes directly.

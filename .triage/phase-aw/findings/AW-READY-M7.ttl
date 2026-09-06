@@ -10,6 +10,26 @@
 # separately") pending that merge. Status stays "open" here until PR #1215 merges
 # forward into this lineage and the workaround in log.rs is removed as dead code.
 
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: CORRECTING an
+# earlier (incorrect) internal assessment that treated this record as closed.
+# It is NOT closed. ruthless-boundary-qa's fresh review at
+# integrate/phase-aw@062cb44dd, cross-checked directly by me against
+# crates/atm/src/commands/log.rs:222-235, confirms: the server-side query fix
+# (CASE-based severity rank, crates/atm-storage-rusqlite/src/
+# diagnostic_timeline.rs:133-138) IS present and correct -- so any direct
+# HTTP consumer of /v1/diagnostics now gets correct filtering. But this
+# record's own recorded closure condition ("status stays open until PR #1215
+# merges forward into this lineage and the workaround in log.rs is removed as
+# dead code") is NOT satisfied: log.rs:222-235 still hard-codes
+# `level_at_least: None` with a comment claiming the server-side filter "is a
+# lexicographic string comparison and is not level-order-correct" -- now
+# false and stale -- and the CLI still maintains a second, independent
+# client-side severity filter (CliLogLevel/LogLevelFilter, log.rs:76-105)
+# duplicating the decision the server now makes correctly. Two parallel
+# severity-filtering implementations that can silently drift again. Remains
+# genuinely open. Flagging to fenix/team-lead for a fix dispatch or an
+# explicit deferral ruling; not something quality-mgr can close unilaterally.
+
 # Persisted file/path values are repository-relative. Runtime checkout paths
 # belong in the agent input only and must not be copied into this record.
 

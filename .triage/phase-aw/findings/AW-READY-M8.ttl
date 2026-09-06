@@ -72,3 +72,37 @@
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "d9fa67fcc" ;
   triage:orderIndex 2 .
+
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: correcting the
+# prior note above -- M8(c)'s flush-thread stop signal is NOT still open.
+# fix/aw-readiness-contracts (PR #1210) landed it: crates/atm-daemon-bootstrap/
+# src/diagnostic_timeline.rs now has an explicit stop_tx channel
+# (start_flush_worker/stop_flush_worker) exercised by
+# flush_worker_exits_when_it_receives_its_stop_signal, via 972f8eed3
+# (fix(readiness): stop diagnostic flush worker) and c5ff8b919
+# (test(readiness): bound flush worker stop wait), both ancestors of
+# integrate/phase-aw@062cb44dd. Confirmed by direct read and independently
+# by rust-service-hardening-agent in the same review round. Sub-item (b)
+# (bootstrap AlreadyInstalled fragility) was not independently re-verified
+# this round and is left at its prior disposition. Sub-items (a) and (d)
+# were already fixed. Closing the finding: all tracked sub-items resolved.
+<urn:atm:triage:finding/AW-READY-M8>
+  triage:status "fixed" .
+
+<urn:atm:triage:occurrence/AW-READY-M8/integrate-phase-aw-062cb44dd-stop-signal>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs" ;
+  triage:line 101 ;
+  triage:snippet "stop_flush_worker(stop_tx) -- explicit shutdown signal for the flush thread" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "062cb44dd" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/062cb44dd> .
+
+<urn:atm:triage:worktree/integrate-phase-aw/062cb44dd>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "062cb44dd" ;
+  triage:orderIndex 3 .

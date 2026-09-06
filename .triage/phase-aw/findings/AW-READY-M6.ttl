@@ -40,3 +40,38 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:orderIndex 1 .
+
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: independently
+# confirmed by direct read at integrate/phase-aw@062cb44dd (also confirmed by
+# req-qa and rust-service-hardening-agent in the same round). The route and
+# storage layers now share one DIAGNOSTIC_QUERY_MAX_LIMIT=1000 constant
+# (crates/atm-storage/src/diagnostics.rs:10, consumed by
+# crates/atm-http-runtime/src/diagnostics_route.rs and
+# crates/atm/src/commands/log.rs), eliminating the 5000-vs-1000 advertised/
+# enforced mismatch, and the route implements real cursor-based pagination
+# (DiagnosticCursor/next_cursor/truncated) with multi-page tests
+# (diagnostics_route.rs:305-383), landed via 94e817405 (feat(atm-storage):
+# shared diagnostic query cap and opaque cursor), 4dac8d7a3
+# (feat(atm-storage-rusqlite): keyset-paginate the diagnostics query), and
+# 08b4938fd (feat(atm-http-runtime): cap-align, paginate, and bound
+# /v1/diagnostics), all ancestors of 062cb44dd. Closing.
+<urn:atm:triage:finding/AW-READY-M6>
+  triage:status "fixed" .
+
+<urn:atm:triage:occurrence/AW-READY-M6/integrate-phase-aw-062cb44dd>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/diagnostics.rs" ;
+  triage:line 10 ;
+  triage:snippet "pub const DIAGNOSTIC_QUERY_MAX_LIMIT: usize = 1_000;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "062cb44dd" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/062cb44dd> .
+
+<urn:atm:triage:worktree/integrate-phase-aw/062cb44dd>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "062cb44dd" ;
+  triage:orderIndex 2 .

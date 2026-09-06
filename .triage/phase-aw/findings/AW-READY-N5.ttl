@@ -40,3 +40,35 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:orderIndex 1 .
+
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: fixed exactly
+# per the post-mortem's own prescribed shape -- a scoped, debug-only
+# ATM_TEST_RUNTIME_HOME override in crates/atm-core/src/home.rs (gated
+# #[cfg(debug_assertions)], compiled out of release builds, so the
+# production host-daemon singleton behavior is unweakened), landed via
+# b3e37b726 (test: isolate CLI parity runtime scope), an ancestor of
+# integrate/phase-aw@062cb44dd. crates/atm-graft-python/tests/
+# test_cli_parity.py now sets this var in setUpClass before constructing
+# native_tools.AtmNativeTools, with an _assert_debug_native_scope guard
+# rejecting a release-wheel/scope mismatch. Independently confirmed by
+# arch-qa and req-qa in the same review round. Closing.
+<urn:atm:triage:finding/AW-READY-N5>
+  triage:status "fixed" .
+
+<urn:atm:triage:occurrence/AW-READY-N5/integrate-phase-aw-062cb44dd>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 52 ;
+  triage:snippet "#[cfg(debug_assertions)] ATM_TEST_RUNTIME_HOME override, validated and compiled out of release" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "062cb44dd" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/062cb44dd> .
+
+<urn:atm:triage:worktree/integrate-phase-aw/062cb44dd>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "062cb44dd" ;
+  triage:orderIndex 2 .

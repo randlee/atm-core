@@ -47,3 +47,38 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:orderIndex 1 .
+
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: the exact gap
+# this record's prior note named -- "no test exercises the genuine
+# concurrent OnceLock::set() race via thread::spawn" -- is now closed.
+# crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs:805-873 has
+# concurrent_attach_timeline_has_one_writer_and_keeps_it_on_reattach, an
+# 8-thread Barrier-synchronized genuine race test asserting exactly one
+# winner claims the writer/flush-worker, with a subsequent sequential
+# re-attach also verified as a no-op. Landed via 97c8ab886
+# (fix(atm-daemon-bootstrap): fold persist-error counters instead of
+# overwriting, make attach_timeline idempotent) and 9a808e6b9
+# (test(bootstrap): race timeline attachment), both ancestors of
+# integrate/phase-aw@062cb44dd. Independently confirmed by arch-qa,
+# req-qa, and rust-service-hardening-agent in the same review round.
+# Closing.
+<urn:atm:triage:finding/AW-READY-O6>
+  triage:status "fixed" .
+
+<urn:atm:triage:occurrence/AW-READY-O6/integrate-phase-aw-062cb44dd>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs" ;
+  triage:line 809 ;
+  triage:snippet "fn concurrent_attach_timeline_has_one_writer_and_keeps_it_on_reattach()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "062cb44dd" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/062cb44dd> .
+
+<urn:atm:triage:worktree/integrate-phase-aw/062cb44dd>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "062cb44dd" ;
+  triage:orderIndex 2 .
