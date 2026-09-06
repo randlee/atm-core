@@ -50,6 +50,7 @@ def build_suite(repo_root: Path) -> unittest.TestSuite:
     test_paths.extend(sorted((repo_root / "scripts/smoke").glob("test_*.py")))
     test_paths.extend(sorted((repo_root / "scripts/tests").glob("test_*.py")))
     test_paths.extend(sorted((repo_root / "scripts/phase-aq").glob("test_*.py")))
+    test_paths.extend(sorted((repo_root / ".claude/skills/daemon-switch/tests").glob("test_*.py")))
     for test_path in test_paths:
         relative = test_path.relative_to(repo_root)
         module_name = (

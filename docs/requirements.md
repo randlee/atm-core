@@ -309,13 +309,30 @@ Satisfied by:
     captured original configuration; ambiguous, missing, changed, or
     unsupported service configuration fails closed before an unsafe mutation
   - adapters must preserve platform-native ownership: an owned macOS
-    LaunchAgent plist copy, exact Windows SCM `BINARY_PATH_NAME` round trip,
-    or an owned systemd `--user` drop-in.  They must not rewrite an unknown
-    source configuration or start a direct child daemon as fallback
+    LaunchAgent plist copy or an owned systemd `--user` drop-in.  They must
+    not rewrite an unknown source configuration or start a direct child
+    daemon as fallback.  Windows has no temporary-launch adapter: the managed
+    daemon is a per-user scheduled task and `temporary-launch` fails closed
+    (ADR-053 amendment 2026-09-05)
   - after successful restoration, the same selected pair starts through the
     ordinary managed service without the temporary argument and doctor proves
     normal mTLS/default state; selected-pair and applicable signing gates
     remain mandatory for every lifecycle-changing operation
+- `REQ-P-DAEMON-SWITCH-002` `daemon-switch` switches one matched CLI/daemon
+  pair in exactly two ordinary situations: `switch --release <X.Y.Z|latest>`
+  selects the platform's published release without caller-supplied binary
+  paths, and `switch --worktree <path>` selects a dogfooding worktree build.
+  `latest` resolves through the GitHub Releases API and fails explicitly when
+  offline.  A worktree switch requires an exact `prerelease/vX.Y.Z` tag on its
+  HEAD, where `X.Y.Z` equals the workspace and both release binaries; `--bump`
+  may run the patch++ prerelease-tag helper and release build first.  The tag
+  prevents speculative code from reporting a released version.  Each mode
+  verifies the pair, switches selectors, restarts the one managed daemon, and
+  ends with `status --doctor` on macOS, Linux, and Windows.  Raw `--cli` /
+  `--daemon` paths remain only for fixtures and Colima; a pair outside a
+  platform release root that reports a published version is refused unless the
+  caller explicitly opts out.  All other daemon-switch ceremony is deferred to
+  a later plan (Rand, 2026-09-05; ADR-053 amendment).
   - evidence may expose redacted service metadata, pair identity, mode,
     digests, phase durations, and recovery outcome, but never private keys,
     certificate contents, raw trust records, or primary-database state
