@@ -1638,7 +1638,52 @@ Phase AX sprint status:
 | `AX.4` | B | after AX.3; parallel with AX.1/AX.2 | `planned` | `feature/ax4-task-cli-and-docs` | `docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md`, `docs/user-documents/tasks.md` |
 | `AX.5` | C | after A and B merge | `planned` | `feature/ax5-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md`, ADR-061 reminder-cycle section |
 | `AX.6` | C | after AX.5 | `planned` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
-| `AX.7` | D | after AX.6 merges | `planned` | none (proof on `integrate/phase-ax`) | `docs/plans/phase-ax/ax7-live-proof.md` |
+| `AX.7` | D | superseded 2026-09-05 (live proof moved to release readiness) | `superseded` | none | `docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md` |
+
+## 56. Phase AY — Native-IPC Transport Cutover For Herdr [PLANNING — DRAFT, NOT APPROVED]
+
+Herdr already runs on Windows: Rand manually verified an atm 1.5.0 self-send,
+and nothing in the current client code blocks it. Phase AY instead moves the
+six-operation client from a per-nudge CLI process to Herdr's native IPC—a
+Unix-domain socket on macOS/Linux and named pipe on Windows—because Phase AX's
+queue templates, built-in nudge rendering, task state/CLI, reminder cycle,
+lead notification, and doctor all depend on that delivery path. It also
+defines the daemon's optional-dependency behavior when Herdr is absent, late,
+or crashed. The CLI remains a bounded fallback. Windows work includes real
+production correctness code—`CREATE_NO_WINDOW`, a bounded kill-then-reap grace
+period, per-call binary re-resolution, and CRLF-tolerant decoding—plus removal
+of three stale scope-outs and closure of the `cfg(unix)` process-test gap. Windows CI
+proves that behavior without live hardware. Live macOS/Windows proof stays in
+release readiness (no sprint carries live evidence, Rand 2026-09-05). No work
+remodels the legacy synchronous daemon; all composition targets the Tokio/Axum
+`atm-http-runtime` cutover architecture.
+
+Nine sprints execute in a documentation lane, a linear implementation
+stack, an independent socket lane, and a code join. AY.1
+runs in parallel with AY.2. The only stacked-PR chain is
+AY.2→AY.3→AY.4→AY.5→AY.6→AY.7, managed noninteractively with the
+`/gh-stack` skill. AY.8 starts independently only after AY.1, AY.2, and
+AY.3 merge; it is parallel-safe with AY.4–AY.7. AY.9 is the standalone
+AY.7+AY.8 code join and the phase's last sprint; the live macOS/Windows
+matrix runs under release readiness once the phase is on develop.
+
+The authoritative umbrella is
+[Phase AY plan](./plans/phase-ay/phase-ay-plan.md), with one
+authoritative sprint file per sprint under `docs/plans/phase-ay/`.
+
+Phase AY sprint status:
+
+| Sprint | Track | Execute | Status | Branch | Authoritative sprint doc |
+| --- | --- | --- | --- | --- | --- |
+| `AY.1` | Docs | parallel with AY.2 | `draft` | `feature/ay1-herdr-audit-docs` | `docs/plans/phase-ay/sprint-AY.1-herdr-audit-docs.md` |
+| `AY.2` | Core stack | parallel with AY.1; stack bottom | `draft` | `feature/ay2-herdr-transport-seam` | `docs/plans/phase-ay/sprint-AY.2-herdr-transport-seam.md` |
+| `AY.3` | Core stack | after AY.2 development and P-E(a); AY.2 merges first | `draft` | `feature/ay3-herdr-endpoint-doctor-config` | `docs/plans/phase-ay/sprint-AY.3-herdr-endpoint-doctor-config.md` |
+| `AY.4` | Core stack | after AY.3 development; parallel with AY.8 once eligible | `draft` | `feature/ay4-herdr-breaker-lifecycle` | `docs/plans/phase-ay/sprint-AY.4-herdr-breaker-lifecycle.md` |
+| `AY.5` | Core stack | after AY.4 development; parallel with AY.8 | `draft` | `feature/ay5-herdr-entry-control-plane` | `docs/plans/phase-ay/sprint-AY.5-herdr-entry-control-plane.md` |
+| `AY.6` | Core stack | after AY.5 development; parallel with AY.8 | `draft` | `feature/ay6-herdr-restart-coordination` | `docs/plans/phase-ay/sprint-AY.6-herdr-restart-coordination.md` |
+| `AY.7` | Core/Windows stack | after AY.6 development; Windows CI lane is the gate; parallel with AY.8 | `draft` | `feature/ay7-windows-herdr-process-installer` | `docs/plans/phase-ay/sprint-AY.7-windows-herdr-process-installer.md` |
+| `AY.8` | Socket | after AY.1/AY.2/AY.3 merge and P-E(b); parallel with AY.4–AY.7; standalone | `draft` | `feature/ay8-herdr-socket-transport` | `docs/plans/phase-ay/sprint-AY.8-herdr-socket-transport.md` |
+| `AY.9` | Join | after AY.7/AY.8 merge; standalone code cutover | `draft` | `feature/ay9-herdr-socket-cutover` | `docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md` |
 
 ## Daemon-Switch Scope Reduction
 
