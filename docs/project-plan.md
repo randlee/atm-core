@@ -1560,22 +1560,6 @@ The authoritative plan is
 critical review round 1 folded in); phase-au sprint docs are being cut from
 it under `docs/plans/phase-au/` on branch `plan/boundary-regression`.
 
-## 55. Phase AW — Unified Retained Runtime Logging [COMPLETE — INTEGRATION PR #1199]
-
-Phase AW makes replacement-runtime tracing retained and safely observable:
-AW.1 installs the allowlisted non-blocking tracing bridge, AW.2 persists the
-SQLite diagnostic timeline, AW.3 exposes health and log queries, AW.4 adds
-graft fallback observability, and AW.5 aligns native tool projections.
-The authoritative plan is [phase-aw-plan](./plans/phase-aw/phase-aw-plan.md).
-
-| Sprint | Status | Branch | Artifacts |
-| --- | --- | --- | --- |
-| `AW.1` | `complete` | `feature/aw1-tracing-bridge` | `docs/plans/phase-aw/sprint-AW.1-tracing-bridge.md` |
-| `AW.2` | `complete` | `feature/aw2-sqlite-diagnostic-timeline` | `docs/plans/phase-aw/sprint-AW.2-sqlite-diagnostic-timeline.md` |
-| `AW.3` | `complete` | `feature/aw3-health-and-log-query` | `docs/plans/phase-aw/sprint-AW.3-health-and-log-query.md` |
-| `AW.4` | `complete` | `feature/aw4-graft-fallback-observability` | `docs/plans/phase-aw/sprint-AW.4-graft-fallback-observability.md` |
-| `AW.5` | `complete` | `feature/aw5-native-tool-parity` | `docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md` |
-
 ## 54. Phase AV — Async Mailbox-Read Cutover Completion [COMPLETE — INTEGRATION PR #1120]
 
 Phase AV fixes the mailbox-read serialization regression: every core job —
@@ -1607,7 +1591,23 @@ Phase AV sprint status:
 | `AV.3` | `complete` (PR #1113 merged) | `feature/av3-read-concurrency-gates` | `docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md` |
 | `AV.4` | `complete` (PR #1114 merged) | `feature/av4-read-query-benchmarks` | `docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md` |
 
-## 55. Phase AX — Nudge Templates On Every Backend And Task-State Tracking [EXECUTING — PHASE CLOSEOUT]
+## 55. Phase AW — Unified Retained Runtime Logging [COMPLETE — INTEGRATION PR #1199]
+
+Phase AW makes replacement-runtime tracing retained and safely observable:
+AW.1 installs the allowlisted non-blocking tracing bridge, AW.2 persists the
+SQLite diagnostic timeline, AW.3 exposes health and log queries, AW.4 adds
+graft fallback observability, and AW.5 aligns native tool projections.
+The authoritative plan is [phase-aw-plan](./plans/phase-aw/phase-aw-plan.md).
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AW.1` | `complete` | `feature/aw1-tracing-bridge` | `docs/plans/phase-aw/sprint-AW.1-tracing-bridge.md` |
+| `AW.2` | `complete` | `feature/aw2-sqlite-diagnostic-timeline` | `docs/plans/phase-aw/sprint-AW.2-sqlite-diagnostic-timeline.md` |
+| `AW.3` | `complete` | `feature/aw3-health-and-log-query` | `docs/plans/phase-aw/sprint-AW.3-health-and-log-query.md` |
+| `AW.4` | `complete` | `feature/aw4-graft-fallback-observability` | `docs/plans/phase-aw/sprint-AW.4-graft-fallback-observability.md` |
+| `AW.5` | `complete` | `feature/aw5-native-tool-parity` | `docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md` |
+
+## 56. Phase AX — Nudge Templates On Every Backend And Task-State Tracking [COMPLETE — MERGED TO DEVELOP (PR #1253, 98661ea18)]
 
 Phase AX closes three delivery defects found in the 2026-09-04 Herdr
 dogfood run (issue #1173): the Herdr sink bypasses the built-in nudge
@@ -1625,7 +1625,11 @@ AX.2→AX.5, AX.4→AX.5, AX.5→AX.6, AX.6→AX.7. Branches are worktrees via
 phase plan §6).
 
 Current phase status: AX.1-AX.6 merged into `integrate/phase-ax`; AX.7
-superseded 2026-09-05.
+superseded 2026-09-05. `integrate/phase-ax` merged to `develop` 2026-09-06
+23:14:05Z via PR #1253 (merge commit `98661ea18`, parents `9a1e242d1` +
+`247bb1340`). Phase complete. AX7's `QA_RUN_MISSING` triage-report gap (no
+authoritative QA run for a superseded sprint) is an open post-mortem
+follow-up, not a blocker.
 
 The authoritative plan is
 [phase-ax-plan](./plans/phase-ax/phase-ax-plan.md) with per-sprint docs
@@ -1643,7 +1647,7 @@ Phase AX sprint status:
 | `AX.6` | C | after AX.5 | `complete` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
 | `AX.7` | D | superseded 2026-09-05 (live proof moved to release readiness) | `superseded` | none | `docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md` |
 
-## 56. Phase AY — Native-IPC Transport Cutover For Herdr [PLANNING — DRAFT, NOT APPROVED]
+## 57. Phase AY — Native-IPC Transport Cutover For Herdr [PLANNING — DRAFT, NOT APPROVED]
 
 Herdr already runs on Windows: Rand manually verified an atm 1.5.0 self-send,
 and nothing in the current client code blocks it. Phase AY instead moves the
