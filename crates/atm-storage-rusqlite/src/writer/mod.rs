@@ -250,6 +250,7 @@ impl SqliteWriter {
                     worker_diagnostic_stats,
                     worker_observability,
                     worker_runtime,
+                    BATCH_TIME_BUDGET,
                 )
             })
             .map_err(|error| {
@@ -930,7 +931,13 @@ mod tests {
         let collection = tokio::spawn(async move {
             let mut batch = vec![first];
             let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
+            collect_batch(
+                &mut receiver,
+                &mut batch,
+                &mut shutting_down,
+                BATCH_TIME_BUDGET,
+            )
+            .await;
             (batch, shutting_down)
         });
 
@@ -950,7 +957,13 @@ mod tests {
         let collection = tokio::spawn(async move {
             let mut batch = vec![first];
             let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
+            collect_batch(
+                &mut receiver,
+                &mut batch,
+                &mut shutting_down,
+                BATCH_TIME_BUDGET,
+            )
+            .await;
             (batch, shutting_down)
         });
 
@@ -974,7 +987,13 @@ mod tests {
         let collection = tokio::spawn(async move {
             let mut batch = vec![first];
             let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
+            collect_batch(
+                &mut receiver,
+                &mut batch,
+                &mut shutting_down,
+                BATCH_TIME_BUDGET,
+            )
+            .await;
             (batch, shutting_down, receiver)
         });
 
@@ -999,7 +1018,13 @@ mod tests {
         let collection = tokio::spawn(async move {
             let mut batch = vec![first];
             let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
+            collect_batch(
+                &mut receiver,
+                &mut batch,
+                &mut shutting_down,
+                BATCH_TIME_BUDGET,
+            )
+            .await;
             (batch, shutting_down)
         });
 
@@ -1025,7 +1050,13 @@ mod tests {
         let mut batch = vec![first];
         let mut shutting_down = false;
 
-        collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
+        collect_batch(
+            &mut receiver,
+            &mut batch,
+            &mut shutting_down,
+            BATCH_TIME_BUDGET,
+        )
+        .await;
 
         assert_eq!(batch.len(), 1);
         assert!(shutting_down);
@@ -1039,7 +1070,13 @@ mod tests {
         let collection = tokio::spawn(async move {
             let mut batch = vec![first];
             let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
+            collect_batch(
+                &mut receiver,
+                &mut batch,
+                &mut shutting_down,
+                BATCH_TIME_BUDGET,
+            )
+            .await;
             (batch, shutting_down)
         });
 

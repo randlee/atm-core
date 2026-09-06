@@ -7,7 +7,7 @@ use atm_core::boundary::{
     self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, TemplateComposer,
 };
 use atm_core::doctor::{DoctorFinding, DoctorSeverity};
-use atm_core::doctor::{ReaderLaneDoctorReport, ReaderLanesDoctorReport, RuntimeDoctorPorts};
+use atm_core::doctor::{ReaderPoolDoctorReport, ReaderPoolMetricsDoctorReport, RuntimeDoctorPorts};
 use atm_core::error::AtmError;
 use atm_core::home::HostRuntimeScope;
 use atm_core::{LocalServiceRuntime, load_atm_config};
@@ -78,7 +78,7 @@ pub struct RuntimeAssembly {
     /// Read-only retained diagnostic timeline supplied by the selected storage backend.
     pub diagnostic_timeline: Arc<dyn DiagnosticTimelineStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
-    pub reader_lanes: Option<ReaderLanesDoctorReport>,
+    pub reader_lanes: Option<ReaderPoolDoctorReport>,
     pub workflow_telemetry: WorkflowTelemetryRuntime,
     template_composer: Option<Arc<dyn TemplateComposer>>,
 }
@@ -156,18 +156,32 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     let storage = inputs
         .storage_factory
         .open(inputs.host_runtime_scope.durable_state_root.as_ref())?;
-    let reader_lanes = storage
-        .effective_reader_lanes()
-        .map(|lanes| ReaderLanesDoctorReport {
-            mailbox: ReaderLaneDoctorReport {
-                pool_size: lanes.mailbox.pool_size,
-                queue_depth: lanes.mailbox.queue_depth,
-            },
-            search: ReaderLaneDoctorReport {
-                pool_size: lanes.search.pool_size,
-                queue_depth: lanes.search.queue_depth,
-            },
-        });
+    let reader_lanes = storage.effective_reader_pool().map(|pool| {
+        let metrics = storage
+            .reader_pool_metrics()
+            .map(|m| ReaderPoolMetricsDoctorReport {
+                queue_depth: m.queue_depth,
+                saturated: m.saturated,
+                in_flight: m.in_flight,
+                wait_nanos: m.wait_nanos,
+                execution_nanos: m.execution_nanos,
+                expired_in_queue: m.expired_in_queue,
+                interrupted_while_active: m.interrupted_while_active,
+                quarantined: m.quarantined,
+                current_quarantined_workers: m.current_quarantined_workers,
+                retired_replaced_workers: m.retired_replaced_workers,
+                quarantine_exhausted_rejections: m.quarantine_exhausted_rejections,
+                pool_size: m.pool_size,
+                last_checkpoint_succeeded: m.last_checkpoint_succeeded,
+                current_wal_frames: m.current_wal_frames,
+            });
+        ReaderPoolDoctorReport {
+            pool_size: pool.pool_size,
+            queue_depth: pool.queue_depth,
+            tool_class_max_in_flight: pool.tool_class_max_in_flight,
+            metrics,
+        }
+    });
     let storage_backends = StorageBackends {
         messages: storage.message_store(),
         rosters: storage.roster_store(),

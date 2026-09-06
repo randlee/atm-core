@@ -62,7 +62,7 @@ use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TemplateCatalogStore};
 use atm_storage::{
-    AtmError, EffectiveReaderLane, EffectiveReaderLanes, IsoTimestamp, StorageFactory,
+    AtmError, EffectiveReaderPool, EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory,
     StorageHandleParts, StorageHandles,
 };
 pub use diagnostic_timeline::{
@@ -674,27 +674,44 @@ impl SqliteStorageFactory {
 
 impl StorageFactory for SqliteStorageFactory {
     fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError> {
-        let effective_reader_lanes = EffectiveReaderLanes {
+        let effective_reader_pool = EffectiveReaderPool {
             pool_size: self.read_pool_config.pool.pool_size.get(),
             queue_depth: self.read_pool_config.pool.queue_depth.get(),
             tool_class_max_in_flight: self.read_pool_config.pool.tool_class_max_in_flight,
-            mailbox: EffectiveReaderLane {
-                pool_size: self.read_pool_config.pool.pool_size.get(),
-                queue_depth: self.read_pool_config.pool.queue_depth.get(),
-            },
-            search: EffectiveReaderLane {
-                pool_size: self.read_pool_config.pool.pool_size.get(),
-                queue_depth: self.read_pool_config.pool.queue_depth.get(),
-            },
         };
-        let backend = SqliteStorageBackend::new_with_observability_and_read_pool_config(
-            self.database_path(durable_state_root),
-            Arc::clone(&self.observability),
-            self.read_pool_config,
-        )?;
+        let backend = Arc::new(
+            SqliteStorageBackend::new_with_observability_and_read_pool_config(
+                self.database_path(durable_state_root),
+                Arc::clone(&self.observability),
+                self.read_pool_config,
+            )?,
+        );
         if let Some(observer) = &self.timeline_observer {
             observer(backend.diagnostic_timeline());
         }
+        let metrics_backend = Arc::clone(&backend);
+        let reader_pool_metrics: Arc<dyn Fn() -> Option<EffectiveReaderPoolMetrics> + Send + Sync> =
+            Arc::new(move || {
+                let snapshot = metrics_backend.reader_lane_metrics();
+                snapshot
+                    .lane("shared")
+                    .map(|lane| EffectiveReaderPoolMetrics {
+                        queue_depth: lane.queue_depth,
+                        saturated: lane.saturated,
+                        in_flight: lane.in_flight,
+                        wait_nanos: lane.wait_nanos,
+                        execution_nanos: lane.execution_nanos,
+                        expired_in_queue: lane.expired_in_queue,
+                        interrupted_while_active: lane.interrupted_while_active,
+                        quarantined: lane.quarantined,
+                        current_quarantined_workers: lane.current_quarantined_workers,
+                        retired_replaced_workers: lane.retired_replaced_workers,
+                        quarantine_exhausted_rejections: lane.quarantine_exhausted_rejections,
+                        pool_size: lane.pool_size,
+                        last_checkpoint_succeeded: lane.last_checkpoint_succeeded,
+                        current_wal_frames: lane.current_wal_frames,
+                    })
+            });
         // The write-through roster seam hydrates its RAM mirror here, fail
         // closed: a durable roster read failure at startup aborts backend
         // construction instead of silently starting with an incomplete RAM
@@ -713,7 +730,8 @@ impl StorageFactory for SqliteStorageFactory {
             message_search_store: backend.message_search_store(),
             async_message_search_store: backend.async_message_search_store(),
             diagnostic_timeline: backend.diagnostic_timeline(),
-            effective_reader_lanes: Some(effective_reader_lanes),
+            effective_reader_pool: Some(effective_reader_pool),
+            reader_pool_metrics: Some(reader_pool_metrics),
         }))
     }
 }

@@ -1,5 +1,6 @@
 use super::*;
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn writer_loop(
     target: Arc<SharedDbTarget>,
     serial_queue: Arc<SerialWriterQueue>,
@@ -8,6 +9,7 @@ pub(crate) fn writer_loop(
     diagnostic_stats: Arc<DiagnosticTimelinePersistenceStats>,
     observability: Arc<dyn SqliteObservability>,
     runtime: tokio::runtime::Runtime,
+    batch_time_budget: Duration,
 ) {
     let mut cache = stmt_cache::WriterStatementCache;
     let mut shutting_down = false;
@@ -23,7 +25,12 @@ pub(crate) fn writer_loop(
         match work {
             WriterWork::Primary(first) => {
                 let mut batch = vec![first];
-                runtime.block_on(collect_batch(&mut receiver, &mut batch, &mut shutting_down));
+                runtime.block_on(collect_batch(
+                    &mut receiver,
+                    &mut batch,
+                    &mut shutting_down,
+                    batch_time_budget,
+                ));
                 serial_queue.with_connection(|connection| {
                     process_batch(&target, connection, &mut cache, batch);
                 });
@@ -199,8 +206,9 @@ pub(crate) async fn collect_batch(
     receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
     batch: &mut Vec<QueuedWrite>,
     shutting_down: &mut bool,
+    budget: Duration,
 ) {
-    let deadline = tokio::time::Instant::now() + BATCH_TIME_BUDGET;
+    let deadline = tokio::time::Instant::now() + budget;
     // Drain an already-queued bounded burst without delay. Between arrivals,
     // yield cooperatively until the fixed deadline instead of parking on an OS
     // timer: the batching contract stays platform-neutral and a one-millisecond
