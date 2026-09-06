@@ -1373,8 +1373,8 @@ class SwitchModeTests(unittest.TestCase):
             (worktree / ".git").write_text("gitdir: elsewhere\n", encoding="utf-8")
             release = worktree / "target" / "release"
             release.mkdir(parents=True)
-            cli = release / "atm"
-            daemon = release / "atm-daemon"
+            cli = release / DAEMON_SWITCH.executable_name("atm")
+            daemon = release / DAEMON_SWITCH.executable_name("atm-daemon")
             for binary in (cli, daemon):
                 binary.write_text("fixture", encoding="utf-8")
                 binary.chmod(0o700)
