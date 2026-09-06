@@ -549,8 +549,8 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     use super::{
-        LogCommand, LogModeCommand, LogSource, QueryArgs, TimelineRecord,
-        parse_log_level_filter, parse_match_expression, parse_relative_duration,
+        LogCommand, LogModeCommand, LogSource, QueryArgs, TimelineRecord, parse_log_level_filter,
+        parse_match_expression, parse_relative_duration,
     };
     use crate::observability::{CliObservability, CliObservabilityOptions};
 
