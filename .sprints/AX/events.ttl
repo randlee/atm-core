@@ -568,3 +568,13 @@ triage:a30 a triage:Assignment ;
     triage:ofSprint triage:AX6 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-09-06T19:49:16Z"^^xsd:dateTime .
+# GO-AX-RECHECK2-CLEANUP-1788724262 (arch-ctm) completed 2026-09-06T19:58:10Z: fix/ax-recheck2-findings
+# 3946deacb, PR #1260 -> integrate/phase-ax. AXPE-QA-122 (project-plan.md AX.1-AX.6 marked complete),
+# AXPE-QA-123 (both ADR-061->062 citations corrected), AXPE-RBP-005 (daemon identity now one-time typed
+# LazyLock, no per-write parsing/format!-flattened error) all reported fixed by dev. cargo fmt/clippy -D
+# warnings/test (240+doctests) on atm-http-runtime, check_line_counts, just test (1089 Python/21 skipped +
+# full workspace Rust), git diff --check all passed. QA dispatched to quality-mgr next; Resolutions to
+# follow on QA PASS.
+triage:c29 a triage:Completion ;
+    triage:ofSprint triage:AX6 ;
+    triage:at "2026-09-06T19:58:33Z"^^xsd:dateTime .
