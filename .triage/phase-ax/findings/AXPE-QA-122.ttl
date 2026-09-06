@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by req-qa in QA-AX-PHASE-END-RECHECK2-1788721613 on PR #1253 (cc9c4f2a6), report:
+# https://github.com/randlee/atm-core/pull/1253#issuecomment-5561581957 . Independently
+# confirmed by quality-mgr via direct git show and by team-lead below. Same defect class
+# as AXPE-QA-106/107/108 (fixed by PR #1238); reintroduced, most likely by the AW-sync
+# merge conflict resolution (merge/develop-aw-into-phase-ax @ b788f6839 -> 102d16f19).
+
+<urn:atm:triage:finding/AXPE-QA-122>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-122" ;
+  triage:title "docs/project-plan.md Phase AX sprint status table still reads planned for AX.1-AX.6" ;
+  triage:description "docs/project-plan.md section 55's 'Phase AX sprint status' table (lines ~1636-1642) shows Status = 'planned' for every row AX.1 through AX.6, directly contradicting the prose two lines above the table ('Current phase status: AX.1-AX.6 merged into integrate/phase-ax; AX.7 superseded 2026-09-05') and every corresponding sprint doc's own frontmatter (status: complete). Only the AX.7 row is correct (superseded). This is the same cross-doc staleness class as AXPE-QA-106/107/108, which fixed this exact table via PR #1238 on 2026-09-06; it reappeared afterward, most likely because the AW-sync merge (merge/develop-aw-into-phase-ax @ b788f6839, landed on integrate/phase-ax at 102d16f19 per Rand's direct-merge ruling) carried forward develop's older copy of this table over the fixed one. Remediation: change Status to complete (or merged) for AX.1-AX.6 rows, matching every sibling sprint doc." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "ci_gate" ;
+  triage:category "req-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T19:49:16Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T19:24:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-122/RECHECK2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-122/RECHECK2-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1636 ;
+  triage:snippet "Phase AX sprint status table, Status column: `planned` on the AX.1-AX.6 rows (lines 1636-1641)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "cc9c4f2a6" ;
+  triage:occursIn <urn:atm:triage:worktree/RECHECK2/cc9c4f2a6> .
+
+<urn:atm:triage:worktree/RECHECK2/cc9c4f2a6>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "cc9c4f2a6" ;
+  triage:orderIndex 0 .

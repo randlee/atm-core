@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by rust-best-practices-agent (as RBP-F003) in QA-AX-PHASE-END-RECHECK2-1788721613
+# on PR #1253 (cc9c4f2a6), report:
+# https://github.com/randlee/atm-core/pull/1253#issuecomment-5561581957 . Independently
+# confirmed by quality-mgr and by team-lead below (exact file:line verified before dispatch).
+
+<urn:atm:triage:finding/AXPE-RBP-005>
+  a triage:Finding ;
+  triage:findingId "AXPE-RBP-005" ;
+  triage:title "write_escalation_mail discards error structure re-parsing DAEMON_ACTOR_NAME on every call" ;
+  triage:description "crates/atm-http-runtime/src/herdr_escalation.rs:398, inside write_escalation_mail, calls atm_core::boundary::DAEMON_ACTOR_NAME.parse() and maps any parse failure through AtmError::validation(format!(\"invalid daemon actor name: {error}\")). DAEMON_ACTOR_NAME is a hardcoded constant, so this fallible re-parse happens on every escalation mail write for a value that can never actually fail at runtime, and the format! discards the original error's structure (type/fields) rather than preserving it. Remediation: parse the constant once (e.g. a lazily-initialized static, or a debug_assert/const-eval-time check) instead of re-parsing per call, and preserve the underlying error via AtmError::validation_source or equivalent structured wrapping instead of format!-flattening it -- no behavior change intended, since the value never actually fails to parse." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "ci_gate" ;
+  triage:category "rust-best-practices-agent" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T19:49:16Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T19:24:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-RBP-005/RECHECK2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-RBP-005/RECHECK2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 398 ;
+  triage:snippet "atm_core::boundary::DAEMON_ACTOR_NAME.parse().map_err(|error| AtmError::validation(format!(\"invalid daemon actor name: {error}\")))?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "cc9c4f2a6" ;
+  triage:occursIn <urn:atm:triage:worktree/RECHECK2/cc9c4f2a6> .
+
+<urn:atm:triage:worktree/RECHECK2/cc9c4f2a6>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "cc9c4f2a6" ;
+  triage:orderIndex 0 .

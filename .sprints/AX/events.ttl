@@ -557,3 +557,14 @@ triage:r119 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-Q
 triage:r120 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-121> ; triage:resolvedAt "2026-09-06T19:00:49Z"^^xsd:dateTime .
 # QA-AXPE-FLAKY-R1-1788720311 on PR #1257 (2de3a3070) PASS 0/0/0 at 2026-09-06T19:02:34Z; #1257 merged 06ce31b1d (CI green). AXPE-QA-119 closed (fixed). develop 7c2947279 (incl. #1214 Phase AY plan, #1180) merged into integrate/phase-ax at c79c45aa0. Rand 2026-09-06: all further fixes go to arch-ctm (not background agents).
 triage:r121 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-119> ; triage:resolvedAt "2026-09-06T19:05:23Z"^^xsd:dateTime .
+# Phase-end recheck2 (QA-AX-PHASE-END-RECHECK2-1788721613 on cc9c4f2a6, FAIL 0/1/2, zero regressions):
+# AXPE-QA-122 (important, project-plan.md status table), AXPE-QA-123 (minor, ADR-061/062 citation,
+# 2 occurrences), AXPE-RBP-005 (minor, herdr_escalation.rs:398 fallible re-parse) filed 2026-09-06T19:49:16Z.
+# Rand's verbatim ruling (2026-09-06 ~19:40Z, relayed by fenix): "have team-lead oversee arch-ctm fixing
+# the 1 important + 2 minor findings on /sc-git-worktree off integrate/phase-ax". Single-writer role for
+# .triage/phase-ax/findings and .sprints/AX/events.ttl moved from fenix to team-lead with today's handoff
+# (Rand, 2026-09-06 ~19:15Z). CLEANUP-mode fix pass on the AX6 branch (highest sprint node).
+triage:a30 a triage:Assignment ;
+    triage:ofSprint triage:AX6 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-06T19:49:16Z"^^xsd:dateTime .
