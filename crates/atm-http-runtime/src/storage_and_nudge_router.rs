@@ -795,17 +795,29 @@ impl StorageAndNudgeRouter {
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         require_local_graft_ingress(ingress)?;
-        let runtime = self.service_runtime.clone();
-        let store = runtime.graft_receiver_endpoint_store()?;
-        self.control_path_sync_bridge
-            .run(deadline, move || {
-                validate_graft_receiver_member(&runtime, &team, &agent)?;
-                let lease = store.lookup(&team, &agent).map_err(graft_store_error)?;
-                Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverLookup(
-                    lease,
-                )))
-            })
-            .await
+        validate_graft_receiver_member(&self.service_runtime, &team, &agent)?;
+        let remaining = deadline.remaining().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "request deadline expired before graft receiver lease lookup",
+            )
+        })?;
+        let store = self.service_runtime.graft_receiver_endpoint_store()?;
+        let lease = tokio::task::spawn_blocking(move || {
+            store
+                .lookup_with_deadline(&team, &agent, remaining)
+                .map_err(graft_store_error)
+        })
+        .await
+        .map_err(|source| {
+            AtmError::new(
+                atm_core::error::AtmErrorCode::InternalError,
+                "graft receiver lease reader task ended unexpectedly",
+            )
+            .with_cause(source)
+        })??;
+        Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverLookup(
+            lease,
+        )))
     }
 
     fn reload_runtime_view(&self, ingress: AuthenticatedIngress) -> Result<ApiResponse, AtmError> {

@@ -729,7 +729,9 @@ mod tests {
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::graft::GraftReceiverListener;
-    use atm_core::nudge_dispatch::rebuild_received_hook_dispatch;
+    use atm_core::nudge_dispatch::{
+        load_received_hook_dispatch_message, rebuild_received_hook_dispatch,
+    };
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{GraftReceiverRegistration, OwnerGeneration};
     use atm_core::schema::{AgentType, AtmMessageId};
@@ -902,6 +904,19 @@ mod tests {
         write_mail_with_runtime(request, &NullObservability, runtime)
             .expect("queue write")
             .persisted_message_id()
+    }
+
+    fn rebuilt_queue_dispatch(
+        runtime: &atm_core::LocalServiceRuntime,
+        member: &MemberKey,
+        message_id: AtmMessageId,
+    ) -> BuiltInPostSendDispatch {
+        let message = load_received_hook_dispatch_message(runtime, member, message_id)
+            .expect("load queued message")
+            .expect("queued message belongs to member");
+        rebuild_received_hook_dispatch(runtime, member, message_id, NudgeKind::Queue, &message)
+            .expect("rebuild dispatch")
+            .expect("graft dispatch")
     }
 
     struct FailingClearPendingStore {
@@ -1286,10 +1301,7 @@ mod tests {
         let message_id = queue_write(root.path(), &runtime, &team);
         let other_message_id = queue_write(root.path(), &runtime, &team);
         let member = MemberKey::new(team.clone(), recipient.clone());
-        let dispatch =
-            rebuild_received_hook_dispatch(&runtime, &member, message_id, NudgeKind::Queue)
-                .expect("rebuild dispatch")
-                .expect("graft dispatch");
+        let dispatch = rebuilt_queue_dispatch(&runtime, &member, message_id);
         let selector = ReplacementReceivedHookSelector::with_herdr_process(
             runtime.clone(),
             Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
@@ -1369,10 +1381,7 @@ mod tests {
 
         let message_id = queue_write(root.path(), &runtime, &team);
         let member = MemberKey::new(team.clone(), recipient.clone());
-        let dispatch =
-            rebuild_received_hook_dispatch(&runtime, &member, message_id, NudgeKind::Queue)
-                .expect("rebuild dispatch")
-                .expect("graft dispatch");
+        let dispatch = rebuilt_queue_dispatch(&runtime, &member, message_id);
         let health = RuntimeHealth::default();
         let selector = ReplacementReceivedHookSelector::with_herdr_process(
             runtime.clone(),
@@ -1427,10 +1436,7 @@ mod tests {
 
         let message_id = queue_write(root.path(), &runtime, &team);
         let member = MemberKey::new(team.clone(), recipient.clone());
-        let dispatch =
-            rebuild_received_hook_dispatch(&runtime, &member, message_id, NudgeKind::Queue)
-                .expect("rebuild dispatch")
-                .expect("graft dispatch");
+        let dispatch = rebuilt_queue_dispatch(&runtime, &member, message_id);
         let health = RuntimeHealth::default();
         let emitter = PublishedGraftReceivedHook::failing_for_test(runtime.clone(), health.clone());
         let error = emitter
@@ -1485,10 +1491,7 @@ mod tests {
 
         let message_id = queue_write(root.path(), &runtime, &team);
         let member = MemberKey::new(team.clone(), recipient.clone());
-        let dispatch =
-            rebuild_received_hook_dispatch(&runtime, &member, message_id, NudgeKind::Queue)
-                .expect("rebuild dispatch")
-                .expect("graft dispatch");
+        let dispatch = rebuilt_queue_dispatch(&runtime, &member, message_id);
         let claim = runtime
             .pending_nudge_store()
             .expect("pending store")

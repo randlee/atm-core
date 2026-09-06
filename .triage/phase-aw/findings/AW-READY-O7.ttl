@@ -27,7 +27,24 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-5> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O7/AW-7e61-6> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O7/integrate-phase-aw-062cb44dd-item4-open> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O7/item5-loopback-escape-hatch> ;
   triage:triageRecordVersion "1" .
+
+# quality-mgr, 2026-09-06, phase-aw-gate-closeout-qa (PR #1254 @ 6345ce7fd):
+# item 4 (dev/prod allowed_dependencies conflation) is confirmed FIXED --
+# boundaries/atm-http-runtime/http-runtime.toml now separates
+# allowed_dependencies from allowed_dev_dependencies, matching the crate's
+# actual Cargo.toml [dependencies]/[dev-dependencies] split, and
+# .just/lint_boundaries.py's collect_manifest_dependency_allowlist_violations
+# was extended to diff both sets independently -- mechanically enforced, not
+# just documented. Independently confirmed by req-qa and arch-qa. Item 5
+# (loopback_tcp_get_json untyped escape hatch) is also confirmed FIXED --
+# the function no longer exists; replaced by a single-purpose, typed
+# loopback_tcp_get_diagnostics used only by diagnostics_query() for the one
+# /v1/diagnostics route, and the generic GET helper (loopback_read::get_json)
+# is now pub(crate), not a public arbitrary-path escape hatch. Bundle's other
+# items (6/9/10/ADR) remain unverified this round -- top-level status stays
+# "open" until the full O7 bundle is closed.
 
 # quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: item (1),
 # "duplicate counter structs", is confirmed FIXED at integrate/phase-aw@

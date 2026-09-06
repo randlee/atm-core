@@ -1437,7 +1437,11 @@ mod tests {
         assert!(!breaker.permits_spawn());
         {
             let mut state = breaker.state.lock().expect("breaker lock");
-            state.opened_at = Some(Instant::now() - Duration::from_secs(31));
+            state.opened_at = Some(
+                Instant::now()
+                    .checked_sub(Duration::from_secs(31))
+                    .expect("a 31-second test offset must be representable"),
+            );
             state.half_open_probe = false;
         }
         assert!(breaker.permits_spawn(), "half-open allows one probe");

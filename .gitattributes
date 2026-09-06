@@ -1,0 +1,4 @@
+# Git hooks are POSIX shell scripts executed by Git's bundled sh on every
+# platform, including Git for Windows. A CRLF checkout (core.autocrlf=true)
+# breaks the shebang line, so pin LF regardless of the client's autocrlf.
+.githooks/* text eol=lf

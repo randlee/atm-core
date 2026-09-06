@@ -11,7 +11,9 @@ use atm_core::boundary::{
     RosterMemberKind, built_in_nudge_template_kind_from_post_send_event,
 };
 use atm_core::error::AtmError;
-use atm_core::nudge_dispatch::rebuild_received_hook_dispatch;
+use atm_core::nudge_dispatch::{
+    load_received_hook_dispatch_message, rebuild_received_hook_dispatch,
+};
 use atm_core::observability::NullObservability;
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{
@@ -788,10 +790,18 @@ fn assert_local_matrix(herdr: bool) {
             .mark_pending_if_deferred(&runtime)
             .expect("mark queued write");
         let member = MemberKey::new(team.clone(), "recipient".parse().expect("recipient"));
-        let dispatch =
-            rebuild_received_hook_dispatch(&runtime, &member, message_id, NudgeKind::Queue)
-                .expect("rebuild queued dispatch")
-                .expect("queued dispatch");
+        let message = load_received_hook_dispatch_message(&runtime, &member, message_id)
+            .expect("load queued message")
+            .expect("queued message belongs to recipient");
+        let dispatch = rebuild_received_hook_dispatch(
+            &runtime,
+            &member,
+            message_id,
+            NudgeKind::Queue,
+            &message,
+        )
+        .expect("rebuild queued dispatch")
+        .expect("queued dispatch");
         assert_local_target(&dispatch, herdr);
         if herdr {
             assert_herdr_rendered_default(&dispatch, expected_kind);
@@ -842,10 +852,18 @@ fn assert_local_matrix(herdr: bool) {
             .mark_pending_if_deferred(&runtime)
             .expect("mark task write");
         let member = MemberKey::new(team.clone(), "recipient".parse().expect("recipient"));
-        let dispatch =
-            rebuild_received_hook_dispatch(&runtime, &member, message_id, NudgeKind::Queue)
-                .expect("rebuild task dispatch")
-                .expect("task dispatch");
+        let message = load_received_hook_dispatch_message(&runtime, &member, message_id)
+            .expect("load task message")
+            .expect("task message belongs to recipient");
+        let dispatch = rebuild_received_hook_dispatch(
+            &runtime,
+            &member,
+            message_id,
+            NudgeKind::Queue,
+            &message,
+        )
+        .expect("rebuild task dispatch")
+        .expect("task dispatch");
         assert_local_target(&dispatch, herdr);
         assert_eq!(dispatch.kind, NudgeKind::Queue);
         assert_eq!(

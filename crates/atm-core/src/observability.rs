@@ -249,6 +249,30 @@ pub enum LogLevelFilter {
     Error,
 }
 
+impl LogLevelFilter {
+    /// Canonical lowercase spelling used by retained-log query surfaces.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Trace => "trace",
+            Self::Debug => "debug",
+            Self::Info => "info",
+            Self::Warn => "warn",
+            Self::Error => "error",
+        }
+    }
+
+    /// Ordering used by severity-threshold queries.
+    pub const fn severity_rank(self) -> u8 {
+        match self {
+            Self::Trace => 0,
+            Self::Debug => 1,
+            Self::Info => 2,
+            Self::Warn => 3,
+            Self::Error => 4,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum LogOrder {

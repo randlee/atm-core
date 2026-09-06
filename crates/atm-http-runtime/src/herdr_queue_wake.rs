@@ -16,7 +16,10 @@ use atm_core::delivery_channel::{
     local_message_received_backend,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::nudge_dispatch::{build_task_reminder_dispatch, rebuild_received_hook_dispatch};
+use atm_core::nudge_dispatch::{
+    build_task_reminder_dispatch, load_received_hook_dispatch_message,
+    rebuild_received_hook_dispatch,
+};
 use atm_core::protocol::RuntimeMemberState;
 use atm_core::types::IsoTimestamp;
 use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrProcessAdapter};
@@ -759,10 +762,20 @@ impl HerdrQueueWakePump {
     ) -> Result<Option<atm_core::boundary::BuiltInPostSendDispatch>, AtmError> {
         let runtime = self.service_runtime.clone();
         let member_key = member.key.clone();
-        run_blocking(move || {
-            rebuild_received_hook_dispatch(&runtime, &member_key, message_id, NudgeKind::Queue)
+        let message = run_blocking(move || {
+            load_received_hook_dispatch_message(&runtime, &member_key, message_id)
         })
-        .await
+        .await?;
+        let Some(message) = message else {
+            return Ok(None);
+        };
+        rebuild_received_hook_dispatch(
+            &self.service_runtime,
+            &member.key,
+            message_id,
+            NudgeKind::Queue,
+            &message,
+        )
     }
 
     async fn emit_claim(

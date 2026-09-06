@@ -12,21 +12,37 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T02:10:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-06T18:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AWReadinessReview ;
   triage:foundAt "2026-09-06T01:40:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-RAM-I4/no-mechanical-guard> ;
   triage:triageRecordVersion "1" .
 
+# quality-mgr, 2026-09-06, phase-aw-gate-closeout-fix-round2 (PR #1254 @ ea2b181c6):
+# arch-ctm replaced the prior 5-file hardcoded substring check (which I had
+# overridden req-qa's "closed" call on, siding with arch-qa's ARCH-002
+# finding) with aw_ram_per_tick_roster_consumers_use_only_the_shared_store_
+# construction_seam: a live recursive scan (collect_rust_files, confirmed by
+# direct read to walk the full directory tree, not a fixed file list) over
+# crates/atm-daemon-bootstrap/src and crates/atm-http-runtime/src, finding
+# every consumer of the durable RosterStore reads (.load_roster(/.list_teams()
+# and asserting each one uses shared_roster_store_arc() and not
+# storage_backends.rosters or roster_runtime_mirror(). Asserts
+# consumers is non-empty so it cannot pass by silently matching nothing.
+# This is now a genuine workspace-scope mechanical guard, analogous in
+# spirit to resolve_picker_recipient()'s single-construction-site test,
+# satisfying the finding's acceptance criterion.
 <urn:atm:triage:occurrence/AW-RAM-I4/no-mechanical-guard>
   a triage:Occurrence ;
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 1 ;
   triage:snippet "no construction-site test pins herdr_queue_wake.rs / per-tick roster consumers to shared_roster_store_arc()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/aw-ram-roster" ;
   triage:headSha "98cea18d7" ;
   triage:occursIn <urn:atm:triage:worktree/fix-aw-ram-roster/98cea18d7-i4> .

@@ -647,6 +647,29 @@ def verify_installed_tools(manifest: BootstrapManifest, python: Path) -> None:
             raise BootstrapError(f"Python package {package} must be exactly {version}; found {actual}.")
 
 
+HOOKS_DIR = ".githooks"
+
+
+def inside_git_checkout() -> bool:
+    """True when ROOT is a git worktree (a `.git` directory or worktree file)."""
+    return (ROOT / ".git").exists()
+
+
+def install_git_hooks(*, dry_run: bool) -> None:
+    """Point core.hooksPath at the tracked hooks so pushes run the fmt/clippy gate.
+
+    The setting lives in the repository config, so one install covers every
+    worktree. Outside a git checkout (an exported tarball) there is nothing
+    to configure and the step is skipped rather than failed.
+    """
+    if not inside_git_checkout():
+        print("bootstrap: not a git checkout; skipping git hook install")
+        return
+    if not (ROOT / HOOKS_DIR / "pre-push").is_file():
+        raise BootstrapError(f"{HOOKS_DIR}/pre-push is missing; the tracked pre-push gate must exist")
+    run(["git", "config", "core.hooksPath", HOOKS_DIR], dry_run=dry_run)
+
+
 def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
     """Install the complete contract, then verify it rather than trusting installs."""
     synchronize_macos_seed_tools(manifest, dry_run=dry_run)
@@ -681,14 +704,24 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
     run(pip_install_command(python), dry_run=dry_run)
     if not dry_run:
         verify_installed_tools(manifest, python)
+    install_git_hooks(dry_run=dry_run)
 
 
 def main(argv: Sequence[str]) -> int:
     """Run a real bootstrap or a reviewable command-only dry run."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="Print exact install commands without changing state.")
+    parser.add_argument(
+        "--hooks-only",
+        action="store_true",
+        help="Only (re)install the tracked git hooks; skip the tool bootstrap.",
+    )
     args = parser.parse_args(argv[1:])
     try:
+        if args.hooks_only:
+            install_git_hooks(dry_run=args.dry_run)
+            print("bootstrap: git hooks installed (core.hooksPath=.githooks).")
+            return 0
         bootstrap(load_manifest(), dry_run=args.dry_run)
     except (BootstrapError, KeyError, OSError, tomllib.TOMLDecodeError) as error:
         print(f"bootstrap refused: {error}", file=sys.stderr)

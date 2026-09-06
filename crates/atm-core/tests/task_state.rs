@@ -5,7 +5,9 @@ use atm_core::boundary::{
     LocalSteerTarget, NudgeKind, PostSendBuiltInTarget, RosterEntry, RosterHarness,
     RosterMemberKind,
 };
-use atm_core::nudge_dispatch::rebuild_received_hook_dispatch;
+use atm_core::nudge_dispatch::{
+    load_received_hook_dispatch_message, rebuild_received_hook_dispatch,
+};
 use atm_core::observability::NullObservability;
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{
@@ -122,11 +124,16 @@ fn assert_task_send_surface(harness: RosterHarness, nudge_mode: NudgeMode, task_
             .contains(&member)
     );
 
+    let message =
+        load_received_hook_dispatch_message(&runtime, &member, outcome.persisted_message_id())
+            .expect("load task message")
+            .expect("task message belongs to recipient");
     let dispatch = rebuild_received_hook_dispatch(
         &runtime,
         &member,
         outcome.persisted_message_id(),
         NudgeKind::Queue,
+        &message,
     )
     .expect("rebuild task dispatch")
     .expect("task dispatch");
