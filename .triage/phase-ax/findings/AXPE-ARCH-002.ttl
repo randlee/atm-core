@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Phase-ending critical review of integrate/phase-ax at c9e8bf3af (2026-09-06; five reviewers, fenix-recorded).
+
+# Closed 2026-09-06T02:15:00Z: QA-AXPE-R1 PR #1234 @ 7f65db491.
+<urn:atm:triage:finding/AXPE-ARCH-002>
+  a triage:Finding ;
+  triage:findingId "AXPE-ARCH-002" ;
+  triage:title "atm subprocess spawn missing ATM runtime env isolation" ;
+  triage:description "legacy_environment_variable_cannot_bypass_clap_parsing (:72-76) spawns Command::new(atm_bin) for `atm --version` with only ATM_CLI_SURFACE_DUMP set, without ATM_HOME/ATM_CONFIG_HOME/ATM_LOG_DIR/ATM_TEAMS_DIR under a temp dir, unlike live_surface_json() (:50-56) and every other CLI subprocess test (RULE-011, docs/cross-platform-guidelines.md Test Subprocess Isolation). Blast radius is small (clap short-circuits --version before init_observability) but the isolation contract is per spawn. Remediation: reuse the tempdir fixture and env() pattern from live_surface_json()." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "arch-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-ARCH-002/INTEGRATE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-ARCH-002/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/cli_surface.rs" ;
+  triage:line 72 ;
+  triage:snippet "Command::new(atm_bin).env(\"ATM_CLI_SURFACE_DUMP\", \"json\") ... --version without isolation env" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d> .
+
+<urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:orderIndex 8 .

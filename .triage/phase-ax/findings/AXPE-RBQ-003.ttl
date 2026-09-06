@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AX-PHASE-END-1788655446 (phase-ending review) on merge/develop-into-phase-ax at 3afa39160; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1232#issuecomment-5556008121 Native id: RBQA-PHASEEND-AX-F001
+
+# Waived 2026-09-06T02:15:00Z: Rand ruling 2026-09-05 (non-blocking phase-end findings do not gate the phase); deferred to post-mortem follow-up, tracked as randlee/atm-core#1243.
+<urn:atm:triage:finding/AXPE-RBQ-003>
+  a triage:Finding ;
+  triage:findingId "AXPE-RBQ-003" ;
+  triage:title "MessageWriteOrigin peer provenance re-decided at three sites instead of one resolved fact" ;
+  triage:description "Peer provenance is independently re-decided at three sites (write/pipeline.rs has_authenticated_peer_provenance and two raw .is_some() shortcuts in send/async_persistence.rs:201,286) instead of consuming the single ValidatedWriteProvenance computed in prepare_send_context. Masked today because the upstream gate rejects the one malformed combination; a provenance-rule change would desync the async sites silently. Remediation: thread the resolved provenance value through and delete the re-derivations. Deferred to the phase post-mortem follow-ups (non-blocking)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "waived" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-06T01:17:12Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T01:14:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-RBQ-003/MERGE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-RBQ-003/MERGE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/async_persistence.rs" ;
+  triage:line 201 ;
+  triage:snippet ".is_some() shortcut re-deriving peer provenance (also :286 and write/pipeline.rs has_authenticated_peer_provenance)" ;
+  triage:status "waived" ;
+  triage:closed true ;
+  triage:branch "merge/develop-into-phase-ax" ;
+  triage:headSha "3afa39160df6a8ca2e26d690784d80f1c53844d4" ;
+  triage:occursIn <urn:atm:triage:worktree/MERGE/3afa39160df6a8ca2e26d690784d80f1c53844d4> .
+
+<urn:atm:triage:worktree/MERGE/3afa39160df6a8ca2e26d690784d80f1c53844d4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/merge-develop-into-phase-ax" ;
+  triage:branch "merge/develop-into-phase-ax" ;
+  triage:headSha "3afa39160df6a8ca2e26d690784d80f1c53844d4" ;
+  triage:orderIndex 11 .

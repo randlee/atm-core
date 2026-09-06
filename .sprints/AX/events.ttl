@@ -495,3 +495,38 @@ triage:a26 a triage:Assignment ;
 triage:c25 a triage:Completion ;
     triage:ofSprint triage:AX7 ;
     triage:at "2026-09-06T00:10:00Z"^^xsd:dateTime .
+
+# AX2-QA-003 waived 2026-09-05T07:36Z (orchestrator ruling; record status "waived"), tracked as randlee/atm-core#1193.
+triage:r83 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX2-QA-003> ; triage:resolvedAt "2026-09-06T00:20:00Z"^^xsd:dateTime .
+
+# Phase AX phase-end review closures (stack #1235 QA PASS on every layer; recorded by fenix 2026-09-06T02:15:00Z). Deferred findings waived under Rand's 2026-09-05 ruling, tracked as randlee/atm-core#1243.
+triage:r84 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-BG-001> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r85 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-BG-002> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r86 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-CPR-001> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r87 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-CPR-M1> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r88 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-ARCH-002> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r89 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-RBQ-001> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r90 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-RBQ-002> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r91 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-FLAKY-001> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r92 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-FLAKY-002> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r93 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-102> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r94 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-103> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r95 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-105> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r96 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-104> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r97 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-114> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r98 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-101> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r99 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-106> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r100 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-107> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r101 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-108> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r102 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-109> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r103 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-112> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r104 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-113> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r105 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-110> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r106 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-ARCH-003> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r107 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-RBQ-003> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r108 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-RSH-001> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r109 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-RSH-002> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r110 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-RBP-001> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r111 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-RBP-002> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r112 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-115> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
+triage:r113 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-116> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
