@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-POOL-V3>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V3" ;
+  triage:title "service_runtime/template_catalog/list/metadata-selection reads run on the writer-side control_path_pool though none are read-modify-write" ;
+  triage:description "fenix writer-pool audit V3: crates/atm-core/src/service_runtime_store.rs:170,201,215,305,356,429; template_catalog_store.rs:185,217,260; service_runtime.rs:565; crates/atm/src/commands/list.rs:327-335; read/metadata_selection.rs:165,188,208,264. Apply Rand's RMW deciding test (verbatim, 01M1T3QFQ3MXYB5NM5VXEG41EP): 'unless it is a situation that the read will be stale/out-of date does read-modify-write type situation occur.' template_catalog_store reads are content-addressed by sha (01M1T3THS8P4JDMGR3M6D2HSV2: 'templates are stored by sha. if template changes, it has a new sha and is a new entry in table') -- immutable by construction, can never be stale, never qualify for the RMW exception, must move unconditionally to the read pool. service_runtime_store and metadata_selection reads (roster/state/session metadata lookups feeding list/read-only commands) are likewise not paired with a subsequent conditional write in the same transaction in any of the cited call sites -- none is a genuine read-modify-write like claim_next_pending; a stale read here at worst returns slightly-behind list/metadata output, which is harmless per the same don't-care-race principle Rand applied to roster reads (01M1T45T3DAW53W7N5BQ83GJG3). Acceptance: every cited read site moves to the single read pool (post AW-POOL-V9), tool-class call sites (list/metadata for CLI display, not agent send/read) counted against the tool-class sub-cap; the writer path retains no read for these call sites." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "concurrency-architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-05T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V3/service-runtime-store> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V3/template-catalog-store> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V3/list-cmd> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V3/metadata-selection> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V3/service-runtime-store>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 170 ;
+  triage:snippet "non-RMW reads at 170,201,215,305,356,429 on the writer-side pool" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v3/ac1088c82> .
+
+<urn:atm:triage:occurrence/AW-POOL-V3/template-catalog-store>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/template_catalog_store.rs" ;
+  triage:line 185 ;
+  triage:snippet "content-addressed sha lookups at 185,217,260 -- immutable, never RMW-eligible" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v3/ac1088c82> .
+
+<urn:atm:triage:occurrence/AW-POOL-V3/list-cmd>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/list.rs" ;
+  triage:line 327 ;
+  triage:snippet "list command reads via writer-side pool, lines 327-335" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v3/ac1088c82> .
+
+<urn:atm:triage:occurrence/AW-POOL-V3/metadata-selection>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/metadata_selection.rs" ;
+  triage:line 165 ;
+  triage:snippet "metadata-selection reads at 165,188,208,264 on the writer-side pool" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v3/ac1088c82> .
+
+<urn:atm:triage:worktree/integrate-phase-aw-v3/ac1088c82>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:orderIndex 1 .

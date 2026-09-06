@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-POOL-V6>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V6" ;
+  triage:title "nudge_dispatch reads a value on the writer-side control_path_pool that is not read-modify-write" ;
+  triage:description "fenix writer-pool audit V6: crates/atm-core/src/nudge_dispatch.rs:95. A single non-RMW read (per Rand's deciding test, 01M1T3QFQ3MXYB5NM5VXEG41EP) on the dispatch path; belongs on the read pool once AW-POOL-V9 exists. Severity minor, carry-forward (fenix's proposal): single call site, low blast radius, no correctness impact identified beyond the same pool-boundary cleanup as the rest of this family." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "concurrency-architecture" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-05T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V6/nudge-dispatch> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V6/nudge-dispatch>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/nudge_dispatch.rs" ;
+  triage:line 95 ;
+  triage:snippet "non-RMW read on the writer-side pool" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v6/ac1088c82> .
+
+<urn:atm:triage:worktree/integrate-phase-aw-v6/ac1088c82>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:orderIndex 1 .

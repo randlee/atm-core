@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-POOL-V4>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V4" ;
+  triage:title "graft-receiver-endpoint and storage/nudge router reads run on the writer-side control_path_pool with no read-modify-write pairing" ;
+  triage:description "fenix writer-pool audit V4: crates/atm-storage-rusqlite/src/graft_receiver_endpoint_store.rs:179 and storage_and_nudge_router.rs:774-787. Applying Rand's RMW deciding test (01M1T3QFQ3MXYB5NM5VXEG41EP): these reads (graft-receiver endpoint lookup, router-side nudge/state fan-out reads) are not paired with a subsequent conditional write against the same value in the same transaction at the cited sites; a stale read here produces at worst a slightly-behind endpoint/nudge routing decision, which the don't-care-race principle (01M1T45T3DAW53W7N5BQ83GJG3) covers. Acceptance: move to the single read pool (post AW-POOL-V9); no write-path read remains at these sites. Severity important rather than blocking (fenix's proposal, unchallenged by any Rand ruling specific to V4): lower request-volume path than V1/V3/V7, and not on a foundational hot loop." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "concurrency-architecture" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-05T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V4/endpoint-store> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V4/router> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V4/endpoint-store>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/graft_receiver_endpoint_store.rs" ;
+  triage:line 179 ;
+  triage:snippet "graft-receiver endpoint lookup on the writer-side pool" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v4/ac1088c82> .
+
+<urn:atm:triage:occurrence/AW-POOL-V4/router>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/storage_and_nudge_router.rs" ;
+  triage:line 774 ;
+  triage:snippet "router-side fan-out reads at 774-787 on the writer-side pool" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v4/ac1088c82> .
+
+<urn:atm:triage:worktree/integrate-phase-aw-v4/ac1088c82>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:orderIndex 1 .

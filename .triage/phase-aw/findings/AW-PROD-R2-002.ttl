@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-PROD-R2-002>
+  a triage:Finding ;
+  triage:findingId "AW-PROD-R2-002" ;
+  triage:title "/v1/diagnostics undocumented at the storage, wire, and API-surface layers -- no atm-rusqlite docs for diagnostic_events, no OpenAPI declaration, and a rollback-safety test gap in diagnostic_timeline.rs limited to a fresh database" ;
+  triage:description "arch-ctm, review-phase-aw-prod-readiness-r2 (NO-GO), relayed by fenix. Three independent documentation/coverage gaps on the same new surface: (1) the checked-in OpenAPI spec has no declaration for /v1/diagnostics despite the route being live and authenticated; (2) atm-rusqlite has no documentation of the diagnostic_events table (schema, retention, indices) though it is now a persisted, queried table; (3) crates/atm-storage-rusqlite/src/diagnostic_timeline.rs:210-242's rollback-safety test only exercises a freshly created database, not a database that already has rows/migrations applied, leaving the rollback path under-covered for the realistic upgrade case. None of these are legacy-daemon findings; atm-http-runtime/atm-storage-rusqlite are the target architecture. Not independently re-verified line-by-line by quality-mgr this round (accepted on arch-ctm's specific citations, consistent with the confirmed-correct sibling finding AW-PROD-R2-001); should be spot-checked by the fix-round implementer against current head before closing." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "documentation-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWProdReadinessR2 ;
+  triage:foundAt "2026-09-05T23:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-PROD-R2-002/openapi> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-PROD-R2-002/docs> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-PROD-R2-002/rollback-test> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-PROD-R2-002/openapi>
+  a triage:Occurrence ;
+  triage:file "docs/openapi.yaml" ;
+  triage:line 1 ;
+  triage:snippet "no /v1/diagnostics path entry" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-r2002/ac1088c82> .
+
+<urn:atm:triage:occurrence/AW-PROD-R2-002/docs>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 1 ;
+  triage:snippet "diagnostic_events table undocumented in atm-rusqlite schema docs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-r2002/ac1088c82> .
+
+<urn:atm:triage:occurrence/AW-PROD-R2-002/rollback-test>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 210 ;
+  triage:snippet "rollback-safety test exercises only a freshly created database" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-r2002/ac1088c82> .
+
+<urn:atm:triage:worktree/integrate-phase-aw-r2002/ac1088c82>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:orderIndex 1 .

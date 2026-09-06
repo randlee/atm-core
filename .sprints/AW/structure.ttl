@@ -21,3 +21,5 @@ triage:AW5 a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 5 ; tr
 triage:AW-INTEGRATION-REVIEW a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 6 ; triage:branch "integrate/phase-aw" ; triage:criteria ".triage/phase-aw/post-mortem.md" .
 triage:AW-PHASE-GATE-REVIEW a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 7 ; triage:branch "integrate/phase-aw" ; triage:criteria ".triage/phase-aw/post-mortem.md" .
 triage:AWReadinessReview a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 8 ; triage:branch "integrate/phase-aw" ; triage:criteria ".triage/phase-aw/post-mortem.md" .
+triage:AWProdReadinessR2 a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 9 ; triage:branch "integrate/phase-aw" ; triage:criteria ".triage/phase-aw/post-mortem.md" .
+triage:AWWriterPoolAudit a triage:Sprint ; triage:inPhase triage:PhaseAW ; triage:order 10 ; triage:branch "integrate/phase-aw" ; triage:criteria ".triage/phase-aw/post-mortem.md" .
