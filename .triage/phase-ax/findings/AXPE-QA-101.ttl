@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AXPE-R1 on PR #1234 (phase-end easy fix set) at 7f65db491; fenix-recorded.
+
+<urn:atm:triage:finding/AXPE-QA-101>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-101" ;
+  triage:title "qa-evidence-master.json coverage_gaps array is stale versus the corrected scope field" ;
+  triage:description "After AXPE-CPR-M1 corrected the top-level scope narrative (AX.1-AX.6 merged; AX.7 superseded), the coverage_gaps array still describes gaps from the earlier state and now contradicts scope. Remediation: update only the coverage_gaps entries to the final phase state (remove or reword entries that describe AX.6 as in development or AX.7 as pending; keep any gap that is still true, e.g. live Windows Herdr proof deferred to release readiness). Do not edit any run record. Report reference: https://github.com/randlee/atm-core/pull/1234#issuecomment-5555900781 (quality-mgr suggested id ATM-QA-101)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "req-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T00:52:55Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T00:51:53Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-101/EASYFIX-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-101/EASYFIX-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/.audit/qa-evidence-master.json" ;
+  triage:line 638 ;
+  triage:snippet "\"coverage_gaps\": [ ... ] (stale relative to scope)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/ax-phase-end-docs-tests" ;
+  triage:headSha "7f65db4911ec696158cbb1248ca85e5fbf055a65" ;
+  triage:occursIn <urn:atm:triage:worktree/EASYFIX/7f65db4911ec696158cbb1248ca85e5fbf055a65> .
+
+<urn:atm:triage:worktree/EASYFIX/7f65db4911ec696158cbb1248ca85e5fbf055a65>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-ax-phase-end-docs-tests" ;
+  triage:branch "fix/ax-phase-end-docs-tests" ;
+  triage:headSha "7f65db4911ec696158cbb1248ca85e5fbf055a65" ;
+  triage:orderIndex 9 .
