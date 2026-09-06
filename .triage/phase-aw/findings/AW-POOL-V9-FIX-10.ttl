@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-POOL-V9-FIX-10>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9-FIX-10" ;
+  triage:title "doctor_projection.rs fixed worker tasks run unbounded graft-receiver lease lookups inside spawn_blocking" ;
+  triage:description "doctor_projection.rs:234 StorageDoctorProjection's fixed worker tasks run the per-roster-member graft-receiver lease lookup inside spawn_blocking with no bound of their own; each lookup can independently wait up to the reader pool's 10s deadline, so under reader-pool saturation a single doctor request can pin a fixed worker for N x up to 10s, well past the client-visible timeout, starving the small worker pool for subsequent doctor requests." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "reliability" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T02:31:26Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-06T02:26:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-10/AW-POOL-V9-FIX-10-integrate> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-10/AW-POOL-V9-FIX-10-A1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-10/AW-POOL-V9-FIX-10-A2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-10/AW-POOL-V9-FIX-10-integrate>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/doctor_projection.rs" ;
+  triage:line 234 ;
+  triage:snippet "let result = tokio::task::spawn_blocking(move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "0efef907bc527fe6483b31a972bb0b762f832fcf" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/phase-aw/0efef907> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-10/AW-POOL-V9-FIX-10-A1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/doctor_projection.rs" ;
+  triage:line 234 ;
+  triage:snippet "let result = tokio::task::spawn_blocking(move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "a60779787c3e89025daf0dc6fcc9d83c73344af8" ;
+  triage:occursIn <urn:atm:triage:worktree/fix/aw-pool-consolidate/a6077978> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-10/AW-POOL-V9-FIX-10-A2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/doctor_projection.rs" ;
+  triage:line 234 ;
+  triage:snippet "let result = tokio::task::spawn_blocking(move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b64dff01f71ff12eae64a0684302075d" ;
+  triage:occursIn <urn:atm:triage:worktree/fix/aw-pool-read-migration/a0e50036> .
+
+<urn:atm:triage:worktree/integrate/phase-aw/0efef907>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "0efef907bc527fe6483b31a972bb0b762f832fcf" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/fix/aw-pool-consolidate/a6077978>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aw-pool-consolidate" ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "a60779787c3e89025daf0dc6fcc9d83c73344af8" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/fix/aw-pool-read-migration/a0e50036>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aw-pool-read-migration" ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b64dff01f71ff12eae64a0684302075d" ;
+  triage:orderIndex 3 .
