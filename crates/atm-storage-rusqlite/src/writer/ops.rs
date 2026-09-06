@@ -176,41 +176,52 @@ pub(crate) fn execute(
             execute_decomposed_message_admission(admission, connection, target)
         }
         WriteOp::AdmitTemplateMessage(admission) => {
-            admission.validate()?;
-            match execute_upsert_message(
-                &admission.record,
-                admission.provenance,
-                connection,
-                cache,
-                target,
-            )? {
-                WriteOpResult::UpsertMessage {
-                    inserted: false,
-                    existing,
-                } => Ok(WriteOpResult::TemplateMessageAdmission {
-                    inserted: false,
-                    existing,
-                }),
-                WriteOpResult::UpsertMessage { inserted: true, .. } => {
-                    let _ = execute_decomposed_message_admission(
-                        &admission.decomposition,
-                        connection,
-                        target,
-                    )?;
-                    Ok(WriteOpResult::TemplateMessageAdmission {
-                        inserted: true,
-                        existing: None,
-                    })
-                }
-                other => Err(AtmError::daemon_unavailable(format!(
-                    "sqlite writer returned the wrong result while admitting a template message: {other:?}"
-                ))),
-            }
+            execute_admit_template_message(admission, connection, cache, target)
         }
         WriteOp::RecordDiagnostics(events) => execute_diagnostic_batch(events, connection, target),
         WriteOp::PruneDiagnostics { now_unix_ms } => {
             execute_diagnostic_prune(*now_unix_ms, connection, target)
         }
+    }
+}
+
+/// Admits a template-sourced message, then persists its decomposition when
+/// the record is newly inserted.
+///
+/// Returns the same [`WriteOpResult::TemplateMessageAdmission`] outcome the
+/// inline `execute` match arm previously produced, with no behavior change.
+fn execute_admit_template_message(
+    admission: &TemplateMessageAdmission,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    admission.validate()?;
+    match execute_upsert_message(
+        &admission.record,
+        admission.provenance,
+        connection,
+        cache,
+        target,
+    )? {
+        WriteOpResult::UpsertMessage {
+            inserted: false,
+            existing,
+        } => Ok(WriteOpResult::TemplateMessageAdmission {
+            inserted: false,
+            existing,
+        }),
+        WriteOpResult::UpsertMessage { inserted: true, .. } => {
+            let _ =
+                execute_decomposed_message_admission(&admission.decomposition, connection, target)?;
+            Ok(WriteOpResult::TemplateMessageAdmission {
+                inserted: true,
+                existing: None,
+            })
+        }
+        other => Err(AtmError::daemon_unavailable(format!(
+            "sqlite writer returned the wrong result while admitting a template message: {other:?}"
+        ))),
     }
 }
 

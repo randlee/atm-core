@@ -656,7 +656,7 @@ impl ReaderPool {
         let reservation = self.reserve_worker()?;
         let request_id = RequestId::next(&self.inner.next_request);
         let (reply, response) = mpsc::sync_channel(1);
-        let mut request = Request {
+        let request = Request {
             id: request_id,
             queued_at: Instant::now(),
             deadline: expires_at,
@@ -672,25 +672,38 @@ impl ReaderPool {
                 let _ = reply.send(result);
             }),
         };
+        self.enqueue_request(&reservation, request, expires_at)?;
+        response
+            .recv_timeout(expires_at.saturating_duration_since(Instant::now()))
+            .map_err(|error| match error {
+                mpsc::RecvTimeoutError::Timeout => {
+                    self.expire_waiting_request(reservation, request_id)
+                }
+                mpsc::RecvTimeoutError::Disconnected => ReadLaneError::Unavailable {
+                    message: "reader worker closed its reply channel".to_owned(),
+                },
+            })?
+    }
+
+    /// Pushes `request` onto the worker's bounded queue, retrying until the
+    /// deadline elapses or the queue accepts the request.
+    fn enqueue_request(
+        &self,
+        reservation: &WorkerReservation,
+        mut request: Request,
+        expires_at: Instant,
+    ) -> Result<(), ReadLaneError> {
+        let metrics = &self.inner.metrics;
         loop {
-            self.inner
-                .metrics
-                .queue_depth
-                .fetch_add(1, Ordering::Relaxed);
+            metrics.queue_depth.fetch_add(1, Ordering::Relaxed);
             match reservation.sender.try_send(WorkerMessage::Request(request)) {
-                Ok(()) => break,
+                Ok(()) => return Ok(()),
                 Err(tokio::sync::mpsc::error::TrySendError::Full(WorkerMessage::Request(
                     returned,
                 ))) => {
-                    self.inner
-                        .metrics
-                        .queue_depth
-                        .fetch_sub(1, Ordering::Relaxed);
+                    metrics.queue_depth.fetch_sub(1, Ordering::Relaxed);
                     if Instant::now() >= expires_at {
-                        self.inner
-                            .metrics
-                            .expired_in_queue
-                            .fetch_add(1, Ordering::Relaxed);
+                        metrics.expired_in_queue.fetch_add(1, Ordering::Relaxed);
                         return Err(ReadLaneError::DeadlineExpired {
                             stage: "waiting in queue",
                         });
@@ -702,26 +715,13 @@ impl ReaderPool {
                     unreachable!("reader submissions never send a shutdown message")
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    self.inner
-                        .metrics
-                        .queue_depth
-                        .fetch_sub(1, Ordering::Relaxed);
+                    metrics.queue_depth.fetch_sub(1, Ordering::Relaxed);
                     return Err(ReadLaneError::Unavailable {
                         message: "reader worker stopped".to_owned(),
                     });
                 }
             }
         }
-        response
-            .recv_timeout(expires_at.saturating_duration_since(Instant::now()))
-            .map_err(|error| match error {
-                mpsc::RecvTimeoutError::Timeout => {
-                    self.expire_waiting_request(reservation, request_id)
-                }
-                mpsc::RecvTimeoutError::Disconnected => ReadLaneError::Unavailable {
-                    message: "reader worker closed its reply channel".to_owned(),
-                },
-            })?
     }
 
     fn reserve_worker(&self) -> Result<WorkerReservation, ReadLaneError> {
