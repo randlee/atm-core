@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AXPE-STRUCT-R1 on PR #1236 at 946763576; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1236#issuecomment-5556000726
+
+<urn:atm:triage:finding/AXPE-QA-104>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-104" ;
+  triage:title "release-findings.json left dirty in the worktree after validation" ;
+  triage:description "The fix pass left release-findings.json modified and uncommitted in the worktree after just validate recorded the boundary-lint failure; committed content is unchanged versus 7f65db491, so this is worktree hygiene, not a committed defect. Evidence artifacts are never hand-edited or left drifted. Remediation: restore the file (git checkout -- release-findings.json) after every validation run and confirm git status is clean before the completion message; fenix restored it on 2026-09-06 before re-dispatch." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "rust-qa-agent" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "branch" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T01:14:37Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T01:13:13Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-104/STRUCT-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-104/STRUCT-1>
+  a triage:Occurrence ;
+  triage:file "release-findings.json" ;
+  triage:line 1 ;
+  triage:snippet "M release-findings.json (status pass->fail with a just-lint-failed finding)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/ax-phase-end-structural" ;
+  triage:headSha "946763576830550debefa5d0862f84ff0029bdc1" ;
+  triage:occursIn <urn:atm:triage:worktree/STRUCT/946763576830550debefa5d0862f84ff0029bdc1> .
+
+<urn:atm:triage:worktree/STRUCT/946763576830550debefa5d0862f84ff0029bdc1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-ax-phase-end-structural" ;
+  triage:branch "fix/ax-phase-end-structural" ;
+  triage:headSha "946763576830550debefa5d0862f84ff0029bdc1" ;
+  triage:orderIndex 10 .
