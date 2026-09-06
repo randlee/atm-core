@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AX-PHASE-END-RECHECK-1788716803 (phase-end recheck) on integrate/phase-ax at 6e8f33ba5; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1253#issuecomment-5561091832 Native id: RBP-F002
+
+# Fixed 2026-09-06: PR #1255 fix/ax-phase-end-recheck-fixes @ c02ccbe6b, QA-2 PASS (QA-AXPE-RECHECK-FIX-R2-1788719605, https://github.com/randlee/atm-core/pull/1255#issuecomment-5561333419); closed by fenix on the verdict, 2026-09-06T18:44:00Z.
+<urn:atm:triage:finding/AXPE-RBP-004>
+  a triage:Finding ;
+  triage:findingId "AXPE-RBP-004" ;
+  triage:title "Task-event lookup compares as_str() == \"reminded\" instead of matching TaskEventKind::Reminded" ;
+  triage:description "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs:96 and :102 find task events with event.event.as_str() == \"reminded\" against a string literal instead of matching the TaskEventKind::Reminded variant the enum was built for, discarding exhaustiveness and rename safety. Workspace sweep found only these two occurrences; no other .as_str() == comparisons against task-event or task-state string literals (reminded, blocked, completed, assigned, acked) in production code." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "rust-best-practices-agent" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T18:44:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T18:03:45Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T18:00:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-RBP-004/INTEGRATE-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-RBP-004/INTEGRATE-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-RBP-004/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 96 ;
+  triage:snippet ".find(|event| event.event.as_str() == \"reminded\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "6e8f33ba59a1167127e94222bbed0405a3680cf0" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/6e8f33ba59a1167127e94222bbed0405a3680cf0> .
+
+<urn:atm:triage:occurrence/AXPE-RBP-004/INTEGRATE-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 102 ;
+  triage:snippet ".find(|event| event.event.as_str() == \"reminded\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "6e8f33ba59a1167127e94222bbed0405a3680cf0" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/6e8f33ba59a1167127e94222bbed0405a3680cf0> .
+
+<urn:atm:triage:worktree/INTEGRATE/6e8f33ba59a1167127e94222bbed0405a3680cf0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "6e8f33ba59a1167127e94222bbed0405a3680cf0" ;
+  triage:orderIndex 12 .

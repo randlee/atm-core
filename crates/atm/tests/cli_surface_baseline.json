@@ -447,6 +447,163 @@
       "args": [
         {
           "has_default": true,
+          "id": "stderr_logs",
+          "long": "stderr-logs",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        }
+      ],
+      "name": "escalation",
+      "subcommands": [
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "address",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "json",
+              "long": "json",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "add",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": true,
+              "id": "json",
+              "long": "json",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "list",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "address",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "json",
+              "long": "json",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "remove",
+          "subcommands": []
+        }
+      ]
+    },
+    {
+      "args": [
+        {
+          "has_default": true,
           "id": "json",
           "long": "json",
           "num_args": {
@@ -579,6 +736,17 @@
           "short": null
         },
         {
+          "has_default": false,
+          "id": "member",
+          "long": "member",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
           "has_default": true,
           "id": "pending_ack",
           "long": "pending-ack",
@@ -629,6 +797,28 @@
           "num_args": {
             "max": 1,
             "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "task_events",
+          "long": "task-events",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "tasks",
+          "long": "tasks",
+          "num_args": {
+            "max": 0,
+            "min": 0
           },
           "required": false,
           "short": null
@@ -1932,6 +2122,17 @@
         },
         {
           "has_default": false,
+          "id": "task_complete",
+          "long": "task-complete",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
           "id": "task_id",
           "long": "task-id",
           "num_args": {
@@ -2821,6 +3022,17 @@
           "has_default": false,
           "id": "tag",
           "long": "tag",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "task_complete",
+          "long": "task-complete",
           "num_args": {
             "max": 1,
             "min": 1

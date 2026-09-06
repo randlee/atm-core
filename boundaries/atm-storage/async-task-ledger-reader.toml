@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-AsyncTaskLedgerReader"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "AsyncTaskLedgerReader"
+
+[public]
+trait = "AsyncTaskLedgerReader"
+notes = "Tokio-facing bounded read-only task-ledger contract; it exposes neither a writer permit nor a database connection."
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = ["atm_runtime::composition::assemble_runtime"]
+
+[ownership]
+io_owns = ["bounded_read_submission", "task_ledger_read_result"]
+io_forbidden = ["write_capable_connection", "writer_lane", "socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["TeamName", "AgentName", "TaskId", "ReadDeadline"]
+response_types = ["TaskRow", "TaskEventRow"]
+error_types = ["ReadLaneError"]
+
+[testing]
+allowed_test_double_paths = ["crate::testing::InMemoryTaskLedgerReader"]
+forbidden_test_bypasses = []
+
+[enforcement]
+io_forbidden_source_modules = { write_capable_connection = ["atm_storage_rusqlite::shared_db_reader_lanes", "atm_storage_rusqlite::reader_pool"], writer_lane = ["atm_storage_rusqlite::reader_pool"], socket_io = ["atm_storage_rusqlite::task_ledger_reader", "atm_storage_rusqlite::shared_db_reader_lanes", "atm_storage_rusqlite::reader_pool"], process_spawn = ["atm_storage_rusqlite::task_ledger_reader", "atm_storage_rusqlite::shared_db_reader_lanes", "atm_storage_rusqlite::reader_pool"] }
+lint_rules = ["LINT-BOUNDARY-TASK-LEDGER-READER-REFERENCES"]
+review_gates = ["no_backend_specific_async_contract", "no_writer_lane_read_submission"]
+
+[status]
+state = "concrete_landed"
+notes = ["The SQLite adapter owns bounded read-only task-ledger workers; runtime callers await this capability directly."]

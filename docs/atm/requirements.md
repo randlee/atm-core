@@ -140,10 +140,13 @@ Required rules:
   carrying exactly one built-in template kind:
   - `delivery`
   - `delivery_ack`
-  - `delivery_task`
-  - `delivery_task_ack`
+  - `queue`
+  - `queue_ack`
+  - `task`
   - `acknowledge`
   - `acknowledge_task`
+  `NudgeKind` selects the delivery or queue family, and task-tagged messages
+  select `task` in either family.
 - `atm` owns direct placeholder substitution for those templates; no Jinja or
   conditional template language is allowed on the built-in path
 - `atm internal-nudge` must read the resolved built-in envelope from
@@ -152,7 +155,7 @@ Required rules:
   - the concrete sink target
   - the resolved template kind
   - the resolved template body or explicit disabled state
-- the accepted built-in path is bounded to six default template bodies, but any
+- the accepted built-in path is bounded to seven default template bodies, but any
   team-scoped override lookup for those bodies must cross the storage-neutral
   `NudgeTemplateOverrideStore` contract upstream of `MessageReceivedHookEmitter`
   rather than performing direct SQLite access or runtime/store reopening in

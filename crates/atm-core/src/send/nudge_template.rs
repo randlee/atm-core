@@ -65,16 +65,19 @@ fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
 pub fn default_template(kind: BuiltInNudgeTemplateKind) -> &'static str {
     match kind {
         BuiltInNudgeTemplateKind::Delivery => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>read atm --team {{team}}</action>\n  <description>{{description}}</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <description>{{description}}</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
         BuiltInNudgeTemplateKind::DeliveryAck => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>read atm --team {{team}}</action>\n  <action>ack the message</action>\n  <description>{{description}}</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>ack the message</action>\n  <description>{{description}}</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
-        BuiltInNudgeTemplateKind::DeliveryTask => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>read atm --team {{team}}</action>\n  <task id=\"{{task_id}}\">{{description}}</task>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+        BuiltInNudgeTemplateKind::Queue => {
+            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <description>{{description}}</description>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
-        BuiltInNudgeTemplateKind::DeliveryTaskAck => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>read atm --team {{team}}</action>\n  <action>ack the message</action>\n  <task id=\"{{task_id}}\">{{description}}</task>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+        BuiltInNudgeTemplateKind::QueueAck => {
+            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>ack the message</action>\n  <description>{{description}}</description>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+        }
+        BuiltInNudgeTemplateKind::Task => {
+            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>ack the message</action>\n  <task id=\"{{task_id}}\">{{description}}</task>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
         BuiltInNudgeTemplateKind::Acknowledge => {
             "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\"/>"
@@ -205,10 +208,46 @@ mod tests {
     fn render_built_in_nudge_populates_placeholders() {
         let rendered = render_built_in_nudge(
             &base_event(),
-            default_template(BuiltInNudgeTemplateKind::DeliveryTaskAck),
+            default_template(BuiltInNudgeTemplateKind::Task),
         )
         .expect("rendered template");
         assert!(rendered.contains(&format!("{TEST_LEAD}@{TEST_TEAM}")));
         assert!(rendered.contains("01KX1TEST00000000000000000"));
+    }
+
+    #[test]
+    fn all_default_templates_render_and_match_their_delivery_contract() {
+        let kinds = [
+            BuiltInNudgeTemplateKind::Delivery,
+            BuiltInNudgeTemplateKind::DeliveryAck,
+            BuiltInNudgeTemplateKind::Queue,
+            BuiltInNudgeTemplateKind::QueueAck,
+            BuiltInNudgeTemplateKind::Task,
+            BuiltInNudgeTemplateKind::Acknowledge,
+            BuiltInNudgeTemplateKind::AcknowledgeTask,
+        ];
+        for kind in kinds {
+            let body = default_template(kind);
+            assert!(!body.contains("read atm "), "legacy read action in {kind}");
+            render_built_in_nudge(&base_event(), body).expect("default template renders");
+            if matches!(
+                kind,
+                BuiltInNudgeTemplateKind::Delivery | BuiltInNudgeTemplateKind::DeliveryAck
+            ) {
+                assert!(body.contains("<when idle=\"immediate\""));
+            } else if !matches!(
+                kind,
+                BuiltInNudgeTemplateKind::Acknowledge | BuiltInNudgeTemplateKind::AcknowledgeTask
+            ) {
+                assert!(!body.contains("<when "));
+            }
+            if !matches!(
+                kind,
+                BuiltInNudgeTemplateKind::Acknowledge | BuiltInNudgeTemplateKind::AcknowledgeTask
+            ) {
+                assert!(body.contains("execute the assigned task"));
+                assert!(body.contains("atm read --message-id"));
+            }
+        }
     }
 }

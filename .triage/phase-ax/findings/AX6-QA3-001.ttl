@@ -1,0 +1,280 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA3-001>
+  a triage:Finding ;
+  triage:findingId "AX6-QA3-001" ;
+  triage:title "RULE-008: new D8 test escalation_recipients_are_scoped_deduplicated_and_capped in crates/atm-storage-rusqlite/src/task_store.rs hardcodes the production atm-dev literal" ;
+  triage:description "AX.6 QA-3 (quality-mgr QA-AX6-R3-1788637011, PR #1204 report 2026-09-05T19:45Z, arch-qa ARCH-101, full-crate sweep) at head 43e1d40b33357024dea87742b4f8a114e7fd4966. The new D8 test escalation_recipients_are_scoped_deduplicated_and_capped at crates/atm-storage-rusqlite/src/task_store.rs:539 (and lines 544, 551, 557, 562, 569, 573, 580, 586, 591) still hardcodes the atm-dev production team literal that this same fix pass removed everywhere else (escalation_admin.rs uses TEST_RECIPIENT, commands/escalation.rs uses TEST_TEAM/TEST_RECIPIENT). The sibling concurrent-add test directly below it already uses the safe @ax6-test pattern. Fix: apply the same test-local non-production constant in this test. Blocking per the zero-tolerance RULE-008 policy; a pre-existing-pattern match is context, not justification." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T20:02:30Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr AX.6 QA-4 recheck (QA-AX6-R4-1788638300) at head ba19d6236; fixed by arch-ctm fix pass GO-AX6-FIX3-1788637962 (Completion c23). Report: PR #1204 comment 5554428957. Sprint verdict remains FAIL on new finding AX6-QA4-001." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T19:48:33Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T19:45:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX6-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX6-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX6-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX6-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX6-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX6-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX6-8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX6-9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX6-10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX7-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX7-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX7-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX7-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX7-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX7-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX7-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX7-8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX7-9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA3-001/AX7-10> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 539 ;
+  triage:snippet ".add_escalation_recipient(&daemon, \"ops@atm-dev\", now)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX6-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 544 ;
+  triage:snippet ".add_escalation_recipient(&daemon, \"ops@atm-dev\", now)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX6-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 551 ;
+  triage:snippet "vec![\"ops@atm-dev\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX6-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 557 ;
+  triage:snippet "vec![\"ops@atm-dev\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX6-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 562 ;
+  triage:snippet ".add_escalation_recipient(&team, \"team-ops@atm-dev\", now)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX6-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 569 ;
+  triage:snippet "vec![\"team-ops@atm-dev\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX6-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 573 ;
+  triage:snippet ".remove_escalation_recipient(&team, \"team-ops@atm-dev\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX6-8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 580 ;
+  triage:snippet "vec![\"ops@atm-dev\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX6-9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 586 ;
+  triage:snippet ".add_escalation_recipient(&daemon, &format!(\"ops-{index}@atm-dev\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX6-10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 591 ;
+  triage:snippet ".add_escalation_recipient(&daemon, \"overflow@atm-dev\", now)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/43e1d40b3> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 539 ;
+  triage:snippet ".add_escalation_recipient(&daemon, \"ops@atm-dev\", now)" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX7-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 544 ;
+  triage:snippet ".add_escalation_recipient(&daemon, \"ops@atm-dev\", now)" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX7-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 551 ;
+  triage:snippet "vec![\"ops@atm-dev\"]" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX7-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 557 ;
+  triage:snippet "vec![\"ops@atm-dev\"]" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX7-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 562 ;
+  triage:snippet ".add_escalation_recipient(&team, \"team-ops@atm-dev\", now)" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX7-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 569 ;
+  triage:snippet "vec![\"team-ops@atm-dev\"]" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX7-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 573 ;
+  triage:snippet ".remove_escalation_recipient(&team, \"team-ops@atm-dev\")" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX7-8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 580 ;
+  triage:snippet "vec![\"ops@atm-dev\"]" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX7-9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 586 ;
+  triage:snippet ".add_escalation_recipient(&daemon, &format!(\"ops-{index}@atm-dev\")" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
+
+<urn:atm:triage:occurrence/AX6-QA3-001/AX7-10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 591 ;
+  triage:snippet ".add_escalation_recipient(&daemon, \"overflow@atm-dev\", now)" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
+
+<urn:atm:triage:worktree/AX6/43e1d40b3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ax6-lead-notification-doctor" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "43e1d40b33357024dea87742b4f8a114e7fd4966" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/d101fee2e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ax7-live-proof" ;
+  triage:branch "feature/ax7-live-proof" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:orderIndex 7 .

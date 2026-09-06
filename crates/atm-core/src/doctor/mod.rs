@@ -1,3 +1,4 @@
+mod ax6;
 pub mod health;
 pub mod report;
 
@@ -28,12 +29,13 @@ pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
-    DoctorSeverity, DoctorStatus, DoctorSummary, GraftReceiverLeaseDoctorReport,
-    GraftReceiversDoctorReport, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
-    HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport, LegacyLiteralIpPeerDoctorReport,
-    PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
-    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, ReaderPoolDoctorReport,
-    ReaderPoolMetricsDoctorReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
+    DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientsDoctorReport,
+    GraftReceiverLeaseDoctorReport, GraftReceiversDoctorReport, HerdrBreakerDoctor,
+    HerdrBreakerDoctorReport, HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport,
+    LegacyLiteralIpPeerDoctorReport, PeerAuthorityDoctorReport, PeerConfigDoctorReport,
+    PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
+    ReaderPoolDoctorReport, ReaderPoolMetricsDoctorReport, RecipientDeliveryPath,
+    RecipientDeliveryPathReport, TeamEscalationRecipientsDoctorReport,
 };
 
 /// Async application port for the live Herdr visibility checks performed by
@@ -168,6 +170,7 @@ pub fn run_doctor_with_runtime(
         None,
         None,
         HerdrBreakerDoctorReport::default(),
+        EscalationRecipientsDoctorReport::default(),
     ))
 }
 
@@ -199,6 +202,11 @@ pub fn run_doctor_with_runtime_ports(
         .as_ref()
         .map(|team| graft_receivers_doctor_report(runtime, team, &mut general_findings))
         .unwrap_or_default();
+    let escalation_recipients = ax6::task_and_roster_findings(
+        runtime,
+        doctor_context.resolved_team.as_ref(),
+        &mut general_findings,
+    );
     let findings = collect_doctor_findings(
         &reports,
         &drift_findings,
@@ -228,6 +236,7 @@ pub fn run_doctor_with_runtime_ports(
         None,
         None,
         runtime_doctors.herdr_breaker.report(),
+        escalation_recipients,
     ))
 }
 
@@ -406,6 +415,7 @@ fn build_doctor_report(
     runtime_status: Option<crate::protocol::RuntimeStatusSnapshot>,
     bootstrap_trace: Option<BootstrapTraceReport>,
     herdr_breaker: HerdrBreakerDoctorReport,
+    escalation_recipients: EscalationRecipientsDoctorReport,
 ) -> DoctorReport {
     let summary = summarize_doctor_findings(&findings);
     let recommendations = collect_recommendations(&findings);
@@ -426,6 +436,7 @@ fn build_doctor_report(
         },
         herdr_breaker,
         post_send,
+        escalation_recipients,
         config,
         mail_store,
         roster_store,
@@ -615,6 +626,41 @@ fn inspect_runtime_doctor_sections(
             findings,
         ),
     }
+}
+
+/// Build warnings from the live runtime status snapshot supplied by the daemon.
+pub fn runtime_condition_findings(
+    snapshot: &crate::protocol::RuntimeStatusSnapshot,
+) -> Vec<DoctorFinding> {
+    let now = crate::types::IsoTimestamp::now();
+    snapshot
+        .members
+        .iter()
+        .filter(|observation| observation.state == crate::protocol::RuntimeMemberState::Blocked)
+        .map(|observation| {
+            let observed_at = observation
+                .state_changed_at
+                .or(observation.last_active_at)
+                .unwrap_or(now);
+            let age = now
+                .into_inner()
+                .signed_duration_since(observed_at.into_inner())
+                .num_seconds()
+                .max(0);
+            DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: AtmErrorCode::MemberBlocked,
+                message: format!(
+                    "member {}@{} is blocked; observation age {}s",
+                    observation.member, observation.team, age
+                ),
+                remediation: Some(
+                    "<member> is waiting for interactive input; attach to its Herdr agent and answer the prompt"
+                        .to_owned(),
+                ),
+            }
+        })
+        .collect()
 }
 
 fn push_obsolete_identity_finding(
@@ -893,8 +939,9 @@ mod tests {
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
     use atm_storage::{
-        CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
-        PrivateKeyRef, TrustedPeer,
+        AgentType, CertificateFingerprint, HostName, HttpsInterface, LocalCertificate,
+        PeerConfigStore, PrivateKeyRef, RosterHarness, RosterMemberKind, RosterSnapshot, TaskRow,
+        TaskState, TrustedPeer,
     };
 
     enum StubHealth {
@@ -2109,6 +2156,168 @@ mod tests {
                 .as_ref()
                 .map(|finding| finding.code),
             Some(AtmErrorCode::PeerConfigValidationFailed)
+        );
+    }
+
+    #[test]
+    fn ax6_doctor_projects_all_roster_task_codes_and_team_counts() {
+        let team: TeamName = "ax6-doctor".parse().expect("team");
+        let worker: AgentName = "worker".parse().expect("worker");
+        let roster = RosterSnapshot {
+            team_name: team.clone(),
+            members: vec![
+                atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: "lead-one".parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Lead,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                },
+                atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: "lead-two".parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Lead,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                },
+                atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: "atm-daemon".parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Worker,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                },
+                atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: worker.clone(),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Worker,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                },
+            ],
+            refreshed_at: None,
+        };
+        let assigned_task = TaskRow {
+            team: team.clone(),
+            task_id: "ax6-stalled".parse().expect("task"),
+            assignee: worker.clone(),
+            assigner: "assigner".parse().expect("agent"),
+            state: TaskState::Assigned,
+            assignment_message_id: atm_storage::AtmMessageId::new(),
+            description: "stalled".to_owned(),
+            assigned_at: atm_storage::IsoTimestamp::now(),
+            updated_at: atm_storage::IsoTimestamp::now(),
+            last_reminded_at: None,
+            reminder_count: atm_storage::TASK_STALLED_REMINDER_THRESHOLD,
+            lead_notified_count: 0,
+        };
+        let mut findings = Vec::new();
+        super::ax6::team_findings(&team, &roster, &[assigned_task], &mut findings);
+        let codes: Vec<_> = findings.iter().map(|finding| finding.code).collect();
+        assert!(codes.contains(&AtmErrorCode::RosterMultipleLeads));
+        assert!(codes.contains(&AtmErrorCode::RosterReservedName));
+        assert!(codes.contains(&AtmErrorCode::TaskStalled));
+        let info = findings
+            .iter()
+            .find(|finding| finding.severity == DoctorSeverity::Info)
+            .expect("one team count finding");
+        assert!(info.message.contains("assigned:1"));
+        assert!(info.message.contains("active:0"));
+        assert_eq!(
+            findings
+                .iter()
+                .filter(|finding| finding.severity == DoctorSeverity::Info)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn ax6_doctor_reports_one_no_lead_warning_for_a_herdr_team() {
+        let team: TeamName = "ax6-herdr-no-lead".parse().expect("team");
+        let roster = RosterSnapshot {
+            team_name: team.clone(),
+            members: ["worker-one", "worker-two"]
+                .into_iter()
+                .map(|agent| atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: agent.parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Worker,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                })
+                .collect(),
+            refreshed_at: None,
+        };
+        let mut findings = Vec::new();
+
+        super::ax6::team_findings(&team, &roster, &[], &mut findings);
+
+        let no_lead: Vec<_> = findings
+            .iter()
+            .filter(|finding| finding.code == AtmErrorCode::RosterNoLead)
+            .collect();
+        assert_eq!(no_lead.len(), 1, "one aggregated warning per team");
+        assert_eq!(no_lead[0].severity, DoctorSeverity::Warning);
+        assert!(no_lead[0].message.contains("ax6-herdr-no-lead"));
+    }
+
+    #[test]
+    fn ax6_doctor_projects_blocked_runtime_code_with_age() {
+        let now = crate::types::IsoTimestamp::now();
+        let snapshot = crate::protocol::RuntimeStatusSnapshot {
+            liveness: crate::protocol::RuntimeLivenessState::Running,
+            readiness: crate::protocol::RuntimeReadinessState::Ready,
+            detail: None,
+            singleton_owner_pid: None,
+            degraded_ingest: false,
+            member_counts: Default::default(),
+            members: vec![crate::protocol::RuntimeMemberObservation {
+                team: "ax6-doctor".parse().expect("team"),
+                member: "blocked".parse().expect("member"),
+                state: crate::protocol::RuntimeMemberState::Blocked,
+                session_id: None,
+                pid: None,
+                last_active_at: None,
+                state_changed_by: None,
+                state_changed_at: Some(now),
+                session_changed_by: None,
+                session_changed_at: None,
+            }],
+            graft_queue_handoff_failures_total: 0,
+            graft_queue_marker_clear_failures_total: 0,
+            bare_cli_queue_full_drops_total: 0,
+            queue_marker_set_failures_total: 0,
+            herdr_queue_last_tick_at: None,
+            queue_messages_drained_total: 0,
+            queue_drain_failures_total: 0,
+            blocking_core_bridge_stalls_total: 0,
+        };
+        let findings = super::runtime_condition_findings(&snapshot);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, AtmErrorCode::MemberBlocked);
+        assert!(findings[0].message.contains("blocked@ax6-doctor"));
+        assert!(
+            findings[0]
+                .remediation
+                .as_deref()
+                .unwrap_or_default()
+                .contains("interactive input")
         );
     }
 }

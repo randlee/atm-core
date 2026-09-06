@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AXPE-STRUCT-R1 on PR #1236 at 946763576; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1236#issuecomment-5556000726
+
+# Closed 2026-09-06T02:15:00Z: QA-AXPE-STRUCT-R2/R3 PR #1236 @ 6c7055274.
+<urn:atm:triage:finding/AXPE-QA-103>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-103" ;
+  triage:title "boundary lint: task_ledger_reader.rs reaches rusqlite::Connection through 10 restricted roots via task_sql" ;
+  triage:description "just lint boundaries fails with 10 findings at 946763576 (passes at 7f65db491): the async task-ledger reader's new use of the crate-private task_sql module makes rusqlite::Connection reachable from roots that boundaries/atm-storage-rusqlite/*.toml restrict. Remediation without editing any boundary TOML (frozen; no ruling granted): shape task_sql so each boundary root only reaches its own permitted surface, e.g. split projections per root (task-store vs async-task-ledger-reader) or move the reader's projection into the reader's own owned module while sharing only the column-list constant and decode functions; run just lint boundaries locally before pushing and quote the clean output in the completion. If a TOML line is genuinely unavoidable, stop and send fenix the exact proposed line with justification instead of editing it." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "rust-qa-agent" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "branch" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-06T01:14:37Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T01:13:13Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-103/STRUCT-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-103/STRUCT-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_ledger_reader.rs" ;
+  triage:line 81 ;
+  triage:snippet "task_sql::select_tasks_for_team(connection, team, member)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ax-phase-end-structural" ;
+  triage:headSha "946763576830550debefa5d0862f84ff0029bdc1" ;
+  triage:occursIn <urn:atm:triage:worktree/STRUCT/946763576830550debefa5d0862f84ff0029bdc1> .
+
+<urn:atm:triage:worktree/STRUCT/946763576830550debefa5d0862f84ff0029bdc1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-ax-phase-end-structural" ;
+  triage:branch "fix/ax-phase-end-structural" ;
+  triage:headSha "946763576830550debefa5d0862f84ff0029bdc1" ;
+  triage:orderIndex 10 .

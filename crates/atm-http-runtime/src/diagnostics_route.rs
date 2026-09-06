@@ -269,7 +269,8 @@ mod tests {
         DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticTimelineResponse,
     };
     use atm_runtime::{
-        DiagnosticCursor, DiagnosticEvent, DiagnosticQuery, DiagnosticTimelineStore,
+        DiagnosticCursor, DiagnosticEvent, DiagnosticQuery, DiagnosticRecordError,
+        DiagnosticTimelineStore,
     };
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
@@ -362,10 +363,7 @@ mod tests {
     }
 
     impl DiagnosticTimelineStore for FixtureStore {
-        fn record_batch(
-            &self,
-            _events: &[DiagnosticEvent],
-        ) -> Result<(), atm_storage::DiagnosticRecordError> {
+        fn record_batch(&self, _events: &[DiagnosticEvent]) -> Result<(), DiagnosticRecordError> {
             unimplemented!("the diagnostics route never writes")
         }
 

@@ -2,7 +2,7 @@
 //! entry family, and persisted-write preparation.
 
 use super::*;
-use crate::send::NudgeMode;
+use crate::send::{NudgeMode, send_mode_for_task_request};
 
 /// Result of the one canonical write operation.
 ///
@@ -98,7 +98,13 @@ impl PreparedWrite {
         observability: &dyn ObservabilityPort,
     ) -> Result<WriteOutcome, AtmError> {
         let outcome = self.finish(runtime, observability)?;
-        let _ = self.mark_pending_if_deferred(runtime);
+        if let Err(error) = self.mark_pending_if_deferred(runtime) {
+            tracing::warn!(
+                message_id = %self.persisted_message_id(),
+                %error,
+                "synchronous deferred-write queue marker failed after durable write"
+            );
+        }
         Ok(outcome)
     }
 
@@ -266,7 +272,7 @@ impl PreparedWrite {
                 &event,
                 &message.envelope.text,
                 self.outbound_request.nudge_mode,
-            ) {
+            )? {
                 dispatches.push(dispatch);
             }
         }
@@ -477,6 +483,7 @@ fn prepare_atomic_acknowledgement_write<
         })?,
         requires_ack: false,
         task_id: source_task_id.clone(),
+        task_complete: None,
         summary: reply.envelope.summary.clone(),
         message: Some(reply.envelope.text.clone()),
         warnings: Vec::new(),
@@ -522,7 +529,9 @@ fn prepare_persisted_write<
     delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
     let mut context = prepare_send_context(runtime, &request)?;
+    crate::send::validate_task_request(&request)?;
     let task_id = request.task_id.clone();
+    request.nudge_mode = send_mode_for_task_request(&request, &task_id);
     let requires_ack = request_requires_ack(&request, &task_id);
     let body = resolve_message_body(
         &request.message_source,
@@ -590,7 +599,9 @@ async fn prepare_persisted_write_async(
     acknowledgement: Option<ResolvedAcknowledgement>,
 ) -> Result<PreparedWrite, AtmError> {
     let mut context = prepare_send_context(runtime, &request)?;
+    crate::send::validate_task_request(&request)?;
     let task_id = request.task_id.clone();
+    request.nudge_mode = send_mode_for_task_request(&request, &task_id);
     let requires_ack = request_requires_ack(&request, &task_id);
     let verified_template =
         crate::send::async_persistence::verify_template_request(runtime, &request)?;
@@ -648,7 +659,7 @@ async fn prepare_persisted_write_async(
     })
 }
 
-fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
+pub(crate) fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
     validate_write_provenance(
         WriteIngress::Canonical,
         WriteProvenance {

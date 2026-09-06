@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AX-PHASE-END-RECHECK-1788716803 (phase-end recheck) on integrate/phase-ax at 6e8f33ba5; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1253#issuecomment-5561091832 Native id: RBP-F001
+
+# Fixed 2026-09-06: PR #1255 fix/ax-phase-end-recheck-fixes @ c02ccbe6b, QA-2 PASS (QA-AXPE-RECHECK-FIX-R2-1788719605, https://github.com/randlee/atm-core/pull/1255#issuecomment-5561333419); closed by fenix on the verdict, 2026-09-06T18:44:00Z.
+<urn:atm:triage:finding/AXPE-RBP-003>
+  a triage:Finding ;
+  triage:findingId "AXPE-RBP-003" ;
+  triage:title "escalate() takes a stringly-typed kind: &str instead of a closed enum" ;
+  triage:description "crates/atm-http-runtime/src/herdr_escalation.rs escalate() function (line 147) takes escalation reason as kind: &str parameter with call sites passing raw string literals \"lead_notified\" (herdr_queue_wake.rs:2036, herdr_queue_wake_escalation.rs:67) and \"blocked_escalated\" (herdr_queue_wake_escalation.rs:225), unlike TaskState / TaskEventKind / ReminderOutcome enum pattern used elsewhere in Phase AX, losing exhaustiveness and rename safety. Remediation: introduce a closed EscalationKind enum with as_str() method for the tracing field, switch all call sites to use enum variants." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "rust-best-practices-agent" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T18:44:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T18:03:31Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T18:00:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-RBP-003/INTEGRATE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-RBP-003/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 147 ;
+  triage:snippet "kind: &str," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "6e8f33ba59a1167127e94222bbed0405a3680cf0" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/6e8f33ba59a1167127e94222bbed0405a3680cf0> .
+
+<urn:atm:triage:worktree/INTEGRATE/6e8f33ba59a1167127e94222bbed0405a3680cf0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "6e8f33ba59a1167127e94222bbed0405a3680cf0" ;
+  triage:orderIndex 12 .

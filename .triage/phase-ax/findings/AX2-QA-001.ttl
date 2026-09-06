@@ -1,0 +1,33 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX2-QA-001>
+  a triage:Finding ;
+  triage:findingId "AX2-QA-001" ;
+  triage:title "Shutdown-cancellation race in HerdrQueueWakePump::emit_claim can re-release/requeue a Herdr message that was already accepted" ;
+  triage:description "Follow-up after cipher's fix pass. quality-mgr QA-2 (PR #1186 Final Quality Report, 2026-09-05T07:36:04Z) verified fixed at e7d4d5453: emit_claim in crates/atm-http-runtime/src/herdr_queue_wake.rs now disarms the release guard immediately after Ok(_) from the emitter and before awaiting the marker-clear cleanup, with a negative-proof regression test ac11_successful_prompt_cancellation_cannot_rerelease_claim. Confirm at HEAD that the disarm precedes the cleanup await and the named test exists, then record the finding as fixed on feature/ax2-herdr-template-rendering at e7d4d5453." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RSH" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T07:36:12Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Blocking finding closed by a later valid Completion and quality-mgr follow-up QA; final sprint verdict AX2-QA2 PASS 0/0/0 (PR #1186 comment 5550327947)." ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T07:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX2 ;
+  triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/AX2/e7d4d54535669339ca184c3eec978f19412d4ec7>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:orderIndex 1 .

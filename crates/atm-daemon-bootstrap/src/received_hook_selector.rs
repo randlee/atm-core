@@ -162,6 +162,7 @@ impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {
         &'a self,
         agent: &'a atm_core::types::AgentName,
         _session: Option<&'a HerdrSession>,
+        _text: &'a str,
         _deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>> {
         let snapshot = AgentSnapshot {
@@ -212,6 +213,15 @@ impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {
     ) -> Pin<Box<dyn Future<Output = Result<atm_herdr::HerdrListOutcome, HerdrError>> + Send + 'a>>
     {
         Box::pin(async { Ok(atm_herdr::HerdrListOutcome { agents: Vec::new() }) })
+    }
+
+    fn notify<'a>(
+        &'a self,
+        _title: &'a str,
+        _body: &'a str,
+        _deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<(), HerdrError>> + Send + 'a>> {
+        Box::pin(async { Ok(()) })
     }
 }
 
@@ -267,6 +277,8 @@ impl ReplacementReceivedHookSelector {
             graft: PublishedGraftReceivedHook {
                 service_runtime: service_runtime.clone(),
                 runtime_health: runtime_health.clone(),
+                #[cfg(test)]
+                forced_failure: false,
             },
             queue_pull: PullPendingReceivedHook {
                 service_runtime,
@@ -417,7 +429,12 @@ impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
                 ));
             };
             let result = process
-                .prompt(&dispatch.event.recipient, target.session.as_ref(), deadline)
+                .prompt(
+                    &dispatch.event.recipient,
+                    target.session.as_ref(),
+                    &target.rendered_nudge,
+                    deadline,
+                )
                 .await;
             match result {
                 Ok(HerdrPromptOutcome::Accepted(_)) => {
@@ -425,7 +442,7 @@ impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
                 }
                 Err(error) => {
                     let outcome = error.emission_outcome();
-                    tracing::warn!(backend = "herdr", member = %dispatch.event.recipient, error = ?error, outcome, "Herdr wake-up was not accepted");
+                    tracing::warn!(subsystem = "herdr_queue_wake", action = "herdr_prompt", backend = "herdr", member = %dispatch.event.recipient, error = ?error, outcome, "Herdr wake-up was not accepted");
                     return Err(error.into());
                 }
             }
@@ -489,6 +506,22 @@ fn hook_deadline_error(stage: &'static str) -> AtmError {
 struct PublishedGraftReceivedHook {
     service_runtime: LocalServiceRuntime,
     runtime_health: RuntimeHealth,
+    #[cfg(test)]
+    forced_failure: bool,
+}
+
+#[cfg(test)]
+impl PublishedGraftReceivedHook {
+    fn failing_for_test(
+        service_runtime: LocalServiceRuntime,
+        runtime_health: RuntimeHealth,
+    ) -> Self {
+        Self {
+            service_runtime,
+            runtime_health,
+            forced_failure: true,
+        }
+    }
 }
 
 impl boundary::sealed::Sealed for PublishedGraftReceivedHook {}
@@ -509,31 +542,38 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
         let member_for_handoff = member.clone();
         let message_id = dispatch.event.message_id;
         let runtime_health_for_clear = runtime_health.clone();
+        #[cfg(test)]
+        let forced_failure = self.forced_failure;
         Box::pin(async move {
-            let result = tokio::task::spawn_blocking(move || {
-                let result = atm_core::graft::deliver_published_receiver_hook_from_local_runtime(
-                    &service_runtime,
-                    &dispatch,
+            #[cfg(test)]
+            let result = if forced_failure {
+                Err(AtmError::new(
+                    AtmErrorCode::PostSendGraftUnavailable,
+                    "injected graft handoff failure",
+                ))
+            } else {
+                deliver_published_graft_hook(
+                    service_runtime,
+                    dispatch,
                     deadline,
-                );
-                if result.is_ok() && kind == NudgeKind::Queue {
-                    atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
-                        &service_runtime,
-                        &member_for_handoff,
-                        &message_id,
-                        || runtime_health_for_clear.record_graft_queue_marker_clear_failure(),
-                    );
-                }
-                result
-            })
-            .await
-            .map_err(|source| {
-                AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "published Graft receiver hook task ended unexpectedly",
+                    kind,
+                    member_for_handoff,
+                    message_id,
+                    runtime_health_for_clear,
                 )
-                .with_cause(source)
-            })?;
+                .await
+            };
+            #[cfg(not(test))]
+            let result = deliver_published_graft_hook(
+                service_runtime,
+                dispatch,
+                deadline,
+                kind,
+                member_for_handoff,
+                message_id,
+                runtime_health_for_clear,
+            )
+            .await;
             if let Err(error) = &result
                 && kind == NudgeKind::Queue
             {
@@ -552,6 +592,41 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
             result
         })
     }
+}
+
+async fn deliver_published_graft_hook(
+    service_runtime: LocalServiceRuntime,
+    dispatch: BuiltInPostSendDispatch,
+    deadline: RequestDeadline,
+    kind: NudgeKind,
+    member: atm_core::boundary::MemberKey,
+    message_id: atm_core::schema::AtmMessageId,
+    runtime_health: RuntimeHealth,
+) -> Result<PostSendEmissionPath, AtmError> {
+    tokio::task::spawn_blocking(move || {
+        let result = atm_core::graft::deliver_published_receiver_hook_from_local_runtime(
+            &service_runtime,
+            &dispatch,
+            deadline,
+        );
+        if result.is_ok() && kind == NudgeKind::Queue {
+            atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+                &service_runtime,
+                &member,
+                &message_id,
+                || runtime_health.record_graft_queue_marker_clear_failure(),
+            );
+        }
+        result
+    })
+    .await
+    .map_err(|source| {
+        AtmError::new(
+            AtmErrorCode::InternalError,
+            "published Graft receiver hook task ended unexpectedly",
+        )
+        .with_cause(source)
+    })?
 }
 
 /// Hands a bare-CLI delivery to the daemon-lifetime FIFO and immediately
@@ -671,14 +746,15 @@ mod tests {
     };
     use atm_storage::RosterSnapshot;
     use std::fs;
-    use std::net::TcpListener;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread;
 
     #[cfg(feature = "benchmark-harness")]
     use super::{BenchmarkHookMode, DisabledReceivedHookSelector};
-    use super::{ReplacementReceivedHookSelector, TokioTmuxReceivedHook};
+    use super::{
+        PublishedGraftReceivedHook, ReplacementReceivedHookSelector, TokioTmuxReceivedHook,
+    };
 
     fn tmux_dispatch() -> BuiltInPostSendDispatch {
         BuiltInPostSendDispatch {
@@ -718,6 +794,7 @@ mod tests {
         dispatch.target =
             PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
                 session: Some(atm_core::HerdrSession::new("team-a").expect("session")),
+                rendered_nudge: "test".to_owned(),
             }));
         dispatch
     }
@@ -1341,9 +1418,7 @@ mod tests {
     async fn failed_queue_graft_handoff_retains_marker_at_attempt_zero() {
         let root = tempfile::tempdir().expect("temporary runtime root");
         let (runtime, endpoint_store, team, recipient) = queue_graft_runtime(root.path());
-        let unused = TcpListener::bind(("127.0.0.1", 0)).expect("reserve endpoint");
-        let endpoint = unused.local_addr().expect("endpoint");
-        drop(unused);
+        let endpoint = "127.0.0.1:9".parse().expect("test endpoint");
         endpoint_store
             .register(
                 &GraftReceiverRegistration {
@@ -1363,14 +1438,8 @@ mod tests {
         let member = MemberKey::new(team.clone(), recipient.clone());
         let dispatch = rebuilt_queue_dispatch(&runtime, &member, message_id);
         let health = RuntimeHealth::default();
-        let selector = ReplacementReceivedHookSelector::with_herdr_process(
-            runtime.clone(),
-            Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
-            health.clone(),
-        );
-        let error = selector
-            .select_emitter(&dispatch)
-            .expect("graft emitter")
+        let emitter = PublishedGraftReceivedHook::failing_for_test(runtime.clone(), health.clone());
+        let error = emitter
             .emit_received_message(
                 dispatch,
                 RequestDeadline::after(std::time::Duration::from_secs(1)),
@@ -1404,9 +1473,7 @@ mod tests {
     async fn sweep_dispatched_queue_graft_failure_reports_for_caller_requeue() {
         let root = tempfile::tempdir().expect("temporary runtime root");
         let (runtime, endpoint_store, team, recipient) = queue_graft_runtime(root.path());
-        let unused = TcpListener::bind(("127.0.0.1", 0)).expect("reserve endpoint");
-        let endpoint = unused.local_addr().expect("endpoint");
-        drop(unused);
+        let endpoint = "127.0.0.1:9".parse().expect("test endpoint");
         endpoint_store
             .register(
                 &GraftReceiverRegistration {
@@ -1432,14 +1499,8 @@ mod tests {
             .expect("claim query")
             .expect("sweep claim");
         let health = RuntimeHealth::default();
-        let selector = ReplacementReceivedHookSelector::with_herdr_process(
-            runtime.clone(),
-            Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
-            health.clone(),
-        );
-        let error = selector
-            .select_emitter(&dispatch)
-            .expect("graft emitter")
+        let emitter = PublishedGraftReceivedHook::failing_for_test(runtime.clone(), health.clone());
+        let error = emitter
             .emit_received_message(dispatch, RequestDeadline::after(Duration::from_secs(1)))
             .await
             .expect_err("unavailable graft must be reported to sweep caller");
@@ -1485,8 +1546,10 @@ mod tests {
             call,
             atm_herdr::testing::FakeHerdrCall::Prompt {
                 session: Some(_),
+                text,
                 ..
             }
+                if text == "test"
         )));
     }
 

@@ -32,9 +32,14 @@ fn run_sc_compose(args: &[&str]) -> Output {
 }
 
 fn run_atm(args: &[&str]) -> Output {
+    let fixture = tempfile::tempdir().expect("temporary ATM environment");
     Command::new(env!("CARGO_BIN_EXE_atm"))
         .current_dir(workspace_root())
         .args(args)
+        .env("ATM_HOME", fixture.path())
+        .env("ATM_CONFIG_HOME", fixture.path().join("config"))
+        .env("ATM_LOG_DIR", fixture.path().join("logs"))
+        .env("ATM_TEAMS_DIR", fixture.path().join("teams"))
         .output()
         .expect("run the built atm binary")
 }

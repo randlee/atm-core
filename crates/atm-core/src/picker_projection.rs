@@ -55,7 +55,8 @@ impl From<RuntimeMemberState> for PickerMemberStatus {
             RuntimeMemberState::Idle => Self::Idle,
             RuntimeMemberState::Offline
             | RuntimeMemberState::Unknown
-            | RuntimeMemberState::IdentityConflict => Self::Dead,
+            | RuntimeMemberState::IdentityConflict
+            | RuntimeMemberState::Blocked => Self::Dead,
         }
     }
 }

@@ -60,8 +60,9 @@ Rules:
   `pane send-input`, `tmux send-keys`, or any other raw-keystroke or
   terminal-automation delivery mechanism on any code path
 - `atm-herdr` must never pass a sender's original ATM message body to
-  Herdr; the only text it writes into a Herdr child's argv is the fixed
-  mailbox-read prompt constant (ADR-058 D2)
+  Herdr; the only text it writes into a Herdr child's argv is the caller-
+  supplied rendered built-in nudge template for the recipient team and kind
+  (ADR-058 D2 as amended)
 - `atm-herdr` must never read `HERDR_SESSION` or `HERDR_SOCKET_PATH` from
   its own process environment to select a session; the caller's explicit
   `Option<&HerdrSession>` argument is the only session source (ADR-058 D1)

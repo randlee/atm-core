@@ -63,6 +63,23 @@ Phase-AC supersession note:
   names; a later approved task-storage phase would reintroduce a fresh
   canonical design instead of reviving speculative transition scaffolding
 
+Phase-AX amendment (2026-09-04): superseded. Task storage is approved in
+Phase AX (phase plan §2). Its canonical model is ADR-062's daemon-owned,
+message-derived Rust state machine in `atm-storage` and
+`atm-storage-rusqlite`; the Claude-code-schema-plus-Pydantic direction is
+withdrawn because task state derives from messages already persisted by the
+daemon, the write path has no Python, and a Claude Code task list is a
+per-session harness artifact rather than a cross-host record. The AC.6
+deletion stands: ADR-062 revives none of that scaffolding.
+
+Phase-AX.6 amendment (2026-09-05): lead notification and escalation are part
+of the retained task surface. `atm-daemon` is the reserved daemon actor and
+cannot be added to or renamed in the roster. Open-task reminders notify the
+single roster lead at reminder thresholds 10, 20, and so on; blocked runtime
+episodes use the same escalation path with an initial 60-second delay and
+10-minute re-notification. Configured daemon and per-team escalation
+recipients are additive fan-out destinations, with a per-tick cap of eight.
+
 The retained product surface is:
 - `atm send`
 - `atm list`
@@ -76,6 +93,9 @@ The retained product surface is:
 
 Approved additive CLI feature for the Phase `Y` line:
 - `atm help`
+
+Approved additive CLI feature for the Phase `AX` line:
+- `atm escalation add|remove|list`
 
 The system must preserve the retained command behavior unless these
 requirements explicitly retire or change it.
@@ -411,9 +431,12 @@ Satisfied by:
 - file-reference policy handling for `send --file`
 - origin-inbox merge / ingest compatibility for Claude-owned inbox files
 - ATM-owned read/ack/clear/task state in SQLite
+- daemon and per-team escalation-recipient state in SQLite
+- lead and escalation-recipient notifications for repeated or blocked tasks
 - structured logging through `sc-observability`
 - log query and follow through `sc-observability`
 - local diagnostics through `atm doctor`
+- the Phase `AX` additive CLI feature `atm escalation`
 - local team discovery and recovery through `atm teams`
 - local roster verification through `atm members`
 - native agent/plugin notification interface
@@ -1108,18 +1131,21 @@ Post-send-hook rules:
   `home_dir` metadata rather than the caller's live process working directory
 - if no matching external `[[atm.post_send_hooks]]` rule is configured, ATM
   must still attempt the shipped built-in in-process post-send path
-- the built-in shipped nudge path must support exactly six named template
+- the built-in shipped nudge path must support exactly seven named template
   cases:
   - `delivery`
   - `delivery_ack`
-  - `delivery_task`
-  - `delivery_task_ack`
+  - `queue`
+  - `queue_ack`
+  - `task`
   - `acknowledge`
   - `acknowledge_task`
+  `NudgeKind` selects the delivery or queue family; task-tagged messages select
+  `task` in either family.
 - the default built-in acknowledge nudge shapes are intentionally compact:
   - `<atm kind="ack" from="..." message-id="..."/>`
   - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
-- teams may override any subset of those six built-in template bodies through
+- teams may override any subset of those seven built-in template bodies through
   host-scoped, team-keyed ATM-managed override rows resolved through the
   storage-neutral `NudgeTemplateOverrideStore` contract
 - built-in precedence is:
@@ -1200,6 +1226,7 @@ Write one message into one target inbox.
 - `--from <name>`
 - `--requires-ack`
 - `--task-id <id>`
+- `--task-complete <id>`
 
 Retired from the current implementation:
 - `--offline-action`
@@ -1328,6 +1355,11 @@ If `--task-id` is present:
 - treat the message as task-linked mail
 - imply `--requires-ack`
 
+`--task-complete <id>` records completion of the open task identified by
+`id`. It is mutually exclusive with `--task-id`; the assigner or assignee may
+complete the task, and an unknown or already-complete task fails without
+writing a message.
+
 ### 6.6 Output Contract
 
 Human output must include:
@@ -1343,6 +1375,7 @@ JSON output must include:
 - `message_id`
 - `requires_ack`
 - `task_id`
+- `task_complete` when a completion was requested
 
 Dry-run JSON output must include:
 - `action = "send"`
@@ -1352,6 +1385,7 @@ Dry-run JSON output must include:
 - `dry_run = true`
 - `requires_ack`
 - `task_id`
+- `task_complete` when a completion was requested
 
 ## 7. Queue Inspection Surfaces (`atm list`, `atm peek`, and `atm read`)
 
@@ -1445,6 +1479,14 @@ Legacy `atm read` flag migration:
 
 Additional supported flags:
 - `--limit <n>`
+- `--tasks [--member <name>]` lists durable task rows for the selected team
+- `--task-events <task-id> [--member <name>]` lists append-only audit rows
+  for one task
+
+`--tasks` and `--task-events` are mutually exclusive and each conflicts with
+every mailbox filter, including `--task`; `--member` is only valid with one of
+those task-ledger surfaces. Their JSON results are bare arrays of `TaskRow` or
+`TaskEventRow`, respectively, rather than the mailbox-list envelope.
 
 Required behavior:
 - load the mailbox/query surface through a bounded metadata-first query path
@@ -2120,6 +2162,10 @@ The initial doctor implementation must cover:
 - `sc-observability` initialization health
 - active shared log path visibility
 - `sc-observability` query-health readiness for `atm log`
+- open-task reminder thresholds and lead-notification audit outcomes
+- blocked runtime episode escalation and retry behavior
+- daemon and per-team escalation recipient configuration and effective-source
+  reporting
 
 Caller-context behavior for `atm doctor`:
 
@@ -2155,6 +2201,14 @@ Each doctor finding must expose at least:
 
 The obsolete config-identity finding must use:
 - `ATM_WARNING_IDENTITY_DRIFT`
+
+Phase AX.6 doctor findings must use these warning codes and actionable guidance:
+
+- `ATM_ROSTER_NO_LEAD` — `assign one lead: atm teams update-member <team> <member> --agent-type lead`
+- `ATM_ROSTER_MULTIPLE_LEADS` — `keep one lead: atm teams update-member <team> <member> --agent-type <other type>`
+- `ATM_ROSTER_RESERVED_NAME` — `rename the member: atm-daemon is reserved for daemon-originated messages`
+- `ATM_TASK_STALLED` — `check the assignee or close the task: atm send <assignee> --task-complete <task_id> --stdin`
+- `ATM_MEMBER_BLOCKED` — `<member> is waiting for interactive input; attach to its Herdr agent and answer the prompt`
 
 Critical findings must cause a non-zero exit status.
 
@@ -2206,6 +2260,9 @@ Bare `atm teams` must:
 - persist the member's durable `home_dir` on the canonical ATM roster row and
   project that same `home_dir` into compatibility `config.json.members`
 - create any required local inbox state atomically with the roster update
+- reject the reserved member name `atm-daemon` with
+  `ATM_MESSAGE_VALIDATION_FAILED`; an existing legacy row may remain and is
+  reported by `atm doctor` as `ATM_ROSTER_RESERVED_NAME`
 
 `atm teams update-member` must:
 - validate that the target team exists
@@ -2225,6 +2282,9 @@ Bare `atm teams` must:
 - project the repaired metadata deterministically into compatibility
   `config.json`
 - preserve unchanged member metadata when a field is not supplied
+- reject the reserved member name `atm-daemon` with
+  `ATM_MESSAGE_VALIDATION_FAILED`; an existing legacy row may remain and is
+  reported by `atm doctor` as `ATM_ROSTER_RESERVED_NAME`
 
 `atm teams remove-member` must:
 - require the caller identity to belong to the target team
@@ -2643,6 +2703,18 @@ Required rules:
 - a task-linked message remains actionable until acknowledged
 - a task-linked message must continue to appear in `atm read` until acknowledged
 - a task-linked message must never be removed by `atm clear` before acknowledgement
+- task state is `assigned`, `active`, then `complete`; acknowledgement moves
+  an assigned task to active only when the assignee has no other active task
+- the assigner or assignee completes an open task with
+  `atm send <assignee> --task-complete <id> --stdin`; completion from assigned
+  acknowledges the assignment in the same transaction so it cannot remain
+  pending acknowledgement
+- every transition, rejection, resend, and reminder is append-only audit data;
+  the durable tables and replay contract are defined by ADR-062
+- the Tokio Herdr queue wake pump checks open tasks after draining deferred
+  mail: for an idle or done Herdr assignee it re-sends the Task body no more
+  than once per 60 seconds, sharing the drain prompt budget; a blocked assignee
+  receives no prompt but records a `blocked` reminder on the same cadence
 
 ## 16. Observability Requirements
 
@@ -3641,6 +3713,13 @@ mail correctness.
 
 ### 22.1 SQLite Mail And Roster Ownership
 
+#### Task storage
+
+`TaskStore` is the sealed, backend-neutral task-ledger capability. SQLite owns
+the `tasks` and append-only `task_events` tables; `MessageWriteOrigin`
+distinguishes local task-bearing messages from peer receipts so only local
+writer admission and acknowledgements apply task transitions.
+
 - `REQ-CORE-RUNTIME-001` ATM mail and team roster state must move to SQLite as
   the authoritative source of truth.
 
@@ -4510,7 +4589,7 @@ mail correctness.
     persistence
   - the shipped default post-send path is the built-in in-process
     implementation
-  - teams may override any subset of the six built-in nudge template bodies
+  - teams may override any subset of the seven built-in nudge template bodies
     through host-scoped, team-keyed ATM-managed override rows resolved through
     the storage-neutral `NudgeTemplateOverrideStore` contract
   - emission failure must be logged and surfaced as a sender-visible warning

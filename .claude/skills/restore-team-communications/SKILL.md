@@ -73,7 +73,7 @@ action, not just a passive unread-mail announcement. Preferred structured
 nudge payload:
 
 ```text
-<atm><action>read atm</action><action>ack <TASK-ID></action><action>execute assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>
+<atm><action>atm read --message-id {{message_id}}</action><action>ack <TASK-ID></action><action>execute assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>
 ```
 
 If the task is queued behind active work, use a nudge about the deferred task

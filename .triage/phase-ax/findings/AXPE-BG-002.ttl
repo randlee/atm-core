@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Phase-ending critical review of integrate/phase-ax at c9e8bf3af (2026-09-06; five reviewers, fenix-recorded).
+
+# Closed 2026-09-06T02:15:00Z: QA-AXPE-R1 PR #1234 @ 7f65db491.
+<urn:atm:triage:finding/AXPE-BG-002>
+  a triage:Finding ;
+  triage:findingId "AXPE-BG-002" ;
+  triage:title "Frozen lint-config/lint_boundaries.py touched this phase without a recorded ruling note" ;
+  triage:description ".just/lint-config.toml and .just/lint_boundaries.py changed in the phase diff (content now identical to develop tip; additive, no loosened rule; .just/tests/test_lint_boundaries.py:1426 adds an AX.3 false-positive regression test) but no phase-ax sprint doc records the ruling. Remediation: add a short ruling note to sprint-AX.3-task-state-machine.md (a 'Frozen-file rulings' paragraph) naming both files, the change, and that it was additive." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "boundary-guard" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-BG-002/INTEGRATE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-BG-002/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.3-task-state-machine.md" ;
+  triage:line 1 ;
+  triage:snippet "no ruling note for .just/lint-config.toml and .just/lint_boundaries.py" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d> .
+
+<urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:orderIndex 8 .

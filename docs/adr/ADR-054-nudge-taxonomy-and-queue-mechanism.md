@@ -281,6 +281,14 @@ an optimization; AQ1's test suite proves it directly (duplicate write → zero
   `PendingNudgeStore`; a seventh optional capability trait requires counting
   from this ADR forward, not from ADR-018's original baseline.
 
+### Phase-AX amendment (2026-09-04)
+
+`TaskStore` is the seventh optional storage capability trait. It is justified
+because task-ledger reads and append-only reminder/lead audit records are a
+separate durable domain, while message-derived state transitions remain inside
+the existing backend writer transaction. This recounts the ADR-018 §3 cap from
+the six traits recorded above; it does not widen `MessageStore`.
+
 ## Rejected alternatives
 
 1. **Trait in `atm-core::boundary` (D1 option ii).** Rejected: forces

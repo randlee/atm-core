@@ -21,7 +21,7 @@ pub mod sealed {
     pub trait Sealed {}
 }
 
-fn require_non_blank(value: String, subject: &str) -> Result<String, AtmError> {
+pub(crate) fn require_non_blank(value: String, subject: &str) -> Result<String, AtmError> {
     if value.trim().is_empty() {
         return Err(AtmError::validation(format!("{subject} must not be blank")));
     }
@@ -85,49 +85,8 @@ impl AsRef<str> for MessageKey {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(transparent)]
-pub struct TaskState(String);
-
-impl TaskState {
-    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        require_non_blank(value.into(), "task state").map(Self)
-    }
-}
-
-impl AsRef<str> for TaskState {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl Deref for TaskState {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl fmt::Display for TaskState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_ref())
-    }
-}
-
-impl FromStr for TaskState {
-    type Err = AtmError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::new(value)
-    }
-}
-
-impl PartialEq<&str> for TaskState {
-    fn eq(&self, other: &&str) -> bool {
-        self.as_ref() == *other
-    }
-}
+pub use crate::task_state::{TaskEventRow, TaskRow};
+pub use crate::task_store::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(transparent)]
@@ -172,8 +131,9 @@ impl FromStr for AckTransition {
 pub enum BuiltInNudgeTemplateKind {
     Delivery,
     DeliveryAck,
-    DeliveryTask,
-    DeliveryTaskAck,
+    Queue,
+    QueueAck,
+    Task,
     Acknowledge,
     AcknowledgeTask,
 }
@@ -183,8 +143,9 @@ impl BuiltInNudgeTemplateKind {
         match self {
             Self::Delivery => "delivery",
             Self::DeliveryAck => "delivery_ack",
-            Self::DeliveryTask => "delivery_task",
-            Self::DeliveryTaskAck => "delivery_task_ack",
+            Self::Queue => "queue",
+            Self::QueueAck => "queue_ack",
+            Self::Task => "task",
             Self::Acknowledge => "acknowledge",
             Self::AcknowledgeTask => "acknowledge_task",
         }
@@ -204,10 +165,14 @@ impl FromStr for BuiltInNudgeTemplateKind {
         match value {
             "delivery" => Ok(Self::Delivery),
             "delivery_ack" => Ok(Self::DeliveryAck),
-            "delivery_task" => Ok(Self::DeliveryTask),
-            "delivery_task_ack" => Ok(Self::DeliveryTaskAck),
+            "queue" => Ok(Self::Queue),
+            "queue_ack" => Ok(Self::QueueAck),
+            "task" => Ok(Self::Task),
             "acknowledge" => Ok(Self::Acknowledge),
             "acknowledge_task" => Ok(Self::AcknowledgeTask),
+            "delivery_task" | "delivery_task_ack" => Err(AtmError::validation(format!(
+                "template kind `{value}` was retired; use \"task\""
+            ))),
             other => Err(AtmError::validation(format!(
                 "unsupported built-in nudge template kind `{other}`"
             ))),
@@ -641,6 +606,17 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         self.save_message(message)?;
         Ok(None)
     }
+    /// Like [`Self::save_message_if_absent`], carrying the write origin so a
+    /// backend can apply task transitions only for local writes. The default
+    /// keeps existing stores as passive message stores.
+    fn save_message_if_absent_with_provenance(
+        &self,
+        message: &Message,
+        provenance: MessageWriteOrigin,
+    ) -> Result<Option<Message>, AtmError> {
+        let _ = provenance;
+        self.save_message_if_absent(message)
+    }
     /// Commits related immutable mailbox records as one durable unit.
     ///
     /// AI.31 uses this for an acknowledgement reply plus the acknowledged
@@ -706,6 +682,16 @@ pub trait AsyncMessageStore: MessageStore {
         message: Message,
     ) -> Result<Option<Message>, AtmError> {
         self.save_message_if_absent(&message)
+    }
+
+    /// Async companion to [`MessageStore::save_message_if_absent_with_provenance`].
+    async fn save_message_if_absent_with_provenance_async(
+        &self,
+        message: Message,
+        provenance: MessageWriteOrigin,
+    ) -> Result<Option<Message>, AtmError> {
+        let _ = provenance;
+        self.save_message_if_absent_async(message).await
     }
 
     /// Atomically admits a mailbox record and its template decomposition on
@@ -781,6 +767,29 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
         scope: MailboxScope,
         deadline: ReadDeadline,
     ) -> Result<Option<IsoTimestamp>, ReadLaneError>;
+}
+
+/// Tokio-safe, read-only task-ledger capability.
+///
+/// Task rows and their append-only audit events are a separate durable
+/// projection from mailbox messages. Implementations must use a bounded
+/// storage-owned reader lane and must not enter the ordered writer lane.
+#[async_trait::async_trait]
+pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
+    async fn list_tasks(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError>;
+
+    async fn list_task_events(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        member: Option<AgentName>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskEventRow>, ReadLaneError>;
 }
 
 pub trait RosterStore: sealed::Sealed + Send + Sync {
@@ -1480,6 +1489,7 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                task_complete: None,
                 extra: Map::new(),
             },
         };
@@ -1622,6 +1632,32 @@ mod tests {
     }
 
     #[test]
+    fn built_in_nudge_template_kind_round_trips_seven_kinds() {
+        let kinds = [
+            BuiltInNudgeTemplateKind::Delivery,
+            BuiltInNudgeTemplateKind::DeliveryAck,
+            BuiltInNudgeTemplateKind::Queue,
+            BuiltInNudgeTemplateKind::QueueAck,
+            BuiltInNudgeTemplateKind::Task,
+            BuiltInNudgeTemplateKind::Acknowledge,
+            BuiltInNudgeTemplateKind::AcknowledgeTask,
+        ];
+        for kind in kinds {
+            assert_eq!(kind.as_str().parse::<BuiltInNudgeTemplateKind>(), Ok(kind));
+        }
+    }
+
+    #[test]
+    fn built_in_nudge_template_kind_rejects_retired_task_kinds() {
+        for retired in ["delivery_task", "delivery_task_ack"] {
+            let error = retired
+                .parse::<BuiltInNudgeTemplateKind>()
+                .expect_err("retired kind");
+            assert!(error.message().contains("was retired; use \"task\""));
+        }
+    }
+
+    #[test]
     fn derive_ack_requirement_ignores_task_id_and_uses_only_requires_ack_and_acknowledged_at() {
         let base = MessageEnvelope {
             from: "sender".parse().expect("agent"),
@@ -1641,6 +1677,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: Some("AD.99".parse().expect("task")),
+            task_complete: None,
             extra: Map::new(),
         };
 

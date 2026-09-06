@@ -204,6 +204,7 @@ impl SendCommand {
             self.task_id.clone(),
             self.dry_run,
         )?
+        .with_task_complete(self.task_complete.clone())
         .with_caller_chat_id(caller_context.caller_chat_id.clone())
         .with_activity_observation(caller_context.activity_observation.clone())
         .with_nudge_mode(nudge_mode);

@@ -12,6 +12,8 @@ pub mod peer_catalog_audit;
 pub mod request_budget;
 pub mod schema;
 pub mod search;
+pub mod task_state;
+pub mod task_store;
 pub mod template_catalog;
 pub mod template_workflow;
 /// Shared no-op test doubles for storage contract traits (RBQA-F002/F003).
@@ -34,15 +36,16 @@ pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
     AcknowledgementSource, AgentType, AsyncGraftReceiverEndpointStore, AsyncMailboxReader,
-    AsyncMessageStore, BuiltInNudgeTemplateKind, CertificateFingerprint, GraftEndpointStoreError,
-    GraftReceiverEndpointStore, GraftReceiverLease, GraftReceiverRegistration, HttpsInterface,
-    LocalCertificate, MAX_NUDGE_ATTEMPTS, MailMessageState, MailboxBucketCounts, MailboxScope,
-    Message, MessageFingerprint, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore,
-    NudgeClaim, NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, PrivateKeyRef,
-    ReadDeadline, ReadLaneError, RosterChangedEvent, RosterHarness, RosterMember,
-    RosterMemberEphemeralState, RosterMemberKind, RosterRuntimeMirror, RosterSnapshot, RosterStore,
-    StorageNotifier, TaskState, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
-    TrustedPeer, derive_ack_requirement,
+    AsyncMessageStore, AsyncTaskLedgerReader, BuiltInNudgeTemplateKind, CertificateFingerprint,
+    GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
+    GraftReceiverRegistration, HttpsInterface, LocalCertificate, MAX_NUDGE_ATTEMPTS,
+    MailMessageState, MailboxBucketCounts, MailboxScope, Message, MessageFingerprint, MessageKey,
+    MessageQuery, MessageReceivedEvent, MessageStore, NudgeClaim, NudgeTemplateOverrideStore,
+    PeerConfigStore, PendingNudgeStore, PrivateKeyRef, ReadDeadline, ReadLaneError,
+    RosterChangedEvent, RosterHarness, RosterMember, RosterMemberEphemeralState, RosterMemberKind,
+    RosterRuntimeMirror, RosterSnapshot, RosterStore, StorageNotifier,
+    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
+    derive_ack_requirement,
 };
 pub use diagnostics::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
@@ -64,6 +67,14 @@ pub use search::{
     SearchLimit, SearchMatchField, SearchMetadataMatch, SearchPageRequest, SearchResultKey,
     SearchTimestampField, SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch,
     StoredWorkflowMetadata, TimeRange,
+};
+pub use task_state::{
+    DAEMON_ACTOR_NAME, TaskActor, TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow,
+    TaskRejected, TaskRow, TaskState, Transition, admit, transition,
+};
+pub use task_store::{
+    DummyTaskStore, EscalationScope, MAX_ESCALATION_RECIPIENTS, MessageWriteOrigin,
+    ReminderOutcome, TASK_STALLED_REMINDER_THRESHOLD, TaskStore,
 };
 pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,

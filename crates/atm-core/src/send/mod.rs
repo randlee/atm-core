@@ -162,6 +162,8 @@ pub struct WriteRequest {
     pub summary_override: Option<String>,
     pub requires_ack: bool,
     pub task_id: Option<TaskId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_complete: Option<TaskId>,
     pub parent_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
     pub expires_at: Option<crate::types::IsoTimestamp>,
@@ -208,6 +210,7 @@ impl WriteRequest {
             summary_override,
             requires_ack,
             task_id,
+            task_complete: None,
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
@@ -220,6 +223,13 @@ impl WriteRequest {
     #[must_use]
     pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
         self.caller_chat_id = caller_chat_id;
+        self
+    }
+
+    /// Marks this message as a request to complete a previously assigned task.
+    #[must_use]
+    pub fn with_task_complete(mut self, task_id: impl Into<Option<TaskId>>) -> Self {
+        self.task_complete = task_id.into();
         self
     }
 
@@ -312,6 +322,26 @@ pub(crate) fn request_requires_ack(request: &SendRequest, task_id: &Option<TaskI
             &request.message_source,
             SendMessageSource::File { path, .. } if file_policy::is_task_envelope(path)
         )
+}
+
+pub(crate) fn validate_task_request(request: &SendRequest) -> Result<(), AtmError> {
+    if request.task_id.is_some() && request.task_complete.is_some() {
+        return Err(AtmError::validation(
+            "a message cannot assign and complete a task at the same time",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn send_mode_for_task_request(
+    request: &SendRequest,
+    task_id: &Option<TaskId>,
+) -> NudgeMode {
+    if task_id.is_some() {
+        NudgeMode::Deferred
+    } else {
+        request.nudge_mode
+    }
 }
 
 #[expect(
@@ -522,6 +552,11 @@ pub(crate) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRu
                     .map(|destination_host| (source_host, destination_host))
             }),
         acknowledgement_source_update,
+        if crate::write::has_authenticated_peer_provenance(request) {
+            atm_storage::MessageWriteOrigin::Peer
+        } else {
+            atm_storage::MessageWriteOrigin::Local
+        },
     )
 }
 
@@ -561,6 +596,7 @@ fn build_send_envelope(
         thread_mode: request.thread_mode,
         expires_at: request.expires_at,
         task_id: task_id.clone(),
+        task_complete: request.task_complete.clone(),
         extra: Map::new(),
     };
     insert_classification_metadata(&mut envelope, &request.classification);
@@ -644,7 +680,11 @@ pub(crate) mod tests;
 
 #[cfg(test)]
 mod path_body_tests {
-    use super::looks_like_path_only_body;
+    use super::{
+        NudgeMode, SendMessageSource, WriteRequest, looks_like_path_only_body,
+        send_mode_for_task_request,
+    };
+    use crate::types::TeamName;
 
     #[test]
     fn detects_existing_relative_and_absolute_files() {
@@ -695,5 +735,50 @@ mod path_body_tests {
             root.path(),
             home.path()
         ));
+    }
+
+    #[test]
+    fn task_request_forces_deferred_mode_while_ordinary_request_is_unchanged() {
+        let home_dir = tempfile::tempdir().expect("temporary home");
+        let team: TeamName = "test-team".parse().expect("team");
+        let task_request = WriteRequest::new(
+            home_dir.path().to_path_buf(),
+            home_dir.path().to_path_buf(),
+            "sender".parse().expect("sender"),
+            "recipient@test-team",
+            team.clone(),
+            SendMessageSource::Inline("task".to_owned()),
+            None,
+            false,
+            Some("task-1".parse().expect("task id")),
+            false,
+        )
+        .expect("task request")
+        .with_nudge_mode(NudgeMode::Immediate);
+        let task_id = task_request.task_id.clone();
+        assert_eq!(
+            send_mode_for_task_request(&task_request, &task_id),
+            NudgeMode::Deferred
+        );
+
+        let ordinary_request = WriteRequest::new(
+            home_dir.path().to_path_buf(),
+            home_dir.path().to_path_buf(),
+            "sender".parse().expect("sender"),
+            "recipient@test-team",
+            team,
+            SendMessageSource::Inline("ordinary".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("ordinary request")
+        .with_nudge_mode(NudgeMode::Immediate);
+        let task_id = ordinary_request.task_id.clone();
+        assert_eq!(
+            send_mode_for_task_request(&ordinary_request, &task_id),
+            NudgeMode::Immediate
+        );
     }
 }

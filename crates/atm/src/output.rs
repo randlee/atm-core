@@ -310,6 +310,7 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
         print_bootstrap_trace(bootstrap_trace);
     }
     print_doctor_peer_config(report);
+    print_doctor_escalation_recipients(report);
     print_doctor_environment(report);
     print_doctor_findings(report);
     print_doctor_roster(report);
@@ -530,6 +531,28 @@ fn print_doctor_findings(report: &DoctorReport) {
         );
         if let Some(remediation) = &finding.remediation {
             println!("    remediation: {remediation}");
+        }
+    }
+}
+
+fn print_doctor_escalation_recipients(report: &DoctorReport) {
+    println!();
+    println!("Escalation recipients (daemon default):");
+    if report.escalation_recipients.daemon.is_empty() {
+        println!("  none");
+    } else {
+        for recipient in &report.escalation_recipients.daemon {
+            println!("  {recipient}");
+        }
+    }
+    for team in &report.escalation_recipients.teams {
+        println!("  team {} [{}]:", team.team, team.source);
+        if team.recipients.is_empty() {
+            println!("    none");
+        } else {
+            for recipient in &team.recipients {
+                println!("    {recipient}");
+            }
         }
     }
 }
@@ -1044,6 +1067,25 @@ mod tests {
             render_send_stdout(&outcome, true, Some(&peer_host)).expect("JSON output");
         let parsed: serde_json::Value = serde_json::from_str(&json_output).expect("JSON output");
         assert_eq!(parsed["delivered_to_peer_host"], "peer.example.test");
+    }
+
+    #[test]
+    fn send_json_includes_task_completion_when_requested() {
+        let outcome: atm_core::send::SendOutcome = serde_json::from_value(json!({
+            "action": "send",
+            "team": "test-team",
+            "agent": "recipient",
+            "sender": "assigner",
+            "outcome": "sent",
+            "message_id": "01KX5TEST00000000000000001",
+            "requires_ack": false,
+            "task_complete": "t-42"
+        }))
+        .expect("completion send outcome");
+
+        let rendered = render_send_stdout(&outcome, true, None).expect("JSON stdout");
+        let parsed: serde_json::Value = serde_json::from_str(&rendered).expect("valid JSON");
+        assert_eq!(parsed["task_complete"], "t-42");
     }
 
     #[test]

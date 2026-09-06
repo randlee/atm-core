@@ -55,7 +55,11 @@ mod client;
 mod diagnostics_route;
 mod doctor_observability;
 mod health_route;
+mod herdr_escalation;
 mod herdr_queue_wake;
+mod herdr_queue_wake_escalation;
+#[cfg(test)]
+mod herdr_queue_wake_test_gates;
 mod http1_server;
 mod loopback_read;
 mod loopback_tcp;
@@ -102,7 +106,7 @@ pub use client::{
 pub use diagnostics_route::{DEFAULT_DIAGNOSTICS_LIMIT, MAX_DIAGNOSTICS_LIMIT};
 pub use herdr_queue_wake::{
     HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-    HerdrQueueWakePump, HerdrQueueWakeStats,
+    HerdrQueueWakePump,
 };
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{

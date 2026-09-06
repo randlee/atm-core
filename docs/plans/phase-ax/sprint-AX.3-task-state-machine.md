@@ -5,7 +5,7 @@ title: Task state machine and storage
 branch: feature/ax3-task-state-machine
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ax3-task-state-machine
 integration_branch: integrate/phase-ax
-status: draft
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: B
@@ -32,9 +32,16 @@ applied inside the existing message-write transactions, with an
 append-only audit log. This sprint changes **no nudge behaviour** and
 adds **no CLI flag**: it delivers the types, the store, the writer-side
 application, the ack gate, the library-level completion request, the
-boundary record, and ADR-061. The CLI and user docs are AX.4; the
+boundary record, and ADR-062. The CLI and user docs are AX.4; the
 reminder cycle is AX.5. This sprint **executes in parallel with AX.1 and
 AX.2** on its own gh-stack rooted on `integrate/phase-ax`.
+
+### Frozen-file rulings
+
+The additive changes to `.just/lint-config.toml` and
+`.just/lint_boundaries.py` are approved frozen-file changes for AX.3:
+they preserve the existing rules and add the AX.3 false-positive regression
+test in `.just/tests/test_lint_boundaries.py:1426`.
 
 ## State machine
 
@@ -124,7 +131,7 @@ Replay claim, stated precisely: for one (team, task_id, assignee), the
 `Reminded` rows equals `tasks.reminder_count`; the latest `Reminded.at`
 equals `tasks.last_reminded_at`. `tasks.description` is **not**
 replayable (a re-send may change it; the log records only `resend`).
-ADR-061 and the boundary record state the same four columns.
+ADR-062 and the boundary record state the same four columns.
 
 ## Deliverables
 
@@ -132,7 +139,20 @@ This is the authoritative deliverable checklist. Every listed deliverable
 lands production-ready for the scope this sprint claims; partial or
 shape-only completion fails the sprint.
 
-- [ ] D1 — retire the unused newtype `pub struct TaskState(String)` in
+### Carried fixes outside sprint scope
+
+AX3-QA3-001, AX3-QA4-001, and AX3-QA5-001/002/004 carry a Phase AV.1a
+reader-lane lifecycle correction on this branch: `reader_pool.rs` now
+retains reader worker and replacement handles and performs one bounded,
+last-owner Drop/join. Deterministic pool tests prove single-owner,
+multi-owner, replacement, and concurrent-last-owner shutdown paths.
+AX3-QA5-003 also evicts a test-support cached SQLite runtime when its
+last `SqliteRuntimeGuard` drops, so test-owned paths do not retain SQLite
+handles through teardown; its cache-eviction test proves that lifecycle.
+These corrective changes are traceability carries, not AX.3 task-state
+deliverables.
+
+- [x] D1 — retire the unused newtype `pub struct TaskState(String)` in
   `crates/atm-storage/src/contract.rs` and its three re-exports
   (`crates/atm-storage/src/lib.rs`, `crates/atm-core/src/boundary/mod.rs`,
   `crates/atm-core/src/lib.rs`); add task types and the pure state
@@ -149,14 +169,19 @@ shape-only completion fails the sprint.
   working and the daemon-runtime crates import through
   `atm_core::boundary` (same pattern as `PendingNudgeStore`). All new identifiers avoid the `nudge` word
   family so `scripts/check-nudge-taxonomy.py` needs no allowlist change.
-- [ ] D2 — `TaskStore` sealed trait (`crates/atm-storage/src/contract.rs`,
-  code contract C2), `DummyTaskStore` double beside
-  `DummyPendingNudgeStore`, boundary file
+- [x] D2 — `TaskStore` sealed trait (`crates/atm-storage/src/task_store.rs`,
+  re-exported from `contract.rs` per D1; code contract C2),
+  `DummyTaskStore` double beside `DummyPendingNudgeStore`, boundary file
   `boundaries/atm-storage/task-store.toml` and its implementation
   companion `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` per
   code contract C5, and a `## TaskStore` section in
-  `docs/atm-storage/boundaries.md`.
-- [ ] D3 — wiring, one site per file, mirroring `PendingNudgeStore`:
+  `docs/atm-storage/boundaries.md`. Backend neutrality (phase plan §2):
+  the trait, the types, the pure transition function, the carrier and
+  the defaulted provenance methods are the whole contract and depend on
+  nothing in `atm-storage-rusqlite`; a SQL Server implementation adds a
+  `TaskStore` impl and the two provenance overrides in its own crate
+  with its own DDL and touches nothing above the trait.
+- [x] D3 — wiring, one site per file, mirroring `PendingNudgeStore`:
   `crates/atm-storage/src/factory.rs` (`StorageHandleParts.task_store`
   field at line 50, `StorageHandles::task_store()` accessor beside
   `pending_nudge_store()` at line 133, and the `StorageHandles::from_parts`
@@ -174,7 +199,7 @@ shape-only completion fails the sprint.
   (assembly field near line 1401 and installation near line 1515).
   Consumers (AX.4 list command, AX.5 pump, AX.6 doctor) obtain the store
   only through `LocalServiceRuntime::task_store()`.
-- [ ] D4 — envelope and request fields. `MessageEnvelope` in
+- [x] D4 — envelope and request fields. `MessageEnvelope` in
   `crates/atm-storage/src/schema/inbox_message.rs` gains
   `task_complete: Option<TaskId>` with
   `#[serde(rename = "taskComplete", default, skip_serializing_if = "Option::is_none")]`
@@ -191,7 +216,14 @@ shape-only completion fails the sprint.
   line 461 and `persist_send_message_async` in
   `crates/atm-core/src/send/async_persistence.rs` line 51) carry it. A request
   with both `task_id` and `task_complete` is rejected at validation.
-- [ ] D5 — write provenance carrier, code contract C6:
+- [x] D5 — write provenance carrier, code contract C6. Merge-forward first:
+  AX.1 (landed on `feature/ax1-queue-template-class` at 1452df008) already
+  edits `prepare_persisted_write` and `prepare_persisted_write_async`
+  (`request.nudge_mode = send_mode_for_task_request(...)`, lines 526/595)
+  and `crates/atm-core/src/boundary/mod.rs`; merge that branch into this
+  worktree before touching either file, keep AX.1's lines verbatim, and
+  place the provenance edits after them (phase plan dependency
+  rationale AX.1→AX.3).
   `MessageWriteOrigin` in `crates/atm-storage/src/contract.rs`; two new
   defaulted methods, one per insert path:
   `MessageStore::save_message_if_absent_with_provenance` (sync trait,
@@ -215,9 +247,10 @@ shape-only completion fails the sprint.
   (persistence.rs line 250) →
   `save_message_if_absent_with_provenance_async`. The sync path matters
   because `write/pipeline.rs` lines 433–435 route an authenticated-peer
-  ack receipt onto it. Only `SqliteMessageStore`
-  (`crates/atm-storage-rusqlite/src/lib.rs` line 625) overrides either
-  method. Every other `MessageStore` implementer keeps the sync default
+  ack receipt onto it. A backend that supports tasks overrides both
+  methods and implements `TaskStore`; in this sprint that is only
+  `SqliteMessageStore` (`crates/atm-storage-rusqlite/src/lib.rs` line
+  625). Every other `MessageStore` implementer keeps the sync default
   (`crates/atm-storage/src/contract.rs` `DummyStore`,
   `crates/atm-core/src/doctor/mod.rs` `UnusedMailStore`,
   `crates/atm-storage-sqlserver-proof/src/lib.rs`
@@ -227,7 +260,7 @@ shape-only completion fails the sprint.
   `crates/atm-runtime-test-support/src/lib.rs` `RecordingWriter`,
   `crates/atm-core/src/ack/admission_tests.rs` `InMemoryAsyncStore`);
   none applies transitions, and both trait docs state this.
-- [ ] D6 — rusqlite implementation
+- [x] D6 — rusqlite implementation
   (`crates/atm-storage-rusqlite/src/task_store.rs`, schema in
   `crates/atm-storage-rusqlite/src/shared_db.rs`, application in
   `crates/atm-storage-rusqlite/src/writer/ops.rs`): tables per code
@@ -249,7 +282,7 @@ shape-only completion fails the sprint.
   existing transaction. `WriteOp::Acknowledge` (`execute_acknowledgement`
   line 413) is the only `Acked` site and uses the loaded source. C7 for
   completion from `Assigned`.
-- [ ] D7 — `docs/adr/ADR-061-task-state-machine.md` recording the
+- [x] D7 — `docs/adr/ADR-062-task-state-machine.md` recording the
   states, events, transition table (including the ∅/`Acked` no-op),
   guards, row resolution, provenance rule and carrier, the one-site
   rule, the precise replay claim, the seventh-capability-trait
@@ -260,25 +293,25 @@ shape-only completion fails the sprint.
   §22.1 (SQLite mail and roster ownership) gains a "Task storage"
   subsection listing `TaskStore`, the two tables, and
   `MessageWriteOrigin` (§7 is queue inspection and is not touched).
-- [ ] D8 — tests listed under Required validation.
-- [ ] D10 — supersede the Phase-AC task-storage deferral. `docs/requirements.md`
+- [x] D8 — tests listed under Required validation.
+- [x] D10 — supersede the Phase-AC task-storage deferral. `docs/requirements.md`
   lines 52–64 ("Phase-AC supersession note") and `docs/architecture.md`
   lines 2871–2880 ("Task Storage (Deferred)") say a later task store
   "starts from Claude-code task schema plus Pydantic validation". Both
   get a dated Phase-AX amendment directly below the existing text (the
   historical note is kept, marked superseded, not rewritten): task
   storage is approved in Phase AX (Rand, 2026-09-04, phase plan §2); the
-  canonical model is ADR-061's daemon-owned, message-derived state
+  canonical model is ADR-062's daemon-owned, message-derived state
   machine implemented in Rust inside `atm-storage` / `atm-storage-rusqlite`;
   the Claude-code-schema-plus-Pydantic direction is withdrawn because ATM
   tasks are derived from messages the daemon already persists, the write
   path is Rust with no Python in it, and a Claude Code task list is a
   per-session harness artifact rather than a cross-host record. The
-  `AC.6` deletion stands: ADR-061 is a fresh design and revives none of
-  the deleted scaffolding. Gate: `grep -n Pydantic docs/requirements.md
-  docs/architecture.md` returns only lines inside the two superseded
-  notes, each followed by the Phase-AX amendment.
-- [ ] D9 — `crates/atm-storage/src/contract.rs` decomposition (arch-qa
+  `AC.6` deletion stands: ADR-062 is a fresh design and revives none of
+  the deleted scaffolding. Gate: the `Pydantic` references in the two named
+  Phase-AC notes each have the Phase-AX amendment; the unrelated historical
+  Phase-AA note is outside this sprint's scope.
+- [x] D9 — `crates/atm-storage/src/contract.rs` decomposition (arch-qa
   RULE-003): the file is already 1133 non-test lines (tests start at
   line 1134) and AX.1, AX.3 and AX.6 all add to it. Extract the graft
   receiver and peer-configuration section (lines 760–1003:
@@ -343,7 +376,12 @@ pub struct TaskRejected { pub detail: String }
 pub enum Transition { To(TaskState), NoOp }
 
 /// Row-local machine: the twelve-cell table above. Pure.
-pub fn transition(state: Option<TaskState>, event: TaskEvent) -> Result<Transition, TaskRejected>;
+pub fn transition(
+    state: Option<TaskState>,
+    event: TaskEvent,
+    task_id: &TaskId,
+    actor: &AgentName,
+) -> Result<Transition, TaskRejected>;
 
 /// Cross-row guards G1 and G2. `open` is every non-Complete row for the
 /// assignee. Pure.
@@ -351,6 +389,7 @@ pub fn admit(
     row: Option<&TaskRow>,
     open: &[TaskRow],
     event: TaskEvent,
+    task_id: &TaskId,
     actor: &AgentName,
 ) -> Result<(), TaskRejected>;
 
@@ -423,6 +462,11 @@ writer inside its transaction (D6). `record_reminder` and
 and AX.6.
 
 ### C3 — schema
+
+Rusqlite backend DDL. Portable SQL apart from `IF NOT EXISTS`; the
+`CHECK` lists mirror the Rust enums and are the only place the enum
+strings appear in SQL. This schema is an implementation detail behind C2:
+another backend supplies its own DDL for the same rows.
 
 ```sql
 CREATE TABLE IF NOT EXISTS tasks (
@@ -714,10 +758,13 @@ paths; `atm read` / `atm ack` argument shapes; `DeliveryRecipientSnapshot`;
    empty; `grep -rn 'atm_storage::.*Task' crates/atm-http-runtime/src crates/atm-daemon-bootstrap/src`
    empty; `python scripts/check-nudge-taxonomy.py` passes with an
    unchanged allowlist; `boundary-guard` review of `task-store.toml`
-   and `task-store-sqlite.toml` passes; ADR-061, the ADR-054 amendment, and requirements §7 merged;
+   and `task-store-sqlite.toml` passes; ADR-062, the ADR-054 amendment, and requirements §7 merged;
    `just validate` green; contract.rs size gate:
-   `awk '/^#\[cfg\(test\)\]/{exit} {n++} END{exit n>1000}' crates/atm-storage/src/contract.rs`
-   succeeds (non-test lines ≤ 1000).
+   `python3 .just/check_line_counts.py` succeeds (non-test lines ≤ 1000);
+   backend neutrality:
+   `cargo tree -p atm-storage -e normal | grep -c rusqlite` prints 0 and
+   `cargo check -p atm-storage-sqlserver-proof` passes with that crate
+   unchanged (it keeps the provenance defaults and `DummyTaskStore`).
 
 ## Required validation
 
@@ -750,7 +797,7 @@ paths; `atm read` / `atm ack` argument shapes; `DeliveryRecipientSnapshot`;
   rusqlite store after `atm-runtime` composition and after
   `storage_and_nudge_router` assembly; the not-installed error shape.
 - `just validate`; quality-mgr Final Quality Report on the PR;
-  `boundary-guard` on the new TOML; `arch-qa` on ADR-061 and the ADR-054
+  `boundary-guard` on the new TOML; `arch-qa` on ADR-062 and the ADR-054
   amendment.
 
 ## Out of scope
@@ -758,4 +805,6 @@ paths; `atm read` / `atm ack` argument shapes; `DeliveryRecipientSnapshot`;
 CLI flags and user docs (AX.4); idle reminders, lead notification,
 doctor codes, Herdr marker exception (AX.5, AX.6); cross-host and
 cross-team tasks; task priority, reassignment, expiry; `--task-cancel`
-(phase plan §2.1 alternative).
+(phase plan §2.1 alternative); a second `TaskStore` backend (the SQL
+Server proof crate compiles unchanged on the defaults; implementing
+`TaskStore` there is a follow-up, made possible by the neutral contract).

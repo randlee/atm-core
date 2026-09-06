@@ -326,7 +326,7 @@ pub(crate) fn process_batch(
 /// retains the existing per-operation rollback and reply semantics; only an
 /// all-success group avoids redundant `SAVEPOINT` / `RELEASE` round trips.
 fn is_batchable_message_admission(queued: &QueuedWrite) -> bool {
-    matches!(&*queued.op, WriteOp::UpsertMessage(_))
+    matches!(&*queued.op, WriteOp::UpsertMessage { .. })
 }
 
 pub(crate) fn process_message_admission_group(
@@ -429,7 +429,17 @@ pub(crate) fn process_queued_write(
         ops::execute(&queued.op, &savepoint, cache, target)
     }));
     let reply = queued.reply;
-    (reply, finalize_queued_write(target, savepoint, result))
+    let result = match result {
+        Ok(Err(error)) => {
+            drop(savepoint);
+            match task_ops::append_rejected_task_event(&queued.op, transaction, target, &error) {
+                Ok(()) => Err(error),
+                Err(audit_error) => Err(audit_error),
+            }
+        }
+        result => finalize_queued_write(target, savepoint, result),
+    };
+    (reply, result)
 }
 
 fn finalize_queued_write(

@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA1-009>
+  a triage:Finding ;
+  triage:findingId "AX6-QA1-009" ;
+  triage:title "Sprint doc still status: draft with all D1-D9 unchecked, reflecting genuine incompleteness" ;
+  triage:description "AX.6 QA-1 (quality-mgr QA-AX6-R1-1788626395, PR #1204 Final Quality Report 2026-09-05T16:56Z) at head 490a6c42a0f3283c251875d9a61fcf99b641c2a2. docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md frontmatter is `status: draft` and every D1-D9 checkbox is unchecked at the review head; req-qa independently confirmed this reflects genuine incompleteness (0/9 deliverables at 100%), not stale bookkeeping. Closes when every deliverable is complete and the doc's checklist and status are updated to match (traceability), per the dev-task contract." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T19:01:51Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr AX.6 QA-2 recheck (QA-AX6-R2-1788630712) at head c3268df8a3dfa5c84f4465459c5d2ba86df1c857; fixed by cipher fix pass GO-AX6-FIX1 (Completion c21). Report: PR #1204 comment 5554091903. Sprint verdict remains FAIL on other findings." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T17:00:47Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T16:56:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-009/AX6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-009/AX7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA1-009/AX6-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md" ;
+  triage:line 8 ;
+  triage:snippet "status: draft" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/490a6c42a> .
+
+<urn:atm:triage:occurrence/AX6-QA1-009/AX7-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md" ;
+  triage:line 8 ;
+  triage:snippet "status: draft" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/1931acea5> .
+
+<urn:atm:triage:worktree/AX6>
+  a triage:WorktreeSnapshot ;
+  triage:path "AX6" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7>
+  a triage:WorktreeSnapshot ;
+  triage:path "AX7" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:orderIndex 7 .

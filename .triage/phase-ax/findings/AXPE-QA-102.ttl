@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AXPE-STRUCT-R1 on PR #1236 at 946763576; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1236#issuecomment-5556000726
+
+# Closed 2026-09-06T02:15:00Z: QA-AXPE-STRUCT-R2/R3 PR #1236 @ 6c7055274.
+<urn:atm:triage:finding/AXPE-QA-102>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-102" ;
+  triage:title "clippy too_many_arguments: record_task_outcome grew to 8 parameters" ;
+  triage:description "cargo clippy --all-targets --all-features -D warnings fails on atm-http-runtime: the AXPE-RBQ-002 fix threaded the AsyncTaskLedgerReader into record_task_outcome as an eighth parameter, tripping clippy::too_many_arguments. Reproduced by quality-mgr on the worktree; baseline 7f65db491 passes. Remediation: reduce the parameter count structurally (e.g. a small crate-private context struct carrying reader + task_store + member, or carry the reader on the pump tick context the way escalate_blocked already reaches it); never add #[allow(clippy::too_many_arguments)]. RULE-003: herdr_queue_wake.rs is at the cap, so any new type lives in a sibling module." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "rust-qa-agent" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "branch" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-06T01:14:37Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T01:13:13Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-102/STRUCT-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-102/STRUCT-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 566 ;
+  triage:snippet "async fn record_task_outcome(&self, reader, task_store, member, row, now, outcome, stats)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ax-phase-end-structural" ;
+  triage:headSha "946763576830550debefa5d0862f84ff0029bdc1" ;
+  triage:occursIn <urn:atm:triage:worktree/STRUCT/946763576830550debefa5d0862f84ff0029bdc1> .
+
+<urn:atm:triage:worktree/STRUCT/946763576830550debefa5d0862f84ff0029bdc1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-ax-phase-end-structural" ;
+  triage:branch "fix/ax-phase-end-structural" ;
+  triage:headSha "946763576830550debefa5d0862f84ff0029bdc1" ;
+  triage:orderIndex 10 .

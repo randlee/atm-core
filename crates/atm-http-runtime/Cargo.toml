@@ -40,6 +40,5 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 atm-core = { workspace = true, features = ["test-utils"] }
 atm-herdr = { workspace = true, features = ["test-utils"] }
 atm-runtime-test-support.workspace = true
-atm-storage.workspace = true
 serde_yaml = "0.9"
 tempfile = "3"

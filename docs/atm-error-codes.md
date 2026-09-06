@@ -164,6 +164,16 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_WAIT_TIMEOUT`
 - `ATM_ACK_INVALID_STATE`
 - `ATM_CLEAR_INVALID_STATE`
+- `ATM_ROSTER_NO_LEAD` — assign one lead: `atm teams update-member <team>
+  <member> --agent-type lead`
+- `ATM_ROSTER_MULTIPLE_LEADS` — keep one lead: `atm teams update-member <team>
+  <member> --agent-type <other type>`
+- `ATM_ROSTER_RESERVED_NAME` — rename the member: `atm-daemon is reserved for
+  daemon-originated messages`
+- `ATM_TASK_STALLED` — check the assignee or close the task: `atm send <assignee>
+  --task-complete <task_id> --stdin`
+- `ATM_MEMBER_BLOCKED` — `<member> is waiting for interactive input; attach to
+  its Herdr agent and answer the prompt`
 
 ### 5.6 Observability
 

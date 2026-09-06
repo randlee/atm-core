@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA2-004>
+  a triage:Finding ;
+  triage:findingId "AX6-QA2-004" ;
+  triage:title "AC1 lead-notification threshold doubling (20th reminder) and failed-lead-write retry path still untested (re-assessment of AX6-QA1-002)" ;
+  triage:description "AX.6 QA-2 (quality-mgr QA-AX6-R2-1788630712, PR #1204 report 2026-09-05T19:01Z, req-qa) at head c3268df8a3dfa5c84f4465459c5d2ba86df1c837. Re-assessment of AX6-QA1-002 at the new severity: the ax6_01/ax6_02/ax6_03 suites at crates/atm-http-runtime/src/herdr_queue_wake.rs:1744-1838 now cover the single threshold, no-lead/two-lead and blocked-escalation cadence cases, but AC1's doubling behaviour (tenth reminder produces one lead message, twentieth produces the second) and the failed-lead-write retry-at-next-reminder path are exercised nowhere in the crate. Fix: add tests for both paths in the ax6_01 suite (tests do not count toward RULE-003)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T19:45:51Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr AX.6 QA-3 recheck (QA-AX6-R3-1788637011) at head 43e1d40b33357024dea87742b4f8a114e7fd4966; fixed by arch-ctm fix pass GO-AX6-FIX2-1788635243 (Completion c22). Report: PR #1204 comment 5554337367. Sprint verdict remains FAIL on AX6-QA3-001/002." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T19:02:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T19:01:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-004/AX6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-004/AX7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA2-004/AX6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1744 ;
+  triage:snippet "async fn ax6_01_task_threshold_uses_separate_fixed_herdr_notification()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "c3268df8a3dfa5c84f4465459c5d2ba86df1c857" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/c3268df8a3dfa5c84f4465459c5d2ba86df1c857> .
+
+<urn:atm:triage:occurrence/AX6-QA2-004/AX7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1744 ;
+  triage:snippet "async fn ax6_01_task_threshold_uses_separate_fixed_herdr_notification()" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
+
+<urn:atm:triage:worktree/AX6/c3268df8a3dfa5c84f4465459c5d2ba86df1c857>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX6" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "c3268df8a3dfa5c84f4465459c5d2ba86df1c857" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/d101fee2e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX7" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e" ;
+  triage:orderIndex 7 .

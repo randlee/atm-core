@@ -78,6 +78,40 @@ Run ATM health and configuration diagnostics
 | `--json` |  | no | Emit the doctor report as JSON. |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 
+### `atm escalation`
+
+Manage daemon-wide and per-team escalation recipients
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+#### `atm escalation add`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `<address>` |  | yes |  |
+| `--team` |  | no |  |
+| `--json` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+#### `atm escalation list`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--team` |  | no |  |
+| `--json` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+#### `atm escalation remove`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `<address>` |  | yes |  |
+| `--team` |  | no |  |
+| `--json` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
 ### `atm help`
 
 Show ATM-owned conceptual help or delegated clap subcommand help
@@ -105,6 +139,9 @@ List one ATM mailbox surface as bounded metadata rows
 | `--from` |  | no |  |
 | `--task` |  | no |  |
 | `--contains` |  | no |  |
+| `--tasks` |  | no | List the durable task ledger for the selected team |
+| `--task-events` |  | no | List the append-only audit events for one task identifier |
+| `--member` |  | no | Restrict a task-ledger view to one assignee |
 | `--json` |  | no |  |
 | `--as` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
@@ -340,6 +377,7 @@ Queue one ATM mailbox message for deferred recipient notification
 | `--summary` |  | no |  |
 | `--requires-ack` |  | no |  |
 | `--task-id` |  | no |  |
+| `--task-complete` |  | no | Complete a previously assigned task as its assigner or assignee |
 | `--dry-run` |  | no |  |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
@@ -448,6 +486,7 @@ Send one ATM mailbox message
 | `--summary` |  | no |  |
 | `--requires-ack` |  | no |  |
 | `--task-id` |  | no |  |
+| `--task-complete` |  | no | Complete a previously assigned task as its assigner or assignee |
 | `--dry-run` |  | no |  |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
@@ -496,7 +535,7 @@ List teams or run one team-administration subcommand
 | Flag | Short | Required | Description |
 |------|-------|----------|-------------|
 | `--team` |  | yes |  |
-| `--kind` |  | yes |  |
+| `--kind` |  | yes | template kind: delivery, delivery_ack, queue, queue_ack, task, acknowledge, acknowledge_task |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 
@@ -505,7 +544,7 @@ List teams or run one team-administration subcommand
 | Flag | Short | Required | Description |
 |------|-------|----------|-------------|
 | `--team` |  | yes |  |
-| `--kind` |  | yes |  |
+| `--kind` |  | yes | template kind: delivery, delivery_ack, queue, queue_ack, task, acknowledge, acknowledge_task |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 
@@ -533,7 +572,7 @@ List teams or run one team-administration subcommand
 | Flag | Short | Required | Description |
 |------|-------|----------|-------------|
 | `--team` |  | yes |  |
-| `--kind` |  | yes |  |
+| `--kind` |  | yes | template kind: delivery, delivery_ack, queue, queue_ack, task, acknowledge, acknowledge_task |
 | `--template-body` |  | yes |  |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |

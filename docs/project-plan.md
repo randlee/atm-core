@@ -1607,7 +1607,7 @@ Phase AV sprint status:
 | `AV.3` | `complete` (PR #1113 merged) | `feature/av3-read-concurrency-gates` | `docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md` |
 | `AV.4` | `complete` (PR #1114 merged) | `feature/av4-read-query-benchmarks` | `docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md` |
 
-## 55. Phase AX — Nudge Templates On Every Backend And Task-State Tracking [PLANNING — PLAN HARDENING]
+## 55. Phase AX — Nudge Templates On Every Backend And Task-State Tracking [EXECUTING — PHASE CLOSEOUT]
 
 Phase AX closes three delivery defects found in the 2026-09-04 Herdr
 dogfood run (issue #1173): the Herdr sink bypasses the built-in nudge
@@ -1624,6 +1624,9 @@ AX.2→AX.5, AX.4→AX.5, AX.5→AX.6, AX.6→AX.7. Branches are worktrees via
 `sc-git-worktree`; PR bases and merges via `gh stack` (sequence in the
 phase plan §6).
 
+Current phase status: AX.1-AX.6 merged into `integrate/phase-ax`; AX.7
+superseded 2026-09-05.
+
 The authoritative plan is
 [phase-ax-plan](./plans/phase-ax/phase-ax-plan.md) with per-sprint docs
 under `docs/plans/phase-ax/`, authored on branch `integrate/phase-ax`.
@@ -1632,12 +1635,12 @@ Phase AX sprint status:
 
 | Sprint | Track | Execute | Status | Branch | Artifacts |
 | --- | --- | --- | --- | --- | --- |
-| `AX.1` | A | parallel with AX.3/AX.4 | `planned` | `feature/ax1-queue-template-class` | `docs/plans/phase-ax/sprint-AX.1-queue-template-class.md`, ADR-019 amendment |
-| `AX.2` | A | after AX.1; parallel with AX.3/AX.4 | `planned` | `feature/ax2-herdr-template-rendering` | `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md`, ADR-058 amendment, `boundaries/atm-herdr/herdr-process-adapter.toml`, `docs/atm-herdr/requirements.md` |
-| `AX.3` | B | parallel with AX.1/AX.2 | `planned` | `feature/ax3-task-state-machine` | `docs/plans/phase-ax/sprint-AX.3-task-state-machine.md`, `docs/adr/ADR-061-task-state-machine.md`, ADR-054 amendment, `boundaries/atm-storage/task-store.toml`, `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` |
-| `AX.4` | B | after AX.3; parallel with AX.1/AX.2 | `planned` | `feature/ax4-task-cli-and-docs` | `docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md`, `docs/user-documents/tasks.md` |
-| `AX.5` | C | after A and B merge | `planned` | `feature/ax5-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md`, ADR-061 reminder-cycle section |
-| `AX.6` | C | after AX.5 | `planned` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
+| `AX.1` | A | parallel with AX.3/AX.4 | `complete` | `feature/ax1-queue-template-class` | `docs/plans/phase-ax/sprint-AX.1-queue-template-class.md`, ADR-019 amendment |
+| `AX.2` | A | after AX.1; parallel with AX.3/AX.4 | `complete` | `feature/ax2-herdr-template-rendering` | `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md`, ADR-058 amendment, `boundaries/atm-herdr/herdr-process-adapter.toml`, `docs/atm-herdr/requirements.md` |
+| `AX.3` | B | parallel with AX.1/AX.2 | `complete` | `feature/ax3-task-state-machine` | `docs/plans/phase-ax/sprint-AX.3-task-state-machine.md`, `docs/adr/ADR-062-task-state-machine.md`, ADR-054 amendment, `boundaries/atm-storage/task-store.toml`, `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` |
+| `AX.4` | B | after AX.3; parallel with AX.1/AX.2 | `complete` | `feature/ax4-task-cli-and-docs` | `docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md`, `docs/user-documents/tasks.md` |
+| `AX.5` | C | after A and B merge | `complete` | `feature/ax5-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md`, ADR-062 reminder-cycle section |
+| `AX.6` | C | after AX.5 | `complete` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
 | `AX.7` | D | superseded 2026-09-05 (live proof moved to release readiness) | `superseded` | none | `docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md` |
 
 ## 56. Phase AY — Native-IPC Transport Cutover For Herdr [PLANNING — DRAFT, NOT APPROVED]

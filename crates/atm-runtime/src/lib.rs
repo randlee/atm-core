@@ -13,7 +13,8 @@ pub mod workflow_telemetry;
 
 pub use atm_storage::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
-    DiagnosticQuery, DiagnosticTimelineStore, StorageFactory, StorageHandles,
+    DiagnosticQuery, DiagnosticRecordError, DiagnosticTimelineStore, StorageFactory,
+    StorageHandles,
 };
 pub use composition::{
     RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime, validate_enabled_peer_configuration,
@@ -24,7 +25,7 @@ pub use doctor_projection::{
 };
 pub use mailbox_runtime::{
     AsyncMailboxRuntime, HandoffConfig, StateHandoffDiagnostics, StateHandoffSupervisor,
-    SupervisorState,
+    SupervisorState, read_deadline,
 };
 pub use workflow_telemetry::{
     WorkflowTelemetryConfig, WorkflowTelemetryDiagnostics, WorkflowTelemetryRuntime,

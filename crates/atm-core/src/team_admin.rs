@@ -754,6 +754,93 @@ mod tests {
     }
 
     #[test]
+    fn add_member_rejects_reserved_daemon_name_without_mutation() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, TEST_SENDER)]);
+        let before = roster_store
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("roster");
+
+        let request = AddMemberRequest::new(
+            tempdir.path().to_path_buf(),
+            TEST_TEAM,
+            "atm-daemon",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            tempdir.path().to_path_buf(),
+            None,
+        )
+        .expect("request parses");
+        let error = add_member_with_roster_store(&roster_store, request)
+            .expect_err("reserved sender must be rejected");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(
+            error
+                .message()
+                .contains("atm-daemon is a reserved sender name")
+        );
+        assert_eq!(
+            roster_store
+                .load_roster(&TEST_TEAM.parse().expect("team"))
+                .expect("roster"),
+            before
+        );
+    }
+
+    #[test]
+    fn update_member_rejects_reserved_daemon_name_without_mutation() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(
+            TEST_TEAM,
+            vec![
+                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
+                roster_member(TEST_TEAM, "atm-daemon"),
+            ],
+        );
+        let before = roster_store
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("roster");
+
+        let error = update_member_with_roster_store(
+            &roster_store,
+            UpdateMemberRequest {
+                caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
+                member: MemberName("atm-daemon".parse().expect("member")),
+                home_dir: None,
+                workspace_root: None,
+                harness: None,
+                agent_type: None,
+                model: None,
+                tmux_pane_id: None,
+                local_backend: None,
+                backend_warning: None,
+                host: None,
+            },
+        )
+        .expect_err("reserved sender must be rejected");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(
+            error
+                .message()
+                .contains("atm-daemon is a reserved sender name")
+        );
+        assert_eq!(
+            roster_store
+                .load_roster(&TEST_TEAM.parse().expect("team"))
+                .expect("roster"),
+            before
+        );
+    }
+
+    #[test]
     fn explicit_herdr_backend_validates_identity_and_session() {
         let tempdir = tempdir().expect("tempdir");
         let request = AddMemberRequest::new_with_backend(
@@ -1718,6 +1805,32 @@ mod tests {
             .expect("saved row");
         assert_eq!(saved.template_body(), Some("<atm/>"));
         assert!(!saved.is_disabled());
+    }
+
+    #[test]
+    fn set_nudge_template_override_round_trips_queue_ack_kind() {
+        let override_store = RecordingNudgeTemplateOverrideStore::default();
+        let outcome = set_nudge_template_override_with_store(
+            &override_store,
+            SetNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "queue_ack",
+                "<atm/>".to_string(),
+            )
+            .expect("request"),
+        )
+        .expect("save");
+
+        assert_eq!(outcome.kind, BuiltInNudgeTemplateKind::QueueAck);
+        let saved = override_store
+            .load_template_override(
+                &TEST_TEAM.parse().expect("team"),
+                BuiltInNudgeTemplateKind::QueueAck,
+            )
+            .expect("load")
+            .expect("saved row");
+        assert_eq!(saved.template_body(), Some("<atm/>"));
     }
 
     #[test]

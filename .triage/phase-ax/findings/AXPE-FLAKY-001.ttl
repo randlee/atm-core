@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Phase-ending critical review of integrate/phase-ax at c9e8bf3af (2026-09-06; five reviewers, fenix-recorded).
+
+# Closed 2026-09-06T02:15:00Z: QA-AXPE-STRUCT-R2/R3 PR #1236 @ 6c7055274.
+<urn:atm:triage:finding/AXPE-FLAKY-001>
+  a triage:Finding ;
+  triage:findingId "AXPE-FLAKY-001" ;
+  triage:title "Reserve-then-drop ephemeral TCP port used as a guaranteed-refused graft endpoint" ;
+  triage:description "failed_queue_graft_handoff_retains_marker_at_attempt_zero (:1351) and sweep_dispatched_queue_graft_failure_reports_for_caller_requeue (:1417) bind 127.0.0.1:0, read the port, drop the listener, and register the closed port as the unavailable graft receiver expecting an immediate PostSendGraftUnavailable. Concurrent #[tokio::test] cases in the same binary bind ephemeral listeners and can reclaim the port before the connect, flipping the assertion. Remediation: inject the failure at the client layer (fake/stub emitter returning PostSendGraftUnavailable) or hold a listener the test owns for its lifetime; never synthesize unavailability from a released port." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "flaky-test-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-FLAKY-001/INTEGRATE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-FLAKY-001/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
+  triage:line 1351 ;
+  triage:snippet "TcpListener::bind((127.0.0.1, 0)) then drop(unused), port reused as refused endpoint" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d> .
+
+<urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:orderIndex 8 .

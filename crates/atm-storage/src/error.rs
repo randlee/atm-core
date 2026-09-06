@@ -665,6 +665,11 @@ mod tests {
             AtmErrorCode::PostSendHerdrPromptFailed,
             AtmErrorCode::HerdrPromptFailed,
             AtmErrorCode::HerdrUnavailable,
+            AtmErrorCode::RosterNoLead,
+            AtmErrorCode::RosterMultipleLeads,
+            AtmErrorCode::RosterReservedName,
+            AtmErrorCode::TaskStalled,
+            AtmErrorCode::MemberBlocked,
         ];
         for code in codes {
             let error = AtmError::for_code(code);
