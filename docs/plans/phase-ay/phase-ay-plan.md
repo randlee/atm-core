@@ -193,7 +193,7 @@ approach.
 
 ADR numbering (AYS-R2-001): `docs/adr/ADR-061-governed-interface-schema-versioning.md`
 is on develop (PR #1218). Phase AX's AX.3 created
-`docs/adr/ADR-061-task-state-machine.md` on `integrate/phase-ax`, not yet
+`docs/adr/ADR-062-task-state-machine.md` on `integrate/phase-ax`, not yet
 on develop, so the two collide when phase AX lands. Resolution, owned by
 fenix inside phase AX (not AY): the AX.3 ADR is renumbered to the next
 free number on `integrate/phase-ax`, with its references in

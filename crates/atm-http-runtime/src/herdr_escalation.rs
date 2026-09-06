@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 
 #[cfg(test)]
@@ -23,6 +23,11 @@ use crate::herdr_queue_wake::run_blocking;
 pub(crate) const HERDR_NOTIFY_DEADLINE: Duration = Duration::from_secs(5);
 pub(crate) const ESCALATION_RECIPIENT_CAP: usize = MAX_ESCALATION_RECIPIENTS;
 pub(crate) const MAX_BLOCKED_ESCALATIONS_PER_TICK: usize = 8;
+
+/// Typed daemon identity for escalation mail; the constant is a valid agent
+/// name, so it is constructed once instead of reparsed for every write.
+static DAEMON_ACTOR: LazyLock<AgentName> =
+    LazyLock::new(|| AgentName::from_validated(atm_core::boundary::DAEMON_ACTOR_NAME));
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum EscalationKind {
@@ -395,11 +400,7 @@ async fn write_escalation_mail(
         let request = WriteRequest::new(
             daemon_home.clone(),
             daemon_home,
-            atm_core::boundary::DAEMON_ACTOR_NAME
-                .parse()
-                .map_err(|error| {
-                    AtmError::validation(format!("invalid daemon actor name: {error}"))
-                })?,
+            DAEMON_ACTOR.clone(),
             &recipient,
             team,
             SendMessageSource::Inline(body),
