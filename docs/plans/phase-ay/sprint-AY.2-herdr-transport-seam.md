@@ -266,7 +266,8 @@ all of those surfaces.
 
 ## Required validation
 
-- `cargo test -p atm-herdr`
+- `cargo test -p atm-herdr --all-features` (the portable fake-Herdr fixture
+  target is gated behind `test-utils`)
 - `just validate`
 - `python3 .just/check_line_counts.py`
 - `gh pr view feature/ay2-herdr-transport-seam --json
