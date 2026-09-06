@@ -162,13 +162,9 @@ impl AsyncMailboxReader for MailboxReader {
 impl atm_storage::contract::sealed::Sealed for MailboxReader {}
 
 pub(crate) fn read_lane_storage_error(error: AtmError) -> ReadLaneError {
-    ReadLaneError::Unavailable {
-        message: format!(
-            "{} (code: {:?}; cause: {})",
-            error.message(),
-            error.code(),
-            error.cause().unwrap_or("none")
-        ),
+    ReadLaneError::Storage {
+        code: error.code(),
+        message: error.message().to_owned(),
     }
 }
 

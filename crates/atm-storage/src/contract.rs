@@ -398,6 +398,7 @@ pub enum ReadLaneError {
     Saturated { reason: &'static str },
     DeadlineExpired { stage: &'static str },
     Unavailable { message: String },
+    Storage { code: AtmErrorCode, message: String },
 }
 
 impl fmt::Display for ReadLaneError {
@@ -415,6 +416,9 @@ impl fmt::Display for ReadLaneError {
             Self::Unavailable { message } => {
                 write!(formatter, "mailbox reader lane is unavailable: {message}")
             }
+            Self::Storage { message, .. } => {
+                write!(formatter, "mailbox reader storage failure: {message}")
+            }
         }
     }
 }
@@ -431,6 +435,7 @@ impl From<ReadLaneError> for AtmError {
             ReadLaneError::Saturated { .. } => AtmErrorCode::DaemonConnectionSaturated,
             ReadLaneError::DeadlineExpired { .. } => AtmErrorCode::MailboxLockTimeout,
             ReadLaneError::Unavailable { .. } => AtmErrorCode::DaemonUnavailable,
+            ReadLaneError::Storage { code, .. } => *code,
         };
         AtmError::new(code, "bounded mailbox reader lane request failed").with_cause(error)
     }
