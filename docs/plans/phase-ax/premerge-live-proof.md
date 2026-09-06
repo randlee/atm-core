@@ -41,6 +41,15 @@ just benchmark-report
 just benchmark-publish
 ```
 
+The evidence path is fixed and exclusive: run only
+`ATM_CAPACITY_HOST_LABEL=<host>-atmbench just benchmark`, then
+`just benchmark-report` (which renders
+`templates/benchmark-report/benchmark-run.xhtml.j2`), then
+`just benchmark-publish`.  The per-lane result JSON, the
+`<campaign>.campaign.json`, and the `<campaign>.xhtml` must all be committed
+under `site/reports/send-message-benchmark/`.  Hand-written or ad-hoc XHTML or
+JSON is never accepted as benchmark evidence.
+
 `just benchmark` is one complete release matrix, producing reviewed results
 for sqlite, UDS, TCP, and TCP-TLS.  The selected `--transport` and `--target`
 forms are diagnostic-only and do not meet this gate.  Compare each candidate
@@ -114,3 +123,7 @@ version or its unavailability, all report paths, the benchmark comparison
 table, each smoke result, evidence branch SHA, and one explicit verdict:
 `NO REGRESSION`, `REGRESSION`, or `COULD NOT RUN`.  State a precise preflight
 or input blocker instead of changing execution mode to obtain a green result.
+Send the completion report directly to the requestor using the requestor's
+full host-qualified address (`<agent>@<team>.<host>`) exactly as given in the
+task assignment.  A bare agent name resolves to the runner's own host and may
+silently misroute the report; task assignments must provide the full address.
