@@ -43,7 +43,7 @@ through normal PR review. Provisioning remains outside timed samples, and the
 runner must still validate the account-local manifest before touching state or
 starting a daemon.
 
-Benchmark completion reports are sent directly to the requestor's full
+Benchmark completion reports are sent directly to the requester's full
 host-qualified address (`<agent>@<team>.<host>`) exactly as supplied in the
 task assignment; a bare agent name must never be resolved by guessing the
 host. Benchmark evidence uses the fixed sequence
