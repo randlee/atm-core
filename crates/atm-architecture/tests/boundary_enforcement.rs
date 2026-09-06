@@ -2025,8 +2025,9 @@ fn aw_pool_graft_receiver_lookup_uses_the_deadline_bounded_reader_lane() {
         .expect("graft receiver lookup route must remain present");
 
     assert!(
-        lookup.contains("tokio::task::spawn_blocking") && lookup.contains("lookup_with_deadline"),
-        "the unpaired graft receiver lookup must run through the deadline-bounded reader lane"
+        lookup.contains("lookup_with_deadline_async")
+            && !lookup.contains("tokio::task::spawn_blocking"),
+        "the unpaired graft receiver lookup must await the deadline-bounded reader lane directly"
     );
     assert!(
         !lookup.contains("control_path_sync_bridge"),

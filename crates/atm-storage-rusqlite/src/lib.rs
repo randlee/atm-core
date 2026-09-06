@@ -54,9 +54,9 @@ pub use crate::observability::{
     SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
 use atm_storage::contract::{
-    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMailboxReader,
-    AsyncMessageStore, GraftReceiverEndpointStore, MailboxBucketCounts, MailboxScope, Message,
-    MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource,
+    AsyncGraftReceiverEndpointStore, AsyncMailboxReader, AsyncMessageStore, MailboxBucketCounts,
+    MailboxScope, Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, TeamName};
@@ -866,7 +866,7 @@ impl SqliteStorageBackend {
 
     pub fn graft_receiver_endpoint_store(
         &self,
-    ) -> Arc<dyn GraftReceiverEndpointStore + Send + Sync> {
+    ) -> Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync> {
         self.graft_receiver_endpoint_store.clone()
     }
 

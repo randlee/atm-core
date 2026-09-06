@@ -256,7 +256,7 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, A
 /// exposing a concrete SQLite handle to the HTTP runtime.
 pub fn open_graft_receiver_endpoint_store(
     path: impl AsRef<Path>,
-) -> Result<Arc<dyn atm_core::GraftReceiverEndpointStore + Send + Sync>, AtmError> {
+) -> Result<Arc<dyn atm_storage::AsyncGraftReceiverEndpointStore + Send + Sync>, AtmError> {
     let backend = atm_storage_rusqlite::SqliteStorageBackend::new(path)?;
     Ok(backend.graft_receiver_endpoint_store())
 }
