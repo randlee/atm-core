@@ -784,7 +784,14 @@ impl StorageAndNudgeRouter {
         self.control_path_sync_bridge
             .run(deadline, move || {
                 validate_graft_receiver_member(&runtime, &team, &agent)?;
-                let lease = store.lookup(&team, &agent).map_err(graft_store_error)?;
+                let remaining = deadline.remaining().ok_or_else(|| {
+                    AtmError::daemon_unavailable(
+                        "request deadline expired before graft receiver lease lookup",
+                    )
+                })?;
+                let lease = store
+                    .lookup_with_deadline(&team, &agent, remaining)
+                    .map_err(graft_store_error)?;
                 Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverLookup(
                     lease,
                 )))
