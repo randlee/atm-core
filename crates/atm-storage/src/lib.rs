@@ -9,7 +9,6 @@ mod error_catalog;
 pub mod error_codes;
 pub mod factory;
 pub mod peer_catalog_audit;
-mod peer_contract;
 pub mod request_budget;
 pub mod schema;
 pub mod search;
@@ -36,15 +35,16 @@ pub mod roles {
 pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
-    AcknowledgementSource, AgentType, AsyncMailboxReader, AsyncMessageStore, AsyncTaskLedgerReader,
-    BuiltInNudgeTemplateKind, CertificateFingerprint, GraftEndpointStoreError,
-    GraftReceiverEndpointStore, GraftReceiverLease, GraftReceiverRegistration, HttpsInterface,
-    LocalCertificate, MAX_NUDGE_ATTEMPTS, MailMessageState, MailboxBucketCounts, MailboxScope,
-    Message, MessageFingerprint, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore,
-    NudgeClaim, NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, PrivateKeyRef,
-    ReadDeadline, ReadLaneError, RosterChangedEvent, RosterHarness, RosterMember,
-    RosterMemberEphemeralState, RosterMemberKind, RosterRuntimeMirror, RosterSnapshot, RosterStore,
-    StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
+    AcknowledgementSource, AgentType, AsyncGraftReceiverEndpointStore, AsyncMailboxReader,
+    AsyncMessageStore, AsyncTaskLedgerReader, BuiltInNudgeTemplateKind, CertificateFingerprint,
+    GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
+    GraftReceiverRegistration, HttpsInterface, LocalCertificate, MAX_NUDGE_ATTEMPTS,
+    MailMessageState, MailboxBucketCounts, MailboxScope, Message, MessageFingerprint, MessageKey,
+    MessageQuery, MessageReceivedEvent, MessageStore, NudgeClaim, NudgeTemplateOverrideStore,
+    PeerConfigStore, PendingNudgeStore, PrivateKeyRef, ReadDeadline, ReadLaneError,
+    RosterChangedEvent, RosterHarness, RosterMember, RosterMemberEphemeralState, RosterMemberKind,
+    RosterRuntimeMirror, RosterSnapshot, RosterStore, StorageNotifier,
+    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
     derive_ack_requirement,
 };
 pub use diagnostics::{
