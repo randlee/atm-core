@@ -1969,7 +1969,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             ],
         )
         self.assertEqual(command.call_args_list[1].args[0][4], "capacity-recipient")
-        self.assertEqual(command.call_args_list[1].args[0][6:8], ["--agent-type", "general-purpose"])
+        self.assertEqual(command.call_args_list[1].args[0][5:7], ["--agent-type", "general-purpose"])
         self.assertEqual(len(command.call_args_list), 2)
 
     def test_capacity_roster_is_unique_per_profile(self):
