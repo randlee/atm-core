@@ -12,22 +12,56 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T01:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-06T18:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AWWriterPoolAudit ;
   triage:foundAt "2026-09-05T23:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V4/endpoint-store> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V4/router> ;
   triage:triageRecordVersion "1" .
 
+# quality-mgr, 2026-09-06, phase-aw-gate-closeout-fix-round2 (PR #1254 @ 2bc491f9a):
+# graft_receiver_lookup (storage_and_nudge_router.rs) -- the single non-RMW
+# read shared by both occurrences -- no longer runs inside
+# control_path_sync_bridge.run(...). validate_graft_receiver_member runs
+# directly (RAM), then store.lookup_with_deadline runs via a bare
+# tokio::task::spawn_blocking, which itself calls SharedDb::read_with_deadline
+# -> self.read_pool.submit_blocking(...) (the genuine deadline-bounded reader
+# pool, verified by direct read of shared_db.rs:214-238) -- never the writer
+# pool. Confirmed the sibling RMW operations on this same store
+# (graft_receiver_register/refresh/unregister) correctly remain on
+# control_path_sync_bridge, since those do write. A new architecture
+# regression guard (aw_pool_graft_receiver_lookup_uses_the_deadline_bounded_
+# reader_lane, boundary_enforcement.rs) mechanically asserts
+# graft_receiver_lookup contains spawn_blocking+lookup_with_deadline and
+# does NOT contain control_path_sync_bridge.
+#
+# quality-mgr, 2026-09-06, rust-qa-agent verification at ecc2e118f (branch
+# later fast-forward-merged with develop -> 95f8594d8, no diff to reviewed
+# files): `cargo test -p atm-architecture --test boundary_enforcement`
+# 95/95 PASS, including aw_pool_graft_receiver_lookup_uses_the_deadline_
+# bounded_reader_lane and av3_control_path_bridge_call_sites_are_the_exact_
+# residual_set_after_rename (residual set no longer includes
+# graft_receiver_lookup, reconciled by commit ecc2e118f). `cargo clippy -p
+# atm-architecture -p atm-http-runtime --tests -- -D warnings` clean. This
+# finding's stated acceptance ("no write-path read remains at these sites")
+# is satisfied. The same reviewer separately flagged (non-blocking,
+# important) that graft_receiver_lookup bridges via spawn_blocking+
+# lookup_with_deadline->submit_blocking rather than the reader pool's
+# native async submit path used by sibling _async methods elsewhere in
+# atm-storage-rusqlite -- filed as a new finding for team-lead's triage,
+# not a reopening of this record: this record's own acceptance criterion
+# (writer-pool removal) does not require the async-native submit path.
 <urn:atm:triage:occurrence/AW-POOL-V4/endpoint-store>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/graft_receiver_endpoint_store.rs" ;
   triage:line 179 ;
   triage:snippet "graft-receiver endpoint lookup on the writer-side pool" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "ac1088c82" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v4/ac1088c82> .
@@ -37,8 +71,8 @@
   triage:file "crates/atm-storage-rusqlite/src/storage_and_nudge_router.rs" ;
   triage:line 774 ;
   triage:snippet "router-side fan-out reads at 774-787 on the writer-side pool" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "ac1088c82" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v4/ac1088c82> .
