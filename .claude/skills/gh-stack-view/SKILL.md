@@ -62,8 +62,8 @@ VERDICT: ✅ COHERENT - every base == parent head, every head pushed and on its 
 |--------|--------|-------|
 | L | layer / stack depth, bottom first | |
 | rebase | `gh stack view --json` `head`/`base`/`needsRebase`, `origin/<branch>` after one fetch, PR `headRefOid` | ✅ not needed (base==parent head and local==origin==PR) · ⚠️ needed · 🔄 local tracking stale, fetch+reset before any sync · ❓ unknown (`--no-fetch`) · 🏁 merged |
-| merge | one GraphQL query: `mergeable`, `mergeStateStatus`, `isDraft`; gh stack `isMerged`/`isQueued` | 🚀 clean · 🚧 blocked/unstable · ⏪ behind · ❌ conflicting/dirty · ⏳ computing · 📝 draft · ◎ queued · 🏁 merged |
-| CI | same query, `statusCheckRollup.state` of the head commit | ✅ success · ❌ failure · 🌀 pending · — none |
+| merge | one GraphQL query: `mergeable`, `mergeStateStatus`, `isDraft`; gh stack `isMerged`/`isQueued` | ✅ mergeable now · 🚧 blocked (conflicting, behind, draft, queued, required checks, still computing) · 🏁 merged |
+| CI | same query, `statusCheckRollup.state` of the head commit | ✅ green · 🌀 running · ⛔ failed, do not enter · — none |
 
 `VERDICT` names the branch and the owner action for every problem (SHAs
 appear there, not in the table). A bottom layer merely behind trunk is a note,

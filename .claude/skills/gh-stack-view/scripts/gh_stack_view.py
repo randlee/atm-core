@@ -203,13 +203,9 @@ def build_rows(stack: dict, prs: dict[int, dict], *, fetched: bool) -> tuple[lis
 
 
 ICON_SYNC = {"ok": "✅", "stale": "🔄", "rebase": "⚠️", "unknown": "❓"}
-ICON_MERGE = {
-    "MERGED": "🏁", "QUEUED": "◎", "CLEAN": "🚀", "HAS_HOOKS": "🚀",
-    "UNSTABLE": "🚧", "BLOCKED": "🚧", "BEHIND": "⏪", "DIRTY": "❌",
-    "CONFLICTING": "❌", "UNKNOWN": "⏳", "DRAFT": "📝",
-}
-ICON_CI = {"SUCCESS": "✅", "FAILURE": "❌", "ERROR": "❌", "PENDING": "🌀",
-           "EXPECTED": "🌀", "NONE": "—"}
+ICON_MERGE = {"MERGED": "\U0001f3c1", "OK": "✅", "BLOCKED": "\U0001f6a7"}
+ICON_CI = {"SUCCESS": "✅", "FAILURE": "⛔", "ERROR": "⛔", "PENDING": "\U0001f300",
+           "EXPECTED": "\U0001f300", "NONE": "—"}
 
 
 def sync_icon(r: dict) -> str:
@@ -225,15 +221,12 @@ def sync_icon(r: dict) -> str:
 
 
 def merge_icon(r: dict) -> str:
+    """✅ only when GitHub says the PR can merge now; anything else is 🚧."""
     if r["merged"]:
         return ICON_MERGE["MERGED"]
-    if r["queued"]:
-        return ICON_MERGE["QUEUED"]
-    if r["draft"]:
-        return ICON_MERGE["DRAFT"]
-    if r["mergeable"] == "CONFLICTING":
-        return ICON_MERGE["CONFLICTING"]
-    return ICON_MERGE.get(r["merge_state"] or "UNKNOWN", ICON_MERGE["UNKNOWN"])
+    if r["draft"] or r["queued"] or r["mergeable"] != "MERGEABLE":
+        return ICON_MERGE["BLOCKED"]
+    return ICON_MERGE["OK"] if r["merge_state"] in ("CLEAN", "HAS_HOOKS", "UNSTABLE") else ICON_MERGE["BLOCKED"]
 
 
 def ci_icon(r: dict) -> str:
