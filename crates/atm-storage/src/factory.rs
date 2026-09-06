@@ -3,10 +3,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::{
-    AsyncMailboxReader, AsyncMessageSearchStore, AsyncMessageStore, AsyncTaskLedgerReader,
-    AtmError, DiagnosticTimelineStore, GraftReceiverEndpointStore, MessageSearchStore,
-    MessageStore, NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore,
-    RosterRuntimeMirror, RosterStore, TaskStore, TemplateCatalogStore,
+    AsyncGraftReceiverEndpointStore, AsyncMailboxReader, AsyncMessageSearchStore,
+    AsyncMessageStore, AsyncTaskLedgerReader, AtmError, DiagnosticTimelineStore,
+    MessageSearchStore, MessageStore, NudgeTemplateOverrideStore, PeerConfigStore,
+    PendingNudgeStore, RosterRuntimeMirror, RosterStore, TaskStore, TemplateCatalogStore,
 };
 
 /// Backend-neutral effective capacity settings for the single shared reader
@@ -116,7 +116,7 @@ pub struct StorageHandles {
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
     task_store: Arc<dyn TaskStore + Send + Sync>,
-    graft_receiver_endpoint_store: Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
+    graft_receiver_endpoint_store: Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
     message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
@@ -146,7 +146,7 @@ pub struct StorageHandleParts {
     pub nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pub pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
     pub task_store: Arc<dyn TaskStore + Send + Sync>,
-    pub graft_receiver_endpoint_store: Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
+    pub graft_receiver_endpoint_store: Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>,
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     pub template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
     pub message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
@@ -173,7 +173,7 @@ impl fmt::Debug for StorageHandles {
             .field("task_store", &"dyn TaskStore")
             .field(
                 "graft_receiver_endpoint_store",
-                &"dyn GraftReceiverEndpointStore",
+                &"dyn AsyncGraftReceiverEndpointStore",
             )
             .field("peer_config_store", &"dyn PeerConfigStore")
             .field("template_catalog_store", &"dyn TemplateCatalogStore")
@@ -257,7 +257,7 @@ impl StorageHandles {
 
     pub fn graft_receiver_endpoint_store(
         &self,
-    ) -> Arc<dyn GraftReceiverEndpointStore + Send + Sync> {
+    ) -> Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync> {
         Arc::clone(&self.graft_receiver_endpoint_store)
     }
 

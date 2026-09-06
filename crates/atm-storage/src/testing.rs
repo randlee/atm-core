@@ -10,9 +10,10 @@
 use chrono::{DateTime, Utc};
 
 use crate::contract::{
-    AsyncMailboxReader, AsyncTaskLedgerReader, GraftEndpointStoreError, GraftReceiverEndpointStore,
-    GraftReceiverLease, GraftReceiverRegistration, MailboxScope, Message, MessageKey, MessageQuery,
-    ReadDeadline, ReadLaneError, sealed,
+    AsyncGraftReceiverEndpointStore, AsyncMailboxReader, AsyncTaskLedgerReader,
+    GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
+    GraftReceiverRegistration, MailboxScope, Message, MessageKey, MessageQuery, ReadDeadline,
+    ReadLaneError, sealed,
 };
 use crate::task_state::{TaskEventRow, TaskRow};
 use crate::types::{AgentName, IsoTimestamp, OwnerGeneration, TaskId, TeamName};
@@ -71,6 +72,9 @@ impl GraftReceiverEndpointStore for NoopGraftReceiverEndpointStore {
         Ok(())
     }
 }
+
+#[async_trait::async_trait]
+impl AsyncGraftReceiverEndpointStore for NoopGraftReceiverEndpointStore {}
 
 /// Deterministic in-memory double for the sealed async mailbox-read contract.
 /// It is intentionally available only through the `test-utils` feature.
