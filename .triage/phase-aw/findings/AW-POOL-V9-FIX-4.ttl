@@ -50,7 +50,7 @@
 <urn:atm:triage:resolution/AW-POOL-V9-FIX-4/r1>
   a triage:Resolution ;
   triage:findingId "AW-POOL-V9-FIX-4" ;
-  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. primary_write_latency_stays_bounded_under_a_full_prune_backlog (writer/mod.rs:696) is now annotated #[ignore = "perf probe; wall-clock bound is not a correctness gate"], satisfying the acceptance criteria's stated alternative disposition (move the latency measurement out of the correctness gate) rather than restructuring the assertion itself. Confirmed by direct read of the test and its ignore attribute on the merged head." ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. primary_write_latency_stays_bounded_under_a_full_prune_backlog (writer/mod.rs:696) is now annotated #[ignore = \"perf probe; wall-clock bound is not a correctness gate\"], satisfying the acceptance criteria's stated alternative disposition (move the latency measurement out of the correctness gate) rather than restructuring the assertion itself. Confirmed by direct read of the test and its ignore attribute on the merged head." ;
   triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
   triage:resolvedStatus "fixed" ;
   triage:resolvedHeadSha "e8825d5cc" ;
