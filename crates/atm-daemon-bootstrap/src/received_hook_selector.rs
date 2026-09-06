@@ -1348,9 +1348,8 @@ mod tests {
     async fn failed_queue_graft_handoff_retains_marker_at_attempt_zero() {
         let root = tempfile::tempdir().expect("temporary runtime root");
         let (runtime, endpoint_store, team, recipient) = queue_graft_runtime(root.path());
-        let unused = TcpListener::bind(("127.0.0.1", 0)).expect("reserve endpoint");
-        let endpoint = unused.local_addr().expect("endpoint");
-        drop(unused);
+        let unavailable_listener = TcpListener::bind(("127.0.0.1", 0)).expect("reserve endpoint");
+        let endpoint = unavailable_listener.local_addr().expect("endpoint");
         endpoint_store
             .register(
                 &GraftReceiverRegistration {
@@ -1414,9 +1413,8 @@ mod tests {
     async fn sweep_dispatched_queue_graft_failure_reports_for_caller_requeue() {
         let root = tempfile::tempdir().expect("temporary runtime root");
         let (runtime, endpoint_store, team, recipient) = queue_graft_runtime(root.path());
-        let unused = TcpListener::bind(("127.0.0.1", 0)).expect("reserve endpoint");
-        let endpoint = unused.local_addr().expect("endpoint");
-        drop(unused);
+        let unavailable_listener = TcpListener::bind(("127.0.0.1", 0)).expect("reserve endpoint");
+        let endpoint = unavailable_listener.local_addr().expect("endpoint");
         endpoint_store
             .register(
                 &GraftReceiverRegistration {
