@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AX-PHASE-END-RECHECK-1788716803 (phase-end recheck) on integrate/phase-ax at 6e8f33ba5; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1253#issuecomment-5561091832 Native id: RSH-AXPE-003
+
+<urn:atm:triage:finding/AXPE-RSH-003>
+  a triage:Finding ;
+  triage:findingId "AXPE-RSH-003" ;
+  triage:title "Herdr wake-up rejection warn! lacks subsystem/action fields" ;
+  triage:description "The tracing::warn! in HerdrReceivedHook::emit_received_message at crates/atm-daemon-bootstrap/src/received_hook_selector.rs:445 (\"Herdr wake-up was not accepted\") omits the subsystem= and action= fields carried by the sibling warn!/error! sites in the same module and in crates/atm-http-runtime/src/herdr_queue_wake.rs and herdr_queue_wake_escalation.rs, so retained-log and doctor projection filtering cannot select it. Remediation: add subsystem = \"received_hook_selector\" and action = \"herdr_prompt\" (match the naming the sibling sites use; verify and use their actual field values). Verify the line and the sibling claim with grep before writing; correct if they differ and say so. Sweep: list every warn!/error! macro in those three files that lacks a subsystem field; if there are more, add one Occurrence per extra site (INTEGRATE-2, INTEGRATE-3, ...) and set repeatable true; otherwise repeatable false." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "rust-service-hardening-agent" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T18:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T18:00:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-RSH-003/INTEGRATE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-RSH-003/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
+  triage:line 445 ;
+  triage:snippet "tracing::warn!(backend = \"herdr\", member = %dispatch.event.recipient, error = ?error, outcome, \"Herdr wake-up was not accepted\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "6e8f33ba59a1167127e94222bbed0405a3680cf0" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/6e8f33ba59a1167127e94222bbed0405a3680cf0> .
+
+<urn:atm:triage:worktree/INTEGRATE/6e8f33ba59a1167127e94222bbed0405a3680cf0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "6e8f33ba59a1167127e94222bbed0405a3680cf0" ;
+  triage:orderIndex 12 .

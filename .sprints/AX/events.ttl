@@ -532,3 +532,5 @@ triage:r112 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-Q
 triage:r113 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-116> ; triage:resolvedAt "2026-09-06T02:15:00Z"^^xsd:dateTime .
 # Phase-end structural fix pass on AX6 (GO-AX-PHASE-END-STRUCTURAL-FIX2/FIX3, arch-ctm): AXPE-QA-102/103/105 filed 2026-09-06T01:13-01:14Z postdate c24 and invalidated it; fixes QA PASS (QA-AXPE-STRUCT-R3) and merged via #1236 (281e62fee).
 triage:c25 a triage:Completion ; triage:ofSprint triage:AX6 ; triage:at "2026-09-06T03:35:31Z"^^xsd:dateTime .
+# Phase-end recheck (QA-AX-PHASE-END-RECHECK-1788716803 on 6e8f33ba5, FAIL 0/1/3, zero regressions): AXPE-QA-117 (important), AXPE-RSH-003, AXPE-RBP-003, AXPE-RBP-004 (minor) filed 2026-09-06T18:00:33Z; CLEANUP pass GO-AX-PHASE-END-RECHECK-FIX-1788717947 to cipher on fix/ax-phase-end-recheck-fixes.
+triage:a27 a triage:Assignment ; triage:ofSprint triage:AX6 ; triage:assignedTo "cipher" ; triage:assignedAt "2026-09-06T18:05:47Z"^^xsd:dateTime .

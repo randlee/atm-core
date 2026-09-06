@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AX-PHASE-END-RECHECK-1788716803 (phase-end recheck) on integrate/phase-ax at 6e8f33ba5; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1253#issuecomment-5561091832 Native id: ATM-QA-001
+<urn:atm:triage:finding/AXPE-QA-117>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-117" ;
+  triage:title "docs/atm-error-codes.md registry missing the five AX.6 doctor codes" ;
+  triage:description "docs/atm-error-codes.md declares itself the single source of truth for ATM-owned error codes and forbids codes outside it, and docs/requirements.md:97 relies on that ownership claim, yet the five AX.6 doctor warning codes ATM_ROSTER_NO_LEAD, ATM_ROSTER_MULTIPLE_LEADS, ATM_ROSTER_RESERVED_NAME, ATM_TASK_STALLED, ATM_MEMBER_BLOCKED (present in crates/atm-error/src/error_codes.rs, error_catalog.rs and requirements.md section 11.3) have zero occurrences in docs/atm-error-codes.md. The broader under-enumeration of the registry pre-dates AX and is out of scope. Remediation: add the five codes to the registry section of docs/atm-error-codes.md reusing the remediation text at docs/requirements.md:2207-2211 (or explicitly narrow the ownership claim in requirements.md section 1 if the doc is intentionally not kept current)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "req-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T18:30:33Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T18:00:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-117/INTEGRATE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-117/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-error-codes.md" ;
+  triage:line 53 ;
+  triage:snippet "## 5. Registry" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "6e8f33ba59a1167127e94222bbed0405a3680cf0" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/6e8f33ba59a1167127e94222bbed0405a3680cf0> .
+
+<urn:atm:triage:worktree/INTEGRATE/6e8f33ba59a1167127e94222bbed0405a3680cf0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "6e8f33ba59a1167127e94222bbed0405a3680cf0" ;
+  triage:orderIndex 12 .
