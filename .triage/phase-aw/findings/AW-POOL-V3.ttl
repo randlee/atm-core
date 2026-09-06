@@ -73,3 +73,12 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "ac1088c82" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AW-POOL-V3/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V3" ;
+  triage:resolutionNote "quality-mgr phase-end gate @94e29a586, fenix ledger hygiene: template_catalog_store.rs reads route through self.db.read; service_runtime_store.rs and read/metadata_selection.rs delegate to SqliteMessageStore::load_message/list_messages which route through self.db.read as of this commit (git blame on the read call sites)." ;
+  triage:resolvedAt "2026-09-06T06:50:29Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "2ca7148daa93" ;
+  triage:resolvedBranch "integrate/phase-aw" .
