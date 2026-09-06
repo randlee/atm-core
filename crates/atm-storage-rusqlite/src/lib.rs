@@ -675,14 +675,9 @@ impl SqliteStorageFactory {
 impl StorageFactory for SqliteStorageFactory {
     fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError> {
         let effective_reader_lanes = EffectiveReaderLanes {
-            mailbox: EffectiveReaderLane {
-                pool_size: self.read_pool_config.pool.pool_size.get(),
-                queue_depth: self.read_pool_config.pool.queue_depth.get(),
-            },
-            search: EffectiveReaderLane {
-                pool_size: self.read_pool_config.pool.pool_size.get(),
-                queue_depth: self.read_pool_config.pool.queue_depth.get(),
-            },
+            pool_size: self.read_pool_config.pool.pool_size.get(),
+            queue_depth: self.read_pool_config.pool.queue_depth.get(),
+            tool_class_max_in_flight: self.read_pool_config.pool.tool_class_max_in_flight,
         };
         let backend = SqliteStorageBackend::new_with_observability_and_read_pool_config(
             self.database_path(durable_state_root),
