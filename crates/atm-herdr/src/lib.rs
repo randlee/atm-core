@@ -12,6 +12,8 @@ use atm_core::{HerdrSession, RequestDeadline};
 mod transport;
 mod transport_cli;
 
+pub use transport::HerdrClientConfig;
+
 use transport::{
     HerdrIo, HerdrOp, get_from_envelope, list_from_envelope, prompt_from_envelope,
     snapshot_from_envelope, unit_from_envelope,

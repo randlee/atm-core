@@ -1,6 +1,6 @@
 //! Tokio process implementation of the private Herdr transport seam.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -21,7 +21,7 @@ impl CliIo {
     pub(crate) fn new(config: &HerdrClientConfig) -> Self {
         let _ = config.socket_path();
         Self {
-            binary_path: config.binary_path().cloned(),
+            binary_path: config.binary_path().map(Path::to_path_buf),
             extra_environment: Vec::new(),
         }
     }

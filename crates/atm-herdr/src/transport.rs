@@ -1,8 +1,9 @@
 //! Private, transport-neutral Herdr request and response contract.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::types::AgentName;
 use atm_core::{HerdrSession, RequestDeadline};
 use serde_json::Value;
@@ -13,21 +14,42 @@ use crate::{
     HerdrWaitOutcome,
 };
 
-/// Default-only private transport configuration. AY.3 owns validation and
-/// public composition of explicit client settings.
-#[derive(Clone, Debug, Default)]
-pub(crate) struct HerdrClientConfig {
+/// Validated Herdr client configuration. Construction is pure and performs no
+/// endpoint or filesystem I/O.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct HerdrClientConfig {
     binary_path: Option<PathBuf>,
     socket_path: Option<PathBuf>,
 }
 
 impl HerdrClientConfig {
-    pub(crate) fn binary_path(&self) -> Option<&PathBuf> {
-        self.binary_path.as_ref()
+    pub fn try_new(
+        binary_path: Option<PathBuf>,
+        socket_path: Option<PathBuf>,
+    ) -> Result<Self, AtmError> {
+        for (key, path) in [
+            ("binary_path", binary_path.as_ref()),
+            ("socket_path", socket_path.as_ref()),
+        ] {
+            if let Some(path) = path.filter(|path| !path.is_absolute()) {
+                return Err(AtmError::new(
+                    AtmErrorCode::ConfigParseFailed,
+                    format!("[herdr] {key} must be absolute: {}", path.display()),
+                ));
+            }
+        }
+        Ok(Self {
+            binary_path,
+            socket_path,
+        })
     }
 
-    pub(crate) fn socket_path(&self) -> Option<&PathBuf> {
-        self.socket_path.as_ref()
+    pub fn binary_path(&self) -> Option<&Path> {
+        self.binary_path.as_deref()
+    }
+
+    pub fn socket_path(&self) -> Option<&Path> {
+        self.socket_path.as_deref()
     }
 }
 
