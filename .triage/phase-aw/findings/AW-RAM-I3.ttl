@@ -37,3 +37,12 @@
   triage:branch "fix/aw-ram-roster" ;
   triage:headSha "98cea18d7" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AW-RAM-I3/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-RAM-I3" ;
+  triage:resolutionNote "quality-mgr phase-end gate @94e29a586, fenix ledger hygiene: roster_runtime.rs:103 now declares `teams: RwLock<BTreeMap<TeamName, Arc<RwLock<TeamRosterRecord>>>>` -- per-team RwLock nested under the map lock, matching the finding's acceptance criteria exactly (confirmed by direct read of current file)." ;
+  triage:resolvedAt "2026-09-06T06:46:36Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "5b3f4692829e" ;
+  triage:resolvedBranch "integrate/phase-aw" .

@@ -87,3 +87,12 @@
 # ownership complication). Not blocking #1199 -> develop merge or the 1.5.x
 # dogfood build. Disposition communicated to fenix/team-lead for fix-dispatch
 # decision; quality-mgr does not implement fixes directly.
+
+<urn:atm:triage:resolution/FTQ-AW-P1-003/r1>
+  a triage:Resolution ;
+  triage:findingId "FTQ-AW-P1-003" ;
+  triage:resolutionNote "quality-mgr phase-end gate @94e29a586, fenix ledger hygiene: Gate::wait_until in message_handler.rs backs wait_until_entered/wait_until_released/wait_until_scheduler_progresses with a hard 5s deadline (GATE_WAIT_TIMEOUT) -- a real redesign, not a widened retry; the .ttl's \"reopened\" note is a stale intermediate snapshot superseded by this commit." ;
+  triage:resolvedAt "2026-09-06T06:46:36Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e53e585ba2c5" ;
+  triage:resolvedBranch "integrate/phase-aw" .
