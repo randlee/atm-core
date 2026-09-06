@@ -86,7 +86,8 @@ impl PeerConfigStore for SqlitePeerConfigStore {
     }
 
     fn local_certificate(&self) -> Result<Option<LocalCertificate>, atm_storage::AtmError> {
-        let certificate = self.db.with_connection(|connection| {
+        let db = Arc::clone(&self.db);
+        let certificate = self.db.read(move |connection| {
             connection
                 .query_row(
                     "SELECT fingerprint, private_key_ref
@@ -95,7 +96,7 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                     |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
                 )
                 .optional()
-                .map_err(|error| self.db.error("failed to load local certificate", error))
+                .map_err(|error| db.error("failed to load local certificate", error))
         })?;
         certificate
             .map(|(fingerprint, private_key_ref)| {
