@@ -636,10 +636,10 @@
     }
   ],
   "coverage_gaps": [
-    "AX.7: not started (must_follow AX.6).",
     "AX2-QA2 head SHA not carried by the verdict message excerpt; PR #1186 is the authoritative reference.",
     "AX5-QA1 headline counts (4/8/7) differ from the deduplicated triage records (4/8/5); the triage records are the lifecycle source.",
-    "AX.6: QA-1 FAIL at 490a6c42a; fix pass pending, later QA runs appended as they occur.",
-    "AX.7: stacked on the AX.6 branch (feature/ax7-herdr-dogfood-evidence, PR #1206, stack #1207); fenix-operated proof sprint, starts when AX.6 has no open blocking findings."
+    "AX.6: closed at QA-5 PASS (PR #1204).",
+    "AX.7: superseded 2026-09-05; live Windows/macOS Herdr proof moved to release readiness (docs/plans/phase-ay/release-readiness-herdr-live-proof.md).",
+    "Nine AXPE phase-end findings are tracked in .triage/phase-ax/findings and fixed on stack #1235."
   ]
 }
