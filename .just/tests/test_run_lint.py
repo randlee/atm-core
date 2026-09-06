@@ -294,6 +294,7 @@ resolver = "2"
                 "daemon-signing-coupling",
                 "shear",
                 "silent-emit",
+                "runtime-stderr",
                 "function-length",
                 "legacy-mailbox-paths",
                 "nudge-taxonomy",

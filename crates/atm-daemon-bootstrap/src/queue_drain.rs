@@ -31,7 +31,7 @@ pub(crate) fn queue_drain_channel_allowed(
     runtime: &LocalServiceRuntime,
     member: &MemberKey,
 ) -> Result<bool, AtmError> {
-    let Some(roster) = runtime.load_roster_member(member.team(), member.agent())? else {
+    let Some(roster) = runtime.load_roster_member(member.team(), member.agent()) else {
         return Ok(false);
     };
     let local_backend = local_message_received_backend(&roster);

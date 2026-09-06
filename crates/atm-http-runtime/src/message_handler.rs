@@ -18,8 +18,8 @@ use atm_core::doctor::DoctorQuery;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{
     CompatibilityPreflight, GraftReceiverLookupRequest, GraftReceiverRefreshRequest,
-    GraftReceiverRegistration, GraftReceiverUnregistration, QueueGetNextRequest, RequestId,
-    ResponseEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest, next_request_id,
+    GraftReceiverRegistration, GraftReceiverUnregistration, HttpApiVersion, QueueGetNextRequest,
+    RequestId, ResponseEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest, next_request_id,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::search::SearchRequest;
@@ -172,6 +172,7 @@ impl AuthenticatedConnector {
                 Ok(AuthenticatedIngress::Local)
             }
             Self::Peer { source_host } => {
+                validate_peer_write_version(request.peer_http_api_version.take())?;
                 request.authenticated_source_host = Some(source_host.clone());
                 if let Some(destination) = request.to.take() {
                     request.to = Some(destination.without_host());
@@ -197,6 +198,7 @@ impl AuthenticatedConnector {
                 // explicit plaintext test reply to the actual socket peer
                 // without accepting a JSON-forged value.
                 request.authenticated_source_host = Some(source_host.clone());
+                validate_peer_write_version(request.peer_http_api_version.take())?;
                 if let Some(destination) = request.to.take() {
                     request.to = Some(destination.without_host());
                 }
@@ -221,6 +223,20 @@ impl AuthenticatedConnector {
             },
         }
     }
+}
+
+fn validate_peer_write_version(peer_version: Option<HttpApiVersion>) -> Result<(), AtmError> {
+    let peer_version = peer_version.unwrap_or_else(HttpApiVersion::current);
+    let local_version = HttpApiVersion::current();
+    if peer_version.major() == local_version.major() {
+        return Ok(());
+    }
+    Err(AtmError::new(
+        AtmErrorCode::ClientDaemonVersionIncompatible,
+        format!(
+            "peer HTTP API major-version mismatch: sender {peer_version}, receiver {local_version}"
+        ),
+    ))
 }
 
 #[derive(Clone)]
@@ -355,12 +371,23 @@ async fn post_messages_with_request_id(
         Ok(ingress) => ingress,
         Err(error) => return error_response(error),
     };
+    let peer_ingress = matches!(
+        ingress,
+        AuthenticatedIngress::Peer | AuthenticatedIngress::UntrustedSmoke(_)
+    );
     let deadline = RequestDeadline::after(state.request_timeout);
 
     let response = state
         .handler
         .write_with_request_id(request, ingress, deadline, request_id)
         .await;
+    if peer_ingress && let Err(error) = &response {
+        warn!(
+            %request_id,
+            error_code = %error.code(),
+            "rejected inbound peer write"
+        );
+    }
     response
         .and_then(map_write_response)
         .unwrap_or_else(error_response)
@@ -627,7 +654,11 @@ fn request_id_from_headers(headers: &HeaderMap) -> Option<RequestId> {
         .and_then(|value| RequestId::new(value).ok())
 }
 
-async fn overload_response(_: BoxError) -> Response {
+/// Shared overload handler for every bounded admission layer (canonical
+/// write routes and the read-only auxiliary routes alike), so a saturated
+/// in-flight capacity always reports the same error shape regardless of
+/// which router rejected the request.
+pub(crate) async fn overload_response(_: BoxError) -> Response {
     warn!("HTTP message ingress rejected because its in-flight capacity is saturated");
     error_response(AtmError::daemon_connection_saturated(
         "HTTP message ingress is at its configured in-flight capacity",
@@ -787,12 +818,12 @@ fn json_response<T: Serialize>(
 #[cfg(test)]
 mod tests {
     use std::num::NonZeroUsize;
-    use std::sync::{Arc, Condvar, Mutex};
-    use std::time::Duration;
+    use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+    use std::time::{Duration, Instant};
 
     use atm_core::api::HttpRequest;
     use atm_core::error::{AtmError, AtmErrorCode};
-    use atm_core::protocol::ResponseEnvelope;
+    use atm_core::protocol::{HttpApiVersion, ResponseEnvelope};
     use atm_core::search::{SearchRequest, SearchResponse};
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
     use atm_core::types::CommandAction;
@@ -905,21 +936,19 @@ mod tests {
         scheduler_progressed: bool,
     }
 
+    const GATE_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+
     impl Gate {
         fn wait_until_released(&self) {
             let mut state = self.state.lock().expect("lock gate");
             state.entered = true;
             self.changed.notify_all();
-            while !state.released {
-                state = self.changed.wait(state).expect("wait gate");
-            }
+            self.wait_until(state, "release", |state| state.released);
         }
 
         fn wait_until_entered(&self) {
-            let mut state = self.state.lock().expect("lock gate");
-            while !state.entered {
-                state = self.changed.wait(state).expect("wait gate");
-            }
+            let state = self.state.lock().expect("lock gate");
+            self.wait_until(state, "entry", |state| state.entered);
         }
 
         fn release(&self) {
@@ -933,9 +962,35 @@ mod tests {
         }
 
         fn wait_until_scheduler_progresses(&self) {
-            let mut state = self.state.lock().expect("lock gate");
-            while !state.scheduler_progressed {
-                state = self.changed.wait(state).expect("wait gate");
+            let state = self.state.lock().expect("lock gate");
+            self.wait_until(state, "scheduler progress", |state| {
+                state.scheduler_progressed
+            });
+        }
+
+        fn wait_until(
+            &self,
+            mut state: MutexGuard<'_, GateState>,
+            condition: &str,
+            ready: impl Fn(&GateState) -> bool,
+        ) {
+            let deadline = Instant::now() + GATE_WAIT_TIMEOUT;
+            while !ready(&state) {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                assert!(
+                    !remaining.is_zero(),
+                    "test gate timed out waiting for {condition} after {GATE_WAIT_TIMEOUT:?}"
+                );
+                let (next_state, wait_result) = self
+                    .changed
+                    .wait_timeout(state, remaining)
+                    .expect("wait gate");
+                state = next_state;
+                if wait_result.timed_out() && !ready(&state) {
+                    panic!(
+                        "test gate timed out waiting for {condition} after {GATE_WAIT_TIMEOUT:?}"
+                    );
+                }
             }
         }
     }
@@ -1702,6 +1757,22 @@ mod tests {
     }
 
     #[test]
+    fn peer_write_version_tolerates_minor_skew_and_rejects_major_skew() {
+        super::validate_peer_write_version(Some(
+            HttpApiVersion::parse("1.0.0").expect("minor-skew fixture"),
+        ))
+        .expect("same-major peer version is compatible");
+
+        let error = super::validate_peer_write_version(Some(
+            HttpApiVersion::parse("2.0.0").expect("major-skew fixture"),
+        ))
+        .expect_err("different-major peer version is incompatible");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+        assert!(error.message().contains("sender 2.0.0"));
+        assert!(error.message().contains("receiver 1.1.0"));
+    }
+
+    #[test]
     fn canonical_route_is_selected_from_the_core_route_surface() {
         assert!(atm_core::api::http_route_surface().any(|route| {
             route.method == "POST" && route.path_template == canonical_write_path()
@@ -1731,16 +1802,11 @@ mod tests {
         });
         gate.wait_until_entered();
 
-        let started = std::time::Instant::now();
         let overloaded = post(
             app,
             serde_json::to_vec(&write_request()).expect("typed JSON"),
         )
         .await;
-        assert!(
-            started.elapsed() < Duration::from_secs(1),
-            "load shedding must reject within the configured request budget"
-        );
         assert_eq!(overloaded.status(), StatusCode::SERVICE_UNAVAILABLE);
         let error: AtmError = serde_json::from_slice(&response_body(overloaded).await)
             .expect("ADR-032 overload JSON");

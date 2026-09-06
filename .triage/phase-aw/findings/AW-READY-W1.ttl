@@ -1,0 +1,91 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-W1>
+  a triage:Finding ;
+  triage:findingId "AW-READY-W1" ;
+  triage:title "Windows Herdr nudge parity, the stated purpose of the Herdr integration and of the 1.5.0 release, shipped without a live Windows backend, and the scope narrowing was never surfaced to Rand as a decision" ;
+  triage:description "fenix, relaying a direct requirements-gap finding from Rand (routed via 01M1S8QK5V67Y2YTRR1E9XA0T2): Windows nudge parity via Herdr was the stated purpose of the Herdr integration and the 1.5.0 release, but 1.5.0 shipped without a live Windows Herdr backend; the tmux/WSL path is still what Windows actually uses today. Root cause traced to docs/adr/ADR-058-herdr-local-steer-backend-contract.md:576, committed 3228036bb (2026-08-26, 'docs(aq): ADR-058 Herdr local steer backend contract + CLI fixture (lane A)'), which states as a bare one-line footnote: 'Herdr on Windows (named-pipe transport exists but is out of AQ scope).' docs/atm-herdr/requirements.md:368 independently restates the same deferral ('atm-herdr does not support Herdr on Windows in Phase AQ (ADR-058 ...)') without additional justification or cross-reference to a plan/AC change. Neither the Phase AQ plan nor any later phase plan (including phase-ax, see occurrence 2) records a corresponding scope change, acceptance-criteria edit, or explicit sign-off from Rand narrowing 1.5.0's Windows-parity goal down to backend-selection/command-construction verification only; only Windows CI coverage for backend selection and command construction exists today, with no named-pipe transport code anywhere in crates/atm-herdr. The narrowing was introduced unilaterally inside an ADR footnote and then quietly load-bearing across two phases. Category is process/scope-integrity, not a code defect: the code matches its (undisclosed) footnoted scope; the defect is that the scope was narrowed without the plan-level visibility a stated release-purpose deserves. Treated as a phase-ending blocker alongside Families M/N/O/P per fenix's explicit direction, pending Rand's decision on whether to (a) accept the current tmux/WSL-only Windows behavior as the real 1.5.0 scope going forward and update the release notes/requirements accordingly, or (b) schedule the named-pipe Windows Herdr backend as tracked follow-up work. See .triage/phase-aw/post-mortem.md 'planning_process_improvement' entry for the systemic recommendation (ADRs must not silently narrow a plan's stated release purpose without a corresponding plan/AC edit and explicit user sign-off)." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "cross_phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T17:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWReadinessReview ;
+  triage:foundAt "2026-09-05T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-W1/ADR058> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-W1/AX-INHERIT> ;
+  triage:triageRecordVersion "1" .
+
+# RULING (Rand, relayed via fenix, 2026-09-05T21:05Z), msg-id
+# 01M1SNZVNRXQGW4NYBMJV3ECM5:
+# DEFER to phase-ay. Rand chose option 1 verbatim: "deferred to phase-ay by
+# Rand, 2026-09-05." Cross-reference: the phase-ay plan PR is #1214.
+# Effect: AW-READY-W1 no longer blocks integrate/phase-aw -> develop (#1199)
+# once the other 13 AW-READY records close. This ruling does NOT change
+# triage:severity/triage:status/triage:dispatchReady above (append-only, no
+# renumbering) -- it is recorded here as the authoritative disposition for
+# the phase-aw readiness gate; phase-ay owns follow-through on the
+# underlying Windows Herdr named-pipe backend work.
+# CLARIFICATION (same ruling): Windows Herdr nudge parity REMAINS a 1.5.x
+# release blocker via the release-readiness checklist -- Rand's earlier
+# rejection of the ADR-058 feature deferral stands. This ruling only says
+# phase-aw is not the phase that delivers it; it does not relax the
+# release-readiness requirement.
+#
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: per the
+# branch-scoped open-findings query's own documented semantics
+# (open-findings-for-sprint.sparql header), only occurrence-level
+# closed/status fields are authoritative per-branch -- a comment-only ruling
+# (however authoritative) is invisible to the live merge gate. This is the
+# same class of gap already corrected this round for AW-READY-M4/M6/M8/N5/O6.
+# Per Rand's explicit instruction above, the header's
+# triage:severity/triage:status/triage:dispatchReady are NOT touched. Instead
+# both occurrences below get their triage:status set to "waived" (on the
+# SPARQL query's own terminal-status list), which excludes this finding from
+# the integrate/phase-aw branch-scoped live gate while leaving triage:closed
+# false (this was never fixed, only deferred) and the underlying code/doc
+# citations unchanged. Tracking ownership moves to phase-ay per the ruling
+# above; the release-readiness checklist obligation is unaffected.
+<urn:atm:triage:occurrence/AW-READY-W1/ADR058>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-058-herdr-local-steer-backend-contract.md" ;
+  triage:line 576 ;
+  triage:snippet "- Herdr on Windows (named-pipe transport exists but is out of AQ scope)." ;
+  triage:status "waived" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "062cb44dd" ;
+  triage:occursIn <urn:atm:triage:worktree/AWW1/062cb44dd> .
+
+<urn:atm:triage:occurrence/AW-READY-W1/AX-INHERIT>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md" ;
+  triage:line 1 ;
+  triage:snippet "## Out of scope\n\nWindows or Linux Herdr runs; hermes graft members; tmux members." ;
+  triage:status "waived" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "062cb44dd" ;
+  triage:occursIn <urn:atm:triage:worktree/AWW1/062cb44dd> .
+
+<urn:atm:triage:worktree/AWW1/062cb44dd>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "062cb44dd" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AWW1/db9b5666a>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "db9b5666a" ;
+  triage:orderIndex 1 .

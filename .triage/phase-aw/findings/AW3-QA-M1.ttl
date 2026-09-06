@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW3-QA-M1>
+  a triage:Finding ;
+  triage:findingId "AW3-QA-M1" ;
+  triage:title "lint-config atm-http-runtime allowlist entry has no boundary_record_path, so boundaries/atm-http-runtime/http-runtime.toml allowed_dependencies drift is unchecked" ;
+  triage:description "qa-pr1182-r1 (msg 01M1QSQWFKBENPSW4ZP83SKMYS) at 199a3bfeb: RBQA-F003 (minor, pre-existing, not attributable to AW.3): .just/lint-config.toml's atm-http-runtime allowlist entry has no boundary_record_path, so drift in boundaries/atm-http-runtime/http-runtime.toml allowed_dependencies (missing atm-runtime etc.) goes mechanically unchecked. Fix: add the boundary_record_path and reconcile the allowed_dependencies list with the actual Cargo edges. CLOSURE (qa-pr1182-r2, quality-mgr): b41b1fcdb's .just/lint-config.toml atm-http-runtime entry now has boundary_record_path pointing at boundaries/atm-http-runtime/http-runtime.toml, and the two allowed_dependencies lists are reconciled. Independently confirmed by req-qa and arch-qa. Finding closed." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint-boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T03:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T03:25:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-QA-M1/AW3-1> ;
+  triage:closedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AW3-QA-M1/AW3-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint-config.toml" ;
+  triage:line 86 ;
+  triage:snippet "path = crates/atm-http-runtime/src/runtime_health.rs (no boundary_record_path)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "199a3bfeb" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/199a3bfeb> .
+
+<urn:atm:triage:worktree/AW3/199a3bfeb>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "199a3bfeb" ;
+  triage:orderIndex 4 .

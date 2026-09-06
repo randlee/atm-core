@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-POOL-V9-FIX-6>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9-FIX-6" ;
+  triage:title "retire_and_replace() can silently ratchet reader pool_size toward zero on respawn failure" ;
+  triage:description "reader_pool.rs:838 retire_and_replace(): if spawn_worker() fails while replacing a quarantined/retired worker, pool_size is left permanently decremented with no retry and no unconditional (non-test-only) observability event -- repeated transient respawn failures under the same sustained load that caused the original quarantine can silently ratchet the pool toward zero live workers." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "reliability" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T02:11:57Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-06T02:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-6/AW1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-6/AW1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 858 ;
+  triage:snippet "if self.spawn_worker(replacement_id).is_err() { return; }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "27c87de22ce5fe5515888200d5cbdc56e7de6598" ;
+  triage:occursIn <urn:atm:triage:worktree/A1/27c87de22ce5fe5515888200d5cbdc56e7de6598> .
+
+<urn:atm:triage:worktree/A1/27c87de22ce5fe5515888200d5cbdc56e7de6598>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/aw-pool-consolidate" ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "27c87de22ce5fe5515888200d5cbdc56e7de6598" ;
+  triage:orderIndex 2 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-6/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-6" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. reader_pool.rs's retire_and_replace() now restores pool_size (fetch_add) and emits an unconditional tracing::warn! observability event when spawn_worker() fails during replacement, rather than leaving pool_size permanently decremented -- confirmed by direct read of the function body on the merged head." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .

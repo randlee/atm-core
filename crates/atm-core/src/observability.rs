@@ -1,7 +1,7 @@
 //! ATM-owned observability boundary and projected log/health types.
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use sc_lint_attributes::sc_lint;
 use serde::de::Error as DeError;
@@ -11,9 +11,46 @@ use serde_json::{Map, Value};
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
+use crate::observability_counters::{JsonlDiagnosticCounters, TimelineDiagnosticCounters};
 use crate::protocol::RequestId;
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+
+/// Canonical retained event file shared by daemon and CLI projections.
+pub const CANONICAL_LOG_FILE_NAME: &str = "atm.log.jsonl";
+/// AW.4's dedicated graft fallback satellite file.
+pub const GRAFT_FALLBACK_LOG_FILE_NAME: &str = "atm-graft-fallback.jsonl";
+
+/// The redaction boundary shared by retained-log producers.
+pub const RETAINED_FIELD_ALLOWLIST: &[&str] = &[
+    "ts",
+    "level",
+    "component",
+    "code",
+    "command",
+    "action",
+    "correlation_id",
+    "outcome",
+    "elapsed_ms",
+    "attempt",
+    "strategy",
+    "endpoint_kind",
+    "failure_class",
+    "refresh_error_code",
+    "error_layer",
+    "origin",
+];
+
+/// Removes fields that are not permitted to reach retained diagnostics.
+pub fn sanitize_retained_fields(mut fields: Map<String, Value>) -> Map<String, Value> {
+    fields.retain(|key, _| RETAINED_FIELD_ALLOWLIST.contains(&key.as_str()));
+    fields
+}
+
+/// Returns the dedicated graft fallback satellite path.
+pub fn graft_fallback_log_path(log_dir: &Path) -> PathBuf {
+    log_dir.join(GRAFT_FALLBACK_LOG_FILE_NAME)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
@@ -562,6 +599,25 @@ pub struct AtmObservabilityDiagnostic {
     pub message: String,
 }
 
+/// Backward-compatible name for the shared JSONL counter projection.
+pub type AtmJsonlObservabilityCounters = JsonlDiagnosticCounters;
+
+/// Backward-compatible name for the shared timeline counter projection.
+pub type AtmTimelineObservabilityCounters = TimelineDiagnosticCounters;
+
+impl AtmObservabilityHealth {
+    /// Projects the shared retained-diagnostics health contract onto the
+    /// doctor report without duplicating its degradation classifier.
+    pub fn apply_retained_diagnostics(
+        &mut self,
+        retained: crate::observability_counters::RetainedObservabilityHealth,
+    ) {
+        self.jsonl = retained.jsonl;
+        self.timeline = retained.timeline;
+        self.degraded = retained.degraded;
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AtmMaintenanceWorkerState {
@@ -591,6 +647,12 @@ pub struct AtmObservabilityHealth {
     pub query_state: Option<AtmObservabilityHealthState>,
     pub maintenance: Option<AtmMaintenanceHealthReport>,
     pub diagnostic: Option<AtmObservabilityDiagnostic>,
+    #[serde(default)]
+    pub jsonl: AtmJsonlObservabilityCounters,
+    #[serde(default)]
+    pub timeline: AtmTimelineObservabilityCounters,
+    #[serde(default)]
+    pub degraded: Vec<String>,
     pub detail: Option<String>,
 }
 
@@ -707,6 +769,9 @@ impl ObservabilityPort for NullObservability {
             query_state: Some(AtmObservabilityHealthState::Unavailable),
             maintenance: None,
             diagnostic: None,
+            jsonl: Default::default(),
+            timeline: Default::default(),
+            degraded: Vec::new(),
             detail: Some("observability adapter is not configured".to_string()),
         })
     }

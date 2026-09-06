@@ -1,0 +1,75 @@
+boundary_id = "BOUNDARY-RosterStore-Sqlite-WriteThrough"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "RosterRuntimeMirror"
+
+[public]
+trait = "RosterStore"
+notes = "write-through RAM roster mirror decorator relocated here from atm-core (FTQ-AW finding 1 on PR #1240); wraps any atm-storage RosterStore (SqliteRosterStore in production) and keeps the paired atm_storage::contract::RosterRuntimeMirror synchronized with every durable roster write in the same operation"
+
+[implementation]
+type = "WriteThroughRosterView"
+module = "atm_storage_rusqlite::roster_runtime"
+visibility = "private"
+constructor = "private"
+
+[composition]
+roots = ["atm_storage_rusqlite::roster_runtime::build_write_through_roster"]
+
+[ownership]
+io_owns = ["roster_runtime_ram_mirror"]
+io_forbidden = ["socket_io", "process_spawn"]
+
+[dependencies]
+# Same authorized dependents as the sibling SqliteRosterStore boundary: only
+# the composition roots that assemble a durable SQLite backend for
+# production or for test-support fixtures may reach this module directly.
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage"]
+forbidden_edges = [
+  "atm -> atm-storage-rusqlite",
+  "atm-daemon -> atm-storage-rusqlite",
+  "atm-graft -> atm-storage-rusqlite",
+  "atm-runtime -> atm-storage-rusqlite",
+  "atm-core -> atm-storage-rusqlite",
+  "atm-storage-rusqlite -> atm-runtime",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = [
+  "WriteThroughRosterView",
+  "RosterRuntimeState",
+  "TeamRosterRecord",
+]
+
+[contracts]
+request_types = ["RosterStore method inputs", "RosterRuntimeMirror method inputs"]
+response_types = ["atm-storage roster DTOs"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = [
+  "LINT-BOUNDARY-ROSTERRUNTIMEMIRROR-EDGES",
+  "LINT-BOUNDARY-ROSTERRUNTIMEMIRROR-REFERENCES",
+]
+review_gates = [
+  "no_public_impl",
+  "no_public_constructor",
+  "single_write_through_impl_site",
+]
+
+[status]
+state = "active"
+notes = [
+  "relocated from crates/atm-core/src/service_runtime.rs (RosterRuntimeView/RosterRuntimeState/TeamRosterRecord) per team-lead boundary ruling on PR #1240 finding 1",
+  "backend-agnostic: the decorator wraps any RosterStore, not only SqliteRosterStore, but is authorized to live only in this crate per this boundary",
+  "build_write_through_roster is the sole composition entrypoint; every caller (production SqliteStorageFactory::open or a test-support fixture) must go through it instead of hand-rolling an equivalent write-through wrapper",
+  "hydration is fail-closed: build_write_through_roster propagates a durable read failure instead of returning a partially-populated mirror",
+  "AW-RAM-I4: the intra-crate bypass is now closed by type, not only by review. StorageHandleParts carries one atm_storage::WriteThroughRosterStore instead of separate roster_store/roster_runtime_mirror fields; its sole constructor (WriteThroughRosterStore::from_write_through_view) requires a value implementing both RosterStore and RosterRuntimeMirror, which only WriteThroughRosterView does, so passing backend.roster_store() at a composition site is a compile error",
+  "crates/atm-storage-rusqlite/tests/roster_write_through_production_path.rs proves the property on the real production path: SqliteStorageFactory::open() on a temp database, then an out-of-band durable write through a second backend that the production roster read must not observe until an explicit reload_from_durable",
+]

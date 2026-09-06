@@ -93,7 +93,7 @@ pub enum ResponseEnvelope {
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.0.0";
+pub const HTTP_API_VERSION: &str = "1.1.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]

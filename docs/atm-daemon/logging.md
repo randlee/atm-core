@@ -1,7 +1,36 @@
-# ATM Daemon Logging Contract
+# ATM Daemon Retained-Log Contract
 
-This document is the Phase S.9 logging contract for ATM-owned retained logs.
-It is a planning/specification document until the S.9 implementation lands.
+This is the active retained-log contract for the Tokio/Axum daemon and its
+CLI and graft consumers.
+
+## Guarantees
+
+Every ATM `warn!` and `error!` event is eligible for retention. INFO is
+additionally retained only for `atm_daemon_bootstrap::lifecycle`,
+`atm_http_runtime::listener`, and `atm_storage_rusqlite::maintenance`. The
+bridge permits only `RETAINED_FIELD_ALLOWLIST`, so retained records never
+contain message bodies, recipients, tokens, raw environment/configuration, or
+absolute user paths.
+
+## Exceptions and origin rules
+
+`PRE_BOOTSTRAP_STDERR_ALLOWLIST` is empty. A future pre-bootstrap stderr
+exception must be named in that allowlist; after bootstrap, runtime code uses
+the tracing bridge. `origin` records diagnostic provenance (`tracing`,
+`sqlite`, `timeline`, or a documented adapter value), not user input.
+
+## Loss and degradation
+
+The JSONL logger and SQLite timeline are independently bounded, non-blocking
+sinks. `dropped_queue_full_total`, `dropped_reentrant_total`, and
+`dropped_persist_error_total` are durable degradation evidence. Timeline
+transitions use `ATM_LOG_SINK_DEGRADED` and `ATM_LOG_SINK_RECOVERED`; its
+batch maximum is `DIAGNOSTIC_BATCH_MAX = 128`, its flush interval is
+`DIAGNOSTIC_FLUSH_INTERVAL_MS = 250`, and the degradation recovery and
+transition rate-limit windows are `DEGRADATION_RECOVERY_WINDOW_SECS = 60` and
+`DEGRADATION_RATE_LIMIT_SECS = 60`. A merged view is therefore not lossless
+under overload. See [graft observability](../graft-observability.md) for the
+fallback satellite contract.
 
 ## Default Retained Log Path
 
@@ -36,15 +65,31 @@ Examples:
 
 ## Default Retained Event Set
 
-Without extra operator tuning, retained logging must include at least:
+Without extra operator tuning, the replacement Tokio/Axum daemon retains:
 
 - daemon start requested
 - daemon startup completed / ready
 - daemon shutdown requested
 - daemon shutdown completed
 - daemon degraded / abnormal-exit signals
-- every `warn!` event emitted by ATM subsystems
-- every `error!` event emitted by ATM subsystems
+- every `warn!` and `error!` event emitted by ATM subsystems
+- `info!` from `atm_daemon_bootstrap::lifecycle`,
+  `atm_http_runtime::listener`, and `atm_storage_rusqlite::maintenance`
+
+The tracing bridge retains only the allowlisted structured fields: `ts`,
+`level`, `component`, `code`, `action`, `correlation_id`, `outcome`,
+`elapsed_ms`, `attempt`, `strategy`, `endpoint_kind`, `failure_class`,
+`error_layer`, and `origin`. Free-form `message` and `detail` text is never
+retained; it remains only on the live tracing/stderr path. Every other field is
+dropped, including message bodies, recipients, tokens, raw
+environment/configuration, and absolute user paths. Admission is non-blocking:
+a full logger queue drops the record and increments the retained diagnostic drop
+counter. Events emitted
+while the bridge is writing are dropped to prevent recursion.
+
+No post-bootstrap runtime path writes directly to stderr. The documented
+`PRE_BOOTSTRAP_STDERR_ALLOWLIST` is currently empty; a future exception must
+be a named pre-logger `file:function` entry here and in the lint gate.
 
 Degraded-state and abnormal-exit signals live in the default `warn!` /
 `error!` baseline rather than in a second info-only lifecycle family.
@@ -115,7 +160,7 @@ ADR-011 forbids retained-log writes from blocking async executor threads.
 internal sink worker thread:
 
 - the daemon does not route retained-log writes through an async executor
-- `sc-observability 1.0.0` `JsonlFileSink` performs synchronous local-file
+- `sc-observability =1.2.0` `JsonlFileSink` performs synchronous local-file
   writes on the daemon's ordinary OS threads
 - shutdown flush runs on a dedicated bounded finalizer thread
 

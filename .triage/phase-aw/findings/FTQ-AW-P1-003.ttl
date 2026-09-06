@@ -1,0 +1,98 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-AW-P1-003>
+  a triage:Finding ;
+  triage:findingId "FTQ-AW-P1-003" ;
+  triage:title "Gate::wait_until_entered/wait_until_released use an untimed Condvar::wait; an assertion failure before gate.release() leaks a permanently-blocked thread" ;
+  triage:description "flaky-test-qa (qa-pr1215-r4). crates/atm-http-runtime/src/message_handler.rs:912-927 (test-only Gate helper, #[cfg(test)] at line 791) uses a bare `while !state.entered { state = self.changed.wait(state)... }` with no timeout. In load_shed_rejects_without_an_application_queue (and any other test sharing this Gate), if the status/error-code assertion at line 1743-1746 ever fails -- e.g. a genuine overload-detection regression -- the test panics before gate.release() runs, leaving the spawned first-request thread permanently blocked in wait_until_released with no deadline and never joined. Does not affect the passing-path determinism verified in qa-pr1215-r4 (FTQ-AW-P1-001/FTQ-002 both PASS); this is pre-existing shared test infrastructure, not part of that round's diff. Fix: bounded wait_timeout_while-based variant, or a scope-guard that calls gate.release() on any panic path before the panic propagates." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-hygiene" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T18:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWReadinessReview ;
+  triage:foundAt "2026-09-05T18:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-AW-P1-003/AW-P1-003-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-AW-P1-003/AW-P1-003-2> ;
+  triage:triageRecordVersion "1" ;
+  triage:closedAt "2026-09-06T01:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
+
+<urn:atm:triage:occurrence/FTQ-AW-P1-003/AW-P1-003-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 913 ;
+  triage:snippet "while !state.entered { state = self.changed.wait(state).expect(\"wait gate\"); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "450f36b91" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/450f36b91> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/450f36b91>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "450f36b91" ;
+  triage:orderIndex 1 .
+
+# quality-mgr, 2026-09-06: closed via PR #1239 (fix/aw-gate-deadline, cipher),
+# merge commit ec098ae59 on integrate/phase-aw. PASS verdict on record
+# (message 01M1T5FNH8TYEF5RH5QHH6MZMT): all three Gate wait methods now
+# route through one wait_until() helper with a fixed 5s deadline via
+# changed.wait_timeout and an actionable timeout panic; test-only, no
+# production/legacy-daemon code touched. fenix disclosed the merge landed
+# with 15/19 checks green and the OS test matrix (4 checks) still pending at
+# merge time; she is watching the remaining run and post-merge integrate CI
+# and will fix-forward with a new PR if anything fails. Recorded here as
+# fixed on the strength of the code review and merge; if the pending OS
+# matrix surfaces a regression, that reopens as a new occurrence, not an
+# edit to this one (append-only).
+<urn:atm:triage:occurrence/FTQ-AW-P1-003/AW-P1-003-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 913 ;
+  triage:snippet "self.wait_until(state, \"entry\", |state| state.entered);" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ec098ae59" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-ftq003/ec098ae59> .
+
+<urn:atm:triage:worktree/integrate-phase-aw-ftq003/ec098ae59>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ec098ae59" ;
+  triage:orderIndex 2 .
+
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: reconfirmed
+# still open, unchanged, at integrate/phase-aw@062cb44dd by two independent
+# reviewers this round (req-qa, flaky-test-qa) and by fenix's own separate
+# production-readiness lanes A and B. No fix has landed and no deferral is
+# recorded. This is test-only infrastructure (#[cfg(test)] Gate helper), not
+# a production-path defect, and the fix is small and well-scoped (bounded
+# wait_timeout_while + assert !timed_out, or a Drop-based release-on-panic
+# guard). quality-mgr verdict: carry-forward as an open minor finding on
+# integrate/phase-aw with a scoped fix recommended in the next fix round
+# (not a phase-ay deferral candidate -- unlike W1, this has no cross-phase
+# ownership complication). Not blocking #1199 -> develop merge or the 1.5.x
+# dogfood build. Disposition communicated to fenix/team-lead for fix-dispatch
+# decision; quality-mgr does not implement fixes directly.
+
+<urn:atm:triage:resolution/FTQ-AW-P1-003/r1>
+  a triage:Resolution ;
+  triage:findingId "FTQ-AW-P1-003" ;
+  triage:resolutionNote "quality-mgr phase-end gate @94e29a586, fenix ledger hygiene: Gate::wait_until in message_handler.rs backs wait_until_entered/wait_until_released/wait_until_scheduler_progresses with a hard 5s deadline (GATE_WAIT_TIMEOUT) -- a real redesign, not a widened retry; the .ttl's \"reopened\" note is a stale intermediate snapshot superseded by this commit." ;
+  triage:resolvedAt "2026-09-06T06:46:36Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e53e585ba2c5" ;
+  triage:resolvedBranch "integrate/phase-aw" .

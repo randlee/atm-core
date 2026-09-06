@@ -409,6 +409,7 @@ pub(crate) fn canonical_ack_write_request(
         caller_team: team.clone(),
         activity_observation: request.activity_observation.clone(),
         authenticated_source_host: None,
+        peer_http_api_version: None,
         origin_message_id: None,
         origin_timestamp: None,
         to: Some(crate::address::AgentAddress::new(
@@ -438,7 +439,7 @@ fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
     agent: &AgentName,
     recovery: &str,
 ) -> Result<(), AtmError> {
-    if runtime.load_roster_member(team, agent)?.is_none() {
+    if runtime.load_roster_member(team, agent).is_none() {
         return Err(AtmError::new(
             crate::error_codes::AtmErrorCode::AgentNotFound,
             format!("agent '{agent}' was not found in team '{team}'\n  Recovery: {recovery}"),

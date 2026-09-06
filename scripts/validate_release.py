@@ -24,8 +24,11 @@ REQUIRED_RELEASE_FILES = (
 )
 REQUIRED_RELEASE_BINARIES = ("atm", "atm-daemon")
 # RBQA-F103: test-only override seams from scripts/send-to/atm-send-to.sh /
-# .ps1 that must never be set in a real release environment.
-SEND_TO_TEST_ONLY_ENV_VARS = ("ATM_SEND_TO_PICKER", "ATM_SEND_TO_NATIVE_PICKER")
+# .ps1 (picker overrides) and atm-send-to.command / nautilus-atm-send-to.sh
+# (desktop-notification override) that must never be set in a real release
+# environment. Keep in sync with SEND_TO_TEST_ONLY_ENV_VARS in
+# .just/tests/test_send_to_surface.py (a test there asserts the two agree).
+SEND_TO_TEST_ONLY_ENV_VARS = ("ATM_SEND_TO_PICKER", "ATM_SEND_TO_NATIVE_PICKER", "ATM_SEND_TO_NOTIFIER")
 KIT_RELEASE_ARTIFACTS = ".github/scripts/release_artifacts.py"
 CHECK_DEP_CURRENCY_ENV = "ATMD_CHECK_DEP_CURRENCY"
 GITHUB_ISSUE_ENV = "ATMD_GH_AUTOFIX_ISSUES"
@@ -277,13 +280,16 @@ def validate_support_files(root: Path, findings: list[Finding]) -> None:
 
 
 def validate_send_to_test_seams(root: Path, findings: list[Finding]) -> None:
-    """Fail release validation if a Send-To test-only picker override leaked
-    into the release environment.
+    """Fail release validation if a Send-To test-only override leaked into
+    the release environment.
 
     ATM_SEND_TO_PICKER / ATM_SEND_TO_NATIVE_PICKER exist only so the
     degradation harness can exercise scripts/send-to/atm-send-to.sh / .ps1
-    without a real UI (see .just/tests/test_send_to_surface.py). Neither
-    variable has a legitimate reason to be set while validating a release.
+    without a real UI, and ATM_SEND_TO_NOTIFIER only so the same harness can
+    exercise atm-send-to.command / nautilus-atm-send-to.sh's failure path
+    without raising a real desktop notification (see
+    .just/tests/test_send_to_surface.py). None of them has a legitimate
+    reason to be set while validating a release.
     """
     _ = root  # signature kept uniform with the other validate_* targets
     leaked = sorted(name for name in SEND_TO_TEST_ONLY_ENV_VARS if os.environ.get(name))
@@ -292,7 +298,7 @@ def validate_send_to_test_seams(root: Path, findings: list[Finding]) -> None:
             Finding(
                 check="send-to-test-seams",
                 severity="error",
-                summary="Send-To test-only picker override is set in the release environment",
+                summary="Send-To test-only override is set in the release environment",
                 detail=", ".join(leaked),
             )
         )

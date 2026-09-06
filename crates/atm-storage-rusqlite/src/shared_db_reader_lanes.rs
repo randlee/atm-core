@@ -3,17 +3,16 @@
 //! This is deliberately separate from `shared_db`: the durable writer surface
 //! must not grow with reader-lane composition details.
 
-use crate::control_path_pool::ControlPathConnections;
-use crate::mailbox_reader::{MailboxReaderMetrics, start_mailbox_reader};
+use crate::mailbox_reader::start_mailbox_reader;
 #[cfg(test)]
 use crate::observability::NullSqliteObservability;
 use crate::observability::SqliteObservability;
-use crate::reader_pool::ReaderLanesConfig;
+use crate::reader_pool::{ReaderPool, SharedReadPoolConfig};
 use crate::search_reader::SearchReader;
 #[cfg(test)]
 use crate::shared_db::record_opened_connection;
 use crate::shared_db::{SharedDbTarget, configure_connection, sqlite_error, sqlite_open_error};
-use crate::writer::SqliteWriter;
+use crate::writer::{SerialWriterQueue, SqliteWriter};
 use atm_storage::{AsyncMailboxReader, AtmError};
 use rusqlite::{Connection, OpenFlags};
 use std::path::Path;
@@ -28,10 +27,10 @@ static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
 pub(crate) struct SharedDb {
     pub(crate) target: Arc<SharedDbTarget>,
     pub(crate) writer: Arc<SqliteWriter>,
-    pub(crate) control_path: Arc<ControlPathConnections>,
+    pub(crate) writer_queue: Arc<SerialWriterQueue>,
+    pub(crate) read_pool: ReaderPool,
     pub(crate) search_reader: Arc<SearchReader>,
     pub(crate) mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
-    pub(crate) mailbox_reader_metrics: MailboxReaderMetrics,
     pub(crate) observability: Arc<dyn SqliteObservability>,
 }
 
@@ -49,13 +48,13 @@ impl SharedDb {
     pub(crate) fn open_in_memory_with_observability(
         observability: Arc<dyn SqliteObservability>,
     ) -> Result<Self, AtmError> {
-        Self::open_in_memory_with_reader_lanes(observability, ReaderLanesConfig::default())
+        Self::open_in_memory_with_reader_lanes(observability, SharedReadPoolConfig::default())
     }
 
     #[cfg(test)]
     pub(crate) fn open_in_memory_with_reader_lanes(
         observability: Arc<dyn SqliteObservability>,
-        reader_lanes: ReaderLanesConfig,
+        reader_lanes: SharedReadPoolConfig,
     ) -> Result<Self, AtmError> {
         reader_lanes.validate()?;
         let target = Arc::new(SharedDbTarget::InMemory {
@@ -69,19 +68,19 @@ impl SharedDb {
 
     #[allow(
         dead_code,
-        reason = "Production construction delegates through ReaderLanesConfig; this direct observability constructor remains a backend test seam."
+        reason = "Production construction delegates through SharedReadPoolConfig; this direct observability constructor remains a backend test seam."
     )]
     pub(crate) fn open_with_observability(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
     ) -> Result<Self, AtmError> {
-        Self::open_with_reader_lanes(path, observability, ReaderLanesConfig::default())
+        Self::open_with_reader_lanes(path, observability, SharedReadPoolConfig::default())
     }
 
     pub(crate) fn open_with_reader_lanes(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
-        reader_lanes: ReaderLanesConfig,
+        reader_lanes: SharedReadPoolConfig,
     ) -> Result<Self, AtmError> {
         reader_lanes.validate()?;
         let path = path.as_ref().to_path_buf();
@@ -103,30 +102,29 @@ impl SharedDb {
     fn assemble(
         target: Arc<SharedDbTarget>,
         observability: Arc<dyn SqliteObservability>,
-        reader_lanes: ReaderLanesConfig,
+        reader_lanes: SharedReadPoolConfig,
     ) -> Result<Self, AtmError> {
-        let writer = Arc::new(SqliteWriter::start(
+        let writer_queue = Arc::new(SerialWriterQueue::open(target.as_ref())?);
+        let writer = Arc::new(SqliteWriter::start_with_queue(
             Arc::clone(&target),
             Arc::clone(&observability),
+            Arc::clone(&writer_queue),
         )?);
-        let search_reader = Arc::new(SearchReader::start(
-            Arc::clone(&target),
-            reader_lanes.search,
-        )?);
-        let (mailbox_reader, mailbox_reader_metrics) =
-            start_mailbox_reader(Arc::clone(&target), reader_lanes.mailbox)?;
+        let read_pool = ReaderPool::start("shared", Arc::clone(&target), reader_lanes.pool)?;
+        let search_reader = Arc::new(SearchReader::new(read_pool.clone(), reader_lanes.pool));
+        let mailbox_reader = start_mailbox_reader(read_pool.clone());
         tracing::debug!(
             writer_handles = 1,
             path = %target.display(),
             "sqlite boundary assembly opened"
         );
         Ok(Self {
-            control_path: Arc::new(ControlPathConnections::new(Arc::clone(&target))),
             target,
             writer,
+            writer_queue,
+            read_pool,
             search_reader,
             mailbox_reader,
-            mailbox_reader_metrics,
             observability,
         })
     }

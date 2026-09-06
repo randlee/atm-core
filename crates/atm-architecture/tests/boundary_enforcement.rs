@@ -18,25 +18,58 @@ use syn::visit::Visit;
 
 const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "atm-daemon"),
+    ("atm", "atm-peer-tls-interop"),
     ("atm", "atm-storage-rusqlite"),
+    ("atm", "peer-tls"),
+    ("atm", "telemetry-implementation"),
+    ("atm-core", "atm-daemon"),
+    ("atm-core", "atm-storage-rusqlite"),
+    ("atm-core", "sc-observability"),
     ("atm-daemon", "atm-runtime"),
+    ("atm-daemon", "atm-peer-tls-interop"),
     ("atm-daemon", "atm-storage-rusqlite"),
+    ("atm-daemon", "atm-observability"),
+    ("atm-daemon", "peer-tls"),
+    ("atm-daemon-bootstrap", "atm-peer-tls-interop"),
+    ("atm-daemon-client", "atm-daemon"),
+    ("atm-daemon-client", "atm-storage-rusqlite"),
+    ("atm-error", "atm-core"),
+    ("atm-error", "atm-storage-rusqlite"),
+    ("atm-observability", "atm-daemon-bootstrap"),
+    ("atm-observability", "atm-http-runtime"),
+    ("atm-observability", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-storage-rusqlite"),
     ("atm-storage", "atm-core"),
     ("atm-storage", "atm-daemon"),
     ("atm-storage", "atm-storage-rusqlite"),
+    ("atm-storage", "telemetry-implementation"),
     ("atm-storage-rusqlite", "atm-core"),
     ("atm-storage-rusqlite", "atm-runtime"),
+    ("atm-storage-rusqlite", "telemetry-implementation"),
     ("atm-graft", "atm-daemon"),
     ("atm-graft", "atm-daemon-bootstrap"),
+    ("atm-graft", "atm-peer-tls-interop"),
     ("atm-graft", "atm-storage-rusqlite"),
     ("atm-graft", "interprocess"),
+    ("atm-graft", "peer-tls"),
+    ("atm-graft-python", "atm-daemon"),
+    ("atm-graft-python", "atm-storage-rusqlite"),
+    ("atm-graft-python", "axum"),
+    ("atm-graft-python", "hyper"),
+    ("atm-graft-python", "reqwest"),
     ("atm-daemon-bootstrap", "atm-graft"),
     ("atm-http-runtime", "atm"),
     ("atm-http-runtime", "atm-daemon-bootstrap"),
     ("atm-http-runtime", "atm-graft"),
     ("atm-http-runtime", "atm-storage-rusqlite"),
+    ("atm-http-runtime", "peer-tls"),
+    ("atm-http-runtime", "telemetry-implementation"),
+    ("atm-query-python", "atm-core"),
+    ("atm-query-python", "atm-graft"),
+    ("atm-query-python", "atm-http-runtime"),
+    ("atm-query-python", "rusqlite"),
     ("atm-runtime", "atm-daemon"),
+    ("atm-runtime", "atm-peer-tls-interop"),
     ("atm-core", "atm-template-sc-compose"),
     ("atm-storage", "atm-template-sc-compose"),
     ("atm-storage-rusqlite", "atm-template-sc-compose"),
@@ -51,6 +84,8 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-herdr", "atm-daemon-bootstrap"),
     ("atm-herdr", "atm-http-runtime"),
     ("atm-herdr", "atm-storage-rusqlite"),
+    ("hermes-atm", "atm-daemon"),
+    ("hermes-atm", "atm-storage-rusqlite"),
 ];
 
 const RETIRED_DAEMON_CONSTRUCT_FRAGMENTS: &[(&str, &str)] = &[
@@ -195,12 +230,14 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
     let root = workspace_root();
     let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let runtime_listener =
+        read_source(&root.join("crates/atm-http-runtime/src/runtime_listener.rs"));
     let runtime_setup = read_source(&root.join("crates/atm-http-runtime/src/runtime_setup.rs"));
-    let runtime_sources = format!("{runtime}\n{runtime_setup}");
+    let runtime_sources = format!("{runtime}\n{runtime_listener}\n{runtime_setup}");
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
     let policy = read_source(&root.join("crates/atm-core/src/peer_wire.rs"));
 
-    let direct_listener = runtime
+    let direct_listener = runtime_listener
         .split("async fn bind_configured_direct_peer_listener")
         .nth(1)
         .and_then(|source| source.split("async fn bind_loopback_listener").next())
@@ -2760,11 +2797,14 @@ fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
 fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
     let root = workspace_root();
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let runtime_listener =
+        read_source(&root.join("crates/atm-http-runtime/src/runtime_listener.rs"));
     let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
     let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
     let unix_socket = read_source(&root.join("crates/atm-http-runtime/src/unix_socket.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
-    let combined = format!("{runtime}\n{unix_socket}\n{http1_server}\n{client}");
+    let combined =
+        format!("{runtime}\n{runtime_listener}\n{unix_socket}\n{http1_server}\n{client}");
 
     assert!(
         combined.contains("UnixListener")
@@ -3311,7 +3351,7 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     );
     assert!(
         router.contains("let newly_persisted = prepared.is_newly_persisted();")
-            && router.contains("if committed.newly_persisted {"),
+            && router.contains("if committed.newly_persisted"),
         "the one hook-routing decision must state the new-versus-idempotent persistence disposition explicitly"
     );
     assert_eq!(
@@ -3842,42 +3882,40 @@ fn missing_forbidden_edges(
 }
 
 fn guarded_boundary_files() -> Vec<PathBuf> {
-    let root = workspace_root();
-    let mut files = vec![
-        root.join("boundaries/atm/local-socket-client-transport.toml"),
-        root.join("boundaries/atm-graft/shared-client-consumer.toml"),
-        root.join("boundaries/atm-http-runtime/http-runtime.toml"),
-        root.join("boundaries/atm-http-runtime/member-state-transition-sink.toml"),
-        root.join("boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"),
-        root.join("boundaries/atm-runtime/runtime-composition.toml"),
-        root.join("boundaries/atm-template-sc-compose/sc-composer.toml"),
-        root.join("boundaries/atm-herdr/herdr-process-adapter.toml"),
-    ];
-    files.extend(boundary_files_in("atm-storage"));
-    let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))
-        .expect("boundaries/atm-storage-rusqlite directory must be readable")
+    all_boundary_files()
+}
+
+fn all_boundary_files() -> Vec<PathBuf> {
+    let root = workspace_root().join("boundaries");
+    let mut files = fs::read_dir(&root)
+        .unwrap_or_else(|error| panic!("boundaries directory must be readable: {error}"))
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("toml"))
+        .filter(|path| path.is_dir())
+        .flat_map(|directory| {
+            fs::read_dir(&directory)
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "boundary directory {} must be readable: {error}",
+                        directory.display()
+                    )
+                })
+                .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+                .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("toml"))
+                .collect::<Vec<_>>()
+        })
         .collect::<Vec<_>>();
-    sqlite_files.sort();
-    files.extend(sqlite_files);
+    files.sort();
     files
 }
 
 #[test]
-fn guarded_boundaries_include_every_atm_storage_record() {
-    let root = workspace_root();
-    let guarded_storage_files = guarded_boundary_files()
-        .into_iter()
-        .filter(|path| path.parent() == Some(root.join("boundaries/atm-storage").as_path()))
-        .collect::<BTreeSet<_>>();
-    let storage_boundary_files = boundary_files_in("atm-storage")
-        .into_iter()
-        .collect::<BTreeSet<_>>();
-
+fn guarded_boundaries_include_every_boundary_record() {
     assert_eq!(
-        guarded_storage_files, storage_boundary_files,
-        "the architecture guard must sweep every boundaries/atm-storage TOML record"
+        guarded_boundary_files()
+            .into_iter()
+            .collect::<BTreeSet<_>>(),
+        all_boundary_files().into_iter().collect::<BTreeSet<_>>(),
+        "the architecture guard must sweep every boundaries/*/*.toml record"
     );
 }
 
@@ -3926,6 +3964,61 @@ fn documented_boundary_section<'a>(docs: &'a str, name: &str) -> Option<&'a str>
 fn read_source(path: &Path) -> String {
     fs::read_to_string(path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+}
+
+#[test]
+fn tracing_bridge_is_installed_only_by_daemon_bootstrap() {
+    let root = workspace_root();
+    let mut offenders = Vec::new();
+    for entry in fs::read_dir(root.join("crates")).expect("crates directory") {
+        let crate_root = entry.expect("crate entry").path();
+        let source_root = crate_root.join("src");
+        if !source_root.is_dir() {
+            continue;
+        }
+        let mut files = Vec::new();
+        collect_rust_files(&source_root, &mut files);
+        for file in files {
+            if read_source(&file).contains("TracingBridgeLayer::install")
+                && !file.starts_with(root.join("crates/atm-daemon-bootstrap/src"))
+            {
+                offenders.push(file.display().to_string());
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "only daemon bootstrap may install tracing bridge: {offenders:?}"
+    );
+    assert!(
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/daemon_observability.rs"))
+            .contains("TracingBridgeLayer::install"),
+        "daemon bootstrap must own tracing bridge installation"
+    );
+}
+
+#[test]
+fn retained_info_targets_each_have_a_real_runtime_emitter() {
+    let root = workspace_root();
+    for (target, path) in [
+        (
+            "atm_daemon_bootstrap::lifecycle",
+            "crates/atm-daemon-bootstrap/src/lib.rs",
+        ),
+        (
+            "atm_http_runtime::listener",
+            "crates/atm-http-runtime/src/runtime_setup.rs",
+        ),
+        (
+            "atm_storage_rusqlite::maintenance",
+            "crates/atm-storage-rusqlite/src/mail_messages_schema.rs",
+        ),
+    ] {
+        assert!(
+            read_source(&root.join(path)).contains(&format!("tracing::info!(target: \"{target}\"")),
+            "{target} must have a real INFO emitter in {path}"
+        );
+    }
 }
 
 /// AV.3 source-scanner primitives deliberately operate on function bodies,
@@ -4081,6 +4174,8 @@ fn av3_read_handler_allowed_types() -> BTreeSet<String> {
     const D1_NAMED_TYPES: &[&str] = &[
         "ApiResponse",
         "AsyncMailboxRuntime",
+        "DiagnosticCounters",
+        "DiagnosticCountersSource",
         "DoctorProjection",
         "ResponseEnvelope",
     ];
@@ -4102,6 +4197,124 @@ fn av3_read_handler_allowed_types() -> BTreeSet<String> {
             &doctor_projection,
             "DoctorProjection",
         ))
+        .collect()
+}
+
+#[test]
+fn aw_diagnostics_composition_stays_behind_the_timeline_store_contract() {
+    let root = workspace_root();
+    let bootstrap =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs"));
+    let diagnostics_route =
+        read_source(&root.join("crates/atm-http-runtime/src/diagnostics_route.rs"));
+    let doctor_observability =
+        read_source(&root.join("crates/atm-http-runtime/src/doctor_observability.rs"));
+    let sqlite_backend = read_source(&root.join("crates/atm-storage-rusqlite/src/lib.rs"));
+    let sqlite_production =
+        production_impl_function_source(&sqlite_backend, "SqliteStorageBackend");
+    let sqlite_production_compact = sqlite_production
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
+
+    assert!(
+        bootstrap.contains("let store: Arc<dyn DiagnosticTimelineStore> = store;")
+            && bootstrap.contains("DiagnosticTimelineWriter::new_with_persistence("),
+        "bootstrap must erase the SQLite implementation at the diagnostic timeline composition seam"
+    );
+    assert!(
+        diagnostics_route.contains("Option<Arc<dyn DiagnosticTimelineStore>>"),
+        "the diagnostics HTTP route must accept only the timeline-store capability"
+    );
+    for forbidden in [
+        "SqliteDiagnosticTimeline",
+        "atm_storage_rusqlite",
+        "SharedDb",
+    ] {
+        assert!(
+            !diagnostics_route.contains(forbidden),
+            "the diagnostics HTTP route must not name the SQLite implementation `{forbidden}`"
+        );
+        assert!(
+            !doctor_observability.contains(forbidden),
+            "the doctor diagnostics projection must not name the SQLite implementation `{forbidden}`"
+        );
+    }
+    assert_eq!(
+        sqlite_production_compact
+            .matches("SqliteDiagnosticTimeline::from_shared_db")
+            .count(),
+        1,
+        "the storage backend must retain exactly one production construction path for its shared diagnostic timeline"
+    );
+    assert!(
+        !sqlite_production_compact.contains("SqliteDiagnosticTimeline{"),
+        "the storage backend must construct the diagnostic timeline only through from_shared_db"
+    );
+}
+
+#[test]
+fn aw_diagnostics_gate_scans_production_functions_after_test_helpers() {
+    let source = r#"
+        impl SqliteStorageBackend {
+            fn production_constructor() {
+                SqliteDiagnosticTimeline::from_shared_db(db);
+            }
+
+            #[cfg(test)]
+            fn fixture_constructor() {
+                SqliteDiagnosticTimeline::from_shared_db(test_db);
+            }
+
+            fn later_production_constructor() {
+                SqliteDiagnosticTimeline::from_shared_db(later_db);
+            }
+        }
+    "#;
+    let production = production_impl_function_source(source, "SqliteStorageBackend");
+    let compact_production = production
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
+
+    assert!(production.contains("production_constructor"));
+    assert!(production.contains("later_production_constructor"));
+    assert!(!production.contains("fixture_constructor"));
+    assert_eq!(
+        compact_production
+            .matches("SqliteDiagnosticTimeline::from_shared_db")
+            .count(),
+        2,
+        "the diagnostics gate must retain production functions appearing after cfg(test) helpers"
+    );
+}
+
+fn production_impl_function_source(source: &str, self_type: &str) -> String {
+    let syntax = syn::parse_file(source).expect("production implementation source must parse");
+    syntax
+        .items
+        .into_iter()
+        .filter_map(|item| match item {
+            syn::Item::Impl(implementation)
+                if !implementation
+                    .attrs
+                    .iter()
+                    .any(is_test_configuration_attribute)
+                    && implementation.self_ty.to_token_stream().to_string() == self_type =>
+            {
+                Some(implementation)
+            }
+            _ => None,
+        })
+        .flat_map(|implementation| implementation.items)
+        .filter_map(|item| match item {
+            syn::ImplItem::Fn(function)
+                if !function.attrs.iter().any(is_test_configuration_attribute) =>
+            {
+                Some(function.to_token_stream().to_string())
+            }
+            _ => None,
+        })
         .collect()
 }
 

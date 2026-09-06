@@ -1560,6 +1560,22 @@ The authoritative plan is
 critical review round 1 folded in); phase-au sprint docs are being cut from
 it under `docs/plans/phase-au/` on branch `plan/boundary-regression`.
 
+## 55. Phase AW — Unified Retained Runtime Logging [COMPLETE — INTEGRATION PR #1199]
+
+Phase AW makes replacement-runtime tracing retained and safely observable:
+AW.1 installs the allowlisted non-blocking tracing bridge, AW.2 persists the
+SQLite diagnostic timeline, AW.3 exposes health and log queries, AW.4 adds
+graft fallback observability, and AW.5 aligns native tool projections.
+The authoritative plan is [phase-aw-plan](./plans/phase-aw/phase-aw-plan.md).
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AW.1` | `complete` | `feature/aw1-tracing-bridge` | `docs/plans/phase-aw/sprint-AW.1-tracing-bridge.md` |
+| `AW.2` | `complete` | `feature/aw2-sqlite-diagnostic-timeline` | `docs/plans/phase-aw/sprint-AW.2-sqlite-diagnostic-timeline.md` |
+| `AW.3` | `complete` | `feature/aw3-health-and-log-query` | `docs/plans/phase-aw/sprint-AW.3-health-and-log-query.md` |
+| `AW.4` | `complete` | `feature/aw4-graft-fallback-observability` | `docs/plans/phase-aw/sprint-AW.4-graft-fallback-observability.md` |
+| `AW.5` | `complete` | `feature/aw5-native-tool-parity` | `docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md` |
+
 ## 54. Phase AV — Async Mailbox-Read Cutover Completion [COMPLETE — INTEGRATION PR #1120]
 
 Phase AV fixes the mailbox-read serialization regression: every core job —
@@ -1590,6 +1606,96 @@ Phase AV sprint status:
 | `AV.2` | `complete` | `feature/av2-read-concurrency-requirements` | `docs/requirements.md`, `docs/adr/ADR-059-async-mailbox-read-concurrency.md`, `docs/plans/phase-av/av-closeout-record.md` |
 | `AV.3` | `complete` (PR #1113 merged) | `feature/av3-read-concurrency-gates` | `docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md` |
 | `AV.4` | `complete` (PR #1114 merged) | `feature/av4-read-query-benchmarks` | `docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md` |
+
+## 55. Phase AX — Nudge Templates On Every Backend And Task-State Tracking [PLANNING — PLAN HARDENING]
+
+Phase AX closes three delivery defects found in the 2026-09-04 Herdr
+dogfood run (issue #1173): the Herdr sink bypasses the built-in nudge
+templates and injects fixed wake text; `atm queue` has no template class
+of its own; and task-tagged mail has no state, so a second task can be
+acked while the first is in progress and an idle assignee is never
+reminded. Seven sprints in four tracks: A = `AX.1` queue template class
+→ `AX.2` Herdr template rendering; B = `AX.3` task state machine and
+storage → `AX.4` task CLI and docs, **running in parallel with A**
+(`parallel_safe`: AX.1∥AX.3, AX.2∥AX.3); C = `AX.5` reminder cycle →
+`AX.6` lead notification and doctor, after A and B merge; D = `AX.7`
+live Herdr evidence. `must_follow` edges: AX.1→AX.2, AX.3→AX.4,
+AX.2→AX.5, AX.4→AX.5, AX.5→AX.6, AX.6→AX.7. Branches are worktrees via
+`sc-git-worktree`; PR bases and merges via `gh stack` (sequence in the
+phase plan §6).
+
+The authoritative plan is
+[phase-ax-plan](./plans/phase-ax/phase-ax-plan.md) with per-sprint docs
+under `docs/plans/phase-ax/`, authored on branch `integrate/phase-ax`.
+
+Phase AX sprint status:
+
+| Sprint | Track | Execute | Status | Branch | Artifacts |
+| --- | --- | --- | --- | --- | --- |
+| `AX.1` | A | parallel with AX.3/AX.4 | `planned` | `feature/ax1-queue-template-class` | `docs/plans/phase-ax/sprint-AX.1-queue-template-class.md`, ADR-019 amendment |
+| `AX.2` | A | after AX.1; parallel with AX.3/AX.4 | `planned` | `feature/ax2-herdr-template-rendering` | `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md`, ADR-058 amendment, `boundaries/atm-herdr/herdr-process-adapter.toml`, `docs/atm-herdr/requirements.md` |
+| `AX.3` | B | parallel with AX.1/AX.2 | `planned` | `feature/ax3-task-state-machine` | `docs/plans/phase-ax/sprint-AX.3-task-state-machine.md`, `docs/adr/ADR-061-task-state-machine.md`, ADR-054 amendment, `boundaries/atm-storage/task-store.toml`, `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` |
+| `AX.4` | B | after AX.3; parallel with AX.1/AX.2 | `planned` | `feature/ax4-task-cli-and-docs` | `docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md`, `docs/user-documents/tasks.md` |
+| `AX.5` | C | after A and B merge | `planned` | `feature/ax5-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md`, ADR-061 reminder-cycle section |
+| `AX.6` | C | after AX.5 | `planned` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
+| `AX.7` | D | superseded 2026-09-05 (live proof moved to release readiness) | `superseded` | none | `docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md` |
+
+## 56. Phase AY — Native-IPC Transport Cutover For Herdr [PLANNING — DRAFT, NOT APPROVED]
+
+Herdr already runs on Windows: Rand manually verified an atm 1.5.0 self-send,
+and nothing in the current client code blocks it. Phase AY instead moves the
+six-operation client from a per-nudge CLI process to Herdr's native IPC—a
+Unix-domain socket on macOS/Linux and named pipe on Windows—because Phase AX's
+queue templates, built-in nudge rendering, task state/CLI, reminder cycle,
+lead notification, and doctor all depend on that delivery path. It also
+defines the daemon's optional-dependency behavior when Herdr is absent, late,
+or crashed. The CLI remains a bounded fallback. Windows work includes real
+production correctness code—`CREATE_NO_WINDOW`, a bounded kill-then-reap grace
+period, per-call binary re-resolution, and CRLF-tolerant decoding—plus removal
+of three stale scope-outs and closure of the `cfg(unix)` process-test gap. Windows CI
+proves that behavior without live hardware. Live macOS/Windows proof stays in
+release readiness (no sprint carries live evidence, Rand 2026-09-05). No work
+remodels the legacy synchronous daemon; all composition targets the Tokio/Axum
+`atm-http-runtime` cutover architecture.
+
+Nine sprints execute in a documentation lane, a linear implementation
+stack, an independent socket lane, and a code join. AY.1
+runs in parallel with AY.2. The only stacked-PR chain is
+AY.2→AY.3→AY.4→AY.5→AY.6→AY.7, managed noninteractively with the
+`/gh-stack` skill. AY.8 starts independently only after AY.1, AY.2, and
+AY.3 merge; it is parallel-safe with AY.4–AY.7. AY.9 is the standalone
+AY.7+AY.8 code join and the phase's last sprint; the live macOS/Windows
+matrix runs under release readiness once the phase is on develop.
+
+The authoritative umbrella is
+[Phase AY plan](./plans/phase-ay/phase-ay-plan.md), with one
+authoritative sprint file per sprint under `docs/plans/phase-ay/`.
+
+Phase AY sprint status:
+
+| Sprint | Track | Execute | Status | Branch | Authoritative sprint doc |
+| --- | --- | --- | --- | --- | --- |
+| `AY.1` | Docs | parallel with AY.2 | `draft` | `feature/ay1-herdr-audit-docs` | `docs/plans/phase-ay/sprint-AY.1-herdr-audit-docs.md` |
+| `AY.2` | Core stack | parallel with AY.1; stack bottom | `draft` | `feature/ay2-herdr-transport-seam` | `docs/plans/phase-ay/sprint-AY.2-herdr-transport-seam.md` |
+| `AY.3` | Core stack | after AY.2 development and P-E(a); AY.2 merges first | `draft` | `feature/ay3-herdr-endpoint-doctor-config` | `docs/plans/phase-ay/sprint-AY.3-herdr-endpoint-doctor-config.md` |
+| `AY.4` | Core stack | after AY.3 development; parallel with AY.8 once eligible | `draft` | `feature/ay4-herdr-breaker-lifecycle` | `docs/plans/phase-ay/sprint-AY.4-herdr-breaker-lifecycle.md` |
+| `AY.5` | Core stack | after AY.4 development; parallel with AY.8 | `draft` | `feature/ay5-herdr-entry-control-plane` | `docs/plans/phase-ay/sprint-AY.5-herdr-entry-control-plane.md` |
+| `AY.6` | Core stack | after AY.5 development; parallel with AY.8 | `draft` | `feature/ay6-herdr-restart-coordination` | `docs/plans/phase-ay/sprint-AY.6-herdr-restart-coordination.md` |
+| `AY.7` | Core/Windows stack | after AY.6 development; Windows CI lane is the gate; parallel with AY.8 | `draft` | `feature/ay7-windows-herdr-process-installer` | `docs/plans/phase-ay/sprint-AY.7-windows-herdr-process-installer.md` |
+| `AY.8` | Socket | after AY.1/AY.2/AY.3 merge and P-E(b); parallel with AY.4–AY.7; standalone | `draft` | `feature/ay8-herdr-socket-transport` | `docs/plans/phase-ay/sprint-AY.8-herdr-socket-transport.md` |
+| `AY.9` | Join | after AY.7/AY.8 merge; standalone code cutover | `draft` | `feature/ay9-herdr-socket-cutover` | `docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md` |
+
+## Daemon-Switch Scope Reduction
+
+Rand's 2026-09-05 scope ruling keeps `daemon-switch` to two operator modes:
+selecting a published release, or selecting a release build from an exactly
+prerelease-tagged worktree for dogfooding. Temporary-launch, quiesce, and
+signing behavior remain independently scoped; no daemon runtime work belongs
+to this line.
+
+| Sprint | Status | Branch | Worktree | Artifacts |
+| --- | --- | --- | --- | --- |
+| `DAEMON-SWITCH-MODES-1` | `in progress` | `fix/daemon-switch-release-and-tagged-modes` | `../atm-core-worktrees/fix/daemon-switch-release-and-tagged-modes` | `REQ-P-DAEMON-SWITCH-002`, ADR-053 amendment, daemon-switch skill/tests |
 
 ## Publishing Improvements
 

@@ -473,7 +473,7 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
     ) -> Result<ListOutcome, AtmError> {
         let command = self.authorize_list(command, deadline).await?;
         let selection = self
-            .select_all(
+            .select_all_for_tool(
                 command.scope().clone(),
                 command.selection().clone(),
                 deadline,
@@ -633,6 +633,26 @@ impl StorageAsyncMailboxRuntime {
         let messages = self
             .reader
             .list_messages(scope.clone(), query(&scope), read_deadline(deadline)?)
+            .await
+            .map_err(AtmError::from)?;
+        Ok(select_mailbox_candidates(
+            messages.into_iter().map(selection_candidate).collect(),
+            &request,
+        ))
+    }
+
+    /// An explicit `atm list` is exploratory/operator traffic. Keep its
+    /// ordinary mailbox policy but reserve the agent-class reader capacity for
+    /// ack/send/read work under saturation.
+    async fn select_all_for_tool(
+        &self,
+        scope: MailboxScope,
+        request: MailboxSelectionRequest,
+        deadline: RequestDeadline,
+    ) -> Result<MailboxSelectionResult, AtmError> {
+        let messages = self
+            .reader
+            .list_messages_for_tool(scope.clone(), query(&scope), read_deadline(deadline)?)
             .await
             .map_err(AtmError::from)?;
         Ok(select_mailbox_candidates(

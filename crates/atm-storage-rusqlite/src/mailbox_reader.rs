@@ -3,43 +3,22 @@
 //! The Tokio runtime awaits this lane; it never borrows the SQLite writer or
 //! schedules `spawn_blocking` work for ordinary mailbox reads.
 
-use std::sync::Arc;
-
 use atm_storage::{
     AsyncMailboxReader, AtmError, IsoTimestamp, MailboxScope, Message, MessageKey, MessageQuery,
     ReadDeadline, ReadLaneError,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 
-use crate::reader_pool::{ReaderPool, ReaderPoolConfig};
+use crate::reader_pool::ReaderPool;
 use crate::shared_db::{SharedDbTarget, deserialize_json, sqlite_error};
 
 struct MailboxReader {
     pool: ReaderPool,
 }
 
-/// Backend-private diagnostics handle kept separate from the sealed reader
-/// adapter so observability does not widen the adapter's construction surface.
-#[derive(Clone)]
-pub(crate) struct MailboxReaderMetrics {
-    pool: ReaderPool,
-}
-
-impl MailboxReaderMetrics {
-    pub(crate) fn snapshot(&self) -> crate::reader_pool::ReaderLaneMetricsSnapshot {
-        self.pool.metrics()
-    }
-
-    pub(crate) fn record_wal_health(&self, checkpoint_succeeded: bool, frames: u64) {
-        self.pool.record_wal_health(checkpoint_succeeded, frames);
-    }
-}
-
 impl MailboxReader {
-    fn start(target: Arc<SharedDbTarget>, config: ReaderPoolConfig) -> Result<Self, AtmError> {
-        Ok(Self {
-            pool: ReaderPool::start("mailbox", target, config)?,
-        })
+    fn new(pool: ReaderPool) -> Self {
+        Self { pool }
     }
 
     async fn submit_list(
@@ -48,14 +27,45 @@ impl MailboxReader {
         query: MessageQuery,
         deadline: ReadDeadline,
     ) -> Result<Vec<Message>, ReadLaneError> {
+        self.submit_list_with_class(scope, query, deadline, false)
+            .await
+    }
+
+    async fn submit_tool_list(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        self.submit_list_with_class(scope, query, deadline, true)
+            .await
+    }
+
+    async fn submit_list_with_class(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        deadline: ReadDeadline,
+        tool_class: bool,
+    ) -> Result<Vec<Message>, ReadLaneError> {
         if !scope.permits(&query) {
             return Err(ReadLaneError::UnauthorizedScope);
         }
-        self.pool
-            .submit(deadline.remaining(), move |connection, target| {
-                list_messages(connection, target, &scope, &query).map_err(storage_error)
-            })
-            .await
+        if tool_class {
+            self.pool
+                .submit_tool(deadline.remaining(), move |connection, target| {
+                    list_messages(connection, target, &scope, &query)
+                        .map_err(read_lane_storage_error)
+                })
+                .await
+        } else {
+            self.pool
+                .submit(deadline.remaining(), move |connection, target| {
+                    list_messages(connection, target, &scope, &query)
+                        .map_err(read_lane_storage_error)
+                })
+                .await
+        }
     }
 
     async fn submit_load(
@@ -78,7 +88,7 @@ impl MailboxReader {
     ) -> Result<bool, ReadLaneError> {
         self.pool
             .submit(deadline.remaining(), move |connection, target| {
-                mailbox_member_exists(connection, target, &scope).map_err(storage_error)
+                mailbox_member_exists(connection, target, &scope).map_err(read_lane_storage_error)
             })
             .await
     }
@@ -90,27 +100,17 @@ impl MailboxReader {
     ) -> Result<Option<IsoTimestamp>, ReadLaneError> {
         self.pool
             .submit(deadline.remaining(), move |connection, target| {
-                load_seen_watermark(connection, target, &scope).map_err(storage_error)
+                load_seen_watermark(connection, target, &scope).map_err(read_lane_storage_error)
             })
             .await
     }
 }
 
 pub(crate) fn start_mailbox_reader(
-    target: Arc<SharedDbTarget>,
-    config: ReaderPoolConfig,
-) -> Result<
-    (
-        Arc<dyn AsyncMailboxReader + Send + Sync>,
-        MailboxReaderMetrics,
-    ),
-    AtmError,
-> {
-    let reader = MailboxReader::start(target, config)?;
-    let metrics = MailboxReaderMetrics {
-        pool: reader.pool.clone(),
-    };
-    Ok((Arc::new(reader), metrics))
+    pool: ReaderPool,
+) -> std::sync::Arc<dyn AsyncMailboxReader + Send + Sync> {
+    let reader = MailboxReader::new(pool);
+    std::sync::Arc::new(reader)
 }
 
 #[async_trait::async_trait]
@@ -122,6 +122,15 @@ impl AsyncMailboxReader for MailboxReader {
         deadline: ReadDeadline,
     ) -> Result<Vec<Message>, ReadLaneError> {
         self.submit_list(scope, query, deadline).await
+    }
+
+    async fn list_messages_for_tool(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        self.submit_tool_list(scope, query, deadline).await
     }
 
     async fn load_message(
@@ -152,10 +161,16 @@ impl AsyncMailboxReader for MailboxReader {
 
 impl atm_storage::contract::sealed::Sealed for MailboxReader {}
 
-fn storage_error(error: AtmError) -> ReadLaneError {
-    ReadLaneError::Unavailable {
+pub(crate) fn read_lane_storage_error(error: AtmError) -> ReadLaneError {
+    ReadLaneError::Storage {
+        code: error.code(),
         message: error.message().to_owned(),
+        cause: error.cause().map(str::to_owned),
     }
+}
+
+fn storage_error(error: AtmError) -> ReadLaneError {
+    read_lane_storage_error(error)
 }
 
 fn list_messages(

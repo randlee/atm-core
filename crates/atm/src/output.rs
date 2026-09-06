@@ -18,10 +18,23 @@ use atm_core::team_admin::{
     DisableNudgeTemplateOverrideOutcome, RemoveMemberOutcome, RestoreOutcome, RestorePlan,
     SetNudgeTemplateOverrideOutcome, TeamsList, UpdateMemberOutcome,
 };
+use atm_core::types::HostName;
 
 /// Print one send result in human-readable or JSON form.
 pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
-    print!("{}", render_send_stdout(outcome, json)?);
+    print!("{}", render_send_stdout(outcome, json, None)?);
+    print_warnings_to_stderr(&outcome.warnings);
+
+    Ok(())
+}
+
+/// Print a send result with the peer host confirmed by the transport.
+pub fn print_send_result_to_peer(
+    outcome: &SendOutcome,
+    json: bool,
+    peer_host: &HostName,
+) -> Result<()> {
+    print!("{}", render_send_stdout(outcome, json, Some(peer_host))?);
     print_warnings_to_stderr(&outcome.warnings);
 
     Ok(())
@@ -162,15 +175,27 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn render_send_stdout(outcome: &SendOutcome, json: bool) -> Result<String> {
+fn render_send_stdout(
+    outcome: &SendOutcome,
+    json: bool,
+    peer_host: Option<&HostName>,
+) -> Result<String> {
     if json {
-        return Ok(format!("{}\n", serde_json::to_string_pretty(outcome)?));
+        let mut value = serde_json::to_value(outcome)?;
+        if let Some(peer_host) = peer_host {
+            value["delivered_to_peer_host"] = serde_json::Value::String(peer_host.to_string());
+        }
+        return Ok(format!("{}\n", serde_json::to_string_pretty(&value)?));
     }
 
-    Ok(format!(
+    let mut rendered = format!(
         "Sent to {}@{} [message_id: {}]\n",
         outcome.agent, outcome.team, outcome.message_id
-    ))
+    );
+    if let Some(peer_host) = peer_host {
+        rendered.push_str(&format!("Delivered to peer host: {peer_host}\n"));
+    }
+    Ok(rendered)
 }
 
 fn print_warnings_to_stderr(warnings: &[WarningEntry]) {
@@ -383,8 +408,12 @@ fn print_doctor_summary(report: &DoctorReport) {
 }
 
 fn print_doctor_observability(report: &DoctorReport) {
-    println!(
-        "Active log path: {}",
+    print!("{}", render_doctor_observability(report));
+}
+
+fn render_doctor_observability(report: &DoctorReport) -> String {
+    let mut output = format!(
+        "Active log path: {}\n",
         report
             .observability
             .active_log_path
@@ -393,7 +422,7 @@ fn print_doctor_observability(report: &DoctorReport) {
             .unwrap_or_else(|| "<unavailable>".to_string())
     );
     if let Some(maintenance) = &report.observability.maintenance {
-        println!(
+        output.push_str(&format!(
             "Maintenance: {} | Rotated: {} | Pruned: {} | Last pass: {}",
             render_maintenance_state(maintenance.state),
             maintenance.rotated_files_total,
@@ -402,8 +431,25 @@ fn print_doctor_observability(report: &DoctorReport) {
                 .last_pass_at
                 .map(|timestamp| timestamp.into_inner().to_string())
                 .unwrap_or_else(|| "never".to_string())
-        );
+        ));
+        output.push('\n');
     }
+    output.push_str(&format!(
+        "Observability: jsonl forwarded={} queue_full_dropped={} reentrant_dropped={}; timeline written={} queue_full_dropped={} persist_error_dropped={}\n",
+        report.observability.jsonl.forwarded_total,
+        report.observability.jsonl.dropped_queue_full_total,
+        report.observability.jsonl.dropped_reentrant_total,
+        report.observability.timeline.written_total,
+        report.observability.timeline.dropped_queue_full_total,
+        report.observability.timeline.dropped_persist_error_total,
+    ));
+    if !report.observability.degraded.is_empty() {
+        output.push_str(&format!(
+            "WARN: Retained observability degraded: {}\n",
+            report.observability.degraded.join(", ")
+        ));
+    }
+    output
 }
 
 fn print_doctor_environment(report: &DoctorReport) {
@@ -909,6 +955,7 @@ mod tests {
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
         BootstrapTraceReport, PeerConfigDoctorReport,
     };
+    use atm_core::types::HostName;
     use serde_json::json;
 
     use super::{
@@ -963,7 +1010,7 @@ mod tests {
         }))
         .expect("send outcome");
 
-        let stdout = render_send_stdout(&outcome, true).expect("JSON stdout");
+        let stdout = render_send_stdout(&outcome, true, None).expect("JSON stdout");
         let stderr = render_warnings_to_stderr(&outcome.warnings);
 
         let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("valid JSON stdout");
@@ -974,6 +1021,29 @@ mod tests {
         assert!(!stdout.contains("Recovery:"));
         assert!(stderr.contains("Recovery:"));
         assert!(stderr.contains("unregistered-tool@test-team"));
+    }
+
+    #[test]
+    fn peer_send_output_names_confirmed_peer_host_in_both_formats() {
+        let outcome: atm_core::send::SendOutcome = serde_json::from_value(json!({
+            "action": "send",
+            "team": "test-team",
+            "agent": "recipient",
+            "sender": "sender",
+            "outcome": "sent",
+            "message_id": "01KX5TEST00000000000000001",
+            "requires_ack": false
+        }))
+        .expect("send outcome");
+        let peer_host: HostName = "peer.example.test".parse().expect("peer host");
+
+        let human = render_send_stdout(&outcome, false, Some(&peer_host)).expect("human output");
+        assert!(human.contains("Delivered to peer host: peer.example.test"));
+
+        let json_output =
+            render_send_stdout(&outcome, true, Some(&peer_host)).expect("JSON output");
+        let parsed: serde_json::Value = serde_json::from_str(&json_output).expect("JSON output");
+        assert_eq!(parsed["delivered_to_peer_host"], "peer.example.test");
     }
 
     #[test]

@@ -58,6 +58,8 @@ pub(crate) mod model_registry;
 pub mod nudge_dispatch;
 /// Observability adapter traits and event payload types.
 pub mod observability;
+/// Runtime diagnostic counter contract consumed by health projections.
+pub mod observability_counters;
 /// Transport-neutral peer-wire policy vocabulary selected at daemon launch.
 pub mod peer_wire;
 /// Internal atomic persistence helpers for shared mutable state files.
