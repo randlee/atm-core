@@ -1,5 +1,6 @@
 mod ax6;
 pub mod health;
+mod herdr_state;
 pub mod report;
 
 #[cfg(test)]
@@ -25,6 +26,12 @@ use crate::types::{AgentName, TeamName};
 use atm_storage::PeerConfigStore;
 use std::sync::Arc;
 
+pub use crate::boundary::HerdrEndpointDoctor;
+pub use herdr_state::{
+    HerdrBinaryProvenance, HerdrBinaryResolution, HerdrDoctorState, HerdrEndpointDisplay,
+    HerdrEndpointObservation, HerdrEndpointProvenance, HerdrMemberPresence, HerdrPresenceOutcome,
+    HerdrRosterMember, HerdrTransportKind, HerdrVersion,
+};
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
