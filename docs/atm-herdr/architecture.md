@@ -283,6 +283,7 @@ pub mod testing {
         Wait { agent: String, session: Option<atm_core::HerdrSession>, until: Vec<super::HerdrAgentStatus>, timeout: std::time::Duration },
         Get { agent: String, session: Option<atm_core::HerdrSession>, breaker_policy: super::BreakerPolicy },
         List { session: Option<atm_core::HerdrSession> },
+        Notify { title: String, body: String },
     }
 
     /// Records every call for assertion; configurable per-call outcome.
@@ -297,6 +298,7 @@ pub mod testing {
         pub fn queue_wait_result(&self, result: Result<super::HerdrWaitOutcome, super::HerdrError>) { /* .. */ }
         pub fn queue_get_result(&self, result: Result<super::HerdrGetOutcome, super::HerdrError>) { /* .. */ }
         pub fn queue_list_result(&self, result: Result<super::HerdrListOutcome, super::HerdrError>) { /* .. */ }
+        pub fn queue_notify_result(&self, result: Result<(), super::HerdrError>) { /* .. */ }
     }
 
     impl super::HerdrProcessAdapter for FakeHerdrProcessAdapter { /* .. */ }
