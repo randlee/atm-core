@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Phase-ending critical review of integrate/phase-ax at c9e8bf3af (2026-09-06; five reviewers, fenix-recorded).
+
+<urn:atm:triage:finding/AXPE-RBQ-002>
+  a triage:Finding ;
+  triage:findingId "AXPE-RBQ-002" ;
+  triage:title "Task-escalation event read goes through TaskStore+spawn_blocking, not the in-scope AsyncTaskLedgerReader" ;
+  triage:description "reminder_events() (:69-78) calls the synchronous TaskStore::list_task_events via run_blocking (herdr_queue_wake.rs:1019-1031) although an AsyncTaskLedgerReader with the identical list_task_events is live in the same pump tick (herdr_queue_wake.rs:435; used at read_due_task:503 and escalate_blocked:232) and is not threaded into record_task_outcome -> maybe_escalate_task (:597-659). Standing rule: task-ledger reads only via AsyncTaskLedgerReader; sprint-AX.6 documents the call as intentional but neither boundaries/atm-storage/task-store.toml nor async-task-ledger-reader.toml records a carve-out. Remediation (ruling, fenix 2026-09-06): option (a) — thread the existing AsyncTaskLedgerReader into maybe_escalate_task/reminder_events as escalate_blocked already does, and drop list_task_events from the TaskStore calls the AX.6 test enumerates. No boundary TOML change." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-RBQ-002/INTEGRATE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-RBQ-002/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 69 ;
+  triage:snippet "store.list_task_events(...) via run_blocking in reminder_events" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d> .
+
+<urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:orderIndex 8 .

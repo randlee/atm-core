@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Phase-ending critical review of integrate/phase-ax at c9e8bf3af (2026-09-06; five reviewers, fenix-recorded).
+
+<urn:atm:triage:finding/AXPE-CPR-001>
+  a triage:Finding ;
+  triage:findingId "AXPE-CPR-001" ;
+  triage:title "AC 8's literal RULE-003 gate command is broken for both files it names" ;
+  triage:description "AC 8's awk one-liner (match on the first line starting with a cfg(test) attribute, exit, count lines, fail above 1000) exits at the first #[cfg(test)] attribute: herdr_queue_wake.rs:26 (`#[cfg(test)] use tokio::sync::Notify;`) and herdr_escalation.rs:8, long before `mod tests`, so it counts ~25 and ~8 lines and always passes. The authoritative gate .just/check_line_counts.py is correct (herdr_queue_wake.rs 997/1000 at head c9e8bf3af) and unaffected. Remediation: replace the awk command in AC 8 with `python3 .just/check_line_counts.py` (the RULE-003 authority) and delete the hand-rolled one-liner anywhere else in docs/plans/phase-ax/." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "critical-plan-reviewer" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-CPR-001/INTEGRATE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-CPR-001/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md" ;
+  triage:line 359 ;
+  triage:snippet "AC 8 awk one-liner that exits at the first cfg(test) attribute (herdr_queue_wake.rs:26, herdr_escalation.rs:8) and always passes" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d> .
+
+<urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:orderIndex 8 .
