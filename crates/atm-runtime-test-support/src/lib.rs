@@ -282,10 +282,21 @@ pub fn open_isolated_sqlite_boundary(root: impl AsRef<Path>) -> Result<RuntimeAs
 /// # Errors
 /// Fails closed: propagates a durable roster read failure encountered while
 /// hydrating the RAM mirror from `durable`.
+#[allow(
+    clippy::type_complexity,
+    reason = "test fixtures destructure the paired handles directly; the production seam uses the WriteThroughRosterStore newtype"
+)]
 pub fn build_write_through_roster_for_test(
     durable: Arc<dyn RosterStore + Send + Sync>,
-) -> Result<atm_storage_rusqlite::roster_runtime::WriteThroughRosterHandles, AtmError> {
-    atm_storage_rusqlite::roster_runtime::build_write_through_roster(durable)
+) -> Result<
+    (
+        Arc<dyn RosterStore + Send + Sync>,
+        Arc<dyn atm_storage::RosterRuntimeMirror + Send + Sync>,
+    ),
+    AtmError,
+> {
+    let roster = atm_storage_rusqlite::roster_runtime::build_write_through_roster(durable)?;
+    Ok((roster.store(), roster.mirror()))
 }
 
 /// Install the current test's isolated runtime path before composing a

@@ -24,7 +24,7 @@ use std::sync::{Arc, RwLock};
 
 use atm_storage::contract::{RosterMember, RosterMemberEphemeralState, RosterRuntimeMirror};
 use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{AtmError, RosterSnapshot, RosterStore};
+use atm_storage::{AtmError, RosterSnapshot, RosterStore, WriteThroughRosterStore};
 
 /// One team's write-through roster mirror: the durable roster columns plus
 /// the ephemeral per-member state layered on top of them. The whole record
@@ -301,18 +301,17 @@ impl RosterRuntimeMirror for WriteThroughRosterView {
     }
 }
 
-/// Paired write-through [`RosterStore`] handle and [`RosterRuntimeMirror`]
-/// read handle returned by [`build_write_through_roster`], over the same
-/// backing RAM state.
-pub type WriteThroughRosterHandles = (
-    Arc<dyn RosterStore + Send + Sync>,
-    Arc<dyn RosterRuntimeMirror + Send + Sync>,
-);
-
 /// Builds the write-through roster seam from a durable [`RosterStore`]:
 /// hydrates the RAM mirror once (fail-closed), then returns the paired
 /// write-through [`RosterStore`] handle and [`RosterRuntimeMirror`] read
-/// handle over the same backing state.
+/// handle over the same backing state, as one
+/// [`WriteThroughRosterStore`].
+///
+/// This is the only function in the workspace that can produce a
+/// [`WriteThroughRosterStore`]: its constructor requires a value
+/// implementing both `RosterStore` and `RosterRuntimeMirror`, which only
+/// [`WriteThroughRosterView`] does. Composition sites therefore cannot
+/// substitute a raw durable roster store -- it fails to compile.
 ///
 /// Every composition root that assembles a durable roster store --
 /// production or test -- must call this rather than handing the raw durable
@@ -324,11 +323,12 @@ pub type WriteThroughRosterHandles = (
 /// cannot be enumerated or read during hydration.
 pub fn build_write_through_roster(
     durable: Arc<dyn RosterStore + Send + Sync>,
-) -> Result<WriteThroughRosterHandles, AtmError> {
+) -> Result<WriteThroughRosterStore, AtmError> {
     let state = Arc::new(RosterRuntimeState::default());
     hydrate_roster_runtime_from_durable(&durable, &state)?;
-    let view = Arc::new(WriteThroughRosterView { durable, state });
-    Ok((view.clone(), view))
+    Ok(WriteThroughRosterStore::from_write_through_view(Arc::new(
+        WriteThroughRosterView { durable, state },
+    )))
 }
 
 #[cfg(test)]
@@ -336,6 +336,12 @@ mod tests {
     use super::*;
     use atm_storage::contract::{AgentType, RosterHarness, RosterMemberKind};
     use std::sync::Mutex;
+
+    /// Neutral fixture identifiers: the subject under test is the
+    /// write-through seam, not any particular team or agent. Production
+    /// team/agent names must never appear as test fixture data.
+    const TEST_TEAM: &str = "test-team";
+    const TEST_AGENT: &str = "test-agent";
 
     #[derive(Default)]
     struct FakeDurableRoster {
@@ -406,15 +412,15 @@ mod tests {
         let durable = Arc::new(FakeDurableRoster::default());
         durable
             .save_roster(&RosterSnapshot {
-                team_name: TeamName::from_validated("atm-dev"),
-                members: vec![member("atm-dev", "dev-1")],
+                team_name: TeamName::from_validated(TEST_TEAM),
+                members: vec![member(TEST_TEAM, TEST_AGENT)],
                 refreshed_at: None,
             })
             .unwrap();
-        let (_store, mirror) = build_write_through_roster(durable).unwrap();
+        let mirror = build_write_through_roster(durable).unwrap().mirror();
         assert_eq!(
-            mirror.load_team_roster(&TeamName::from_validated("atm-dev")),
-            vec![member("atm-dev", "dev-1")]
+            mirror.load_team_roster(&TeamName::from_validated(TEST_TEAM)),
+            vec![member(TEST_TEAM, TEST_AGENT)]
         );
     }
 
@@ -433,8 +439,8 @@ mod tests {
         let durable = Arc::new(FakeDurableRoster::default());
         durable
             .save_roster(&RosterSnapshot {
-                team_name: TeamName::from_validated("atm-dev"),
-                members: vec![member("atm-dev", "dev-1")],
+                team_name: TeamName::from_validated(TEST_TEAM),
+                members: vec![member(TEST_TEAM, TEST_AGENT)],
                 refreshed_at: None,
             })
             .unwrap();
@@ -448,18 +454,19 @@ mod tests {
     #[test]
     fn save_roster_updates_ram_in_the_same_operation() {
         let durable = Arc::new(FakeDurableRoster::default());
-        let (store, mirror) = build_write_through_roster(durable).unwrap();
-        let team = TeamName::from_validated("atm-dev");
+        let roster = build_write_through_roster(durable).unwrap();
+        let (store, mirror) = (roster.store(), roster.mirror());
+        let team = TeamName::from_validated(TEST_TEAM);
         store
             .save_roster(&RosterSnapshot {
                 team_name: team.clone(),
-                members: vec![member("atm-dev", "dev-1")],
+                members: vec![member(TEST_TEAM, TEST_AGENT)],
                 refreshed_at: None,
             })
             .unwrap();
         assert_eq!(
             mirror.load_team_roster(&team),
-            vec![member("atm-dev", "dev-1")]
+            vec![member(TEST_TEAM, TEST_AGENT)]
         );
     }
 
@@ -468,14 +475,14 @@ mod tests {
         let durable = Arc::new(FakeDurableRoster::default());
         durable
             .save_roster(&RosterSnapshot {
-                team_name: TeamName::from_validated("atm-dev"),
-                members: vec![member("atm-dev", "dev-1")],
+                team_name: TeamName::from_validated(TEST_TEAM),
+                members: vec![member(TEST_TEAM, TEST_AGENT)],
                 refreshed_at: None,
             })
             .unwrap();
-        let (_store, mirror) = build_write_through_roster(durable).unwrap();
-        let team = TeamName::from_validated("atm-dev");
-        let agent = AgentName::from_validated("dev-1");
+        let mirror = build_write_through_roster(durable).unwrap().mirror();
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_AGENT);
         assert_eq!(
             mirror.ephemeral_state(&team, &agent),
             Some(RosterMemberEphemeralState::default())
@@ -492,26 +499,27 @@ mod tests {
     #[test]
     fn set_ephemeral_state_is_a_no_op_for_an_absent_member() {
         let durable = Arc::new(FakeDurableRoster::default());
-        let (_store, mirror) = build_write_through_roster(durable).unwrap();
-        let team = TeamName::from_validated("atm-dev");
-        let agent = AgentName::from_validated("dev-1");
+        let mirror = build_write_through_roster(durable).unwrap().mirror();
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_AGENT);
         assert!(!mirror.set_herdr_wake_pending(&team, &agent, true));
     }
 
     #[test]
     fn reload_from_durable_re_derives_ram_and_drops_removed_teams() {
         let durable = Arc::new(FakeDurableRoster::default());
-        let team = TeamName::from_validated("atm-dev");
+        let team = TeamName::from_validated(TEST_TEAM);
         durable
             .save_roster(&RosterSnapshot {
                 team_name: team.clone(),
-                members: vec![member("atm-dev", "dev-1")],
+                members: vec![member(TEST_TEAM, TEST_AGENT)],
                 refreshed_at: None,
             })
             .unwrap();
-        let (store, mirror) =
+        let roster =
             build_write_through_roster(Arc::clone(&durable) as Arc<dyn RosterStore + Send + Sync>)
                 .unwrap();
+        let (store, mirror) = (roster.store(), roster.mirror());
         // Out-of-band durable mutation that bypasses the write-through seam.
         durable
             .save_roster(&RosterSnapshot {
@@ -522,7 +530,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             mirror.load_team_roster(&team),
-            vec![member("atm-dev", "dev-1")]
+            vec![member(TEST_TEAM, TEST_AGENT)]
         );
         store.list_teams().unwrap(); // exercise through the RosterStore facade too
         mirror.reload_from_durable().unwrap();
@@ -532,9 +540,10 @@ mod tests {
     #[test]
     fn reload_from_durable_fails_closed_on_durable_error() {
         let durable = Arc::new(FakeDurableRoster::default());
-        let (_store, mirror) =
+        let mirror =
             build_write_through_roster(Arc::clone(&durable) as Arc<dyn RosterStore + Send + Sync>)
-                .unwrap();
+                .unwrap()
+                .mirror();
         durable
             .fail_list_teams
             .store(true, std::sync::atomic::Ordering::SeqCst);

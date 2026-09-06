@@ -70,4 +70,6 @@ notes = [
   "backend-agnostic: the decorator wraps any RosterStore, not only SqliteRosterStore, but is authorized to live only in this crate per this boundary",
   "build_write_through_roster is the sole composition entrypoint; every caller (production SqliteStorageFactory::open or a test-support fixture) must go through it instead of hand-rolling an equivalent write-through wrapper",
   "hydration is fail-closed: build_write_through_roster propagates a durable read failure instead of returning a partially-populated mirror",
+  "AW-RAM-I4: the intra-crate bypass is now closed by type, not only by review. StorageHandleParts carries one atm_storage::WriteThroughRosterStore instead of separate roster_store/roster_runtime_mirror fields; its sole constructor (WriteThroughRosterStore::from_write_through_view) requires a value implementing both RosterStore and RosterRuntimeMirror, which only WriteThroughRosterView does, so passing backend.roster_store() at a composition site is a compile error",
+  "crates/atm-storage-rusqlite/tests/roster_write_through_production_path.rs proves the property on the real production path: SqliteStorageFactory::open() on a temp database, then an out-of-band durable write through a second backend that the production roster read must not observe until an explicit reload_from_durable",
 ]

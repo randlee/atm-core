@@ -697,14 +697,12 @@ impl StorageFactory for SqliteStorageFactory {
         // closed: a durable roster read failure at startup aborts backend
         // construction instead of silently starting with an incomplete RAM
         // roster for the process lifetime.
-        let (roster_store, roster_runtime_mirror) =
-            roster_runtime::build_write_through_roster(backend.roster_store())?;
+        let roster = roster_runtime::build_write_through_roster(backend.roster_store())?;
         Ok(StorageHandles::from_parts(StorageHandleParts {
             message_store: backend.message_store(),
             async_message_store: backend.async_message_store(),
             async_mailbox_reader: backend.async_mailbox_reader(),
-            roster_store,
-            roster_runtime_mirror,
+            roster,
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
             graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),

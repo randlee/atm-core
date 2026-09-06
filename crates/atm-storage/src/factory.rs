@@ -25,6 +25,67 @@ pub struct EffectiveReaderLanes {
     pub search: EffectiveReaderLane,
 }
 
+/// A roster [`RosterStore`] handle proven, *by type*, to be the
+/// write-through RAM-mirroring seam -- paired with the
+/// [`RosterRuntimeMirror`] read handle over the same backing state.
+///
+/// # Why this is a newtype and not two plain fields
+///
+/// [`StorageHandleParts`] used to take `roster_store` and
+/// `roster_runtime_mirror` as two independent `Arc<dyn ...>` fields. Nothing
+/// stopped a future edit from passing a backend's *raw durable* roster store
+/// (e.g. `backend.roster_store()`) as `roster_store` while pairing it with an
+/// unrelated mirror: every roster read would then silently go back to hitting
+/// the database, defeating the RAM-roster design ruling, and no boundary lint
+/// would notice because the bypass is intra-crate.
+///
+/// This type closes that vector at the type level. Its only constructor,
+/// [`WriteThroughRosterStore::from_write_through_view`], requires a *single*
+/// value that implements **both** [`RosterStore`] and [`RosterRuntimeMirror`]
+/// -- i.e. a store that serves its own reads from its own RAM mirror. A
+/// durable-backed roster store implements only [`RosterStore`], and an
+/// `Arc<dyn RosterStore + Send + Sync>` cannot coerce into the bound at all,
+/// so the bypass is a compile error rather than a silent regression.
+#[derive(Clone)]
+pub struct WriteThroughRosterStore {
+    store: Arc<dyn RosterStore + Send + Sync>,
+    mirror: Arc<dyn RosterRuntimeMirror + Send + Sync>,
+}
+
+impl fmt::Debug for WriteThroughRosterStore {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WriteThroughRosterStore").finish()
+    }
+}
+
+impl WriteThroughRosterStore {
+    /// The sole constructor: adopts one write-through view as both the
+    /// durable-write [`RosterStore`] handle and the [`RosterRuntimeMirror`]
+    /// read handle.
+    ///
+    /// The `V: RosterStore + RosterRuntimeMirror` bound is the enforcement
+    /// mechanism -- a raw durable roster store cannot satisfy it.
+    pub fn from_write_through_view<V>(view: Arc<V>) -> Self
+    where
+        V: RosterStore + RosterRuntimeMirror + 'static,
+    {
+        Self {
+            store: Arc::clone(&view) as Arc<dyn RosterStore + Send + Sync>,
+            mirror: view as Arc<dyn RosterRuntimeMirror + Send + Sync>,
+        }
+    }
+
+    /// The write-through durable-write handle.
+    pub fn store(&self) -> Arc<dyn RosterStore + Send + Sync> {
+        Arc::clone(&self.store)
+    }
+
+    /// The RAM mirror read handle paired with [`Self::store`].
+    pub fn mirror(&self) -> Arc<dyn RosterRuntimeMirror + Send + Sync> {
+        Arc::clone(&self.mirror)
+    }
+}
+
 /// Backend-neutral handles returned by the selected durable storage backend.
 #[derive(Clone)]
 pub struct StorageHandles {
@@ -57,10 +118,12 @@ pub struct StorageHandleParts {
     pub message_store: Arc<dyn MessageStore + Send + Sync>,
     pub async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
     pub async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
-    pub roster_store: Arc<dyn RosterStore + Send + Sync>,
-    /// Runtime-owned, write-through RAM roster mirror paired with
-    /// `roster_store`. See [`RosterRuntimeMirror`].
-    pub roster_runtime_mirror: Arc<dyn RosterRuntimeMirror + Send + Sync>,
+    /// The write-through roster seam: the durable-write [`RosterStore`]
+    /// handle and its paired RAM [`RosterRuntimeMirror`], carried as one
+    /// value that only [`WriteThroughRosterStore::from_write_through_view`]
+    /// can construct. Handing a raw durable roster store here does not
+    /// compile.
+    pub roster: WriteThroughRosterStore,
     pub nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pub pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
     pub graft_receiver_endpoint_store: Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
@@ -103,8 +166,8 @@ impl StorageHandles {
             message_store: parts.message_store,
             async_message_store: parts.async_message_store,
             async_mailbox_reader: parts.async_mailbox_reader,
-            roster_store: parts.roster_store,
-            roster_runtime_mirror: parts.roster_runtime_mirror,
+            roster_store: parts.roster.store(),
+            roster_runtime_mirror: parts.roster.mirror(),
             nudge_template_override_store: parts.nudge_template_override_store,
             pending_nudge_store: parts.pending_nudge_store,
             graft_receiver_endpoint_store: parts.graft_receiver_endpoint_store,
