@@ -578,3 +578,16 @@ triage:a30 a triage:Assignment ;
 triage:c29 a triage:Completion ;
     triage:ofSprint triage:AX6 ;
     triage:at "2026-09-06T19:58:33Z"^^xsd:dateTime .
+# QA-AX-1260-FINAL-RECHECK2 PASS 0/0/0 on PR #1260 (fix/ax-recheck2-findings -> integrate/phase-ax,
+# f5c1a577de0c9b56d8628fd33ed13fae00c48326), report:
+# https://github.com/randlee/atm-core/pull/1260#issuecomment-5561957376 . All three findings confirmed
+# fixed by req-qa/arch-qa/rust-qa-agent, fresh repo-wide sweep found no other ADR-061/062 misattribution.
+triage:r122 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AXPE-QA-122> ;
+    triage:resolvedAt "2026-09-06T20:28:23Z"^^xsd:dateTime .
+triage:r123 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AXPE-QA-123> ;
+    triage:resolvedAt "2026-09-06T20:28:23Z"^^xsd:dateTime .
+triage:r124 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AXPE-RBP-005> ;
+    triage:resolvedAt "2026-09-06T20:28:23Z"^^xsd:dateTime .

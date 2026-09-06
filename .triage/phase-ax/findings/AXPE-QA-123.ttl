@@ -33,8 +33,11 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "phase" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-09-06T20:28:23Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "QA-AX-1260-FINAL-RECHECK2 PASS 0/0/0 on PR #1260 (f5c1a577d): all 3 occurrences confirmed fixed; fresh repo-wide sweep by req-qa and quality-mgr found no other ADR-061/062 misattribution. Report: https://github.com/randlee/atm-core/pull/1260#issuecomment-5561957376" ;
   triage:triagedAt "2026-09-06T19:49:16Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
   triage:foundAt "2026-09-06T19:24:49Z"^^xsd:dateTime ;
@@ -48,8 +51,8 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1640 ;
   triage:snippet "AX.3 row, Artifacts column: `docs/adr/ADR-061-task-state-machine.md` (should be ADR-062-task-state-machine.md)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ax" ;
   triage:headSha "cc9c4f2a6" ;
   triage:occursIn <urn:atm:triage:worktree/RECHECK2/cc9c4f2a6> .
@@ -59,8 +62,8 @@
   triage:file "docs/plans/phase-ay/phase-ay-plan.md" ;
   triage:line 196 ;
   triage:snippet "`docs/adr/ADR-061-task-state-machine.md` on `integrate/phase-ax`, not yet ... (should be ADR-062-task-state-machine.md)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ax" ;
   triage:headSha "cc9c4f2a6" ;
   triage:occursIn <urn:atm:triage:worktree/RECHECK2/cc9c4f2a6> .
@@ -70,8 +73,8 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1642 ;
   triage:snippet "AX.5 row, Artifacts column: `ADR-061 reminder-cycle section` (should be `ADR-062 reminder-cycle section`; actual section is docs/adr/ADR-062-task-state-machine.md:42)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ax-recheck2-findings" ;
   triage:headSha "3946deacb" ;
   triage:occursIn <urn:atm:triage:worktree/RECHECK2-QA2/3946deacb> .
