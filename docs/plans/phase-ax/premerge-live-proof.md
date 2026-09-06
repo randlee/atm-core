@@ -59,10 +59,14 @@ A red result is not a terminal status report.  Preserve its generated artifact
 and use the pre-created remediation worktree to do the following before asking
 for operator help:
 
-The running benchmark agent is empowered to fix minor blockers itself and to
-make any change necessary to meet or exceed the benchmark floors.  It does not
-need to escalate to a human first; it must preserve the candidate, evidence,
-and account-isolation rules below while doing so.
+The running benchmark agent owns this full loop: it reports minor blockers it
+fixes itself, is empowered to make any change necessary to meet or exceed the
+benchmark floors, and fixes benchmark regressions itself as part of the same
+run.  It does not escalate to Rand or start a separate agent dispatch loop for
+these fixes.  The benchmark run is never interrupted or second-guessed
+mid-run; quality-mgr and team-lead judge the correctness of the fixes
+afterward through normal PR review.  The agent must preserve the candidate,
+evidence, and account-isolation rules below while doing so.
 
 1. Reproduce the failing target locally with the same candidate, account,
    target/profile, and release build; distinguish a measured floor regression
