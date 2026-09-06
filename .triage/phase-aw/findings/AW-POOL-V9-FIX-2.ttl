@@ -71,3 +71,11 @@
   triage:branch "fix/aw-pool-read-migration" ;
   triage:headSha "27c87de22" ;
   triage:orderIndex 2 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-2/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-2" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. doctor/report.rs's ReaderPoolDoctorReport is now a single struct (pool_size, queue_depth, tool_class_max_in_flight, metrics: Option<ReaderPoolMetricsDoctorReport>) built once in atm-runtime/src/composition.rs:171 -- no remaining two-lane ('mailbox'/'search') naming split in doctor/diagnostics output. Confirmed by direct grep for ReaderPoolDoctorReport construction sites (single call site) and reader_lanes field wiring in doctor_projection.rs." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .

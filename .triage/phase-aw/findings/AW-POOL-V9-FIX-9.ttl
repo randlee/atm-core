@@ -78,3 +78,11 @@
   triage:branch "fix/aw-pool-read-migration" ;
   triage:headSha "a0e50036b64dff01f71ff12eae64a0684302075d" ;
   triage:orderIndex 3 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-9/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-9" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. Disposed by design, not code-restructured: commit e095cbd9a ("docs(storage): explain fixed sync read deadline", authored by Rand directly) adds explicit doc comments to SharedDb::read/read_tool stating the fixed 10s pool deadline is intentional for this legacy sync-compat surface, with Tokio request-level deadlines enforced by the HTTP runtime adapters instead. The threading capability this finding asked for does now exist as a distinct primitive (read_with_deadline, added alongside the ARCH-002/FIX-10 fix and used by graft_receiver_endpoint_store.rs's lookup_with_deadline) for call sites that need it; read()/read_tool() deliberately keep the static deadline as documented legacy behavior. No production caller was found needing read()/read_tool() to thread a caller deadline. Confirmed by direct code read plus git log on shared_db.rs." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e095cbd9a" ;
+  triage:resolvedBranch "integrate/phase-aw" .

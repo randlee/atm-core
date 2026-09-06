@@ -66,3 +66,11 @@
   triage:branch "fix/aw-diagnostics-admission" ;
   triage:headSha "f3f5cd5fb1190e5eb66538b85229a1ede8e5d9cb" ;
   triage:orderIndex 3 .
+<urn:atm:triage:resolution/AW-POOL-V9-ARCH-002/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-ARCH-002" ;
+  triage:resolutionNote "quality-mgr final targeted re-verify at fix/aw-pool-read-migration@935461a69 (rust-qa-agent: full fmt/clippy/test gate green, zero legacy-daemon touches; plus my own independent diff read of service_runtime.rs) confirmed PASS: RetainedServiceRuntime::graft_receiver_lease now takes a deadline: Duration threaded through GraftReceiverLeaseCache::load, recomputing remaining = expires_at.saturating_duration_since(Instant::now()) on each wait/load step and erroring out once remaining is zero, down through SqliteGraftReceiverEndpointStore::lookup_with_deadline -> SharedDb::read_with_deadline -> ReaderPool::submit_blocking(deadline, ...) -- a genuine I/O-bound deadline, not just an inter-iteration check. A subsequent pure-extraction refactor (37e725fc8, "split graft lease wait", RULE-002 function-length) was confirmed behavior-preserving via git diff. Ancestry of both 935461a69 and 37e725fc8 in e8825d5cc (PR #1244's merge to integrate/phase-aw) reconfirmed via git merge-base --is-ancestor before this closure." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "37e725fc8" ;
+  triage:resolvedBranch "integrate/phase-aw" .

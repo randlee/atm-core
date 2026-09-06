@@ -112,3 +112,11 @@
   triage:branch "fix/aw-pool-read-migration" ;
   triage:headSha "a0e50036b" ;
   triage:orderIndex 1 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-1/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-1" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc (PR #1244 merge). peer_config_store.rs (list_interfaces/local_certificate/list_trusted_peers/trusted_peer), pending_nudge_store.rs (list_pending_members), nudge_template_override_store.rs (load_template_override) all confirmed calling self.db.read(...), which routes through the shared ReaderPool, not the writer connection. Directly grepped on the merged head." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .

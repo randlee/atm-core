@@ -49,3 +49,12 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "ac1088c82" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AW-POOL-V9/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc, after all of FIX-1..FIX-10, ARCH-002, QA-001, and QA-002 are independently confirmed closed (see their own Resolution events). control_path_pool.rs is deleted entirely (398 lines removed, confirmed absent, zero remaining references in lib.rs). No separate mailbox/search/doctor ReaderPoolConfig lanes remain -- reader_pool.rs has a single ReaderPoolConfig type and a single doctor-facing ReaderPoolDoctorReport projection (FIX-2/FIX-5). All previously control-path-pool-routed reads (peer_config_store.rs, pending_nudge_store.rs, nudge_template_override_store.rs, graft_receiver_endpoint_store.rs, template_catalog_store.rs) now route through the shared ReaderPool via SharedDb::read/read_with_deadline; all writes moved to the single writer queue. Rand's ruling (relayed by fenix, 01M1T3GRDS1G9W1AWMCRBSA5VX) is implemented as stated: one serial writer queue for every mutation, one N-sized read pool for every read with tool-class reads capped below N." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .

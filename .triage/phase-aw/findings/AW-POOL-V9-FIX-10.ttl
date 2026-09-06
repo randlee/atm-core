@@ -78,3 +78,11 @@
   triage:branch "fix/aw-pool-read-migration" ;
   triage:headSha "a0e50036b64dff01f71ff12eae64a0684302075d" ;
   triage:orderIndex 3 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-10/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-10" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. The per-roster-member graft-receiver lease lookup inside doctor_projection.rs's spawn_blocking worker is no longer able to independently consume up to the reader pool's full 10s deadline per call: the ARCH-002 fix (commits 935461a69 -> 37e725fc8, already closed) threads a real per-call deadline (LEASE_LOOKUP_BUDGET minus elapsed) into graft_receiver_lease -> GraftReceiverLeaseCache::load -> lookup_with_deadline -> ReaderPool::submit_blocking, so the whole per-member loop is now genuinely bounded to the intended ~2s LEASE_LOOKUP_BUDGET rather than N x up to 10s. This closes FIX-10's underlying starvation concern via the same fix chain that closed ARCH-002. Confirmed by direct diff/code read of service_runtime.rs and doctor/mod.rs on the merged head." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "37e725fc8" ;
+  triage:resolvedBranch "integrate/phase-aw" .

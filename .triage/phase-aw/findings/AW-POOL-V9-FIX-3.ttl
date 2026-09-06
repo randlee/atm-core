@@ -54,3 +54,11 @@
   triage:branch "fix/aw-diagnostics-admission" ;
   triage:headSha "f3f5cd5fb1190e5eb66538b85229a1ede8e5d9cb" ;
   triage:orderIndex 3 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-3/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-3" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. crates/atm-storage-rusqlite/src/writer/mod.rs is now 554 non-test lines (well under the 1000-line cap), with the batch-processing pipeline extracted into a new sibling writer/batch.rs module (writer/ dir also has ops.rs, ops_envelope.rs, shutdown_support.rs, stmt_cache.rs). Confirmed by direct line count and directory listing on the merged head." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .

@@ -66,3 +66,11 @@
   triage:branch "fix/aw-pool-read-migration" ;
   triage:headSha "27c87de22ce5fe5515888200d5cbdc56e7de6598" ;
   triage:orderIndex 3 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-7/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-7" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. mailbox_reader.rs now exposes a shared pub(crate) read_lane_storage_error() helper (preserving code/message/cause), used by both mailbox_reader.rs's storage_error() and search_reader.rs's submit()/submit_tool() paths -- the prior duplicated per-file collapse-to-Unavailable logic is gone. Confirmed by direct grep of both files on the merged head." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .

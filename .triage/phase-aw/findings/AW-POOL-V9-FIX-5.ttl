@@ -66,3 +66,11 @@
   triage:branch "fix/aw-pool-read-migration" ;
   triage:headSha "27c87de" ;
   triage:orderIndex 3 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-5/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-5" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. ReaderLaneMetrics/ReaderLaneMetricsSnapshot carry no #[allow(dead_code)] on the merged head and are wired into the doctor endpoint via ReaderPoolMetricsDoctorReport (doctor/report.rs:286-296: queue_depth, saturated, in_flight, wait_nanos, execution_nanos, expired_in_queue, interrupted_while_active, quarantined, current_quarantined_workers, retired_replaced_workers), populated at the same composition.rs:171 doctor-report construction site fixed for FIX-2. Confirmed by direct grep/read." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .

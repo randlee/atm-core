@@ -78,3 +78,11 @@
   triage:branch "fix/aw-pool-read-migration" ;
   triage:headSha "a0e50036b64dff01f71ff12eae64a0684302075d" ;
   triage:orderIndex 3 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-8/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-8" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. mailbox_reader.rs's storage_error() now delegates to read_lane_storage_error(), which builds ReadLaneError::Storage{code, message, cause: error.cause().map(str::to_owned)} -- matches AW-POOL-V9-QA-002's independently-verified fix (commit 2309b8dd9, already closed) and is no longer a lossy conversion. Confirmed by direct read on the merged head." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .

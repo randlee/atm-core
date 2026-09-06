@@ -40,3 +40,11 @@
   triage:branch "fix/aw-pool-consolidate" ;
   triage:headSha "27c87de22ce5fe5515888200d5cbdc56e7de6598" ;
   triage:orderIndex 2 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-6/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-6" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. reader_pool.rs's retire_and_replace() now restores pool_size (fetch_add) and emits an unconditional tracing::warn! observability event when spawn_worker() fails during replacement, rather than leaving pool_size permanently decremented -- confirmed by direct read of the function body on the merged head." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .
