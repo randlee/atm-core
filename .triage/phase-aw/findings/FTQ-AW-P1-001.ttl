@@ -20,7 +20,7 @@
   triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T18:30:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:qa-pr1215-r2 ;
+  triage:foundIn triage:AWReadinessReview ;
   triage:foundAt "2026-09-05T18:17:37Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-AW-P1-001/AW-P1-001> ;
   triage:triageRecordVersion "1" .

@@ -18,7 +18,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T18:55:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:qa-pr1215-r4 ;
+  triage:foundIn triage:AWReadinessReview ;
   triage:foundAt "2026-09-05T18:50:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-AW-P1-003/AW-P1-003-1> ;
   triage:triageRecordVersion "1" .
