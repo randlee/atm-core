@@ -5,7 +5,7 @@
     "start": "2026-09-05T05:00:31Z",
     "end": "2026-09-05T16:56:30Z"
   },
-  "scope": "phase-ax sprints AX.1-AX.7 (graph-orchestration cursor over .sprints/AX; sprint PRs #1185 AX.1, #1186 AX.2, #1191 AX.3, #1194 AX.4, #1201 AX.5 all merged into integrate/phase-ax). Every QA round quality-mgr reported for AX.1-AX.5 is listed; the latest run_type qa per sprint is the authoritative verdict. AX.6 (feature/ax6-lead-notification-doctor, cipher, Assignment a21) is in development with no QA run yet; AX.7 has not started. This master is extended with each authoritative verdict message as quality-mgr reports it.",
+  "scope": "phase-ax sprints AX.1-AX.6 (AX.1-AX.6 merged into integrate/phase-ax). AX.7 was superseded on 2026-09-05, with live proof moved to release readiness.",
   "count_basis": "headline/reviewer",
   "path_notes": "Built by fenix (phase AX orchestrator, sole .triage/.sprints writer) directly from ATM messages in the fenix and quality-mgr queues (team atm-dev): every assignment_message_id is the first fenix->quality-mgr message carrying that QA task id (atm list quality-mgr --all --json); every result_message_id is quality-mgr's verdict message in fenix's queue (atm list --all --json); Final Quality Report comment ids come from the GitHub issue-comments API for each PR. No verdict, run, or message id was fabricated; null means the value is not carried by the source message.",
   "runs": [
