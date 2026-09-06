@@ -72,8 +72,9 @@ AY.4–AY.7.
 
 ## Preconditions
 
-- P-A — `integrate/phase-ay` exists and contains develop merge `a7aebefb8`;
-  `git merge-base --is-ancestor a7aebefb8 integrate/phase-ay` exits zero.
+- P-A — the Phase AY plan's P-A is satisfied: Phase AX has merged to develop,
+  `integrate/phase-ay` was cut from that exact fetched develop head, and the
+  recorded merge-base and symbol-presence checks all pass.
 - P-B — the Phase AY plan has dated approval from Rand.
 - AY.2 development and contracts are pushed. AY.3 is created from
   `feature/ay2-herdr-transport-seam`; AY.2 need not have merged for the stacked
@@ -155,19 +156,28 @@ do not patch, harden, remodel, or add Herdr behavior to it.
 ```rust
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HerdrClientConfig {
-    pub binary_path: Option<PathBuf>,
-    pub socket_path: Option<PathBuf>,
+    binary_path: Option<PathBuf>,
+    socket_path: Option<PathBuf>,
 }
 
 impl HerdrClientConfig {
-    /// Pure validation: both configured paths must be absolute.
-    pub fn validate(&self) -> Result<(), AtmError>;
+    /// Pure fallible construction; both configured paths must be absolute.
+    pub fn try_new(
+        binary_path: Option<PathBuf>,
+        socket_path: Option<PathBuf>,
+    ) -> Result<Self, AtmError>;
+
+    pub fn binary_path(&self) -> Option<&Path>;
+    pub fn socket_path(&self) -> Option<&Path>;
 }
 ```
 
 `HerdrClientConfig` is one of exactly two new public `atm-herdr` items in this
-sprint. Validation performs no I/O and returns the existing
-`AtmErrorCode::ConfigParseFailed`; no string error or new error family is added.
+sprint. Its fields remain private; `Default` is the valid no-path value and all
+non-default construction goes through `try_new`, so an invalid relative path is
+not representable through the public API. Construction performs no I/O and
+returns the existing `AtmErrorCode::ConfigParseFailed`; no string error or new
+error family is added.
 
 ```rust
 // crates/atm-daemon-bootstrap/src/herdr_config.rs
@@ -177,8 +187,8 @@ pub(crate) fn daemon_herdr_client_config(
 ```
 
 The optional `[herdr]` table has only optional `binary_path` and `socket_path`
-string keys and uses `deny_unknown_fields`. The reader calls this sprint's pure
-`validate`; it never probes the filesystem beyond reading `.atm.toml`.
+string keys and uses `deny_unknown_fields`. The reader calls this sprint's
+`try_new`; it never probes the filesystem beyond reading `.atm.toml`.
 `HerdrClientConfig` implements `Clone`, so composition reads and validates once
 and gives the same value to both consumers:
 
@@ -208,6 +218,30 @@ pub enum HerdrTransportKind { Cli, Socket }
 pub enum HerdrEndpointProvenance { Session, SocketPath, HerdrDefault }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct HerdrEndpointDisplay(String);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HerdrEndpointDisplayRoot {
+    XdgConfigHome,
+    Home,
+    AppData,
+    Configured,
+}
+
+impl HerdrEndpointDisplay {
+    /// Accepts only relative normal components; root/prefix/parent components
+    /// fail with ConfigParseFailed. `Configured` retains only the file name.
+    pub fn from_relative(
+        root: HerdrEndpointDisplayRoot,
+        relative: &Path,
+        named_pipe: bool,
+    ) -> Result<Self, AtmError>;
+
+    pub fn as_str(&self) -> &str;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HerdrBinaryProvenance { Configured, Path }
 
@@ -226,7 +260,13 @@ pub enum HerdrPresenceOutcome {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HerdrVersion(pub String);
+#[serde(try_from = "String", into = "String")]
+pub struct HerdrVersion(String);
+
+impl HerdrVersion {
+    pub fn parse(value: impl Into<String>) -> Result<Self, AtmError>;
+    pub fn as_str(&self) -> &str;
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HerdrRosterMember {
@@ -247,7 +287,7 @@ pub struct HerdrEndpointObservation {
     pub session: Option<HerdrSession>,
     pub provenance: HerdrEndpointProvenance,
     pub transport: HerdrTransportKind,
-    pub endpoint: Option<String>, // sanitized display value, never the raw endpoint
+    pub endpoint: Option<HerdrEndpointDisplay>,
     pub binary: Option<HerdrBinaryResolution>,
     pub state: HerdrDoctorState,
     pub live_handoff: Option<bool>,
@@ -268,11 +308,16 @@ impl HerdrDoctorProbe {
 }
 ```
 
+`HerdrVersion` has no public inner field. `parse`, `TryFrom<String>`, and custom
+deserialization accept only the supported semantic-version syntax and map an
+invalid server value to the typed unexpected-response path; `as_str`,
+`Display`, and serialization expose it read-only.
+
 `HerdrDoctorProbe` is the other new public `atm-herdr` item. The atm-herdr
 boundary `[contracts]` inventory adds request types `HerdrClientConfig` and
 `HerdrRosterMember`, response type `HerdrEndpointObservation`, and error type
 `AtmError`. Its docs name the only `AtmError` construction sites:
-`From<HerdrError> for AtmError` and `HerdrClientConfig::validate`. The
+`From<HerdrError> for AtmError` and `HerdrClientConfig::try_new`. The
 architecture test pins the Phase AX public list plus only
 `HerdrClientConfig` and `HerdrDoctorProbe` and pins both public signatures.
 
@@ -314,13 +359,13 @@ pub enum HerdrDoctorState {
     BinaryNotFound { searched: Vec<PathBuf> },
     BinaryNotExecutable { path: PathBuf, cause: String },
     BelowMinimum { version: HerdrVersion, minimum: HerdrVersion },
-    ServerNotRunning { endpoint_named_by_herdr: Option<String> },
+    ServerNotRunning { endpoint_named_by_herdr: Option<HerdrEndpointDisplay> },
     ClientServerMismatch {
         client: Option<HerdrVersion>,
         server: Option<HerdrVersion>,
     },
-    EndpointUnreachable { endpoint: String },
-    PermissionDenied { endpoint: String },
+    EndpointUnreachable { endpoint: HerdrEndpointDisplay },
+    PermissionDenied { endpoint: HerdrEndpointDisplay },
     ProbeTimedOut { after: Duration },
     UnexpectedResponse { code: Option<String>, detail: String },
     Other { code: AtmErrorCode, detail: String },
@@ -349,12 +394,15 @@ Endpoints are ordered default first, then named sessions bytewise. There is no
 aggregate `herdr.state` or `herdr.remedy`.
 
 Every endpoint-bearing string in this DTO, including endpoint fields inside a
-state variant, is a display value produced inside `atm-herdr`. The formatter
-replaces a matching captured root with `$XDG_CONFIG_HOME`, `$HOME`, or
-`%APPDATA%`; an explicit path outside those roots becomes
+state variant, uses `HerdrEndpointDisplay`. atm-herdr resolves the raw endpoint,
+reduces it to a validated root plus relative components, and calls
+`from_relative`; an architecture pin permits this construction only in the
+atm-herdr sanitizer. The formatter emits `$XDG_CONFIG_HOME`, `$HOME`, or
+`%APPDATA%`; an explicit path outside those roots emits
 `<configured>/<file-name>`. The Windows `\\.\pipe\` prefix is retained after
-the path portion is sanitized. Raw values remain private inputs to transport
-I/O and never enter atm-core, JSON, human output, snapshots, or logs.
+the path portion is sanitized. Custom deserialization accepts only those
+symbolic prefixes, and raw values remain transport inputs that never enter
+atm-core, JSON, human output, snapshots, or logs.
 
 ```json
 {
@@ -416,17 +464,22 @@ or roster yields `configured: null` plus an error field, never a guessed value.
 ## Acceptance criteria
 
 - [ ] A1 — Config fixtures prove every C1 row, error code, detail, key/file
-  name, source-cause rule, default case, both keys, and relative-path refusal.
+  name, source-cause rule, default case, both keys, and relative-path refusal;
+  a source/API pin proves config fields are private and every non-default value
+  is constructed by `try_new`.
 - [ ] A2 — The P-E-approved boundary bundle is the first commit; `just lint boundaries`
   passes; the architecture test finds exactly the closed and bootstrap adapter
   implementations, pins the two public atm-herdr items/signatures and complete
   request/response/error inventory; `rg "HerdrPresenceDoctor"` finds nothing.
 - [ ] A3 — Every state-inventory row has human and JSON snapshots with its
   remedy, no listed `HerdrError` maps to `other`, and an injected unclassified
-  variant preserves its typed code/detail without debug formatting.
+  variant preserves its typed code/detail without debug formatting. Version
+  fixtures prove invalid strings cannot construct or deserialize
+  `HerdrVersion`.
 - [ ] A4 — Endpoint snapshots prove default/session ordering, all three
   provenances, mismatch capability retention, CLI `endpoint: null`, and exact
-  member keys.
+  member keys. Constructor/deserializer and construction-site pins prove raw or
+  parent-traversing endpoint strings cannot inhabit `HerdrEndpointDisplay`.
 - [ ] A5 — Presence zero-regression fixtures compare the complete ordered
   `Vec<DoctorFinding>` to Phase AX behavior for all statuses, typed failures,
   one/multiple infrastructure failures, and interleaved endpoints.

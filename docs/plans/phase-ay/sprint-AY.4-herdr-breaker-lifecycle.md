@@ -26,7 +26,7 @@ dependency_relations:
   - prerequisite: AY.4
     dependent: AY.8
     relation: parallel_safe
-    rationale: AY.4 edits only Tokio/Axum breaker-escalation and real-composition lifecycle-test modules after AY.3's contracts merge; AY.8 owns atm-herdr socket transport, fixtures, boundary revisions, and its architecture exemption.
+    rationale: AY.4 owns Tokio/Axum breaker escalation, bootstrap escalation config, CLI-reference text, and real-composition lifecycle tests after AY.3; AY.8 owns atm-herdr socket transport, socket fixtures, version-ledger text, boundary revisions, and its architecture exemption, so their exact paths and artifacts do not intersect.
 ---
 
 # AY.4 — Herdr breaker escalation and failure lifecycle
@@ -89,19 +89,24 @@ or test-only completion fails the sprint.
   Phase AX.6 escalation helper at most once per breaker-open timestamp. Queued
   ATM mail to the lead and configured recipients is durable; Herdr desktop
   notification is an independent best-effort attempt, retains AX.6's absolute
-  five-second `HERDR_NOTIFY_DEADLINE`, and never contains the mail body.
+  five-second `HERDR_NOTIFY_DEADLINE`, and never contains the mail body. Extend
+  AY.3's deny-unknown-fields reader with
+  `herdr.escalation_min_interval_secs`: default 1,800, accepted range
+  1–86,400 inclusive, and `ConfigParseFailed` on zero, negative, overflow, or
+  out-of-range input.
 - [ ] D2 — Wire D1 through `atm-http-runtime` composition with no readiness
   dependency on Herdr. A closed/half-open/new-open transition follows C2;
   escalation failure cannot stop the daemon, discard mail, or extend the
   breaker's normal backoff.
-- [ ] D3 — Add the complete real-composition failure/recovery suite in C3,
+- [ ] D3 — Add the complete real-composition failure/recovery suite in C4,
   backed by AY.2's portable fake Herdr and AY.3's doctor projection. Tests drive
   the actual Tokio/Axum composition and queue-wake path, not isolated mocks of
   the behavior being claimed.
 - [ ] D4 — Extend the HR-SAFE-003 architecture guard and focused observability
   assertions for D1: notification text contains state/remedy but never mail
   body; each attempt records the breaker cycle, mail outcomes, notification
-  outcome, and recovery transition without secrets.
+  outcome, and recovery transition without secrets. Document the configuration
+  key, default, units, and accepted range.
 
 ### Paths to delete
 
@@ -113,8 +118,9 @@ None.
 | --- | --- |
 | Production state/dedup | new `crates/atm-http-runtime/src/herdr_breaker_escalation.rs` |
 | Runtime hook | one thin integration in `crates/atm-http-runtime/src/herdr_queue_wake.rs` plus module export/composition |
+| Config parsing/composition | `crates/atm-daemon-bootstrap/src/herdr_config.rs` and its existing composition call site |
 | Composition fixtures | `crates/atm-daemon-bootstrap/src/herdr_lifecycle_tests.rs` and its `#[cfg(test)]` module declaration |
-| Architecture/observability proof | the existing HR-SAFE-003 guard and focused runtime tests; no new legacy-daemon allowlist |
+| Architecture/observability/docs proof | the existing HR-SAFE-003 guard, focused runtime tests, and `docs/atm/cli-reference-1-5-0.md`; no new legacy-daemon allowlist |
 
 New production logic stays outside `herdr_queue_wake.rs`; that existing file
 receives only the call needed to pass an observed breaker transition into the
@@ -166,6 +172,27 @@ impl HerdrBreakerEscalationGate {
 }
 ```
 
+AY.4 replaces AY.3's private bootstrap reader result with a single-read
+composition value; the client configuration is still constructed only through
+its fallible constructor:
+
+```rust
+pub(crate) struct DaemonHerdrConfig {
+    pub client: HerdrClientConfig,
+    pub escalation_min_interval: Duration,
+}
+
+pub(crate) fn daemon_herdr_config(
+    env: &dyn EnvSource,
+) -> Result<DaemonHerdrConfig, AtmError>;
+```
+
+The private TOML DTO uses an integer seconds field and `deny_unknown_fields`.
+The reader accepts only `1..=86_400`, defaults to `1_800`, and constructs both
+values in one parse. Invalid type, zero, negative, overflow, or values above
+86,400 fail daemon startup with `ConfigParseFailed`, naming the file, key,
+value, accepted range, and recovery.
+
 The state machine is explicit:
 
 ```text
@@ -187,7 +214,20 @@ within `min_interval` yields exactly one escalation). No prompt is automatically
 when its submission outcome is unknown because prompt operations are not
 idempotent.
 
-### C3 — Real-composition scenario matrix
+### C3 — Shutdown and drain
+
+AY.4 adds no supervisor or detached background task. The escalation gate is
+owned by the existing queue-wake pump. When the Tokio/Axum runtime enters
+`Draining`, its existing shutdown watch stops new queue-wake admissions and new
+escalation claims immediately. An already admitted prompt or escalation may
+finish only within the smaller of its own absolute request/notification
+deadline and the runtime shutdown deadline; forced cancellation drops all
+guards and joins the pump. Completed durable mail writes are never rolled back,
+an unknown prompt remains pending without automatic retry, and no desktop
+notification begins after shutdown. Gate state is dropped only after the pump
+joins and is intentionally empty after restart, matching L10.
+
+### C4 — Real-composition scenario matrix
 
 | ID | Stimulus | Required result |
 | --- | --- | --- |
@@ -195,7 +235,7 @@ idempotent.
 | L2 | Fake Herdr always returns `server_not_running` | Breaker opens, typed doctor state/remedy appears, daemon stays ready, exactly one cycle escalation fires |
 | L3 | Fake Herdr changes to `protocol_mismatch` mid-run | Breaker opens, doctor shows `client_server_mismatch`, one escalation fires, first successful half-open call closes breaker |
 | L4 | Connection resets during `wait` | No automatic prompt retry or duplicate prompt; pending mail remains and queue wake re-nudges it |
-| L5 | ATM daemon restarts with queued mail | SQLite queue survives and backlog drains after readiness |
+| L5 | Shutdown begins with queued mail while a prompt or escalation is in flight, then ATM restarts | New work and escalation claims stop; admitted work finishes within its own/runtime shutdown bound or is cancelled and joined; guards are released; completed mail remains durable; an unknown prompt stays pending; backlog drains after readiness |
 | L6 | Server is below `HERDR_MINIMUM_VERSION` | Doctor reports `below_minimum`; ordinary calls fail/continue on Herdr's own protocol terms without daemon shutdown |
 | L7 | Desktop `notification show` fails | Lead and recipient mail writes remain, `notify_ok == false`, and no second escalation occurs for the same open timestamp |
 | L8 | Breaker is already open during doctor | `BreakerPolicy::Bypass` reports current endpoint state while separate breaker projection remains open |
@@ -218,19 +258,25 @@ fixed sleeps and flaky retries are prohibited.
 | Repeated open poll | dedup suppresses second attempt for same timestamp | none; wait for half-open/recovery or a new cycle |
 | Prompt submission becomes unknown | infrastructure error and pending mail retained | never retry prompt automatically; queue reminder supplies idempotent follow-up |
 | Half-open attempt fails | breaker returns to open under existing ADR-058 policy | wait for the next bounded backoff; daemon remains ready |
+| Escalation interval invalid | startup `ConfigParseFailed` names key/value and `1..=86_400` range | choose a value in range or remove the key for the 1,800-second default |
+| Shutdown interrupts Herdr work | bounded cancellation/join; durable mail and pending prompt state retained | restart ATM; queued work resumes through normal pump cadence |
 
 ## Acceptance criteria
 
 - [ ] A1 — Gate table tests prove exactly one `claim` per open timestamp and a
-  new claim after a distinct later cycle.
+  new claim after a distinct later cycle. Config fixtures prove the 1,800-
+  second default, both inclusive bounds, and rejection of zero, negative,
+  overflow, wrong type, unknown key, and 86,401 with `ConfigParseFailed`.
 - [ ] A2 — D1 tests prove lead and configured-recipient mail survive desktop
   notification failure or timeout, the stalled case returns within the injected
   five-second deadline with `notify_ok == false`, and HR-SAFE-003 rejects any
   mail body reaching notification arguments.
-- [ ] A3 — Every C3 scenario passes through real Tokio/Axum composition; no
+- [ ] A3 — Every C4 scenario passes through real Tokio/Axum composition; no
   scenario substitutes the frozen synchronous daemon.
 - [ ] A4 — L3 and L9 prove recovery within one existing backoff window without
-  ATM restart; L4 proves no duplicate prompt on unknown submission.
+  ATM restart; L4 proves no duplicate prompt on unknown submission; L5 proves
+  shutdown stops admissions and bounds/drains or cancels every in-flight prompt
+  and escalation without losing durable/pending state.
 - [ ] A5 — Open-breaker doctor uses bypass and retains the independent endpoint
   and breaker projections from AY.3.
 - [ ] A6 — Source/architecture review finds no `herdr server` launch, Herdr

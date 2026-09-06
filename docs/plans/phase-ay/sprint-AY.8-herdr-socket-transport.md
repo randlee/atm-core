@@ -111,14 +111,17 @@ completion fails the sprint.
   hot-spin. The response line has a hard 1 MiB cap. Deadline exhaustion maps
   to existing `HerdrError::Timeout`; oversized or EOF-without-newline responses
   map to existing `HerdrError::InternalError` and log the observed byte count
-  at the transport boundary.
+  at the transport boundary. `SocketIo` spawns no task: dropping a pending call
+  at runtime shutdown closes its stream and releases its permit by RAII.
 - [ ] D7 — add a test-only fake Unix-socket/named-pipe server under
   `crates/atm-herdr/tests/support/fake_herdr_socket/`. It replays every AY.2
   version recording and covers absent endpoint, late start, no newline,
   oversized response, stalled connect/write/read, a rejected second request on
   one connection, pipe-busy-then-free with paused Tokio time on the Windows
   lane, and a 17-caller saturation case that proves the final caller waits for
-  a permit or times out under its original deadline.
+  a permit or times out under its original deadline. Cancellation fixtures drop
+  calls during permit wait, connect, write, and read and prove no permit,
+  stream, retry timer, or task survives.
 - [ ] D8 — run the entire ADR-058 adapter fixture suite through
   `HerdrProcessInvoker` over both `HerdrIo` variants with identical assertions.
   `docs/atm-herdr/herdr-versions.md` gains ping/request/response/error-code
@@ -192,7 +195,13 @@ decode HerdrEnvelope; close the connection
 
 The permit is held through close and released on every success, error, and
 cancellation path. Tests use paused Tokio time for busy-pipe retry and deadline
-expiry; they do not sleep on wall-clock time.
+expiry; they do not sleep on wall-clock time. `SocketIo` owns no detached work:
+all connect/retry/I/O futures are children of the admitted caller. During
+Tokio/Axum drain, the existing runtime stops new admissions; admitted calls may
+finish only within the smaller of their request deadline and runtime shutdown
+deadline. Forced cancellation drops the stream, retry sleep, and semaphore
+permit before the runtime join completes. The invoker and semaphore are dropped
+after those tasks join, and restart constructs fresh state.
 
 Canonical request examples, each exactly one NDJSON line:
 
@@ -260,7 +269,8 @@ be amended and re-reviewed before implementation continues.
    and Windows; the Windows lane exercises a real fake named-pipe server.
 4. Every deadline, line-bound, one-request, absent-endpoint, late-start,
    pipe-busy backoff, and 16-permit saturation case in D6/D7 is deterministic
-   and passes.
+   and passes; cancellation at permit wait/connect/write/read releases every
+   resource without a detached task.
 5. `git diff <parent>..HEAD -- crates/atm-daemon-bootstrap` is empty;
    the construction-site allowlist passes; the PR changed-file set is a subset
    of C3.

@@ -71,9 +71,9 @@ it must not be appended to this stack.
 
 ## Preconditions
 
-- P-A — `integrate/phase-ay` is cut from the Phase AX integration branch after
-  AX.6 and contains develop merge `a7aebefb8` (PR #1218). Verify with
-  `git merge-base --is-ancestor a7aebefb8 integrate/phase-ay`.
+- P-A — the Phase AY plan's P-A is satisfied: Phase AX has merged to develop,
+  `integrate/phase-ay` was cut from that exact fetched develop head, and the
+  recorded merge-base and symbol-presence checks all pass.
 - P-B — the Phase AY plan has dated approval from Rand.
 - Development runs on macOS or Linux; all three CI lanes, including
   `windows-latest`, are merge gates. No Windows machine and no live Herdr

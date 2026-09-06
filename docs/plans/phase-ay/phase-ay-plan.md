@@ -635,147 +635,24 @@ installed, doctor prints one line "herdr: not configured".
   `<configured>/<file-name>`. Raw endpoints never enter JSON, human output,
   snapshots, or logs.
 
-  ```rust
-  // crates/atm-core/src/doctor/herdr_state.rs. The DTOs below (plain data, serde derives,
-  // no I/O) land in AY.3 with HerdrDoctorProbe, which returns and consumes them; the
-  // HerdrEndpointDoctor port, ClosedHerdrEndpointDoctor, presence_findings and
-  // herdr_configured.rs are also AY.3. atm-core owns the DTOs and
-  // the port because atm-core -> atm-herdr is a forbidden edge
-  // (boundary_enforcement.rs:47); atm-herdr, which already depends on atm-core,
-  // fills them. HerdrEndpointDoctor REPLACES HerdrPresenceDoctor (doctor/mod.rs:42;
-  // AYP-R4-003): one port, one probe path. The presence DoctorFindings that
-  // HerdrPresenceDoctor produced are derived in atm-core from the observations
-  // (fn presence_findings(&[HerdrEndpointObservation]) -> Vec<DoctorFinding>, from the typed
-  // per-member outcomes each endpoint carries; AYP-R5-001/AYP-R6-002), so no member is
-  // probed twice. HerdrBreakerDoctor (doctor/report.rs:262) is unchanged. Every
-  // variant carries its remedy via `fn remedy(&self) -> &'static str`; tests
-  // iterate every variant on the CLI transport (AY.3) and again on the socket
-  // transport (AY.9).
-  pub struct HerdrVersion(pub String);                 // as Herdr reports it; semver compare lives in atm-herdr
-  pub enum HerdrTransportKind { Cli, Socket }
-  #[serde(rename_all = "snake_case")]
-  pub enum HerdrEndpointProvenance { Session, SocketPath, HerdrDefault }
-  pub struct HerdrEndpointObservation {
-      pub session: Option<HerdrSession>,               // None = default endpoint
-      pub provenance: HerdrEndpointProvenance,
-      pub transport: HerdrTransportKind,
-      pub endpoint: Option<String>,                    // AYS-R3-001: privacy-preserving display form of the socket/pipe name,
-                                                       // filled by atm-herdr from its own HerdrEndpoint (AY.8/AY.9);
-                                                       // None on CLI; raw values and HerdrEndpoint never enter atm-core.
-      pub binary: Option<(PathBuf, &'static str)>,     // resolved path + "configured" | "path" (CLI only)
-      pub state: HerdrDoctorState,
-      pub live_handoff: Option<bool>,                  // AYP-R5-004/AYP-R6-001: a probe fact, independent of `state`:
-                                                       // Some(capabilities contains "live_handoff") whenever server_info/ping
-                                                       // returned (Ok, BelowMinimum, ClientServerMismatch); None only when
-                                                       // capability retrieval failed. JSON: endpoints[].capabilities.live_handoff
-      pub members: Vec<HerdrMemberPresence>,           // AYP-R5-001/AYP-R6-002: one entry per Herdr-backend roster member
-                                                       // routed to this endpoint, never cleared by `state` (BelowMinimum
-                                                       // still probes: calls continue on Herdr's terms)
-  }
-  pub struct HerdrRosterMember { pub ordinal: usize, pub name: AgentName }   // probe INPUT only (observe); ordinal = index in
-                                                                             // MembersList.members; never serialized
-  pub struct HerdrMemberPresence {
-      #[serde(skip)] pub ordinal: usize,               // copied from the HerdrRosterMember: an ordering detail, not schema
-      pub name: AgentName,
-      pub outcome: HerdrPresenceOutcome,               // internally tagged snake_case serde shape; snapshot-pinned
-  }
-  // JSON: endpoints[].members[] entries are exactly {"name", "outcome"}; the AY.3 snapshot test
-  // asserts there is no `member` wrapper and no `ordinal` key (AYP-R8-002).
-  #[serde(tag = "kind", content = "detail", rename_all = "snake_case")]
-  pub enum HerdrPresenceOutcome {
-      Visible,                                         // `get` succeeded; any AgentStatus (Blocked included) is visible, as today
-      Finding(DoctorFinding),                          // any non-infrastructure HerdrError, AgentNotFound included: the exact
-                                                       // DoctorFinding the AX adapter emits today, built in atm-herdr by
-                                                       // `presence_finding` (replacement_handler.rs:181-206
-                                                       // `herdr_presence_finding` moved verbatim: typed AtmErrorCode, catalog
-                                                       // remediation, emission_outcome text). DoctorFinding (doctor/report.rs:31,
-                                                       // PartialEq) is an existing atm-core type; nothing is rebuilt from strings.
-      Infrastructure { code: AtmErrorCode, detail: String }, // typed infrastructure identity plus safe detail
-  }
-  // presence_findings (atm-core) is the AX loop (replacement_handler.rs:125-154) run over the
-  // flattened observations (AYP-R7-001): collect every HerdrMemberPresence of every endpoint,
-  // sort by `ordinal` (roster order restored), push each Finding(f) in that order,
-  // remember only the FIRST Infrastructure code/detail across all endpoints, and append exactly
-  // one Info HerdrUnavailable built from that typed pair after the loop;
-  // Visible -> nothing. Never one Info per endpoint. Zero-regression tests compare the whole
-  // ordered Vec<DoctorFinding> (PartialEq) with the AX adapter's output on the same
-  // fake-herdr recording: visible (Idle/Working/Blocked/Done), not-visible, failed (e.g.
-  // AgentBlocked), one and several infrastructure-failed members, and a two-endpoint fixture
-  // (default plus one session) with interleaved roster failures and two distinct
-  // infrastructure reasons (only the first reason appears, once).
-  #[serde(tag = "kind", rename_all = "snake_case")]
-  pub enum HerdrDoctorState {
-      Ok { version: HerdrVersion, protocol: u32 },
-      NotConfigured,
-      BinaryNotFound { searched: Vec<PathBuf> },
-      BinaryNotExecutable { path: PathBuf, cause: String },   // exists, not a file / no exec bit / not herdr
-      BelowMinimum { version: HerdrVersion, minimum: HerdrVersion },
-      ServerNotRunning { endpoint_named_by_herdr: Option<String> },
-      ClientServerMismatch { client: Option<HerdrVersion>, server: Option<HerdrVersion> }, // protocol_mismatch
-      EndpointUnreachable { endpoint: String },               // socket transport: refused / absent
-      PermissionDenied { endpoint: String },
-      ProbeTimedOut { after: Duration },
-      UnexpectedResponse { code: Option<String>, detail: String },    // malformed JSON, oversized line, Advisory, InternalError
-      Other { code: AtmErrorCode, detail: String },                   // future/unlisted variant; never debug-only text
-  }
-  // No BreakerOpen variant: the breaker is `HerdrBreakerDoctorReport` (AX.6, unchanged).
-  // ADR-001 workspace-convention seal (AYP-R4-003): Sealed supertrait; `pub mod sealed`
-  // visibility unchanged. Machine-readable record boundaries/atm-core/herdr-endpoint-doctor.toml
-  // (BOUNDARY-HerdrEndpointDoctor; [implementation] visibility = "trait_only";
-  // [dependencies] allowed_dependents = ["atm-daemon-bootstrap"]; forbidden_edges include
-  // "atm-core -> atm-herdr"), discovered by boundary_enforcement.rs core_boundary_files()
-  // and linked from a `## HerdrEndpointDoctor` section of docs/atm-core/boundaries.md; an
-  // architecture test counts `impl HerdrEndpointDoctor for` across the workspace and
-  // requires exactly two: ClosedHerdrEndpointDoctor (atm-core) and
-  // HerdrEndpointDoctorAdapter (atm-daemon-bootstrap). The TOML is P-E's AY.3 file.
-  pub trait HerdrEndpointDoctor: crate::boundary::sealed::Sealed + Send + Sync {
-      fn observe<'a>(&'a self, roster: &'a MembersList, caller_deadline: RequestDeadline)
-          -> Pin<Box<dyn Future<Output = Vec<HerdrEndpointObservation>> + Send + 'a>>;
-  }
-  pub struct ClosedHerdrEndpointDoctor;   // replaces ClosedHerdrPresenceDoctor; returns an empty Vec
-  // Implemented once, in atm-daemon-bootstrap (replacement_handler.rs:
-  // HerdrEndpointDoctorAdapter replaces HerdrPresenceDoctorAdapter) over atm-herdr's
-  // public `HerdrDoctorProbe` (AY.3). `MembersList` (team_admin.rs:93) is the doctor's
-  // view of one `load_team_roster` RosterSnapshot, built by
-  // `ordered_roster_member_summaries` (doctor/mod.rs:679-698); the same instance feeds
-  // `herdr_is_configured` below (AYS-R3-003).
-  ```
+  AY.3 C1–C6 are the sole normative Rust and JSON contracts for
+  `HerdrClientConfig`, all doctor DTOs, `HerdrEndpointDoctor`, endpoint display,
+  presence projection, and error mapping. They are intentionally not duplicated
+  in this umbrella. atm-core owns the DTOs and sealed port; atm-herdr fills them;
+  atm-daemon-bootstrap supplies the only production adapter. AY.3's public-item,
+  signature, serde-shape, boundary-inventory, and implementation-count tests pin
+  that exact contract.
 
-  The `HerdrError` to `HerdrDoctorState` mapping lives in atm-herdr
-  (`crates/atm-herdr/src/doctor_probe.rs`), the crate that owns
-  `HerdrError` and `HERDR_MINIMUM_VERSION`; it covers every `HerdrError`
-  variant (`Other` is the exhaustive-match fallback; a test asserts no
-  listed variant maps to `Other`).
-- Architecture and lifecycle tests (AY.4): (a) daemon starts and reaches
-  ready with no `herdr` binary on PATH and none configured, and a tmux
-  nudge and a hermes graft nudge still succeed in that state; (b) same
-  with a fake `herdr` that always returns `server_not_running`: the
-  breaker opens, doctor reports it, the daemon stays up; (c) no code path
-  in atm-daemon-bootstrap or atm-http-runtime spawns `herdr server` or
-  any long-lived Herdr child (grep guard in boundary_enforcement.rs); (d)
-  `daemon-switch` in the not-configured case writes no Herdr entry.
+  AY.4 C4 is likewise the sole authoritative lifecycle scenario matrix. Its
+  L1–L12 cases cover optional startup, failure, recovery, deduplication,
+  cancellation, and bounded notification behavior; later transport cutover must
+  rerun that exact matrix rather than an umbrella restatement.
 
 ### Herdr starts after atm has been running
 
-No special handling exists or is needed; the plan states the three
-mechanisms that make late start self-healing, and AY.4 tests them:
-
-1. Every call spawns a fresh `herdr` client process (AY.8: a fresh
-   connection per command). There is no session or connection state to
-   re-establish, and the traits were configured from roster data, not
-   from Herdr's runtime state.
-2. The ADR-058 breaker goes half-open after one backoff window
-   (ADR-058:650), so the first successful call closes it; recovery is
-   detected within one backoff window of Herdr coming up.
-3. Mail queued while Herdr was down stays queued. The queue-wake pump
-   (`HERDR_POLL_INTERVAL_MS = 5_000`) and the AX.5 reminder cycle
-   re-nudge idle members with pending work on their cadence, so the
-   backlog drains without any startup code.
-
-The one case that does not self-heal is configuration mismatch (Herdr
-started on a named session while atm is configured for the default, or a
-different account on Windows). Doctor is where that shows up, as a
-`server_not_running` probe result next to the configured values.
+AY.4 C4 L9 is the sole normative late-start contract and acceptance case;
+its failure/recovery mechanics are not restated here. Configuration mismatch
+remains a typed AY.3 doctor outcome rather than an implicit startup repair.
 
 ## Upgrade and restart coordination (normative)
 
@@ -935,13 +812,10 @@ User-experience contract (AY.3 through AY.6 acceptance, verified by req-qa):
   `HERDR_NOTIFY_DEADLINE`; failure or timeout is logged as `notify_ok == false`,
   once per open cycle (dedup keyed on the breaker's open timestamp), and it
   never carries the mail body (HR-SAFE-003).
-- Lifecycle tests: fake Herdr enters the mismatch state mid-run (breaker
-  opens, doctor text, one notification, recovery on the next half-open);
-  fake Herdr resets the connection during a `wait` (no duplicate prompt,
-  pending mail re-nudged by the pump); daemon restarted with queued mail
-  (backlog drains); `daemon-switch --restart-herdr` rejected on a
-  not-configured host and refused without `--stop-herdr-panes` when the
-  fake Herdr lacks `live_handoff`.
+- Lifecycle coverage is not restated here: AY.4 C4 L1–L12 is the sole runtime
+  failure/recovery/shutdown matrix, and AY.6's authoritative scenario matrix is
+  the sole coordinated-restart contract. AY.9 reruns AY.4 L1–L12 verbatim after
+  the socket-default swap.
 
 ## Sprint map, parallel tracks and stacking
 
@@ -1013,9 +887,10 @@ the merged integration head; AY.9 is a standalone two-parent join and the
 phase's last sprint. None is passed to `gh stack link`, and no unmerged
 sibling is ever merged into one of those branches.
 
-The sprint files below are authoritative. Each has mandatory YAML
-frontmatter with exact scalar branch/worktree/stack-parent/PR-target
-values, plus one authoritative list each for production-ready
+The sprint files below are authoritative. Each has the template's literal
+mandatory YAML keys `id`, `title`, `status`, `branch`, and `target`, plus exact
+scalar worktree/stack-parent/PR-target values and one authoritative list each for
+production-ready
 deliverables, acceptance criteria, paths to delete, required validation,
 and explicit non-closure. QA reviews from these files, not from the
 umbrella:
@@ -1036,14 +911,32 @@ phase lands on develop (ruling 5).
 
 Common preconditions:
 
-- P-A: `integrate/phase-ay` exists, cut from `integrate/phase-ax` after
-  PR #1204 (AX.6) has merged into it, then `develop` merged into it with
-  a merge commit so the baseline contains PR #1218 (merge commit
-  a7aebefb8, 2026-09-05T20:11Z: `HERDR_MINIMUM_VERSION` at
-  `crates/atm-herdr/src/lib.rs:22` and ADR-061). Mechanical check before
-  any AY dispatch: `git merge-base --is-ancestor a7aebefb8
-  integrate/phase-ay` exits 0 (owner: fenix). AYS-R2-002 read a stale
-  checkout; the fact stands, and this check makes it verifiable.
+- P-A: first merge `integrate/phase-ax` into `develop`. Immediately after a
+  fresh fetch, set `phase_ax_merge_sha=$(git rev-parse origin/develop)`, record
+  that exact SHA in the AY.1 PR, and create `integrate/phase-ay` directly from
+  that exact `origin/develop` head—never from `integrate/phase-ax`. Both
+  `git merge-base --is-ancestor a7aebefb8 origin/develop` and
+  `git merge-base --is-ancestor "$phase_ax_merge_sha" origin/develop` must exit
+  0, and the same two checks against `integrate/phase-ay` must exit 0.
+  Finally, presence checks on `integrate/phase-ay` must find
+  `HERDR_MINIMUM_VERSION`, ADR-061, HR-CORE-010, `herdr_escalation`,
+  `EscalationOutcome`, `EscalationKind`, and `HERDR_NOTIFY_DEADLINE`. PR #1218
+  is already on `origin/develop` as `a7aebefb8`; the Phase AX symbols arrive
+  through the recorded Phase AX develop merge. Owner: fenix.
+
+  ```bash
+  git fetch origin
+  phase_ax_merge_sha=$(git rev-parse origin/develop)
+  git merge-base --is-ancestor a7aebefb8 origin/develop
+  git merge-base --is-ancestor "$phase_ax_merge_sha" origin/develop
+  git merge-base --is-ancestor a7aebefb8 integrate/phase-ay
+  git merge-base --is-ancestor "$phase_ax_merge_sha" integrate/phase-ay
+  git grep -n 'pub const HERDR_MINIMUM_VERSION' integrate/phase-ay -- crates/atm-herdr/src/lib.rs
+  git ls-tree -r --name-only integrate/phase-ay -- docs/adr | rg '^docs/adr/ADR-061-'
+  git grep -n 'HR-CORE-010' integrate/phase-ay -- docs/atm-herdr/requirements.md
+  git grep -n 'EscalationOutcome\|EscalationKind\|HERDR_NOTIFY_DEADLINE' integrate/phase-ay -- crates/atm-http-runtime
+  git ls-tree -r --name-only integrate/phase-ay -- crates/atm-http-runtime/src | rg 'herdr_escalation.rs|herdr_queue_wake_escalation.rs'
+  ```
 - P-B: this plan is approved by Rand (dated line in this file).
 - P-C (release-readiness prerequisite, not a sprint precondition; no AY
   sprint waits on it, ruling 5): the FastPC4 Windows `atm-dev` team exists with Herdr installed via
@@ -1226,13 +1119,12 @@ readiness; the task-state-machine ADR was renumbered to ADR-062 on
 integrate/phase-ax; a develop freshness merge and the phase-ending review
 are in progress; one PR integrate/phase-ax -> develop follows them.
 
-Decision (Rand, 2026-09-05): `integrate/phase-ay` is cut from
-`integrate/phase-ax` after PR #1204 has merged into it, or from develop if
-phase-ax has already merged to develop at that moment. Either way AY.1 and AY.2
-take the AX contract, including HR-CORE-010 notify, as its baseline.
-When cut from phase-ax, `integrate/phase-ay` is retargeted to develop and
-merged forward once the phase-ax PR lands, before the phase-ay PR opens.
-AX does not wait on any AY sprint.
+Current ordering directive (Rand, relayed by fenix 2026-09-06): the Phase AX
+integration PR merges to `develop` first. Only then is `integrate/phase-ay` cut
+from that updated `origin/develop`, so AY.1 and AY.2 begin with the complete AX
+contract, including HR-CORE-010 notification. There is no direct
+`integrate/phase-ax` → `integrate/phase-ay` cut or later retargeting path. AX
+does not wait on any AY sprint.
 
 ## Risks
 
@@ -1249,8 +1141,9 @@ AX does not wait on any AY sprint.
    the Windows CI lane (AY.7).
 4. Console flash per nudge: CREATE_NO_WINDOW asserted at the single spawn
    site by test (AY.7); visual confirmation is a release-readiness row.
-5. Merge collision with AX: AY branches from phase-ax after AX.6 and
-   merges forward after the phase-ax PR lands (P-A).
+5. Merge collision with AX: no AY integration branch exists until the complete
+   Phase AX integration PR has merged to `develop`; AY is then cut from that
+   exact fetched develop head and P-A mechanically proves both baseline commits.
 6. Hot-path regression: the official benchmark runs once, at release
    readiness on the develop build (`release-readiness-herdr-live-proof.md`),
    never as a sprint or phase gate (Rand, 2026-09-05: "pull the benchmark
@@ -1307,6 +1200,12 @@ AX does not wait on any AY sprint.
   directly from this team until the FastPC4 team exists.
 
 ## Review ledger
+
+This ledger records historical revisions and is not an implementation contract.
+Later entries supersede earlier shapes and ownership decisions; the current
+sprint files are the sole normative source. In particular, r26 explicitly
+supersedes r17/r18 DTO ownership and all pre-r26 primitive config, endpoint,
+version, and lifecycle-label shapes.
 
 - qa-pr1214-plan r1 (73f79aa4f, FAIL) and r2 (04685bfbf, PASS on the
   blocking contradiction; Important "W1 bundles eight closure types"
@@ -1408,8 +1307,10 @@ AX does not wait on any AY sprint.
   side by renumbering before the phase-ax PR; AY.1 gains the one-file
   check), AYS-R2-002 (disputed on the fact: PR #1218 merged
   2026-09-05T20:11Z as a7aebefb8 with the constant at lib.rs:22 and the
-  ADR file; the reviewer read a stale checkout; P-A now carries the
-  merge-base check), AYS-R2-003 (`HerdrTransportKind` defined, core
+  ADR file; the reviewer read a stale checkout; the fact remains correct, but
+  r26 supersedes this entry's former branch-order assumption and P-A now gates
+  both the PR #1218 commit and the Phase AX develop merge), AYS-R2-003
+  (`HerdrTransportKind` defined, core
   owned), AYS-R2-004 (AY.7 adapted (d) distinct from (g)), AYS-R2-005
   (AY.4 size L with internal order), AYS-R2-006 (line citations
   re-pinned to develop a7aebefb8), AYS-R2-007 (`[contracts]` type list
@@ -1453,8 +1354,9 @@ AX does not wait on any AY sprint.
   `herdr.state`/`herdr.remedy` removed; `endpoints[]` in a fixed order),
   AYP-R4-003 (`HerdrEndpointDoctor` replaces `HerdrPresenceDoctor`:
   ADR-001 `Sealed` supertrait, one recorded impl site, presence findings
-  derived from observations), AYS-R3-001 (`endpoint: Option<String>` on
-  the atm-core DTO, filled by atm-herdr via `Display`), AYS-R3-002 (AY.6
+  derived from observations), historical AYS-R3-001 (at r11 the atm-core DTO
+  used primitive `endpoint: Option<String>` filled by atm-herdr via `Display`;
+  superseded by r26's validated `HerdrEndpointDisplay`), AYS-R3-002 (AY.6
   deliverable 5 amends the AY.2 pin test; wording in both sprints),
   AYS-R3-003 (`herdr_is_configured` takes the same `MembersList` doctor
   builds from one roster load), AYS-R3-M1 (AY.2 and AY.6 acceptance
@@ -1486,7 +1388,8 @@ AX does not wait on any AY sprint.
   `herdr_config.rs` given its contract (`daemon_herdr_client_config(env)
   -> Result<HerdrClientConfig, AtmError>`, missing table = default, fail
   closed otherwise) and relative-path validation moved to the pure
-  `HerdrClientConfig::validate` so AY.2 acceptance 6 needs no file I/O.
+  then-public `HerdrClientConfig::validate` so AY.2 acceptance 6 needed no file
+  I/O; r26 supersedes it with private fields and `try_new`.
 - r15 (2026-09-05): critical-plan-reviewer R6 (solar, on r13: 2 blocking;
   AYP-R4-003, R5-002/003/005/006 closed). AYP-R6-001 (`live_handoff:
   Option<bool>` kept whenever the server answered, independent of state;
@@ -1497,42 +1400,48 @@ AX does not wait on any AY sprint.
   to the AX adapter; `agent list` no longer used for presence).
 - r16 (2026-09-05): critical-plan-reviewer R7 (solar, on r15: 1 blocking,
   2 important, 1 minor; AYP-R6-001 closed) and plan-scope r6 (AYS-R5-001/002
-  closed; 1 important, 1 minor). AYP-R7-001 (`HerdrPresenceOutcome` now
-  {Visible, Finding(DoctorFinding), Infrastructure{reason}} built by
+  closed; 1 important, 1 minor). AYP-R7-001 (`HerdrPresenceOutcome` used the
+  then-current {Visible, Finding(DoctorFinding), Infrastructure{reason}}
+  (superseded by r25/r26's internally tagged typed variants) built by
   atm-herdr's moved `presence_finding`; `HerdrRosterMember` ordinal;
   `presence_findings` flattens, restores roster order, one global
   HerdrUnavailable Info; two-endpoint interleaved fixture), AYP-R7-002 and
   AYS-R6-001 (`HerdrEndpointDoctorAdapter` and `herdr_configured.rs`
   moved into deliverable 2 = stage 1, over a default-config probe;
   deliverable 1 = stage 2 wiring only; header, deliverables and AC 7 use
-  one wording), AYP-R7-003 (`validate -> Result<(), AtmError>` with
+  one wording), historical AYP-R7-003 (`validate -> Result<(), AtmError>` with
   `ConfigParseFailed`; reader uses `AtmError::new(..).with_cause(..)`, no
   `config_invalid`; fixtures for unresolvable home, unreadable file,
-  relative `binary_path`), AYP-R7-004 and AYS-R6-M1 (AY.3 AC 7/8 in
+  relative `binary_path`; superseded by r26's `try_new`), AYP-R7-004 and
+  AYS-R6-M1 (AY.3 AC 7/8 in
   reading order).
 - r17 (2026-09-05): critical-plan-reviewer R8 (solar, on r16: 0 blocking,
   3 important; AYP-R7-001..004 closed) and plan-scope r7 (PASS, AYS-R6-001
   and M1 closed). AYP-R8-001 (AY.1 `[contracts]`: `request_types` adds
   `HerdrRosterMember`, `error_types` adds `AtmError`; atm-herdr
   boundaries.md error_types bullet names the two construction sites; AY.2
-  pin test pins the `observe`/`validate` signatures), AYP-R8-002
+  pin test pinned the then-current `observe`/`validate` signatures; r26 replaces
+  the latter with `try_new`), AYP-R8-002
   (`HerdrMemberPresence` is `{#[serde(skip)] ordinal, name, outcome}`;
   `HerdrRosterMember` is probe input only; snapshot asserts exactly
   name/outcome), AYP-R8-003 (`herdr_config.rs` failure mapping is a
   per-class table with one constructor/cause policy each; validate Err
   wrapped once with the file, validate error as cause; AY.3 AC 7 asserts
-  detail and cause per row). AYF-R17-001 (fenix): the doctor DTO file
-  `herdr_state.rs` moves to AY.2 deliverable 1 because
+  detail and cause per row). Historical AYF-R17-001 (fenix, superseded by the
+  r22 sprint reauthoring and r26): at r17 the doctor DTO file
+  `herdr_state.rs` moved to AY.2 deliverable 1 because
   `HerdrDoctorProbe::observe` returns and consumes it and AY.3 must_follow
   AY.2; port, closed impl, `presence_findings`, predicate and boundary
   record stay AY.3 stage 1.
 - r18 (2026-09-05): critical-plan-reviewer R9 (solar, on r17: 0 blocking,
   0 important, 1 minor; AYP-R8-001..003 closed, AYF-R17-001 assessed
   sound) and plan-scope r8 (PASS, 1 minor wording). AYP-R9-001 and
-  AYS-R8-M1: AY.2 out-of-scope line now excepts the DTO file and names
+  Historical AYS-R8-M1 (superseded by r22/r26): AY.2's then-current
+  out-of-scope line excepted the DTO file and named
   the doctor pieces it excludes; AY.3 size-L rationale says "port over the
-  AY.2 DTOs" and states the estimate is unchanged. AY.2 deliverable 1 is
-  the authoritative DTO ownership statement.
+  AY.2 DTOs" and stated the estimate was unchanged. Current ownership is
+  unambiguous: AY.2 forbids changes to `crates/atm-core/src/doctor/**`; AY.3 D2
+  and its exact-target table solely own `doctor/herdr_state.rs` and all DTOs.
 - r19 (2026-09-05): Rand ruling 5 ("herdr is working w/ cli today"):
   no live Windows evidence campaign for the CLI transport. AY.5 narrowed
   to size S (process correctness in `transport_cli.rs`, installer Windows
@@ -1610,3 +1519,21 @@ AX does not wait on any AY sprint.
   typed infrastructure outcomes, privacy-preserving endpoint display, a
   16-call socket concurrency cap, and a 10 ms deadline-clipped Windows pipe-
   busy retry; each contract now has a deterministic acceptance case.
+- r26 (2026-09-06, solar): quality-mgr QA-AYPLAN-R25-1788655720 corrections.
+  AYP-R25-REQQA-001 was a stale-checkout premise: a fresh fetch verified PR
+  #1218 content on `origin/develop` `550627d71` (`HERDR_MINIMUM_VERSION` and
+  ADR-061) and Phase AX content on `origin/integrate/phase-ax` `716f798f1`
+  (`herdr_escalation`, HR-CORE-010). The real defect was ordering; P-A and every
+  sprint now require Phase AX → develop first, then an AY cut from that exact
+  develop head with both merge-base and symbol checks. AYP-R14-001/002 and
+  AYP-R25-ARCH-001 deleted the umbrella DTO duplicate and defer solely to AY.3
+  C1–C6. AYP-R14-003, AYP-R25-ARCH-002, and AYP-R25-PLANSCOPE-001/002 replace
+  every stale lifecycle subset/label with AY.4 C4 L1–L12 and require AY.9 to
+  rerun all twelve, including L10–L12. AYP-R25-RBQA-001 marks r17/r18 ownership
+  historical and pins AY.3 as sole DTO owner. AYP-R25-RBP-001/002 add validated
+  `HerdrEndpointDisplay` and private, fallibly constructed `HerdrClientConfig`;
+  AYP-R25-RSH-001 routes and bounds `escalation_min_interval_secs`; and
+  AYP-R25-RSH-002 pins shutdown admission, draining, cancellation, and resource
+  release across AY.4/AY.8/AY.9. Minor AYP-R14-M1 removes illustrative `Copy`,
+  AYP-R25-RBQA-002 corrects `HerdrEndpoint` visibility wording, and
+  AYP-R25-RBP-003 makes `HerdrVersion` private and validated.
