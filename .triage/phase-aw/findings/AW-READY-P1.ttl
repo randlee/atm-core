@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T16:54:42Z"^^xsd:dateTime ;
   triage:foundIn triage:AW5 ;
@@ -45,8 +47,16 @@
 # the same-file guard is exercised with the actual ~/.config/atm/share/<team>
 # fixture and the source bytes are asserted unchanged. Original guard:
 # f2962ecc1; follow-up regression-fixture proof: d9fa67fcc. QA owns closure.
-<urn:atm:triage:finding/AW-READY-P1>
-  triage:status "fixed" .
+#
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: removed the
+# stale duplicate `triage:status "fixed"` triple previously here (same
+# duplicate-predicate defect class already corrected this round for
+# AW-READY-M4/M7 -- it caused the deduplicated current_integration_summary
+# diagnostic, which reads the finding-level status directly rather than
+# through the branch-scoped occurrence gate, to see this record's FIRST
+# (stale "open") status triple and report it as an open blocker even though
+# both linked occurrences were already closed/fixed). Consolidated to a
+# single header assertion above (status "fixed", closedAt/closedBy added).
 
 # quality-mgr, 2026-09-05, qa-pr1215-r2: independently confirmed by req-qa,
 # arch-qa, and ruthless-boundary-qa -- fixture path matches production's

@@ -23,6 +23,7 @@
   triage:foundIn triage:AWReadinessReview ;
   triage:foundAt "2026-09-05T22:01:02Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-N5-ENV-001/N5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-N5-ENV-001/N5-fixed-ee54c0adc> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AW-N5-ENV-001/N5-1>
@@ -30,11 +31,24 @@
   triage:file "crates/atm-graft-python/tests/test_cli_parity.py" ;
   triage:line 306 ;
   triage:snippet "cls.native_tools = native_tools.AtmNativeTools(" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "9e6383f0b" ;
   triage:occursIn <urn:atm:triage:worktree/N5-aw-fix/9e6383f0b> .
+
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: the branch
+# fix/aw-readiness-easy@9e6383f0b itself was never patched for this specific
+# defect -- the real fix landed via a different branch (fix/aw-readiness-
+# parity, PR #1227) merged into integrate/phase-aw at ee54c0adc, per the
+# resolution note above. That left this original occurrence permanently
+# open/non-terminal even though the finding itself is fully fixed, which the
+# stale_occurrences_summary diagnostic (which checks ALL hasOccurrence-linked
+# occurrences on a terminal finding, not just the branch-scoped subset) kept
+# flagging. Marking it "inherited-fix"/closed true: this occurrence's own
+# branch never received a direct fix, but the finding is resolved via the
+# inherited merge from the sibling branch -- an accurate terminal status, not
+# a claim that fix/aw-readiness-easy@9e6383f0b itself was edited.
 
 <urn:atm:triage:worktree/N5-aw-fix/9e6383f0b>
   a triage:WorktreeSnapshot ;
