@@ -5,6 +5,7 @@
 # belong in the agent input only and must not be copied into this record.
 # Filed by quality-mgr during QA-AXPE-R1 on PR #1234 (phase-end easy fix set) at 7f65db491; fenix-recorded.
 
+# Closed 2026-09-06T02:15:00Z: QA-AXPE-EVIDENCE-R1 PR #1237 @ 407c8be52, reconfirmed @ 4c81926bb.
 <urn:atm:triage:finding/AXPE-QA-101>
   a triage:Finding ;
   triage:findingId "AXPE-QA-101" ;
@@ -16,8 +17,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "phase" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-06T00:52:55Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
   triage:foundAt "2026-09-06T00:51:53Z"^^xsd:dateTime ;
@@ -29,8 +32,8 @@
   triage:file "docs/plans/phase-ax/.audit/qa-evidence-master.json" ;
   triage:line 638 ;
   triage:snippet "\"coverage_gaps\": [ ... ] (stale relative to scope)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ax-phase-end-docs-tests" ;
   triage:headSha "7f65db4911ec696158cbb1248ca85e5fbf055a65" ;
   triage:occursIn <urn:atm:triage:worktree/EASYFIX/7f65db4911ec696158cbb1248ca85e5fbf055a65> .

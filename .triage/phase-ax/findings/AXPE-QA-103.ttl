@@ -5,6 +5,7 @@
 # belong in the agent input only and must not be copied into this record.
 # Filed by quality-mgr during QA-AXPE-STRUCT-R1 on PR #1236 at 946763576; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1236#issuecomment-5556000726
 
+# Closed 2026-09-06T02:15:00Z: QA-AXPE-STRUCT-R2/R3 PR #1236 @ 6c7055274.
 <urn:atm:triage:finding/AXPE-QA-103>
   a triage:Finding ;
   triage:findingId "AXPE-QA-103" ;
@@ -16,8 +17,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "branch" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-06T01:14:37Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
   triage:foundAt "2026-09-06T01:13:13Z"^^xsd:dateTime ;
@@ -29,8 +32,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_ledger_reader.rs" ;
   triage:line 81 ;
   triage:snippet "task_sql::select_tasks_for_team(connection, team, member)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ax-phase-end-structural" ;
   triage:headSha "946763576830550debefa5d0862f84ff0029bdc1" ;
   triage:occursIn <urn:atm:triage:worktree/STRUCT/946763576830550debefa5d0862f84ff0029bdc1> .

@@ -5,6 +5,7 @@
 # belong in the agent input only and must not be copied into this record.
 # Filed by quality-mgr during QA-AX-PHASE-END-1788655446 (phase-ending review) on merge/develop-into-phase-ax at 3afa39160; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1232#issuecomment-5556008121 Native id: ATM-QA-AX-PE-007
 
+# Closed 2026-09-06T02:15:00Z: QA-AXPE-PLANDOCS-R1/R2 PR #1238 @ 29b6af19f.
 <urn:atm:triage:finding/AXPE-QA-109>
   a triage:Finding ;
   triage:findingId "AXPE-QA-109" ;
@@ -16,8 +17,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "phase" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-06T01:17:12Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
   triage:foundAt "2026-09-06T01:14:51Z"^^xsd:dateTime ;
@@ -29,8 +32,8 @@
   triage:file "docs/plans/phase-ax/.audit/qa-evidence-master.json" ;
   triage:line 1 ;
   triage:snippet "AX6-QA2 ... ATM-QA-004" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "merge/develop-into-phase-ax" ;
   triage:headSha "3afa39160df6a8ca2e26d690784d80f1c53844d4" ;
   triage:occursIn <urn:atm:triage:worktree/MERGE/3afa39160df6a8ca2e26d690784d80f1c53844d4> .

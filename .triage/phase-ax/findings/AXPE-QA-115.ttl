@@ -5,6 +5,7 @@
 # belong in the agent input only and must not be copied into this record.
 # Filed by quality-mgr during QA-AXPE-STRUCT-R2-1788657810 (PR #1236, fix/ax-phase-end-structural @ 0364a1b94); fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1236#issuecomment-5556146083 Native id: QA-JUSTVALIDATE-ENV
 
+# Waived 2026-09-06T02:15:00Z: Rand ruling 2026-09-05 (non-blocking phase-end findings do not gate the phase); deferred to post-mortem follow-up, tracked as randlee/atm-core#1243.
 <urn:atm:triage:finding/AXPE-QA-115>
   a triage:Finding ;
   triage:findingId "AXPE-QA-115" ;
@@ -16,7 +17,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "phase" ;
-  triage:status "open" ;
+  triage:status "waived" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-06T01:48:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
@@ -29,8 +32,8 @@
   triage:file "tools/bootstrap.toml" ;
   triage:line 4 ;
   triage:snippet "rust = \"1.94.1\" / cargo-shear = \"1.13.3\"" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "waived" ;
+  triage:closed true ;
   triage:branch "fix/ax-phase-end-structural" ;
   triage:headSha "0364a1b940c2cb346ca4171e3021a2f5df7e7284" ;
   triage:occursIn <urn:atm:triage:worktree/L3/0364a1b940c2cb346ca4171e3021a2f5df7e7284> .

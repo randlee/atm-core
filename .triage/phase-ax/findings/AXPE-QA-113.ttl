@@ -5,6 +5,7 @@
 # belong in the agent input only and must not be copied into this record.
 # Filed by quality-mgr during QA-AXPE-PLANDOCS-R1-1788657753 (PR #1238, fix/ax-phase-end-plan-docs @ 2240fe906); fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1238#issuecomment-5556099225 Native id: AXPE-QA-111 (renumbered: AXPE-QA-111 collides with an existing phase-ax record).
 
+# Closed 2026-09-06T02:15:00Z: QA-AXPE-PLANDOCS-R2 PR #1238 @ 29b6af19f.
 <urn:atm:triage:finding/AXPE-QA-113>
   a triage:Finding ;
   triage:findingId "AXPE-QA-113" ;
@@ -16,8 +17,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "phase" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-06T01:36:30Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
   triage:foundAt "2026-09-06T01:34:20Z"^^xsd:dateTime ;
@@ -29,8 +32,8 @@
   triage:file "docs/plans/phase-ax/.audit/qa-evidence-master.json" ;
   triage:line 643 ;
   triage:snippet "Nine AXPE phase-end findings are tracked in .triage/phase-ax/findings and fixed on stack #1235." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ax-phase-end-plan-docs" ;
   triage:headSha "2240fe906501251263e4a017ab13985fcf874500" ;
   triage:occursIn <urn:atm:triage:worktree/L5/2240fe906501251263e4a017ab13985fcf874500> .
