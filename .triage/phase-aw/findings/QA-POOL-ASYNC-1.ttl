@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-POOL-ASYNC-1>
+  a triage:Finding ;
+  triage:findingId "QA-POOL-ASYNC-1" ;
+  triage:title "graft_receiver_lookup fix uses spawn_blocking+submit_blocking instead of native async submit path" ;
+  triage:description "In the AW-POOL-V4 remainder fix (commit 83f3d27cc, later merged to develop via PR #1254 at merge commit a09f60884), the graft_receiver_lookup deadline-bounded read fix in crates/atm-http-runtime/src/storage_and_nudge_router.rs uses spawn_blocking + submit_blocking against control_path_sync_bridge instead of atm-storage-rusqlite's native async submit path (ReaderPool lanes: async submit + deadline + interrupt) that sibling `_async` methods already use. This is architecturally inconsistent with the SQLite reads async via ReaderPool, no join standing pattern (semaphore-around-spawn_blocking is considered a FAIL for read paths elsewhere in this codebase) but quality-mgr scored it non-blocking/minor since it does not regress correctness, only consistency/efficiency." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T20:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:phase-aw-gate-closeout ;
+  triage:foundAt "2026-09-06T18:53:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-POOL-ASYNC-1/R1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-POOL-ASYNC-1/R1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 785 ;
+  triage:snippet "self.control_path_sync_bridge.run(deadline, move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "dba42148d" ;
+  triage:occursIn <urn:atm:triage:worktree/develop/dba42148d> .
+
+<urn:atm:triage:worktree/develop/dba42148d>
+  a triage:WorktreeSnapshot ;
+  triage:path "." ;
+  triage:branch "develop" ;
+  triage:headSha "dba42148d" ;
+  triage:orderIndex 0 .
