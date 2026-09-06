@@ -1962,33 +1962,50 @@ fn aq4_resolve_picker_recipient_has_a_single_construction_site() {
 }
 
 #[test]
-fn aw_ram_roster_hot_paths_use_the_shared_roster_store_seam() {
-    // Hot-path roster consumers must receive the runtime's write-through,
-    // RAM-backed store. Reaching through an alternate runtime accessor here
-    // would silently restore a durable SQLite read on the delivery path.
+fn aw_ram_per_tick_roster_consumers_use_only_the_shared_store_construction_seam() {
+    // A per-tick consumer that calls the durable RosterStore methods must
+    // obtain that handle from LocalServiceRuntime's write-through RAM seam.
+    // Scan the whole live runtime source surface instead of pinning a small
+    // hand-maintained file list, so a newly added queue/nudge worker cannot
+    // silently reintroduce the AW-POOL-V7 SQLite-read pattern.
     let root = workspace_root();
-    let hot_paths = [
-        "crates/atm-daemon-bootstrap/src/lib.rs",
-        "crates/atm-daemon-bootstrap/src/queue_drain.rs",
-        "crates/atm-daemon-bootstrap/src/received_hook_selector.rs",
-        "crates/atm-http-runtime/src/herdr_queue_wake.rs",
-        "crates/atm-http-runtime/src/storage_and_nudge_router.rs",
+    let runtime_source_roots = [
+        root.join("crates/atm-daemon-bootstrap/src"),
+        root.join("crates/atm-http-runtime/src"),
     ];
+    let mut files = Vec::new();
+    for source_root in runtime_source_roots {
+        collect_rust_files(&source_root, &mut files);
+    }
 
-    let violations = hot_paths
+    let durable_roster_reads = [".load_roster(", ".list_teams("];
+    let consumers = files
         .iter()
-        .filter_map(|relative_path| {
-            let source = read_source(&root.join(relative_path));
-            (!source.contains("shared_roster_store_arc()")
-                || source.contains("storage_backends.rosters")
-                || source.contains("roster_runtime_mirror()"))
-            .then(|| (*relative_path).to_owned())
+        .filter_map(|path| {
+            let source = read_source(path);
+            durable_roster_reads
+                .iter()
+                .any(|read| source.contains(read))
+                .then_some((path, source))
         })
+        .collect::<Vec<_>>();
+    let violations = consumers
+        .iter()
+        .filter(|(_, source)| {
+            !source.contains("shared_roster_store_arc()")
+                || source.contains("storage_backends.rosters")
+                || source.contains("roster_runtime_mirror()")
+        })
+        .map(|(path, _)| path.strip_prefix(&root).unwrap_or(path).display().to_string())
         .collect::<Vec<_>>();
 
     assert!(
+        !consumers.is_empty(),
+        "the runtime source scan must find at least one durable roster consumer"
+    );
+    assert!(
         violations.is_empty(),
-        "AW RAM-roster hot paths must use only shared_roster_store_arc(), never a raw or alternate roster accessor: {violations:?}"
+        "per-tick durable roster consumers must construct their handle only via shared_roster_store_arc(): {violations:?}"
     );
 }
 
