@@ -12,18 +12,16 @@ use crate::{
 /// Effective capacity settings for one reader lane, selected by the backend
 /// when it constructs the live pool.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EffectiveReaderLane {
+pub struct EffectiveReaderPool {
     pub pool_size: usize,
     pub queue_depth: usize,
+    pub tool_class_max_in_flight: usize,
 }
 
 /// Backend-neutral effective capacity settings for the benchmarked reader
 /// lanes. This is runtime data, not a benchmark-side default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EffectiveReaderLanes {
-    pub mailbox: EffectiveReaderLane,
-    pub search: EffectiveReaderLane,
-}
+pub type EffectiveReaderLanes = EffectiveReaderPool;
 
 /// A roster [`RosterStore`] handle proven, *by type*, to be the
 /// write-through RAM-mirroring seam -- paired with the
