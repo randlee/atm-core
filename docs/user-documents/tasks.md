@@ -33,7 +33,7 @@ atm list --task-events t-42 --member cipher --json
 
 `--tasks --json` returns an array of task rows. `--task-events <id> --json`
 returns that task's append-only events in sequence order. An unknown task id
-prints the event header only (or `[]` as JSON) and succeeds. See ADR-061 for
+prints the event header only (or `[]` as JSON) and succeeds. See ADR-062 for
 the task tables and audit/replay contract.
 
 For a Herdr-backed assignee, ATM re-sends the Task reminder body while an open

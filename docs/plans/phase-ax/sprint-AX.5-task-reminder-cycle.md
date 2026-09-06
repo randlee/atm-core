@@ -189,7 +189,7 @@ shape-only completion fails the sprint.
   by the tmux hook path, and an assignee moved after reading is an
   ordinary non-Herdr assignee (reminders out of scope, phase plan §5).
   `SendOutcome` is unchanged.
-- [x] D5 — docs: ADR-061 gains a "Reminder cycle" section (rule,
+- [x] D5 — docs: ADR-062 gains a "Reminder cycle" section (rule,
   properties, 60 s, 5 s tick, drain-first ordering, shared prompt budget,
   Herdr only, `idle_members` semantics unchanged, Blocked handling);
   `docs/requirements.md` §15.4 gains the reminder rule;
@@ -275,7 +275,7 @@ log record and `atm list --task-events`, not doctor).
 5. `herdr_queue_poll_tick` carries `task_reminders`,
    `task_reminders_unrenderable`, and `task_reminders_blocked`; `just
    validate` green; `python scripts/check-nudge-taxonomy.py` unchanged
-   allowlist; ADR-061 and requirements §15.4 merged.
+   allowlist; ADR-062 and requirements §15.4 merged.
 6. An assignee whose Herdr status is `blocked` shows `state=blocked` in
    `atm members`, receives no prompt, and accrues one `Reminded` row with
    outcome `blocked` per 60 s while blocked; when it returns to idle the
@@ -302,7 +302,7 @@ log record and `atm list --task-events`, not doctor).
   task reminder against a fixture Herdr adapter, with negative proof (an
   assignee with no open task gets no prompt).
 - `just validate`; quality-mgr Final Quality Report on the PR; `arch-qa`
-  on the ADR-061 reminder-cycle section.
+  on the ADR-062 reminder-cycle section.
 
 ## Out of scope
 

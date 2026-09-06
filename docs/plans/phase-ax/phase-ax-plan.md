@@ -157,7 +157,7 @@ cycle-1 hardening findings; binding unless Rand objects at plan review):
   Daemon-down behaviour is identical to queued mail today: nothing is
   nudged until the daemon pump runs.
 - `TaskStore` is the seventh optional storage capability trait under
-  ADR-018 §3 as re-counted by ADR-054; ADR-061 is the follow-up ADR that
+  ADR-018 §3 as re-counted by ADR-054; ADR-062 is the follow-up ADR that
   rule requires.
 - An ack whose task id has no local `tasks` row is **never rejected**:
   the machine is a no-op for it (pre-upgrade mail, peer-delivered tasks).
@@ -228,7 +228,7 @@ follow-up options on #1173, not open questions.
   `docs/requirements.md` (Phase-AC supersession note) and
   `docs/architecture.md` ("Task Storage (Deferred)") still say a later
   task store would start from Claude-code task schema plus Pydantic.
-  AX.3 D10 amends both: the canonical task model is ADR-061's
+  AX.3 D10 amends both: the canonical task model is ADR-062's
   message-derived state machine in Rust, the `AC.6` deletion stands, and
   nothing deleted there is revived.
 
@@ -238,7 +238,7 @@ follow-up options on #1173, not open questions.
 | --- | --- | --- | --- | --- | --- |
 | AX.1 | A | **parallel with AX.3/AX.4** | Queue template class and default template fixes | `BuiltInNudgeTemplateKind`, override-table migration, kind selection, task sends forced deferred, default bodies, CLI kind strings, six-kind statements in docs and ADR-019 amendment, nudge scripts | `sprint-AX.1-queue-template-class.md` |
 | AX.2 | A | after AX.1; **parallel with AX.3/AX.4** | Herdr renders the built-in template | `HerdrNudgeTarget`, `send/hook.rs` Herdr branch, `HerdrProcessAdapter::prompt` and its three impls, bootstrap selector call site, ADR-058 amendment, `HR-CORE-002`/`HR-SAFE-003`, Herdr boundary record, contract fixture | `sprint-AX.2-herdr-template-rendering.md` |
-| AX.3 | B | **parallel with AX.1/AX.2** | Task state machine and storage | `atm-storage` task types and pure transition, `TaskStore` and wiring, `MessageWriteOrigin` carrier on both insert paths, rusqlite tables and in-transaction application, ack gate, `SendRequest::with_task_complete`, two boundary records, ADR-061, ADR-054 amendment (trait re-count), requirements §7 | `sprint-AX.3-task-state-machine.md` |
+| AX.3 | B | **parallel with AX.1/AX.2** | Task state machine and storage | `atm-storage` task types and pure transition, `TaskStore` and wiring, `MessageWriteOrigin` carrier on both insert paths, rusqlite tables and in-transaction application, ack gate, `SendRequest::with_task_complete`, two boundary records, ADR-062, ADR-054 amendment (trait re-count), requirements §7 | `sprint-AX.3-task-state-machine.md` |
 | AX.4 | B | after AX.3; **parallel with AX.1/AX.2** | Task completion and inspection CLI | `atm send --task-complete`, `atm list --tasks` / `--task-events`, requirements §6.5/§6.6/§15.4, team-protocol, `docs/user-documents/tasks.md` | `sprint-AX.4-task-cli-and-docs.md` |
 | AX.5 | C | after A and B merge | Task reminder cycle in the Herdr pump | pump task step, idle-set widening, clock seam, `RuntimeMemberState::Blocked`, blocked-assignee reminder outcome, task-row reminder rendering, drain-first ordering (no marker exception) | `sprint-AX.5-task-reminder-cycle.md` |
 | AX.6 | C | after AX.5 | Lead notification and doctor | `atm-daemon` reserved sender, lead message, blocked escalation, Herdr desktop notification via `HerdrProcessAdapter::notify`, daemon-default escalation recipients with per-team override (any resolvable address), five doctor codes with catalog guidance | `sprint-AX.6-lead-notification-doctor.md` |

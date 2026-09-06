@@ -159,7 +159,7 @@ shape-only completion fails the sprint.
   the same way `atm help` was recorded, and §2.1 In Scope lists it;
   §11.3 lists the five doctor
   codes with remediation; §12.3 (or the reserved-identifier section)
-  lists `atm-daemon`; ADR-061 gains a "Lead notification" section;
+  lists `atm-daemon`; ADR-062 gains a "Lead notification" section;
   `docs/user-documents/nudge-templates.md` and `docs/team-protocol.md`
   describe the lead message.
 - [x] D5 — tests listed under Required validation.
@@ -334,7 +334,7 @@ visibility (public).
    `ATM_MEMBER_BLOCKED`; each with the C2 remediation text. Ten
    `blocked` reminders produce the lead message with `last outcome
    blocked`.
-4. `just validate` green; requirements §11.3/§12.3, ADR-061, ADR-058
+4. `just validate` green; requirements §11.3/§12.3, ADR-062, ADR-058
    amendment and `HR-CORE-010` updated.
 5. A member observed `blocked` for 60 s produces exactly one lead message
    with the C3 body and one `notify` call with the C4 argv; still blocked

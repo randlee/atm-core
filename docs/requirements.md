@@ -64,13 +64,13 @@ Phase-AC supersession note:
   canonical design instead of reviving speculative transition scaffolding
 
 Phase-AX amendment (2026-09-04): superseded. Task storage is approved in
-Phase AX (phase plan §2). Its canonical model is ADR-061's daemon-owned,
+Phase AX (phase plan §2). Its canonical model is ADR-062's daemon-owned,
 message-derived Rust state machine in `atm-storage` and
 `atm-storage-rusqlite`; the Claude-code-schema-plus-Pydantic direction is
 withdrawn because task state derives from messages already persisted by the
 daemon, the write path has no Python, and a Claude Code task list is a
 per-session harness artifact rather than a cross-host record. The AC.6
-deletion stands: ADR-061 revives none of that scaffolding.
+deletion stands: ADR-062 revives none of that scaffolding.
 
 Phase-AX.6 amendment (2026-09-05): lead notification and escalation are part
 of the retained task surface. `atm-daemon` is the reserved daemon actor and
@@ -2693,7 +2693,7 @@ Required rules:
   acknowledges the assignment in the same transaction so it cannot remain
   pending acknowledgement
 - every transition, rejection, resend, and reminder is append-only audit data;
-  the durable tables and replay contract are defined by ADR-061
+  the durable tables and replay contract are defined by ADR-062
 - the Tokio Herdr queue wake pump checks open tasks after draining deferred
   mail: for an idle or done Herdr assignee it re-sends the Task body no more
   than once per 60 seconds, sharing the drain prompt budget; a blocked assignee

@@ -32,7 +32,7 @@ applied inside the existing message-write transactions, with an
 append-only audit log. This sprint changes **no nudge behaviour** and
 adds **no CLI flag**: it delivers the types, the store, the writer-side
 application, the ack gate, the library-level completion request, the
-boundary record, and ADR-061. The CLI and user docs are AX.4; the
+boundary record, and ADR-062. The CLI and user docs are AX.4; the
 reminder cycle is AX.5. This sprint **executes in parallel with AX.1 and
 AX.2** on its own gh-stack rooted on `integrate/phase-ax`.
 
@@ -124,7 +124,7 @@ Replay claim, stated precisely: for one (team, task_id, assignee), the
 `Reminded` rows equals `tasks.reminder_count`; the latest `Reminded.at`
 equals `tasks.last_reminded_at`. `tasks.description` is **not**
 replayable (a re-send may change it; the log records only `resend`).
-ADR-061 and the boundary record state the same four columns.
+ADR-062 and the boundary record state the same four columns.
 
 ## Deliverables
 
@@ -275,7 +275,7 @@ deliverables.
   existing transaction. `WriteOp::Acknowledge` (`execute_acknowledgement`
   line 413) is the only `Acked` site and uses the loaded source. C7 for
   completion from `Assigned`.
-- [x] D7 — `docs/adr/ADR-061-task-state-machine.md` recording the
+- [x] D7 — `docs/adr/ADR-062-task-state-machine.md` recording the
   states, events, transition table (including the ∅/`Acked` no-op),
   guards, row resolution, provenance rule and carrier, the one-site
   rule, the precise replay claim, the seventh-capability-trait
@@ -294,13 +294,13 @@ deliverables.
   get a dated Phase-AX amendment directly below the existing text (the
   historical note is kept, marked superseded, not rewritten): task
   storage is approved in Phase AX (Rand, 2026-09-04, phase plan §2); the
-  canonical model is ADR-061's daemon-owned, message-derived state
+  canonical model is ADR-062's daemon-owned, message-derived state
   machine implemented in Rust inside `atm-storage` / `atm-storage-rusqlite`;
   the Claude-code-schema-plus-Pydantic direction is withdrawn because ATM
   tasks are derived from messages the daemon already persists, the write
   path is Rust with no Python in it, and a Claude Code task list is a
   per-session harness artifact rather than a cross-host record. The
-  `AC.6` deletion stands: ADR-061 is a fresh design and revives none of
+  `AC.6` deletion stands: ADR-062 is a fresh design and revives none of
   the deleted scaffolding. Gate: the `Pydantic` references in the two named
   Phase-AC notes each have the Phase-AX amendment; the unrelated historical
   Phase-AA note is outside this sprint's scope.
@@ -751,7 +751,7 @@ paths; `atm read` / `atm ack` argument shapes; `DeliveryRecipientSnapshot`;
    empty; `grep -rn 'atm_storage::.*Task' crates/atm-http-runtime/src crates/atm-daemon-bootstrap/src`
    empty; `python scripts/check-nudge-taxonomy.py` passes with an
    unchanged allowlist; `boundary-guard` review of `task-store.toml`
-   and `task-store-sqlite.toml` passes; ADR-061, the ADR-054 amendment, and requirements §7 merged;
+   and `task-store-sqlite.toml` passes; ADR-062, the ADR-054 amendment, and requirements §7 merged;
    `just validate` green; contract.rs size gate:
    `awk '/^#\[cfg\(test\)\]/{exit} {n++} END{exit n>1000}' crates/atm-storage/src/contract.rs`
    succeeds (non-test lines ≤ 1000); backend neutrality:
@@ -790,7 +790,7 @@ paths; `atm read` / `atm ack` argument shapes; `DeliveryRecipientSnapshot`;
   rusqlite store after `atm-runtime` composition and after
   `storage_and_nudge_router` assembly; the not-installed error shape.
 - `just validate`; quality-mgr Final Quality Report on the PR;
-  `boundary-guard` on the new TOML; `arch-qa` on ADR-061 and the ADR-054
+  `boundary-guard` on the new TOML; `arch-qa` on ADR-062 and the ADR-054
   amendment.
 
 ## Out of scope

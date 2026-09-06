@@ -2,7 +2,7 @@
 title: Task State Machine
 ---
 
-# ADR-061 — Task State Machine
+# ADR-062 — Task State Machine
 
 Date: 2026-09-04
 

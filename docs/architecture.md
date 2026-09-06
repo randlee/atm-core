@@ -2881,12 +2881,12 @@ Phase `AC` closeout note:
   scaffolding
 
 Phase-AX amendment (2026-09-04): superseded. Task storage is approved in
-Phase AX (phase plan §2). ADR-061 defines the daemon-owned,
+Phase AX (phase plan §2). ADR-062 defines the daemon-owned,
 message-derived Rust state machine implemented by `atm-storage` and
 `atm-storage-rusqlite`; the Claude-code-schema-plus-Pydantic direction is
 withdrawn because the daemon already persists source messages, its write path
 has no Python, and a Claude Code task list is a per-session harness artifact,
-not a cross-host record. The AC.6 deletion stands: ADR-061 is a fresh design,
+not a cross-host record. The AC.6 deletion stands: ADR-062 is a fresh design,
 not a revival of deleted scaffolding.
 
 #### RosterStore
