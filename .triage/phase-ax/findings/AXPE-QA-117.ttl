@@ -40,3 +40,5 @@
   triage:branch "integrate/phase-ax" ;
   triage:headSha "6e8f33ba59a1167127e94222bbed0405a3680cf0" ;
   triage:orderIndex 12 .
+
+# Correction 2026-09-06 (fenix): the description cites crates/atm-error/src/error_catalog.rs; the catalog lives in crates/atm-error/src/error_codes.rs (no such error_catalog.rs file). Record text only; finding unchanged.
