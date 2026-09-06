@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY2-QA-002>
+  a triage:Finding ;
+  triage:findingId "AY2-QA-002" ;
+  triage:title "D5/AC6 unmet: no test exercises the real transport path (HerdrProcessInvoker/CliIo -> decode_envelope)" ;
+  triage:description "quality-mgr qa-pr1269-r1 (PR #1269 @ a35154291; Blocking; req-qa ATM-QA-001, independently confirmed). crates/atm-herdr/tests/fake_herdr_modes.rs spawned the fake-Herdr binary directly and asserted only on its stdout; it never routed through HerdrIo/CliIo/HerdrProcessInvoker. decode_envelope (must tolerate unknown JSON fields and CRLF per D5) has exactly one caller, crates/atm-herdr/src/transport_cli.rs:35 (production), and no test invokes it. No test references CliIo or HerdrProcessInvoker. D5 coverage (child-stdout parsing, argv+HERDR_SESSION round-trip through one invoker, binary resolution through the Phase AX path, version replay between calls, unknown-field tolerance, CRLF tolerance) is structurally untested; AC6 unmet. Required correction: integration tests that route through the real production path against the fake-herdr binary (PATH-inject fake-herdr as herdr, or a cfg(test)-only HerdrClientConfig constructor with explicit binary path), covering CRLF, unknown JSON fields, two sessions through one invoker, and version replay across two calls." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-herdr/tests/, crates/atm-herdr/src/transport.rs, crates/atm-herdr/src/transport_cli.rs, docs/plans/phase-ay/sprint-AY.2-*.md D5/AC6" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T23:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY2 ;
+  triage:foundAt "2026-09-06T23:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-002/integrate-0-ay2qa002> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-002/ay2-1-ay2qa002> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-002/ay3-2-ay2qa002> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY2-QA-002/integrate-0-ay2qa002>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_cli.rs" ;
+  triage:line 162 ;
+  triage:snippet "fn decode_envelope - missing transport-seam tests" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "d084bb2ff" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ay-d084bb2ff> .
+
+<urn:atm:triage:occurrence/AY2-QA-002/ay2-1-ay2qa002>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_cli.rs" ;
+  triage:line 162 ;
+  triage:snippet "fn decode_envelope - missing transport-seam tests" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "9839b90c5" ;
+  triage:occursIn <urn:atm:triage:worktree/ay2-9839b90c5> .
+
+<urn:atm:triage:occurrence/AY2-QA-002/ay3-2-ay2qa002>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_cli.rs" ;
+  triage:line 162 ;
+  triage:snippet "fn decode_envelope - missing transport-seam tests" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "0b0bfa304" ;
+  triage:occursIn <urn:atm:triage:worktree/ay3-0b0bfa304> .
+
+<urn:atm:triage:worktree/integrate-ay-d084bb2ff>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "d084bb2ff" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/ay2-9839b90c5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ay2-herdr-transport-seam" ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "9839b90c5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ay3-0b0bfa304>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "0b0bfa304" ;
+  triage:orderIndex 2 .

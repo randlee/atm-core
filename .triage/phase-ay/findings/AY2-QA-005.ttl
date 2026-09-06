@@ -1,0 +1,68 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY2-QA-005>
+  a triage:Finding ;
+  triage:findingId "AY2-QA-005" ;
+  triage:title "Herdr wire error message and retry_after_ms silently discarded in transport.rs error_from_envelope" ;
+  triage:description "quality-mgr qa-pr1269-r1 (PR #1269 @ a35154291; Important; rust-best-practices-agent RBP-F001, independently confirmed). crates/atm-herdr/src/transport.rs:177 error_from_envelope decodes message and retry_after_ms from the child's stderr JSON envelope then discards both (let _ = (&error.message, error.retry_after_ms);) before mapping to HerdrError. HerdrError::Advisory surfaces only the wire code, never the supplied message; the server's retry_after_ms is never used, Unavailable's retry hint comes solely from the local circuit breaker. Required correction: thread message into the HerdrError variants that can carry it (at minimum Advisory/InternalError) and use wire retry_after_ms as input/override for the breaker-derived retry hint on Unavailable. Record line as it stands at 9839b90c5." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-herdr/src/transport.rs, crates/atm-herdr/src/transport_cli.rs, crates/atm-herdr/src/lib.rs HerdrError definition" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T23:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY2 ;
+  triage:foundAt "2026-09-06T23:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-005/AY2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-005/AY3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY2-QA-005/AY2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport.rs" ;
+  triage:line 177 ;
+  triage:snippet "let _ = (&error.message, error.retry_after_ms);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "9839b90c5" ;
+  triage:occursIn <urn:atm:triage:worktree/ay2/9839b90c5> .
+
+<urn:atm:triage:occurrence/AY2-QA-005/AY3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport.rs" ;
+  triage:line 177 ;
+  triage:snippet "let _ = (&error.message, error.retry_after_ms);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "0b0bfa304" ;
+  triage:occursIn <urn:atm:triage:worktree/ay3/0b0bfa304> .
+
+<urn:atm:triage:worktree/integrate/phase-ay>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "d084bb2ff" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/ay2/9839b90c5>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ay2-herdr-transport-seam" ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "9839b90c5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ay3/0b0bfa304>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "0b0bfa304" ;
+  triage:orderIndex 2 .

@@ -1,0 +1,164 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY2-QA-004>
+  a triage:Finding ;
+  triage:findingId "AY2-QA-004" ;
+  triage:title "dead legacy oracles retained under #[cfg(any())] in atm-herdr lib.rs instead of deleted" ;
+  triage:description "Quality QA flagged dead code at crates/atm-herdr/src/lib.rs:554-785 (legacy_process_oracle) and :803-906 (legacy_parser_oracle), plus three now-unused imports gated by the same permanently-false #[cfg(any())], duplicate logic already moved into transport.rs/transport_cli.rs. Inert scaffolding. Required correction: delete legacy_process_oracle, legacy_parser_oracle and their three orphaned #[cfg(any())] imports from lib.rs; D1/D2/D6 tests already prove equivalence." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-hygiene" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-herdr/src/**/*.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T23:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY2 ;
+  triage:foundAt "2026-09-06T23:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY2-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY2-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY2-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY3-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY3-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY3-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-004/AY3-5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY2-QA-004/AY2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 5 ;
+  triage:snippet "#[cfg(any())] use std::process::Stdio;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "9839b90c5" ;
+  triage:occursIn <urn:atm:triage:worktree/ay2/9839b90c5> .
+
+<urn:atm:triage:occurrence/AY2-QA-004/AY2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 13 ;
+  triage:snippet "#[cfg(any())] use serde_json::Value;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "9839b90c5" ;
+  triage:occursIn <urn:atm:triage:worktree/ay2/9839b90c5> .
+
+<urn:atm:triage:occurrence/AY2-QA-004/AY2-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 15 ;
+  triage:snippet "#[cfg(any())] use tokio::io::AsyncReadExt;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "9839b90c5" ;
+  triage:occursIn <urn:atm:triage:worktree/ay2/9839b90c5> .
+
+<urn:atm:triage:occurrence/AY2-QA-004/AY2-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 554 ;
+  triage:snippet "#[cfg(any())] mod legacy_process_oracle {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "9839b90c5" ;
+  triage:occursIn <urn:atm:triage:worktree/ay2/9839b90c5> .
+
+<urn:atm:triage:occurrence/AY2-QA-004/AY2-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 803 ;
+  triage:snippet "#[cfg(any())] mod legacy_parser_oracle {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "9839b90c5" ;
+  triage:occursIn <urn:atm:triage:worktree/ay2/9839b90c5> .
+
+<urn:atm:triage:occurrence/AY2-QA-004/AY3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 5 ;
+  triage:snippet "#[cfg(any())] use std::process::Stdio;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "0b0bfa304" ;
+  triage:occursIn <urn:atm:triage:worktree/ay3/0b0bfa304> .
+
+<urn:atm:triage:occurrence/AY2-QA-004/AY3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 13 ;
+  triage:snippet "#[cfg(any())] use serde_json::Value;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "0b0bfa304" ;
+  triage:occursIn <urn:atm:triage:worktree/ay3/0b0bfa304> .
+
+<urn:atm:triage:occurrence/AY2-QA-004/AY3-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 15 ;
+  triage:snippet "#[cfg(any())] use tokio::io::AsyncReadExt;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "0b0bfa304" ;
+  triage:occursIn <urn:atm:triage:worktree/ay3/0b0bfa304> .
+
+<urn:atm:triage:occurrence/AY2-QA-004/AY3-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 554 ;
+  triage:snippet "#[cfg(any())] mod legacy_process_oracle {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "0b0bfa304" ;
+  triage:occursIn <urn:atm:triage:worktree/ay3/0b0bfa304> .
+
+<urn:atm:triage:occurrence/AY2-QA-004/AY3-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 803 ;
+  triage:snippet "#[cfg(any())] mod legacy_parser_oracle {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "0b0bfa304" ;
+  triage:occursIn <urn:atm:triage:worktree/ay3/0b0bfa304> .
+
+<urn:atm:triage:worktree/ay-integrate/d084bb2ff>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ay-integrate" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "d084bb2ff" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/ay2/9839b90c5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ay2" ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "9839b90c5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ay3/0b0bfa304>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ay3" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "0b0bfa304" ;
+  triage:orderIndex 2 .
