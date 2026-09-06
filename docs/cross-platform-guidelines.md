@@ -277,11 +277,24 @@ CI runs Rust 1.94.1 clippy with `-D warnings`. Local toolchains may be older and
 
 - **Deprecated APIs**: Use `assert_cmd::cargo::cargo_bin_cmd!("atm")` instead of the deprecated `Command::cargo_bin("atm")`.
 
-### Pre-Commit Check
+### Pre-Push Gate
+
+CI must never fail on formatting or clippy. The tracked hook
+`.githooks/pre-push` runs `cargo fmt --all --check` and the exact CI clippy
+command (`cargo clippy --workspace --all-targets -- -D warnings`, bare cargo,
+no venv) before any push that touches Rust sources or Cargo manifests, and
+refuses the push on failure. `just bootstrap` installs it via `git config
+core.hooksPath .githooks`; `just hooks` reinstalls it on its own through the
+same guards. The setting is repository-wide, so it covers every worktree.
+`.gitattributes` pins the hook to LF so a Windows checkout with
+`core.autocrlf=true` cannot corrupt the shebang line.
+
+The only bypass is explicit: `ATM_SKIP_PUSH_GATE=1 git push`. It prints that
+it skipped. Do not use it to push code that has not passed the gate.
 
 Always run before declaring implementation complete:
 ```bash
-cargo clippy -- -D warnings
+just fmt check && cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 ## Temporary Files and Directories

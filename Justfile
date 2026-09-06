@@ -26,6 +26,11 @@ help:
 bootstrap *args:
     {{seed_python_cmd}} tools/bootstrap.py {{args}}
 
+# Install the tracked git hooks (pre-push fmt + clippy gate). `just bootstrap`
+# does this too; use this recipe to (re)install without a full bootstrap.
+hooks:
+    {{seed_python_cmd}} tools/bootstrap.py --hooks-only
+
 [private]
 _fmt-write:
     cargo fmt --all
