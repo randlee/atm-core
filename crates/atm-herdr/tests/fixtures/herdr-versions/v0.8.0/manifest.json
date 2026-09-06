@@ -1,0 +1,6 @@
+{
+  "version": "0.8.0",
+  "protocol": 20,
+  "mode": "v0.8.0-blocked-prompt",
+  "delta": "blocked-prompt"
+}

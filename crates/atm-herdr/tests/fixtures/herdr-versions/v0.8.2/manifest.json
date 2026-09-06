@@ -1,0 +1,6 @@
+{
+  "version": "0.8.2",
+  "protocol": 20,
+  "mode": "replay",
+  "response": "response.json"
+}
