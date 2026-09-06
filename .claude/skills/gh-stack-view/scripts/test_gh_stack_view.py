@@ -126,9 +126,6 @@ class BuildRowsShapeTests(unittest.TestCase):
         self.assertTrue(any("gh stack reports needsRebase" in p for p in problems))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 T1 = "1" * 40  # trunk head after the bottom layer merged
 
@@ -199,3 +196,6 @@ class MergedBottomLayerTests(unittest.TestCase):
         _rows, problems, _notes = gsv.build_rows(stack, prs, fetched=True)
         self.assertEqual(len(problems), 1)
         self.assertIn("L3 docs/top: base ddddddddd != parent head bbbbbbbbb -> needs rebase", problems[0])
+
+if __name__ == "__main__":
+    unittest.main()

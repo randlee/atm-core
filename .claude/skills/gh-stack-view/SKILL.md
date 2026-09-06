@@ -88,9 +88,9 @@ VERDICT: ✅ COHERENT - every base == parent head, every head pushed and on its 
 | CI | same query, `statusCheckRollup.state` of the head commit | ✅ green · 🌀 running · ⛔ failed, do not enter · — none |
 
 `VERDICT` names the branch and the owner action for every problem (SHAs
-appear there, not in the table). A bottom layer merely behind trunk is a note,
-not a problem: do not rebase a layer whose CI could go green just to catch up
-with trunk. The legend is printed once at the end. `--json` emits
+appear there, not in the table). The lowest OPEN layer (layer 1, or the first
+layer above already-merged ones) merely behind trunk is a note, not a problem:
+do not rebase a layer whose CI could go green just to catch up with trunk. The legend is printed once at the end. `--json` emits
 `stacks[].rows[]`, `problems[]`, `notes[]`, `coherent` for agents that need to
 branch on the result.
 
