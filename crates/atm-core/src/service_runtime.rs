@@ -10,9 +10,9 @@ use std::sync::{Arc, MutexGuard, RwLock};
 use std::time::{Duration, Instant};
 
 use atm_storage::{
-    AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore, AsyncTaskLedgerReader,
-    GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
-    MessageStore as SharedMessageStore, OwnerGeneration, PendingNudgeStore,
+    AsyncGraftReceiverEndpointStore, AsyncMessageSearchStore,
+    AsyncMessageStore as SharedAsyncMessageStore, AsyncTaskLedgerReader, GraftEndpointStoreError,
+    GraftReceiverLease, MessageStore as SharedMessageStore, OwnerGeneration, PendingNudgeStore,
     RosterMemberEphemeralState, RosterRuntimeMirror, RosterStore as SharedRosterStore, TaskStore,
     TemplateCatalogStore,
 };
@@ -313,7 +313,7 @@ pub struct LocalServiceRuntime {
     pending_nudge_store: Option<std::sync::Arc<dyn PendingNudgeStore + Send + Sync>>,
     task_store: Option<std::sync::Arc<dyn TaskStore + Send + Sync>>,
     graft_receiver_endpoint_store:
-        Option<std::sync::Arc<dyn GraftReceiverEndpointStore + Send + Sync>>,
+        Option<std::sync::Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>>,
     /// Optional renderer selected by the bootstrap composition root. Core send
     /// policy sees only this port; it never depends on `sc-composer` itself.
     pub(crate) template_composer: Option<std::sync::Arc<dyn TemplateComposer>>,
@@ -516,7 +516,7 @@ impl LocalServiceRuntime {
     #[must_use]
     pub fn with_graft_receiver_endpoint_store(
         mut self,
-        store: std::sync::Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
+        store: std::sync::Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>,
     ) -> Self {
         self.graft_receiver_endpoint_store = Some(store);
         self
@@ -524,7 +524,7 @@ impl LocalServiceRuntime {
 
     pub fn graft_receiver_endpoint_store(
         &self,
-    ) -> Result<std::sync::Arc<dyn GraftReceiverEndpointStore + Send + Sync>, AtmError> {
+    ) -> Result<std::sync::Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>, AtmError> {
         self.graft_receiver_endpoint_store.clone().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "the graft receiver endpoint store was not installed in this runtime",
