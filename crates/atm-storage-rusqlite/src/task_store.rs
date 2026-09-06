@@ -5,11 +5,12 @@ use atm_storage::{
     AtmError, AtmMessageId, EscalationScope, MAX_ESCALATION_RECIPIENTS, MemberKey, ReminderOutcome,
     TaskActor, TaskEventKind, TaskEventMarker, TaskEventRow, TaskRow, TaskState, TaskStore,
 };
-use rusqlite::{Connection, OptionalExtension, Row, params};
+use rusqlite::{Connection, Row, params};
 
 use super::SqliteTaskStore;
 use crate::shared_db::SharedDb;
 use crate::shared_db::{SharedDbTarget, SqliteConnection, sqlite_error};
+use crate::task_sql;
 
 const TASK_SCHEMA_DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS tasks (
@@ -146,20 +147,7 @@ impl SqliteTaskStore {
         member: &MemberKey,
         task_id: &TaskId,
     ) -> Result<Option<TaskRow>, AtmError> {
-        connection
-            .query_row(
-                "SELECT team, task_id, assignee, assigner, state, assignment_message_id,
-                        description, assigned_at, updated_at, last_reminded_at, reminder_count,
-                        lead_notified_count
-                   FROM tasks WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-                params![
-                    member.team().as_str(),
-                    task_id.as_str(),
-                    member.agent().as_str()
-                ],
-                Self::decode_row,
-            )
-            .optional()
+        task_sql::select_task_row(connection, member.team(), task_id, member.agent())
             .map_err(|error| self.db.error("failed to load task row", error))
     }
 
@@ -224,14 +212,10 @@ impl TaskStore for SqliteTaskStore {
     }
 
     fn open_tasks(&self, member: &MemberKey) -> Result<Vec<TaskRow>, AtmError> {
-        let mut tasks = self.list_tasks(&member.team, Some(&member.agent))?;
-        tasks.retain(|task| task.state != TaskState::Complete);
-        tasks.sort_by(|left, right| {
-            left.assigned_at
-                .cmp(&right.assigned_at)
-                .then_with(|| left.task_id.cmp(&right.task_id))
-        });
-        Ok(tasks)
+        self.db.with_connection(|connection| {
+            task_sql::select_open_tasks_for_member(connection, member.team(), member.agent())
+                .map_err(|error| self.db.error("failed to list open tasks", error))
+        })
     }
 
     fn list_tasks(
@@ -240,23 +224,8 @@ impl TaskStore for SqliteTaskStore {
         member: Option<&AgentName>,
     ) -> Result<Vec<TaskRow>, AtmError> {
         self.db.with_connection(|connection| {
-            let mut statement = connection
-                .prepare(
-                    "SELECT team, task_id, assignee, assigner, state, assignment_message_id,
-                            description, assigned_at, updated_at, last_reminded_at, reminder_count,
-                            lead_notified_count
-                       FROM tasks WHERE team = ?1 AND (?2 IS NULL OR assignee = ?2)
-                       ORDER BY assigned_at DESC, task_id DESC",
-                )
-                .map_err(|error| self.db.error("failed to prepare task list", error))?;
-            let rows = statement
-                .query_map(
-                    params![team.as_str(), member.map(AgentName::as_str)],
-                    Self::decode_row,
-                )
-                .map_err(|error| self.db.error("failed to list tasks", error))?;
-            rows.map(|row| row.map_err(|error| self.db.error("failed to decode task row", error)))
-                .collect()
+            task_sql::select_tasks_for_team(connection, team, member)
+                .map_err(|error| self.db.error("failed to list tasks", error))
         })
     }
 
@@ -267,27 +236,8 @@ impl TaskStore for SqliteTaskStore {
         assignee: Option<&AgentName>,
     ) -> Result<Vec<TaskEventRow>, AtmError> {
         self.db.with_connection(|connection| {
-            let mut statement = connection
-                .prepare(
-                    "SELECT team, task_id, assignee, seq, at, event, from_state, to_state, actor,
-                            message_id, outcome, marker, detail
-                       FROM task_events
-                      WHERE team = ?1 AND task_id = ?2 AND (?3 IS NULL OR assignee = ?3)
-                      ORDER BY seq ASC",
-                )
-                .map_err(|error| self.db.error("failed to prepare task event list", error))?;
-            let rows = statement
-                .query_map(
-                    params![
-                        team.as_str(),
-                        task_id.as_str(),
-                        assignee.map(AgentName::as_str)
-                    ],
-                    Self::decode_event_row,
-                )
-                .map_err(|error| self.db.error("failed to list task events", error))?;
-            rows.map(|row| row.map_err(|error| self.db.error("failed to decode task event", error)))
-                .collect()
+            task_sql::select_task_events(connection, team, task_id, assignee)
+                .map_err(|error| self.db.error("failed to list task events", error))
         })
     }
 

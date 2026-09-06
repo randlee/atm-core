@@ -14,6 +14,7 @@ use std::sync::Arc;
 use crate::SqliteTaskStore;
 use crate::reader_pool::ReaderPool;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
+use crate::task_sql;
 
 struct TaskLedgerReader {
     pool: ReaderPool,
@@ -79,24 +80,18 @@ fn list_tasks(
     member: Option<&AgentName>,
 ) -> Result<Vec<TaskRow>, AtmError> {
     let mut statement = connection
-        .prepare(
-            "SELECT team, task_id, assignee, assigner, state, assignment_message_id,
-                    description, assigned_at, updated_at, last_reminded_at, reminder_count,
-                    lead_notified_count
-               FROM tasks WHERE team = ?1 AND (?2 IS NULL OR assignee = ?2)
-               ORDER BY assigned_at DESC, task_id DESC",
-        )
+        .prepare(&task_sql::select_tasks_for_team_sql())
         .map_err(|error| sqlite_error(target, "failed to prepare async task list", error))?;
-    let rows = statement
+    statement
         .query_map(
             params![team.as_str(), member.map(AgentName::as_str)],
             SqliteTaskStore::decode_row,
         )
-        .map_err(|error| sqlite_error(target, "failed to execute async task list", error))?;
-    rows.map(|row| {
-        row.map_err(|error| sqlite_error(target, "failed to decode async task row", error))
-    })
-    .collect()
+        .map_err(|error| sqlite_error(target, "failed to list async tasks", error))?
+        .map(|row| {
+            row.map_err(|error| sqlite_error(target, "failed to decode async task row", error))
+        })
+        .collect()
 }
 
 fn list_task_events(
@@ -107,15 +102,9 @@ fn list_task_events(
     member: Option<&AgentName>,
 ) -> Result<Vec<TaskEventRow>, AtmError> {
     let mut statement = connection
-        .prepare(
-            "SELECT team, task_id, assignee, seq, at, event, from_state, to_state, actor,
-                    message_id, outcome, marker, detail
-               FROM task_events
-              WHERE team = ?1 AND task_id = ?2 AND (?3 IS NULL OR assignee = ?3)
-              ORDER BY seq ASC",
-        )
+        .prepare(&task_sql::select_task_events_sql())
         .map_err(|error| sqlite_error(target, "failed to prepare async task event list", error))?;
-    let rows = statement
+    statement
         .query_map(
             params![
                 team.as_str(),
@@ -124,11 +113,11 @@ fn list_task_events(
             ],
             SqliteTaskStore::decode_event_row,
         )
-        .map_err(|error| sqlite_error(target, "failed to execute async task event list", error))?;
-    rows.map(|row| {
-        row.map_err(|error| sqlite_error(target, "failed to decode async task event", error))
-    })
-    .collect()
+        .map_err(|error| sqlite_error(target, "failed to list async task events", error))?
+        .map(|row| {
+            row.map_err(|error| sqlite_error(target, "failed to decode async task event", error))
+        })
+        .collect()
 }
 
 fn read_lane_error(error: AtmError) -> ReadLaneError {

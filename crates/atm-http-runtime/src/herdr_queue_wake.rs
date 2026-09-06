@@ -23,9 +23,6 @@ use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrProcessAdapter};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
-#[cfg(test)]
-use tokio::sync::Notify;
-
 use crate::herdr_escalation::EscalationState;
 use crate::runtime_health::RuntimeHealth;
 
@@ -38,9 +35,6 @@ pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
 /// Minimum spacing between task reminders for one Herdr assignee.
 pub const TASK_REMINDER_INTERVAL_MS: u64 = 60_000;
 const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
-
-#[cfg(test)]
-type HandoffCleanupTestGate = (Arc<Notify>, Arc<Notify>);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct HerdrQueueWakeStats {
@@ -78,7 +72,10 @@ pub struct HerdrQueueWakePump {
     task_step_available: Arc<Mutex<Option<bool>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
     #[cfg(test)]
-    handoff_cleanup_test_gate: Arc<Mutex<Option<HandoffCleanupTestGate>>>,
+    pub(crate) handoff_cleanup_test_gate:
+        Arc<Mutex<Option<crate::herdr_queue_wake_test_gates::Gate>>>,
+    #[cfg(test)]
+    pub(crate) prompt_started_test_gate: Arc<Mutex<Option<Arc<tokio::sync::Notify>>>>,
 }
 
 impl HerdrQueueWakePump {
@@ -104,6 +101,8 @@ impl HerdrQueueWakePump {
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
             #[cfg(test)]
             handoff_cleanup_test_gate: Arc::new(Mutex::new(None)),
+            #[cfg(test)]
+            prompt_started_test_gate: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -119,40 +118,6 @@ impl HerdrQueueWakePump {
     fn with_clock(mut self, clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>) -> Self {
         self.clock = clock;
         self
-    }
-
-    #[cfg(test)]
-    fn install_handoff_cleanup_test_gate(&self) -> (Arc<Notify>, Arc<Notify>) {
-        let entered = Arc::new(Notify::new());
-        let release = Arc::new(Notify::new());
-        self.handoff_cleanup_test_gate
-            .lock()
-            .expect("handoff cleanup gate lock")
-            .replace((Arc::clone(&entered), Arc::clone(&release)));
-        (entered, release)
-    }
-
-    #[cfg(test)]
-    fn clear_handoff_cleanup_test_gate(&self) {
-        self.handoff_cleanup_test_gate
-            .lock()
-            .expect("handoff cleanup gate lock")
-            .take();
-    }
-
-    #[cfg(test)]
-    async fn await_handoff_cleanup_test_gate(&self) {
-        let Some((entered, release)) = self
-            .handoff_cleanup_test_gate
-            .lock()
-            .expect("handoff cleanup gate lock")
-            .as_ref()
-            .cloned()
-        else {
-            return;
-        };
-        entered.notify_one();
-        release.notified().await;
     }
 
     /// Starts the single polling task. The task owns no per-member workers.
@@ -473,7 +438,7 @@ impl HerdrQueueWakePump {
                 let Some(row) = self.read_due_task(reader.as_ref(), &candidate, now).await else {
                     continue;
                 };
-                self.emit_task_reminder(task_store, candidate, row, now, stats)
+                self.emit_task_reminder(reader.as_ref(), task_store, candidate, row, now, stats)
                     .await;
             }
         }
@@ -521,22 +486,21 @@ impl HerdrQueueWakePump {
 
     async fn emit_task_reminder(
         &self,
+        reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
         task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
         candidate: TaskCandidate,
         row: TaskRow,
         now: IsoTimestamp,
         stats: &mut HerdrQueueWakeStats,
     ) {
+        let context = crate::herdr_queue_wake_escalation::TaskReminderContext {
+            reader,
+            task_store,
+            member: &candidate.member.key,
+        };
         if candidate.blocked {
-            self.record_task_outcome(
-                task_store,
-                &candidate.member.key,
-                &row,
-                now,
-                ReminderOutcome::Blocked,
-                stats,
-            )
-            .await;
+            self.record_task_outcome(&context, &row, now, ReminderOutcome::Blocked, stats)
+                .await;
             return;
         }
         if stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
@@ -554,15 +518,8 @@ impl HerdrQueueWakePump {
             Ok(None) => return,
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_render", outcome = "unrenderable", error = %error, member = %candidate.member.key, "Herdr task reminder could not render");
-                self.record_task_outcome(
-                    task_store,
-                    &candidate.member.key,
-                    &row,
-                    now,
-                    ReminderOutcome::Unrenderable,
-                    stats,
-                )
-                .await;
+                self.record_task_outcome(&context, &row, now, ReminderOutcome::Unrenderable, stats)
+                    .await;
                 return;
             }
         };
@@ -575,15 +532,8 @@ impl HerdrQueueWakePump {
             .await
         {
             Ok(_) => {
-                self.record_task_outcome(
-                    task_store,
-                    &candidate.member.key,
-                    &row,
-                    now,
-                    ReminderOutcome::Emitted,
-                    stats,
-                )
-                .await
+                self.record_task_outcome(&context, &row, now, ReminderOutcome::Emitted, stats)
+                    .await
             }
             Err(error) if error.code() == AtmErrorCode::HerdrUnavailable => stats.breaker_open += 1,
             Err(error) => {
@@ -596,15 +546,14 @@ impl HerdrQueueWakePump {
 
     async fn record_task_outcome(
         &self,
-        task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
-        member: &MemberKey,
+        context: &crate::herdr_queue_wake_escalation::TaskReminderContext<'_>,
         row: &TaskRow,
         now: IsoTimestamp,
         outcome: ReminderOutcome,
         stats: &mut HerdrQueueWakeStats,
     ) {
         let recorded_row = self
-            .record_task_reminder(task_store, member, row, now, outcome)
+            .record_task_reminder(context.task_store, context.member, row, now, outcome)
             .await;
         match outcome {
             ReminderOutcome::Emitted => {
@@ -614,10 +563,17 @@ impl HerdrQueueWakePump {
             ReminderOutcome::Unrenderable => stats.task_reminders_unrenderable += 1,
             ReminderOutcome::Blocked => stats.task_reminders_blocked += 1,
         }
-        self.stamp_task_attempt(member, now);
+        self.stamp_task_attempt(context.member, now);
         if let Ok(recorded_row) = recorded_row {
-            self.maybe_escalate_task(task_store, &recorded_row, now, stats)
-                .await;
+            crate::herdr_queue_wake_escalation::maybe_escalate_task(
+                self,
+                context.reader,
+                context.task_store,
+                &recorded_row,
+                now,
+                stats,
+            )
+            .await;
         }
     }
 
@@ -645,17 +601,6 @@ impl HerdrQueueWakePump {
                 Err(error)
             }
         }
-    }
-
-    async fn maybe_escalate_task(
-        &self,
-        task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
-        row: &TaskRow,
-        now: IsoTimestamp,
-        stats: &mut HerdrQueueWakeStats,
-    ) {
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(self, task_store, row, now, stats)
-            .await;
     }
 
     async fn escalate_blocked(
@@ -820,6 +765,8 @@ impl HerdrQueueWakePump {
         release: &mut ReleasePendingOnDrop,
         stats: &mut HerdrQueueWakeStats,
     ) -> bool {
+        #[cfg(test)]
+        self.notify_prompt_started_test_gate();
         match emitter
             .emit_received_message(dispatch, RequestDeadline::after(HERDR_REQUEST_DEADLINE))
             .await
@@ -876,8 +823,6 @@ impl HerdrQueueWakePump {
         // Herdr has accepted the prompt. Disarm before any cleanup await so
         // cancellation cannot re-release an already delivered claim.
         release.disarm();
-        #[cfg(test)]
-        self.await_handoff_cleanup_test_gate().await;
         let runtime = self.service_runtime.clone();
         let member_key = member.key.clone();
         let message_id = claim.msg;
@@ -892,6 +837,8 @@ impl HerdrQueueWakePump {
             Ok(())
         })
         .await;
+        #[cfg(test)]
+        self.await_handoff_cleanup_test_gate().await;
         self.reset_release_streak(&member.key);
         stats.prompted += 1;
         tracing::info!(
@@ -1694,23 +1641,13 @@ mod tests {
     ) {
         let (root, runtime, fake, pump, _health, key) = build_test_pump();
         let prompt_gate = fake.block_next_prompt();
+        let prompt_started = pump.install_prompt_started_test_gate();
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let sender_clone = shutdown_tx.clone();
         let task = pump.clone().start(shutdown_rx);
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                if fake
-                    .calls()
-                    .iter()
-                    .any(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
-                {
-                    break;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("the fake prompt is in flight before shutdown");
+        tokio::time::timeout(Duration::from_secs(1), prompt_started.notified())
+            .await
+            .expect("the fake prompt is in flight before shutdown");
         shutdown_tx.send(()).expect("shutdown notification");
         tokio::time::timeout(Duration::from_secs(1), task)
             .await
@@ -1766,6 +1703,10 @@ mod tests {
 
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump,
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &row,
             timestamp,
@@ -1817,6 +1758,10 @@ mod tests {
         tenth.reminder_count = 10;
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump,
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &tenth,
             timestamp,
@@ -1829,6 +1774,10 @@ mod tests {
         nineteenth.lead_notified_count = 1;
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump,
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &nineteenth,
             timestamp,
@@ -1840,6 +1789,10 @@ mod tests {
         twentieth.reminder_count = 20;
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump,
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &twentieth,
             timestamp,
@@ -1881,6 +1834,10 @@ mod tests {
 
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump.clone().with_daemon_home(root.path().join("home")),
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &tenth,
             timestamp,
@@ -1894,6 +1851,10 @@ mod tests {
         let mut retry_stats = HerdrQueueWakeStats::default();
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump.with_daemon_home(root.path().join("home")),
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &eleventh,
             timestamp,
@@ -1924,6 +1885,10 @@ mod tests {
 
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump,
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &row,
             timestamp,
@@ -1948,6 +1913,10 @@ mod tests {
             .expect("roster");
         crate::herdr_queue_wake_escalation::maybe_escalate_task(
             &pump,
+            runtime
+                .async_task_ledger_reader()
+                .expect("task reader")
+                .as_ref(),
             &task_store,
             &row,
             timestamp,
@@ -3207,10 +3176,12 @@ mod tests {
     #[tokio::test]
     async fn ac11_successful_prompt_cancellation_cannot_rerelease_claim() {
         let (_root, runtime, fake, pump, _health, key) = build_test_pump();
-        let (clear_started, allow_clear) = pump.install_handoff_cleanup_test_gate();
+        let (clear_started, _allow_clear) = pump.install_handoff_cleanup_test_gate();
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let task = pump.clone().start(shutdown_rx);
-        clear_started.notified().await;
+        tokio::time::timeout(Duration::from_secs(1), clear_started.notified())
+            .await
+            .expect("marker cleanup completes before cancellation");
 
         shutdown_tx.send(()).expect("shutdown notification");
         task.await.expect("poll task join");
@@ -3224,23 +3195,15 @@ mod tests {
             "a successful Herdr prompt must not be re-released while cleanup is pending"
         );
 
-        allow_clear.notify_one();
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                if runtime
-                    .pending_nudge_store()
-                    .expect("pending store")
-                    .list_pending_members()
-                    .expect("pending members")
-                    .is_empty()
-                {
-                    break;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("marker cleanup completes");
+        assert!(
+            runtime
+                .pending_nudge_store()
+                .expect("pending store")
+                .list_pending_members()
+                .expect("pending members")
+                .is_empty(),
+            "completed marker cleanup leaves no pending member"
+        );
 
         fake.queue_list_result(Ok(HerdrListOutcome {
             agents: vec![AgentSnapshot {

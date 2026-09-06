@@ -19,8 +19,15 @@ const TASK_READ_DEADLINE: Duration = Duration::from_secs(5);
 const MAX_BLOCKED_TASKS_IN_BODY: usize = 8;
 const MAX_BLOCKED_MAIL_BODY_BYTES: usize = 4_096;
 
+pub(crate) struct TaskReminderContext<'a> {
+    pub(crate) reader: &'a (dyn AsyncTaskLedgerReader + Send + Sync),
+    pub(crate) task_store: &'a Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+    pub(crate) member: &'a MemberKey,
+}
+
 pub(crate) async fn maybe_escalate_task(
     pump: &HerdrQueueWakePump,
+    reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
     task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
     row: &TaskRow,
     now: IsoTimestamp,
@@ -33,7 +40,7 @@ pub(crate) async fn maybe_escalate_task(
     if row.reminder_count < threshold {
         return;
     }
-    let events = match reminder_events(task_store, row).await {
+    let events = match reminder_events(reader, row).await {
         Ok(events) => events,
         Err(error) => {
             tracing::warn!(
@@ -67,14 +74,20 @@ pub(crate) async fn maybe_escalate_task(
 }
 
 async fn reminder_events(
-    task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+    reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
     row: &TaskRow,
 ) -> Result<Vec<TaskEventRow>, atm_core::error::AtmError> {
-    let store = Arc::clone(task_store);
-    let team = row.team.clone();
-    let task_id = row.task_id.clone();
-    let assignee = row.assignee.clone();
-    run_blocking(move || store.list_task_events(&team, &task_id, Some(&assignee))).await
+    let deadline = ReadDeadline::new(TASK_READ_DEADLINE)
+        .map_err(|error| atm_core::error::AtmError::daemon_unavailable(error.to_string()))?;
+    reader
+        .list_task_events(
+            row.team.clone(),
+            row.task_id.clone(),
+            Some(row.assignee.clone()),
+            deadline,
+        )
+        .await
+        .map_err(|error| atm_core::error::AtmError::daemon_unavailable(error.to_string()))
 }
 
 fn task_escalation_body(row: &TaskRow, now: IsoTimestamp, events: &[TaskEventRow]) -> String {
