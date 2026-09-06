@@ -25,6 +25,7 @@ import argparse
 import json
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 
 def run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -35,18 +36,67 @@ def short(sha: str | None) -> str:
     return (sha or "")[:9] or "-"
 
 
-def stack_json() -> dict:
-    proc = run(["gh", "stack", "view", "--json"], check=False)
+def stack_json_at(path: str) -> dict | None:
+    proc = subprocess.run(["gh", "stack", "view", "--json"], cwd=path, text=True, capture_output=True)
     if proc.returncode != 0:
-        msg = (proc.stderr or proc.stdout).strip()
-        sys.stderr.write(
-            f"gh stack view --json failed: {msg}\n"
-            "Hint: run from a worktree checked out on a stack branch "
-            "(develop/main/detached HEAD are not part of any stack). "
-            "Never `git checkout` in the main repo; cd into the layer's worktree.\n"
-        )
-        sys.exit(2)
-    return json.loads(proc.stdout)
+        return None
+    try:
+        data = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return None
+    return data if data.get("branches") else None
+
+
+def worktree_paths() -> list[str]:
+    """Every worktree of this repo that is checked out on a branch (cwd first)."""
+    out = run(["git", "worktree", "list", "--porcelain"]).stdout
+    paths: list[str] = []
+    cur: str | None = None
+    for line in out.splitlines():
+        if line.startswith("worktree "):
+            cur = line[len("worktree "):]
+        elif line.startswith("branch ") and cur:
+            paths.append(cur)
+            cur = None
+        elif line == "" :
+            cur = None
+    cwd = run(["git", "rev-parse", "--show-toplevel"]).stdout.strip()
+    paths.sort(key=lambda p: p != cwd)
+    return paths
+
+
+def discover_stacks(trunk_filter: str | None, *, include_merged: bool) -> list[dict]:
+    """Run `gh stack view --json` once per worktree, dedupe by branch set.
+
+    Works from develop/main (not part of any stack): every stack that has at
+    least one worktree checked out is found. Concurrent, read-only.
+    """
+    paths = worktree_paths()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(stack_json_at, paths))
+    stacks: list[dict] = []
+    for path, data in zip(paths, results):
+        if not data:
+            continue
+        if trunk_filter and data["trunk"] != trunk_filter:
+            continue
+        if not include_merged and all(b.get("isMerged") for b in data["branches"]):
+            continue
+        data["worktree"] = path
+        stacks.append(data)
+    # Each worktree only knows the layers linked from it; the same stack seen
+    # from a lower layer is a prefix of the view from the top. Keep the longest.
+    def names(d: dict) -> tuple[str, ...]:
+        return tuple(b["name"] for b in d["branches"])
+    stacks = [d for d in stacks if not any(
+        o is not d and len(names(o)) > len(names(d)) and names(o)[: len(names(d))] == names(d)
+        for o in stacks)]
+    uniq: dict[tuple[str, ...], dict] = {}
+    for d in stacks:
+        uniq.setdefault(names(d), d)
+    stacks = list(uniq.values())
+    stacks.sort(key=lambda d: (not d["trunk"].startswith("integrate/"), d["trunk"], d["branches"][0]["name"]))
+    return stacks
 
 
 def origin_sha(ref: str) -> str | None:
@@ -94,19 +144,27 @@ def build_rows(stack: dict, prs: dict[int, dict], *, fetched: bool) -> tuple[lis
     for idx, br in enumerate(stack["branches"], start=1):
         name = br["name"]
         pr = prs.get((br.get("pr") or {}).get("number") or -1, {})
+        if br.get("isMerged"):
+            rows.append({"layer": idx, "branch": name, "pr": (br.get("pr") or {}).get("number"),
+                         "head": br.get("head"), "base": br.get("base"), "merged": True, "queued": False,
+                         "draft": False, "mergeable": None, "merge_state": "MERGED", "ci": pr.get("ci"),
+                         "base_ok": None, "origin_ok": None, "needs_rebase": False, "origin": None,
+                         "pr_head": pr.get("headRefOid"), "expected_base": expected_base, "pr_base": pr.get("baseRefName")})
+            expected_base = br.get("head") or expected_base
+            continue
         origin = origin_sha(name) if fetched else None
-        base_ok = (br["base"] == expected_base) if expected_base else None
+        base_ok = (br.get("base") == expected_base) if (expected_base and br.get("base")) else None
         origin_ok = None
         if origin:
-            origin_ok = br["head"] == origin and (not pr or pr.get("headRefOid") == origin)
+            origin_ok = br.get("head") == origin and (not pr or pr.get("headRefOid") == origin)
         row = {
             "layer": idx,
             "branch": name,
             "pr": (br.get("pr") or {}).get("number"),
-            "head": br["head"],
+            "head": br.get("head"),
             "origin": origin,
             "pr_head": pr.get("headRefOid"),
-            "base": br["base"],
+            "base": br.get("base"),
             "expected_base": expected_base,
             "base_ok": base_ok,
             "origin_ok": origin_ok,
@@ -123,7 +181,7 @@ def build_rows(stack: dict, prs: dict[int, dict], *, fetched: bool) -> tuple[lis
         if pr and pr.get("baseRefName") not in (None, parent):
             problems.append(f"L{idx} {name}: PR #{row['pr']} base is {pr['baseRefName']}, expected {parent}")
         if base_ok is False:
-            if idx == 1 and is_ancestor(br["base"], expected_base):
+            if idx == 1 and is_ancestor(br.get("base", ""), expected_base):
                 notes.append(f"L1 {name}: behind trunk ({short(br['base'])} < {short(expected_base)}); fine unless CONFLICTING, do not restart CI just to catch up")
             else:
                 problems.append(f"L{idx} {name}: base {short(br['base'])} != parent head {short(expected_base)} -> needs rebase")
@@ -140,7 +198,7 @@ def build_rows(stack: dict, prs: dict[int, dict], *, fetched: bool) -> tuple[lis
             problems.append(f"L{idx} {name}: PR #{row['pr']} is DRAFT (blocks stack merge)")
         rows.append(row)
         # The next layer must be based on THIS layer's pushed head (fall back to local).
-        expected_base = origin or br["head"]
+        expected_base = origin or br.get("head")
     return rows, problems, notes
 
 
@@ -155,6 +213,8 @@ ICON_CI = {"SUCCESS": "✅", "FAILURE": "❌", "ERROR": "❌", "PENDING": "🌀"
 
 
 def sync_icon(r: dict) -> str:
+    if r["merged"]:
+        return ICON_MERGE["MERGED"]
     if r["origin_ok"] is False:
         return ICON_SYNC["stale"]
     if r["base_ok"] is False or r["needs_rebase"]:
@@ -181,15 +241,14 @@ def ci_icon(r: dict) -> str:
 
 
 def render_table(stack: dict, rows: list[dict], problems: list[str], notes: list[str], *, trunk_origin: str | None) -> str:
-    hdr = ["L", "branch", "PR", "head", "base", "sync", "merge", "CI"]
-    lines = [f"stack: {stack['trunk']} @ {short(trunk_origin)}  (current: {stack['currentBranch']})", ""]
+    hdr = ["L", "PR", "sync", "merge", "CI"]
+    lines = [f"stack: {stack['branches'][-1]['name']} -> {stack['trunk']} @ {short(trunk_origin)}", ""]
     lines.append("| " + " | ".join(hdr) + " |")
     lines.append("|" + "|".join("---" for _ in hdr) + "|")
     for r in rows:
         pr = f"#{r['pr']}" if r["pr"] else "-"
         lines.append("| " + " | ".join([
-            str(r["layer"]), r["branch"], pr, short(r["head"]), short(r["base"]),
-            sync_icon(r), merge_icon(r), ci_icon(r),
+            f"{r['layer']}/{len(rows)}", pr, sync_icon(r), merge_icon(r), ci_icon(r),
         ]) + " |")
     lines.append("")
     if problems:
@@ -198,7 +257,11 @@ def render_table(stack: dict, rows: list[dict], problems: list[str], notes: list
     else:
         lines.append("VERDICT: ✅ COHERENT - every base == parent head, every head pushed and on its PR")
     lines.extend(f"- note: {n}" for n in notes)
-    lines.append("")
+    return "\n".join(lines)
+
+
+def legend() -> str:
+    lines = []
     lines.append("sync: ✅ base==parent head & local==origin==PR  🔄 local/origin/PR heads differ  ⚠️ needs rebase  ❓ unknown (--no-fetch)")
     lines.append("merge: 🚀 clean  🚧 blocked/unstable  ⏪ behind  ❌ conflicting/dirty  ⏳ computing  📝 draft  ◎ queued  🏁 merged")
     lines.append("CI: ✅ success  ❌ failure  🌀 pending  — none")
@@ -207,25 +270,46 @@ def render_table(stack: dict, rows: list[dict], problems: list[str], notes: list
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--trunk", help="only stacks whose trunk is this branch (e.g. integrate/phase-aw)")
+    ap.add_argument("--phase", help="shorthand for --trunk integrate/phase-<PHASE>")
+    ap.add_argument("--all", action="store_true", help="include stacks whose every layer is already merged")
     ap.add_argument("--no-fetch", action="store_true", help="skip `git fetch origin` and origin comparison")
     ap.add_argument("--no-pr", action="store_true", help="skip the GraphQL PR query (offline / local-only view)")
-    ap.add_argument("--json", action="store_true", help="emit the merged rows as JSON instead of a table")
+    ap.add_argument("--json", action="store_true", help="emit the merged rows as JSON instead of tables")
     args = ap.parse_args()
+    trunk_filter = args.trunk or (f"integrate/phase-{args.phase.lower()}" if args.phase else None)
 
-    stack = stack_json()
+    stacks = discover_stacks(trunk_filter, include_merged=args.all)
+    if not stacks:
+        where = f" with trunk {trunk_filter}" if trunk_filter else ""
+        sys.stderr.write(
+            f"no gh stack found{where}. Stacks are discovered through `git worktree list`; a stack "
+            "needs at least one of its layers checked out in a worktree (never `git checkout` in the main repo).\n"
+        )
+        return 2
     fetched = not args.no_fetch
     if fetched:
         run(["git", "fetch", "--quiet", "origin"], check=False)
-    numbers = [b["pr"]["number"] for b in stack["branches"] if b.get("pr")]
+    numbers = sorted({b["pr"]["number"] for st in stacks for b in st["branches"] if b.get("pr")})
     prs = {} if args.no_pr else pr_details(numbers)
-    rows, problems, notes = build_rows(stack, prs, fetched=fetched)
-    trunk_origin = origin_sha(stack["trunk"]) if fetched else None
+
+    report: list[dict] = []
+    blocks: list[str] = []
+    any_problem = False
+    for st in stacks:
+        rows, problems, notes = build_rows(st, prs, fetched=fetched)
+        trunk_origin = origin_sha(st["trunk"]) if fetched else None
+        any_problem |= bool(problems)
+        report.append({"trunk": st["trunk"], "trunk_origin": trunk_origin, "worktree": st["worktree"],
+                       "rows": rows, "problems": problems, "notes": notes, "coherent": not problems})
+        blocks.append(render_table(st, rows, problems, notes, trunk_origin=trunk_origin))
     if args.json:
-        print(json.dumps({"trunk": stack["trunk"], "trunk_origin": trunk_origin, "current": stack["currentBranch"],
-                          "rows": rows, "problems": problems, "notes": notes, "coherent": not problems}, indent=2))
+        print(json.dumps({"stacks": report, "coherent": not any_problem}, indent=2))
     else:
-        print(render_table(stack, rows, problems, notes, trunk_origin=trunk_origin))
-    return 1 if problems else 0
+        print("\n\n".join(blocks))
+        print()
+        print(legend())
+    return 1 if any_problem else 0
 
 
 if __name__ == "__main__":
