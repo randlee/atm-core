@@ -54,15 +54,15 @@ pub(crate) enum HerdrOp<'a> {
 
 /// Transport response before it is decoded into a public domain outcome.
 pub(crate) struct HerdrEnvelope {
-    pub(crate) result: Option<Value>,
-    pub(crate) error: Option<HerdrErrorEnvelope>,
+    pub result: Option<Value>,
+    pub error: Option<HerdrErrorEnvelope>,
 }
 
 /// Structured Herdr error data carried independently of a transport.
 pub(crate) struct HerdrErrorEnvelope {
-    pub(crate) code: String,
-    pub(crate) message: String,
-    pub(crate) retry_after_ms: Option<u64>,
+    pub code: String,
+    pub message: String,
+    pub retry_after_ms: Option<u64>,
 }
 
 /// Private transport selection. AY.2 intentionally constructs only CLI.
