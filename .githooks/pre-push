@@ -40,14 +40,11 @@ if ! cargo fmt --all --check; then
     exit 1
 fi
 
-echo "pre-push: running clippy -D warnings (same invocation as CI)" >&2
-# `just _lint-clippy` pins PYO3_PYTHON to the bootstrap venv; fall back to plain
-# cargo clippy in a worktree that has not run `just bootstrap` yet.
-if command -v just >/dev/null 2>&1 && [ -x .bootstrap-venv/bin/python ]; then
-    just _lint-clippy
-else
-    cargo clippy --workspace --all-targets -- -D warnings
-fi
+echo "pre-push: running cargo clippy --workspace --all-targets -- -D warnings" >&2
+# This is byte-for-byte the gating clippy job in .github/workflows/ci.yml
+# (job "clippy"): bare cargo, no PYO3_PYTHON, no venv, no `just`. Keeping it
+# identical to CI is the whole point; do not route it through the Justfile.
+cargo clippy --workspace --all-targets -- -D warnings
 status=$?
 if [ "$status" -ne 0 ]; then
     echo "pre-push: REFUSED. Clippy reported warnings; fix them before pushing." >&2

@@ -703,8 +703,17 @@ def main(argv: Sequence[str]) -> int:
     """Run a real bootstrap or a reviewable command-only dry run."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="Print exact install commands without changing state.")
+    parser.add_argument(
+        "--hooks-only",
+        action="store_true",
+        help="Only (re)install the tracked git hooks; skip the tool bootstrap.",
+    )
     args = parser.parse_args(argv[1:])
     try:
+        if args.hooks_only:
+            install_git_hooks(dry_run=args.dry_run)
+            print("bootstrap: git hooks installed (core.hooksPath=.githooks).")
+            return 0
         bootstrap(load_manifest(), dry_run=args.dry_run)
     except (BootstrapError, KeyError, OSError, tomllib.TOMLDecodeError) as error:
         print(f"bootstrap refused: {error}", file=sys.stderr)

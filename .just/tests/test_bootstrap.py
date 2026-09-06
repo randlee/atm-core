@@ -327,5 +327,24 @@ class GitHookTests(unittest.TestCase):
 
 
 
+    def test_hooks_only_installs_hooks_without_bootstrapping_tools(self) -> None:
+        with (
+            mock.patch.object(bootstrap, "install_git_hooks") as install,
+            mock.patch.object(bootstrap, "bootstrap") as full,
+        ):
+            self.assertEqual(bootstrap.main(["bootstrap.py", "--hooks-only"]), 0)
+        install.assert_called_once_with(dry_run=False)
+        full.assert_not_called()
+
+    def test_hooks_only_surfaces_bootstrap_errors(self) -> None:
+        with mock.patch.object(bootstrap, "install_git_hooks", side_effect=bootstrap.BootstrapError("boom")):
+            self.assertEqual(bootstrap.main(["bootstrap.py", "--hooks-only"]), 1)
+
+    def test_hook_is_pinned_to_lf_line_endings(self) -> None:
+        attributes = self.HOOK.parents[1] / ".gitattributes"
+        self.assertIn(".githooks/* text eol=lf", attributes.read_text(encoding="utf-8"))
+        self.assertNotIn(b"\r\n", self.HOOK.read_bytes(), "hook must be LF-only in the tree")
+
+
 if __name__ == "__main__":
     unittest.main()
