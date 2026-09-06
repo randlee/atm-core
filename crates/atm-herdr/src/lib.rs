@@ -908,7 +908,10 @@ mod legacy_parser_oracle {
 #[cfg(feature = "test-utils")]
 pub mod testing {
     use super::*;
+    use crate::transport::HerdrClientConfig;
+    use crate::transport_cli::CliIo;
     use std::collections::VecDeque;
+    use std::path::PathBuf;
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum FakeHerdrCall {
@@ -952,6 +955,14 @@ pub mod testing {
     #[derive(Debug, Default, Clone)]
     pub struct FakeHerdrProcessAdapter {
         state: Arc<Mutex<FakeState>>,
+    }
+
+    #[must_use]
+    pub fn production_invoker_with_test_binary(binary: PathBuf) -> HerdrProcessInvoker {
+        HerdrProcessInvoker {
+            breaker: Arc::new(HerdrSpawnBreaker::default()),
+            io: HerdrIo::Cli(CliIo::new(&HerdrClientConfig::for_test_binary(binary))),
+        }
     }
 
     impl FakeHerdrProcessAdapter {

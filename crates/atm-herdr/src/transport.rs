@@ -31,6 +31,16 @@ impl HerdrClientConfig {
     }
 }
 
+#[cfg(feature = "test-utils")]
+impl HerdrClientConfig {
+    pub(crate) fn for_test_binary(binary_path: PathBuf) -> Self {
+        Self {
+            binary_path: Some(binary_path),
+            socket_path: None,
+        }
+    }
+}
+
 /// One request the private Herdr transport can carry.
 pub(crate) enum HerdrOp<'a> {
     Prompt {
