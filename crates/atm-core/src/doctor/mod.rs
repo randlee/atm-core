@@ -460,7 +460,8 @@ fn graft_receivers_doctor_report(
                 findings.push(DoctorFinding {
                     severity: DoctorSeverity::Warning,
                     code: atm_storage::AtmErrorCode::DaemonUnavailable,
-                    message: "skipped graft-receiver lease lookups: doctor budget exhausted".to_owned(),
+                    message: "skipped graft-receiver lease lookups: doctor budget exhausted"
+                        .to_owned(),
                     remediation: Some("Rerun `atm doctor` to inspect remaining leases.".to_owned()),
                 });
                 return None;

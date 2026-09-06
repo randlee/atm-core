@@ -164,9 +164,8 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
                 .map_err(|error| db.error("failed to list pending members", error))?;
             rows.into_iter()
                 .map(|entry| {
-                    let (team, agent) = entry.map_err(|error| {
-                        db.error("failed to read pending member row", error)
-                    })?;
+                    let (team, agent) = entry
+                        .map_err(|error| db.error("failed to read pending member row", error))?;
                     let team = team.parse().map_err(|error| {
                         AtmError::validation(format!(
                             "invalid team in mail_message_states: {error}"

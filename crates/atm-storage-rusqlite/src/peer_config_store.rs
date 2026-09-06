@@ -28,9 +28,7 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                     "SELECT bind_addr, advertise_host, enabled
                      FROM peer_https_interfaces ORDER BY bind_addr",
                 )
-                .map_err(|error| {
-                    db.error("failed to prepare HTTPS interface query", error)
-                })?;
+                .map_err(|error| db.error("failed to prepare HTTPS interface query", error))?;
             statement
                 .query_map([], |row| {
                     Ok((
@@ -41,8 +39,8 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                 })
                 .map_err(|error| db.error("failed to query HTTPS interfaces", error))?
                 .map(|row| {
-                    let (bind_addr, advertise_host, enabled) = row
-                        .map_err(|error| db.error("failed to read HTTPS interface", error))?;
+                    let (bind_addr, advertise_host, enabled) =
+                        row.map_err(|error| db.error("failed to read HTTPS interface", error))?;
                     Ok(HttpsInterface {
                         bind_addr: parse_bind_addr(&bind_addr)?,
                         advertise_host: parse_host(&advertise_host)?,
