@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AW2-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-AW2-F001" ;
+  triage:title "SqliteDiagnosticTimeline::open opened a private rusqlite Connection instead of routing through SharedDb's single writer" ;
+  triage:description "qa-pr1179-r1 (ruthless-boundary-qa, confirmed by quality-mgr) at e61bb3588: SqliteDiagnosticTimeline::open() created its own rusqlite Connection against the same DB file; inert (not wired into any call path) but sprint-AW.2 deliverable 3 requires no second SQLite connection. arch-ctm's 8be5ac880 (feat(diagnostics): route timeline batches through writer lane) reports reusing the backend writer; qa-pr1179-r2 verifies every path (open/record_batch/query/prune) and the hot-path gate on writer/mod.rs. CLOSURE (qa-pr1179-r4, quality-mgr): corrected from an earlier overclaim -- prune() routes through the writer lane (WriteOp::PruneDiagnostics, see AW2-QA-B1 closure), but query() (diagnostic_timeline.rs ~89-119) routes through SharedDb::with_connection -> control_path_pool, the codebase's existing shared bounded read-connection pool used by other read paths, NOT a private ad hoc Connection. Ruling: this satisfies the finding's actual concern (no private connection bypassing established pooling/lane discipline); the ADR-ATM-RUSQLITE-002 'no competing writer connection' restriction applies to writes, not reads, so control_path_pool use for a read-only query() is architecturally sound and not a new violation. req-qa's round-4 finding (ATM-QA-AW2R4-002) correctly flagged that the closure text must not claim control_path_pool is unused outright -- this description is amended accordingly. Finding closed." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "storage-boundary" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T03:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW2 ;
+  triage:foundAt "2026-09-05T02:42:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AW2-F001/AW2-1> ;
+  triage:closedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBQA-AW2-F001/AW2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 1 ;
+  triage:snippet "impl SqliteDiagnosticTimeline" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "e61bb3588" ;
+  triage:occursIn <urn:atm:triage:worktree/AW2/e61bb3588> .
+
+<urn:atm:triage:worktree/AW2/e61bb3588>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "e61bb3588" ;
+  triage:orderIndex 2 .

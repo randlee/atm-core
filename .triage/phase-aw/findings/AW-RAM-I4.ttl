@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-RAM-I4>
+  a triage:Finding ;
+  triage:findingId "AW-RAM-I4" ;
+  triage:title "No mechanical boundary/lint guard pins per-tick roster consumers to shared_roster_store_arc(), so a future PR could reintroduce the AW-POOL-V7 failure pattern silently" ;
+  triage:description "quality-mgr, qa-pr1240-r1 (ruthless-boundary-qa's RBQA-F002). The original AW-POOL-V7 defect (per-tick roster SQL reads) was not caused by a literal rusqlite/Sqlite* reference in atm-http-runtime -- boundaries/atm-http-runtime/http-runtime.toml's io_forbidden list would not have caught it, because the leak was a trait-level SharedRosterStore handle that happened to be backed by SQLite rather than the RAM mirror. Nothing in boundaries/**/*.toml or crates/atm-architecture/tests/boundary_enforcement.rs mechanically pins 'every long-lived/per-tick roster consumer must obtain its RosterStore handle via LocalServiceRuntime::shared_roster_store_arc()', so a future PR could reintroduce a raw durable-backed roster handle on a hot path with no lint failing. Acceptance: add a boundary/lint rule or an atm-architecture construction-site test (analogous to the existing resolve_picker_recipient() single-construction-site check) asserting that herdr_queue_wake.rs and other per-tick consumers only ever obtain a RosterStore via shared_roster_store_arc(), not via any other SharedRosterStore-producing constructor." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "boundary-governance" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T02:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWReadinessReview ;
+  triage:foundAt "2026-09-06T01:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-RAM-I4/no-mechanical-guard> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-RAM-I4/no-mechanical-guard>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1 ;
+  triage:snippet "no construction-site test pins herdr_queue_wake.rs / per-tick roster consumers to shared_roster_store_arc()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "98cea18d7" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-ram-roster/98cea18d7-i4> .
+
+<urn:atm:triage:worktree/fix-aw-ram-roster/98cea18d7-i4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-ram-roster" ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "98cea18d7" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW4-QA-B1>
+  a triage:Finding ;
+  triage:findingId "AW4-QA-B1" ;
+  triage:title "crates/atm-graft-python/src/lib.rs exceeds the RULE-003 1000-line file cap after AW.4" ;
+  triage:description "qa-pr1181-r1 (msg 01M1QS4C69FTKB887D5K0V12Y8) at 9f4d3170e: arch-qa RULE-003: lib.rs grew from 902 to 1096 non-test lines (+194) in this commit alone, crossing the 1000-line cap; independently re-verified by quality-mgr via mod-tests-boundary counts on both revisions. Zero-tolerance rule. Split lib.rs (e.g. extract observability_paths / ack_tool / with_daemon_recovery groupings into a submodule). CLOSURE (qa-cipher-fix, quality-mgr): Cipher's 33a03603d extracted DaemonRecoveryPolicy::strategy, PyGraftSession::recovery_endpoint_kind, with_daemon_recovery, and its recover_daemon_unavailable/recovery_attempt/recovery_outcome helpers plus RecoveryContext into a new crates/atm-graft-python/src/recovery.rs (183 lines), a mechanical move (identical bodies, forwards via pub(super) and super:: paths, no logic changes). quality-mgr independently ran .just/check_line_counts.py: lib.rs production line count now 800 (was 1096), workspace-wide RULE-003 check passes. cargo check -p atm-graft-python compiles clean at 33a03603d. Finding closed." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "file-size-cap" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T03:18:47Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW4 ;
+  triage:foundAt "2026-09-05T03:12:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW4-QA-B1/AW4-1> ;
+  triage:closedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AW4-QA-B1/AW4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "#[pymodule]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/aw4-graft-fallback-observability" ;
+  triage:headSha "9f4d3170e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW4/9f4d3170e> .
+
+<urn:atm:triage:worktree/AW4/9f4d3170e>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw4-graft-fallback-observability" ;
+  triage:branch "feature/aw4-graft-fallback-observability" ;
+  triage:headSha "9f4d3170e" ;
+  triage:orderIndex 3 .

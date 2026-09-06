@@ -9,10 +9,7 @@ use atm_storage::AtmError;
 
 impl SharedDb {
     pub(crate) fn reader_lane_metrics(&self) -> ReaderLanesMetricsSnapshot {
-        ReaderLanesMetricsSnapshot::from_lanes([
-            self.mailbox_reader_metrics.snapshot(),
-            self.search_reader.metrics(),
-        ])
+        ReaderLanesMetricsSnapshot::from_lanes([self.read_pool.metrics()])
     }
 
     pub(crate) fn checkpoint_wal(&self) -> Result<(), AtmError> {
@@ -37,9 +34,7 @@ impl SharedDb {
             Ok((busy, frames)) => {
                 let succeeded = *busy == 0;
                 let frames = u64::try_from(*frames).unwrap_or(u64::MAX);
-                self.mailbox_reader_metrics
-                    .record_wal_health(succeeded, frames);
-                self.search_reader.record_wal_health(succeeded, frames);
+                self.read_pool.record_wal_health(succeeded, frames);
             }
             Err(error) => self
                 .observability

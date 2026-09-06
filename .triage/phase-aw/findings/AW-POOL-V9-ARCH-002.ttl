@@ -1,0 +1,76 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-POOL-V9-ARCH-002>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9-ARCH-002" ;
+  triage:title "FIX-10's doctor lease-lookup budget only gates between loop iterations, not the in-flight lookup call itself" ;
+  triage:description "quality-mgr's PR #1244 (A2, fix/aw-pool-read-migration) re-QA (arch-qa reviewer): crates/atm-core/src/doctor/mod.rs:459 LEASE_LOOKUP_BUDGET (Duration::from_secs(2)) is checked only between iterations of the roster .filter_map() loop, not as a deadline on the in-flight runtime.graft_receiver_lease(...) call itself (line ~469). A single slow/saturated lookup can still consume up to the ReaderPool's full request_deadline (10s) before the loop re-checks elapsed time, so the whole operation's real wall-clock bound is ~10s worst case for one call, not the intended 2s total. This does fix the original O(N)-lookups-times-10s starvation (the per-iteration early-exit loop-bypass is closed and correctly implemented), but does not truly bound the whole operation to 2s as FIX-10's acceptance criteria (constant-budget across the whole per-member loop) claims. Fix direction: thread a per-call deadline (derived from the remaining budget: LEASE_LOOKUP_BUDGET minus lookup_started.elapsed()) into the lease lookup call itself, not just a gate on whether the next iteration starts." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-service-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T02:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-06T03:10:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-ARCH-002/A2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-ARCH-002/A3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-ARCH-002/A2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 459 ;
+  triage:snippet "if lookup_started.elapsed() >= LEASE_LOOKUP_BUDGET {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "515111d49c43ebba87f7b1f17e876b555b6c19e9" ;
+  triage:occursIn <urn:atm:triage:worktree/A2/515111d49c43ebba87f7b1f17e876b555b6c19e9> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-ARCH-002/A3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 459 ;
+  triage:snippet "if lookup_started.elapsed() >= LEASE_LOOKUP_BUDGET {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-diagnostics-admission" ;
+  triage:headSha "f3f5cd5fb1190e5eb66538b85229a1ede8e5d9cb" ;
+  triage:occursIn <urn:atm:triage:worktree/A3/f3f5cd5fb1190e5eb66538b85229a1ede8e5d9cb> .
+
+<urn:atm:triage:worktree/A1/5ad73f498d06293bef94c2dcdb835f1e873e926c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/aw-pool-consolidate" ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "5ad73f498d06293bef94c2dcdb835f1e873e926c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/A2/515111d49c43ebba87f7b1f17e876b555b6c19e9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/aw-pool-read-migration" ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "515111d49c43ebba87f7b1f17e876b555b6c19e9" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/A3/f3f5cd5fb1190e5eb66538b85229a1ede8e5d9cb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/aw-diagnostics-admission" ;
+  triage:branch "fix/aw-diagnostics-admission" ;
+  triage:headSha "f3f5cd5fb1190e5eb66538b85229a1ede8e5d9cb" ;
+  triage:orderIndex 3 .
+<urn:atm:triage:resolution/AW-POOL-V9-ARCH-002/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-ARCH-002" ;
+  triage:resolutionNote "quality-mgr final targeted re-verify at fix/aw-pool-read-migration@935461a69 (rust-qa-agent: full fmt/clippy/test gate green, zero legacy-daemon touches; plus my own independent diff read of service_runtime.rs) confirmed PASS: RetainedServiceRuntime::graft_receiver_lease now takes a deadline: Duration threaded through GraftReceiverLeaseCache::load, recomputing remaining = expires_at.saturating_duration_since(Instant::now()) on each wait/load step and erroring out once remaining is zero, down through SqliteGraftReceiverEndpointStore::lookup_with_deadline -> SharedDb::read_with_deadline -> ReaderPool::submit_blocking(deadline, ...) -- a genuine I/O-bound deadline, not just an inter-iteration check. A subsequent pure-extraction refactor (37e725fc8, "split graft lease wait", RULE-002 function-length) was confirmed behavior-preserving via git diff. Ancestry of both 935461a69 and 37e725fc8 in e8825d5cc (PR #1244's merge to integrate/phase-aw) reconfirmed via git merge-base --is-ancestor before this closure." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "37e725fc8" ;
+  triage:resolvedBranch "integrate/phase-aw" .

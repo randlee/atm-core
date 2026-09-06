@@ -104,7 +104,7 @@ pub(super) fn ensure_process_descriptor_limit() {
     RAISED.get_or_init(
         || match atm_core::descriptor_limit::raise_descriptor_soft_limit() {
             atm_core::descriptor_limit::DescriptorLimitOutcome::Raised { previous, current } => {
-                tracing::info!(
+                tracing::info!(target: "atm_http_runtime::listener",
                     previous,
                     current,
                     "raised the process descriptor soft limit"

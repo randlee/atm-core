@@ -1,0 +1,88 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-POOL-V9-FIX-9>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9-FIX-9" ;
+  triage:title "SharedDb::read/read_tool hardcode static request_deadline() instead of threading caller's remaining deadline" ;
+  triage:description "shared_db.rs:212 SharedDb::read/read_tool hardcode the ReaderPool's static 10s request_deadline() instead of threading the caller's remaining deadline, unlike mailbox_reader.rs's sibling lane which does thread deadline.remaining() through submit/submit_tool." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "concurrency-architecture" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T02:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-06T02:26:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-9/INT-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-9/A1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-9/A2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-9/INT-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 212 ;
+  triage:snippet "pub(crate) fn read<T>(...request_deadline()...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "0efef907bc527fe6483b31a972bb0b762f832fcf" ;
+  triage:occursIn <urn:atm:triage:worktree/INT/0efef907bc527fe6483b31a972bb0b762f832fcf> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-9/A1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 212 ;
+  triage:snippet "pub(crate) fn read<T>(...request_deadline()...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "a60779787c3e89025daf0dc6fcc9d83c73344af8" ;
+  triage:occursIn <urn:atm:triage:worktree/A1/a60779787c3e89025daf0dc6fcc9d83c73344af8> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-9/A2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 212 ;
+  triage:snippet "pub(crate) fn read<T>(...request_deadline()...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b64dff01f71ff12eae64a0684302075d" ;
+  triage:occursIn <urn:atm:triage:worktree/A2/a0e50036b64dff01f71ff12eae64a0684302075d> .
+
+<urn:atm:triage:worktree/INT/0efef907bc527fe6483b31a972bb0b762f832fcf>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "0efef907bc527fe6483b31a972bb0b762f832fcf" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/A1/a60779787c3e89025daf0dc6fcc9d83c73344af8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/aw-pool-consolidate" ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "a60779787c3e89025daf0dc6fcc9d83c73344af8" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/A2/a0e50036b64dff01f71ff12eae64a0684302075d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/aw-pool-read-migration" ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b64dff01f71ff12eae64a0684302075d" ;
+  triage:orderIndex 3 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-9/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-9" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. Disposed by design, not code-restructured: commit e095cbd9a ("docs(storage): explain fixed sync read deadline", authored by Rand directly) adds explicit doc comments to SharedDb::read/read_tool stating the fixed 10s pool deadline is intentional for this legacy sync-compat surface, with Tokio request-level deadlines enforced by the HTTP runtime adapters instead. The threading capability this finding asked for does now exist as a distinct primitive (read_with_deadline, added alongside the ARCH-002/FIX-10 fix and used by graft_receiver_endpoint_store.rs's lookup_with_deadline) for call sites that need it; read()/read_tool() deliberately keep the static deadline as documented legacy behavior. No production caller was found needing read()/read_tool() to thread a caller deadline. Confirmed by direct code read plus git log on shared_db.rs." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e095cbd9a" ;
+  triage:resolvedBranch "integrate/phase-aw" .

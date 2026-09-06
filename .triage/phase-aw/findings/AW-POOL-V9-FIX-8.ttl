@@ -1,0 +1,88 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-POOL-V9-FIX-8>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9-FIX-8" ;
+  triage:title "mailbox_reader.rs's storage_error() still does lossy AtmError->ReadLaneError conversion" ;
+  triage:description "mailbox_reader.rs's storage_error() still does the lossy AtmError->ReadLaneError{message} conversion (discards code/cause) -- this PR's own two migrated files (graft_receiver_endpoint_store.rs, template_catalog_store.rs) correctly avoid it via GraftEndpointStoreError::storage()/direct AtmError passthrough, but the pre-existing instance in mailbox_reader.rs (in this PR's review scope) was not fixed." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T22:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-06T02:26:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-8/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-8/3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/mailbox_reader.rs" ;
+  triage:line 155 ;
+  triage:snippet "fn storage_error(error: AtmError) -> ReadLaneError {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "0efef907bc527fe6483b31a972bb0b762f832fcf" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-aw/0efef907b> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-8/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/mailbox_reader.rs" ;
+  triage:line 124 ;
+  triage:snippet "fn storage_error(error: AtmError) -> ReadLaneError {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "a60779787c3e89025daf0dc6fcc9d83c73344af8" ;
+  triage:occursIn <urn:atm:triage:worktree/A1/a60779787> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-8/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/mailbox_reader.rs" ;
+  triage:line 162 ;
+  triage:snippet "fn storage_error(error: AtmError) -> ReadLaneError {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b64dff01f71ff12eae64a0684302075d" ;
+  triage:occursIn <urn:atm:triage:worktree/A2/a0e50036b> .
+
+<urn:atm:triage:worktree/integrate-aw/0efef907b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "0efef907bc527fe6483b31a972bb0b762f832fcf" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/A1/a60779787>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/A1" ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "a60779787c3e89025daf0dc6fcc9d83c73344af8" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/A2/a0e50036b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/A2" ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b64dff01f71ff12eae64a0684302075d" ;
+  triage:orderIndex 3 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-8/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-8" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. mailbox_reader.rs's storage_error() now delegates to read_lane_storage_error(), which builds ReadLaneError::Storage{code, message, cause: error.cause().map(str::to_owned)} -- matches AW-POOL-V9-QA-002's independently-verified fix (commit 2309b8dd9, already closed) and is no longer a lossy conversion. Confirmed by direct read on the merged head." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .

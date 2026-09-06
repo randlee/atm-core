@@ -119,10 +119,12 @@ pub enum AtmErrorCode {
     ObservabilityHealthFailed,
     ObservabilityBootstrapFailed,
     ObservabilityHealthOk,
+    RetainedDiagnosticsHealthOk,
     WarningInvalidTeamMemberSkipped,
     WarningMailboxRecordSkipped,
     WarningMalformedAtmFieldIgnored,
     WarningObservabilityHealthDegraded,
+    WarningRetainedDiagnosticsDegraded,
     WarningSqliteHealthDegraded,
     WarningOriginInboxEntrySkipped,
     WarningMissingTeamConfigFallback,
@@ -289,10 +291,12 @@ impl AtmErrorCode {
             Self::ObservabilityHealthFailed => "ATM_OBSERVABILITY_HEALTH_FAILED",
             Self::ObservabilityBootstrapFailed => "ATM_OBSERVABILITY_BOOTSTRAP_FAILED",
             Self::ObservabilityHealthOk => "ATM_OBSERVABILITY_HEALTH_OK",
+            Self::RetainedDiagnosticsHealthOk => "ATM_RETAINED_DIAGNOSTICS_HEALTH_OK",
             Self::WarningInvalidTeamMemberSkipped => "ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED",
             Self::WarningMailboxRecordSkipped => "ATM_WARNING_MAILBOX_RECORD_SKIPPED",
             Self::WarningMalformedAtmFieldIgnored => "ATM_WARNING_MALFORMED_ATM_FIELD_IGNORED",
             Self::WarningObservabilityHealthDegraded => "ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED",
+            Self::WarningRetainedDiagnosticsDegraded => "ATM_WARNING_RETAINED_DIAGNOSTICS_DEGRADED",
             Self::WarningSqliteHealthDegraded => "ATM_WARNING_SQLITE_HEALTH_DEGRADED",
             Self::WarningOriginInboxEntrySkipped => "ATM_WARNING_ORIGIN_INBOX_ENTRY_SKIPPED",
             Self::WarningMissingTeamConfigFallback => "ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK",
@@ -464,11 +468,15 @@ fn parse_observability_or_warning_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_OBSERVABILITY_HEALTH_FAILED" => AtmErrorCode::ObservabilityHealthFailed,
         "ATM_OBSERVABILITY_BOOTSTRAP_FAILED" => AtmErrorCode::ObservabilityBootstrapFailed,
         "ATM_OBSERVABILITY_HEALTH_OK" => AtmErrorCode::ObservabilityHealthOk,
+        "ATM_RETAINED_DIAGNOSTICS_HEALTH_OK" => AtmErrorCode::RetainedDiagnosticsHealthOk,
         "ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED" => AtmErrorCode::WarningInvalidTeamMemberSkipped,
         "ATM_WARNING_MAILBOX_RECORD_SKIPPED" => AtmErrorCode::WarningMailboxRecordSkipped,
         "ATM_WARNING_MALFORMED_ATM_FIELD_IGNORED" => AtmErrorCode::WarningMalformedAtmFieldIgnored,
         "ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED" => {
             AtmErrorCode::WarningObservabilityHealthDegraded
+        }
+        "ATM_WARNING_RETAINED_DIAGNOSTICS_DEGRADED" => {
+            AtmErrorCode::WarningRetainedDiagnosticsDegraded
         }
         "ATM_WARNING_SQLITE_HEALTH_DEGRADED" => AtmErrorCode::WarningSqliteHealthDegraded,
         "ATM_WARNING_ORIGIN_INBOX_ENTRY_SKIPPED" => AtmErrorCode::WarningOriginInboxEntrySkipped,

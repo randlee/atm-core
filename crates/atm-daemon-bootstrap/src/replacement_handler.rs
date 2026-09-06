@@ -48,6 +48,8 @@ pub(crate) struct ReplacementHandlerConfig<F> {
     pub(crate) peer_wire_mode: PeerWireMode,
     pub(crate) peer_adapter_selection: SelectedPeerAdapterSelection,
     pub(crate) runtime_health: RuntimeHealth,
+    pub(crate) diagnostic_counters:
+        Option<Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>>,
     pub(crate) bare_cli: BareCliRuntime,
     pub(crate) herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 }
@@ -223,6 +225,7 @@ pub(crate) fn build_replacement_handler(
         peer_wire_mode,
         peer_adapter_selection,
         runtime_health,
+        diagnostic_counters,
         bare_cli,
         herdr_process,
     } = config;
@@ -247,6 +250,38 @@ pub(crate) fn build_replacement_handler(
         runtime_health.clone(),
         queue_wake_process,
     ));
+    let handler = compose_storage_router(
+        assembly,
+        observability,
+        selector,
+        runtime_health,
+        diagnostic_counters,
+        bare_cli,
+        transition_sink,
+        queue_wake_pump,
+        daemon_launch_identity,
+        peer_wire_mode,
+        peer_adapter_selection,
+    )?;
+    Ok((Arc::new(handler), recovery_sweep))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compose_storage_router(
+    assembly: RuntimeAssembly,
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    selector: Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    runtime_health: RuntimeHealth,
+    diagnostic_counters: Option<
+        Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
+    >,
+    bare_cli: BareCliRuntime,
+    transition_sink: Arc<dyn atm_http_runtime::MemberStateTransitionSink>,
+    queue_wake_pump: Arc<HerdrQueueWakePump>,
+    daemon_launch_identity: DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
+    peer_adapter_selection: SelectedPeerAdapterSelection,
+) -> Result<StorageAndNudgeRouter, AtmError> {
     let async_mailbox_runtime = assembly
         .async_mailbox_runtime
         .clone()
@@ -270,6 +305,7 @@ pub(crate) fn build_replacement_handler(
     .with_doctor_projection(Arc::new(doctor_projection))
     .with_maintenance(queue_wake_pump)
     .with_runtime_health(runtime_health, assembly.doctor_ports)
+    .with_diagnostic_counters_option(diagnostic_counters)
     .with_member_state_transition_sink(transition_sink)
     .with_bare_cli_fifo(bare_cli.fifo(), bare_cli.queue_full_drops())
     .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
@@ -281,8 +317,7 @@ pub(crate) fn build_replacement_handler(
         peer_wire_security: Some(peer_wire_mode.security().into()),
     })
     .with_shared_direct_peer_client(shared_direct_peer_client()?);
-    let handler = add_peer_connection_pool(handler, peer_adapter_selection);
-    Ok((Arc::new(handler), recovery_sweep))
+    Ok(add_peer_connection_pool(handler, peer_adapter_selection))
 }
 
 fn add_peer_connection_pool(

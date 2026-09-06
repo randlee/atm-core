@@ -395,9 +395,20 @@ impl ReadDeadline {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReadLaneError {
     UnauthorizedScope,
-    Saturated { reason: &'static str },
-    DeadlineExpired { stage: &'static str },
-    Unavailable { message: String },
+    Saturated {
+        reason: &'static str,
+    },
+    DeadlineExpired {
+        stage: &'static str,
+    },
+    Unavailable {
+        message: String,
+    },
+    Storage {
+        code: AtmErrorCode,
+        message: String,
+        cause: Option<String>,
+    },
 }
 
 impl fmt::Display for ReadLaneError {
@@ -415,6 +426,13 @@ impl fmt::Display for ReadLaneError {
             Self::Unavailable { message } => {
                 write!(formatter, "mailbox reader lane is unavailable: {message}")
             }
+            Self::Storage { message, cause, .. } => {
+                write!(formatter, "mailbox reader storage failure: {message}")?;
+                if let Some(cause) = cause {
+                    write!(formatter, "; cause: {cause}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -431,6 +449,7 @@ impl From<ReadLaneError> for AtmError {
             ReadLaneError::Saturated { .. } => AtmErrorCode::DaemonConnectionSaturated,
             ReadLaneError::DeadlineExpired { .. } => AtmErrorCode::MailboxLockTimeout,
             ReadLaneError::Unavailable { .. } => AtmErrorCode::DaemonUnavailable,
+            ReadLaneError::Storage { code, .. } => *code,
         };
         AtmError::new(code, "bounded mailbox reader lane request failed").with_cause(error)
     }
@@ -725,6 +744,21 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
         deadline: ReadDeadline,
     ) -> Result<Vec<Message>, ReadLaneError>;
 
+    /// Runs a bounded exploratory mailbox list through the tool-class slice
+    /// of the shared reader pool.
+    ///
+    /// Implementations that do not distinguish reader-pool classes retain
+    /// the ordinary read-only behavior. SQLite overrides this so operator and
+    /// CLI enumeration cannot consume every reader worker.
+    async fn list_messages_for_tool(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        self.list_messages(scope, query, deadline).await
+    }
+
     async fn load_message(
         &self,
         scope: MailboxScope,
@@ -753,6 +787,59 @@ pub trait RosterStore: sealed::Sealed + Send + Sync {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
+}
+
+/// Ephemeral per-member roster state that never round-trips through the
+/// durable roster store. Every field here is mutated in RAM only, on an
+/// observed state change; nothing here is ever read from or written to a
+/// durable backend.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RosterMemberEphemeralState {
+    /// Set/cleared by Herdr queue-wake bookkeeping when a member's steer
+    /// target is pending a wake attempt.
+    pub herdr_wake_pending: bool,
+}
+
+/// Cross-crate seam for the runtime-owned, write-through in-memory roster
+/// mirror. Every roster consumer reads through this handle after startup
+/// hydration; a durable roster write updates the backing mirror in the same
+/// operation through the paired [`RosterStore`] write-through implementation.
+///
+/// The concrete write-through implementation (the [`RosterStore`] impl and
+/// the state backing both this trait and that impl) is authorized only at
+/// the `atm-storage-rusqlite` composition boundary (see
+/// `boundaries/atm-storage-rusqlite/roster-store-sqlite.toml`). This trait
+/// exists so `atm-core` and other consumer crates can hold and call the
+/// mirror without depending on that concrete backend crate.
+pub trait RosterRuntimeMirror: Send + Sync {
+    /// Reads one team's roster from RAM. Never issues a durable read.
+    fn load_team_roster(&self, team: &TeamName) -> Vec<RosterMember>;
+    /// Reads one roster member from RAM. Never issues a durable read.
+    fn load_roster_member(&self, team: &TeamName, agent: &AgentName) -> Option<RosterMember>;
+    /// Enumerates every team currently held in RAM. Never issues a durable read.
+    fn list_teams(&self) -> Vec<TeamName>;
+    /// Reads one member's ephemeral (non-durable) roster state from RAM.
+    fn ephemeral_state(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Option<RosterMemberEphemeralState>;
+    /// Sets one member's Herdr wake-pending ephemeral flag in RAM only.
+    /// Returns `false` without effect when the member is not present in the
+    /// current roster snapshot.
+    fn set_herdr_wake_pending(&self, team: &TeamName, agent: &AgentName, pending: bool) -> bool;
+    /// Re-hydrates the RAM roster mirror from the durable roster store.
+    ///
+    /// This is *not* the write-through synchronization mechanism -- every
+    /// durable roster write already updates RAM in the same operation. This
+    /// exists only for an authenticated control-plane reload boundary that
+    /// wants to re-derive RAM from durable state (e.g. after an out-of-band
+    /// durable migration).
+    ///
+    /// # Errors
+    /// Returns an error if the durable roster store cannot be read; RAM is
+    /// left unchanged on failure.
+    fn reload_from_durable(&self) -> Result<(), AtmError>;
 }
 
 /// Registration payload for one loopback graft receiver lease.
@@ -870,6 +957,17 @@ pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError>;
+
+    /// Performs one bounded durable lease lookup. Implementations that own a
+    /// reader pool must apply `deadline` to the submitted read.
+    fn lookup_with_deadline(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        _deadline: Duration,
+    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+        self.lookup(team, agent)
+    }
 
     fn mark_unreachable(
         &self,

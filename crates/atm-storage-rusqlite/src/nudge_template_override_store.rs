@@ -1,5 +1,5 @@
 use super::SqliteNudgeTemplateOverrideStore;
-use crate::shared_db::{SharedDb, SqliteConnection};
+use crate::shared_db::SharedDb;
 use atm_storage::error::AtmError;
 use atm_storage::types::{IsoTimestamp, TeamName};
 use atm_storage::{
@@ -23,13 +23,15 @@ impl NudgeTemplateOverrideStore for SqliteNudgeTemplateOverrideStore {
         team: &TeamName,
         kind: BuiltInNudgeTemplateKind,
     ) -> Result<Option<TeamNudgeTemplateOverrideRow>, AtmError> {
-        self.db.with_connection(|connection| {
+        let db = Arc::clone(&self.db);
+        let team_key = team.clone();
+        self.db.read(move |connection| {
             connection
                 .query_row(
                     "SELECT mode, template_body, updated_at
                      FROM team_nudge_template_overrides
                      WHERE team_name = ?1 AND template_kind = ?2;",
-                    params![team.as_str(), kind.as_str()],
+                    params![team_key.as_str(), kind.as_str()],
                     |row| {
                         Ok((
                             row.get::<_, String>(0)?,
@@ -40,20 +42,12 @@ impl NudgeTemplateOverrideStore for SqliteNudgeTemplateOverrideStore {
                 )
                 .optional()
                 .map_err(|error| {
-                    self.db
-                        .error("failed to load team nudge template override row", error)
+                    db.error("failed to load team nudge template override row", error)
                 })?
                 .map(|(mode, template_body, updated_at)| {
-                    let mode = normalize_loaded_override_mode(
-                        connection,
-                        self.db.as_ref(),
-                        team,
-                        kind,
-                        mode,
-                        template_body,
-                    )?;
+                    let mode = normalize_loaded_override_mode(mode, template_body)?;
                     Ok(TeamNudgeTemplateOverrideRow {
-                        team_name: team.clone(),
+                        team_name: team_key.clone(),
                         kind,
                         mode,
                         updated_at: parse_updated_at(updated_at)?,
@@ -163,29 +157,12 @@ fn parse_updated_at(raw: String) -> Result<IsoTimestamp, AtmError> {
 }
 
 fn normalize_loaded_override_mode(
-    connection: &SqliteConnection,
-    db: &SharedDb,
-    team: &TeamName,
-    kind: BuiltInNudgeTemplateKind,
     mode: String,
     template_body: String,
 ) -> Result<TeamNudgeTemplateOverrideMode, AtmError> {
     match mode.as_str() {
         "override" => {
             if template_body.trim().is_empty() {
-                connection
-                    .execute(
-                        "UPDATE team_nudge_template_overrides
-                         SET mode = 'disabled'
-                         WHERE team_name = ?1 AND template_kind = ?2;",
-                        params![team.as_str(), kind.as_str()],
-                    )
-                    .map_err(|error| {
-                        db.error(
-                            "failed to normalize legacy empty nudge-template override row",
-                            error,
-                        )
-                    })?;
                 return Ok(TeamNudgeTemplateOverrideMode::Disabled);
             }
             Ok(TeamNudgeTemplateOverrideMode::Override { template_body })
@@ -340,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn sqlite_override_store_migrates_legacy_empty_rows_to_disabled() {
+    fn sqlite_override_store_treats_legacy_empty_rows_as_disabled_without_writing() {
         let backend = crate::SqliteStorageBackend::in_memory_for_test().expect("backend");
         let db = backend.shared_db_for_test();
         db.with_connection(|connection| {
@@ -370,5 +347,18 @@ mod tests {
             .expect("row");
 
         assert!(row.is_disabled());
+        let persisted_mode = db
+            .with_connection(|connection| {
+                connection
+                    .query_row(
+                        "SELECT mode FROM team_nudge_template_overrides
+                         WHERE team_name = ?1 AND template_kind = ?2;",
+                        params!["test-team", "delivery_ack"],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .map_err(|error| db.error("load legacy mode", error))
+            })
+            .expect("legacy row remains readable");
+        assert_eq!(persisted_mode, "override");
     }
 }
