@@ -31,7 +31,11 @@ Run from anywhere in the repo, normally the main checkout on `develop`. The
 script discovers every stack by running `gh stack view --json` in each
 worktree from `git worktree list` (concurrently), keeps the longest view of
 each stack (a lower-layer worktree only sees the layers linked from it), and
-joins them into one report. Fully merged stacks are hidden unless `--all`.
+joins them into one report. The default view is strict: only stacks whose
+trunk is the current phase (highest `integrate/phase-*` seen) or `develop`,
+and only stacks that still have an open layer. Merged, closed and other-phase
+stacks are counted on a `hidden:` line; `--phase`/`--trunk` selects another
+trunk, `--all` shows everything.
 
 ```bash
 python3 .claude/skills/gh-stack-view/scripts/gh_stack_view.py --phase aw

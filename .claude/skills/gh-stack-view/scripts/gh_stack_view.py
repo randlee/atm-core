@@ -86,38 +86,50 @@ def worktree_paths() -> list[str]:
     return paths
 
 
-def discover_stacks(trunk_filter: str | None, *, include_merged: bool) -> list[dict]:
+def discover_stacks(trunk_filter: str | None, *, include_all: bool) -> tuple[list[dict], int]:
     """Run `gh stack view --json` once per worktree, dedupe by branch set.
 
     Works from develop/main (not part of any stack): every stack that has at
     least one worktree checked out is found. Concurrent, read-only.
+
+    Default view is strict: trunk must be the current phase (highest
+    integrate/phase-* seen) or develop, and the stack must still have an open
+    layer. Returns (stacks, hidden_count).
     """
     paths = worktree_paths()
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(stack_json_at, paths))
-    stacks: list[dict] = []
+    found: list[dict] = []
     for path, data in zip(paths, results):
-        if not data:
-            continue
-        if trunk_filter and data["trunk"] != trunk_filter:
-            continue
-        if not include_merged and all(b.get("isMerged") for b in data["branches"]):
-            continue
-        data["worktree"] = path
-        stacks.append(data)
+        if data:
+            data["worktree"] = path
+            found.append(data)
+
     # Each worktree only knows the layers linked from it; the same stack seen
     # from a lower layer is a prefix of the view from the top. Keep the longest.
     def names(d: dict) -> tuple[str, ...]:
         return tuple(b["name"] for b in d["branches"])
-    stacks = [d for d in stacks if not any(
+    found = [d for d in found if not any(
         o is not d and len(names(o)) > len(names(d)) and names(o)[: len(names(d))] == names(d)
-        for o in stacks)]
+        for o in found)]
     uniq: dict[tuple[str, ...], dict] = {}
-    for d in stacks:
+    for d in found:
         uniq.setdefault(names(d), d)
-    stacks = list(uniq.values())
+    found = list(uniq.values())
+
+    phases = sorted(d["trunk"] for d in found if d["trunk"].startswith("integrate/phase-"))
+    allowed_trunks = {trunk_filter} if trunk_filter else ({phases[-1]} if phases else set()) | {"develop"}
+
+    def is_open(d: dict) -> bool:
+        return any(not b.get("isMerged") and (b.get("pr") or {}).get("state", "OPEN") != "CLOSED"
+                   for b in d["branches"])
+
+    if include_all and not trunk_filter:
+        stacks = found
+    else:
+        stacks = [d for d in found if d["trunk"] in allowed_trunks and (include_all or is_open(d))]
     stacks.sort(key=lambda d: (not d["trunk"].startswith("integrate/"), d["trunk"], d["branches"][0]["name"]))
-    return stacks
+    return stacks, len(found) - len(stacks)
 
 
 def origin_sha(ref: str) -> str | None:
@@ -299,7 +311,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--trunk", help="only stacks whose trunk is this branch (e.g. integrate/phase-aw)")
     ap.add_argument("--phase", help="shorthand for --trunk integrate/phase-<PHASE>")
-    ap.add_argument("--all", action="store_true", help="include stacks whose every layer is already merged")
+    ap.add_argument("--all", action="store_true", help="show every stack, including merged/closed ones and other phases")
     ap.add_argument("--no-fetch", action="store_true", help="skip `git fetch origin` and origin comparison")
     ap.add_argument("--no-pr", action="store_true", help="skip the GraphQL PR query (offline / local-only view)")
     ap.add_argument("--json", action="store_true", help="emit the merged rows as JSON instead of tables")
@@ -325,11 +337,12 @@ def preflight() -> None:
 
 def run_report(args: argparse.Namespace, trunk_filter: str | None) -> int:
     preflight()
-    stacks = discover_stacks(trunk_filter, include_merged=args.all)
+    stacks, hidden = discover_stacks(trunk_filter, include_all=args.all)
     if not stacks:
-        where = f" with trunk {trunk_filter}" if trunk_filter else ""
+        where = f" with trunk {trunk_filter}" if trunk_filter else " for the current phase or develop"
+        hint = f" ({hidden} merged/closed/other-phase stack(s) hidden; --all to show)" if hidden else ""
         sys.stderr.write(
-            f"no gh stack found{where}. Stacks are discovered through `git worktree list`; a stack "
+            f"no open gh stack found{where}{hint}. Stacks are discovered through `git worktree list`; a stack "
             "needs at least one of its layers checked out in a worktree (never `git checkout` in the main repo).\n"
         )
         return 2
@@ -352,10 +365,12 @@ def run_report(args: argparse.Namespace, trunk_filter: str | None) -> int:
                        "rows": rows, "problems": problems, "notes": notes, "coherent": not problems})
         blocks.append(render_table(st, rows, problems, notes, trunk_origin=trunk_origin))
     if args.json:
-        print(json.dumps({"stacks": report, "coherent": not any_problem}, indent=2))
+        print(json.dumps({"stacks": report, "hidden": hidden, "coherent": not any_problem}, indent=2))
     else:
         print("\n\n".join(blocks))
         print()
+        if hidden:
+            print(f"hidden: {hidden} merged/closed/other-phase stack(s); --all to show")
         print(legend())
     return 1 if any_problem else 0
 
