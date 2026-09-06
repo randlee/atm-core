@@ -7,6 +7,13 @@ on:
   push:
     branches: [develop, main]
 
+# One live run per ref: a new push to a PR branch cancels the queued/running
+# run for the superseded commit instead of stacking a full matrix behind it.
+# Pushes to develop/main are never cancelled (every landed commit gets a run).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   ci-scope:
     name: Classify CI scope
