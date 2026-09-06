@@ -202,10 +202,10 @@ impl EnvSource for FakeEnvSource {
 /// avoids that race structurally: there is only ever one subscriber, its
 /// `enabled()` always returns `true`, and the interest cache converges once
 /// and stays converged for the rest of the process — no further
-/// installs/rebuilds ever compete with it. Each call reads only the
-/// buffer keyed by the calling thread's `ThreadId`, so unrelated concurrent
-/// callers (including nested/child capture calls on other threads) never
-/// see each other's events.
+/// installs/rebuilds ever compete with it. Each calling thread maintains a
+/// stack of capture buffers in thread-local state, so concurrent callers do
+/// not contend for or observe one another's events, and nested captures keep
+/// their output separate.
 #[cfg(any(test, feature = "test-utils"))]
 pub fn capture_tracing<T>(f: impl FnOnce() -> T) -> (T, String) {
     tracing_capture::capture(f)
@@ -213,20 +213,16 @@ pub fn capture_tracing<T>(f: impl FnOnce() -> T) -> (T, String) {
 
 #[cfg(any(test, feature = "test-utils"))]
 mod tracing_capture {
-    use std::collections::HashMap;
+    use std::cell::RefCell;
     use std::fmt;
-    use std::sync::{Mutex, OnceLock};
-    use std::thread::ThreadId;
+    use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
     use tracing::field::{Field, Visit};
     use tracing::span::{Attributes, Id, Record};
     use tracing::{Event, Metadata, Subscriber};
 
-    type Buffers = Mutex<HashMap<ThreadId, String>>;
-
-    fn buffers() -> &'static Buffers {
-        static BUFFERS: OnceLock<Buffers> = OnceLock::new();
-        BUFFERS.get_or_init(Default::default)
+    thread_local! {
+        static CAPTURE_STACK: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
     }
 
     #[derive(Default)]
@@ -241,10 +237,8 @@ mod tracing_capture {
         }
     }
 
-    /// Zero-sized: every instance forwards to the same process-wide
-    /// [`buffers`] static, so `tracing::Dispatch::new` (which takes
-    /// ownership of the subscriber it wraps) can construct as many cheap
-    /// copies as it needs without ever duplicating captured state.
+    /// Zero-sized: capture state is thread-local, so worker reuse cannot
+    /// mix one test's events into another test's capture buffer.
     #[derive(Debug, Default, Clone, Copy)]
     struct GlobalCaptureProxy;
 
@@ -264,12 +258,13 @@ mod tracing_capture {
         fn event(&self, event: &Event<'_>) {
             let mut visitor = LineVisitor::default();
             event.record(&mut visitor);
-            let thread_id = std::thread::current().id();
-            let mut buffers = buffers().lock().expect("capture buffers lock");
-            let line = buffers.entry(thread_id).or_default();
-            line.push_str(event.metadata().level().as_str());
-            line.push_str(&visitor.0);
-            line.push('\n');
+            CAPTURE_STACK.with(|stack| {
+                if let Some(line) = stack.borrow_mut().last_mut() {
+                    line.push_str(event.metadata().level().as_str());
+                    line.push_str(&visitor.0);
+                    line.push('\n');
+                }
+            });
         }
 
         fn enter(&self, _span: &Id) {}
@@ -290,17 +285,53 @@ mod tracing_capture {
 
     pub(super) fn capture<T>(f: impl FnOnce() -> T) -> (T, String) {
         ensure_installed();
-        let thread_id = std::thread::current().id();
-        buffers()
-            .lock()
-            .expect("capture buffers lock")
-            .remove(&thread_id);
-        let result = f();
-        let logs = buffers()
-            .lock()
-            .expect("capture buffers lock")
-            .remove(&thread_id)
-            .unwrap_or_default();
-        (result, logs)
+        CAPTURE_STACK.with(|stack| stack.borrow_mut().push(String::new()));
+        let result = catch_unwind(AssertUnwindSafe(f));
+        let logs = CAPTURE_STACK.with(|stack| stack.borrow_mut().pop().unwrap_or_default());
+        match result {
+            Ok(value) => (value, logs),
+            Err(payload) => resume_unwind(payload),
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        use super::capture;
+
+        #[test]
+        fn nested_captures_keep_their_events_separate() {
+            let ((), outer_logs) = capture(|| {
+                tracing::warn!("outer capture before nested capture");
+                let ((), inner_logs) = capture(|| {
+                    tracing::warn!("inner capture event");
+                });
+                assert!(inner_logs.contains("inner capture event"));
+                assert!(!inner_logs.contains("outer capture"));
+                tracing::warn!("outer capture after nested capture");
+            });
+
+            assert!(outer_logs.contains("outer capture before nested capture"));
+            assert!(outer_logs.contains("outer capture after nested capture"));
+            assert!(!outer_logs.contains("inner capture event"));
+        }
+
+        #[test]
+        fn panic_drops_the_capture_buffer_before_the_next_capture() {
+            let panic = catch_unwind(AssertUnwindSafe(|| {
+                capture(|| {
+                    tracing::warn!("event from panicking capture");
+                    panic!("intentional capture cleanup panic");
+                });
+            }));
+            assert!(panic.is_err());
+
+            let ((), logs) = capture(|| {
+                tracing::warn!("event after panicking capture");
+            });
+            assert!(logs.contains("event after panicking capture"));
+            assert!(!logs.contains("event from panicking capture"));
+        }
     }
 }
