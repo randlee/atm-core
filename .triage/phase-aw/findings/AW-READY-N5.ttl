@@ -15,31 +15,15 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T16:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW5 ;
   triage:foundAt "2026-09-05T16:40:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-N5/AW1-1> ;
   triage:triageRecordVersion "1" .
-
-<urn:atm:triage:occurrence/AW-READY-N5/AW1-1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/home.rs" ;
-  triage:line 48 ;
-  triage:snippet "pub fn current_host_runtime_scope() -> Result<HostRuntimeScope, AtmError> {" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-aw" ;
-  triage:headSha "7e61ad87e" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-aw/7e61ad87e> .
-
-<urn:atm:triage:worktree/integrate-aw/7e61ad87e>
-  a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/integrate-aw" ;
-  triage:branch "integrate/phase-aw" ;
-  triage:headSha "7e61ad87e" ;
-  triage:orderIndex 1 .
 
 # quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: fixed exactly
 # per the post-mortem's own prescribed shape -- a scoped, debug-only
@@ -51,11 +35,9 @@
 # test_cli_parity.py now sets this var in setUpClass before constructing
 # native_tools.AtmNativeTools, with an _assert_debug_native_scope guard
 # rejecting a release-wheel/scope mismatch. Independently confirmed by
-# arch-qa and req-qa in the same review round. Closing.
-<urn:atm:triage:finding/AW-READY-N5>
-  triage:status "fixed" .
-
-<urn:atm:triage:occurrence/AW-READY-N5/integrate-phase-aw-062cb44dd>
+# arch-qa, req-qa, and fenix's separate production-readiness lane B
+# (bounded harness waits also confirmed at test_cli_parity.py:104,136,192-232).
+<urn:atm:triage:occurrence/AW-READY-N5/AW1-1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/home.rs" ;
   triage:line 52 ;
@@ -64,11 +46,11 @@
   triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "062cb44dd" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/062cb44dd> .
+  triage:occursIn <urn:atm:triage:worktree/integrate-aw/062cb44dd> .
 
-<urn:atm:triage:worktree/integrate-phase-aw/062cb44dd>
+<urn:atm:triage:worktree/integrate-aw/062cb44dd>
   a triage:WorktreeSnapshot ;
-  triage:path "atm-core-worktrees/integrate/phase-aw" ;
+  triage:path ".worktrees/integrate-aw" ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "062cb44dd" ;
   triage:orderIndex 2 .

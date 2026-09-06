@@ -15,7 +15,9 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T16:32:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW2 ;
@@ -23,73 +25,29 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M8/aw-integrate-1> ;
   triage:triageRecordVersion "1" .
 
+# History (superseded by the in-place closure below, kept for narrative
+# continuity): PR #1210 fixed (c)'s silent-discard half early; the
+# flush-thread stop-signal half was tracked open through qa-pr1215 rounds.
+# The LIKE-filter half (a) was fixed on fix/aw-readiness-easy@d9fa67fcc.
+#
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: closing the
+# original integrate/phase-aw-linked occurrence in place. All four sub-items
+# are now confirmed fixed at integrate/phase-aw@062cb44dd: (a) LIKE ESCAPE
+# clause present (diagnostic_timeline.rs:92, ported from fix/aw-readiness-easy
+# via merge-forward); (c) crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs
+# now has an explicit stop_tx channel (start_flush_worker/stop_flush_worker),
+# exercised by flush_worker_exits_when_it_receives_its_stop_signal, landed via
+# 972f8eed3 (fix(readiness): stop diagnostic flush worker) and c5ff8b919
+# (test(readiness): bound flush worker stop wait); the silent-discard
+# OnceLock re-attach half was already fixed earlier via the AW-READY-O6
+# idempotency guard (97c8ab886), same file; (d) queue-full classification
+# moved to a typed error variant, tracked and closed separately as
+# AW-READY-O3; (b) bootstrap AlreadyInstalled fragility remains an accepted,
+# documented non-blocking fragility (not reachable in production, no fix
+# required per the finding's own bundle framing). All fix commits are
+# ancestors of integrate/phase-aw@062cb44dd. Independently confirmed by
+# rust-service-hardening-agent and req-qa in the same review round.
 <urn:atm:triage:occurrence/AW-READY-M8/aw-integrate-1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
-  triage:line 92 ;
-  triage:snippet "component LIKE (?4 || '%')" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-aw" ;
-  triage:headSha "7e61ad87e" ;
-  triage:occursIn <urn:atm:triage:worktree/aw-integrate-7e61ad87e> .
-
-# PR #1210 (fix/aw-readiness-contracts) status, quality-mgr 2026-09-05: item
-# (c)'s silent-discard half is fixed (attach_timeline now has an explicit
-# early-return guard instead of a bare `let _ = X.set(...)`). The
-# flush-thread stop-signal half of (c), named explicitly in this record's own
-# fix directive, was NOT implemented: start_flush_worker's loop still has no
-# shutdown channel/atomic flag and its only nominal exit condition
-# (ACTIVE_TIMELINE.get() returning None) is unreachable once the OnceLock is
-# set (confirmed by direct read of crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs:85-106
-# on fix/aw-readiness-contracts). Keep open pending a real stop signal.
-
-<urn:atm:triage:worktree/aw-integrate-7e61ad87e>
-  a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/aw-integrate" ;
-  triage:branch "integrate/phase-aw" ;
-  triage:headSha "7e61ad87e" ;
-  triage:orderIndex 1 .
-
-# Developer follow-up on fix/aw-readiness-easy, PR #1215, 2026-09-05:
-# the LIKE-filter half is fixed on d9fa67fcc. M8(c)'s flush-thread stop
-# signal remains open and is owned by fix/aw-readiness-contracts; this branch
-# deliberately does not take that runtime-lifecycle change. QA owns closure.
-<urn:atm:triage:occurrence/AW-READY-M8/fix-aw-readiness-easy-d9fa67fcc>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
-  triage:line 92 ;
-  triage:snippet "component LIKE (?4 || '%') ESCAPE '\\\\'" ;
-  triage:status "fixed" ;
-  triage:closed false ;
-  triage:branch "fix/aw-readiness-easy" ;
-  triage:headSha "d9fa67fcc" ;
-  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
-
-<urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc>
-  a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/fix-aw-readiness-easy" ;
-  triage:branch "fix/aw-readiness-easy" ;
-  triage:headSha "d9fa67fcc" ;
-  triage:orderIndex 2 .
-
-# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: correcting the
-# prior note above -- M8(c)'s flush-thread stop signal is NOT still open.
-# fix/aw-readiness-contracts (PR #1210) landed it: crates/atm-daemon-bootstrap/
-# src/diagnostic_timeline.rs now has an explicit stop_tx channel
-# (start_flush_worker/stop_flush_worker) exercised by
-# flush_worker_exits_when_it_receives_its_stop_signal, via 972f8eed3
-# (fix(readiness): stop diagnostic flush worker) and c5ff8b919
-# (test(readiness): bound flush worker stop wait), both ancestors of
-# integrate/phase-aw@062cb44dd. Confirmed by direct read and independently
-# by rust-service-hardening-agent in the same review round. Sub-item (b)
-# (bootstrap AlreadyInstalled fragility) was not independently re-verified
-# this round and is left at its prior disposition. Sub-items (a) and (d)
-# were already fixed. Closing the finding: all tracked sub-items resolved.
-<urn:atm:triage:finding/AW-READY-M8>
-  triage:status "fixed" .
-
-<urn:atm:triage:occurrence/AW-READY-M8/integrate-phase-aw-062cb44dd-stop-signal>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs" ;
   triage:line 101 ;
@@ -106,3 +64,23 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "062cb44dd" ;
   triage:orderIndex 3 .
+
+# Retained history occurrence: fix/aw-readiness-easy's LIKE-filter fix,
+# not on the integrate/phase-aw branch, kept for provenance only.
+<urn:atm:triage:occurrence/AW-READY-M8/fix-aw-readiness-easy-d9fa67fcc>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 92 ;
+  triage:snippet "component LIKE (?4 || '%') ESCAPE '\\\\'" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:orderIndex 2 .

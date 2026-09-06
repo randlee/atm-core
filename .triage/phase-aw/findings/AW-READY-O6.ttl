@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T16:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW1 ;
@@ -23,35 +25,13 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-O6/AW1-O6-1> ;
   triage:triageRecordVersion "1" .
 
-<urn:atm:triage:occurrence/AW-READY-O6/AW1-O6-1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs" ;
-  triage:line 41 ;
-  triage:snippet "pub(crate) fn attach_timeline(store: Arc<atm_storage_rusqlite::SqliteDiagnosticTimeline>) {" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-aw" ;
-  triage:headSha "7e61ad87e" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-aw/7e61ad87e> .
-
 # PR #1210 (fix/aw-readiness-contracts) status, quality-mgr 2026-09-05: the
 # no-op/idempotency guard IS implemented and tested (sequential-call test
-# attach_timeline_second_call_does_not_replace_the_active_writer). Remains
-# open because no test exercises the genuine concurrent OnceLock::set() race
-# via thread::spawn -- only sequential re-calls are proven. Keep open until a
-# multi-thread race test is added.
-
-<urn:atm:triage:worktree/integrate-aw/7e61ad87e>
-  a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/integrate-aw" ;
-  triage:branch "integrate/phase-aw" ;
-  triage:headSha "7e61ad87e" ;
-  triage:orderIndex 1 .
-
-# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: the exact gap
-# this record's prior note named -- "no test exercises the genuine
-# concurrent OnceLock::set() race via thread::spawn" -- is now closed.
-# crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs:805-873 has
+# attach_timeline_second_call_does_not_replace_the_active_writer). Was left
+# open pending a genuine concurrent-race test.
+#
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: that gap is now
+# closed. crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs:809-873 has
 # concurrent_attach_timeline_has_one_writer_and_keeps_it_on_reattach, an
 # 8-thread Barrier-synchronized genuine race test asserting exactly one
 # winner claims the writer/flush-worker, with a subsequent sequential
@@ -59,13 +39,9 @@
 # (fix(atm-daemon-bootstrap): fold persist-error counters instead of
 # overwriting, make attach_timeline idempotent) and 9a808e6b9
 # (test(bootstrap): race timeline attachment), both ancestors of
-# integrate/phase-aw@062cb44dd. Independently confirmed by arch-qa,
-# req-qa, and rust-service-hardening-agent in the same review round.
-# Closing.
-<urn:atm:triage:finding/AW-READY-O6>
-  triage:status "fixed" .
-
-<urn:atm:triage:occurrence/AW-READY-O6/integrate-phase-aw-062cb44dd>
+# integrate/phase-aw@062cb44dd. Independently confirmed by arch-qa, req-qa,
+# and rust-service-hardening-agent in the same review round.
+<urn:atm:triage:occurrence/AW-READY-O6/AW1-O6-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs" ;
   triage:line 809 ;
@@ -74,11 +50,11 @@
   triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "062cb44dd" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/062cb44dd> .
+  triage:occursIn <urn:atm:triage:worktree/integrate-aw/062cb44dd> .
 
-<urn:atm:triage:worktree/integrate-phase-aw/062cb44dd>
+<urn:atm:triage:worktree/integrate-aw/062cb44dd>
   a triage:WorktreeSnapshot ;
-  triage:path "atm-core-worktrees/integrate/phase-aw" ;
+  triage:path ".worktrees/integrate-aw" ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "062cb44dd" ;
   triage:orderIndex 2 .
