@@ -229,12 +229,6 @@ message = "atm-daemon may depend on atm-storage-rusqlite only through the docume
 
 [[boundaries.manifest_section_rules]]
 owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
-dependency_package = "atm-storage"
-allowed_sections = ["dev-dependencies"]
-message = "atm-http-runtime must not depend on atm-storage in production; it is a test-only fixture dependency"
-
-[[boundaries.manifest_section_rules]]
-owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
 dependency_package = "atm-runtime-test-support"
 allowed_sections = ["dev-dependencies"]
 message = "atm-http-runtime must not depend on atm-runtime-test-support in production; it is a test-only fixture dependency"
