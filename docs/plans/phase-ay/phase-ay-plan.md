@@ -3,7 +3,7 @@ phase: AY
 title: "Phase AY: native-IPC transport cutover for Herdr"
 canonical_path: docs/plans/phase-ay/phase-ay-plan.md
 integration_branch: develop (plan) / integrate/phase-ay (dev)
-status: draft, not approved (Rand, 2026-09-05)
+status: approved for execution (Rand, 2026-09-06, verbal to fenix: start phase-ay from the near-merge integrate/phase-ax head with develop fully merged)
 owner: solar (solar@atm-dev, from 2026-09-06T00:30Z; handed over by fenix)
 authored: 2026-09-05
 supersedes:
@@ -966,6 +966,10 @@ Common preconditions:
   git push --set-upstream origin integrate/phase-ay
   ```
 - P-B: this plan is approved by Rand (dated line in this file).
+  Met 2026-09-06: Rand directed fenix to create integrate/phase-ay from
+  integrate/phase-ax (046c9abd9, develop merged at 07edd48c9) and begin
+  graph-orchestration; this supersedes P-A's "never from integrate/phase-ax"
+  wording for this phase. All P-A presence checks pass on that head.
 - P-C (release-readiness prerequisite, not a sprint precondition; no AY
   sprint waits on it, ruling 5): the FastPC4 Windows `atm-dev` team exists with Herdr installed via
   the official installer and its parked reporter agent has delivered one
