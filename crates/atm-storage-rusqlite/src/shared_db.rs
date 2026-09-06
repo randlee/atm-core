@@ -214,12 +214,7 @@ impl SharedDb {
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
     ) -> Result<T, AtmError> {
         debug_assert_blocking_only("SharedDb::with_connection");
-        let mut lease = crate::control_path_pool::checkout(&self.control_path)?;
-        let outcome = operation(lease.connection());
-        if outcome.is_ok() {
-            lease.park();
-        }
-        outcome
+        self.writer_queue.with_connection(operation)
     }
 
     /// Call only from backend-owned blocking code paths.
@@ -232,7 +227,7 @@ impl SharedDb {
         operation: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, AtmError>,
     ) -> Result<T, AtmError> {
         debug_assert_blocking_only("SharedDb::with_transaction");
-        self.with_connection(|connection| {
+        self.writer_queue.with_connection(|connection| {
             // Acquire the SQLite writer lock up front so concurrent write paths
             // wait under the configured busy_timeout instead of failing during
             // deferred lock escalation on slower Windows schedulers.
@@ -954,10 +949,7 @@ mod tests {
     use crate::shared_db_reader_lanes::open_read_connection_for_target;
     use atm_storage::AtmErrorCode;
 
-    /// Number of control-path borrows a single burst is modelled on. Any
-    /// value comfortably above the connection bound proves reuse rather than
-    /// an accidentally oversized cache.
-    const CONTROL_PATH_BORROWS: usize = 32;
+    const SERIAL_WRITER_BORROWS: usize = 32;
 
     fn count_probe_rows(db: &SharedDb) -> Result<i64, AtmError> {
         db.with_connection(|connection| {
@@ -968,32 +960,31 @@ mod tests {
     }
 
     #[test]
-    fn control_path_borrows_reuse_one_connection_instead_of_reopening_per_call() {
+    fn serial_writer_queue_reuses_its_one_connection_for_blocking_borrows() {
         let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
         reset_opened_connection_count(db.target());
 
-        for _ in 0..CONTROL_PATH_BORROWS {
-            count_probe_rows(&db).expect("control-path read succeeds");
+        for _ in 0..SERIAL_WRITER_BORROWS {
+            count_probe_rows(&db).expect("serialized writer read succeeds");
         }
 
         assert_eq!(
             opened_connection_count(db.target()),
-            1,
-            "sequential control-path borrows must reuse one connection; opening per call \
-             multiplies descriptor demand by the in-flight admission count"
+            0,
+            "the serial writer queue owns the already-open writer connection"
         );
     }
 
     #[test]
-    fn concurrent_control_path_borrows_stay_within_the_connection_bound() {
+    fn concurrent_blocking_borrows_share_the_serial_writer_connection() {
         let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
-        // Warm the pool so the burst below measures reuse, not first-touch.
+        // The writer queue is assembled before the test counter is reset.
         count_probe_rows(&db).expect("control-path read succeeds");
         reset_opened_connection_count(db.target());
 
-        let barrier = Arc::new(std::sync::Barrier::new(CONTROL_PATH_BORROWS));
+        let barrier = Arc::new(std::sync::Barrier::new(SERIAL_WRITER_BORROWS));
         std::thread::scope(|scope| {
-            for _ in 0..CONTROL_PATH_BORROWS {
+            for _ in 0..SERIAL_WRITER_BORROWS {
                 let db = db.clone();
                 let barrier = Arc::clone(&barrier);
                 scope.spawn(move || {
@@ -1002,25 +993,21 @@ mod tests {
                 });
             }
         });
-        let burst_opens = opened_connection_count(db.target());
-        assert!(
-            burst_opens <= crate::control_path_pool::MAX_CONTROL_PATH_CONNECTIONS,
-            "a control-path burst must never open more connections than the bound"
-        );
+        assert_eq!(opened_connection_count(db.target()), 0);
 
         reset_opened_connection_count(db.target());
-        for _ in 0..CONTROL_PATH_BORROWS {
-            count_probe_rows(&db).expect("control-path read succeeds");
+        for _ in 0..SERIAL_WRITER_BORROWS {
+            count_probe_rows(&db).expect("serialized writer read succeeds");
         }
         assert_eq!(
             opened_connection_count(db.target()),
             0,
-            "after a burst the parked connections must absorb the next round without reopening"
+            "the serial writer queue remains the sole blocking connection"
         );
     }
 
     #[test]
-    fn failed_control_path_borrows_are_not_parked_for_reuse() {
+    fn failed_serial_writer_borrow_keeps_the_queue_available() {
         let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
         reset_opened_connection_count(db.target());
 
@@ -1032,8 +1019,8 @@ mod tests {
 
         assert_eq!(
             opened_connection_count(db.target()),
-            2,
-            "a connection whose operation failed is dropped rather than parked"
+            0,
+            "a returned operation error does not create a competing writer connection"
         );
     }
 
@@ -1181,27 +1168,11 @@ mod tests {
     use std::thread;
 
     #[test]
-    fn stalled_writer_lock_yields_a_typed_lock_error_after_the_busy_timeout() {
-        // Proves the SQLITE_BUSY_TIMEOUT < SERVER_REQUEST_BUDGET contract
-        // holds under real writer-lock contention, not only as the
-        // compile-time assertion in `atm_storage::request_budget`: a second
-        // writer that has to wait out the configured busy_timeout must fail
-        // with a typed lock error, so the daemon can return an actionable
-        // response instead of the request silently overrunning on the
-        // client. This deliberately waits on SQLite's own busy-lock retry
-        // loop instead of a fixed sleep primitive; the elapsed wall time is
-        // the product observable under test, not a synchronization device.
-        //
-        // This intentionally uses a file-backed target rather than the
-        // `cache=shared` in-memory target used by other tests in this
-        // module: SQLite's shared-cache mode reports same-process table
-        // lock conflicts as `SQLITE_LOCKED`, and `busy_timeout`'s retry
-        // handler only fires for `SQLITE_BUSY`, so a shared-cache
-        // in-memory target would fail the second writer immediately
-        // without ever exercising the busy-wait this test verifies.
-        // Production storage (`SharedDbTarget::Path`) always opens plain,
-        // non-shared-cache connections, so this matches production
-        // locking semantics.
+    fn serial_writer_queue_serializes_blocking_control_path_transactions() {
+        // The serial queue owns the only mutable SQLite connection. A
+        // blocking debug/control-path transaction must therefore wait for an
+        // existing borrower instead of opening a competing writer connection
+        // and relying on SQLite busy-lock retries.
         let tempdir = tempfile::tempdir().expect("create temporary database directory");
         let db_path = tempdir.path().join("busy-timeout-contract.db");
         let db = Arc::new(
@@ -1234,31 +1205,46 @@ mod tests {
             .recv()
             .expect("first writer must confirm it holds the lock before the second write starts");
 
-        let started_at = std::time::Instant::now();
-        let result = db.with_transaction(|_connection| Ok(()));
-        let elapsed = started_at.elapsed();
+        let (contender_started_tx, contender_started_rx) = mpsc::channel::<()>();
+        let (result_tx, result_rx) = mpsc::channel();
+        let contender_db = Arc::clone(&db);
+        let contender = thread::spawn(move || {
+            contender_started_tx
+                .send(())
+                .expect("signal that the second control-path transaction started");
+            let started_at = std::time::Instant::now();
+            let result = contender_db.with_transaction(|_connection| Ok(()));
+            result_tx
+                .send((result, started_at.elapsed()))
+                .expect("report second control-path transaction result");
+        });
+
+        contender_started_rx
+            .recv()
+            .expect("second control-path transaction must start");
+        assert!(
+            result_rx
+                .recv_timeout(std::time::Duration::from_millis(25))
+                .is_err(),
+            "the second control-path transaction must remain queued while the first owns the sole writer connection"
+        );
 
         release_tx
             .send(())
             .expect("release the held writer lock so the holder thread can finish");
         holder.join().expect("holder thread panicked");
 
-        let error = result.expect_err(
-            "a second writer contending on an already-held immediate transaction must fail \
-             once the configured busy_timeout elapses",
-        );
-        assert_eq!(
-            error.code(),
-            atm_storage::AtmErrorCode::MailboxLockTimeout,
-            "a busy writer lock must surface as a typed mailbox-lock error, not an \
-             opaque failure: {error:?}"
-        );
-        eprintln!("stalled writer lock typed-error elapsed: {elapsed:?}");
+        let (result, elapsed) = result_rx
+            .recv()
+            .expect("queued control-path transaction must finish after release");
+        contender.join().expect("contender thread panicked");
         assert!(
-            elapsed >= atm_storage::request_budget::SQLITE_BUSY_TIMEOUT / 2,
-            "a stalled writer must actually wait out most of the configured \
-             busy_timeout ({:?}) before failing, not fail immediately: waited {elapsed:?}",
-            atm_storage::request_budget::SQLITE_BUSY_TIMEOUT,
+            result.is_ok(),
+            "the queued control-path transaction must reuse the serial writer connection: {result:?}"
+        );
+        assert!(
+            elapsed >= std::time::Duration::from_millis(25),
+            "the second control-path transaction must wait for the queue owner: waited {elapsed:?}"
         );
     }
 

@@ -21,6 +21,7 @@ use atm_storage::{AtmError, AtmErrorCode, DiagnosticEvent};
 use rusqlite::TransactionBehavior;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::thread::{self, JoinHandle};
@@ -43,6 +44,34 @@ const WRITE_OP_DEADLINE: Duration = Duration::from_secs(10);
 // filesystem delay; callers can restart cleanly after this deadline expires.
 const WRITER_SHUTDOWN_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 const SUBMIT_RETRY_INTERVAL: Duration = Duration::from_millis(5);
+
+/// The sole mutable SQLite connection. Both typed writer operations and the
+/// remaining blocking control-path boundary borrow this queue, so SQLite
+/// mutations cannot race on independent writer connections.
+pub(crate) struct SerialWriterQueue {
+    connection: Mutex<SqliteConnection>,
+}
+
+impl SerialWriterQueue {
+    pub(crate) fn open(target: &SharedDbTarget) -> Result<Self, AtmError> {
+        let mut connection = open_writer_connection_for_target(target)?;
+        ensure_schema(&mut connection, target)?;
+        Ok(Self {
+            connection: Mutex::new(connection),
+        })
+    }
+
+    pub(crate) fn with_connection<T>(
+        &self,
+        operation: impl FnOnce(&mut SqliteConnection) -> T,
+    ) -> T {
+        let mut connection = self
+            .connection
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        operation(&mut connection)
+    }
+}
 
 enum ReplyTx {
     Sync(SyncSender<Result<WriteOpResult, AtmError>>),
@@ -142,13 +171,15 @@ impl std::fmt::Debug for SqliteWriter {
 }
 
 impl SqliteWriter {
-    pub(crate) fn start(
+    pub(crate) fn start_with_queue(
         target: Arc<SharedDbTarget>,
         observability: Arc<dyn SqliteObservability>,
+        serial_queue: Arc<SerialWriterQueue>,
     ) -> Result<Self, AtmError> {
         Self::start_with_settings(
             target,
             observability,
+            serial_queue,
             CHANNEL_CAPACITY,
             WRITE_OP_DEADLINE,
             WRITER_SHUTDOWN_JOIN_DEADLINE,
@@ -158,6 +189,7 @@ impl SqliteWriter {
     fn start_with_settings(
         target: Arc<SharedDbTarget>,
         observability: Arc<dyn SqliteObservability>,
+        serial_queue: Arc<SerialWriterQueue>,
         channel_capacity: usize,
         write_op_deadline: Duration,
         shutdown_join_deadline: Duration,
@@ -165,6 +197,7 @@ impl SqliteWriter {
         Self::start_with_runtime_builder(
             target,
             observability,
+            serial_queue,
             channel_capacity,
             write_op_deadline,
             shutdown_join_deadline,
@@ -179,6 +212,7 @@ impl SqliteWriter {
     fn start_with_runtime_builder<BuildRuntime>(
         target: Arc<SharedDbTarget>,
         observability: Arc<dyn SqliteObservability>,
+        serial_queue: Arc<SerialWriterQueue>,
         channel_capacity: usize,
         write_op_deadline: Duration,
         shutdown_join_deadline: Duration,
@@ -187,9 +221,6 @@ impl SqliteWriter {
     where
         BuildRuntime: FnOnce() -> std::io::Result<tokio::runtime::Runtime>,
     {
-        let mut connection = open_writer_connection_for_target(target.as_ref())?;
-        ensure_schema(&mut connection, target.as_ref())?;
-
         let (sender, receiver) = tokio::sync::mpsc::channel(channel_capacity);
         let (diagnostic_sender, diagnostic_receiver) =
             tokio::sync::mpsc::channel(DIAGNOSTIC_QUEUE_BATCHES);
@@ -213,7 +244,7 @@ impl SqliteWriter {
             .spawn(move || {
                 writer_loop(
                     target,
-                    connection,
+                    serial_queue,
                     receiver,
                     diagnostic_receiver,
                     worker_diagnostic_stats,
@@ -520,7 +551,7 @@ impl SqliteWriter {
 
 fn writer_loop(
     target: Arc<SharedDbTarget>,
-    mut connection: SqliteConnection,
+    serial_queue: Arc<SerialWriterQueue>,
     mut receiver: tokio::sync::mpsc::Receiver<WriterMessage>,
     mut diagnostic_receiver: tokio::sync::mpsc::Receiver<DiagnosticWriterMessage>,
     diagnostic_stats: Arc<DiagnosticTimelinePersistenceStats>,
@@ -542,26 +573,35 @@ fn writer_loop(
             WriterWork::Primary(first) => {
                 let mut batch = vec![first];
                 runtime.block_on(collect_batch(&mut receiver, &mut batch, &mut shutting_down));
-                process_batch(&target, &mut connection, &mut cache, batch);
+                serial_queue.with_connection(|connection| {
+                    process_batch(&target, connection, &mut cache, batch);
+                });
             }
             WriterWork::Diagnostics(message) => match message {
-                DiagnosticWriterMessage::Records(batch) => process_diagnostic_batch(
-                    &target,
-                    &mut connection,
-                    &mut cache,
-                    batch,
-                    &mut diagnostic_rows_since_prune,
-                    diagnostic_stats.as_ref(),
-                ),
+                DiagnosticWriterMessage::Records(batch) => {
+                    serial_queue.with_connection(|connection| {
+                        process_diagnostic_batch(
+                            &target,
+                            connection,
+                            &mut cache,
+                            batch,
+                            &mut diagnostic_rows_since_prune,
+                            diagnostic_stats.as_ref(),
+                        );
+                    })
+                }
                 DiagnosticWriterMessage::Prune { now_unix_ms, reply } => {
-                    let result =
-                        process_diagnostic_prune(&target, &mut connection, &mut cache, now_unix_ms);
+                    let result = serial_queue.with_connection(|connection| {
+                        process_diagnostic_prune(&target, connection, &mut cache, now_unix_ms)
+                    });
                     let _ = reply.send(result);
                 }
             },
         }
     }
-    checkpoint_writer_connection(target.as_ref(), &mut connection, observability.as_ref());
+    serial_queue.with_connection(|connection| {
+        checkpoint_writer_connection(target.as_ref(), connection, observability.as_ref());
+    });
 }
 
 enum WriterWork {
@@ -1294,9 +1334,12 @@ mod tests {
         let target = Arc::new(SharedDbTarget::InMemory {
             uri: "file:writer-runtime-build-failure?mode=memory&cache=shared".to_owned(),
         });
+        let serial_queue =
+            Arc::new(SerialWriterQueue::open(target.as_ref()).expect("writer queue"));
         let error = SqliteWriter::start_with_runtime_builder(
             target,
             Arc::new(NullSqliteObservability),
+            serial_queue,
             CHANNEL_CAPACITY,
             WRITE_OP_DEADLINE,
             WRITER_SHUTDOWN_JOIN_DEADLINE,

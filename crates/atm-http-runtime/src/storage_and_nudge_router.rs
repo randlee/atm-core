@@ -2325,17 +2325,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn doctor_projection_serializes_effective_storage_reader_lane_settings() {
+    async fn doctor_projection_serializes_effective_shared_storage_reader_settings() {
         let fixture = fixture(true, None, None);
         let assembly =
             open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
         let reader_lanes = assembly
             .reader_lanes
             .expect("SQLite assembly exposes its effective reader lanes");
-        assert_eq!(reader_lanes.mailbox.pool_size, 4);
-        assert_eq!(reader_lanes.mailbox.queue_depth, 16);
-        assert_eq!(reader_lanes.search.pool_size, 2);
-        assert_eq!(reader_lanes.search.queue_depth, 8);
+        assert_eq!(reader_lanes.mailbox.pool_size, 8);
+        assert_eq!(reader_lanes.mailbox.queue_depth, 32);
+        assert_eq!(reader_lanes.search.pool_size, 8);
+        assert_eq!(reader_lanes.search.queue_depth, 32);
         let projection = StorageDoctorProjection::start(
             DoctorProjectionConfig {
                 reader_lanes: Some(reader_lanes),
@@ -2355,10 +2355,10 @@ mod tests {
             .await
             .expect("doctor report");
         let json = serde_json::to_value(&report).expect("doctor report serializes");
-        assert_eq!(json["reader_lanes"]["mailbox"]["pool_size"], 4);
-        assert_eq!(json["reader_lanes"]["mailbox"]["queue_depth"], 16);
-        assert_eq!(json["reader_lanes"]["search"]["pool_size"], 2);
-        assert_eq!(json["reader_lanes"]["search"]["queue_depth"], 8);
+        assert_eq!(json["reader_lanes"]["mailbox"]["pool_size"], 8);
+        assert_eq!(json["reader_lanes"]["mailbox"]["queue_depth"], 32);
+        assert_eq!(json["reader_lanes"]["search"]["pool_size"], 8);
+        assert_eq!(json["reader_lanes"]["search"]["queue_depth"], 32);
     }
 
     #[tokio::test]
