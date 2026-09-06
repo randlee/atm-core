@@ -47,7 +47,7 @@ Benchmark evidence follows a fixed, exclusive path: run
 `just benchmark-report`, then `just benchmark-publish`; commit the per-lane
 result JSON, `<campaign>.campaign.json`, and `<campaign>.xhtml` under
 `site/reports/send-message-benchmark/`.  The report and evidence reply must go
-directly to the requestor's full host-qualified address (`<agent>@<team>.<host>`)
+directly to the requester's full host-qualified address (`<agent>@<team>.<host>`)
 exactly as given in the task assignment; never guess from a bare agent name.
 Use its public peer-wire targets, not a Cargo feature or a private harness:
 

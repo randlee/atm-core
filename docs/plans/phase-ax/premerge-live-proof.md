@@ -123,7 +123,7 @@ version or its unavailability, all report paths, the benchmark comparison
 table, each smoke result, evidence branch SHA, and one explicit verdict:
 `NO REGRESSION`, `REGRESSION`, or `COULD NOT RUN`.  State a precise preflight
 or input blocker instead of changing execution mode to obtain a green result.
-Send the completion report directly to the requestor using the requestor's
+Send the completion report directly to the requester using the requester's
 full host-qualified address (`<agent>@<team>.<host>`) exactly as given in the
 task assignment.  A bare agent name resolves to the runner's own host and may
 silently misroute the report; task assignments must provide the full address.
