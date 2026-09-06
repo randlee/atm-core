@@ -1,4 +1,5 @@
 ---
+id: AY.2
 phase: AY
 sprint: AY.2
 title: Private transport foundation, CLI pure motion, and portable fake Herdr
@@ -12,6 +13,7 @@ execution_track: core
 parallel_with: [AY.1]
 stack_parent: integrate/phase-ay
 pr_target: integrate/phase-ay
+target: integrate/phase-ay
 dependency_relations:
   - prerequisite: AY.1
     dependent: AY.2
@@ -256,11 +258,9 @@ all of those surfaces.
 6. CLI argv, PATH resolution, `HERDR_SESSION`, timeout, kill/reap, error mapping,
    and breaker behavior are byte-identical to the Phase AX oracle. No
    `HERDR_SOCKET_PATH` config behavior or config-validation API is introduced.
-7. Removed (r24): the official benchmark runs once at release readiness on
-   the develop build (Rand, 2026-09-05); no sprint or phase gate.
-8. `crates/atm-core/src/doctor/**`, `doctor_probe.rs`, both boundary inventory
+7. `crates/atm-core/src/doctor/**`, `doctor_probe.rs`, both boundary inventory
    files, and atm-herdr's public exports are unchanged from the sprint base.
-9. The sprint meets the common phase merge gate: zero blocking, important, or
+8. The sprint meets the common phase merge gate: zero blocking, important, or
    in-scope minor findings; quality-manager PASS on the PR; CI green at merge;
    no flaky-test allowance; no Tokio added to atm-core.
 

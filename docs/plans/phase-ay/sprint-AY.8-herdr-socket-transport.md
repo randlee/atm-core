@@ -1,4 +1,5 @@
 ---
+id: AY.8
 phase: AY
 sprint: AY.8
 title: Direct Herdr socket and named-pipe transport without cutover
@@ -7,6 +8,7 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ay8-herdr-s
 integration_branch: integrate/phase-ay
 stack_parent: none
 pr_target: integrate/phase-ay
+target: integrate/phase-ay
 status: draft
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
@@ -103,16 +105,20 @@ completion fails the sprint.
   nudge hot path. `server_info` opens a separate one-request connection for
   `ping`; version/minimum checks remain doctor-only.
 - [ ] D6 — one absolute `RequestDeadline` covers connect, Windows
-  `ERROR_PIPE_BUSY` retry, write, flush, and read. The response line has a hard
-  1 MiB cap. Deadline exhaustion maps to existing `HerdrError::Timeout`;
-  oversized or EOF-without-newline responses map to existing
-  `HerdrError::InternalError` and log the observed byte count at the transport
-  boundary.
+  `ERROR_PIPE_BUSY` retry, in-flight permit acquisition, write, flush, and read.
+  At most 16 socket calls are in flight per invoker. A busy pipe waits 10 ms
+  between attempts, clipped to the remaining absolute deadline, so it cannot
+  hot-spin. The response line has a hard 1 MiB cap. Deadline exhaustion maps
+  to existing `HerdrError::Timeout`; oversized or EOF-without-newline responses
+  map to existing `HerdrError::InternalError` and log the observed byte count
+  at the transport boundary.
 - [ ] D7 — add a test-only fake Unix-socket/named-pipe server under
   `crates/atm-herdr/tests/support/fake_herdr_socket/`. It replays every AY.2
   version recording and covers absent endpoint, late start, no newline,
   oversized response, stalled connect/write/read, a rejected second request on
-  one connection, and pipe-busy-then-free on the Windows lane.
+  one connection, pipe-busy-then-free with paused Tokio time on the Windows
+  lane, and a 17-caller saturation case that proves the final caller waits for
+  a permit or times out under its original deadline.
 - [ ] D8 — run the entire ADR-058 adapter fixture suite through
   `HerdrProcessInvoker` over both `HerdrIo` variants with identical assertions.
   `docs/atm-herdr/herdr-versions.md` gains ping/request/response/error-code
@@ -159,6 +165,8 @@ pub(crate) struct SocketIo {
     cfg: HerdrClientConfig,
     env: HerdrHostEnv,
     max_line_bytes: usize, // exactly 1 MiB
+    in_flight: Arc<Semaphore>, // exactly 16 permits in production
+    pipe_busy_retry_delay: Duration, // exactly 10 ms in production
 }
 ```
 
@@ -174,11 +182,17 @@ default/session, and explicit `socket_path` on both platforms.
 
 ```text
 resolve endpoint from (config, per-call session, captured host env)
+acquire one of 16 per-invoker permits under the caller's absolute RequestDeadline
 connect under the caller's absolute RequestDeadline
+on Windows ERROR_PIPE_BUSY, wait min(10 ms, deadline remaining), then retry
 write one compact JSON request followed by one LF; flush
 read through the first LF, rejecting more than 1 MiB or EOF before LF
 decode HerdrEnvelope; close the connection
 ```
+
+The permit is held through close and released on every success, error, and
+cancellation path. Tests use paused Tokio time for busy-pipe retry and deadline
+expiry; they do not sleep on wall-clock time.
 
 Canonical request examples, each exactly one NDJSON line:
 
@@ -244,17 +258,16 @@ be amended and re-reviewed before implementation continues.
    full Windows pipe string.
 3. Both transports pass the same adapter equivalence suite on macOS, Linux,
    and Windows; the Windows lane exercises a real fake named-pipe server.
-4. Every deadline, line-bound, one-request, absent-endpoint, late-start, and
-   pipe-busy case in D6/D7 is deterministic and passes.
+4. Every deadline, line-bound, one-request, absent-endpoint, late-start,
+   pipe-busy backoff, and 16-permit saturation case in D6/D7 is deterministic
+   and passes.
 5. `git diff <parent>..HEAD -- crates/atm-daemon-bootstrap` is empty;
    the construction-site allowlist passes; the PR changed-file set is a subset
    of C3.
 6. `herdr-versions.md` contains complete NDJSON columns for every listed
    release from 0.8.0.
 7. The public-item pin contains exactly the three D9 additions.
-8. Removed (r24): the official benchmark runs once at release readiness on
-   the develop build (Rand, 2026-09-05); no sprint or phase gate.
-9. `gh pr view feature/ay8-herdr-socket-transport --json
+8. `gh pr view feature/ay8-herdr-socket-transport --json
    headRefName,baseRefName,state` reports base `integrate/phase-ay`; AY.8 is not
    linked into the implementation stack.
 

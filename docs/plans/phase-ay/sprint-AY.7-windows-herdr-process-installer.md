@@ -1,4 +1,5 @@
 ---
+id: AY.7
 phase: AY
 sprint: AY.7
 title: Windows process correctness and per-user Herdr installer verification
@@ -7,6 +8,7 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ay7-windows
 integration_branch: integrate/phase-ay
 stack_parent: feature/ay6-herdr-restart-coordination
 pr_target: feature/ay6-herdr-restart-coordination
+target: feature/ay6-herdr-restart-coordination
 status: draft
 recommended_agent: arch-ctm (no Windows machine required; the Windows CI lane is the gate)
 recommended_model: n/a

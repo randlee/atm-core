@@ -1,4 +1,5 @@
 ---
+id: AY.9
 phase: AY
 sprint: AY.9
 title: Herdr socket cutover, doctor projection, and lifecycle validation
@@ -7,6 +8,7 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ay9-herdr-s
 integration_branch: integrate/phase-ay
 stack_parent: none
 pr_target: integrate/phase-ay
+target: integrate/phase-ay
 status: draft
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
@@ -72,11 +74,12 @@ completion fails the sprint.
   calls with no daemon restart. Keep the distinct below-minimum case and keep
   CLI variants green while fallback exists.
 - [ ] D4 — extend doctor without crossing crate boundaries: each endpoint
-  reports `transport: socket` and the display form of the resolved Unix socket
-  or full Windows pipe in the existing atm-core-owned
+  reports `transport: socket` and a privacy-preserving display form of the
+  resolved Unix socket or Windows pipe in the existing atm-core-owned
   `HerdrEndpointObservation.endpoint`. `HerdrDoctorProbe::new` consumes the
   same C1 selection as the invoker. `HerdrEndpoint` never appears in atm-core
-  or atm-daemon-bootstrap.
+  or atm-daemon-bootstrap, and raw endpoint paths never enter doctor DTOs,
+  human/JSON output, snapshots, or logs.
 - [ ] D5 — update the Herdr configuration reference and operator documentation
   with the closed C1 values, socket default, explicit CLI fallback, no-silent-
   fallback rule, and doctor transport/endpoint fields. The docs name the
@@ -148,7 +151,7 @@ The existing endpoint schema is extended by populated values, not new keys:
         "session": "default",
         "provenance": "herdr_default",
         "transport": "socket",
-        "endpoint": "/Users/operator/.config/herdr/herdr.sock",
+        "endpoint": "$HOME/.config/herdr/herdr.sock",
         "binary": null,
         "state": {"kind": "ok", "version": "0.8.2", "protocol": 20},
         "remedy": "none",
@@ -171,8 +174,14 @@ the `kind`, provenance, transport, and outcome-kind names are snake_case; the
 outcome remains the tagged object defined by AY.3. Every
 `members[]` object has exactly `name` and `outcome`; there is no `ordinal` or
 `member` wrapper, and there is no aggregate `herdr.state` or `herdr.remedy`.
-Default precedes sessions sorted bytewise. On Windows `endpoint` is the full
-`\\.\pipe\...` display string.
+Default precedes sessions sorted bytewise. Before populating any endpoint-
+bearing doctor field, `atm-herdr` converts its private raw `HerdrEndpoint` to a
+display value: a matching captured root becomes `$XDG_CONFIG_HOME`, `$HOME`, or
+`%APPDATA%`; an explicit path outside those roots becomes
+`<configured>/<file-name>`. On Windows the `\\.\pipe\` prefix is retained and
+the path portion is sanitized by the same rule. Tests use synthetic usernames
+and assert that neither those names nor raw home/config roots occur anywhere in
+serialized JSON, human output, snapshots, or transport logs.
 
 ## Required work
 
@@ -193,10 +202,11 @@ Default precedes sessions sorted bytewise. On Windows `endpoint` is the full
 2. Adapted lifecycle tests (a)–(k) pass on macOS, Linux, and Windows, with the
    server-version switch and below-minimum behavior retained as distinct tests;
    CLI variants also pass.
-3. Doctor snapshots prove socket transport and endpoint on Unix and Windows,
-   deterministic endpoint order, exact member-entry keys, and no aggregate
-   state/remedy. A forbidden-edge grep proves `HerdrEndpoint` does not enter
-   atm-core or atm-daemon-bootstrap.
+3. Doctor snapshots prove socket transport and sanitized endpoint display on
+   Unix and Windows, deterministic endpoint order, exact member-entry keys,
+   no aggregate state/remedy, and no raw username/home/config root. A
+   forbidden-edge grep proves `HerdrEndpoint` does not enter atm-core or
+   atm-daemon-bootstrap.
 4. The AY.2 zero-regression oracle passes through the socket default.
 5. The CLI fallback, cutover release, exact removal release, and later deletion
    of CLI ownership keys are recorded in user docs and `docs/project-plan.md`.
@@ -206,12 +216,10 @@ Default precedes sessions sorted bytewise. On Windows `endpoint` is the full
 7. The AY.3 config-reader matrix includes omitted, `socket`, `cli`, unknown
    string, and unknown key; only the two supported values parse and 1.6.0 is
    the pinned CLI-removal release.
-8. Removed (r24): the official benchmark runs once at release readiness on
-   the develop build (Rand, 2026-09-05); no sprint or phase gate.
-9. `gh pr view feature/ay9-herdr-socket-cutover --json
+8. `gh pr view feature/ay9-herdr-socket-cutover --json
    headRefName,baseRefName,state` reports base `integrate/phase-ay` after both
    parent PRs merged; AY.9 is not linked into the implementation stack.
-10. No path under `docs/plans/phase-ay/evidence/` is added or changed by AY.9;
+9. No path under `docs/plans/phase-ay/evidence/` is added or changed by AY.9;
    no sprint carries live evidence.
 
 ## Required validation

@@ -1,4 +1,5 @@
 ---
+id: AY.6
 phase: AY
 sprint: AY.6
 title: Coordinated Herdr endpoint restart
@@ -12,6 +13,7 @@ execution_track: core
 parallel_with: [AY.8]
 stack_parent: feature/ay5-herdr-entry-control-plane
 pr_target: feature/ay5-herdr-entry-control-plane
+target: feature/ay5-herdr-entry-control-plane
 dependency_relations:
   - prerequisite: AY.5
     dependent: AY.6

@@ -1,4 +1,5 @@
 ---
+id: AY.5
 phase: AY
 sprint: AY.5
 title: Transactional Herdr entry control plane
@@ -12,6 +13,7 @@ execution_track: core
 parallel_with: [AY.8]
 stack_parent: feature/ay4-herdr-breaker-lifecycle
 pr_target: feature/ay4-herdr-breaker-lifecycle
+target: feature/ay4-herdr-breaker-lifecycle
 dependency_relations:
   - prerequisite: AY.4
     dependent: AY.5

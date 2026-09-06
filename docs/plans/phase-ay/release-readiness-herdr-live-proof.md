@@ -31,7 +31,7 @@ the socket transport.
 1. Install the same build SHA on rand-m5 and FastPC4. Record atm build SHA,
    Herdr version, host, operator, start/end timestamps. Confirm `atm doctor`
    healthy and the Herdr endpoint record reports `transport: socket` and the
-   expected resolved endpoint.
+   expected privacy-preserving display endpoint.
 2. Operators capture the matrix below byte-for-byte. Agents may format the
    index and validate files; they never author, synthesize, or retype
    observations (repository rule: evidence artifacts are never authored).
@@ -67,9 +67,9 @@ the run stays here.
 - `herdr update` while nudges continue without a daemon restart;
 - socket-boundary structured logs; latency samples;
 - one cross-host nudge with timestamps captured at both ends;
-- Windows only: the full named-pipe endpoint, `tasklist` before/after the
-  timeout case, operator confirmation that no console window flashes; these
-  also fill the audit cells AY.7 marked `release readiness` in
+- Windows only: the sanitized named-pipe display endpoint, `tasklist`
+  before/after the timeout case, operator confirmation that no console window
+  flashes; these also fill the audit cells AY.7 marked `release readiness` in
   `docs/atm-herdr/windows-process-audit.md`.
 
 ## Row contract
@@ -81,8 +81,9 @@ pass/fail | operator
 ```
 
 Cross-host latency is calculated from the two captured source timestamps.
-Exclude secrets, config contents, unrelated message bodies, and terminal
-output outside the named case.
+Exclude secrets, raw home/config roots, usernames embedded in endpoint paths,
+config contents, unrelated message bodies, and terminal output outside the
+named case.
 
 ## Outcome
 

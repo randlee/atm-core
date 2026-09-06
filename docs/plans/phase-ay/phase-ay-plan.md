@@ -4,7 +4,7 @@ title: Phase AY, Windows Herdr parity and UDS/named-pipe transport (same command
 canonical_path: docs/plans/phase-ay/phase-ay-plan.md
 integration_branch: develop (plan) / integrate/phase-ay (dev)
 status: draft, not approved (Rand, 2026-09-05)
-owner: fenix (fenix@atm-dev on rand-m5, from 2026-09-05T18:51Z)
+owner: solar (solar@atm-dev, from 2026-09-06T00:30Z; handed over by fenix)
 authored: 2026-09-05
 supersedes:
   - docs/adr/ADR-058-herdr-local-steer-backend-contract.md:576 ("Herdr on Windows ... out of AQ scope")
@@ -595,6 +595,10 @@ installed, doctor prints one line "herdr: not configured".
   cause names what was searched), `ProtocolMismatch`, `Timeout`. **No new
   variant is introduced**; the previous revision's
   `HerdrError::NotRunning` is `ServerNotRunning`.
+- Direct socket calls share a 16-permit per-invoker cap. Permit acquisition,
+  connect, Windows `ERROR_PIPE_BUSY` retry, write, flush, and read all consume
+  the caller's one absolute deadline; busy-pipe attempts wait 10 ms (clipped to
+  remaining time) so neither saturation nor an unavailable pipe can hot-spin.
 - Infrastructure-class failures open the ADR-058 D10.1 breaker
   host-wide, as today. Herdr-harness nudges then fail fast with the
   breaker error; tmux and hermes nudges, mail delivery, the CLI and
@@ -605,7 +609,7 @@ installed, doctor prints one line "herdr: not configured".
   such member names none (or when `herdr.socket_path` is set). Rendered
   for humans and as `atm doctor --json`: `herdr.configured: bool`,
   `herdr.endpoints[]` (per endpoint: `session` or `"default"`,
-  provenance, transport kind, `endpoint` (resolved socket/pipe name on
+  provenance, transport kind, `endpoint` (privacy-preserving display form on
   the socket transport, `null` on CLI), binary resolution with
   provenance `"configured"`/`"path"`, server `version`/`protocol` from
   `herdr status server --json` (CLI) or `ping` (socket), `state`,
@@ -624,7 +628,12 @@ installed, doctor prints one line "herdr: not configured".
   replacement_handler.rs:125-206), run by doctor itself under
   `BreakerPolicy::Bypass`, so an open breaker never hides the live
   endpoint state (test). Doctor does **not** compute Herdr's socket or
-  pipe path under the CLI transport; it reports what Herdr says.
+  pipe path under the CLI transport; it reports what Herdr says. Before any
+  endpoint-bearing value crosses from atm-herdr into the doctor DTO, its
+  captured root is replaced with `$XDG_CONFIG_HOME`, `$HOME`, or `%APPDATA%`;
+  an explicit endpoint outside those roots becomes
+  `<configured>/<file-name>`. Raw endpoints never enter JSON, human output,
+  snapshots, or logs.
 
   ```rust
   // crates/atm-core/src/doctor/herdr_state.rs. The DTOs below (plain data, serde derives,
@@ -650,9 +659,9 @@ installed, doctor prints one line "herdr: not configured".
       pub session: Option<HerdrSession>,               // None = default endpoint
       pub provenance: HerdrEndpointProvenance,
       pub transport: HerdrTransportKind,
-      pub endpoint: Option<String>,                    // AYS-R3-001: Display form of the resolved socket/pipe name,
+      pub endpoint: Option<String>,                    // AYS-R3-001: privacy-preserving display form of the socket/pipe name,
                                                        // filled by atm-herdr from its own HerdrEndpoint (AY.8/AY.9);
-                                                       // None on the CLI transport. HerdrEndpoint never enters atm-core.
+                                                       // None on CLI; raw values and HerdrEndpoint never enter atm-core.
       pub binary: Option<(PathBuf, &'static str)>,     // resolved path + "configured" | "path" (CLI only)
       pub state: HerdrDoctorState,
       pub live_handoff: Option<bool>,                  // AYP-R5-004/AYP-R6-001: a probe fact, independent of `state`:
@@ -681,13 +690,13 @@ installed, doctor prints one line "herdr: not configured".
                                                        // `herdr_presence_finding` moved verbatim: typed AtmErrorCode, catalog
                                                        // remediation, emission_outcome text). DoctorFinding (doctor/report.rs:31,
                                                        // PartialEq) is an existing atm-core type; nothing is rebuilt from strings.
-      Infrastructure { reason: String },               // is_infrastructure(): reason = format!("{error:?}"), as today
+      Infrastructure { code: AtmErrorCode, detail: String }, // typed infrastructure identity plus safe detail
   }
   // presence_findings (atm-core) is the AX loop (replacement_handler.rs:125-154) run over the
   // flattened observations (AYP-R7-001): collect every HerdrMemberPresence of every endpoint,
   // sort by `ordinal` (roster order restored), push each Finding(f) in that order,
-  // remember only the FIRST Infrastructure reason across all endpoints, and append exactly
-  // one Info HerdrUnavailable "Herdr presence probe skipped: {reason}" after the loop;
+  // remember only the FIRST Infrastructure code/detail across all endpoints, and append exactly
+  // one Info HerdrUnavailable built from that typed pair after the loop;
   // Visible -> nothing. Never one Info per endpoint. Zero-regression tests compare the whole
   // ordered Vec<DoctorFinding> (PartialEq) with the AX adapter's output on the same
   // fake-herdr recording: visible (Idle/Working/Blocked/Done), not-visible, failed (e.g.
@@ -707,7 +716,7 @@ installed, doctor prints one line "herdr: not configured".
       PermissionDenied { endpoint: String },
       ProbeTimedOut { after: Duration },
       UnexpectedResponse { code: Option<String>, detail: String },    // malformed JSON, oversized line, Advisory, InternalError
-      Other { error: String },                                        // HerdrError variants not listed above
+      Other { code: AtmErrorCode, detail: String },                   // future/unlisted variant; never debug-only text
   }
   // No BreakerOpen variant: the breaker is `HerdrBreakerDoctorReport` (AX.6, unchanged).
   // ADR-001 workspace-convention seal (AYP-R4-003): Sealed supertrait; `pub mod sealed`
@@ -922,9 +931,10 @@ User-experience contract (AY.3 through AY.6 acceptance, verified by req-qa):
 - The breaker-open escalation carries the same state text through the
   AX.6 helper: queued ATM mail to the lead and configured recipients is
   the durable path (it does not depend on Herdr), Herdr desktop notify
-  is an independent best-effort attempt whose failure is logged, once
-  per open cycle (dedup keyed on the breaker's open timestamp), never
-  the mail body (HR-SAFE-003).
+  is an independent best-effort attempt with AX.6's absolute five-second
+  `HERDR_NOTIFY_DEADLINE`; failure or timeout is logged as `notify_ok == false`,
+  once per open cycle (dedup keyed on the breaker's open timestamp), and it
+  never carries the mail body (HR-SAFE-003).
 - Lifecycle tests: fake Herdr enters the mismatch state mid-run (breaker
   opens, doctor text, one notification, recovery on the next half-open);
   fake Herdr resets the connection during a `wait` (no duplicate prompt,
@@ -1589,3 +1599,14 @@ AX does not wait on any AY sprint.
   AY.7-owned; boundary_enforcement.rs untouched) and a "Required work and
   exact targets" section added. AYS-R12 minor: AY.9 illustrative enum
   derives aligned with AY.3.
+- r25 (2026-09-06, solar): accepted plan ownership from fenix. Removed the
+  r24 benchmark tombstones from AY.2, AY.8, and AY.9 acceptance criteria and
+  renumbered those authoritative lists; benchmark history remains in this
+  ledger and the single production-readiness run remains in
+  `release-readiness-herdr-live-proof.md`. Added the sprint template's literal
+  required `id` and `target` frontmatter keys to every sprint (retaining the
+  richer phase, dependency, and PR metadata). Closed the remaining quality-
+  report minors by pinning the existing five-second notification deadline,
+  typed infrastructure outcomes, privacy-preserving endpoint display, a
+  16-call socket concurrency cap, and a 10 ms deadline-clipped Windows pipe-
+  busy retry; each contract now has a deterministic acceptance case.

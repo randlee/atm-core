@@ -1,4 +1,5 @@
 ---
+id: AY.1
 phase: AY
 sprint: AY.1
 title: Herdr audit, version table, requirements, and ADR text
@@ -12,6 +13,7 @@ execution_track: docs
 parallel_with: [AY.2]
 stack_parent: none
 pr_target: integrate/phase-ay
+target: integrate/phase-ay
 dependency_relations:
   - prerequisite: AY.1
     dependent: AY.2

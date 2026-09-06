@@ -1,4 +1,5 @@
 ---
+id: AY.4
 phase: AY
 sprint: AY.4
 title: Herdr breaker escalation and failure lifecycle
@@ -12,6 +13,7 @@ execution_track: core
 parallel_with: [AY.8]
 stack_parent: feature/ay3-herdr-endpoint-doctor-config
 pr_target: feature/ay3-herdr-endpoint-doctor-config
+target: feature/ay3-herdr-endpoint-doctor-config
 dependency_relations:
   - prerequisite: AY.3
     dependent: AY.4
@@ -86,8 +88,8 @@ or test-only completion fails the sprint.
   the existing Tokio/Axum Herdr queue-wake breaker observation. It invokes the
   Phase AX.6 escalation helper at most once per breaker-open timestamp. Queued
   ATM mail to the lead and configured recipients is durable; Herdr desktop
-  notification is an independent best-effort attempt and never contains the
-  mail body.
+  notification is an independent best-effort attempt, retains AX.6's absolute
+  five-second `HERDR_NOTIFY_DEADLINE`, and never contains the mail body.
 - [ ] D2 — Wire D1 through `atm-http-runtime` composition with no readiness
   dependency on Herdr. A closed/half-open/new-open transition follows C2;
   escalation failure cannot stop the daemon, discard mail, or extend the
@@ -141,6 +143,10 @@ pub(crate) fn escalate(
 `EscalationOutcome` exposes lead write, configured-recipient writes, and
 `notify_ok` independently. A notification failure never rolls back or suppresses
 mail. The notification carries endpoint state/remedy only, never `mail_body`.
+The inherited `HerdrProcessAdapter::notify` call receives
+`RequestDeadline::after(HERDR_NOTIFY_DEADLINE)` where the AX.6 constant is five
+seconds. Timeout is recorded as `notify_ok == false`; it cannot delay the
+breaker path past that bound or affect any durable mail outcome.
 
 ### C2 — Breaker-cycle deduplication
 
@@ -196,6 +202,7 @@ idempotent.
 | L9 | Herdr starts after ATM has been running | First successful call after one backoff window closes breaker and queued work resumes without daemon restart |
 | L10 | ATM daemon restarts during one open outage | Exactly one additional escalation after restart; no further repeat while the same outage persists |
 | L11 | Endpoint flaps open-close-open five times inside `min_interval` (injected clock) | Exactly one escalation; suppressed claims logged with next eligible time |
+| L12 | Desktop notification stalls beyond `HERDR_NOTIFY_DEADLINE` | The attempt returns within the five-second absolute bound with `notify_ok == false`; durable lead and recipient writes remain successful |
 
 Every wait uses injected time/deadlines or existing bounded backoff controls;
 fixed sleeps and flaky retries are prohibited.
@@ -207,6 +214,7 @@ fixed sleeps and flaky retries are prohibited.
 | Durable lead write fails | structured escalation outcome/log names lead write failure | preserve queued work; correct ATM storage and allow the next distinct open cycle to notify |
 | Configured-recipient write fails | per-recipient structured outcome | preserve other writes; correct the named recipient/team record |
 | Desktop notify fails | `notify_ok == false`; mail outcomes unchanged | inspect Herdr availability; durable ATM mail remains authoritative |
+| Desktop notify stalls | five-second notification deadline expires; `notify_ok == false`; mail outcomes unchanged | inspect Herdr availability; durable ATM mail remains authoritative |
 | Repeated open poll | dedup suppresses second attempt for same timestamp | none; wait for half-open/recovery or a new cycle |
 | Prompt submission becomes unknown | infrastructure error and pending mail retained | never retry prompt automatically; queue reminder supplies idempotent follow-up |
 | Half-open attempt fails | breaker returns to open under existing ADR-058 policy | wait for the next bounded backoff; daemon remains ready |
@@ -216,8 +224,9 @@ fixed sleeps and flaky retries are prohibited.
 - [ ] A1 — Gate table tests prove exactly one `claim` per open timestamp and a
   new claim after a distinct later cycle.
 - [ ] A2 — D1 tests prove lead and configured-recipient mail survive desktop
-  notification failure, `notify_ok == false`, and HR-SAFE-003 rejects any mail
-  body reaching notification arguments.
+  notification failure or timeout, the stalled case returns within the injected
+  five-second deadline with `notify_ok == false`, and HR-SAFE-003 rejects any
+  mail body reaching notification arguments.
 - [ ] A3 — Every C3 scenario passes through real Tokio/Axum composition; no
   scenario substitutes the frozen synchronous daemon.
 - [ ] A4 — L3 and L9 prove recovery within one existing backoff window without

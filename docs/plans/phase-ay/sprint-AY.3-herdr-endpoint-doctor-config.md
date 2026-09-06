@@ -1,4 +1,5 @@
 ---
+id: AY.3
 phase: AY
 sprint: AY.3
 title: Herdr endpoint doctor and daemon configuration
@@ -12,6 +13,7 @@ execution_track: core
 parallel_with: []
 stack_parent: feature/ay2-herdr-transport-seam
 pr_target: feature/ay2-herdr-transport-seam
+target: feature/ay2-herdr-transport-seam
 dependency_relations:
   - prerequisite: AY.2
     dependent: AY.3
@@ -114,6 +116,8 @@ completion fails the sprint.
   configured status, deterministic endpoint list, endpoint provenance,
   transport, binary resolution, typed state/remedy, live-handoff capability,
   exact member outcomes, and the existing separate host-wide breaker report.
+  Endpoint strings are privacy-preserving display values under C6; raw home,
+  config-root, socket, and pipe values never cross the `atm-herdr` boundary.
   Document the schema in `docs/atm/cli-reference-1-5-0.md`.
 - [ ] D5 — Add focused config, boundary, endpoint, state-mapping, presence, and
   rendering tests that close every contract and error row below on all three CI
@@ -218,7 +222,7 @@ pub struct HerdrBinaryResolution {
 pub enum HerdrPresenceOutcome {
     Visible,
     Finding { finding: DoctorFinding },
-    Infrastructure { reason: String },
+    Infrastructure { code: AtmErrorCode, detail: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -243,7 +247,7 @@ pub struct HerdrEndpointObservation {
     pub session: Option<HerdrSession>,
     pub provenance: HerdrEndpointProvenance,
     pub transport: HerdrTransportKind,
-    pub endpoint: Option<String>,
+    pub endpoint: Option<String>, // sanitized display value, never the raw endpoint
     pub binary: Option<HerdrBinaryResolution>,
     pub state: HerdrDoctorState,
     pub live_handoff: Option<bool>,
@@ -319,20 +323,22 @@ pub enum HerdrDoctorState {
     PermissionDenied { endpoint: String },
     ProbeTimedOut { after: Duration },
     UnexpectedResponse { code: Option<String>, detail: String },
-    Other { error: String },
+    Other { code: AtmErrorCode, detail: String },
 }
 ```
 
 Every variant has `remedy(&self) -> &'static str`. `atm-herdr`, which owns
 `HerdrError` and `HERDR_MINIMUM_VERSION`, owns the exhaustive mapping. No listed
-`HerdrError` may fall into `Other`. There is no `BreakerOpen` endpoint state;
+`HerdrError` may fall into `Other`; an unclassified future variant still
+retains its stable `AtmErrorCode` and safe detail rather than a debug string.
+There is no `BreakerOpen` endpoint state;
 the existing `HerdrBreakerDoctorReport` remains separate.
 
 ### C5 — Presence projection
 
 `presence_findings(&[HerdrEndpointObservation]) -> Vec<DoctorFinding>` flattens
 all endpoint members, sorts by nonserialized roster ordinal, preserves each
-typed `Finding`, remembers only the first infrastructure reason, and appends
+typed `Finding`, remembers only the first infrastructure code/detail, and appends
 exactly one global informational `HerdrUnavailable` after member findings.
 `Visible` emits nothing. `HerdrMemberPresence` serializes exactly `name` and
 `outcome`; no `member` wrapper or `ordinal` key is allowed.
@@ -341,6 +347,14 @@ exactly one global informational `HerdrUnavailable` after member findings.
 
 Endpoints are ordered default first, then named sessions bytewise. There is no
 aggregate `herdr.state` or `herdr.remedy`.
+
+Every endpoint-bearing string in this DTO, including endpoint fields inside a
+state variant, is a display value produced inside `atm-herdr`. The formatter
+replaces a matching captured root with `$XDG_CONFIG_HOME`, `$HOME`, or
+`%APPDATA%`; an explicit path outside those roots becomes
+`<configured>/<file-name>`. The Windows `\\.\pipe\` prefix is retained after
+the path portion is sanitized. Raw values remain private inputs to transport
+I/O and never enter atm-core, JSON, human output, snapshots, or logs.
 
 ```json
 {
@@ -408,7 +422,8 @@ or roster yields `configured: null` plus an error field, never a guessed value.
   implementations, pins the two public atm-herdr items/signatures and complete
   request/response/error inventory; `rg "HerdrPresenceDoctor"` finds nothing.
 - [ ] A3 — Every state-inventory row has human and JSON snapshots with its
-  remedy, and no listed `HerdrError` maps to `other`.
+  remedy, no listed `HerdrError` maps to `other`, and an injected unclassified
+  variant preserves its typed code/detail without debug formatting.
 - [ ] A4 — Endpoint snapshots prove default/session ordering, all three
   provenances, mismatch capability retention, CLI `endpoint: null`, and exact
   member keys.
