@@ -18,9 +18,9 @@ pub(crate) struct CliIo {
 
 impl CliIo {
     pub(crate) fn new(config: &HerdrClientConfig) -> Self {
-        let _ = &config.socket_path;
+        let _ = config.socket_path();
         Self {
-            binary_path: config.binary_path.clone(),
+            binary_path: config.binary_path().cloned(),
         }
     }
 

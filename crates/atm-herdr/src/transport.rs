@@ -17,8 +17,18 @@ use crate::{
 /// public composition of explicit client settings.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct HerdrClientConfig {
-    pub(crate) binary_path: Option<PathBuf>,
-    pub(crate) socket_path: Option<PathBuf>,
+    binary_path: Option<PathBuf>,
+    socket_path: Option<PathBuf>,
+}
+
+impl HerdrClientConfig {
+    pub(crate) fn binary_path(&self) -> Option<&PathBuf> {
+        self.binary_path.as_ref()
+    }
+
+    pub(crate) fn socket_path(&self) -> Option<&PathBuf> {
+        self.socket_path.as_ref()
+    }
 }
 
 /// One request the private Herdr transport can carry.
