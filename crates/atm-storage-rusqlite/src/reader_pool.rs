@@ -859,6 +859,11 @@ impl PoolInner {
             // A failed respawn must not permanently ratchet the advertised
             // capacity downward; the retired worker was already removed.
             self.metrics.pool_size.fetch_add(1, Ordering::Relaxed);
+            tracing::warn!(
+                worker_id,
+                replacement_id,
+                "reader worker replacement failed; capacity restored"
+            );
             return;
         }
         self.metrics.pool_size.fetch_add(1, Ordering::Relaxed);
