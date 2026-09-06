@@ -493,17 +493,14 @@ impl HerdrQueueWakePump {
         now: IsoTimestamp,
         stats: &mut HerdrQueueWakeStats,
     ) {
+        let context = crate::herdr_queue_wake_escalation::TaskReminderContext {
+            reader,
+            task_store,
+            member: &candidate.member.key,
+        };
         if candidate.blocked {
-            self.record_task_outcome(
-                reader,
-                task_store,
-                &candidate.member.key,
-                &row,
-                now,
-                ReminderOutcome::Blocked,
-                stats,
-            )
-            .await;
+            self.record_task_outcome(&context, &row, now, ReminderOutcome::Blocked, stats)
+                .await;
             return;
         }
         if stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
@@ -521,16 +518,8 @@ impl HerdrQueueWakePump {
             Ok(None) => return,
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_render", outcome = "unrenderable", error = %error, member = %candidate.member.key, "Herdr task reminder could not render");
-                self.record_task_outcome(
-                    reader,
-                    task_store,
-                    &candidate.member.key,
-                    &row,
-                    now,
-                    ReminderOutcome::Unrenderable,
-                    stats,
-                )
-                .await;
+                self.record_task_outcome(&context, &row, now, ReminderOutcome::Unrenderable, stats)
+                    .await;
                 return;
             }
         };
@@ -543,16 +532,8 @@ impl HerdrQueueWakePump {
             .await
         {
             Ok(_) => {
-                self.record_task_outcome(
-                    reader,
-                    task_store,
-                    &candidate.member.key,
-                    &row,
-                    now,
-                    ReminderOutcome::Emitted,
-                    stats,
-                )
-                .await
+                self.record_task_outcome(&context, &row, now, ReminderOutcome::Emitted, stats)
+                    .await
             }
             Err(error) if error.code() == AtmErrorCode::HerdrUnavailable => stats.breaker_open += 1,
             Err(error) => {
@@ -565,16 +546,14 @@ impl HerdrQueueWakePump {
 
     async fn record_task_outcome(
         &self,
-        reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
-        task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
-        member: &MemberKey,
+        context: &crate::herdr_queue_wake_escalation::TaskReminderContext<'_>,
         row: &TaskRow,
         now: IsoTimestamp,
         outcome: ReminderOutcome,
         stats: &mut HerdrQueueWakeStats,
     ) {
         let recorded_row = self
-            .record_task_reminder(task_store, member, row, now, outcome)
+            .record_task_reminder(context.task_store, context.member, row, now, outcome)
             .await;
         match outcome {
             ReminderOutcome::Emitted => {
@@ -584,12 +563,12 @@ impl HerdrQueueWakePump {
             ReminderOutcome::Unrenderable => stats.task_reminders_unrenderable += 1,
             ReminderOutcome::Blocked => stats.task_reminders_blocked += 1,
         }
-        self.stamp_task_attempt(member, now);
+        self.stamp_task_attempt(context.member, now);
         if let Ok(recorded_row) = recorded_row {
             crate::herdr_queue_wake_escalation::maybe_escalate_task(
                 self,
-                reader,
-                task_store,
+                context.reader,
+                context.task_store,
                 &recorded_row,
                 now,
                 stats,
