@@ -5,6 +5,7 @@
 # belong in the agent input only and must not be copied into this record.
 # Filed by quality-mgr during QA-AXPE-RECHECK-FIX-R1-1788718441 (QA-1 on PR #1255) observed in a full-workspace test run; pre-existing on integrate/phase-ax; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1255#issuecomment-5561237864 Native id: ATM-QA-206.
 
+# Fixed 2026-09-06: PR #1257 fix/ax-flaky-atm-temp-tracing-capture @ 2de3a3070 (thread-local tracing capture stack), QA-1 PASS (QA-AXPE-FLAKY-R1-1788720311, https://github.com/randlee/atm-core/pull/1257#issuecomment-5561446885), merged 06ce31b1d; closed by fenix on the verdict, 2026-09-06T19:05:23Z.
 <urn:atm:triage:finding/AXPE-QA-119>
   a triage:Finding ;
   triage:findingId "AXPE-QA-119" ;
@@ -16,7 +17,9 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "phase" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T19:05:23Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T18:28:13Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
@@ -30,8 +33,8 @@
   triage:file "crates/atm-core/src/atm_temp.rs" ;
   triage:line 580 ;
   triage:snippet "fn not_writable_io_error_is_logged_not_discarded()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ax" ;
   triage:headSha "c2dce3b5897a6e8c1e9e9dc26f1efe4c05cbd318" ;
   triage:occursIn <urn:atm:triage:worktree/INTEGRATE/c2dce3b5897a6e8c1e9e9dc26f1efe4c05cbd318> .
@@ -41,8 +44,8 @@
   triage:file "crates/atm-core/src/test_support.rs" ;
   triage:line 210 ;
   triage:snippet "pub fn capture_tracing<T>(f: impl FnOnce() -> T) -> (T, String)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ax" ;
   triage:headSha "c2dce3b5897a6e8c1e9e9dc26f1efe4c05cbd318" ;
   triage:occursIn <urn:atm:triage:worktree/INTEGRATE/c2dce3b5897a6e8c1e9e9dc26f1efe4c05cbd318> .
