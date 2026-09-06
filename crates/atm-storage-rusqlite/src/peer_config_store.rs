@@ -130,13 +130,14 @@ impl PeerConfigStore for SqlitePeerConfigStore {
     }
 
     fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, atm_storage::AtmError> {
-        self.db.with_connection(|connection| {
+        let db = Arc::clone(&self.db);
+        self.db.read(move |connection| {
             let mut statement = connection
                 .prepare(
                     "SELECT host, fingerprint, enabled, https_port
                      FROM peer_trusted_peers ORDER BY host",
                 )
-                .map_err(|error| self.db.error("failed to prepare trusted-peer query", error))?;
+                .map_err(|error| db.error("failed to prepare trusted-peer query", error))?;
             statement
                 .query_map([], |row| {
                     Ok((
@@ -146,10 +147,10 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                         row.get::<_, u16>(3)?,
                     ))
                 })
-                .map_err(|error| self.db.error("failed to query trusted peers", error))?
+                .map_err(|error| db.error("failed to query trusted peers", error))?
                 .map(|row| {
                     let (host, fingerprint, enabled, https_port) =
-                        row.map_err(|error| self.db.error("failed to read trusted peer", error))?;
+                        row.map_err(|error| db.error("failed to read trusted peer", error))?;
                     Ok(TrustedPeer {
                         host: parse_host(&host)?,
                         fingerprint: parse_fingerprint(fingerprint)?,
