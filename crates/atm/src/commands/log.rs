@@ -224,11 +224,12 @@ impl QueryArgs {
             atm_core::observability_counters::DiagnosticTimelineQuery {
                 since_unix_ms,
                 until_unix_ms,
-                // The server-side `level_at_least` filter is a lexicographic
-                // string comparison and is not level-order-correct (tracked
-                // separately); the CLI deliberately fetches unfiltered and
-                // applies level filtering client-side below instead.
-                level_at_least: None,
+                level_at_least: self
+                    .levels
+                    .iter()
+                    .map(|level| level_name(*level))
+                    .min_by_key(|level| diagnostic_level_rank(level))
+                    .map(str::to_owned),
                 component_prefix: self.component.clone(),
                 limit: Some(limit),
                 cursor: None,
@@ -239,13 +240,6 @@ impl QueryArgs {
         Ok(response
             .records
             .into_iter()
-            .filter(|record| {
-                self.levels.is_empty()
-                    || self
-                        .levels
-                        .iter()
-                        .any(|level| level_name(*level) == record.level)
-            })
             .map(|record| TimelineRecord::from_record(record, self.source))
             .collect())
     }
@@ -299,6 +293,17 @@ impl QueryArgs {
         }
 
         Ok(())
+    }
+}
+
+fn diagnostic_level_rank(level: &str) -> u8 {
+    match level {
+        "trace" => 0,
+        "debug" => 1,
+        "info" => 2,
+        "warn" => 3,
+        "error" => 4,
+        _ => unreachable!("CliLogLevel always maps to a known diagnostic level"),
     }
 }
 

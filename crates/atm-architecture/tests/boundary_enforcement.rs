@@ -1962,6 +1962,37 @@ fn aq4_resolve_picker_recipient_has_a_single_construction_site() {
 }
 
 #[test]
+fn aw_ram_roster_hot_paths_use_the_shared_roster_store_seam() {
+    // Hot-path roster consumers must receive the runtime's write-through,
+    // RAM-backed store. Reaching through an alternate runtime accessor here
+    // would silently restore a durable SQLite read on the delivery path.
+    let root = workspace_root();
+    let hot_paths = [
+        "crates/atm-daemon-bootstrap/src/lib.rs",
+        "crates/atm-daemon-bootstrap/src/queue_drain.rs",
+        "crates/atm-daemon-bootstrap/src/received_hook_selector.rs",
+        "crates/atm-http-runtime/src/herdr_queue_wake.rs",
+        "crates/atm-http-runtime/src/storage_and_nudge_router.rs",
+    ];
+
+    let violations = hot_paths
+        .iter()
+        .filter_map(|relative_path| {
+            let source = read_source(&root.join(relative_path));
+            (!source.contains("shared_roster_store_arc()")
+                || source.contains("storage_backends.rosters")
+                || source.contains("roster_runtime_mirror()"))
+            .then(|| (*relative_path).to_owned())
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        violations.is_empty(),
+        "AW RAM-roster hot paths must use only shared_roster_store_arc(), never a raw or alternate roster accessor: {violations:?}"
+    );
+}
+
+#[test]
 fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let root = workspace_root();
     let daemon_lib = root.join("crates/atm-daemon/src/main.rs");
