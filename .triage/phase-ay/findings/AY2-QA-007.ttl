@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY2-QA-007>
+  a triage:Finding ;
+  triage:findingId "AY2-QA-007" ;
+  triage:title "Sprint doc's literal required-validation command `cargo test -p atm-herdr` fails to compile (E0432 unresolved import atm_herdr::testing)" ;
+  triage:description "quality-mgr (qa-pr1269-r2, https://github.com/randlee/atm-core/pull/1269#issuecomment-5562897370, ARCH-002) reproduced at e12c87da2 that bare `cargo test -p atm-herdr` (the exact command in docs/plans/phase-ay/sprint-AY.2-herdr-transport-seam.md required validation) fails with E0432 unresolved import atm_herdr::testing because crates/atm-herdr/Cargo.toml has no [dev-dependencies] self-entry activating test-utils; `--all-features` masks it." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "build" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-herdr" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T23:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY2 ;
+  triage:foundAt "2026-09-06T23:16:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-007/AY2-QA-007-01> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY2-QA-007/AY2-QA-007-01>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/transport_fixture.rs" ;
+  triage:line 7 ;
+  triage:snippet "use atm_herdr::testing::production_invoker_with_test_binary_and_environment;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "a78ca9046" ;
+  triage:occursIn <urn:atm:triage:worktree/AY2/a78ca9046> .
+
+<urn:atm:triage:worktree/AY2/a78ca9046>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ay2-herdr-transport-seam" ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "a78ca9046" ;
+  triage:orderIndex 1 .
