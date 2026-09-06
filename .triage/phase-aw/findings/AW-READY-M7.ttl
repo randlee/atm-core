@@ -44,21 +44,38 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T16:52:43Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-06T18:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AW3 ;
   triage:foundAt "2026-09-05T16:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M7/AW3-query-1> ;
   triage:triageRecordVersion "1" .
 
+# quality-mgr, 2026-09-06, phase-aw-gate-closeout-fix-round2 (PR #1254 @ ce62bb41c):
+# The finding's own recorded closure condition is now satisfied. arch-ctm's
+# fix (crates/atm/src/commands/log.rs, crates/atm-core/src/observability.rs)
+# removes the duplicate CliLogLevel enum, level_name(), and
+# diagnostic_level_rank() entirely; the CLI now parses --level directly into
+# the shared LogLevelFilter contract (parse_log_level_filter) and computes
+# level_at_least via LogLevelFilter::severity_rank()/as_str() -- new methods
+# added on the one canonical enum in atm-core/src/observability.rs. The
+# stale "not level-order-correct" comment and the client-side re-filter
+# workaround are gone; there is exactly one severity-ordering implementation
+# left (severity_rank()), used both to build the server-forwarded threshold
+# and (via as_str() equality, not ranking) for the JSONL/graft exact-match
+# path -- no remaining parallel implementation that can silently drift.
+# Regression coverage added: timeline_source_forwards_the_shared_severity_threshold
+# (log.rs) asserts level=info is actually forwarded to /v1/diagnostics.
 <urn:atm:triage:occurrence/AW-READY-M7/AW3-query-1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
   triage:line 92 ;
   triage:snippet "SELECT query at line 92 with level >= ?3 against TEXT column" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "7e61ad87e" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e> .
