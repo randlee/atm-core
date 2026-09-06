@@ -12,7 +12,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T01:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AWWriterPoolAudit ;
@@ -20,40 +20,42 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V7/cache> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V7/mutation> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V7/tick> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "1" ;
+  triage:closedAt "2026-09-06T03:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
 
 <urn:atm:triage:occurrence/AW-POOL-V7/cache>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/service_runtime.rs" ;
   triage:line 613 ;
   triage:snippet "load_team_roster only caches one requested team; cleared only on authenticated reload" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-aw" ;
-  triage:headSha "ac1088c82" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v7/ac1088c82> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "d514f0370" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-ram-roster-v7/d514f0370> .
 
 <urn:atm:triage:occurrence/AW-POOL-V7/mutation>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
   triage:line 336 ;
   triage:snippet "save_roster/update_member/remove_member persist via replace_roster without updating RosterSnapshotCache" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-aw" ;
-  triage:headSha "ac1088c82" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v7/ac1088c82> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "d514f0370" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-ram-roster-v7/d514f0370> .
 
 <urn:atm:triage:occurrence/AW-POOL-V7/tick>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 114 ;
   triage:snippet "shared_roster_store_arc() -> herdr_candidates() -> list_teams()+load_roster() per tick" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-aw" ;
-  triage:headSha "ac1088c82" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v7/ac1088c82> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "d514f0370" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-ram-roster-v7/d514f0370> .
 
 <urn:atm:triage:worktree/integrate-phase-aw-v7/ac1088c82>
   a triage:WorktreeSnapshot ;
@@ -61,3 +63,13 @@
   triage:branch "integrate/phase-aw" ;
   triage:headSha "ac1088c82" ;
   triage:orderIndex 1 .
+
+# Closure (appended 2026-09-06 by fenix at quality-mgr's request): fixed on
+# fix/aw-ram-roster@d514f0370 (PR #1240), qa-pr1240-r3 PASS with zero findings;
+# d514f0370 verified as an ancestor of origin/fix/aw-ram-roster before recording.
+<urn:atm:triage:worktree/fix-aw-ram-roster-v7/d514f0370>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-ram-roster" ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "d514f0370" ;
+  triage:orderIndex 2 .
