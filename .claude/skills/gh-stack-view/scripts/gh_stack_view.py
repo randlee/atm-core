@@ -194,6 +194,11 @@ def build_rows(stack: dict, prs: dict[int, dict], *, fetched: bool) -> tuple[lis
     problems: list[str] = []
     notes: list[str] = []
     expected_base = trunk_origin
+    # Name of the branch the next open layer must be based on.  Starts at the
+    # trunk and only advances past OPEN layers: a merged layer's content now
+    # lives in the trunk (GitHub retargets its child onto the trunk), so the
+    # layer above a merged one is judged against the trunk, not the merged head.
+    parent = trunk
     for idx, br in enumerate(stack["branches"], start=1):
         name = br["name"]
         pr = prs.get((br.get("pr") or {}).get("number") or -1, {})
@@ -203,7 +208,9 @@ def build_rows(stack: dict, prs: dict[int, dict], *, fetched: bool) -> tuple[lis
                          "draft": False, "mergeable": None, "merge_state": "MERGED", "ci": pr.get("ci"),
                          "base_ok": None, "origin_ok": None, "needs_rebase": False, "origin": None,
                          "pr_head": pr.get("headRefOid"), "expected_base": expected_base, "pr_base": pr.get("baseRefName")})
-            expected_base = br.get("head") or expected_base
+            # Merged: its head is (an ancestor of) the trunk head now.  The next
+            # open layer must sit on the trunk; ``parent`` stays at the trunk.
+            expected_base = trunk_origin or br.get("head") or expected_base
             continue
         # gh stack omits ``head``/``base`` for a layer that has no local branch
         # (e.g. viewed from a sibling worktree before the branch was fetched).
@@ -243,12 +250,15 @@ def build_rows(stack: dict, prs: dict[int, dict], *, fetched: bool) -> tuple[lis
             "ci": pr.get("ci"),
             "pr_base": pr.get("baseRefName"),
         }
-        parent = trunk if idx == 1 else stack["branches"][idx - 2]["name"]
+        parent_is_trunk = parent == trunk
         if pr and pr.get("baseRefName") not in (None, parent):
             problems.append(f"L{idx} {name}: PR #{row['pr']} base is {pr['baseRefName']}, expected {parent}")
         if base_ok is False:
-            if idx == 1 and is_ancestor(base or "", expected_base):
-                notes.append(f"L1 {name}: behind trunk ({short(base)} < {short(expected_base)}); fine unless CONFLICTING, do not restart CI just to catch up")
+            # The lowest OPEN layer (idx 1, or any layer whose lower layers are
+            # all merged) may sit on an older trunk commit: that is a note, not
+            # a rebase order.  Against an open parent it is a real mismatch.
+            if parent_is_trunk and is_ancestor(base or "", expected_base):
+                notes.append(f"L{idx} {name}: behind trunk ({short(base)} < {short(expected_base)}); fine unless CONFLICTING, do not restart CI just to catch up")
             else:
                 problems.append(f"L{idx} {name}: base {short(base)} != parent head {short(expected_base)} -> needs rebase")
         if origin_ok is False:
@@ -265,6 +275,7 @@ def build_rows(stack: dict, prs: dict[int, dict], *, fetched: bool) -> tuple[lis
         rows.append(row)
         # The next layer must be based on THIS layer's pushed head (fall back to local, then PR).
         expected_base = origin or head or pr.get("headRefOid") or expected_base
+        parent = name
     return rows, problems, notes
 
 

@@ -128,3 +128,74 @@ class BuildRowsShapeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+T1 = "1" * 40  # trunk head after the bottom layer merged
+
+
+class MergedBottomLayerTests(unittest.TestCase):
+    """Regression: after ``gh stack merge``/merge-async lands the bottom layer,
+    GitHub retargets the next layer onto the trunk.  The report used to demand
+    that layer be based on the MERGED branch (PR base and base SHA), producing
+    two false problems on a stack gh-stack itself reported as needsRebase=false.
+    Seen twice on the Phase AX evidence stack (#1266 merged under #1262)."""
+
+    def setUp(self) -> None:
+        # Trunk moved from T0 to T1 (the merge commit of the bottom layer).
+        self.origins = {TRUNK: T1, "fix/bottom": A1, "fix/middle": B2, "docs/top": C3}
+        self.ancestors = {(T0, T1), (A1, T1)}
+        patches = [
+            mock.patch.object(gsv, "origin_sha", side_effect=lambda ref: self.origins.get(ref)),
+            mock.patch.object(gsv, "is_ancestor", side_effect=lambda a, b: (a, b) in self.ancestors),
+        ]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def merged_bottom_stack(self, *, middle_base: str, middle_pr_base: str = TRUNK) -> tuple[dict, dict]:
+        bottom = layer("fix/bottom", 1, head=A1, base=T0)
+        bottom["isMerged"] = True
+        bottom["pr"]["state"] = "MERGED"
+        stack = {"trunk": TRUNK, "currentBranch": "docs/top", "branches": [
+            bottom,
+            layer("fix/middle", 2, head=B2, base=middle_base),
+            layer("docs/top", 3, head=C3, base=B2),
+        ]}
+        prs = {1: pr(A1, TRUNK, state="MERGED"), 2: pr(B2, middle_pr_base), 3: pr(C3, "fix/middle")}
+        return stack, prs
+
+    def test_layer_above_merged_bottom_is_judged_against_trunk(self) -> None:
+        # gh stack reports the retargeted layer's base as the pre-merge trunk
+        # commit (T0), an ancestor of the new trunk head: behind trunk, not a rebase.
+        stack, prs = self.merged_bottom_stack(middle_base=T0)
+        rows, problems, notes = gsv.build_rows(stack, prs, fetched=True)
+        self.assertEqual(problems, [], problems)
+        self.assertEqual(len(notes), 1)
+        self.assertIn("L2 fix/middle: behind trunk", notes[0])
+        self.assertEqual(gsv.sync_icon(rows[0]), gsv.ICON_MERGE["MERGED"])
+        self.assertEqual(gsv.sync_icon(rows[1]), gsv.ICON_SYNC["rebase"], "behind trunk still shows the rebase icon")
+        self.assertEqual(gsv.sync_icon(rows[2]), gsv.ICON_SYNC["ok"])
+        self.assertEqual(rows[1]["expected_base"], T1, "expected base is the trunk head, not the merged layer's head")
+
+    def test_layer_above_merged_bottom_on_trunk_head_is_clean(self) -> None:
+        stack, prs = self.merged_bottom_stack(middle_base=T1)
+        rows, problems, notes = gsv.build_rows(stack, prs, fetched=True)
+        self.assertEqual(problems, [])
+        self.assertEqual(notes, [])
+        self.assertEqual([gsv.sync_icon(r) for r in rows[1:]], [gsv.ICON_SYNC["ok"]] * 2)
+
+    def test_layer_above_merged_bottom_still_targeting_merged_branch_is_flagged(self) -> None:
+        # GitHub has not retargeted the PR yet: that IS a problem the owner must fix.
+        stack, prs = self.merged_bottom_stack(middle_base=T1, middle_pr_base="fix/bottom")
+        _rows, problems, _notes = gsv.build_rows(stack, prs, fetched=True)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("PR #2 base is fix/bottom, expected integrate/phase-ax", problems[0])
+
+    def test_open_parent_mismatch_is_still_a_problem(self) -> None:
+        # Above an OPEN layer the ancestor leniency must not apply.
+        stack, prs = self.merged_bottom_stack(middle_base=T1)
+        stack["branches"][2]["base"] = OLD
+        self.ancestors.add((OLD, B2))
+        _rows, problems, _notes = gsv.build_rows(stack, prs, fetched=True)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("L3 docs/top: base ddddddddd != parent head bbbbbbbbb -> needs rebase", problems[0])
