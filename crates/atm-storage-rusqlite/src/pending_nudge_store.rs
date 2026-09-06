@@ -149,22 +149,23 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
     }
 
     fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
-        self.db.with_connection(|connection| {
+        let db = Arc::clone(&self.db);
+        self.db.read(move |connection| {
             let mut statement = connection
                 .prepare(
                     "SELECT DISTINCT team, agent FROM mail_message_states
                      WHERE nudge_pending_at IS NOT NULL AND read = 0 AND deleted_at IS NULL;",
                 )
-                .map_err(|error| self.db.error("failed to list pending members", error))?;
+                .map_err(|error| db.error("failed to list pending members", error))?;
             let rows = statement
                 .query_map([], |row| {
                     Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
                 })
-                .map_err(|error| self.db.error("failed to list pending members", error))?;
+                .map_err(|error| db.error("failed to list pending members", error))?;
             rows.into_iter()
                 .map(|entry| {
                     let (team, agent) = entry.map_err(|error| {
-                        self.db.error("failed to read pending member row", error)
+                        db.error("failed to read pending member row", error)
                     })?;
                     let team = team.parse().map_err(|error| {
                         AtmError::validation(format!(
