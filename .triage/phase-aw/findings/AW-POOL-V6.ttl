@@ -12,21 +12,32 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T01:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-06T18:12:36Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AWWriterPoolAudit ;
   triage:foundAt "2026-09-05T23:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V6/nudge-dispatch> ;
   triage:triageRecordVersion "1" .
 
+# quality-mgr, 2026-09-06, phase-aw-gate-closeout-qa (PR #1254 @ 6345ce7fd):
+# rebuild_received_hook_dispatch no longer loads the message itself -- it now
+# takes `message: &Message` as a parameter. The load moved to a dedicated
+# caller-side step (load_received_hook_dispatch_message, nudge_dispatch.rs:
+# 78-88), invoked from queue_drain.rs's claim_next_dispatch via its own
+# `run_blocking("load queued message dispatch", ...)` call, separate from
+# the writer's claim. Independently confirmed by req-qa, rust-qa-agent, and
+# arch-qa in the same round; exactly one load_message call site remains in
+# nudge_dispatch.rs (inside load_received_hook_dispatch_message itself).
 <urn:atm:triage:occurrence/AW-POOL-V6/nudge-dispatch>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/nudge_dispatch.rs" ;
   triage:line 95 ;
   triage:snippet "non-RMW read on the writer-side pool" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
   triage:headSha "ac1088c82" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v6/ac1088c82> .

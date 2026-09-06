@@ -10,7 +10,7 @@
 //! store reload helper this module wraps.
 
 use crate::boundary::{
-    BuiltInPostSendDispatch, MemberKey, MessageKey, NudgeKind, PostSendHookEvent,
+    BuiltInPostSendDispatch, MemberKey, Message, MessageKey, NudgeKind, PostSendHookEvent,
 };
 use crate::delivery_policy::DeliveryPolicyCoordinator;
 use crate::error::AtmError;
@@ -71,33 +71,43 @@ pub fn clear_queue_marker_after_handoff(
     }
 }
 
-/// Rebuilds the receiver-hook dispatch for one already-persisted message.
+/// Loads one queued message for receiver-hook dispatch reconstruction.
+///
+/// Composition owns this durable read and must place it on the reader path
+/// before passing the returned message to [`rebuild_received_hook_dispatch`].
+pub fn load_received_hook_dispatch_message(
+    runtime: &LocalServiceRuntime,
+    member: &MemberKey,
+    message_id: AtmMessageId,
+) -> Result<Option<Message>, AtmError> {
+    let key = MessageKey::from(message_id);
+    Ok(runtime
+        .message_store
+        .load_message(&key)?
+        .filter(|message| &message.team == member.team() && &message.agent == member.agent()))
+}
+
+/// Rebuilds the receiver-hook dispatch for one already-loaded message.
 ///
 /// `kind` selects the rebuilt dispatch's [`NudgeKind`] (a queue claim always
 /// rebuilds `Queue`; a diagnostic replay may request `Steer`). Returns
-/// `Ok(None)` when the message does not exist, is not addressed to `member`,
-/// or resolves to no first-party delivery capability for the recipient —
-/// the same conditions under which the write-time planner omits a dispatch.
+/// `Ok(None)` when the loaded message resolves to no first-party delivery
+/// capability for the recipient — the same condition under which the
+/// write-time planner omits a dispatch.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] if the message store or roster lookups fail, or if
-/// the recipient is no longer present in the roster.
+/// Returns [`AtmError`] if the recipient is no longer present in the roster.
 pub fn rebuild_received_hook_dispatch(
     runtime: &LocalServiceRuntime,
     member: &MemberKey,
     message_id: AtmMessageId,
     kind: NudgeKind,
+    message: &Message,
 ) -> Result<Option<BuiltInPostSendDispatch>, AtmError> {
-    let key = MessageKey::from(message_id);
-    let Some(message) = runtime
-        .message_store
-        .load_message(&key)?
-        .filter(|message| &message.team == member.team() && &message.agent == member.agent())
-    else {
+    if &message.team != member.team() || &message.agent != member.agent() {
         return Ok(None);
-    };
-
+    }
     let delivery_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
         runtime,
         member.team(),

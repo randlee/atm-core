@@ -183,17 +183,23 @@ pub fn loopback_tcp_client(
     )))
 }
 
-/// Fetch one bounded JSON projection from the capability-authenticated
-/// loopback daemon. Kept private to the crate: the one production consumer
-/// is [`diagnostics_query`], which owns the single typed route contract this
-/// primitive serves. Do not add a second untyped call site; add a typed
-/// method beside `diagnostics_query` instead.
-pub(crate) async fn loopback_tcp_get_json(
+/// Fetch and decode the bounded diagnostic-timeline projection from the
+/// capability-authenticated loopback daemon.
+async fn loopback_tcp_get_diagnostics(
     endpoint_record_path: impl AsRef<Path>,
-    path: String,
+    path: &str,
     request_timeout: Duration,
-) -> Result<Vec<u8>, AtmError> {
-    crate::loopback_read::get_json(endpoint_record_path.as_ref(), path, request_timeout).await
+) -> Result<atm_core::observability_counters::DiagnosticTimelineResponse, AtmError> {
+    let body = crate::loopback_read::get_json(
+        endpoint_record_path.as_ref(),
+        path.to_owned(),
+        request_timeout,
+    )
+    .await?;
+    serde_json::from_slice(&body).map_err(|error| {
+        AtmError::daemon_unavailable("daemon returned an invalid diagnostic timeline response")
+            .with_cause(error)
+    })
 }
 
 /// Typed client for the bounded, read-only `/v1/diagnostics` route.
@@ -232,16 +238,12 @@ pub async fn diagnostics_query(
     if let Some(cursor) = query.cursor.as_deref() {
         params.push(format!("cursor={}", percent_encode_query_value(cursor)));
     }
-    let body = loopback_tcp_get_json(
+    loopback_tcp_get_diagnostics(
         endpoint_record_path,
-        format!("/v1/diagnostics?{}", params.join("&")),
+        &format!("/v1/diagnostics?{}", params.join("&")),
         request_timeout,
     )
-    .await?;
-    serde_json::from_slice(&body).map_err(|error| {
-        AtmError::daemon_unavailable("daemon returned an invalid diagnostic timeline response")
-            .with_cause(error)
-    })
+    .await
 }
 
 /// Percent-encodes one query-string value using the unreserved set from

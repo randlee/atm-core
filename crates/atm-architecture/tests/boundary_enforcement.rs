@@ -1962,6 +1962,79 @@ fn aq4_resolve_picker_recipient_has_a_single_construction_site() {
 }
 
 #[test]
+fn aw_ram_per_tick_roster_consumers_use_only_the_shared_store_construction_seam() {
+    // A per-tick consumer that calls the durable RosterStore methods must
+    // obtain that handle from LocalServiceRuntime's write-through RAM seam.
+    // Scan the whole live runtime source surface instead of pinning a small
+    // hand-maintained file list, so a newly added queue/nudge worker cannot
+    // silently reintroduce the AW-POOL-V7 SQLite-read pattern.
+    let root = workspace_root();
+    let runtime_source_roots = [
+        root.join("crates/atm-daemon-bootstrap/src"),
+        root.join("crates/atm-http-runtime/src"),
+    ];
+    let mut files = Vec::new();
+    for source_root in runtime_source_roots {
+        collect_rust_files(&source_root, &mut files);
+    }
+
+    let durable_roster_reads = [".load_roster(", ".list_teams("];
+    let consumers = files
+        .iter()
+        .filter_map(|path| {
+            let source = read_source(path);
+            durable_roster_reads
+                .iter()
+                .any(|read| source.contains(read))
+                .then_some((path, source))
+        })
+        .collect::<Vec<_>>();
+    let violations = consumers
+        .iter()
+        .filter(|(_, source)| {
+            !source.contains("shared_roster_store_arc()")
+                || source.contains("storage_backends.rosters")
+                || source.contains("roster_runtime_mirror()")
+        })
+        .map(|(path, _)| {
+            path.strip_prefix(&root)
+                .unwrap_or(path)
+                .display()
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        !consumers.is_empty(),
+        "the runtime source scan must find at least one durable roster consumer"
+    );
+    assert!(
+        violations.is_empty(),
+        "per-tick durable roster consumers must construct their handle only via shared_roster_store_arc(): {violations:?}"
+    );
+}
+
+#[test]
+fn aw_pool_graft_receiver_lookup_uses_the_deadline_bounded_reader_lane() {
+    let root = workspace_root();
+    let source = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
+    let lookup = source
+        .split("    async fn graft_receiver_lookup(")
+        .nth(1)
+        .and_then(|rest| rest.split("\n    fn reload_runtime_view").next())
+        .expect("graft receiver lookup route must remain present");
+
+    assert!(
+        lookup.contains("tokio::task::spawn_blocking") && lookup.contains("lookup_with_deadline"),
+        "the unpaired graft receiver lookup must run through the deadline-bounded reader lane"
+    );
+    assert!(
+        !lookup.contains("control_path_sync_bridge"),
+        "the unpaired graft receiver lookup must not consume the writer-side control path"
+    );
+}
+
+#[test]
 fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let root = workspace_root();
     let daemon_lib = root.join("crates/atm-daemon/src/main.rs");
@@ -3735,7 +3808,6 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
         "graft_receiver_register".to_owned(),
         "graft_receiver_refresh".to_owned(),
         "graft_receiver_unregister".to_owned(),
-        "graft_receiver_lookup".to_owned(),
     ]);
     assert_eq!(
         av3_bridge_run_call_sites_by_enclosing_fn(production_router),

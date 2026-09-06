@@ -3,6 +3,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use atm_core::observability_counters::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticTimelineRecord,
     DiagnosticTimelineResponse,
@@ -39,6 +42,43 @@ struct DiagnosticsState {
     /// HTTP admission permit, this remains held after a timed-out request
     /// returns until its non-cancellable spawn_blocking query finishes.
     query_workers: Arc<tokio::sync::Semaphore>,
+    #[cfg(test)]
+    worker_completion: Option<Arc<WorkerCompletion>>,
+}
+
+/// Test-only observation point for the worker-admission lifecycle.
+///
+/// The completion count advances only after the blocking closure explicitly
+/// releases its owned semaphore permit. This makes a test waiting on the
+/// count a proof that a subsequent request can acquire admission.
+#[cfg(test)]
+#[derive(Debug, Default)]
+struct WorkerCompletion {
+    completed: tokio::sync::Notify,
+    completed_count: AtomicUsize,
+}
+
+#[cfg(test)]
+impl WorkerCompletion {
+    fn complete(&self) {
+        self.completed_count.fetch_add(1, Ordering::SeqCst);
+        self.completed.notify_waiters();
+    }
+
+    async fn wait_for_completed(&self, target: usize) {
+        let completion = async {
+            loop {
+                let notified = self.completed.notified();
+                if self.completed_count.load(Ordering::SeqCst) >= target {
+                    return;
+                }
+                notified.await;
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(1), completion)
+            .await
+            .expect("worker completion must arrive within the test's hard bound");
+    }
 }
 
 /// Adds the authenticated local diagnostics query route.
@@ -53,6 +93,25 @@ pub(crate) fn diagnostics_router(
             store,
             query_deadline,
             query_workers: Arc::new(tokio::sync::Semaphore::new(max_in_flight_queries)),
+            #[cfg(test)]
+            worker_completion: None,
+        })
+}
+
+#[cfg(test)]
+fn diagnostics_router_with_worker_completion(
+    store: Option<Arc<dyn DiagnosticTimelineStore>>,
+    query_deadline: Duration,
+    max_in_flight_queries: usize,
+    worker_completion: Arc<WorkerCompletion>,
+) -> Router {
+    Router::new()
+        .route("/v1/diagnostics", get(query_diagnostics))
+        .with_state(DiagnosticsState {
+            store,
+            query_deadline,
+            query_workers: Arc::new(tokio::sync::Semaphore::new(max_in_flight_queries)),
+            worker_completion: Some(worker_completion),
         })
 }
 
@@ -92,6 +151,8 @@ async fn query_diagnostics(
         .map_err(|_| diagnostics_error(StatusCode::BAD_REQUEST, "cursor is invalid"))?;
     let query_deadline = state.query_deadline;
     let query_workers = Arc::clone(&state.query_workers);
+    #[cfg(test)]
+    let worker_completion = state.worker_completion.clone();
     let store = state.store.ok_or_else(|| {
         diagnostics_error(
             StatusCode::SERVICE_UNAVAILABLE,
@@ -108,8 +169,15 @@ async fn query_diagnostics(
         limit: Some(limit + 1),
         cursor,
     };
-    let mut events =
-        run_bounded_diagnostics_query(query_deadline, query_workers, store, storage_query).await?;
+    let mut events = run_bounded_diagnostics_query(
+        query_deadline,
+        query_workers,
+        store,
+        storage_query,
+        #[cfg(test)]
+        worker_completion,
+    )
+    .await?;
     let truncated = events.len() > limit;
     events.truncate(limit);
     let next_cursor = truncated.then(|| {
@@ -137,6 +205,7 @@ async fn run_bounded_diagnostics_query(
     query_workers: Arc<tokio::sync::Semaphore>,
     store: Arc<dyn DiagnosticTimelineStore>,
     storage_query: atm_runtime::DiagnosticQuery,
+    #[cfg(test)] worker_completion: Option<Arc<WorkerCompletion>>,
 ) -> Result<Vec<atm_runtime::DiagnosticEvent>, axum::response::Response> {
     let worker_permit = query_workers.try_acquire_owned().map_err(|_| {
         diagnostics_error(
@@ -147,8 +216,13 @@ async fn run_bounded_diagnostics_query(
     let query_future = tokio::task::spawn_blocking(move || {
         // Keep this permit in the blocking closure so a deadline response
         // cannot release capacity while the synchronous SQLite query lives.
-        let _worker_permit = worker_permit;
-        store.query(&storage_query)
+        let result = store.query(&storage_query);
+        drop(worker_permit);
+        #[cfg(test)]
+        if let Some(worker_completion) = worker_completion {
+            worker_completion.complete();
+        }
+        result
     });
     tokio::time::timeout(query_deadline, query_future)
         .await
@@ -202,7 +276,7 @@ mod tests {
     use http_body_util::BodyExt;
     use tower::ServiceExt;
 
-    use super::diagnostics_router;
+    use super::{WorkerCompletion, diagnostics_router, diagnostics_router_with_worker_completion};
 
     /// Synchronizes a fixture query with its test so a bounded-deadline test
     /// can advance paused tokio time deterministically instead of racing a
@@ -217,8 +291,6 @@ mod tests {
     struct QueryGate {
         entered: tokio::sync::Notify,
         entered_count: AtomicUsize,
-        finished: tokio::sync::Notify,
-        finished_count: AtomicUsize,
         state: std::sync::Mutex<QueryGateState>,
         release: std::sync::Condvar,
     }
@@ -239,8 +311,6 @@ mod tests {
             Arc::new(Self {
                 entered: tokio::sync::Notify::new(),
                 entered_count: AtomicUsize::new(0),
-                finished: tokio::sync::Notify::new(),
-                finished_count: AtomicUsize::new(0),
                 state: std::sync::Mutex::new(QueryGateState::default()),
                 release: std::sync::Condvar::new(),
             })
@@ -262,24 +332,12 @@ mod tests {
                 !timeout.timed_out(),
                 "query gate release must arrive within the test's hard bound"
             );
-            self.finished_count.fetch_add(1, Ordering::SeqCst);
-            self.finished.notify_waiters();
         }
 
         async fn wait_for_entered(&self, target: usize) {
             loop {
                 let notified = self.entered.notified();
                 if self.entered_count.load(Ordering::SeqCst) >= target {
-                    return;
-                }
-                notified.await;
-            }
-        }
-
-        async fn wait_for_finished(&self, target: usize) {
-            loop {
-                let notified = self.finished.notified();
-                if self.finished_count.load(Ordering::SeqCst) >= target {
                     return;
                 }
                 notified.await;
@@ -461,12 +519,17 @@ mod tests {
     async fn a_query_that_exceeds_its_deadline_is_reported_as_unavailable() {
         let gate = QueryGate::new();
         let deadline = Duration::from_millis(20);
-        let store: std::sync::Arc<dyn DiagnosticTimelineStore> =
-            std::sync::Arc::new(FixtureStore {
-                rows: vec![fixture_event(1, 1)],
-                gate: Some(Arc::clone(&gate)),
-            });
-        let router = diagnostics_router(Some(store), deadline, 8);
+        let store: Arc<dyn DiagnosticTimelineStore> = Arc::new(FixtureStore {
+            rows: vec![fixture_event(1, 1)],
+            gate: Some(Arc::clone(&gate)),
+        });
+        let worker_completion = Arc::new(WorkerCompletion::default());
+        let router = diagnostics_router_with_worker_completion(
+            Some(store),
+            deadline,
+            8,
+            Arc::clone(&worker_completion),
+        );
 
         let request = tokio::spawn(get(router, "/v1/diagnostics"));
 
@@ -484,7 +547,7 @@ mod tests {
         // Let the parked fixture query thread return so it does not leak
         // past the end of the test.
         gate.release();
-        gate.wait_for_finished(1).await;
+        worker_completion.wait_for_completed(1).await;
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -498,7 +561,13 @@ mod tests {
         // This directly models the production max-connections budget: two
         // timed-out requests may leave two workers running, but never a
         // third once their HTTP futures have returned.
-        let router = diagnostics_router(Some(store), deadline, 2);
+        let worker_completion = Arc::new(WorkerCompletion::default());
+        let router = diagnostics_router_with_worker_completion(
+            Some(store),
+            deadline,
+            2,
+            Arc::clone(&worker_completion),
+        );
 
         let first = tokio::spawn(get(router.clone(), "/v1/diagnostics"));
         gate.wait_for_entered(1).await;
@@ -525,7 +594,7 @@ mod tests {
         );
 
         gate.release();
-        gate.wait_for_finished(2).await;
+        worker_completion.wait_for_completed(2).await;
 
         let (status, _) = get(router, "/v1/diagnostics").await;
         assert_eq!(
