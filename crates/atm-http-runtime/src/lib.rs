@@ -624,6 +624,7 @@ impl HttpRuntime<Configured> {
                 diagnostics_route::diagnostics_router(
                     self.diagnostic_timeline.clone(),
                     self.config.timeouts.request,
+                    self.config.limits.max_connections,
                 ),
             ),
             self.config.limits.max_connections,
@@ -2973,6 +2974,7 @@ mod tests {
                 .merge(diagnostics_route::diagnostics_router(
                     None,
                     Duration::from_secs(1),
+                    1,
                 ))
                 .merge(saturating_route),
             1,
