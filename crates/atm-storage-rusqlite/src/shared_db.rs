@@ -218,11 +218,22 @@ impl SharedDb {
     where
         T: Send + 'static,
     {
+        self.read_with_deadline(self.read_pool.request_deadline(), operation)
+    }
+
+    /// Runs one pure synchronous read with the caller's bounded deadline.
+    pub(crate) fn read_with_deadline<T>(
+        &self,
+        deadline: std::time::Duration,
+        operation: impl FnOnce(&Connection) -> Result<T, AtmError> + Send + 'static,
+    ) -> Result<T, AtmError>
+    where
+        T: Send + 'static,
+    {
         self.read_pool
-            .submit_blocking(
-                self.read_pool.request_deadline(),
-                move |connection, _target| Ok(operation(connection)),
-            )
+            .submit_blocking(deadline, move |connection, _target| {
+                Ok(operation(connection))
+            })
             .map_err(AtmError::from)?
     }
 

@@ -452,7 +452,8 @@ fn graft_receiver_runtime_wiring_and_unconfigured_defaults_are_explicit() {
         runtime
             .graft_receiver_lease(
                 &TeamName::from_validated(TEST_TEAM),
-                &AgentName::from_validated(CALLER)
+                &AgentName::from_validated(CALLER),
+                std::time::Duration::from_secs(10),
             )
             .expect("unconfigured lease default"),
         None
@@ -478,7 +479,8 @@ fn graft_receiver_runtime_wiring_and_unconfigured_defaults_are_explicit() {
         runtime
             .graft_receiver_lease(
                 &TeamName::from_validated(TEST_TEAM),
-                &AgentName::from_validated(CALLER)
+                &AgentName::from_validated(CALLER),
+                std::time::Duration::from_secs(10),
             )
             .expect("configured lease lookup"),
         None

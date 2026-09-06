@@ -7,7 +7,7 @@ use crate::delivery_channel::{
 use crate::error::AtmError;
 use crate::provenance::ValidatedWriteProvenance;
 use crate::schema::{AtmMessageId, ThreadMode};
-use crate::service_runtime::RetainedServiceRuntime;
+use crate::service_runtime::{GRAFT_RECEIVER_LEASE_LOOKUP_DEADLINE, RetainedServiceRuntime};
 use crate::types::{AgentName, PaneId, TeamName};
 
 #[expect(
@@ -355,7 +355,8 @@ impl DeliveryPolicyCoordinator {
         let member = runtime
             .load_roster_member(team, agent)
             .ok_or_else(|| AtmError::agent_not_found(agent, team))?;
-        let lease = runtime.graft_receiver_lease(team, agent)?;
+        let lease =
+            runtime.graft_receiver_lease(team, agent, GRAFT_RECEIVER_LEASE_LOOKUP_DEADLINE)?;
         Ok(DeliveryRecipientSnapshot::from_roster(
             member,
             graft_lease_state(lease.as_ref()),

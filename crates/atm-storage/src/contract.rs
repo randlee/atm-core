@@ -958,6 +958,17 @@ pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
         agent: &AgentName,
     ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError>;
 
+    /// Performs one bounded durable lease lookup. Implementations that own a
+    /// reader pool must apply `deadline` to the submitted read.
+    fn lookup_with_deadline(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        _deadline: Duration,
+    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+        self.lookup(team, agent)
+    }
+
     fn mark_unreachable(
         &self,
         team: &TeamName,

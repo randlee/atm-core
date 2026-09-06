@@ -29,7 +29,7 @@ use crate::local_http::LocalCapability;
 use crate::protocol::OwnerGeneration;
 use crate::read::{ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, SendRequest};
-use crate::service_runtime::RetainedServiceRuntime;
+use crate::service_runtime::{GRAFT_RECEIVER_LEASE_LOOKUP_DEADLINE, RetainedServiceRuntime};
 use crate::types::{AgentName, ChatId, TeamName};
 
 pub const MAX_GRAFT_POST_SEND_FRAME_BYTES: usize = 1024 * 1024;
@@ -112,7 +112,12 @@ where
             "receiver endpoint is unavailable because the recipient is absent from the roster",
         ));
     };
-    let Some(lease) = runtime.graft_receiver_lease(recipient_team, recipient)? else {
+    let Some(lease) = runtime.graft_receiver_lease(
+        recipient_team,
+        recipient,
+        GRAFT_RECEIVER_LEASE_LOOKUP_DEADLINE,
+    )?
+    else {
         return Err(graft_receiver_not_registered_error(
             recipient_team,
             recipient,
@@ -991,6 +996,7 @@ mod tests {
             &self,
             _team: &TeamName,
             _agent: &AgentName,
+            _deadline: Duration,
         ) -> Result<Option<atm_storage::GraftReceiverLease>, AtmError> {
             Ok(self.lease.get())
         }

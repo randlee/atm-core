@@ -460,7 +460,11 @@ fn graft_receivers_doctor_report(
                 });
                 return None;
             }
-            let lease = match runtime.graft_receiver_lease(team, &member.agent_name) {
+            let lease = match runtime.graft_receiver_lease(
+                team,
+                &member.agent_name,
+                LEASE_LOOKUP_BUDGET.saturating_sub(lookup_started.elapsed()),
+            ) {
                 Ok(lease) => lease?,
                 Err(error) => {
                     push_doctor_error(findings, DoctorSeverity::Error, error);
