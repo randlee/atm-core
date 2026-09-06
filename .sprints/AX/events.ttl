@@ -534,3 +534,5 @@ triage:r113 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-Q
 triage:c25 a triage:Completion ; triage:ofSprint triage:AX6 ; triage:at "2026-09-06T03:35:31Z"^^xsd:dateTime .
 # Phase-end recheck (QA-AX-PHASE-END-RECHECK-1788716803 on 6e8f33ba5, FAIL 0/1/3, zero regressions): AXPE-QA-117 (important), AXPE-RSH-003, AXPE-RBP-003, AXPE-RBP-004 (minor) filed 2026-09-06T18:00:33Z; CLEANUP pass GO-AX-PHASE-END-RECHECK-FIX-1788717947 to cipher on fix/ax-phase-end-recheck-fixes.
 triage:a27 a triage:Assignment ; triage:ofSprint triage:AX6 ; triage:assignedTo "cipher" ; triage:assignedAt "2026-09-06T18:05:47Z"^^xsd:dateTime .
+# GO-AX-PHASE-END-RECHECK-FIX-1788717947 (cipher) completed 2026-09-06T18:12:31Z: fix/ax-phase-end-recheck-fixes 6dd403525, PR #1255 -> integrate/phase-ax (AXPE-QA-117, RSH-003, RBP-003, RBP-004).
+triage:c26 a triage:Completion ; triage:ofSprint triage:AX6 ; triage:at "2026-09-06T18:13:59Z"^^xsd:dateTime .
