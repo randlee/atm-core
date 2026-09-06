@@ -13,7 +13,7 @@ use atm_core::home::HostRuntimeScope;
 use atm_core::{LocalServiceRuntime, load_atm_config};
 use atm_storage::{
     DiagnosticTimelineStore, MessageStore as SharedMessageStore, PeerConfigStore,
-    RosterStore as SharedRosterStore, StorageFactory,
+    RosterStore as SharedRosterStore, StorageFactory, StorageHandles,
 };
 
 use crate::legacy_storage_adapters::{
@@ -146,17 +146,10 @@ impl ConfigDoctor for RuntimeConfigDoctor {
     }
 }
 
-pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly, AtmError> {
-    let template_composer = inputs.template_composer;
-    let workflow_telemetry = inputs
-        .workflow_telemetry
-        .map_or_else(WorkflowTelemetryRuntime::disabled, |setup| {
-            WorkflowTelemetryRuntime::start(setup.config, setup.sink)
-        });
-    let storage = inputs
-        .storage_factory
-        .open(inputs.host_runtime_scope.durable_state_root.as_ref())?;
-    let reader_lanes = storage.effective_reader_pool().map(|pool| {
+/// Project a storage backend's effective reader pool (and its live metrics,
+/// when available) into the doctor-facing report shape.
+fn reader_pool_doctor_report(storage: &StorageHandles) -> Option<ReaderPoolDoctorReport> {
+    storage.effective_reader_pool().map(|pool| {
         let metrics = storage
             .reader_pool_metrics()
             .map(|m| ReaderPoolMetricsDoctorReport {
@@ -181,7 +174,20 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
             tool_class_max_in_flight: pool.tool_class_max_in_flight,
             metrics,
         }
-    });
+    })
+}
+
+pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly, AtmError> {
+    let template_composer = inputs.template_composer;
+    let workflow_telemetry = inputs
+        .workflow_telemetry
+        .map_or_else(WorkflowTelemetryRuntime::disabled, |setup| {
+            WorkflowTelemetryRuntime::start(setup.config, setup.sink)
+        });
+    let storage = inputs
+        .storage_factory
+        .open(inputs.host_runtime_scope.durable_state_root.as_ref())?;
+    let reader_lanes = reader_pool_doctor_report(&storage);
     let storage_backends = StorageBackends {
         messages: storage.message_store(),
         rosters: storage.roster_store(),
