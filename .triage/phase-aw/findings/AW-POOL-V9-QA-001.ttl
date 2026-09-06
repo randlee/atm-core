@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-POOL-V9-QA-001>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9-QA-001" ;
+  triage:title "nudge_template_override_store.rs load_template_override migration to ReaderPool embeds a write, causing a real test failure" ;
+  triage:description "quality-mgr's PR #1244 (A2, fix/aw-pool-read-migration) re-QA independent gate re-run found a real test FAILURE. FIX-1's migration of load_template_override (crates/atm-storage-rusqlite/src/nudge_template_override_store.rs, around line 28) to self.db.read(...) (shared ReaderPool) embeds a write: normalize_loaded_override_mode issues an UPDATE to migrate legacy empty-body override rows to 'disabled', but ReaderPool connections run with PRAGMA query_only=ON. This reproduces as a real failing test: sqlite_override_store_migrates_legacy_empty_rows_to_disabled panics with 'attempt to write a readonly database'. Full cargo test --workspace: atm-storage-rusqlite lib tests 136 passed/1 failed, all other 28 binaries pass. FIX-1 confirmed correct for the other 4 stores (peer_config/pending_nudge/graft_receiver_endpoint/template_catalog) -- only this one file regresses. Recommended fix direction: split the read-only lookup from the legacy-row normalization write -- perform the UPDATE via with_connection/with_transaction (the writer path) outside the reader-pool read, not inside it." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "concurrency-architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T20:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-06T03:10:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-QA-001/nto-28> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-QA-001/nto-28>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/nudge_template_override_store.rs" ;
+  triage:line 28 ;
+  triage:snippet "self.db.read(move |connection| { ... normalize_loaded_override_mode(...) }) -- write embedded in read-only context" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "515111d49" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-pool-read-migration/515111d49> .
+
+<urn:atm:triage:worktree/fix-aw-pool-consolidate/5ad73f498>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-pool-consolidate" ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "5ad73f498" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/fix-aw-pool-read-migration/515111d49>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-pool-read-migration" ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "515111d49" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/fix-aw-diagnostics-admission/f3f5cd5fb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-diagnostics-admission" ;
+  triage:branch "fix/aw-diagnostics-admission" ;
+  triage:headSha "f3f5cd5fb" ;
+  triage:orderIndex 3 .
