@@ -856,6 +856,9 @@ impl PoolInner {
         self.metrics.pool_size.fetch_sub(1, Ordering::Relaxed);
         let replacement_id = self.next_worker_id.fetch_add(1, Ordering::Relaxed);
         if self.spawn_worker(replacement_id).is_err() {
+            // A failed respawn must not permanently ratchet the advertised
+            // capacity downward; the retired worker was already removed.
+            self.metrics.pool_size.fetch_add(1, Ordering::Relaxed);
             return;
         }
         self.metrics.pool_size.fetch_add(1, Ordering::Relaxed);
