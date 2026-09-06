@@ -35,10 +35,13 @@ replacement for functional smoke coverage. Each successful run writes its
 immutable JSON, its XHTML panel, and the aggregate report beneath
 `site/reports/`; the recipe rebuilds the report automatically. Use
 `just benchmark-report` only to rebuild or inspect already-published evidence.
-The running benchmark agent is empowered to fix minor blockers itself and to
-make any change necessary to meet or exceed benchmark floors without
-escalating to a human first; follow the [Phase AX pre-merge live proof
-policy](plans/phase-ax/premerge-live-proof.md) for the required safeguards.
+The running benchmark agent reports minor blockers it fixes itself, is
+empowered to make any change necessary to meet or exceed benchmark floors, and
+fixes regressions itself as part of the same run without escalating to Rand or
+starting a separate agent dispatch loop.  The run is never interrupted or
+second-guessed mid-run; quality-mgr and team-lead review the resulting fixes
+afterward through the normal PR process.  Follow the [Phase AX pre-merge live
+proof policy](plans/phase-ax/premerge-live-proof.md) for the safeguards.
 Use its public peer-wire targets, not a Cargo feature or a private harness:
 
 ```bash
