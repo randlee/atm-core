@@ -194,6 +194,11 @@ def build_rows(stack: dict, prs: dict[int, dict], *, fetched: bool) -> tuple[lis
     problems: list[str] = []
     notes: list[str] = []
     expected_base = trunk_origin
+    # Name of the branch the next open layer must be based on.  Starts at the
+    # trunk and only advances past OPEN layers: a merged layer's content now
+    # lives in the trunk (GitHub retargets its child onto the trunk), so the
+    # layer above a merged one is judged against the trunk, not the merged head.
+    parent = trunk
     for idx, br in enumerate(stack["branches"], start=1):
         name = br["name"]
         pr = prs.get((br.get("pr") or {}).get("number") or -1, {})
@@ -203,21 +208,36 @@ def build_rows(stack: dict, prs: dict[int, dict], *, fetched: bool) -> tuple[lis
                          "draft": False, "mergeable": None, "merge_state": "MERGED", "ci": pr.get("ci"),
                          "base_ok": None, "origin_ok": None, "needs_rebase": False, "origin": None,
                          "pr_head": pr.get("headRefOid"), "expected_base": expected_base, "pr_base": pr.get("baseRefName")})
-            expected_base = br.get("head") or expected_base
+            # Merged: its head is (an ancestor of) the trunk head now.  The next
+            # open layer must sit on the trunk; ``parent`` stays at the trunk.
+            expected_base = trunk_origin or br.get("head") or expected_base
             continue
+        # gh stack omits ``head``/``base`` for a layer that has no local branch
+        # (e.g. viewed from a sibling worktree before the branch was fetched).
+        # Never subscript them directly: a missing key must degrade to ❓, not crash.
+        head = br.get("head")
+        base = br.get("base")
         origin = origin_sha(name) if fetched else None
-        base_ok = (br.get("base") == expected_base) if (expected_base and br.get("base")) else None
+        base_ok = (base == expected_base) if (expected_base and base) else None
         origin_ok = None
         if origin:
-            origin_ok = br.get("head") == origin and (not pr or pr.get("headRefOid") == origin)
+            if head:
+                origin_ok = head == origin and (not pr or pr.get("headRefOid") == origin)
+            elif pr:
+                # No local head to compare; the remote side (origin vs PR) can still be checked.
+                origin_ok = pr.get("headRefOid") == origin
+        if head is None:
+            notes.append(f"L{idx} {name}: gh stack reported no local head (branch not present locally); local tracking not verified")
+        if base is None:
+            notes.append(f"L{idx} {name}: gh stack reported no base SHA; base coherence not verified")
         row = {
             "layer": idx,
             "branch": name,
             "pr": (br.get("pr") or {}).get("number"),
-            "head": br.get("head"),
+            "head": head,
             "origin": origin,
             "pr_head": pr.get("headRefOid"),
-            "base": br.get("base"),
+            "base": base,
             "expected_base": expected_base,
             "base_ok": base_ok,
             "origin_ok": origin_ok,
@@ -230,17 +250,20 @@ def build_rows(stack: dict, prs: dict[int, dict], *, fetched: bool) -> tuple[lis
             "ci": pr.get("ci"),
             "pr_base": pr.get("baseRefName"),
         }
-        parent = trunk if idx == 1 else stack["branches"][idx - 2]["name"]
+        parent_is_trunk = parent == trunk
         if pr and pr.get("baseRefName") not in (None, parent):
             problems.append(f"L{idx} {name}: PR #{row['pr']} base is {pr['baseRefName']}, expected {parent}")
         if base_ok is False:
-            if idx == 1 and is_ancestor(br.get("base", ""), expected_base):
-                notes.append(f"L1 {name}: behind trunk ({short(br['base'])} < {short(expected_base)}); fine unless CONFLICTING, do not restart CI just to catch up")
+            # The lowest OPEN layer (idx 1, or any layer whose lower layers are
+            # all merged) may sit on an older trunk commit: that is a note, not
+            # a rebase order.  Against an open parent it is a real mismatch.
+            if parent_is_trunk and is_ancestor(base or "", expected_base):
+                notes.append(f"L{idx} {name}: behind trunk ({short(base)} < {short(expected_base)}); fine unless CONFLICTING, do not restart CI just to catch up")
             else:
-                problems.append(f"L{idx} {name}: base {short(br['base'])} != parent head {short(expected_base)} -> needs rebase")
+                problems.append(f"L{idx} {name}: base {short(base)} != parent head {short(expected_base)} -> needs rebase")
         if origin_ok is False:
             problems.append(
-                f"L{idx} {name}: local {short(br['head'])} / origin {short(origin)} / PR {short(pr.get('headRefOid'))} differ"
+                f"L{idx} {name}: local {short(head)} / origin {short(origin)} / PR {short(pr.get('headRefOid'))} differ"
                 " -> local tracking stale or unpushed; owner must fetch+reset or push"
             )
         if br.get("needsRebase"):
@@ -250,8 +273,9 @@ def build_rows(stack: dict, prs: dict[int, dict], *, fetched: bool) -> tuple[lis
         if pr.get("isDraft"):
             problems.append(f"L{idx} {name}: PR #{row['pr']} is DRAFT (blocks stack merge)")
         rows.append(row)
-        # The next layer must be based on THIS layer's pushed head (fall back to local).
-        expected_base = origin or br.get("head")
+        # The next layer must be based on THIS layer's pushed head (fall back to local, then PR).
+        expected_base = origin or head or pr.get("headRefOid") or expected_base
+        parent = name
     return rows, problems, notes
 
 

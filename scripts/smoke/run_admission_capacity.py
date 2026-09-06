@@ -959,11 +959,15 @@ def allocate_direct_peer_port() -> int:
     return port
 
 
-def host_runtime_client_environment(environment: dict[str, str]) -> dict[str, str]:
-    """Use the OS-user runtime record, never the disposable config root, for doctor."""
-    result = dict(environment)
-    result.pop("ATM_HOME", None)
-    return result
+def benchmark_runtime_client_environment(environment: dict[str, str]) -> dict[str, str]:
+    """Keep doctor bound to the disposable daemon that this runner launched.
+
+    The benchmark daemon receives its own ``ATM_HOME``.  Its public doctor
+    probe must use that same runtime selection; removing it instead queries an
+    unrelated ambient account daemon and can turn a healthy benchmark daemon
+    into a spurious warning result.
+    """
+    return dict(environment)
 
 
 def benchmark_doctor_payload(result: dict[str, object]) -> dict[str, object]:
@@ -1068,12 +1072,15 @@ def prepare_capacity_roster(
     roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
 ) -> None:
     """Create the disposable roster used exclusively by public benchmark writes."""
-    for team, member in (
-        (roster.team, roster.agent),
-        (roster.team, roster.recipient),
+    for team, member, agent_type in (
+        (roster.team, roster.agent, "lead"),
+        (roster.team, roster.recipient, "general-purpose"),
     ):
         result = command_result(
-            [str(atm), "teams", "add-member", team, member, "--home-dir", str(home), "--json"],
+            [
+                str(atm), "teams", "add-member", team, member,
+                "--agent-type", agent_type, "--home-dir", str(home), "--json",
+            ],
             timeout=15.0,
             env=env,
         )
@@ -1983,18 +1990,28 @@ def run_capacity(
         process = None
         daemon_output = None
 
-    def start_and_doctor(mode: str = launch_peer_wire_security) -> None:
-        """Start the exact released daemon and require its public ready response."""
+    def start_daemon(mode: str = launch_peer_wire_security) -> None:
+        """Start the exact released daemon and retain its ownership handle."""
         nonlocal process, daemon_output
         process, daemon_output = start_capacity_daemon(daemon, home, env, mode)
+
+    def require_healthy_doctor() -> None:
+        """Require public doctor health after the disposable roster is present."""
+        if process is None:
+            raise SmokeError("capacity doctor requested before the benchmark daemon started")
         doctor = command_result(
             [str(atm), "doctor", "--json"],
             timeout=10.0,
-            env=host_runtime_client_environment(env),
+            env=benchmark_runtime_client_environment(env),
         )
         evidence["doctor"] = benchmark_doctor_payload(doctor)
         evidence["doctor_status"] = "passed"
         evidence["daemon_pid"] = process.pid
+
+    def start_and_doctor(mode: str = launch_peer_wire_security) -> None:
+        """Start the daemon and validate its already-provisioned public state."""
+        start_daemon(mode)
+        require_healthy_doctor()
 
     try:
         run_lifecycle_phase(
@@ -2009,7 +2026,7 @@ def run_capacity(
             # including the secure-default daemon used by the sqlite and UDS
             # targets.  Persist a disposable identity through the ordinary
             # plaintext control plane before any measured mTLS launch.
-            run_lifecycle_phase(evidence, "snapshot", lambda: start_and_doctor("plaintext-test"))
+            run_lifecycle_phase(evidence, "snapshot", lambda: start_daemon("plaintext-test"))
             mtls_identity = run_lifecycle_phase(
                 evidence,
                 "snapshot",
@@ -2030,7 +2047,7 @@ def run_capacity(
         # The pre-roster daemon is deliberately short-lived: it initializes
         # the account database, then is quiesced before the public snapshot
         # owner copies the clean baseline.
-        run_lifecycle_phase(evidence, "snapshot", start_and_doctor)
+        run_lifecycle_phase(evidence, "snapshot", start_daemon)
         run_lifecycle_phase(
             evidence, "stop", lambda: stop_owned_daemon(output_key="pre_snapshot_daemon_output"),
         )
@@ -2039,10 +2056,11 @@ def run_capacity(
         evidence["clean_baseline_snapshot"]["sidecars_absent"] = True
 
         # Roster creation belongs strictly after clean-baseline publication.
-        run_lifecycle_phase(evidence, "profile", start_and_doctor)
+        run_lifecycle_phase(evidence, "profile", start_daemon)
         run_lifecycle_phase(
             evidence, "profile", lambda: prepare_capacity_roster(atm, env, home, roster),
         )
+        run_lifecycle_phase(evidence, "profile", require_healthy_doctor)
         if transport == "sqlite":
             if direct_writer is None:
                 raise SmokeError("direct production-writer binary is unavailable")
