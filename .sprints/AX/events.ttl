@@ -495,3 +495,6 @@ triage:a26 a triage:Assignment ;
 triage:c25 a triage:Completion ;
     triage:ofSprint triage:AX7 ;
     triage:at "2026-09-06T00:10:00Z"^^xsd:dateTime .
+
+# AX2-QA-003 waived 2026-09-05T07:36Z (orchestrator ruling; record status "waived"), tracked as randlee/atm-core#1193.
+triage:r83 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AX2-QA-003> ; triage:resolvedAt "2026-09-06T00:20:00Z"^^xsd:dateTime .
