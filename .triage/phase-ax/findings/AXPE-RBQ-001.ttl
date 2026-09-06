@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Phase-ending critical review of integrate/phase-ax at c9e8bf3af (2026-09-06; five reviewers, fenix-recorded).
+
+<urn:atm:triage:finding/AXPE-RBQ-001>
+  a triage:Finding ;
+  triage:findingId "AXPE-RBQ-001" ;
+  triage:title "Task row/event SQL duplicated three times with no single owner" ;
+  triage:description "The tasks/task_events SELECT text is maintained independently in task_store.rs:143-164,237-261,263-292 (SqliteTaskStore), task_ledger_reader.rs:75-132 (async reader lane) and writer/task_ops.rs:29-71 (writer transaction). writer/task_ops.rs filters state <> 'complete' in SQL with no ORDER BY while TaskStore::open_tasks filters and sorts in Rust, so the two open-task definitions already diverge in mechanism; no test or TOML keeps the copies in sync. Remediation: one crate-private query module (e.g. task_sql) exposing select_task_row / select_tasks_for_team / select_task_events over an explicit connection, reusing the existing decode_row/decode_event_row; all three call sites use it; add a task_store_boundary.rs assertion that the tasks/task_events column list appears exactly once in the crate." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-RBQ-001/INTEGRATE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-RBQ-001/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 29 ;
+  triage:snippet "SELECT ... FROM tasks / task_events duplicated across task_store.rs, task_ledger_reader.rs, writer/task_ops.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d> .
+
+<urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:orderIndex 8 .

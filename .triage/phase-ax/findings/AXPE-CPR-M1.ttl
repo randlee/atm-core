@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Phase-ending critical review of integrate/phase-ax at c9e8bf3af (2026-09-06; five reviewers, fenix-recorded).
+
+<urn:atm:triage:finding/AXPE-CPR-M1>
+  a triage:Finding ;
+  triage:findingId "AXPE-CPR-M1" ;
+  triage:title "qa-evidence-master.json scope narrative is stale versus its own runs array" ;
+  triage:description "The top-level `scope` field says AX.6 is in development with no QA run yet and AX.7 has not started, while `runs` records five AX.6 QA rounds ending in a QA-5 PASS and AX.7 was superseded on 2026-09-05. Remediation: update only the `scope` narrative to the final state (AX.1-AX.6 merged; AX.7 superseded, live proof moved to release readiness). Do not edit any run record." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "critical-plan-reviewer" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-CPR-M1/INTEGRATE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-CPR-M1/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/.audit/qa-evidence-master.json" ;
+  triage:line 8 ;
+  triage:snippet "\"scope\": ... AX.6 ... no QA run yet; AX.7 has not started" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d> .
+
+<urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:orderIndex 8 .

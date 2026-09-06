@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Phase-ending critical review of integrate/phase-ax at c9e8bf3af (2026-09-06; five reviewers, fenix-recorded).
+
+<urn:atm:triage:finding/AXPE-FLAKY-002>
+  a triage:Finding ;
+  triage:findingId "AXPE-FLAKY-002" ;
+  triage:title "Busy-spin polling loops gated by a fixed 1s wall-clock timeout instead of a notification primitive" ;
+  triage:description "cancel_inflight_prompt() (~:1700 and ~:1715) and ac11_successful_prompt_cancellation_cannot_rerelease_claim (~:3228) spin `loop { ...; tokio::task::yield_now().await }` on fake.calls() / list_pending_members() inside tokio::time::timeout(1s). The 1s ceiling doubles as the pass/fail bound on a spawn_blocking-backed completion; under CI contention the spin competes with the blocking pool it waits on. The same file already has the Notify-based install_handoff_cleanup_test_gate/await_handoff_cleanup_test_gate seam. Remediation: signal completion with a Notify/oneshot fired after the blocking work (test-only seam like the existing gate), await it, and keep the timeout only as an outer hang diagnostic. Watch RULE-003: herdr_queue_wake.rs is at 997/1000 production lines per .just/check_line_counts.py, so any production-side seam must land in a sibling module." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "flaky-test-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX5 ;
+  triage:foundAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-FLAKY-002/INTEGRATE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-FLAKY-002/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1700 ;
+  triage:snippet "loop { if fake.calls()...; tokio::task::yield_now().await } under timeout(Duration::from_secs(1))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d> .
+
+<urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:orderIndex 8 .

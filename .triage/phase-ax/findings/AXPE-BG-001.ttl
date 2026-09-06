@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Phase-ending critical review of integrate/phase-ax at c9e8bf3af (2026-09-06; five reviewers, fenix-recorded).
+
+<urn:atm:triage:finding/AXPE-BG-001>
+  a triage:Finding ;
+  triage:findingId "AXPE-BG-001" ;
+  triage:title "New AX.3 SQLite boundary record omits the daemon->rusqlite forbidden edge its siblings declare" ;
+  triage:description "task-store-sqlite.toml:25 forbidden_edges lists atm-storage-rusqlite -> atm-core and -> atm-runtime but not \"atm-daemon -> atm-storage-rusqlite\", while async-task-ledger-reader-sqlite.toml:25, mail-store-sqlite.toml:34-40 and roster-store-sqlite.toml:34-40 all declare it, matching runtime-composition.toml:26-31. The aggregate test guarded_boundaries_forbid_every_declared_crate_edge still passes because it checks the union, so this is per-record drift (AA.5 invariant), not a live enforcement gap. Remediation: add the edge to task-store-sqlite.toml forbidden_edges. Frozen-file ruling (fenix, 2026-09-06): this one-line addition to boundaries/atm-storage-rusqlite/task-store-sqlite.toml is approved; no other boundary TOML change is." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "boundary-guard" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX3 ;
+  triage:foundAt "2026-09-06T00:20:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-BG-001/INTEGRATE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-BG-001/INTEGRATE-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage-rusqlite/task-store-sqlite.toml" ;
+  triage:line 25 ;
+  triage:snippet "forbidden_edges omits atm-daemon -> atm-storage-rusqlite" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d> .
+
+<urn:atm:triage:worktree/INTEGRATE/c9e8bf3aff8d95899ee76caabef470af34c0649d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "c9e8bf3aff8d95899ee76caabef470af34c0649d" ;
+  triage:orderIndex 8 .
