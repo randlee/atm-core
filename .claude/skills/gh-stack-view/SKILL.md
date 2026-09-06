@@ -43,11 +43,11 @@ the main repo to get one).
 
 ## Output
 
-The script renders everything. **Paste its output verbatim.** The agent makes
-no rendering decisions: no reformatting, no re-summarising, no substituting
-its own per-branch lookups.
+The script renders everything. **Paste its output verbatim and unfenced**
+(no ``` around it) so the markdown table renders in the terminal. The agent
+makes no rendering decisions: no reformatting, no re-summarising, no
+substituting its own per-branch lookups. Example (as it should appear):
 
-```
 stack: fix/aw-pool-read-migration -> integrate/phase-aw @ 0e640b20a
 
 | L | PR | rebase | merge | CI |
@@ -56,7 +56,6 @@ stack: fix/aw-pool-read-migration -> integrate/phase-aw @ 0e640b20a
 | 2/2 | #1244 | ✅ | 🚧 | 🌀 |
 
 VERDICT: ✅ COHERENT - every base == parent head, every head pushed and on its PR
-```
 
 | Column | Source | Icons |
 |--------|--------|-------|

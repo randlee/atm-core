@@ -256,8 +256,8 @@ def render_table(stack: dict, rows: list[dict], problems: list[str], notes: list
 def legend() -> str:
     lines = []
     lines.append("rebase: ✅ not needed (base==parent head, local==origin==PR)  ⚠️ needed  🔄 local tracking stale: fetch+reset before any sync  ❓ unknown (--no-fetch)  🏁 merged")
-    lines.append("merge: 🚀 clean  🚧 blocked/unstable  ⏪ behind  ❌ conflicting/dirty  ⏳ computing  📝 draft  ◎ queued  🏁 merged")
-    lines.append("CI: ✅ success  ❌ failure  🌀 pending  — none")
+    lines.append("merge: ✅ mergeable now  🚧 blocked (conflicting, behind, draft, queued, required checks, or still computing)  🏁 merged")
+    lines.append("CI: ✅ green  🌀 running  ⛔ failed, do not enter  — none")
     return "\n".join(lines)
 
 
