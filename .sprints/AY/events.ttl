@@ -15,3 +15,7 @@ triage:c1 a triage:Completion ;
     triage:ofSprint triage:AY1 ;
     triage:at "2026-09-06T22:14:55Z"^^xsd:dateTime .
 
+
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:AY2 ;
+    triage:at "2026-09-06T22:38:53Z"^^xsd:dateTime .
