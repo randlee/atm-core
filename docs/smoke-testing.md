@@ -22,6 +22,14 @@ just smoke inbound-peer-combine --panes-dir <directory> --hosts <hosts> --output
 just smoke graft-hermes [arguments accepted by the Hermes graft smoke]
 ```
 
+`peer-pair` has no implicit loopback fixture.  It always requires both
+`--config` and `--evidence-dir`; the supplied role configuration owns its
+identities, public-client commands, and any runner-owned daemon paths.  Do not
+invoke bare `just smoke peer-pair`, do not synthesize a trust record, and do
+not substitute the `normal` fixture for this release-evidence lane.  If no
+approved role configuration is supplied, report peer-pair as not run with that
+exact input blocker.
+
 `just benchmark` is the separate, canonical performance gate; it is not a
 replacement for functional smoke coverage. Each successful run writes its
 immutable JSON, its XHTML panel, and the aggregate report beneath

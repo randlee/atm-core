@@ -3,6 +3,7 @@ title: "Phase AX — Nudge templates on every backend and task-state tracking"
 phase: AX
 branch: integrate/phase-ax
 status: closeout
+worktree: ../atm-core-worktrees/integrate/phase-ax
 owner: fenix (plan author); team-lead (dispatch); arch-ctm / Cipher-311d (implementation)
 base_revision: 5b1baacef (develop)
 integration_branch: integrate/phase-ax
@@ -337,6 +338,15 @@ test or evidence gate.
 - Task priority, reassignment, expiry, configurable intervals.
 
 ## 6. Execution notes
+
+### Pre-merge release proof
+
+AX implementation is complete and the phase is in `closeout`. The required
+physical benchmark and fixture-smoke procedure is
+the [pre-merge live-proof runbook](./premerge-live-proof.md).  That runbook is
+the operative source for the dedicated-account route, the benchmark matrix,
+and the separate smoke lanes.  It intentionally does not revive AX.7: AX.7
+remains superseded as recorded in the sprint table.
 
 - Development happens in worktrees created by `sc-git-worktree`; PR
   bases and bottom-to-top merging are managed by `gh stack`. `gh stack`
