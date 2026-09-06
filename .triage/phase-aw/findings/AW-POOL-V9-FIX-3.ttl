@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-POOL-V9-FIX-3>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9-FIX-3" ;
+  triage:title "writer/mod.rs is ~1562 non-test lines, over the 1000-line decomposition cap in atm-storage-rusqlite" ;
+  triage:description "quality-mgr's PR #1242 QA verdict (arch-qa): crates/atm-storage-rusqlite/src/writer/mod.rs is ~1562 non-test lines after SerialWriterQueue was folded in alongside the existing batch/diagnostics/shutdown pipeline, over the 1000-line decomposition cap (rated important not blocking). Acceptance: extract the batch-processing pipeline (writer_loop, process_batch, process_message_admission_group, process_queued_write) into a new crates/atm-storage-rusqlite/src/writer/batch.rs module, re-exported from writer/mod.rs, bringing writer/mod.rs back under the 1000-line cap with no behavior change." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "architecture-decomposition" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T20:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-06T02:00:01Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-3/A1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-3/A1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "writer/mod.rs ~1562 non-test lines, over the 1000-line decomposition cap; extract writer_loop/process_batch/process_message_admission_group/process_queued_write to writer/batch.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "5ad73f498d06293bef94c2dcdb835f1e873e926c" ;
+  triage:occursIn <urn:atm:triage:worktree/A1/5ad73f498d06293bef94c2dcdb835f1e873e926c> .
+
+<urn:atm:triage:worktree/A1/5ad73f498d06293bef94c2dcdb835f1e873e926c>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aw-pool-consolidate" ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "5ad73f498d06293bef94c2dcdb835f1e873e926c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/A2/515111d49c43ebba87f7b1f17e876b555b6c19e9>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aw-pool-read-migration" ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "515111d49c43ebba87f7b1f17e876b555b6c19e9" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/A3/f3f5cd5fb1190e5eb66538b85229a1ede8e5d9cb>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aw-diagnostics-admission" ;
+  triage:branch "fix/aw-diagnostics-admission" ;
+  triage:headSha "f3f5cd5fb1190e5eb66538b85229a1ede8e5d9cb" ;
+  triage:orderIndex 3 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-3/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-3" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. crates/atm-storage-rusqlite/src/writer/mod.rs is now 554 non-test lines (well under the 1000-line cap), with the batch-processing pipeline extracted into a new sibling writer/batch.rs module (writer/ dir also has ops.rs, ops_envelope.rs, shutdown_support.rs, stmt_cache.rs). Confirmed by direct line count and directory listing on the merged head." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .

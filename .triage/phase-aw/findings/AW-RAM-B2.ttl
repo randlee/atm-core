@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-RAM-B2>
+  a triage:Finding ;
+  triage:findingId "AW-RAM-B2" ;
+  triage:title "service_runtime.rs exceeds the 1000-line decomposition cap after the roster-mirror subsystem was added" ;
+  triage:description "quality-mgr, qa-pr1240-r1 (arch-qa): crates/atm-core/src/service_runtime.rs is 1866 total lines; excluding #[cfg(test)] regions, non-test production code is approximately 1147 lines, over the 1000-line decomposition ceiling. This PR added the entire new roster write-through subsystem (RosterMemberEphemeralState, TeamRosterRecord, RosterRuntimeState, RosterRuntimeView, hydrate_roster_runtime_from_durable -- roughly lines 37-297, ~260 non-test lines) into this already-oversized file instead of a dedicated module. Acceptance: extract the roster runtime-mirror subsystem (and its tests) into a new module, e.g. crates/atm-core/src/service_runtime/roster_runtime.rs, re-exported from service_runtime.rs. This also gives AW-RAM-B1's sealed-trait impl site a natural, separately-reviewable home if the ruling keeps the impl in atm-core." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "code-structure" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T02:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWReadinessReview ;
+  triage:foundAt "2026-09-06T01:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-RAM-B2/service-runtime-size> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-RAM-B2/service-runtime-size>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 1 ;
+  triage:snippet "non-test production code ~1147 lines, over the 1000-line cap" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "98cea18d7" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-ram-roster/98cea18d7-b2> .
+
+<urn:atm:triage:worktree/fix-aw-ram-roster/98cea18d7-b2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-ram-roster" ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "98cea18d7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AW-RAM-B2/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-RAM-B2" ;
+  triage:resolutionNote "quality-mgr phase-end gate @94e29a586, fenix ledger hygiene: commit message states service_runtime.rs drops from 1153 to 812 non-test lines after relocating the roster subsystem out of it (later growth to current 1421 total lines is from unrelated subsequent work, not a reopening of this finding)." ;
+  triage:resolvedAt "2026-09-06T06:46:36Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "5b3f4692829e" ;
+  triage:resolvedBranch "integrate/phase-aw" .

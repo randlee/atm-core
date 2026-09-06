@@ -28,8 +28,8 @@ dependency_relations:
   - prerequisite: AW.1
     dependent: AW.4
     relation: must_follow
-    scope: AW.4 consumes AW.1's graft_fallback_log_path constant and the
-      atm-observability boundary record AW.1 creates
+    scope: AW.4 consumes AW.1's graft_fallback_log_path contract from
+      atm-core and the retained-log boundary record AW.1 creates
   - prerequisite: AW.2
     dependent: AW.3
     relation: must_follow
@@ -157,7 +157,8 @@ Phase-wide invariants (apply to every sprint):
 - **Redaction allowlist, not denylist.** `RETAINED_FIELD_ALLOWLIST` (defined
   in AW.1, reused by AW.2/AW.4): `ts, level, component, code, action,
   correlation_id, outcome, elapsed_ms, attempt, strategy, endpoint_kind,
-  failure_class, error_layer, origin, message, detail`. Anything else is
+  failure_class, refresh_error_code, error_layer, origin, message, detail`.
+  Anything else is
   dropped. Never message bodies, template values, recipients, chat IDs,
   credentials, tokens, raw env/config values, absolute user paths.
 - **Bounded everywhere.** Queues, batch sizes, row counts, detail length, and
@@ -216,7 +217,7 @@ Phase-wide invariants (apply to every sprint):
   AW.3 D1) plus `trait DiagnosticCountersSource: Send + Sync { fn snapshot(&self)
   -> DiagnosticCounters; }`. AW.1 implements it for `TracingBridgeStats`,
   AW.2 for the combined bridge+timeline stats, and the bootstrap injects one
-  `Arc<dyn DiagnosticCountersSource>` into `RuntimeHealth` (AW.3) — so
+  `Arc<dyn DiagnosticCountersSource>` into the HTTP runtime builder (AW.3) — so
   `atm-http-runtime` gains no crate edge.
 - **`DiagnosticTimelineStore`** (defined in AW.2, `crates/atm-storage/src/diagnostics.rs`)
   is reached by AW.3 through `atm-runtime` router state exactly like the
@@ -251,6 +252,11 @@ AW.1 ──merged──▶ { AW.2 ∥ AW.4 } ──both merged──▶ AW.3
   immediately, CI is a merge gate only.
 - Merge-forward from `integrate/phase-aw` on every parent merge
   (`feedback_merge_forward_asap`).
+- **Execution deviation (recorded 2026-09-05):** AW.3 was cut and reviewed
+  before AW.2 merged, violating the declared `AW.2 → AW.3 must_follow`
+  relation. Merge-forward from `integrate/phase-aw` after AW.2 (PR #1179,
+  #1195) and AW.4 landed substituted for the ordering; AW.3 (PR #1182, #1196, #1198)
+  was re-verified by quality-mgr on the merged base before its final merge.
 - Hermes-side (`crates/hermes-atm`, Python) is in-repo and owned by AW.4
   (fallback envelope consumption) and AW.5 (projections); no Hermes logger
   or path logic is ever written in Python.
@@ -327,7 +333,7 @@ addressed in round 3 text):
 | I7 | `DiagnosticSink` never specified | Fixed: signature in §2 "Cross-sprint contracts" |
 | I8 | AW.3/AW.5 file overlap not reserved | Fixed: §4 file-reservation table |
 | I9 | AW.1 D6 hedge; AW.3 health block crossed an unrecorded crate edge | Fixed: D6 lists exact contents; AW.3 uses `DiagnosticCountersSource` injected by bootstrap and reaches the timeline via `atm-runtime` state — no new edge |
-| I10 | `atm-graft-python` grant in tracing-bridge.toml broader than needed | Fixed: AW.1 grants `allowed_dependents = ["atm-daemon-bootstrap", "atm"]` only; AW.4 amends the record when it adds the edge |
+| I10 | `atm-graft-python` grant in tracing-bridge.toml broader than needed | Fixed: the Python binding consumes the retained contract from `atm-core` and has no tracing-bridge dependency |
 | I11 | ATM-QA-006 — AW.5 D2 claimed `atm_ack` parity without a test or AC | Fixed: AW.5 D3 parity test adds the ack case; AC6 asserts `atm_ack` equals `atm ack --json` |
 | I12 | RBQA-AW5-F002 — ack result type unnamed, no `response_types` entry | Fixed: `AtmAckResult` (= `AtmSendResult`) named in AW.4 D3a and committed in AW.4 D5; AW.5 D4 re-asserts the full list |
 | M13 | Minor — `docs/requirements.md:907` stale version | Fixed in AW.1 D5 (see I6) |

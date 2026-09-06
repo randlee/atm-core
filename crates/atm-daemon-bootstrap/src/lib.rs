@@ -44,11 +44,13 @@ mod atm_temp_config;
 mod atm_temp_sweeper_runtime;
 mod bare_cli_runtime;
 mod daemon_observability;
+mod diagnostic_timeline;
 mod owner_gate;
 mod peer_launch_config;
 mod queue_drain;
 mod received_hook_selector;
 mod replacement_handler;
+mod sqlite_observability;
 
 use atm_temp_config::daemon_atm_config;
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
@@ -90,6 +92,7 @@ pub async fn bootstrap_replacement_observability()
                     "daemon observability bootstrap worker did not complete: {source}"
                 ))
             })??;
+    observability.install_tracing_bridge()?;
     Ok(Arc::new(observability))
 }
 
@@ -179,9 +182,23 @@ pub fn assemble_host_runtime_with_template_composer(
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
     template_composer: Option<Arc<dyn TemplateComposer>>,
 ) -> Result<RuntimeAssembly, AtmError> {
+    assemble_host_runtime_with_storage_factory(
+        config_current_dir,
+        non_claude_outbound,
+        template_composer,
+        SqliteStorageFactory::host_scoped(),
+    )
+}
+
+fn assemble_host_runtime_with_storage_factory(
+    config_current_dir: PathBuf,
+    non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
+    template_composer: Option<Arc<dyn TemplateComposer>>,
+    storage_factory: SqliteStorageFactory,
+) -> Result<RuntimeAssembly, AtmError> {
     assemble_runtime(RuntimeAssemblyInputs {
         host_runtime_scope: current_host_runtime_scope()?,
-        storage_factory: Arc::new(SqliteStorageFactory::host_scoped()),
+        storage_factory: Arc::new(storage_factory),
         config_current_dir,
         non_claude_outbound,
         template_composer,
@@ -207,8 +224,16 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 /// must not depend on that directory: [`RuntimeAssembly::for_daemon`] removes
 /// the workspace-backed config doctor before requests can be served.
 pub fn assemble_daemon_runtime() -> Result<RuntimeAssembly, AtmError> {
-    assemble_host_runtime(PathBuf::new(), Arc::new(LocalFileNonClaudeOutbound::new()))
-        .map(RuntimeAssembly::for_daemon)
+    let storage_factory = SqliteStorageFactory::host_scoped()
+        .with_observability(Arc::new(sqlite_observability::DaemonSqliteObservability))
+        .with_timeline_observer(Arc::new(diagnostic_timeline::attach_timeline));
+    assemble_host_runtime_with_storage_factory(
+        PathBuf::new(),
+        Arc::new(LocalFileNonClaudeOutbound::new()),
+        Some(template_composer()),
+        storage_factory,
+    )
+    .map(RuntimeAssembly::for_daemon)
 }
 
 /// Starts the replacement Tokio/Axum daemon as the only active serving path.
@@ -360,7 +385,7 @@ fn record_peer_wire_mode_selection(
     peer_wire_mode: PeerWireMode,
     peer_stream_adapter: &Option<Arc<dyn PeerStreamAdapter>>,
 ) {
-    tracing::info!(
+    tracing::info!(target: "atm_daemon_bootstrap::lifecycle",
         peer_wire_security = peer_wire_mode.security().as_launch_value(),
         mtls_ready = peer_stream_adapter.is_some(),
         "replacement daemon selected peer-wire mode"
@@ -412,6 +437,8 @@ async fn run_replacement_daemon_with_selector(
         start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
+    let diagnostic_timeline = Arc::clone(&assembly.diagnostic_timeline);
+    let diagnostic_counters = diagnostic_timeline::active_counters();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
     let (handler, recovery_sweep) = build_replacement_handler(
         assembly,
@@ -425,6 +452,7 @@ async fn run_replacement_daemon_with_selector(
                 pool_config: peer_pool_config,
             },
             runtime_health: runtime_health.clone(),
+            diagnostic_counters: diagnostic_counters.clone(),
             bare_cli,
             herdr_process,
         },
@@ -442,7 +470,14 @@ async fn run_replacement_daemon_with_selector(
         peer_wire_mode,
         &peer_stream_adapter,
     );
-    let running = start_replacement_runtime(config, handler.clone(), runtime_health).await?;
+    let running = start_replacement_runtime_with_diagnostics(
+        config,
+        handler.clone(),
+        runtime_health,
+        diagnostic_timeline,
+        diagnostic_counters,
+    )
+    .await?;
     run_until_shutdown(
         running,
         handler,
@@ -487,10 +522,42 @@ async fn run_until_shutdown(
     .await
 }
 
+#[cfg(test)]
+async fn start_replacement_runtime_for_test(
+    config: HttpRuntimeConfig,
+    handler: Arc<StorageAndNudgeRouter>,
+    runtime_health: RuntimeHealth,
+) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
+    start_replacement_runtime(config, handler, runtime_health, None, None).await
+}
+
+async fn start_replacement_runtime_with_diagnostics(
+    config: HttpRuntimeConfig,
+    handler: Arc<StorageAndNudgeRouter>,
+    runtime_health: RuntimeHealth,
+    diagnostic_timeline: Arc<dyn atm_runtime::DiagnosticTimelineStore>,
+    diagnostic_counters: Option<
+        Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
+    >,
+) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
+    start_replacement_runtime(
+        config,
+        handler,
+        runtime_health,
+        Some(diagnostic_timeline),
+        diagnostic_counters,
+    )
+    .await
+}
+
 async fn start_replacement_runtime(
     config: HttpRuntimeConfig,
     handler: Arc<StorageAndNudgeRouter>,
     runtime_health: RuntimeHealth,
+    diagnostic_timeline: Option<Arc<dyn atm_runtime::DiagnosticTimelineStore>>,
+    diagnostic_counters: Option<
+        Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
+    >,
 ) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
     // `StorageAndNudgeRouter` forwards `RuntimeMaintenance::start` to the
     // `HerdrQueueWakePump` composed in `build_replacement_handler`. Without
@@ -499,12 +566,16 @@ async fn start_replacement_runtime(
     // wake pump silently never starts in production.
     let maintenance = Arc::clone(&handler) as Arc<dyn atm_http_runtime::RuntimeMaintenance>;
     let runtime_handler: Arc<dyn atm_http_runtime::CanonicalWriteHandler> = handler;
-    HttpRuntimeBuilder::new(config, runtime_handler)
+    let mut builder = HttpRuntimeBuilder::new(config, runtime_handler)
         .with_runtime_health(runtime_health)
-        .with_maintenance(maintenance)
-        .build()?
-        .start()
-        .await
+        .with_maintenance(maintenance);
+    if let Some(timeline) = diagnostic_timeline {
+        builder = builder.with_diagnostic_timeline(timeline);
+    }
+    if let Some(counters) = diagnostic_counters {
+        builder = builder.with_diagnostic_counters(counters);
+    }
+    builder.build()?.start().await
 }
 
 async fn await_runtime_or_shutdown(
@@ -517,11 +588,11 @@ async fn await_runtime_or_shutdown(
     tokio::select! {
         signal = wait_for_shutdown_signal() => {
             let signal = signal?;
-            eprintln!("replacement ATM daemon received {}; starting graceful shutdown", signal.as_str());
+            tracing::info!(target: "atm_daemon_bootstrap::lifecycle", signal = signal.as_str(), "replacement ATM daemon received shutdown signal; starting graceful shutdown");
             false
         }
         _ = running.wait_for_server_stop() => {
-            eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
+            tracing::error!(target: "atm_daemon_bootstrap::lifecycle", code = "ATM_RUNTIME_UNEXPECTED_STOP", "replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
             let result = shutdown_replacement_daemon(
                 running,
                 handler,
@@ -630,6 +701,7 @@ async fn shutdown_replacement_daemon(
         .await;
     workflow_telemetry.shutdown().await;
     atm_temp_sweeper.shutdown().await;
+    diagnostic_timeline::stop_flush_worker();
     let _stopped = stopped?;
     Ok(())
 }
@@ -842,7 +914,7 @@ mod replacement_runtime_tests {
         assemble_host_runtime_with_template_composer, build_replacement_handler,
         legacy_literal_ip_policy_from_value, parse_direct_peer_port, parse_peer_wire_mode,
         peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
-        start_replacement_runtime, write_ready_signal_if_requested,
+        start_replacement_runtime_for_test, write_ready_signal_if_requested,
     };
     use peer_tls::LegacyLiteralIpPolicy;
 
@@ -1114,6 +1186,7 @@ mod replacement_runtime_tests {
                     pool_config: PeerPoolConfig::default(),
                 },
                 runtime_health: runtime_health.clone(),
+                diagnostic_counters: None,
                 bare_cli: Default::default(),
                 herdr_process: None,
             },
@@ -1306,6 +1379,7 @@ mod replacement_runtime_tests {
                     pool_config: PeerPoolConfig::default(),
                 },
                 runtime_health: runtime_health.clone(),
+                diagnostic_counters: None,
                 bare_cli: Default::default(),
                 herdr_process: Some(fake.clone()),
             },
@@ -1323,7 +1397,7 @@ mod replacement_runtime_tests {
             PeerPoolConfig::default(),
         );
 
-        let running = start_replacement_runtime(config, handler, runtime_health.clone())
+        let running = start_replacement_runtime_for_test(config, handler, runtime_health.clone())
             .await
             .expect("start the real replacement runtime entry point");
 

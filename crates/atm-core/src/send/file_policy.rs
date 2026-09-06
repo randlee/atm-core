@@ -99,14 +99,22 @@ pub fn process_file_reference(
         .file_name()
         .ok_or_else(|| AtmError::file_policy("file path has no file name"))?;
     let share_copy = share_dir.join(file_name);
+    if file_path
+        .canonicalize()
+        .ok()
+        .zip(share_copy.canonicalize().ok())
+        .is_some_and(|(source, destination)| source == destination)
+    {
+        return Ok(render_reference_message(message_text, &share_copy));
+    }
     let copied_bytes = fs::copy(file_path, &share_copy).map_err(|error| {
         AtmError::file_policy(format!("failed to copy file into share directory: {error}"))
     })?;
-    if copied_bytes > MAX_FILE_REFERENCE_BYTES {
+    if copied_bytes != file_size.len() {
         let _ = fs::remove_file(&share_copy);
         return Err(AtmError::file_policy(format!(
-            "file reference exceeds the {}-byte limit after copy: {}",
-            MAX_FILE_REFERENCE_BYTES,
+            "file reference copy was incomplete (copied {copied_bytes} of {} bytes): {}",
+            file_size.len(),
             file_path.display()
         )));
     }
@@ -202,5 +210,37 @@ mod tests {
         assert!(is_task_envelope(&task));
         assert!(!is_task_envelope(&prose));
         assert!(!is_task_envelope(&similarly_named));
+    }
+
+    #[test]
+    fn share_dir_source_is_not_truncated_by_file_reference_copy() {
+        let current_dir = tempdir().expect("current tempdir");
+        let home_dir = tempdir().expect("home tempdir");
+        let share_dir = home_dir
+            .path()
+            .join(".config")
+            .join("atm")
+            .join("share")
+            .join(TEST_TEAM);
+        fs::create_dir_all(&share_dir).expect("share directory");
+        let source_path = share_dir.join("payload.txt");
+        let original = b"source content must survive";
+        fs::write(&source_path, original).expect("source file");
+
+        let reference = process_file_reference(
+            &source_path,
+            None,
+            &TEST_TEAM.parse().expect("team"),
+            current_dir.path(),
+            home_dir.path(),
+        )
+        .expect("share-dir source should be accepted");
+
+        assert_eq!(source_path.parent(), Some(share_dir.as_path()));
+        assert!(reference.contains("payload.txt"));
+        assert_eq!(
+            fs::read(&source_path).expect("source remains readable"),
+            original
+        );
     }
 }

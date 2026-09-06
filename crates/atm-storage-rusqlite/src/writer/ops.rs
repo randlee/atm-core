@@ -14,8 +14,9 @@ use atm_storage::error::AtmError;
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
-    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, MessageWriteOrigin,
-    TemplateMessageAdmission, TemplateRegistration, TemplateRegistrationOutcome,
+    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DiagnosticEvent,
+    MessageWriteOrigin, TemplateMessageAdmission, TemplateRegistration,
+    TemplateRegistrationOutcome,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
@@ -58,6 +59,12 @@ pub(crate) enum WriteOp {
     RegisterTemplate(Box<TemplateRegistration>),
     AdmitDecomposedMessage(Box<DecomposedMessageAdmission>),
     AdmitTemplateMessage(Box<TemplateMessageAdmission>),
+    /// Lower-priority callers submit bounded, already-redacted batches only.
+    RecordDiagnostics(Vec<DiagnosticEvent>),
+    /// Retention shares the lower-priority diagnostic writer lane.
+    PruneDiagnostics {
+        now_unix_ms: i64,
+    },
 }
 
 impl std::fmt::Debug for WriteOp {
@@ -91,6 +98,14 @@ impl std::fmt::Debug for WriteOp {
                 .debug_tuple("AdmitTemplateMessage")
                 .field(&admission.record.message_key)
                 .finish(),
+            Self::RecordDiagnostics(events) => formatter
+                .debug_tuple("RecordDiagnostics")
+                .field(&events.len())
+                .finish(),
+            Self::PruneDiagnostics { now_unix_ms } => formatter
+                .debug_struct("PruneDiagnostics")
+                .field("now_unix_ms", now_unix_ms)
+                .finish(),
         }
     }
 }
@@ -113,6 +128,8 @@ pub(crate) enum WriteOpResult {
         inserted: bool,
         existing: Option<Box<Message>>,
     },
+    DiagnosticsRecorded,
+    DiagnosticsPruned(u64),
 }
 
 pub(crate) fn execute(
@@ -190,7 +207,47 @@ pub(crate) fn execute(
                 ))),
             }
         }
+        WriteOp::RecordDiagnostics(events) => execute_diagnostic_batch(events, connection, target),
+        WriteOp::PruneDiagnostics { now_unix_ms } => {
+            execute_diagnostic_prune(*now_unix_ms, connection, target)
+        }
     }
+}
+
+fn execute_diagnostic_batch(
+    events: &[DiagnosticEvent],
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    for event in events {
+        connection.execute(
+            "INSERT INTO diagnostic_events (ts_unix_ms, level, component, code, correlation_id, origin, message, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![event.ts_unix_ms, event.level, event.component, event.code, event.correlation_id, event.origin, event.message, event.detail],
+        ).map_err(|error| sqlite_error(target, "failed to record diagnostic timeline batch", error))?;
+    }
+    Ok(WriteOpResult::DiagnosticsRecorded)
+}
+
+fn execute_diagnostic_prune(
+    now_unix_ms: i64,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    let cutoff = now_unix_ms - crate::DIAGNOSTIC_MAX_AGE_DAYS * 24 * 60 * 60 * 1_000;
+    let expired_rows = connection
+        .execute(
+            "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events WHERE ts_unix_ms < ?1 ORDER BY id LIMIT ?2)",
+            params![cutoff, crate::DIAGNOSTIC_PRUNE_BATCH],
+        )
+        .map_err(|error| sqlite_error(target, "failed to prune expired diagnostic events", error))?;
+    if expired_rows > 0 {
+        return Ok(WriteOpResult::DiagnosticsPruned(expired_rows as u64));
+    }
+    let excess_rows = connection.execute(
+        "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms DESC, id DESC LIMIT ?1 OFFSET ?2)",
+        params![crate::DIAGNOSTIC_PRUNE_BATCH, crate::DIAGNOSTIC_MAX_ROWS],
+    ).map_err(|error| sqlite_error(target, "failed to prune excess diagnostic events", error))?;
+    Ok(WriteOpResult::DiagnosticsPruned(excess_rows as u64))
 }
 
 fn execute_read_display_state(

@@ -59,14 +59,16 @@ Rules:
 ### RULE-001: No direct `sc-observability` imports in library crates
 Severity: CRITICAL
 
-`sc-observability` is an observability backend. Only binary entry points may
-import it:
-- Allowed: `crates/atm/src/main.rs` and other true binary entry points
-- Forbidden: any `lib.rs`, any `mod.rs`, and any non-entry-point `.rs` file in
-  a library crate
+`sc-observability` is an observability backend. `atm-observability` is the
+sole sanctioned library facade and owns every non-binary backend import:
+- Allowed: `crates/atm-observability/src/**`, `crates/atm/src/main.rs`, and
+  other true binary entry points
+- Forbidden: every other library crate and every consumer-facing public API
+  that requires a caller to name an `sc_observability*` type
 
 Check:
-`grep -r "sc.observability\\|sc_observability" <crate>/src/`
+`rg "sc_observability" crates --glob '*.rs'` must report only the facade and
+approved binary entry points.
 
 ### RULE-002: No custom `emit_*` functions wrapping log output
 Severity: CRITICAL

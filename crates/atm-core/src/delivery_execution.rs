@@ -174,6 +174,9 @@ mod tests {
                 query_state: Some(AtmObservabilityHealthState::Unavailable),
                 maintenance: None,
                 diagnostic: None,
+                jsonl: Default::default(),
+                timeline: Default::default(),
+                degraded: Vec::new(),
                 detail: Some("test observer".to_string()),
             })
         }

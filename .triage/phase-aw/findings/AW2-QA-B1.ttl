@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW2-QA-B1>
+  a triage:Finding ;
+  triage:findingId "AW2-QA-B1" ;
+  triage:title "SqliteDiagnosticTimeline::prune runs DELETEs on a pooled control-path connection instead of the single-writer lane; DIAGNOSTIC_PRUNE_CHECK_EVERY auto-prune not implemented" ;
+  triage:description "qa-pr1179-r3 (req-qa + ruthless-boundary-qa, msg 01M1QQPCZVHYSQ37GQMXKKQMFS) at 0e825b75e: prune (diagnostic_timeline.rs ~113-120) executes DELETEs via SharedDb::with_transaction -> control_path_pool::checkout, a separate pooled connection outside the writer priority lane; writer/ops.rs has only a RecordDiagnostics WriteOp and no prune variant. Contradicts sprint-AW.2 deliverable 8 (prune runs as a RecordDiagnostics-lane op) and the module's single-writer rationale. The DIAGNOSTIC_PRUNE_CHECK_EVERY auto-prune trigger is not implemented anywhere. Retention work was still in progress at this tip per arch-ctm. CLOSURE (qa-pr1179-r4, quality-mgr): ruthless-boundary-qa and req-qa both independently confirmed at d3eee516b that prune() now submits WriteOp::PruneDiagnostics over the writer's diagnostic_sender channel (writer/mod.rs prune_diagnostics, ~406-426) and executes on the worker's own single writer connection (writer/mod.rs process_diagnostic_prune, ~742-768; writer/ops.rs WriteOp::PruneDiagnostics handling, ~202-220) -- no separate pooled connection. DIAGNOSTIC_PRUNE_CHECK_EVERY auto-trigger confirmed wired via process_diagnostic_batch. Finding closed. Note: this required adding new WriteOp variants (PruneDiagnostics, RecordDiagnostics) not present in AV.1b's original enumeration -- see quality-mgr's separate ruling on the AV.3 read-concurrency gate's WriteOp allowlist for the required companion gate amendment." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "storage-writer-lane" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T03:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW2 ;
+  triage:foundAt "2026-09-05T02:57:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW2-QA-B1/AW2-1> ;
+  triage:closedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AW2-QA-B1/AW2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 113 ;
+  triage:snippet "fn prune" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "0e825b75e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW2/0e825b75e> .
+
+<urn:atm:triage:worktree/AW2/0e825b75e>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "0e825b75e" ;
+  triage:orderIndex 2 .

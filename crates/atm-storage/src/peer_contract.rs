@@ -6,6 +6,7 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::num::NonZeroU16;
 use std::str::FromStr;
+use std::time::Duration;
 
 use crate::contract::{require_non_blank, sealed};
 use crate::error::AtmError;
@@ -104,6 +105,16 @@ pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError>;
+    /// Performs one bounded durable lease lookup. Implementations that own a
+    /// reader pool must apply `deadline` to the submitted read.
+    fn lookup_with_deadline(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        _deadline: Duration,
+    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+        self.lookup(team, agent)
+    }
     fn mark_unreachable(
         &self,
         team: &TeamName,

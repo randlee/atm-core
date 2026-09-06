@@ -160,9 +160,12 @@ Query ATM log records using explicit field filters
 
 | Flag | Short | Required | Description |
 |------|-------|----------|-------------|
+| `--source` |  | no | Select the retained-log source. JSONL is the byte-compatible default |
 | `--level` |  | no | Restrict results to one or more severity levels |
 | `--match` |  | no | Match one structured ATM field exactly, for example command=send |
 | `--since` |  | no | Inclusive lower time bound as RFC3339 or a relative duration like 15m |
+| `--until` |  | no | Inclusive upper time bound as RFC3339 or a relative duration |
+| `--component` |  | no | Restrict timeline records to a component prefix |
 | `--limit` |  | no | Maximum number of returned records |
 | `--json` |  | no | Emit machine-readable JSON output |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
@@ -173,9 +176,12 @@ Query recent ATM log records
 
 | Flag | Short | Required | Description |
 |------|-------|----------|-------------|
+| `--source` |  | no | Select the retained-log source. JSONL is the byte-compatible default |
 | `--level` |  | no | Restrict results to one or more severity levels |
 | `--match` |  | no | Match one structured ATM field exactly, for example command=send |
 | `--since` |  | no | Inclusive lower time bound as RFC3339 or a relative duration like 15m |
+| `--until` |  | no | Inclusive upper time bound as RFC3339 or a relative duration |
+| `--component` |  | no | Restrict timeline records to a component prefix |
 | `--limit` |  | no | Maximum number of returned records |
 | `--json` |  | no | Emit machine-readable JSON output |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
@@ -186,9 +192,12 @@ Follow new ATM log records as they arrive
 
 | Flag | Short | Required | Description |
 |------|-------|----------|-------------|
+| `--source` |  | no | Select the retained-log source. JSONL is the byte-compatible default |
 | `--level` |  | no | Restrict results to one or more severity levels |
 | `--match` |  | no | Match one structured ATM field exactly, for example command=send |
 | `--since` |  | no | Inclusive lower time bound as RFC3339 or a relative duration like 15m |
+| `--until` |  | no | Inclusive upper time bound as RFC3339 or a relative duration |
+| `--component` |  | no | Restrict timeline records to a component prefix |
 | `--limit` |  | no | Maximum number of returned records |
 | `--json` |  | no | Emit machine-readable JSON output |
 | `--poll-interval-ms` |  | no | Poll interval in milliseconds between follow polls |

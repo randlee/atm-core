@@ -1,0 +1,99 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# quality-mgr note, 2026-09-05, re: fix/aw-readiness-api round-2 QA (qa-pr1211-r2):
+# the real fix for this finding (CASE-based severity rank replacing the lexical
+# compare) lands on the sibling branch fix/aw-readiness-easy (PR #1215), not on
+# fix/aw-readiness-api (PR #1211). arch-qa/ruthless-boundary-qa confirmed it closed
+# there. fix/aw-readiness-api adds only a client-side re-filter workaround in
+# crates/atm/src/commands/log.rs (comment: "not level-order-correct, tracked
+# separately") pending that merge. Status stays "open" here until PR #1215 merges
+# forward into this lineage and the workaround in log.rs is removed as dead code.
+
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: CORRECTING an
+# earlier (incorrect) internal assessment that treated this record as closed.
+# It is NOT closed. ruthless-boundary-qa's fresh review at
+# integrate/phase-aw@062cb44dd, cross-checked directly by me against
+# crates/atm/src/commands/log.rs:222-235, confirms: the server-side query fix
+# (CASE-based severity rank, crates/atm-storage-rusqlite/src/
+# diagnostic_timeline.rs:133-138) IS present and correct -- so any direct
+# HTTP consumer of /v1/diagnostics now gets correct filtering. But this
+# record's own recorded closure condition ("status stays open until PR #1215
+# merges forward into this lineage and the workaround in log.rs is removed as
+# dead code") is NOT satisfied: log.rs:222-235 still hard-codes
+# `level_at_least: None` with a comment claiming the server-side filter "is a
+# lexicographic string comparison and is not level-order-correct" -- now
+# false and stale -- and the CLI still maintains a second, independent
+# client-side severity filter (CliLogLevel/LogLevelFilter, log.rs:76-105)
+# duplicating the decision the server now makes correctly. Two parallel
+# severity-filtering implementations that can silently drift again. Remains
+# genuinely open. Flagging to fenix/team-lead for a fix dispatch or an
+# explicit deferral ruling; not something quality-mgr can close unilaterally.
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-M7>
+  a triage:Finding ;
+  triage:findingId "AW-READY-M7" ;
+  triage:title "/v1/diagnostics?level= performs a lexical string compare instead of a severity-rank comparison, so level=info silently drops all error rows" ;
+  triage:description "fenix reviewer-A (01M1S6XV64XHNGSP00NWXK26RQ) and fenix-C (01M1S751VVM0K4C7ZW6YDPC7BQ, their F1, duplicate noted as O1, counted once here); quality-mgr confirmed the exact query text: crates/atm-storage-rusqlite/src/diagnostic_timeline.rs:92 query against TEXT column storing lowercase level-name strings (error/warn/info/trace). Lexical ordering puts error below info, so level=info silently drops every error row instead of including it. No test exercises level_at_least semantics. The CLI itself is unaffected because it filters client-side after fetching (crates/atm/src/commands/log.rs:232-238), but any direct HTTP consumer of the route is exposed. Fix: integer rank column or CASE expression for severity ordering; test error inclusion at warn/info thresholds." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "query-correctness" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:52:43Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T16:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M7/AW3-query-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-M7/AW3-query-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 92 ;
+  triage:snippet "SELECT query at line 92 with level >= ?3 against TEXT column" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e> .
+
+<urn:atm:triage:worktree/integrate-phase-aw/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .
+
+# Developer branch status, PR #1215, 2026-09-05: severity-rank filtering is
+# present from 7f678a558 and remains fixed on d9fa67fcc for the server-side
+# query only. quality-mgr, 2026-09-06: the stale duplicate
+# `triage:status "fixed"` reassertion previously here has been removed -- a
+# second triage:status triple on the same finding subject produced a
+# duplicate row (with a stale "fixed" status value) in the branch-scoped
+# open-findings query, double-counting this finding in the live gate. The
+# finding-level status remains "open" in the header above, consistent with
+# the correction note recorded 2026-09-06: the CLI-bypass sub-condition this
+# finding's closure explicitly requires is still unmet.
+<urn:atm:triage:occurrence/AW-READY-M7/fix-aw-readiness-easy-d9fa67fcc>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;
+  triage:line 92 ;
+  triage:snippet "CASE lower(level) WHEN 'trace' THEN 0 WHEN 'debug' THEN 1 WHEN 'info' THEN 2 WHEN 'warn' THEN 3 WHEN 'error' THEN 4" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:orderIndex 2 .

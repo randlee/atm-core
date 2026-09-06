@@ -34,7 +34,7 @@ pub use report::{
     HerdrBreakerDoctorReport, HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport,
     LegacyLiteralIpPeerDoctorReport, PeerAuthorityDoctorReport, PeerConfigDoctorReport,
     PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
-    ReaderLaneDoctorReport, ReaderLanesDoctorReport, RecipientDeliveryPath,
+    ReaderPoolDoctorReport, ReaderPoolMetricsDoctorReport, RecipientDeliveryPath,
     RecipientDeliveryPathReport, TeamEscalationRecipientsDoctorReport,
 };
 
@@ -454,18 +454,28 @@ fn graft_receivers_doctor_report(
     team: &TeamName,
     findings: &mut Vec<DoctorFinding>,
 ) -> GraftReceiversDoctorReport {
-    let roster = match runtime.load_team_roster(team) {
-        Ok(roster) => roster,
-        Err(error) => {
-            push_doctor_error(findings, DoctorSeverity::Error, error);
-            return GraftReceiversDoctorReport::default();
-        }
-    };
+    const LEASE_LOOKUP_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+    let lookup_started = std::time::Instant::now();
+    let roster = runtime.load_team_roster(team);
     let now = chrono::Utc::now();
     let receivers = roster
         .into_iter()
         .filter_map(|member| {
-            let lease = match runtime.graft_receiver_lease(team, &member.agent_name) {
+            if lookup_started.elapsed() >= LEASE_LOOKUP_BUDGET {
+                findings.push(DoctorFinding {
+                    severity: DoctorSeverity::Warning,
+                    code: atm_storage::AtmErrorCode::DaemonUnavailable,
+                    message: "skipped graft-receiver lease lookups: doctor budget exhausted"
+                        .to_owned(),
+                    remediation: Some("Rerun `atm doctor` to inspect remaining leases.".to_owned()),
+                });
+                return None;
+            }
+            let lease = match runtime.graft_receiver_lease(
+                team,
+                &member.agent_name,
+                LEASE_LOOKUP_BUDGET.saturating_sub(lookup_started.elapsed()),
+            ) {
                 Ok(lease) => lease?,
                 Err(error) => {
                     push_doctor_error(findings, DoctorSeverity::Error, error);
@@ -774,16 +784,9 @@ fn load_member_roster(
         push_doctor_error(findings, DoctorSeverity::Error, error);
         return None;
     }
-    let members = match runtime.load_team_roster(team) {
-        Ok(roster) => {
-            push_mixed_local_backend_warning(team, &roster, findings);
-            ordered_roster_member_summaries(&roster, caller_identity, live_cwd)
-        }
-        Err(error) => {
-            push_doctor_error(findings, DoctorSeverity::Error, error);
-            return None;
-        }
-    };
+    let roster = runtime.load_team_roster(team);
+    push_mixed_local_backend_warning(team, &roster, findings);
+    let members = ordered_roster_member_summaries(&roster, caller_identity, live_cwd);
 
     Some(MembersList {
         team: team.clone(),
@@ -1123,11 +1126,23 @@ mod tests {
         }
 
         fn save_roster(&self, _roster: &atm_storage::RosterSnapshot) -> Result<(), AtmError> {
-            unreachable!("doctor tests do not touch the roster store boundary")
+            unreachable!("doctor tests do not mutate the roster store boundary")
         }
 
         fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
-            unreachable!("doctor tests do not touch the roster store boundary")
+            // Runtime construction hydrates the RAM roster from the durable
+            // store exactly once at startup, so a real durable store's
+            // `list_teams` is exercised here even though doctor itself never
+            // mutates rosters. Mirror that by returning the distinct team
+            // names present in the fixture data.
+            let mut teams: Vec<TeamName> = self
+                .members
+                .iter()
+                .map(|member| member.team_name.clone())
+                .collect();
+            teams.sort();
+            teams.dedup();
+            Ok(teams)
         }
     }
 
@@ -1300,6 +1315,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1376,9 +1394,15 @@ mod tests {
     }
 
     fn test_runtime_with_roster(members: &[&str]) -> LocalServiceRuntime {
+        let (roster_store, roster_runtime_mirror) =
+            atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(roster_store(
+                members,
+            )))
+            .expect("write-through roster fixture hydrates from the in-memory fake");
         LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
-            Arc::new(roster_store(members)),
+            roster_store,
+            roster_runtime_mirror,
             Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
         )
@@ -1473,6 +1497,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1502,6 +1529,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1536,6 +1566,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1567,6 +1600,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Degraded),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: Some("query backlog".to_string()),
                 }),
             },
@@ -1595,6 +1631,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Unavailable),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: Some("logger unavailable".to_string()),
                 }),
             },
@@ -1654,6 +1693,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1684,6 +1726,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1714,6 +1759,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1744,6 +1792,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1784,11 +1835,17 @@ mod tests {
             HOME_DIR_METADATA_KEY.to_string(),
             serde_json::json!("/repo/roster"),
         );
+        let (roster_store, roster_runtime_mirror) =
+            atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(
+                TestRosterStore {
+                    members: vec![roster_member],
+                },
+            ))
+            .expect("write-through roster fixture hydrates from the in-memory fake");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
-            Arc::new(TestRosterStore {
-                members: vec![roster_member],
-            }),
+            roster_store,
+            roster_runtime_mirror,
             Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
         );
@@ -1802,6 +1859,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1873,6 +1933,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1897,6 +1960,9 @@ mod tests {
                 query_state: Some(AtmObservabilityHealthState::Healthy),
                 maintenance: None,
                 diagnostic: None,
+                jsonl: Default::default(),
+                timeline: Default::default(),
+                degraded: Vec::new(),
                 detail: None,
             }),
         }

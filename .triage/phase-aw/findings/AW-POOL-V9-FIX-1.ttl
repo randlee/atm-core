@@ -1,0 +1,122 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-POOL-V9-FIX-1>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9-FIX-1" ;
+  triage:title "shared_db.rs with_connection still routes pure reads to writer connection instead of shared ReaderPool" ;
+  triage:description "quality-mgr's PR #1244 QA verdict: AW-POOL-V9's fix amended to A2 (fix/aw-pool-read-migration) after A1 deleted control_path_pool.rs. shared_db.rs:248 with_connection still delegates to self.writer_queue instead of shared ReaderPool. Reads in peer_config_store.rs (list_interfaces, local_certificate, list_trusted_peers, trusted_peer), pending_nudge_store.rs (list_pending_members), and nudge_template_override_store.rs (load_template_override) all call self.db.with_connection(...), which resolves to the writer-side connection, not the shared ReaderPool." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "concurrency-architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T20:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-06T02:00:01Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/shared-db-248> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/peer-config-24> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/peer-config-89> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/peer-config-132> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/peer-config-166> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/pending-nudge-152> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/nudge-template-26> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/shared-db-248>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 248 ;
+  triage:snippet "pub(crate) fn with_connection -- delegates reads to self.writer_queue instead of shared ReaderPool" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-pool-read-migration/a0e50036b> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/peer-config-24>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/peer_config_store.rs" ;
+  triage:line 24 ;
+  triage:snippet "fn list_interfaces -- self.db.with_connection(|connection| SELECT)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-pool-read-migration/a0e50036b> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/peer-config-89>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/peer_config_store.rs" ;
+  triage:line 89 ;
+  triage:snippet "fn local_certificate -- let certificate = self.db.with_connection(|connection| SELECT)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-pool-read-migration/a0e50036b> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/peer-config-132>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/peer_config_store.rs" ;
+  triage:line 132 ;
+  triage:snippet "fn list_trusted_peers -- self.db.with_connection(|connection| SELECT DISTINCT)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-pool-read-migration/a0e50036b> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/peer-config-166>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/peer_config_store.rs" ;
+  triage:line 166 ;
+  triage:snippet "fn trusted_peer -- let peer = self.db.with_connection(|connection| SELECT)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-pool-read-migration/a0e50036b> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/pending-nudge-152>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/pending_nudge_store.rs" ;
+  triage:line 152 ;
+  triage:snippet "fn list_pending_members -- self.db.with_connection(|connection| SELECT DISTINCT)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-pool-read-migration/a0e50036b> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/nudge-template-26>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/nudge_template_override_store.rs" ;
+  triage:line 26 ;
+  triage:snippet "fn load_template_override -- self.db.with_connection(|connection| SELECT)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-pool-read-migration/a0e50036b> .
+
+<urn:atm:triage:worktree/fix-aw-pool-read-migration/a0e50036b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-pool-read-migration" ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "a0e50036b" ;
+  triage:orderIndex 1 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-1/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-1" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc (PR #1244 merge). peer_config_store.rs (list_interfaces/local_certificate/list_trusted_peers/trusted_peer), pending_nudge_store.rs (list_pending_members), nudge_template_override_store.rs (load_template_override) all confirmed calling self.db.read(...), which routes through the shared ReaderPool, not the writer connection. Directly grepped on the merged head." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .
