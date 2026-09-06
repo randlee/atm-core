@@ -23,10 +23,12 @@ remodeling.
    - a separate `/sc-git-worktree` remediation branch, used only when a
      benchmark result or harness failure needs root-cause and correction.
      Never put source edits on the evidence branch.
-3. Physical performance evidence runs as the pre-provisioned dedicated account
-   over `ssh atmbench@rand-m5.local`, not from the interactive rand-m4 account.
-   Confirm `whoami` is `atmbench` and `~/.atm/benchmark-account.json` exists
-   before running a benchmark.  Do not bootstrap or reset another account.
+3. Physical performance evidence runs as the runner-provisioned dedicated
+   account over `ssh atmbench@rand-m5.local`, not from the interactive rand-m4
+   account.  The running agent may provision this disposable account when it
+   is absent; confirm `whoami` is `atmbench` and
+   `~/.atm/benchmark-account.json` exists before running a benchmark.  Do not
+   bootstrap or reset another account.
 
 ## Benchmark gate
 
@@ -56,6 +58,11 @@ cross-account interference.
 A red result is not a terminal status report.  Preserve its generated artifact
 and use the pre-created remediation worktree to do the following before asking
 for operator help:
+
+The running benchmark agent is empowered to fix minor blockers itself and to
+make any change necessary to meet or exceed the benchmark floors.  It does not
+need to escalate to a human first; it must preserve the candidate, evidence,
+and account-isolation rules below while doing so.
 
 1. Reproduce the failing target locally with the same candidate, account,
    target/profile, and release build; distinguish a measured floor regression

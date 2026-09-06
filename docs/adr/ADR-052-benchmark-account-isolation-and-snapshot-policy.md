@@ -32,6 +32,12 @@ being a separate OS user; it is not an alternate scope for the interactive
 user. The account name is supplied by an operator/bootstrap workflow and is
 never a hardcoded identity or hostname.
 
+The running benchmark agent provisions its own disposable benchmark account
+as part of the workflow when needed; the workflow does not require a human to
+pre-provision that account. Provisioning remains outside timed samples, and
+the runner must still validate the account-local manifest before touching
+state or starting a daemon.
+
 The benchmark runner must validate an account-local manifest against the
 executing process before it can touch state or start a daemon. The manifest
 binds the benchmark workflow to the account's UID, home, canonical durable
