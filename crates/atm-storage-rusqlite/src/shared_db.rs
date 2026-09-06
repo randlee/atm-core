@@ -1,13 +1,13 @@
 use crate::mail_messages_schema::{mail_messages_index_ddl, mail_messages_table_ddl};
 pub(crate) use crate::shared_db_reader_lanes::SharedDb;
 use crate::writer::{WriteOp, WriteOpResult, validate_upsert_message_request};
-use atm_storage::AsyncMailboxReader;
 use atm_storage::TemplateMessageAdmission;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
+use atm_storage::{AsyncMailboxReader, ReadLaneError};
 #[cfg(test)]
 use rusqlite::OpenFlags;
 use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};
@@ -235,6 +235,25 @@ impl SharedDb {
                 Ok(operation(connection))
             })
             .map_err(AtmError::from)?
+    }
+
+    /// Awaits one pure read on the shared reader pool with the caller's
+    /// deadline. Tokio request paths use this instead of wrapping the
+    /// synchronous compatibility surface in `spawn_blocking`.
+    pub(crate) async fn read_with_deadline_async<T>(
+        &self,
+        deadline: std::time::Duration,
+        operation: impl FnOnce(&Connection) -> Result<T, AtmError> + Send + 'static,
+    ) -> Result<T, AtmError>
+    where
+        T: Send + 'static,
+    {
+        self.read_pool
+            .submit(deadline, move |connection, _target| {
+                operation(connection).map_err(read_lane_storage_error)
+            })
+            .await
+            .map_err(AtmError::from)
     }
 
     /// Runs a pure inspection read under the shared pool's tool-class cap.
@@ -521,6 +540,14 @@ impl SharedDb {
             #[cfg(test)]
             SharedDbTarget::InMemory { .. } => None,
         }
+    }
+}
+
+fn read_lane_storage_error(error: AtmError) -> ReadLaneError {
+    ReadLaneError::Storage {
+        code: error.code(),
+        message: error.message().to_owned(),
+        cause: error.cause().map(str::to_owned),
     }
 }
 

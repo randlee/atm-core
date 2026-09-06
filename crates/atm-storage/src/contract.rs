@@ -978,6 +978,29 @@ pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
     ) -> Result<(), GraftEndpointStoreError>;
 }
 
+/// Tokio-safe counterpart to [`GraftReceiverEndpointStore`] lease lookups.
+///
+/// The synchronous trait remains the compatibility surface for non-Tokio
+/// callers. HTTP request paths use this companion so a SQLite backend can
+/// await its bounded reader lane directly instead of consuming a Tokio
+/// blocking worker merely to wait for that lane.
+#[async_trait::async_trait]
+pub trait AsyncGraftReceiverEndpointStore: GraftReceiverEndpointStore {
+    /// Looks up one receiver lease through the backend-owned asynchronous
+    /// reader lane.
+    async fn lookup_with_deadline_async(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+        _deadline: Duration,
+    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+        let error = AtmError::daemon_unavailable(
+            "graft receiver endpoint store does not implement async lease lookup",
+        );
+        Err(GraftEndpointStoreError::storage(&error))
+    }
+}
+
 /// A non-empty, opaque certificate fingerprint. It cannot be confused with a
 /// private-key reference at storage and transport boundaries.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]

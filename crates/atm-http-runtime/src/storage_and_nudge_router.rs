@@ -786,19 +786,10 @@ impl StorageAndNudgeRouter {
             )
         })?;
         let store = self.service_runtime.graft_receiver_endpoint_store()?;
-        let lease = tokio::task::spawn_blocking(move || {
-            store
-                .lookup_with_deadline(&team, &agent, remaining)
-                .map_err(graft_store_error)
-        })
-        .await
-        .map_err(|source| {
-            AtmError::new(
-                atm_core::error::AtmErrorCode::InternalError,
-                "graft receiver lease reader task ended unexpectedly",
-            )
-            .with_cause(source)
-        })??;
+        let lease = store
+            .lookup_with_deadline_async(&team, &agent, remaining)
+            .await
+            .map_err(graft_store_error)?;
         Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverLookup(
             lease,
         )))
