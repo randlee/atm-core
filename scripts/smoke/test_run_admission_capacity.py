@@ -833,15 +833,19 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(captured["lifecycle"]["restore"][-1]["status"], "failed")
         self.assertIn("recovery:", captured["failure"])
 
-    def test_host_runtime_doctor_environment_ignores_disposable_atm_home(self):
+    def test_benchmark_doctor_environment_preserves_disposable_atm_home(self):
         environment = {
             "ATM_HOME": "/tmp/atm-capacity-1",
             "ATM_IDENTITY": "capacity-agent",
             "ATM_TEAM": "capacity-team",
         }
         self.assertEqual(
-            RUNNER.host_runtime_client_environment(environment),
-            {"ATM_IDENTITY": "capacity-agent", "ATM_TEAM": "capacity-team"},
+            RUNNER.benchmark_runtime_client_environment(environment),
+            {
+                "ATM_HOME": "/tmp/atm-capacity-1",
+                "ATM_IDENTITY": "capacity-agent",
+                "ATM_TEAM": "capacity-team",
+            },
         )
         self.assertIn("ATM_HOME", environment)
 
