@@ -552,3 +552,4 @@ triage:r118 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-Q
 triage:c28 a triage:Completion ; triage:ofSprint triage:AX6 ; triage:at "2026-09-06T18:45:08Z"^^xsd:dateTime .
 # QA-AXMERGE-AW-R2-1788720008 on PR #1256 (11cb6e96c) PASS 0/0/0 at 2026-09-06T18:46:57Z; AXPE-QA-120 closed (fixed). Merge of #1256 at CI-green.
 triage:r119 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-120> ; triage:resolvedAt "2026-09-06T18:47:42Z"^^xsd:dateTime .
+# CI Just lint FAILED on PR #1256 head 11cb6e96c (run 34052404819): RULE-002 hard violations from the merge union -> AXPE-QA-121 (important). Merge of #1256 held; fix pass on the merge branch by a fenix background agent (merge fallout, sanctioned), then QA-3. Note: origin/develop has advanced to 7c2947279 past the merge base dba42148d.
