@@ -33,7 +33,9 @@ use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
 use crate::RuntimeHealth;
 use crate::bare_cli_fifo::{BareCliFifo, BareCliQueueFullDrops, drain_bare_cli_messages};
-use crate::router_support::{append_warnings, hook_warning, write_response};
+use crate::router_support::{
+    append_warnings, hook_warning, validate_graft_receiver_member, write_response,
+};
 
 fn retry_deferred_marker<F>(health: &RuntimeHealth, mut mark: F) -> Result<(), AtmError>
 where
@@ -1136,17 +1138,6 @@ fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Result<(), AtmE
         return Err(AtmError::validation(
             "graft receiver registration is available only through authenticated local HTTP adapters",
         ));
-    }
-    Ok(())
-}
-
-fn validate_graft_receiver_member(
-    runtime: &LocalServiceRuntime,
-    team: &atm_core::types::TeamName,
-    agent: &atm_core::types::AgentName,
-) -> Result<(), AtmError> {
-    if runtime.load_roster_member(team, agent)?.is_none() {
-        return Err(AtmError::agent_not_found(agent.as_str(), team.as_str()));
     }
     Ok(())
 }
