@@ -1953,7 +1953,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(body["message_source"], {"Inline": "capacity-42"})
         self.assertNotIn("RequestEnvelope", body)
 
-    def test_capacity_roster_creates_sender_and_distinct_local_recipient(self):
+    def test_capacity_roster_creates_a_lead_sender_and_distinct_local_recipient(self):
         atm = Path(tempfile.gettempdir()) / "atm"
         capacity_home = Path(tempfile.gettempdir()) / "capacity-home"
         result = {"exit_code": 0, "stdout": "", "stderr": ""}
@@ -1965,10 +1965,11 @@ class AdmissionCapacityTests(unittest.TestCase):
             command.call_args_list[0].args[0],
             [
                 str(atm), "teams", "add-member", "capacity-team", "capacity-agent",
-                "--home-dir", str(capacity_home), "--json",
+                "--agent-type", "lead", "--home-dir", str(capacity_home), "--json",
             ],
         )
         self.assertEqual(command.call_args_list[1].args[0][4], "capacity-recipient")
+        self.assertEqual(command.call_args_list[1].args[0][6:8], ["--agent-type", "general-purpose"])
         self.assertEqual(len(command.call_args_list), 2)
 
     def test_capacity_roster_is_unique_per_profile(self):
