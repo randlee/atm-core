@@ -1633,12 +1633,14 @@ Unix-domain socket on macOS/Linux and named pipe on Windows—because Phase AX's
 queue templates, built-in nudge rendering, task state/CLI, reminder cycle,
 lead notification, and doctor all depend on that delivery path. It also
 defines the daemon's optional-dependency behavior when Herdr is absent, late,
-or crashed. The CLI remains a bounded fallback. Windows remains a docs-and-tests
-deliverable: remove three stale scope-outs, close the `cfg(unix)` process-test
-gap, and prove process behavior in Windows CI. Live macOS/Windows proof stays
-in release readiness (no sprint carries live evidence, Rand 2026-09-05). No
-work remodels the legacy synchronous daemon; all composition targets the
-Tokio/Axum `atm-http-runtime` cutover architecture.
+or crashed. The CLI remains a bounded fallback. Windows work includes real
+production correctness code—`CREATE_NO_WINDOW`, a bounded kill-then-reap grace
+period, per-call binary re-resolution, and CRLF-tolerant decoding—plus removal
+of three stale scope-outs and closure of the `cfg(unix)` process-test gap. Windows CI
+proves that behavior without live hardware. Live macOS/Windows proof stays in
+release readiness (no sprint carries live evidence, Rand 2026-09-05). No work
+remodels the legacy synchronous daemon; all composition targets the Tokio/Axum
+`atm-http-runtime` cutover architecture.
 
 Nine sprints execute in a documentation lane, a linear implementation
 stack, an independent socket lane, and a code join. AY.1

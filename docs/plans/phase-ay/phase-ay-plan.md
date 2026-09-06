@@ -37,12 +37,15 @@ defines that optional-dependency model and cuts the six-operation client from
 per-spawn CLI invocation to Herdr's native IPC: a Unix-domain socket on
 macOS/Linux and a named pipe on Windows.
 
-Windows remains an explicit documentation-and-tests deliverable, not the
-motivation for the phase. AY removes the three unapproved Windows scope-out
-statements, closes the `#[cfg(unix)]` process-test gap in the Windows CI lane,
-and records Windows process coverage. Live platform proof and the one official
-benchmark remain release-readiness activities after the phase lands; neither
-is a sprint.
+Windows correctness remains an explicit implementation, documentation, and
+test deliverable, not the motivation for the phase. AY.7 adds Windows-specific
+production code for `CREATE_NO_WINDOW`, a bounded kill-then-reap grace period,
+per-call binary re-resolution, and CRLF-tolerant decoding. Across AY, the work
+also removes the three unapproved Windows scope-out statements, closes the
+`#[cfg(unix)]` process-test gap, and records process coverage. All AY.7
+behavior is verified in the Windows CI lane without a live-hardware gate. Live
+platform proof and the one official benchmark remain release-readiness
+activities after the phase lands; neither is a sprint.
 
 Transport decision (AYP-R13-005; recorded by fenix for Rand's approval
 with P-B; rulings 1 to 5 unchanged): the phase moves all three platforms
@@ -137,14 +140,18 @@ corrects the ADR-058 Herdr pin, and (AY.8 only) revises the boundary TOML
 io_owns. Everything else in the AX contract is carried unchanged, and the
 "Request set" section below lists it from the AX.6 head.
 
-## Windows documentation and test gaps (verified 2026-09-05, integrate/phase-aw)
+## Windows correctness, documentation, and test gaps (verified 2026-09-05, integrate/phase-aw)
 
-Nothing in the code. `crates/atm-herdr/src/lib.rs` production code has
-no platform branches; it spawns the `herdr` binary by name and Herdr's
-own CLI selects UDS or named pipe. Backend selection, roster harness
-fields, the received-hook selector and the doctor presence probe are all
-platform-neutral. The Herdr client is daemon-side only (atm-http-runtime
-and atm-daemon-bootstrap depend on atm-herdr; the CLI crate does not), so
+The six-operation feature set already runs on Windows: nothing in the current
+client blocks the platform. `crates/atm-herdr/src/lib.rs` production code has
+no platform branches; it spawns the `herdr` binary by name and Herdr's own CLI
+selects UDS or named pipe. That platform-neutral implementation does not yet
+provide the Windows-specific process correctness AY.7 adds: no-console-window
+creation, a bounded kill-then-reap grace period, per-call binary re-resolution,
+and CRLF-tolerant decoding. Backend selection, roster harness fields, the
+received-hook selector, and the doctor presence probe are platform-neutral.
+The Herdr client is daemon-side only (`atm-http-runtime` and
+`atm-daemon-bootstrap` depend on `atm-herdr`; the CLI crate does not), so
 nothing here touches the frozen legacy synchronous daemon.
 
 The real gaps:
@@ -937,10 +944,9 @@ Common preconditions:
   fresh fetch, set `phase_ax_merge_sha=$(git rev-parse origin/develop)`, record
   that exact SHA in the AY.1 PR, and create `integrate/phase-ay` directly from
   that exact `origin/develop` head—never from `integrate/phase-ax`.
-  `git merge-base --is-ancestor a7aebefb8 origin/develop` must exit 0, and
-  both the PR #1218 merge and the recorded Phase AX merge must be ancestors of
-  `integrate/phase-ay`.
-  Finally, presence checks on `integrate/phase-ay` must find
+  `git merge-base --is-ancestor a7aebefb8 origin/develop` must exit 0. After
+  creating `integrate/phase-ay` at the recorded SHA, presence checks on that
+  branch must find
   `HERDR_MINIMUM_VERSION`, ADR-061, HR-CORE-010, `herdr_escalation`,
   `EscalationOutcome`, `EscalationKind`, and `HERDR_NOTIFY_DEADLINE`. PR #1218
   is already on `origin/develop` as `a7aebefb8`; the Phase AX symbols arrive
@@ -952,8 +958,6 @@ Common preconditions:
   phase_ax_merge_sha=$(git rev-parse origin/develop)
   git merge-base --is-ancestor a7aebefb8 origin/develop
   git switch --create integrate/phase-ay "$phase_ax_merge_sha"
-  git merge-base --is-ancestor a7aebefb8 integrate/phase-ay
-  git merge-base --is-ancestor "$phase_ax_merge_sha" integrate/phase-ay
   git grep -n 'pub const HERDR_MINIMUM_VERSION' integrate/phase-ay -- crates/atm-herdr/src/lib.rs
   git ls-tree -r --name-only integrate/phase-ay -- docs/adr | rg '^docs/adr/ADR-061-'
   git grep -n 'HR-CORE-010' integrate/phase-ay -- docs/atm-herdr/requirements.md
@@ -1572,4 +1576,14 @@ version, and lifecycle-label shapes.
   added the integration-branch creation commands, distinguished plan ownership
   from phase-execution ownership, named AY.4's `daemon_herdr_config` reader in
   AY.9, moved AY.8/AY.9 quality-manager gates into acceptance criteria, and
-  removed the tautological merge-base check.
+  replaced the original same-revision `origin/develop` merge-base check while
+  adding the branch-creation workflow; r28 removes the post-creation
+  redundancies exposed by that change.
+- r28 (2026-09-06, solar): closed AYP-R27-001/002. Removed both post-creation
+  merge-base checks, which were guaranteed by creating `integrate/phase-ay` at
+  the recorded develop SHA, while retaining the pre-creation PR #1218 ancestry
+  check and the Phase AX symbol-presence gates. Corrected the phase framing to
+  name AY.7's real Windows-specific production work (`CREATE_NO_WINDOW`,
+  a bounded kill-then-reap grace period, per-call binary re-resolution, and
+  CRLF-tolerant decoding) alongside its documentation and Windows-CI coverage;
+  no live-hardware sprint gate was introduced.
