@@ -959,11 +959,15 @@ def allocate_direct_peer_port() -> int:
     return port
 
 
-def host_runtime_client_environment(environment: dict[str, str]) -> dict[str, str]:
-    """Use the OS-user runtime record, never the disposable config root, for doctor."""
-    result = dict(environment)
-    result.pop("ATM_HOME", None)
-    return result
+def benchmark_runtime_client_environment(environment: dict[str, str]) -> dict[str, str]:
+    """Keep doctor bound to the disposable daemon that this runner launched.
+
+    The benchmark daemon receives its own ``ATM_HOME``.  Its public doctor
+    probe must use that same runtime selection; removing it instead queries an
+    unrelated ambient account daemon and can turn a healthy benchmark daemon
+    into a spurious warning result.
+    """
+    return dict(environment)
 
 
 def benchmark_doctor_payload(result: dict[str, object]) -> dict[str, object]:
@@ -1990,7 +1994,7 @@ def run_capacity(
         doctor = command_result(
             [str(atm), "doctor", "--json"],
             timeout=10.0,
-            env=host_runtime_client_environment(env),
+            env=benchmark_runtime_client_environment(env),
         )
         evidence["doctor"] = benchmark_doctor_payload(doctor)
         evidence["doctor_status"] = "passed"
