@@ -43,6 +43,19 @@ the socket transport.
    update, every configured endpoint healthy, and no aggregate `herdr.state`
    or `herdr.remedy`.
 
+## Official benchmark (once per release, not per sprint)
+
+Ruling (Rand, 2026-09-05): the benchmark sprints are pulled from Phase AY;
+the official benchmark runs here, once, on the release-readiness build.
+`just benchmark-official` from the dedicated benchmark account against the
+build under test; the published report directory is cited in the
+release-readiness report. A hot-path floor regression is a fix PR on develop
+under the normal process, not a phase or sprint reopen. Each run is a 4 to 8
+hour marathon (Rand via solar, 2026-09-06), which is why exactly one run
+exists. If the socket transport needs a benchmark that does not exist yet,
+its design may be a sprint following the established benchmark patterns;
+the run stays here.
+
 ## Matrix (both platforms unless noted)
 
 - prompt, wait, get, list, notify round trips (request and response JSON);

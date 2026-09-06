@@ -252,8 +252,8 @@ be amended and re-reviewed before implementation continues.
 6. `herdr-versions.md` contains complete NDJSON columns for every listed
    release from 0.8.0.
 7. The public-item pin contains exactly the three D9 additions.
-8. Removed (r24): the official benchmark runs once for the phase after AY.9,
-   in the phase-ending workflow (Rand via solar, 2026-09-06); no sprint gate.
+8. Removed (r24): the official benchmark runs once at release readiness on
+   the develop build (Rand, 2026-09-05); no sprint or phase gate.
 9. `gh pr view feature/ay8-herdr-socket-transport --json
    headRefName,baseRefName,state` reports base `integrate/phase-ay`; AY.8 is not
    linked into the implementation stack.

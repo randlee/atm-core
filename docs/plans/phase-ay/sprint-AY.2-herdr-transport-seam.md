@@ -256,8 +256,8 @@ all of those surfaces.
 6. CLI argv, PATH resolution, `HERDR_SESSION`, timeout, kill/reap, error mapping,
    and breaker behavior are byte-identical to the Phase AX oracle. No
    `HERDR_SOCKET_PATH` config behavior or config-validation API is introduced.
-7. Removed (r24): the official benchmark runs once for the phase after AY.9,
-   in the phase-ending workflow (Rand via solar, 2026-09-06); no sprint gate.
+7. Removed (r24): the official benchmark runs once at release readiness on
+   the develop build (Rand, 2026-09-05); no sprint or phase gate.
 8. `crates/atm-core/src/doctor/**`, `doctor_probe.rs`, both boundary inventory
    files, and atm-herdr's public exports are unchanged from the sprint base.
 9. The sprint meets the common phase merge gate: zero blocking, important, or

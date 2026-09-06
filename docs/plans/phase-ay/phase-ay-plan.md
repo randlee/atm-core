@@ -1099,13 +1099,9 @@ has merged with all three CI lanes green, the socket-default and
 explicit-CLI lifecycle suites passing, and the AY.8 equivalence suite
 unchanged, is recorded here and in `docs/project-plan.md`, chosen by Rand
 from exactly these. No live run is an input to this decision (ruling 5);
-the phase-ending critical review on the integrate head is. The
-phase-ending workflow also carries the phase's single official benchmark
-(`just benchmark-official --branch integrate/phase-ay` from the dedicated
-benchmark account, run once by fenix after AY.9 merges, in parallel with
-the five reviewers); a hot-path regression against the published floors
-is a fix PR on integrate/phase-ay, never a sprint reopen (Rand via solar,
-2026-09-06; closes AYP-R13-002).
+the phase-ending critical review on the integrate head is. The official
+benchmark is not part of this gate either: it runs once at release
+readiness on the develop build (Rand, 2026-09-05; closes AYP-R13-002).
 
 - **Ship**: AY.9 merged and its automated gates met; live macOS/Windows
   proof follows under release readiness.
@@ -1245,11 +1241,16 @@ AX does not wait on any AY sprint.
    site by test (AY.7); visual confirmation is a release-readiness row.
 5. Merge collision with AX: AY branches from phase-ax after AX.6 and
    merges forward after the phase-ax PR lands (P-A).
-6. Hot-path regression: exactly one official benchmark run for the phase,
-   after AY.9 merges, in the phase-ending workflow (below); never a sprint
-   gate. Ruling (Rand via solar, 2026-09-06): each `just benchmark-official`
-   run is a 4 to 8 hour marathon, so three sprint-level runs (12 to 24
-   hours) are not acceptable.
+6. Hot-path regression: the official benchmark runs once, at release
+   readiness on the develop build (`release-readiness-herdr-live-proof.md`),
+   never as a sprint or phase gate (Rand, 2026-09-05: "pull the benchmark
+   sprints and run those at production readiness"). Each
+   `just benchmark-official` run is a 4 to 8 hour marathon, so three
+   sprint-level runs (12 to 24 hours) are not acceptable (Rand via solar,
+   2026-09-06). If the socket transport needs a benchmark that does not
+   exist yet, its design (following the established benchmark patterns under
+   `docs/benchmarks/` and `site/reports/send-message-benchmark/`) may be a
+   sprint; the run is still release readiness.
 7. AY.9 (socket cutover) quietly dropped again: the exit gate requires a dated
    Ship/Defer/Cancel decision line before the phase PR.
 8. FastPC4 not ready: no sprint depends on it (ruling 5). Every sprint
@@ -1573,9 +1574,10 @@ AX does not wait on any AY sprint.
   (FAIL 1I/1m). AYP-R13-001 gap item 4 reworded: no Windows Herdr evidence
   is recorded in this repository; Rand's manual 1.5.0 CLI self-send is
   context, not denied (AY.1 D1 aligned). AYP-R13-002 closed by Rand's
-  ruling via solar: one official benchmark for the phase, after AY.9, in
-  the phase-ending workflow; `just benchmark-official` removed from AY.2,
-  AY.8, AY.9 gates; risk 6 rewritten. AYP-R13-003 Defer requires a cleanup
+  ruling: benchmark sprints pulled, one official benchmark at release
+  readiness on the develop build; `just benchmark-official` removed from
+  AY.2, AY.8, AY.9 gates; risk 6 rewritten; a new benchmark's design may be
+  a sprint, its run is not. AYP-R13-003 Defer requires a cleanup
   PR restoring CLI as the omitted-config default with a mechanical test.
   AYP-R13-004 Cancel inventory enumerated with build/test/absence gates.
   AYP-R13-005 transport decision recorded up front. AYP-R13-006 AY.7 D2

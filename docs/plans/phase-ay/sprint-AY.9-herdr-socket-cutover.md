@@ -206,9 +206,8 @@ Default precedes sessions sorted bytewise. On Windows `endpoint` is the full
 7. The AY.3 config-reader matrix includes omitted, `socket`, `cli`, unknown
    string, and unknown key; only the two supported values parse and 1.6.0 is
    the pinned CLI-removal release.
-8. Removed (r24): the official benchmark runs once for the phase after AY.9
-   merges, in the phase-ending workflow (Rand via solar, 2026-09-06); no
-   sprint gate.
+8. Removed (r24): the official benchmark runs once at release readiness on
+   the develop build (Rand, 2026-09-05); no sprint or phase gate.
 9. `gh pr view feature/ay9-herdr-socket-cutover --json
    headRefName,baseRefName,state` reports base `integrate/phase-ay` after both
    parent PRs merged; AY.9 is not linked into the implementation stack.
