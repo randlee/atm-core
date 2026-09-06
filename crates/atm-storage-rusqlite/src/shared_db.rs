@@ -205,6 +205,8 @@ pub(crate) fn opened_connection_count(target: &SharedDbTarget) -> usize {
 
 impl SharedDb {
     /// Runs one pure synchronous compatibility read on the shared read pool.
+    /// The fixed 10-second pool deadline is intentional for this legacy sync-compat surface;
+    /// Tokio request-level deadlines are enforced by the HTTP runtime adapters.
     ///
     /// The `MessageStore` and catalog ports predate their Tokio counterparts,
     /// so callers remain synchronous. They still enter a defensively opened,
@@ -225,6 +227,7 @@ impl SharedDb {
     }
 
     /// Runs a pure inspection read under the shared pool's tool-class cap.
+    /// Its fixed pool deadline is likewise intentional for the synchronous compatibility port.
     pub(crate) fn read_tool<T>(
         &self,
         operation: impl FnOnce(&Connection) -> Result<T, AtmError> + Send + 'static,
