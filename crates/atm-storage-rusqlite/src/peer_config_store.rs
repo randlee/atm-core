@@ -165,15 +165,17 @@ impl PeerConfigStore for SqlitePeerConfigStore {
     }
 
     fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, atm_storage::AtmError> {
-        let peer = self.db.with_connection(|connection| {
+        let db = Arc::clone(&self.db);
+        let host_key = host.clone();
+        let peer = self.db.read(move |connection| {
             connection
                 .query_row(
                     "SELECT fingerprint, enabled, https_port FROM peer_trusted_peers WHERE host = ?1",
-                    params![host.as_str()],
+                    params![host_key.as_str()],
                     |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, u16>(2)?)),
                 )
                 .optional()
-                .map_err(|error| self.db.error("failed to load trusted peer", error))
+                .map_err(|error| db.error("failed to load trusted peer", error))
         })?;
         peer.map(|(fingerprint, enabled, https_port)| {
             Ok(TrustedPeer {
