@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AXPE-PLANDOCS-R1-1788657753 (PR #1238, fix/ax-phase-end-plan-docs @ 2240fe906); fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1238#issuecomment-5556099225 Native id: AXPE-QA-110 (renumbered: AXPE-QA-110 collides with an existing phase-ax record).
+
+<urn:atm:triage:finding/AXPE-QA-112>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-112" ;
+  triage:title "phase-ax-plan.md frontmatter status still draft while project-plan.md says closeout" ;
+  triage:description "docs/plans/phase-ax/phase-ax-plan.md frontmatter carries status: draft while docs/project-plan.md section 55 (same PR) now reports phase closeout with AX.1-AX.6 merged and AX.7 superseded. Remediation: set the frontmatter status to the closeout state consistent with project-plan.md (body text unchanged)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "req-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T01:36:30Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T01:34:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-112/L5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-112/L5-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/phase-ax-plan.md" ;
+  triage:line 5 ;
+  triage:snippet "status: draft" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/ax-phase-end-plan-docs" ;
+  triage:headSha "2240fe906501251263e4a017ab13985fcf874500" ;
+  triage:occursIn <urn:atm:triage:worktree/L5/2240fe906501251263e4a017ab13985fcf874500> .
+
+<urn:atm:triage:worktree/L5/2240fe906501251263e4a017ab13985fcf874500>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-ax-phase-end-plan-docs" ;
+  triage:branch "fix/ax-phase-end-plan-docs" ;
+  triage:headSha "2240fe906501251263e4a017ab13985fcf874500" ;
+  triage:orderIndex 13 .
