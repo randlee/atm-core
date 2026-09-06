@@ -23,6 +23,21 @@ use crate::herdr_queue_wake::run_blocking;
 pub(crate) const HERDR_NOTIFY_DEADLINE: Duration = Duration::from_secs(5);
 pub(crate) const ESCALATION_RECIPIENT_CAP: usize = MAX_ESCALATION_RECIPIENTS;
 pub(crate) const MAX_BLOCKED_ESCALATIONS_PER_TICK: usize = 8;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum EscalationKind {
+    LeadNotified,
+    BlockedEscalated,
+}
+
+impl EscalationKind {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::LeadNotified => "lead_notified",
+            Self::BlockedEscalated => "blocked_escalated",
+        }
+    }
+}
 pub(crate) const BLOCKED_NOTIFY_MS: u64 = 60_000;
 pub(crate) const BLOCKED_RENOTIFY_MS: u64 = 600_000;
 
@@ -144,7 +159,7 @@ pub(crate) async fn escalate(
     team: &TeamName,
     mail_body: &str,
     notification: &EscalationNotification,
-    kind: &str,
+    kind: EscalationKind,
 ) -> EscalationOutcome {
     let targets = match load_escalation_targets(runtime, task_store, team).await {
         Ok(targets) => targets,
@@ -168,7 +183,7 @@ pub(crate) async fn escalate(
         event = "herdr_queue_poll_outcome",
         subsystem = "herdr_queue_wake",
         action = "escalation",
-        outcome = kind,
+        outcome = kind.as_str(),
         team = %team,
         lead_present = outcome.lead.is_some(),
         recipients_written = outcome.recipients_written,
@@ -310,14 +325,14 @@ async fn notify_only(
     herdr_process: &dyn HerdrProcessAdapter,
     team: &TeamName,
     notification: &EscalationNotification,
-    kind: &str,
+    kind: EscalationKind,
 ) -> EscalationOutcome {
     let notify_ok = notify(herdr_process, notification).await;
     tracing::info!(
         event = "herdr_queue_poll_outcome",
         subsystem = "herdr_queue_wake",
         action = "escalation",
-        outcome = kind,
+        outcome = kind.as_str(),
         team = %team,
         lead_present = false,
         recipients_written = 0,

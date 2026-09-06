@@ -13,7 +13,7 @@ pub use atm_storage::contract::{AckTransition, Message, MessageKey};
 pub use atm_storage::{
     AsyncTaskLedgerReader, BuiltInNudgeTemplateKind, DAEMON_ACTOR_NAME, EscalationScope,
     MAX_ESCALATION_RECIPIENTS, NudgeTemplateOverrideStore, ReadDeadline, ReminderOutcome,
-    TASK_STALLED_REMINDER_THRESHOLD, TaskEventRow, TaskRow, TaskStore,
+    TASK_STALLED_REMINDER_THRESHOLD, TaskEventKind, TaskEventRow, TaskRow, TaskStore,
     TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
 };
 
