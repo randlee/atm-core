@@ -241,7 +241,7 @@ def ci_icon(r: dict) -> str:
 
 
 def render_table(stack: dict, rows: list[dict], problems: list[str], notes: list[str], *, trunk_origin: str | None) -> str:
-    hdr = ["L", "PR", "sync", "merge", "CI"]
+    hdr = ["L", "PR", "rebase", "merge", "CI"]
     lines = [f"stack: {stack['branches'][-1]['name']} -> {stack['trunk']} @ {short(trunk_origin)}", ""]
     lines.append("| " + " | ".join(hdr) + " |")
     lines.append("|" + "|".join("---" for _ in hdr) + "|")
@@ -262,7 +262,7 @@ def render_table(stack: dict, rows: list[dict], problems: list[str], notes: list
 
 def legend() -> str:
     lines = []
-    lines.append("sync: ✅ base==parent head & local==origin==PR  🔄 local/origin/PR heads differ  ⚠️ needs rebase  ❓ unknown (--no-fetch)")
+    lines.append("rebase: ✅ not needed (base==parent head, local==origin==PR)  ⚠️ needed  🔄 local tracking stale: fetch+reset before any sync  ❓ unknown (--no-fetch)  🏁 merged")
     lines.append("merge: 🚀 clean  🚧 blocked/unstable  ⏪ behind  ❌ conflicting/dirty  ⏳ computing  📝 draft  ◎ queued  🏁 merged")
     lines.append("CI: ✅ success  ❌ failure  🌀 pending  — none")
     return "\n".join(lines)

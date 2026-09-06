@@ -50,7 +50,7 @@ its own per-branch lookups.
 ```
 stack: fix/aw-pool-read-migration -> integrate/phase-aw @ 0e640b20a
 
-| L | PR | sync | merge | CI |
+| L | PR | rebase | merge | CI |
 |---|---|---|---|---|
 | 1/2 | #1242 | ✅ | 🚧 | 🌀 |
 | 2/2 | #1244 | ✅ | 🚧 | 🌀 |
@@ -61,7 +61,7 @@ VERDICT: ✅ COHERENT - every base == parent head, every head pushed and on its 
 | Column | Source | Icons |
 |--------|--------|-------|
 | L | layer / stack depth, bottom first | |
-| sync | `gh stack view --json` `head`/`base`/`needsRebase`, `origin/<branch>` after one fetch, PR `headRefOid` | ✅ base==parent head and local==origin==PR · 🔄 local/origin/PR heads differ · ⚠️ needs rebase · ❓ unknown (`--no-fetch`) · 🏁 merged |
+| rebase | `gh stack view --json` `head`/`base`/`needsRebase`, `origin/<branch>` after one fetch, PR `headRefOid` | ✅ not needed (base==parent head and local==origin==PR) · ⚠️ needed · 🔄 local tracking stale, fetch+reset before any sync · ❓ unknown (`--no-fetch`) · 🏁 merged |
 | merge | one GraphQL query: `mergeable`, `mergeStateStatus`, `isDraft`; gh stack `isMerged`/`isQueued` | 🚀 clean · 🚧 blocked/unstable · ⏪ behind · ❌ conflicting/dirty · ⏳ computing · 📝 draft · ◎ queued · 🏁 merged |
 | CI | same query, `statusCheckRollup.state` of the head commit | ✅ success · ❌ failure · 🌀 pending · — none |
 
