@@ -256,8 +256,8 @@ all of those surfaces.
 6. CLI argv, PATH resolution, `HERDR_SESSION`, timeout, kill/reap, error mapping,
    and breaker behavior are byte-identical to the Phase AX oracle. No
    `HERDR_SOCKET_PATH` config behavior or config-validation API is introduced.
-7. The official benchmark exits zero against published floors, with no hot-path
-   regression.
+7. Removed (r24): the official benchmark runs once for the phase after AY.9,
+   in the phase-ending workflow (Rand via solar, 2026-09-06); no sprint gate.
 8. `crates/atm-core/src/doctor/**`, `doctor_probe.rs`, both boundary inventory
    files, and atm-herdr's public exports are unchanged from the sprint base.
 9. The sprint meets the common phase merge gate: zero blocking, important, or
@@ -269,8 +269,6 @@ all of those surfaces.
 - `cargo test -p atm-herdr`
 - `just validate`
 - `python3 .just/check_line_counts.py`
-- `just benchmark-official --branch integrate/phase-ay` from the dedicated
-  benchmark account; cite the generated published report in the PR.
 - `gh pr view feature/ay2-herdr-transport-seam --json
   headRefName,baseRefName,state` after the first child is linked, verifying
   AY.2 is the stack bottom and its PR targets `integrate/phase-ay`.

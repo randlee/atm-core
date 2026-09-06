@@ -107,7 +107,7 @@ socket_path = "/absolute/herdr-api-endpoint" # optional endpoint override
 ```
 
 ```rust
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)] // illustrative; the canonical DTO is AY.3's
 #[serde(rename_all = "snake_case")]
 pub enum HerdrTransportKind {
     Cli,
@@ -206,7 +206,9 @@ Default precedes sessions sorted bytewise. On Windows `endpoint` is the full
 7. The AY.3 config-reader matrix includes omitted, `socket`, `cli`, unknown
    string, and unknown key; only the two supported values parse and 1.6.0 is
    the pinned CLI-removal release.
-8. The official benchmark exits 0 against the published floors.
+8. Removed (r24): the official benchmark runs once for the phase after AY.9
+   merges, in the phase-ending workflow (Rand via solar, 2026-09-06); no
+   sprint gate.
 9. `gh pr view feature/ay9-herdr-socket-cutover --json
    headRefName,baseRefName,state` reports base `integrate/phase-ay` after both
    parent PRs merged; AY.9 is not linked into the implementation stack.
@@ -217,8 +219,6 @@ Default precedes sessions sorted bytewise. On Windows `endpoint` is the full
 
 - `just validate` on all three CI lanes.
 - Socket-default and CLI-fallback lifecycle suites on all three lanes.
-- `just benchmark-official --branch integrate/phase-ay` from the dedicated
-  benchmark account; cite the published report directory in the PR.
 - quality-mgr Final Quality Report: 0 blocking, 0 important, 0 minor in scope.
 
 ## Out of scope

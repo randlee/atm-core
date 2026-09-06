@@ -252,7 +252,8 @@ be amended and re-reviewed before implementation continues.
 6. `herdr-versions.md` contains complete NDJSON columns for every listed
    release from 0.8.0.
 7. The public-item pin contains exactly the three D9 additions.
-8. The official benchmark exits 0 against published hot-path floors.
+8. Removed (r24): the official benchmark runs once for the phase after AY.9,
+   in the phase-ending workflow (Rand via solar, 2026-09-06); no sprint gate.
 9. `gh pr view feature/ay8-herdr-socket-transport --json
    headRefName,baseRefName,state` reports base `integrate/phase-ay`; AY.8 is not
    linked into the implementation stack.
@@ -262,8 +263,6 @@ be amended and re-reviewed before implementation continues.
 - `just validate` on all three CI lanes.
 - `cargo test -p atm-herdr`.
 - `python3 .just/check_line_counts.py`.
-- `just benchmark-official --branch integrate/phase-ay` from the dedicated
-  benchmark account; cite the published report directory in the PR.
 - Compare the PR file list mechanically against C3.
 - quality-mgr Final Quality Report: 0 blocking, 0 important, 0 minor in scope.
 

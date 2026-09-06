@@ -147,26 +147,37 @@ mail. The notification carries endpoint state/remedy only, never `mail_body`.
 ```rust
 pub(crate) struct HerdrBreakerEscalationGate {
     last_escalated_opened_at: Option<IsoTimestamp>,
+    last_escalated_at: Option<IsoTimestamp>,
+    min_interval: Duration, // default 30 min; config key `herdr.escalation_min_interval_secs`
 }
 
 impl HerdrBreakerEscalationGate {
-    /// True exactly once for each distinct Open.opened_at value.
-    pub(crate) fn claim(&mut self, opened_at: IsoTimestamp) -> bool;
+    /// True at most once per distinct Open.opened_at value, and never
+    /// sooner than `min_interval` after the previous escalation (uses the
+    /// injected clock). A suppressed claim is logged with the next
+    /// eligible time.
+    pub(crate) fn claim(&mut self, opened_at: IsoTimestamp, now: IsoTimestamp) -> bool;
 }
 ```
 
 The state machine is explicit:
 
 ```text
-closed/half-open -- new Open(opened_at) --> claim true, remember opened_at
+closed/half-open -- new Open(opened_at) --> claim true, remember opened_at and now
 same Open(opened_at) --------------------> claim false
-later Open(new_opened_at) ---------------> claim true, replace remembered key
+later Open(new_opened_at), now - last_escalated_at <  min_interval --> claim false (suppressed, logged)
+later Open(new_opened_at), now - last_escalated_at >= min_interval --> claim true, replace both keys
 ```
 
-The gate does not count polling ticks. Restarting the ATM daemon may forget the
-in-memory notification key, but the durable mail record and escalation helper's
-existing task-store bookkeeping prevent message loss; the lifecycle fixture
-pins the permitted post-restart behavior. No prompt is automatically retried
+The gate does not count polling ticks. The interval bound is what stops a
+flapping endpoint from producing an unbounded mail storm: at most one
+escalation per `min_interval` per endpoint regardless of how many open
+cycles occur. Restarting the ATM daemon forgets the in-memory keys, so one
+repeat escalation for an outage that spans a restart is the accepted,
+documented behaviour (no durable idempotency store is added; low-code); the
+lifecycle fixtures pin it: L10 (daemon restart during one open outage
+yields exactly one additional escalation) and L11 (open-close-open flapping
+within `min_interval` yields exactly one escalation). No prompt is automatically retried
 when its submission outcome is unknown because prompt operations are not
 idempotent.
 
@@ -183,6 +194,8 @@ idempotent.
 | L7 | Desktop `notification show` fails | Lead and recipient mail writes remain, `notify_ok == false`, and no second escalation occurs for the same open timestamp |
 | L8 | Breaker is already open during doctor | `BreakerPolicy::Bypass` reports current endpoint state while separate breaker projection remains open |
 | L9 | Herdr starts after ATM has been running | First successful call after one backoff window closes breaker and queued work resumes without daemon restart |
+| L10 | ATM daemon restarts during one open outage | Exactly one additional escalation after restart; no further repeat while the same outage persists |
+| L11 | Endpoint flaps open-close-open five times inside `min_interval` (injected clock) | Exactly one escalation; suppressed claims logged with next eligible time |
 
 Every wait uses injected time/deadlines or existing bounded backoff controls;
 fixed sleeps and flaky retries are prohibited.

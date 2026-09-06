@@ -24,6 +24,25 @@ expectation is that macOS, Linux and Windows have the same feature set:
 the daemon talks to Herdr with one command set, over a Unix domain socket
 on macOS/Linux and over Herdr's named pipe on Windows.
 
+Transport decision (AYP-R13-005; recorded by fenix for Rand's approval
+with P-B; rulings 1 to 5 unchanged): the phase moves all three platforms
+to Herdr's native IPC (Unix domain socket, named pipe) rather than keeping
+the CLI process adapter as the permanent design, because the CLI
+transport spawns one `herdr` process per nudge and carries the failure
+classes that come with it: spawn latency on the hot path, argv size
+limits (randlee/atm-core#1193, one oversized message can trip the shared
+breaker), a per-spawn console window on Windows, orphaned children on
+timeout, and PATH/binary drift between `herdr` releases. Rejected
+alternatives: (a) CLI-only forever, which fixes Windows process
+correctness (AY.7) but keeps every class above on every platform; (b) atm
+owning or supervising Herdr, excluded by ruling 1. Compatibility
+ownership: AY.8's equivalence suite proves the socket client emits the
+same request set and error mapping as the CLI transport for every Herdr
+release at or above `HERDR_MINIMUM_VERSION`; AY.9 keeps the CLI transport
+as an explicit fallback for one minor release so a Herdr drift can be
+absorbed without a hotfix. AY.8 and AY.9 are therefore part of the parity
+phase, not a separate modernization.
+
 Post-mortem entry: filed as AW-READY-W1 (blocking) with a
 planning-process-improvement action (scope narrowings hidden inside ADR
 "not relied upon" lists or sprint deliverables must be surfaced to the
@@ -122,7 +141,13 @@ The real gaps:
 3. Untested Windows spawn concerns: `herdr.exe` discovery (configured
    path, PATH), console-window flash on every nudge (CREATE_NO_WINDOW),
    kill/reap on timeout (orphaned herdr.exe), stdout encoding.
-4. No live Windows Herdr deployment or evidence of any kind.
+4. No Windows Herdr evidence is recorded in this repository (no readiness
+   record, release note, or proof row names a Windows Herdr nudge). Rand's
+   manual atm 1.5.0 CLI self-send on Windows, reported in conversation, is
+   baseline context that this plan does not deny; it is not a recorded
+   matrix, has no process-behaviour coverage, and predates the socket and
+   named-pipe path. The gap is the recorded release-readiness matrix and
+   the process coverage, not the existence of any Windows run.
 5. No startup/failure model: the daemon has no stated behaviour for
    "Herdr not installed", "Herdr not running yet" or "Herdr crashed".
 
@@ -1074,20 +1099,42 @@ has merged with all three CI lanes green, the socket-default and
 explicit-CLI lifecycle suites passing, and the AY.8 equivalence suite
 unchanged, is recorded here and in `docs/project-plan.md`, chosen by Rand
 from exactly these. No live run is an input to this decision (ruling 5);
-the phase-ending critical review on the integrate head is.
+the phase-ending critical review on the integrate head is. The
+phase-ending workflow also carries the phase's single official benchmark
+(`just benchmark-official --branch integrate/phase-ay` from the dedicated
+benchmark account, run once by fenix after AY.9 merges, in parallel with
+the five reviewers); a hot-path regression against the published floors
+is a fix PR on integrate/phase-ay, never a sprint reopen (Rand via solar,
+2026-09-06; closes AYP-R13-002).
 
 - **Ship**: AY.9 merged and its automated gates met; live macOS/Windows
   proof follows under release readiness.
-- **Defer**: the socket cutover is deferred to a named phase, ADR-058 D3 amended to say
-  the CLI transport is the supported design until then; AY.8 code stays
-  behind explicit config.
+- **Defer**: the socket cutover is deferred to a named phase and ADR-058 D3
+  is amended to say the CLI transport is the supported design until then.
+  Because AY.9 has already made socket the omitted-config default, Defer
+  requires a pre-closure cleanup PR on integrate/phase-ay that restores
+  CLI as the omitted-config default, reverts AY.9's production composition
+  default and every user-document claim of socket default, and keeps the
+  socket transport only as explicit opt-in (`transport = "socket"`).
+  Mechanical gate for Defer: a test named `omitted_transport_selects_cli`
+  passes on the integrate head, and `atm doctor --json` on a
+  transport-less config reports `transport: cli` in the AY.3 snapshot.
 - **Cancel**: the AY.9 cutover is backed out, ADR-058 D3 rewritten to make the CLI
   transport the permanent design, and a cleanup PR merged before phase
-  closure that deletes `transport_socket.rs`, the fake socket server,
-  the `herdr_local_socket_client` ownership key, the AI.11 exemption
-  line and the NDJSON columns; the AY.8 and AY.9 sprint docs marked
-  superseded. The gate check for Cancel is mechanical: `test ! -e
-  crates/atm-herdr/src/transport_socket.rs` on the integrate head.
+  closure that reverts every AY.8 and AY.9 production artifact, not only
+  the named file: `transport_socket.rs` and the fake socket server; the
+  `HerdrIo` socket variant, its factory and the endpoint resolver with its
+  public types, pins and exports; the Tokio `net` feature; the `transport`
+  and `socket_path` configuration keys and their validation; the socket
+  values of the doctor `transport`/`endpoint` fields and their snapshots;
+  the `herdr_local_socket_client` ownership key, the AI.11 exemption line
+  and the NDJSON columns; operator documentation of the socket default.
+  The AY.8 and AY.9 sprint docs are marked superseded. Gate checks for
+  Cancel are mechanical on the integrate head: `test ! -e
+  crates/atm-herdr/src/transport_socket.rs`; `grep -rn
+  'HerdrTransportKind::Socket\|herdr_local_socket_client' crates
+  boundaries` returns nothing; the workspace builds and `just validate` is
+  green after the cleanup PR.
 
 The decision line has this exact shape, on its own line in this
 section, so quality-mgr can check it mechanically:
@@ -1198,7 +1245,11 @@ AX does not wait on any AY sprint.
    site by test (AY.7); visual confirmation is a release-readiness row.
 5. Merge collision with AX: AY branches from phase-ax after AX.6 and
    merges forward after the phase-ax PR lands (P-A).
-6. Hot-path regression: official benchmark run before merge (AY.2, AY.8, AY.9).
+6. Hot-path regression: exactly one official benchmark run for the phase,
+   after AY.9 merges, in the phase-ending workflow (below); never a sprint
+   gate. Ruling (Rand via solar, 2026-09-06): each `just benchmark-official`
+   run is a 4 to 8 hour marathon, so three sprint-level runs (12 to 24
+   hours) are not acceptable.
 7. AY.9 (socket cutover) quietly dropped again: the exit gate requires a dated
    Ship/Defer/Cancel decision line before the phase PR.
 8. FastPC4 not ready: no sprint depends on it (ruling 5). Every sprint
@@ -1518,3 +1569,21 @@ AX does not wait on any AY sprint.
   machine section; AX status (AX.7 superseded the same day). Every
   sprint doc's AY.10 reference retargeted. Same ruling closed phase AX's
   AX.7 live-proof sprint.
+- r24 (2026-09-06, fenix): solar R13 (6a98cdf11, FAIL 3B/5I) and scope r12
+  (FAIL 1I/1m). AYP-R13-001 gap item 4 reworded: no Windows Herdr evidence
+  is recorded in this repository; Rand's manual 1.5.0 CLI self-send is
+  context, not denied (AY.1 D1 aligned). AYP-R13-002 closed by Rand's
+  ruling via solar: one official benchmark for the phase, after AY.9, in
+  the phase-ending workflow; `just benchmark-official` removed from AY.2,
+  AY.8, AY.9 gates; risk 6 rewritten. AYP-R13-003 Defer requires a cleanup
+  PR restoring CLI as the omitted-config default with a mechanical test.
+  AYP-R13-004 Cancel inventory enumerated with build/test/absence gates.
+  AYP-R13-005 transport decision recorded up front. AYP-R13-006 AY.7 D2
+  bounded kill-then-reap with a delayed-exit test seam. AYP-R13-007 AY.4
+  C2 gains a minimum re-escalation interval and restart/flapping
+  scenarios. AYP-R13-008 AY.6 bounded completion policy (deadlines,
+  per-command timeouts, verify retry, codes, fixtures). AYS-R12-001 AY.7
+  D3 test file named (`crates/atm-herdr/tests/windows_process_confinement.rs`,
+  AY.7-owned; boundary_enforcement.rs untouched) and a "Required work and
+  exact targets" section added. AYS-R12 minor: AY.9 illustrative enum
+  derives aligned with AY.3.

@@ -164,6 +164,19 @@ reread doctor
 require selected endpoint.state.kind == ok
 ```
 
+Bounded completion policy (AYP-R13-008): the whole `--restart-herdr` run
+has one overall deadline (default 120 s, `--restart-timeout-secs`); every
+Herdr shell-out (`server live-handoff`, `server stop`, entry start) has a
+per-command timeout (default 30 s) after which the child is killed and
+reaped and the run fails with `HERDR_RESTART_TIMEOUT` naming the command;
+the post-relaunch doctor verification retries with bounded backoff (at most
+5 reads, 2 s, 4 s, 8 s, 8 s, 8 s, all within the overall deadline) and
+fails with `HERDR_RESTART_VERIFY_TIMEOUT` listing the last observed
+endpoint state. Both codes use the AY.5 exit class 4 and the C4 envelope.
+Fixtures: a hung command fake (never exits) proves the per-command bound;
+a slow-but-successful readiness fake (endpoint ok on the third read) proves
+retry without a false failure; both use injected time, no real sleeps.
+
 Every command is scoped: default uses `herdr server ...`; a session uses
 `herdr --session <name> server ...`. `live_handoff: null` means unknown and
 takes the stop branch. A handoff failure stops immediately because Herdr owns

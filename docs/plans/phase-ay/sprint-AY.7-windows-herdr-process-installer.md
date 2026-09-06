@@ -75,15 +75,29 @@ completion fails the sprint.
   LF and CRLF accepted.
 - [ ] D2 — every Windows CLI-transport spawn uses
   `CREATE_NO_WINDOW = 0x08000000`; timeout/cancellation follows the existing
-  kill-then-reap path and waits for the child after kill. A Windows CI test
-  spawns a long-running stand-in child (for example `cmd /c` with a `timeout`
-  longer than the deadline), hits the deadline, and asserts that kill and wait
-  both complete and `try_wait` reports the child exited; a unit test asserts
-  that the one spawn site applies `CREATE_NO_WINDOW`. The console-flash visual
-  check is a release-readiness row, not a sprint gate.
-- [ ] D3 — an architecture test fails if Windows-only process code for this
-  behavior appears outside `transport_cli.rs`. The public
-  `HerdrProcessAdapter` signatures and the `HerdrError` enum remain unchanged.
+  kill-then-reap path and waits for the child after kill, under a bounded
+  cleanup grace period (default 5 s, a `transport_cli.rs` constant): if kill
+  plus wait do not complete inside it, the operation ends with an
+  infrastructure-class `HerdrError` whose cause is `child_cleanup_timeout`
+  (no new public variant) and the child handle is dropped with a structured
+  log line naming the pid. A Windows CI test spawns a long-running stand-in
+  child (for example `cmd /c` with a `timeout` longer than the deadline),
+  hits the deadline, and asserts that kill and wait both complete and
+  `try_wait` reports the child exited; a second test uses the crate-private
+  child seam (a `ChildHandle` trait object the fake implements with a
+  delayed `wait`) to prove the grace period fires and the typed failure is
+  returned; a unit test asserts that the one spawn site applies
+  `CREATE_NO_WINDOW`. The console-flash visual check is a release-readiness
+  row, not a sprint gate.
+- [ ] D3 — an architecture test in the AY.7-owned file
+  `crates/atm-herdr/tests/windows_process_confinement.rs` fails if
+  Windows-only process code for this behavior (`creation_flags`,
+  `CREATE_NO_WINDOW`, `herdr.exe`, `cfg(windows)` process handling) appears
+  outside `crates/atm-herdr/src/transport_cli.rs`.
+  `crates/atm-architecture/tests/boundary_enforcement.rs` is not touched by
+  AY.7 (it is in AY.8's C3 allowlist; this keeps AY.7/AY.8 `parallel_safe`).
+  The public `HerdrProcessAdapter` signatures and the `HerdrError` enum
+  remain unchanged.
 - [ ] D4 — verify the Windows branches of AY.5 entry management and AY.6
   restart coordination in the Windows CI lane, running the real Windows
   branch code against the AY.5/AY.6 platform fakes for the privileged
@@ -130,7 +144,9 @@ let program = match config.binary_path.as_deref() {
 };
 let mut command = tokio::process::Command::new(program);
 command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-// On deadline/cancellation: child.kill().await, then child.wait().await.
+// On deadline/cancellation: kill then wait, both inside a 5 s cleanup grace
+// period; exceeding it returns an infrastructure HerdrError with cause
+// `child_cleanup_timeout` and logs the pid.
 ```
 
 The executable is resolved at call time for every `prompt`, `wait`, `get`,
@@ -154,7 +170,25 @@ bytewise. Under the CLI transport its `transport` is `cli` and `endpoint` is
 `null`; account/session mismatch is an ordinary doctor finding with code
 `HERDR_ENTRY_ACCOUNT_MISMATCH`, not a new `HerdrDoctorState` variant.
 
-## Required work
+## Required work and exact targets
+
+Files AY.7 may add or edit (anything else is a scope change):
+
+- `crates/atm-herdr/src/transport_cli.rs` (Windows branch only: path
+  resolution, `CREATE_NO_WINDOW`, UTF-8/CRLF decoding, bounded kill-then-reap,
+  the crate-private `ChildHandle` seam)
+- `crates/atm-herdr/tests/windows_process_confinement.rs` (new, D3)
+- `crates/atm-herdr/tests/windows_transport_cli.rs` (new, `cfg(windows)`
+  tests for D1/D2)
+- the Windows-branch test modules that AY.5 and AY.6 already name for the
+  entry control plane and restart coordination (platform fakes; no new
+  production paths)
+- `docs/atm-herdr/windows-process-audit.md` (D5)
+- `.github/workflows/*` only if the Windows CI lane needs the new test
+  binaries listed, with the diff quoted in the PR
+
+Not touched: `crates/atm-architecture/tests/boundary_enforcement.rs`,
+`transport_socket.rs`, any boundary TOML, `.just/lint-config.toml`.
 
 1. Keep every Windows process change inside `transport_cli.rs`, then close the
    path-resolution, no-window, UTF-8/CRLF, timeout, kill, and reap cases with
@@ -173,13 +207,17 @@ bytewise. Under the CLI transport its `transport` is `cli` and `endpoint` is
    consecutive calls, missing binary, UTF-8 LF, UTF-8 CRLF, and invalid UTF-8
    cases have deterministic Windows tests.
 3. Deadline and cancellation tests prove kill-then-reap in the Windows CI
-   lane (`try_wait` reports exit after kill and wait); the creation-flags test
-   proves `CREATE_NO_WINDOW` at the single spawn site.
+   lane (`try_wait` reports exit after kill and wait), the delayed-`wait`
+   seam test proves the 5 s cleanup grace period returns the typed
+   `child_cleanup_timeout` failure, and the creation-flags test proves
+   `CREATE_NO_WINDOW` at the single spawn site.
 4. Installer tests prove same-user logon tasks for default-only and default plus
    two named sessions, plus refusal and zero writes for service/session-0 and
    different-account configurations.
-5. The architecture test proves no `cfg(windows)` for this process behavior
-   exists outside `crates/atm-herdr/src/transport_cli.rs`.
+5. `crates/atm-herdr/tests/windows_process_confinement.rs` proves no
+   `cfg(windows)` process handling for this behavior exists outside
+   `crates/atm-herdr/src/transport_cli.rs`; `git diff <AY.6-head>..HEAD
+   --name-only` does not list `boundary_enforcement.rs` or any boundary TOML.
 6. Every audit value cites the dated Windows CI run URL and artifact name, or
    is marked `release readiness` for the cells only a live machine can fill;
    no cell remains `AY.7`, `TBD`, or an equivalent placeholder.

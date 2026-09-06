@@ -72,7 +72,9 @@ completion fails the sprint.
   action`, `production fix`, or `upstream request`). It includes the six ATM
   operations, the v0.8.0-to-v0.8.2 and v0.8.2-to-`3a822e81` drift, and the
   error-code differences. Windows-observed cells are explicitly marked
-  `AY.7`; this sprint must not imply that live Windows evidence exists.
+  `AY.7` or `release readiness`; this sprint must not claim recorded
+  Windows Herdr evidence beyond what the repository holds (Rand's manual
+  1.5.0 CLI self-send is context, not a recorded matrix).
 - [ ] D2 — Add `docs/atm-herdr/herdr-versions.md` as the compatibility ledger.
   It has one row per supported Herdr release beginning at 0.8.0, records
   `PROTOCOL_VERSION`, argv and JSON shapes for the six operations, material
