@@ -1,0 +1,117 @@
+{
+  "campaign_id": "20260906T193755Z-m5-atmbench",
+  "completed_at": "2026-09-06T19:38:06.347901Z",
+  "host_label": "m5-atmbench",
+  "os": "macos",
+  "phase": "ao2",
+  "results": [
+    {
+      "baseline": {
+        "p50_floor": 35000.0,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "8f6cb5e68dc37664ca669586ea73bcd38c1d5286e38ffde139fccbe4d6afb489",
+        "atm-daemon": "9d23d3e20569233dec06f3843c20b60b6a922e4b856385b2f1599efb57a32518"
+      },
+      "campaign_id": "20260906T193755Z-m5-atmbench",
+      "direct_sqlite_message_write": null,
+      "durability_after_restart": null,
+      "frames_per_connection": 0,
+      "generated_at": "2026-09-06T19:38:04.952433Z",
+      "host_label": "m5-atmbench",
+      "incomplete_reason": "benchmark snapshot phase failed: capacity doctor failed: summary status 'warning'; recovery: keep the benchmark daemon stopped and inspect retained snapshot staging material",
+      "messages_admitted": 0,
+      "messages_durable": 0,
+      "messages_requested": 0,
+      "metrics": null,
+      "os": "macos",
+      "schema_version": 4,
+      "source_revision": "cc9c4f2a6440e117057c8712e6d8f0d0d686372d",
+      "status": "INCOMPLETE",
+      "target": "sqlite"
+    },
+    {
+      "baseline": {
+        "p50_floor": 18000.0,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "8f6cb5e68dc37664ca669586ea73bcd38c1d5286e38ffde139fccbe4d6afb489",
+        "atm-daemon": "9d23d3e20569233dec06f3843c20b60b6a922e4b856385b2f1599efb57a32518"
+      },
+      "campaign_id": "20260906T193755Z-m5-atmbench",
+      "direct_sqlite_message_write": null,
+      "durability_after_restart": null,
+      "frames_per_connection": 8,
+      "generated_at": "2026-09-06T19:38:05.981748Z",
+      "host_label": "m5-atmbench",
+      "incomplete_reason": "benchmark snapshot phase failed: capacity doctor failed: summary status 'warning'; recovery: keep the benchmark daemon stopped and inspect retained snapshot staging material",
+      "messages_admitted": 0,
+      "messages_durable": 0,
+      "messages_requested": 0,
+      "metrics": null,
+      "os": "macos",
+      "schema_version": 4,
+      "source_revision": "cc9c4f2a6440e117057c8712e6d8f0d0d686372d",
+      "status": "INCOMPLETE",
+      "target": "uds"
+    },
+    {
+      "baseline": {
+        "p50_floor": 17000.0,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "8f6cb5e68dc37664ca669586ea73bcd38c1d5286e38ffde139fccbe4d6afb489",
+        "atm-daemon": "9d23d3e20569233dec06f3843c20b60b6a922e4b856385b2f1599efb57a32518"
+      },
+      "campaign_id": "20260906T193755Z-m5-atmbench",
+      "direct_sqlite_message_write": null,
+      "durability_after_restart": null,
+      "frames_per_connection": 8,
+      "generated_at": "2026-09-06T19:38:06.106631Z",
+      "host_label": "m5-atmbench",
+      "incomplete_reason": "benchmark snapshot phase failed: capacity doctor failed: summary status 'warning'; recovery: keep the benchmark daemon stopped and inspect retained snapshot staging material",
+      "messages_admitted": 0,
+      "messages_durable": 0,
+      "messages_requested": 0,
+      "metrics": null,
+      "os": "macos",
+      "schema_version": 4,
+      "source_revision": "cc9c4f2a6440e117057c8712e6d8f0d0d686372d",
+      "status": "INCOMPLETE",
+      "target": "tcp"
+    },
+    {
+      "baseline": {
+        "p50_floor": 13500.0,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "8f6cb5e68dc37664ca669586ea73bcd38c1d5286e38ffde139fccbe4d6afb489",
+        "atm-daemon": "9d23d3e20569233dec06f3843c20b60b6a922e4b856385b2f1599efb57a32518"
+      },
+      "campaign_id": "20260906T193755Z-m5-atmbench",
+      "direct_sqlite_message_write": null,
+      "durability_after_restart": null,
+      "frames_per_connection": 8,
+      "generated_at": "2026-09-06T19:38:06.227560Z",
+      "host_label": "m5-atmbench",
+      "incomplete_reason": "benchmark snapshot phase failed: capacity doctor failed: summary status 'warning'; recovery: keep the benchmark daemon stopped and inspect retained snapshot staging material",
+      "messages_admitted": 0,
+      "messages_durable": 0,
+      "messages_requested": 0,
+      "metrics": null,
+      "os": "macos",
+      "schema_version": 4,
+      "source_revision": "cc9c4f2a6440e117057c8712e6d8f0d0d686372d",
+      "status": "INCOMPLETE",
+      "target": "tcp-tls"
+    }
+  ],
+  "schema_version": 4,
+  "source_revision": "cc9c4f2a6440e117057c8712e6d8f0d0d686372d",
+  "started_at": "2026-09-06T19:37:55.185034Z",
+  "status": "INCOMPLETE"
+}
