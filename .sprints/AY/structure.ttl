@@ -9,7 +9,8 @@ triage:PhaseAY a triage:Phase .
 # AY.8 is a standalone join gated on AY.1+AY.2+AY.3 merged and P-E(b); AY.9 is the last
 # sprint, gated on AY.7+AY.8 merged. The cursor does not encode the wave gates; the
 # orchestrator checks must_follow merges (and P-E rulings for AY.3/AY.8) before dispatch.
-# Stack linking: `gh stack link --base integrate/phase-ay feature/ay2-...` on AY.2's first
+# Stack linking: gh stack link needs two args, so the stack is created on AY.3's first push
+# (gh stack link --base integrate/phase-ay 1269 feature/ay3-...; AY.2 is PR #1269) rather than AY.2's first
 # push (GitHub refuses zero-commit PRs), then `gh stack link <stack#> feature/ayN-...` per
 # subsequent sprint push. Never gh stack rebase/sync/merge; merge commits only.
 triage:AY1 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 1 ; triage:branch "feature/ay1-herdr-audit-docs" ; triage:criteria "docs/plans/phase-ay/sprint-AY.1-herdr-audit-docs.md" .
