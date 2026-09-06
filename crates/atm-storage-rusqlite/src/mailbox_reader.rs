@@ -27,14 +27,45 @@ impl MailboxReader {
         query: MessageQuery,
         deadline: ReadDeadline,
     ) -> Result<Vec<Message>, ReadLaneError> {
+        self.submit_list_with_class(scope, query, deadline, false)
+            .await
+    }
+
+    async fn submit_tool_list(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        self.submit_list_with_class(scope, query, deadline, true)
+            .await
+    }
+
+    async fn submit_list_with_class(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        deadline: ReadDeadline,
+        tool_class: bool,
+    ) -> Result<Vec<Message>, ReadLaneError> {
         if !scope.permits(&query) {
             return Err(ReadLaneError::UnauthorizedScope);
         }
-        self.pool
-            .submit(deadline.remaining(), move |connection, target| {
-                list_messages(connection, target, &scope, &query).map_err(read_lane_storage_error)
-            })
-            .await
+        if tool_class {
+            self.pool
+                .submit_tool(deadline.remaining(), move |connection, target| {
+                    list_messages(connection, target, &scope, &query)
+                        .map_err(read_lane_storage_error)
+                })
+                .await
+        } else {
+            self.pool
+                .submit(deadline.remaining(), move |connection, target| {
+                    list_messages(connection, target, &scope, &query)
+                        .map_err(read_lane_storage_error)
+                })
+                .await
+        }
     }
 
     async fn submit_load(
@@ -93,6 +124,15 @@ impl AsyncMailboxReader for MailboxReader {
         self.submit_list(scope, query, deadline).await
     }
 
+    async fn list_messages_for_tool(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        self.submit_tool_list(scope, query, deadline).await
+    }
+
     async fn load_message(
         &self,
         scope: MailboxScope,
@@ -122,13 +162,10 @@ impl AsyncMailboxReader for MailboxReader {
 impl atm_storage::contract::sealed::Sealed for MailboxReader {}
 
 pub(crate) fn read_lane_storage_error(error: AtmError) -> ReadLaneError {
-    ReadLaneError::Unavailable {
-        message: format!(
-            "{} (code: {:?}; cause: {})",
-            error.message(),
-            error.code(),
-            error.cause().unwrap_or("none")
-        ),
+    ReadLaneError::Storage {
+        code: error.code(),
+        message: error.message().to_owned(),
+        cause: error.cause().map(str::to_owned),
     }
 }
 

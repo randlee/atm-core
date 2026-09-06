@@ -395,9 +395,20 @@ impl ReadDeadline {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReadLaneError {
     UnauthorizedScope,
-    Saturated { reason: &'static str },
-    DeadlineExpired { stage: &'static str },
-    Unavailable { message: String },
+    Saturated {
+        reason: &'static str,
+    },
+    DeadlineExpired {
+        stage: &'static str,
+    },
+    Unavailable {
+        message: String,
+    },
+    Storage {
+        code: AtmErrorCode,
+        message: String,
+        cause: Option<String>,
+    },
 }
 
 impl fmt::Display for ReadLaneError {
@@ -415,6 +426,13 @@ impl fmt::Display for ReadLaneError {
             Self::Unavailable { message } => {
                 write!(formatter, "mailbox reader lane is unavailable: {message}")
             }
+            Self::Storage { message, cause, .. } => {
+                write!(formatter, "mailbox reader storage failure: {message}")?;
+                if let Some(cause) = cause {
+                    write!(formatter, "; cause: {cause}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -431,6 +449,7 @@ impl From<ReadLaneError> for AtmError {
             ReadLaneError::Saturated { .. } => AtmErrorCode::DaemonConnectionSaturated,
             ReadLaneError::DeadlineExpired { .. } => AtmErrorCode::MailboxLockTimeout,
             ReadLaneError::Unavailable { .. } => AtmErrorCode::DaemonUnavailable,
+            ReadLaneError::Storage { code, .. } => *code,
         };
         AtmError::new(code, "bounded mailbox reader lane request failed").with_cause(error)
     }
@@ -725,6 +744,21 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
         deadline: ReadDeadline,
     ) -> Result<Vec<Message>, ReadLaneError>;
 
+    /// Runs a bounded exploratory mailbox list through the tool-class slice
+    /// of the shared reader pool.
+    ///
+    /// Implementations that do not distinguish reader-pool classes retain
+    /// the ordinary read-only behavior. SQLite overrides this so operator and
+    /// CLI enumeration cannot consume every reader worker.
+    async fn list_messages_for_tool(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        self.list_messages(scope, query, deadline).await
+    }
+
     async fn load_message(
         &self,
         scope: MailboxScope,
@@ -923,6 +957,17 @@ pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError>;
+
+    /// Performs one bounded durable lease lookup. Implementations that own a
+    /// reader pool must apply `deadline` to the submitted read.
+    fn lookup_with_deadline(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        _deadline: Duration,
+    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+        self.lookup(team, agent)
+    }
 
     fn mark_unreachable(
         &self,

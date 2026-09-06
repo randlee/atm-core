@@ -54,3 +54,12 @@
   triage:branch "fix/aw-diagnostics-admission" ;
   triage:headSha "f3f5cd5fb" ;
   triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/AW-POOL-V9-QA-001/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-QA-001" ;
+  triage:resolutionNote "quality-mgr targeted re-verify at fix/aw-pool-read-migration@2748eb951 (rust-qa-agent, verified independently): fix commit bd379a1cc (route nudge override reads through reader pool) confirmed an ancestor of 2748eb951. load_template_override migration to self.db.read(...) no longer embeds a write; normalize_loaded_override_mode's legacy self-heal UPDATE was removed entirely. Regression test renamed sqlite_override_store_treats_legacy_empty_rows_as_disabled_without_writing, asserts underlying row stays mode='override' in storage while surfacing as Disabled in memory. Ran directly: 1 passed." ;
+  triage:resolvedAt "2026-09-06T04:45:26Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "2748eb951" ;
+  triage:resolvedBranch "fix/aw-pool-read-migration" .

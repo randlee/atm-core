@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, MutexGuard, RwLock};
 use std::time::{Duration, Instant};
 
 use atm_storage::{
@@ -40,6 +40,7 @@ enum WorkspaceConfigAccess {
 /// value for that same bounded interval preserves restart recovery: a missing
 /// refresh expires the snapshot and the next delivery re-reads durable state.
 const GRAFT_RECEIVER_LEASE_CACHE_TTL: Duration = Duration::from_secs(1);
+pub(crate) const GRAFT_RECEIVER_LEASE_LOOKUP_DEADLINE: Duration = Duration::from_secs(10);
 
 #[derive(Clone)]
 struct CachedGraftReceiverLease {
@@ -76,6 +77,32 @@ impl Default for GraftReceiverLeaseCache {
 }
 
 impl GraftReceiverLeaseCache {
+    fn wait_for_in_flight_load<'entry>(
+        entry: &'entry GraftReceiverLeaseEntry,
+        mut state: MutexGuard<'entry, GraftReceiverLeaseState>,
+        expires_at: Instant,
+    ) -> Result<MutexGuard<'entry, GraftReceiverLeaseState>, AtmError> {
+        while matches!(*state, GraftReceiverLeaseState::Loading) {
+            let remaining = expires_at.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(AtmError::daemon_unavailable(
+                    "graft receiver lease lookup exceeded its deadline",
+                ));
+            }
+            let (next_state, timeout) = entry
+                .changed
+                .wait_timeout(state, remaining)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state = next_state;
+            if timeout.timed_out() && matches!(*state, GraftReceiverLeaseState::Loading) {
+                return Err(AtmError::daemon_unavailable(
+                    "graft receiver lease lookup exceeded its deadline",
+                ));
+            }
+        }
+        Ok(state)
+    }
+
     fn entry(&self, key: &(TeamName, AgentName)) -> Arc<GraftReceiverLeaseEntry> {
         {
             let entries = self
@@ -129,11 +156,15 @@ impl GraftReceiverLeaseCache {
         &self,
         team: &TeamName,
         agent: &AgentName,
-        load: impl FnOnce() -> Result<Option<GraftReceiverLease>, AtmError>,
+        deadline: Duration,
+        load: impl FnOnce(Duration) -> Result<Option<GraftReceiverLease>, AtmError>,
     ) -> Result<Option<GraftReceiverLease>, AtmError> {
         let key = (team.clone(), agent.clone());
         let entry = self.entry(&key);
         let mut load = Some(load);
+        let expires_at = Instant::now().checked_add(deadline).ok_or_else(|| {
+            AtmError::daemon_unavailable("graft receiver lease deadline overflow")
+        })?;
 
         loop {
             let mut state = entry
@@ -145,12 +176,7 @@ impl GraftReceiverLeaseCache {
                     return Ok(cached.lease.clone());
                 }
                 GraftReceiverLeaseState::Loading => {
-                    while matches!(*state, GraftReceiverLeaseState::Loading) {
-                        state = entry
-                            .changed
-                            .wait(state)
-                            .unwrap_or_else(|poisoned| poisoned.into_inner());
-                    }
+                    drop(Self::wait_for_in_flight_load(&entry, state, expires_at)?);
                 }
                 GraftReceiverLeaseState::Cached(_) | GraftReceiverLeaseState::Empty => {
                     // Only this key's entry lock is held while loading. Other
@@ -159,9 +185,16 @@ impl GraftReceiverLeaseCache {
                     // cache-map write guard.
                     *state = GraftReceiverLeaseState::Loading;
                     drop(state);
+                    let remaining = expires_at.saturating_duration_since(Instant::now());
+                    if remaining.is_zero() {
+                        return Err(AtmError::daemon_unavailable(
+                            "graft receiver lease lookup exceeded its deadline",
+                        ));
+                    }
                     let result = load
                         .take()
                         .expect("each cache caller owns one durable lookup")(
+                        remaining
                     );
                     let mut state = entry
                         .state
@@ -215,6 +248,7 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         &self,
         _team: &TeamName,
         _agent: &AgentName,
+        _deadline: Duration,
     ) -> Result<Option<GraftReceiverLease>, AtmError> {
         Ok(None)
     }
@@ -782,13 +816,17 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         &self,
         team: &TeamName,
         agent: &AgentName,
+        deadline: Duration,
     ) -> Result<Option<GraftReceiverLease>, AtmError> {
         let Some(store) = &self.graft_receiver_endpoint_store else {
             return Ok(None);
         };
-        self.graft_receiver_lease_cache.load(team, agent, || {
-            store.lookup(team, agent).map_err(graft_store_error)
-        })
+        self.graft_receiver_lease_cache
+            .load(team, agent, deadline, |remaining| {
+                store
+                    .lookup_with_deadline(team, agent, remaining)
+                    .map_err(graft_store_error)
+            })
     }
 
     fn mark_graft_receiver_unreachable(
@@ -1048,7 +1086,7 @@ mod tests {
         for _ in 0..64 {
             assert_eq!(
                 cache
-                    .load(&team, &agent, || {
+                    .load(&team, &agent, Duration::from_secs(1), |_| {
                         durable_lookups.fetch_add(1, Ordering::Relaxed);
                         Ok(None)
                     })
@@ -1064,7 +1102,7 @@ mod tests {
 
         cache.invalidate(&team, &agent);
         cache
-            .load(&team, &agent, || {
+            .load(&team, &agent, Duration::from_secs(1), |_| {
                 durable_lookups.fetch_add(1, Ordering::Relaxed);
                 Ok(None)
             })
@@ -1078,7 +1116,7 @@ mod tests {
         let expiry_cache = GraftReceiverLeaseCache::with_ttl(Duration::ZERO);
         for _ in 0..2 {
             expiry_cache
-                .load(&team, &agent, || {
+                .load(&team, &agent, Duration::from_secs(1), |_| {
                     durable_lookups.fetch_add(1, Ordering::Relaxed);
                     Ok(None)
                 })
@@ -1107,7 +1145,7 @@ mod tests {
             let first_agent = agent.clone();
             let first = scope.spawn(move || {
                 first_cache
-                    .load(&first_team, &first_agent, || {
+                    .load(&first_team, &first_agent, Duration::from_secs(1), |_| {
                         first_started_tx.send(()).expect("announce first lookup");
                         release_first_rx.recv().expect("release first lookup");
                         Ok(None)
@@ -1119,7 +1157,10 @@ mod tests {
             let second_cache = Arc::clone(&cache);
             let second_agent = agent.clone();
             scope.spawn(move || {
-                let result = second_cache.load(&second_team, &second_agent, || Ok(None));
+                let result =
+                    second_cache.load(&second_team, &second_agent, Duration::from_secs(1), |_| {
+                        Ok(None)
+                    });
                 second_done_tx.send(result).expect("report second lookup");
             });
 
@@ -1237,16 +1278,21 @@ mod tests {
             let loader = scope.spawn(move || {
                 fixture
                     .cache
-                    .load(&fixture.team, &fixture.agent, || {
-                        // Reads durable state before the unregistration below
-                        // and returns after it: exactly the ordering that
-                        // would let a stale lease outlive the mutation.
-                        let lease = fixture.durable_read();
-                        lookup_started_tx.send(()).expect("announce durable lookup");
-                        release_lookup_rx.recv().expect("release durable lookup");
-                        returned.store(true, Ordering::SeqCst);
-                        Ok(lease)
-                    })
+                    .load(
+                        &fixture.team,
+                        &fixture.agent,
+                        Duration::from_secs(1),
+                        |_| {
+                            // Reads durable state before the unregistration below
+                            // and returns after it: exactly the ordering that
+                            // would let a stale lease outlive the mutation.
+                            let lease = fixture.durable_read();
+                            lookup_started_tx.send(()).expect("announce durable lookup");
+                            release_lookup_rx.recv().expect("release durable lookup");
+                            returned.store(true, Ordering::SeqCst);
+                            Ok(lease)
+                        },
+                    )
                     .expect("in-flight lease lookup")
             });
             lookup_started_rx
@@ -1256,9 +1302,12 @@ mod tests {
             // A second admission for the same receiver coalesces onto the
             // in-flight lookup instead of starting its own.
             scope.spawn(move || {
-                let result = fixture
-                    .cache
-                    .load(&fixture.team, &fixture.agent, || Ok(fixture.durable_read()));
+                let result = fixture.cache.load(
+                    &fixture.team,
+                    &fixture.agent,
+                    Duration::from_secs(1),
+                    |_| Ok(fixture.durable_read()),
+                );
                 waiter_done_tx
                     .send(result)
                     .expect("report coalesced waiter");
@@ -1321,7 +1370,12 @@ mod tests {
     fn assert_no_stale_lease_survives_the_invalidation(fixture: &LeaseRaceFixture) {
         let after_invalidation = fixture
             .cache
-            .load(&fixture.team, &fixture.agent, || Ok(fixture.durable_read()))
+            .load(
+                &fixture.team,
+                &fixture.agent,
+                Duration::from_secs(1),
+                |_| Ok(fixture.durable_read()),
+            )
             .expect("lookup after invalidation");
         assert_eq!(
             after_invalidation, None,

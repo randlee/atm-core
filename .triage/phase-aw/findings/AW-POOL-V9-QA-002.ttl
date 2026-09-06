@@ -59,3 +59,12 @@
   triage:branch "fix/aw-diagnostics-admission" ;
   triage:headSha "f3f5cd5fb1190e5eb66538b85229a1ede8e5d9cb" ;
   triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/AW-POOL-V9-QA-002/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-QA-002" ;
+  triage:resolutionNote "quality-mgr targeted re-verify at fix/aw-pool-read-migration@2748eb951 (rust-qa-agent, verified independently against contract.rs/mailbox_reader.rs directly): fix commit 2309b8dd9 (preserve reader failure causes) confirmed an ancestor of 2748eb951. ReadLaneError::Storage now carries a real cause: Option<String> field, populated via error.cause().map(str::to_owned) in read_lane_storage_error/storage_error(). Code preserved structurally; original driver-error text now survives into the outer AtmError.cause() (embedded in Display text, not a separate structured AtmError field). No dedicated unit test asserts the full round-trip -- noted as a minor non-blocking test-gap, not reopened as a finding. A3-branch occurrence (fix/aw-diagnostics-admission) still needs the equivalent fix or a merge-forward from A2 once A2 lands; not yet independently re-verified on A3." ;
+  triage:resolvedAt "2026-09-06T04:45:26Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "2748eb951" ;
+  triage:resolvedBranch "fix/aw-pool-read-migration" .

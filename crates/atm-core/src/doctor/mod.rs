@@ -443,12 +443,28 @@ fn graft_receivers_doctor_report(
     team: &TeamName,
     findings: &mut Vec<DoctorFinding>,
 ) -> GraftReceiversDoctorReport {
+    const LEASE_LOOKUP_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+    let lookup_started = std::time::Instant::now();
     let roster = runtime.load_team_roster(team);
     let now = chrono::Utc::now();
     let receivers = roster
         .into_iter()
         .filter_map(|member| {
-            let lease = match runtime.graft_receiver_lease(team, &member.agent_name) {
+            if lookup_started.elapsed() >= LEASE_LOOKUP_BUDGET {
+                findings.push(DoctorFinding {
+                    severity: DoctorSeverity::Warning,
+                    code: atm_storage::AtmErrorCode::DaemonUnavailable,
+                    message: "skipped graft-receiver lease lookups: doctor budget exhausted"
+                        .to_owned(),
+                    remediation: Some("Rerun `atm doctor` to inspect remaining leases.".to_owned()),
+                });
+                return None;
+            }
+            let lease = match runtime.graft_receiver_lease(
+                team,
+                &member.agent_name,
+                LEASE_LOOKUP_BUDGET.saturating_sub(lookup_started.elapsed()),
+            ) {
                 Ok(lease) => lease?,
                 Err(error) => {
                     push_doctor_error(findings, DoctorSeverity::Error, error);

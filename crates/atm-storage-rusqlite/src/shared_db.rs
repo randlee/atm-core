@@ -204,6 +204,56 @@ pub(crate) fn opened_connection_count(target: &SharedDbTarget) -> usize {
 }
 
 impl SharedDb {
+    /// Runs one pure synchronous compatibility read on the shared read pool.
+    /// The fixed 10-second pool deadline is intentional for this legacy sync-compat surface;
+    /// Tokio request-level deadlines are enforced by the HTTP runtime adapters.
+    ///
+    /// The `MessageStore` and catalog ports predate their Tokio counterparts,
+    /// so callers remain synchronous. They still enter a defensively opened,
+    /// bounded reader worker rather than the one serial writer connection.
+    pub(crate) fn read<T>(
+        &self,
+        operation: impl FnOnce(&Connection) -> Result<T, AtmError> + Send + 'static,
+    ) -> Result<T, AtmError>
+    where
+        T: Send + 'static,
+    {
+        self.read_with_deadline(self.read_pool.request_deadline(), operation)
+    }
+
+    /// Runs one pure synchronous read with the caller's bounded deadline.
+    pub(crate) fn read_with_deadline<T>(
+        &self,
+        deadline: std::time::Duration,
+        operation: impl FnOnce(&Connection) -> Result<T, AtmError> + Send + 'static,
+    ) -> Result<T, AtmError>
+    where
+        T: Send + 'static,
+    {
+        self.read_pool
+            .submit_blocking(deadline, move |connection, _target| {
+                Ok(operation(connection))
+            })
+            .map_err(AtmError::from)?
+    }
+
+    /// Runs a pure inspection read under the shared pool's tool-class cap.
+    /// Its fixed pool deadline is likewise intentional for the synchronous compatibility port.
+    pub(crate) fn read_tool<T>(
+        &self,
+        operation: impl FnOnce(&Connection) -> Result<T, AtmError> + Send + 'static,
+    ) -> Result<T, AtmError>
+    where
+        T: Send + 'static,
+    {
+        self.read_pool
+            .submit_tool_blocking(
+                self.read_pool.request_deadline(),
+                move |connection, _target| Ok(operation(connection)),
+            )
+            .map_err(AtmError::from)?
+    }
+
     /// Call only from backend-owned blocking code paths.
     ///
     /// Accepted risk: this is enforced as a crate-internal contract rather
