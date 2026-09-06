@@ -445,13 +445,7 @@ fn graft_receivers_doctor_report(
 ) -> GraftReceiversDoctorReport {
     const LEASE_LOOKUP_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
     let lookup_started = std::time::Instant::now();
-    let roster = match runtime.load_team_roster(team) {
-        Ok(roster) => roster,
-        Err(error) => {
-            push_doctor_error(findings, DoctorSeverity::Error, error);
-            return GraftReceiversDoctorReport::default();
-        }
-    };
+    let roster = runtime.load_team_roster(team);
     let now = chrono::Utc::now();
     let receivers = roster
         .into_iter()
