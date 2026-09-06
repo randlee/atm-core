@@ -1622,7 +1622,7 @@ Phase AX sprint status:
 | `AX.4` | B | after AX.3; parallel with AX.1/AX.2 | `planned` | `feature/ax4-task-cli-and-docs` | `docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md`, `docs/user-documents/tasks.md` |
 | `AX.5` | C | after A and B merge | `planned` | `feature/ax5-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md`, ADR-061 reminder-cycle section |
 | `AX.6` | C | after AX.5 | `planned` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
-| `AX.7` | D | after AX.6 merges | `planned` | none (proof on `integrate/phase-ax`) | `docs/plans/phase-ax/ax7-live-proof.md` |
+| `AX.7` | D | superseded 2026-09-05 (live proof moved to release readiness) | `superseded` | none | `docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md` |
 
 ## 56. Phase AY — Windows Herdr Parity And Socket/Pipe Transport [PLANNING — DRAFT, NOT APPROVED]
 
@@ -1630,18 +1630,19 @@ Phase AY restores the unapproved Windows scope-out in the Herdr integration
 and moves the same six-operation client contract to Herdr's Unix-domain
 socket on macOS/Linux and named pipe on Windows. It retains the CLI path as
 a bounded fallback, adds typed per-endpoint doctor and installer behavior,
-and closes with live evidence on macOS and FastPC4. It does not remodel the
+and leaves live macOS/Windows proof to release readiness (no sprint
+carries live evidence, Rand 2026-09-05). It does not remodel the
 legacy synchronous daemon: all composition work targets the Tokio/Axum
 `atm-http-runtime` cutover architecture.
 
-Ten sprints execute in a documentation lane, a linear implementation
-stack, an independent socket lane, a code join, and a proof sprint. AY.1
+Nine sprints execute in a documentation lane, a linear implementation
+stack, an independent socket lane, and a code join. AY.1
 runs in parallel with AY.2. The only stacked-PR chain is
 AY.2→AY.3→AY.4→AY.5→AY.6→AY.7, managed noninteractively with the
 `/gh-stack` skill. AY.8 starts independently only after AY.1, AY.2, and
 AY.3 merge; it is parallel-safe with AY.4–AY.7. AY.9 is the standalone
-AY.7+AY.8 code join. AY.10 starts only after AY.9 merges and captures
-live macOS/Windows proof from that merged integration head.
+AY.7+AY.8 code join and the phase's last sprint; the live macOS/Windows
+matrix runs under release readiness once the phase is on develop.
 
 The authoritative umbrella is
 [Phase AY plan](./plans/phase-ay/phase-ay-plan.md), with one
@@ -1657,10 +1658,9 @@ Phase AY sprint status:
 | `AY.4` | Core stack | after AY.3 development; parallel with AY.8 once eligible | `draft` | `feature/ay4-herdr-breaker-lifecycle` | `docs/plans/phase-ay/sprint-AY.4-herdr-breaker-lifecycle.md` |
 | `AY.5` | Core stack | after AY.4 development; parallel with AY.8 | `draft` | `feature/ay5-herdr-entry-control-plane` | `docs/plans/phase-ay/sprint-AY.5-herdr-entry-control-plane.md` |
 | `AY.6` | Core stack | after AY.5 development; parallel with AY.8 | `draft` | `feature/ay6-herdr-restart-coordination` | `docs/plans/phase-ay/sprint-AY.6-herdr-restart-coordination.md` |
-| `AY.7` | Core/Windows stack | after AY.6 development and P-C/P-D; parallel with AY.8 | `draft` | `feature/ay7-windows-herdr-process-installer` | `docs/plans/phase-ay/sprint-AY.7-windows-herdr-process-installer.md` |
+| `AY.7` | Core/Windows stack | after AY.6 development; Windows CI lane is the gate; parallel with AY.8 | `draft` | `feature/ay7-windows-herdr-process-installer` | `docs/plans/phase-ay/sprint-AY.7-windows-herdr-process-installer.md` |
 | `AY.8` | Socket | after AY.1/AY.2/AY.3 merge and P-E(b); parallel with AY.4–AY.7; standalone | `draft` | `feature/ay8-herdr-socket-transport` | `docs/plans/phase-ay/sprint-AY.8-herdr-socket-transport.md` |
 | `AY.9` | Join | after AY.7/AY.8 merge; standalone code cutover | `draft` | `feature/ay9-herdr-socket-cutover` | `docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md` |
-| `AY.10` | Proof | after AY.9 merge; standalone live proof | `draft` | `feature/ay10-herdr-live-proof` | `docs/plans/phase-ay/sprint-AY.10-herdr-live-proof.md` |
 
 ## Publishing Improvements
 

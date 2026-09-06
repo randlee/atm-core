@@ -199,7 +199,8 @@ the listed focused validation and any mandatory PR checks must pass.
 - No Rust, fixture, process, installer, transport, daemon, or composition-root
   implementation.
 - No live Windows observation or evidence campaign; AY.7 fills the audit
-  columns, and AY.10 owns the phase's live socket-transport evidence.
+  columns from Windows CI artifacts, and the live matrix is release
+  readiness (ruling 5).
 - No AY.2 fixture bytes in docs; this sprint records their manifest paths.
 - No public boundary inventory update; AY.3 owns both boundary files and their
   matching public-item pins.

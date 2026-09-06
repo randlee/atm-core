@@ -259,7 +259,8 @@ This is the authoritative validation list.
   JSON, and exit-code fixtures enabled.
 - [ ] V2 — Run isolated macOS/Linux platform-fake install -> status -> remove
   flows and assert object, registration, marker, digest, journal, and cleanup.
-  Windows is fixture-complete here; AY.7 owns live FastPC4 verification.
+  Windows is fixture-complete here; AY.7 runs the Windows branch in the
+  Windows CI lane.
 - [ ] V3 — `just lint spell` and `just lint adr-index` exit zero.
 - [ ] V4 — `just validate` exits zero.
 - [ ] V5 — `gh pr view feature/ay5-herdr-entry-control-plane --json
@@ -269,8 +270,8 @@ This is the authoritative validation list.
 ## Non-closure and out of scope
 
 - Coordinated Herdr restart and ATM restart preflight are AY.6.
-- Live Windows entry verification is AY.7; socket transport/cutover/proof are
-  AY.8–AY.10.
+- Windows entry verification in the Windows CI lane is AY.7; socket
+  transport/cutover are AY.8–AY.9.
 - This sprint never installs/updates the Herdr binary, directly executes
   `herdr server`, or probes whether Herdr is running. Platform registration may
   apply its native start-at-login behavior.

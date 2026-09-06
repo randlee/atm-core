@@ -236,5 +236,5 @@ This is the authoritative validation list.
 - Endpoint/config/doctor contracts are closed by AY.3 and are not redesigned.
 - Herdr entry install/remove/status/repair and restart coordination are AY.5
   and AY.6.
-- Windows process fixes are AY.7; socket transport/cutover/proof are AY.8–AY.10.
+- Windows process fixes are AY.7; socket transport/cutover are AY.8–AY.9.
 - No legacy synchronous-daemon runtime or dispatch work is permitted.

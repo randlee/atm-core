@@ -20,7 +20,7 @@ dependency_relations:
   - prerequisite: AY.6
     dependent: AY.7
     relation: must_follow
-    rationale: AY.7 implements and live-verifies the Windows CLI process and per-user entry/restart branches against the complete coordinated-restart contract delivered here.
+    rationale: AY.7 implements and CI-verifies the Windows CLI process and per-user entry/restart branches against the complete coordinated-restart contract delivered here.
   - prerequisite: AY.6
     dependent: AY.8
     relation: parallel_safe
@@ -104,7 +104,7 @@ completion fails the sprint.
 - [ ] D5 — Add complete selector/handoff/stop/relaunch/verification/preflight
   fixtures, exact JSON snapshots, grep gates, and operator documentation in the
   daemon-switch skill. All platform argv and identifiers are asserted; AY.7
-  owns live Windows execution.
+  owns Windows execution in the Windows CI lane.
 
 ### Paths to delete
 
@@ -256,7 +256,7 @@ This is the authoritative validation list.
 ## Non-closure and out of scope
 
 - Herdr binary installation and upgrade remain operator-owned Herdr actions.
-- Live Windows restart verification is AY.7; socket transport/cutover/proof are
-  AY.8–AY.10.
+- Windows restart verification in the Windows CI lane is AY.7; socket
+  transport/cutover are AY.8–AY.9.
 - This sprint does not select, add, or remove a Herdr transport.
 - No legacy synchronous-daemon runtime or dispatch work is permitted.

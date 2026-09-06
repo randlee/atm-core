@@ -21,10 +21,6 @@ dependency_relations:
     dependent: AY.9
     relation: must_follow
     rationale: the direct socket and named-pipe implementation and equivalence suite must merge before production composition selects it.
-  - prerequisite: AY.9
-    dependent: AY.10
-    relation: must_follow
-    rationale: AY.10 captures live proof only after the cutover, fallback, doctor projection, and lifecycle suite have merged into the integration branch.
 ---
 
 # AY.9 — Herdr socket cutover, doctor projection, and lifecycle validation
@@ -32,7 +28,9 @@ dependency_relations:
 Select the AY.8 socket transport in the Tokio/Axum production composition,
 make it the default with an explicit one-minor CLI fallback, and close its
 configuration, doctor, and automated lifecycle contracts on all three CI
-lanes. Live macOS/Windows operator proof and phase disposition are AY.10.
+lanes. AY.9 is the phase's last sprint; live macOS/Windows operator proof
+is release readiness after the phase lands on develop (ruling 5), and the
+phase disposition is taken on AY.9's automated gates.
 
 ## Dispatch and PR topology
 
@@ -81,8 +79,9 @@ completion fails the sprint.
   or atm-daemon-bootstrap.
 - [ ] D5 — update the Herdr configuration reference and operator documentation
   with the closed C1 values, socket default, explicit CLI fallback, no-silent-
-  fallback rule, and doctor transport/endpoint fields. The docs name AY.10 as
-  the live release-readiness gate; they do not claim live proof in AY.9.
+  fallback rule, and doctor transport/endpoint fields. The docs name the
+  release-readiness checklist as the live gate; they do not claim live proof
+  in AY.9.
 - [ ] D6 — tests and automated gates under Required validation pass on the
   branch and all three CI lanes. AY.9 contains no operator-authored live
   evidence and does not record the phase disposition.
@@ -184,7 +183,7 @@ Default precedes sessions sorted bytewise. On Windows `endpoint` is the full
    suites on every CI platform.
 3. Align doctor snapshots and operator docs with the canonical tagged schema,
    record the atm 1.6.0 fallback-removal obligation, and keep all live evidence
-   out of this coding sprint.
+   out of this sprint (ruling 5).
 
 ## Acceptance criteria
 
@@ -212,7 +211,7 @@ Default precedes sessions sorted bytewise. On Windows `endpoint` is the full
    headRefName,baseRefName,state` reports base `integrate/phase-ay` after both
    parent PRs merged; AY.9 is not linked into the implementation stack.
 10. No path under `docs/plans/phase-ay/evidence/` is added or changed by AY.9;
-   AY.10 remains the sole live-proof sprint.
+   no sprint carries live evidence.
 
 ## Required validation
 
@@ -226,7 +225,8 @@ Default precedes sessions sorted bytewise. On Windows `endpoint` is the full
 
 - New Herdr capabilities or a change to Herdr's protocol.
 - Removing the CLI fallback in the same release as cutover.
-- Live macOS/Windows proof and the phase disposition (AY.10).
+- Live macOS/Windows proof (release readiness) and the phase disposition
+  (Rand, on AY.9's automated gates and the phase-ending review).
 - Any patch, hardening, or remodeling of the legacy synchronous daemon. D1 is
   exclusively the Tokio/Axum `atm-http-runtime` composition path planned for
   the AL.5–AL.7 cutover; legacy dispatch remains frozen for Phase AM deletion.

@@ -271,7 +271,8 @@ be amended and re-reviewed before implementation continues.
 
 - Selecting or defaulting to the socket transport (AY.9).
 - Production composition changes under `atm-daemon-bootstrap` (AY.9).
-- Doctor projection changes (AY.9) or live platform evidence (AY.10).
+- Doctor projection changes (AY.9) or live platform evidence (release
+  readiness, ruling 5).
 - Removing the CLI transport or its ownership keys.
 - Any patch, hardening, or remodeling of the legacy synchronous daemon. The
   eventual selection point remains the Tokio/Axum `atm-http-runtime` path.

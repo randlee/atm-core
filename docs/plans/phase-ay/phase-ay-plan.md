@@ -63,13 +63,23 @@ atm own Herdr and gated the daemon on Herdr being reachable.
    the binary path, defaulting to Herdr's own defaults, passes them to
    the child exactly as HR-CORE-006 already specifies, and doctor reports
    them with their provenance.
-5. **Herdr over the CLI transport works today; prove Windows once, on the
-   target transport** (Rand, 2026-09-05, r19). No sprint runs a live
-   Windows evidence campaign for the CLI transport. AY.7 is limited to
-   Windows process correctness in `transport_cli.rs`, the Windows branch
-   of the installer, and the audit columns; the single live Windows Herdr
-   evidence set of the phase is AY.10's, on the socket transport after the
-   AY.9 cutover has merged.
+5. **No sprint carries live evidence** (Rand, 2026-09-05, r19 and r23:
+   "I don't want a sprint including live evidence"; "we have release
+   readiness, we have phase-ending review"). Herdr over the CLI transport
+   works today. No AY sprint has a live run, an operator-captured
+   artifact, or a physical machine as a deliverable, acceptance criterion,
+   precondition, or merge gate. Sprint gates are code, tests, fixtures,
+   fakes, and the three CI lanes. Phase quality is gated by the
+   phase-ending critical review (the five reviewers on the integrate head
+   plus quality-mgr `review_mode: phase_end`). Live macOS/Windows proof of
+   the socket transport is release readiness on the develop/release build,
+   using the checklist in
+   [`release-readiness-herdr-live-proof.md`](./release-readiness-herdr-live-proof.md);
+   it never blocks a sprint or the phase PR. AY.7 is Windows process
+   correctness in `transport_cli.rs`, the Windows branch of the installer
+   control plane, and the audit columns, all proven in the Windows CI
+   lane. Phase AX's AX.7 live-proof sprint was superseded on the same
+   ruling.
 
 ## Baseline: the phase-ax Herdr contract is the starting point
 
@@ -900,7 +910,7 @@ User-experience contract (AY.3 through AY.6 acceptance, verified by req-qa):
 
 ## Sprint map, parallel tracks and stacking
 
-Ten sprints, numbered sequentially. Each row maps to exactly one
+Nine sprints, numbered sequentially. Each row maps to exactly one
 authoritative sprint file. Relations follow
 `.claude/skills/plan-hardening/sprint-planning-guidelines.md`:
 `must_follow` names a development/merge dependency, while
@@ -915,10 +925,9 @@ contracts, artifacts, and ownership.
 | AY.4 | Breaker escalation and real-composition failure/recovery lifecycle | M | Core stack | AY.3 | AY.8 | macOS/Linux + Windows CI |
 | AY.5 | Transactional Herdr entry install/remove/status/repair | M | Core stack | AY.4 | AY.8 | macOS/Linux + platform fakes |
 | AY.6 | Coordinated Herdr restart/live-handoff and ATM-restart preflight | M | Core stack | AY.5 | AY.8 | macOS/Linux + platform fakes |
-| AY.7 | Windows process correctness and installer verification | S | Core/Windows stack | AY.6, P-C, P-D | AY.8 | FastPC4 |
+| AY.7 | Windows process correctness and installer Windows branch | S | Core/Windows stack | AY.6 | AY.8 | Windows CI lane |
 | AY.8 | Direct socket/pipe transport, fake server, compatibility/equivalence | L | Socket | AY.1, AY.2, AY.3, P-E(b) | AY.4, AY.5, AY.6, AY.7 | macOS/Linux + Windows CI |
 | AY.9 | Socket-default cutover, CLI fallback, doctor projection, lifecycle/CI | M | Join | AY.7, AY.8 | none | all CI lanes |
-| AY.10 | Live macOS/Windows proof and phase disposition | S | Proof | AY.9, P-C, P-D | none | rand-m5 + FastPC4 |
 
 Execution waves are explicit:
 
@@ -930,9 +939,8 @@ Execution waves are explicit:
 | 4 | AY.4 and AY.8 | AY.8 starts independently only after AY.1, AY.2, and AY.3 merge and P-E(b) is approved. |
 | 5 | AY.5 and AY.8 | AY.5 stays in the linear stack; AY.8 remains an independent sibling. |
 | 6 | AY.6 and AY.8 | Same independent concurrency; neither branch merges the unmerged sibling. |
-| 7 | AY.7 and AY.8 | AY.7 also requires P-C/P-D and FastPC4; AY.8 has no physical-host gate. |
-| 8 | AY.9 | Starts from `integrate/phase-ay` only after AY.7 and AY.8 merge. |
-| 9 | AY.10 | Starts only after AY.9 merges; proof uses that merged integration SHA. |
+| 7 | AY.7 and AY.8 | Neither has a physical-host gate; AY.7's gate is the Windows CI lane (ruling 5). |
+| 8 | AY.9 | Starts from `integrate/phase-ay` only after AY.7 and AY.8 merge; the last sprint. |
 
 The sole linear stack is AY.2 -> AY.3 -> AY.4 -> AY.5 -> AY.6 ->
 AY.7. Use the `/gh-stack` skill for every operation on that stack.
@@ -966,10 +974,9 @@ rebase`, `gh stack sync`, or `gh stack merge`; do not force-push; merge
 each PR in dependency order with `gh pr merge --merge`.
 
 AY.1 is standalone. AY.8 is a standalone three-parent join created from
-the merged integration head; AY.9 is a standalone two-parent join; AY.10
-is a standalone proof sprint that must observe the merged AY.9 head.
-None is passed to `gh stack link`, and no unmerged sibling is ever merged
-into one of those branches.
+the merged integration head; AY.9 is a standalone two-parent join and the
+phase's last sprint. None is passed to `gh stack link`, and no unmerged
+sibling is ever merged into one of those branches.
 
 The sprint files below are authoritative. Each has mandatory YAML
 frontmatter with exact scalar branch/worktree/stack-parent/PR-target
@@ -987,7 +994,10 @@ umbrella:
 - [`sprint-AY.7-windows-herdr-process-installer.md`](./sprint-AY.7-windows-herdr-process-installer.md)
 - [`sprint-AY.8-herdr-socket-transport.md`](./sprint-AY.8-herdr-socket-transport.md)
 - [`sprint-AY.9-herdr-socket-cutover.md`](./sprint-AY.9-herdr-socket-cutover.md)
-- [`sprint-AY.10-herdr-live-proof.md`](./sprint-AY.10-herdr-live-proof.md)
+
+Not a sprint: [`release-readiness-herdr-live-proof.md`](./release-readiness-herdr-live-proof.md)
+is the live macOS/Windows checklist run under release readiness after the
+phase lands on develop (ruling 5).
 
 Common preconditions:
 
@@ -1000,7 +1010,8 @@ Common preconditions:
   integrate/phase-ay` exits 0 (owner: fenix). AYS-R2-002 read a stale
   checkout; the fact stands, and this check makes it verifiable.
 - P-B: this plan is approved by Rand (dated line in this file).
-- P-C: the FastPC4 Windows `atm-dev` team exists with Herdr installed via
+- P-C (release-readiness prerequisite, not a sprint precondition; no AY
+  sprint waits on it, ruling 5): the FastPC4 Windows `atm-dev` team exists with Herdr installed via
   the official installer and its parked reporter agent has delivered one
   round-trip report to rand-m4 or rand-m5. Owner: Rand. Network
   prerequisite (fenix@rand-m4, 2026-09-05T20:36Z, confirmed by Rand):
@@ -1010,7 +1021,8 @@ Common preconditions:
   on the dispatching Mac, then ATM trust entries both ways; Rand can
   bring the VPN up on request, so the proof is on demand once the team
   is installed; target date: set by Rand in this line when known.
-- P-D: the Windows dev agent is named here (ATM identity on the FastPC4
+- P-D (release-readiness prerequisite, same status as P-C): the Windows
+  operator agent is named here (ATM identity on the FastPC4
   team, agent kind) by Rand. Dispatch path (Rand, 2026-09-05): Rand
   establishes the VPN connection; fenix (the atm team on rand-m5) then
   sshes into FastPC4 without a password and manages a remote Herdr pane
@@ -1045,33 +1057,35 @@ Common preconditions:
   `io_forbidden` is unchanged. The two CLI keys are dropped in the sprint
   that removes the CLI fallback (atm 1.6.0, after AY.9), not in AY.8.
 
-Approval blocker (AYP-R2-011): P-C's readiness proof (date and ATM
-message id of the reporter's first round-trip) and P-D's exact FastPC4
-ATM identity are placeholders until Rand fills them. Plan approval
-(P-B) requires both filled or an explicit dated line from Rand deferring
-AY.7/AY.10 scheduling; AY.7 is never dispatched on a placeholder.
+AYP-R2-011 (approval blocker on P-C/P-D placeholders) is closed by
+ruling 5 (r23): no sprint depends on P-C or P-D, so plan approval (P-B)
+does not wait on them. They gate only the release-readiness checklist,
+which is scheduled by Rand outside this phase.
 
 Common acceptance for every sprint: merge gate 0 blocking / 0 important /
 0 minor in scope, quality-mgr PASS posted on the PR, CI green at merge
 time (never a dispatch gate), no flaky-test tolerance, frozen files
 untouched without a written ruling, no tokio in atm-core.
 
-## Phase AY exit gate (AY.10 disposition)
+## Phase AY exit gate (AY.9 disposition)
 
-Phase AY is not complete until a dated decision in AY.10, after the socket
-cutover and live matrix,
-is recorded here and in `docs/project-plan.md`, chosen by Rand from
-exactly these:
+Phase AY is not complete until a dated decision, after the AY.9 cutover
+has merged with all three CI lanes green, the socket-default and
+explicit-CLI lifecycle suites passing, and the AY.8 equivalence suite
+unchanged, is recorded here and in `docs/project-plan.md`, chosen by Rand
+from exactly these. No live run is an input to this decision (ruling 5);
+the phase-ending critical review on the integrate head is.
 
-- **Ship**: AY.9 merged and AY.10 live acceptance met.
-- **Defer**: the live cutover proof is deferred to a named phase, ADR-058 D3 amended to say
+- **Ship**: AY.9 merged and its automated gates met; live macOS/Windows
+  proof follows under release readiness.
+- **Defer**: the socket cutover is deferred to a named phase, ADR-058 D3 amended to say
   the CLI transport is the supported design until then; AY.8 code stays
   behind explicit config.
 - **Cancel**: the AY.9 cutover is backed out, ADR-058 D3 rewritten to make the CLI
   transport the permanent design, and a cleanup PR merged before phase
   closure that deletes `transport_socket.rs`, the fake socket server,
   the `herdr_local_socket_client` ownership key, the AI.11 exemption
-  line and the NDJSON columns; the AY.8 through AY.10 sprint docs marked
+  line and the NDJSON columns; the AY.8 and AY.9 sprint docs marked
   superseded. The gate check for Cancel is mechanical: `test ! -e
   crates/atm-herdr/src/transport_socket.rs` on the integrate head.
 
@@ -1152,12 +1166,12 @@ Consequences for atm:
 
 ## Ordering with phase AX
 
-Status 2026-09-05 (fenix@rand-m5): AX.1 through AX.5 are merged into
-integrate/phase-ax; AX.6 (PR #1204) is in its second fix pass; AX.7
-(PR #1206, stacked on AX.6) is the macOS live-proof sprint and keeps its
-own accepted scope (Windows runs are out of AX.7 scope and stay so; AY.9
-does not inherit that proof; AY.10 owns Windows evidence, ruling 5). One PR integrate/phase-ax -> develop follows
-AX.7 and the phase-ending review.
+Status 2026-09-06 (fenix@rand-m5): AX.1 through AX.6 are merged into
+integrate/phase-ax; AX.7 (the macOS live-proof sprint, PR #1206) was
+superseded on 2026-09-05 under ruling 5 and its matrix moved to release
+readiness; the task-state-machine ADR was renumbered to ADR-062 on
+integrate/phase-ax; a develop freshness merge and the phase-ending review
+are in progress; one PR integrate/phase-ax -> develop follows them.
 
 Decision (Rand, 2026-09-05): `integrate/phase-ay` is cut from
 `integrate/phase-ax` after PR #1204 has merged into it, or from develop if
@@ -1178,19 +1192,20 @@ AX does not wait on any AY sprint.
    adopted.
 2. Transport extraction silently changes macOS/Linux behaviour:
    pure-motion commit, unedited fixtures, boundary tests unchanged.
-3. Orphaned herdr.exe after timeout: explicit live-verified test (AY.7).
-4. Console flash per nudge: CREATE_NO_WINDOW plus visual confirmation
-   (AY.7).
+3. Orphaned herdr.exe after timeout: deterministic kill-then-reap test in
+   the Windows CI lane (AY.7).
+4. Console flash per nudge: CREATE_NO_WINDOW asserted at the single spawn
+   site by test (AY.7); visual confirmation is a release-readiness row.
 5. Merge collision with AX: AY branches from phase-ax after AX.6 and
    merges forward after the phase-ax PR lands (P-A).
 6. Hot-path regression: official benchmark run before merge (AY.2, AY.8, AY.9).
-7. AY.9/AY.10 (socket cutover and proof) quietly dropped again: the exit gate requires a dated
+7. AY.9 (socket cutover) quietly dropped again: the exit gate requires a dated
    Ship/Defer/Cancel decision line before the phase PR.
-8. FastPC4 not ready: only AY.7 and AY.10 depend on it (P-C/P-D), and
-   AY.10 waits for AY.9. AY.1 through AY.6 and AY.8 land without a physical
-   Windows machine; AY.9 waits for the AY.7 Windows implementation gate,
-   and the phase cannot close with Windows parity claimed until AY.10's
-   Windows evidence exists (ruling 5).
+8. FastPC4 not ready: no sprint depends on it (ruling 5). Every sprint
+   lands on the three CI lanes; the Windows CI lane is AY.7's gate. Only
+   the release-readiness checklist needs FastPC4 (P-C/P-D), so a claim of
+   Windows Herdr parity in release notes waits on that checklist, never
+   the phase PR.
 9. Two launchers race at login (atm-installed Herdr entry vs a GUI Herdr
    the user opens): the entry has no KeepAlive, the loser exits 1 once,
    the GUI attaches as a client to whichever server won, and the daemon
@@ -1207,12 +1222,13 @@ AX does not wait on any AY sprint.
 
 ## Windows machine and team (Rand, 2026-09-05)
 
-- Windows testing runs on **FastPC4**. Rand will set up a Windows
-  `atm-dev` team on FastPC4; AY.7 dev work (including filling the
-  Windows-observed audit rows) and AY.10's live-evidence matrix
-  (the phase's only evidence owner, ruling 5) both execute there, inside
-  a Herdr session, with the daemon and Herdr installed per-user by
-  `daemon-switch`.
+- Live Windows verification runs on **FastPC4** under release readiness,
+  not in any sprint (ruling 5). Rand will set up a Windows `atm-dev` team
+  on FastPC4; the release-readiness checklist executes there inside a
+  Herdr session, with the daemon and Herdr installed per-user by
+  `daemon-switch`. AY.7 dev work runs wherever the dev agent sits and is
+  gated by the Windows CI lane; its audit rows are filled from CI
+  artifacts.
 - Cross-host messaging from FastPC4 has been unreliable because of VPN
   issues. Design: park one agent on the FastPC4 team whose only job is
   to report back regularly (on a fixed cadence and on every sprint
@@ -1223,8 +1239,8 @@ AX does not wait on any AY sprint.
   evidence. Outbound dispatch to FastPC4 is fenix's j2 assignment sent
   to the named dev agent (P-D); when the link is down, the reporter's
   next report carries the last assignment id it saw and fenix re-sends.
-- The Windows CI job stays the merge gate; FastPC4 evidence is the
-  release-readiness gate for Windows Herdr parity.
+- The Windows CI job is the only Windows merge gate; FastPC4 evidence is
+  the release-readiness gate for claiming Windows Herdr parity.
 - cwin remains routed through Rand; nothing is dispatched to FastPC4
   directly from this team until the FastPC4 team exists.
 
@@ -1488,3 +1504,17 @@ AX does not wait on any AY sprint.
   disposition gate are the current review surface. A new plan-scope and
   critical review is required before approval; r21 is historical evidence,
   not approval of r22.
+- r23 (2026-09-06, fenix): Rand's ruling of 2026-09-05, "I don't want a
+  sprint including live evidence" / "we have release readiness, we have
+  phase-ending review", applied to the r22 structure. AY.10 is no longer a
+  sprint: its matrix, capture rules and row contract moved to
+  `release-readiness-herdr-live-proof.md` (a checklist run after the phase
+  lands on develop; never a sprint or phase gate). Nine sprints remain;
+  AY.9 is the last. AY.7's FastPC4 live verifications (D2, D4, D5, AC3,
+  AC6, required validation) became Windows CI lane tests and CI
+  artifacts; P-C/P-D are release-readiness prerequisites and AYP-R2-011
+  is closed. The exit-gate decision is taken on AY.9's automated gates and
+  the phase-ending review. Ruling 5 rewritten; risks 3, 4, 7, 8; Windows
+  machine section; AX status (AX.7 superseded the same day). Every
+  sprint doc's AY.10 reference retargeted. Same ruling closed phase AX's
+  AX.7 live-proof sprint.

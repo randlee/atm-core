@@ -439,5 +439,5 @@ This is the authoritative validation list.
   AY.4; this sprint closes the endpoint/config/doctor surface itself.
 - Herdr entry installation and restart coordination are AY.5 and AY.6.
 - Windows process fixes are AY.7; socket transport and cutover are AY.8/AY.9;
-  live phase proof is AY.10.
+  live proof is release readiness, not a sprint.
 - No legacy synchronous-daemon runtime or dispatch work is permitted.

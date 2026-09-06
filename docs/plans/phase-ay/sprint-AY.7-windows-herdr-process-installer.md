@@ -8,7 +8,7 @@ integration_branch: integrate/phase-ay
 stack_parent: feature/ay6-herdr-restart-coordination
 pr_target: feature/ay6-herdr-restart-coordination
 status: draft
-recommended_agent: named-windows-agent (P-D)
+recommended_agent: arch-ctm (no Windows machine required; the Windows CI lane is the gate)
 recommended_model: n/a
 execution_track: windows
 parallel_with: [AY.8]
@@ -24,23 +24,22 @@ dependency_relations:
   - prerequisite: AY.7
     dependent: AY.9
     relation: must_follow
-    rationale: AY.9 consumes the verified Windows process and installer facts before selecting the socket transport; AY.10 then performs the live Windows socket proof.
+    rationale: AY.9 consumes the CI-verified Windows process and installer facts before selecting the socket transport.
 ---
 
 # AY.7 — Windows process correctness and per-user Herdr installer verification
 
-Make the retained CLI fallback production-correct on Windows and prove that
-the AY.5/AY.6 installer and restart control plane uses per-user logon tasks in
-the same account and session as Herdr. This sprint does not implement or
-exercise the socket transport.
+Make the retained CLI fallback production-correct on Windows and prove, in
+the Windows CI lane, that the AY.5/AY.6 installer and restart control plane
+uses per-user logon tasks in the same account and session as Herdr. This
+sprint does not implement or exercise the socket transport and has no live
+run on a physical Windows machine (ruling 5).
 
 ## Dispatch and stack contract
 
-AY.7 does not dispatch until P-C and P-D in the phase plan are filled: FastPC4
-is reachable by the agreed operator path, its `atm-dev` reporter has completed
-one round trip, and the exact Windows developer identity is named. Its branch
-is created from `feature/ay6-herdr-restart-coordination`, not from the integration
-branch.
+AY.7 dispatches when AY.6 development is pushed; it has no physical-machine
+precondition. Its branch is created from
+`feature/ay6-herdr-restart-coordination`, not from the integration branch.
 
 Use the `/gh-stack` skill for the phase's linear implementation stack. After
 the `AY.2 -> AY.3 -> AY.4 -> AY.5 -> AY.6 -> AY.7` branches and PRs exist,
@@ -76,30 +75,40 @@ completion fails the sprint.
   LF and CRLF accepted.
 - [ ] D2 — every Windows CLI-transport spawn uses
   `CREATE_NO_WINDOW = 0x08000000`; timeout/cancellation follows the existing
-  kill-then-reap path and waits for the child after kill. A FastPC4 test proves
-  that the child leaves no `herdr.exe` orphan in `tasklist` and a visual check
-  proves that no console window flashes.
+  kill-then-reap path and waits for the child after kill. A Windows CI test
+  spawns a long-running stand-in child (for example `cmd /c` with a `timeout`
+  longer than the deadline), hits the deadline, and asserts that kill and wait
+  both complete and `try_wait` reports the child exited; a unit test asserts
+  that the one spawn site applies `CREATE_NO_WINDOW`. The console-flash visual
+  check is a release-readiness row, not a sprint gate.
 - [ ] D3 — an architecture test fails if Windows-only process code for this
   behavior appears outside `transport_cli.rs`. The public
   `HerdrProcessAdapter` signatures and the `HerdrError` enum remain unchanged.
-- [ ] D4 — live-verify the Windows branches of AY.5 entry management and AY.6
-  restart coordination on FastPC4:
-  one marker-bearing, per-user logon task for the atm daemon and one for each
-  distinct Herdr endpoint; both run in the interactive user's account/session.
+- [ ] D4 — verify the Windows branches of AY.5 entry management and AY.6
+  restart coordination in the Windows CI lane, running the real Windows
+  branch code against the AY.5/AY.6 platform fakes for the privileged
+  operations (`schtasks` argv, account/session detection seam, marker files
+  in a per-test temp dir): one marker-bearing, per-user logon task for the
+  atm daemon and one for each distinct Herdr endpoint; both are asserted to
+  run in the interactive user's account/session.
   A service/session-0 or different-account configuration is refused with
   `HERDR_ENTRY_ACCOUNT_MISMATCH`, no task is written, and doctor reports the
   mismatch with the remedy `reinstall per-user`.
 - [ ] D5 — fill every Windows-observed column in
-  `docs/atm-herdr/windows-process-audit.md`: observed newline convention,
-  detached stdio behavior, console-flash result, the exact pipe name Herdr
-  reports, date, FastPC4 identity, and the source doctor artifact. Preserve one
-  row per audited item and the verdict vocabulary `no action`,
-  `production fix`, or `upstream request`.
-- [ ] D6 — this sprint creates no live Herdr round-trip evidence campaign.
-  The only committed observations are the doctor `herdr` section required by
-  D4 and the audit facts required by D5. The phase's macOS/Windows prompt,
-  wait, get, list, notify, late-start, upgrade, latency, and negative-case
-  evidence belongs only to AY.10 on the socket transport after AY.9's cutover.
+  `docs/atm-herdr/windows-process-audit.md` from the Windows CI lane's test
+  output and the doctor JSON an integration test in that lane writes as a CI
+  artifact: observed newline convention, detached stdio behavior, the pipe
+  name shape Herdr reports, date, CI run URL, and the source artifact name.
+  Cells that only a live Herdr on a physical machine can fill (console-flash
+  result, live pipe name) are marked `release readiness` and carried by
+  `release-readiness-herdr-live-proof.md`. Preserve one row per audited item
+  and the verdict vocabulary `no action`, `production fix`, or `upstream
+  request`.
+- [ ] D6 — this sprint creates no live evidence of any kind (ruling 5). The
+  only committed observations are CI artifacts and the audit facts required
+  by D5. The live macOS/Windows matrix (prompt, wait, get, list, notify,
+  late start, upgrade, latency, negative cases) is the release-readiness
+  checklist, run after the phase lands on develop.
 - [ ] D7 — tests and evidence checks under Required validation pass on the
   branch and in the Windows CI lane.
 
@@ -131,12 +140,13 @@ or PATH search in its cause. No new environment precedence is introduced:
 each call still passes exactly one of `HERDR_SESSION` or `HERDR_SOCKET_PATH`,
 or neither.
 
-AY.7 consumes, but does not change, the AY.3 doctor JSON contract. The captured
-artifact must be valid `atm doctor --json` output for which this extraction
-succeeds and contains no aggregate endpoint state:
+AY.7 consumes, but does not change, the AY.3 doctor JSON contract. The doctor JSON
+that the Windows CI integration test writes as an artifact must be valid
+`atm doctor --json` output for which this extraction succeeds and contains no
+aggregate endpoint state:
 
 ```sh
-jq -e '.herdr.configured == true and (.herdr.endpoints | type == "array") and (.herdr.breaker | type == "object") and (.herdr | has("state") | not)' fastpc4-doctor.json
+jq -e '.herdr.configured == true and (.herdr.endpoints | type == "array") and (.herdr.breaker | type == "object") and (.herdr | has("state") | not)' windows-ci-doctor.json
 ```
 
 Each endpoint record remains ordered `default` first and then sessions
@@ -148,11 +158,12 @@ bytewise. Under the CLI transport its `transport` is `cli` and `endpoint` is
 
 1. Keep every Windows process change inside `transport_cli.rs`, then close the
    path-resolution, no-window, UTF-8/CRLF, timeout, kill, and reap cases with
-   deterministic tests before using FastPC4.
-2. Exercise AY.5 entry management and AY.6 restart behavior under the same
-   interactive Windows account, including every refusal and zero-write case.
-3. Fill the audit columns only from the dated FastPC4 run and keep the diff
-   free of a live round-trip evidence directory; AY.10 owns that campaign.
+   deterministic tests that run in the Windows CI lane.
+2. Exercise the AY.5 entry-management and AY.6 restart Windows branches
+   against the platform fakes in the Windows CI lane, including every refusal
+   and zero-write case.
+3. Fill the audit columns only from the dated Windows CI run and its
+   artifacts; keep the diff free of any evidence directory.
 
 ## Acceptance criteria
 
@@ -161,23 +172,25 @@ bytewise. Under the CLI transport its `transport` is `cli` and `endpoint` is
 2. File-or-directory `binary_path`, PATH fallback, path re-resolution on two
    consecutive calls, missing binary, UTF-8 LF, UTF-8 CRLF, and invalid UTF-8
    cases have deterministic Windows tests.
-3. Deadline and cancellation tests prove kill-then-reap. The FastPC4 run cites
-   before/after `tasklist` output with no orphan and records no console flash.
+3. Deadline and cancellation tests prove kill-then-reap in the Windows CI
+   lane (`try_wait` reports exit after kill and wait); the creation-flags test
+   proves `CREATE_NO_WINDOW` at the single spawn site.
 4. Installer tests prove same-user logon tasks for default-only and default plus
    two named sessions, plus refusal and zero writes for service/session-0 and
    different-account configurations.
 5. The architecture test proves no `cfg(windows)` for this process behavior
    exists outside `crates/atm-herdr/src/transport_cli.rs`.
-6. Every audit value cites the dated FastPC4 run and source artifact; no cell
-   remains `AY.7`, `TBD`, or an equivalent placeholder.
+6. Every audit value cites the dated Windows CI run URL and artifact name, or
+   is marked `release readiness` for the cells only a live machine can fill;
+   no cell remains `AY.7`, `TBD`, or an equivalent placeholder.
 7. `gh pr view feature/ay7-windows-herdr-process-installer --json
    headRefName,baseRefName,state` reports base
    `feature/ay6-herdr-restart-coordination`.
 
 ## Required validation
 
-- `just validate` on FastPC4.
-- `cargo test -p atm-herdr` on FastPC4 and the repository's Windows CI lane.
+- `just validate` on the dev host.
+- `cargo test -p atm-herdr` in the repository's Windows CI lane (the gate).
 - All three CI lanes green at merge time; Windows remains the merge gate.
 - Run the architecture guard and the audit placeholder/no-evidence grep gates.
 - quality-mgr Final Quality Report: 0 blocking, 0 important, 0 minor in scope.
@@ -185,7 +198,7 @@ bytewise. Under the CLI transport its `transport` is `cli` and `endpoint` is
 ## Out of scope
 
 - Direct UDS/named-pipe transport or its production cutover (AY.8/AY.9).
-- The phase's live Herdr evidence set (AY.10).
+- Live evidence of any kind; the live matrix is release readiness (ruling 5).
 - Herdr upgrade, supervision, or daemon-startup behavior.
 - Any patch, hardening, or remodeling of the legacy synchronous daemon. All
   daemon-side composition remains Tokio/Axum through `atm-http-runtime`.
