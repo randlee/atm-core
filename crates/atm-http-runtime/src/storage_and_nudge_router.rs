@@ -798,7 +798,11 @@ impl StorageAndNudgeRouter {
                 "runtime reload is available only through authenticated local HTTP adapters",
             ));
         }
-        self.service_runtime.clear_roster_cache();
+        // Write-through already keeps the RAM roster mirror synchronized
+        // with every durable mutation; this re-hydration is not the
+        // synchronization mechanism, it only re-derives RAM from durable
+        // state for the rare case of an out-of-band durable change.
+        self.service_runtime.reload_roster_from_durable_store();
         Ok(ApiResponse::new(ResponseEnvelope::RuntimeViewReloaded))
     }
 }
