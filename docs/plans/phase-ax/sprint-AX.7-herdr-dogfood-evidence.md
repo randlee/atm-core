@@ -4,7 +4,7 @@ sprint: AX.7
 title: Live Herdr dogfood evidence on the integrate head
 branch: feature/ax7-herdr-dogfood-evidence (stacked on feature/ax6-lead-notification-doctor, PR #1204; proof runs against the AX.6 head merged forward, PR targets the AX.6 branch via gh stack)
 integration_branch: integrate/phase-ax
-status: draft
+status: superseded (2026-09-05, Rand: no sprint carries live evidence; live proof is release readiness)
 recommended_agent: none
 recommended_model: n/a
 operator: fenix (rand-m5 owner; a proof sprint, not a coding sprint)
@@ -18,6 +18,18 @@ dependency_relations:
 ---
 
 # AX.7 — Live Herdr dogfood evidence
+
+## Disposition (2026-09-05)
+
+Superseded before execution. Rand's ruling: no sprint carries live
+evidence as a deliverable or a merge gate. Live proof of the Herdr
+dogfood matrix belongs to release readiness, run on the develop build
+after phase AW and phase AX have both landed (the AX head alone would be
+replaced by the AW merge). Phase quality is gated by the phase-ending
+critical review (five reviewers on the integrate head plus quality-mgr
+`review_mode: phase_end`) and CI. PR #1206 (scaffold only) is closed
+unmerged; its branch is retained. The case table below stays as the
+release-readiness matrix input; the procedure is not a sprint.
 
 Repeat the 2026-09-04 dogfood matrix against a daemon built from the
 `integrate/phase-ax` head, on the real `atm-dev` Herdr team, and record

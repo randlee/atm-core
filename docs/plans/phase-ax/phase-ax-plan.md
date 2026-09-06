@@ -242,7 +242,7 @@ follow-up options on #1173, not open questions.
 | AX.4 | B | after AX.3; **parallel with AX.1/AX.2** | Task completion and inspection CLI | `atm send --task-complete`, `atm list --tasks` / `--task-events`, requirements §6.5/§6.6/§15.4, team-protocol, `docs/user-documents/tasks.md` | `sprint-AX.4-task-cli-and-docs.md` |
 | AX.5 | C | after A and B merge | Task reminder cycle in the Herdr pump | pump task step, idle-set widening, clock seam, `RuntimeMemberState::Blocked`, blocked-assignee reminder outcome, task-row reminder rendering, drain-first ordering (no marker exception) | `sprint-AX.5-task-reminder-cycle.md` |
 | AX.6 | C | after AX.5 | Lead notification and doctor | `atm-daemon` reserved sender, lead message, blocked escalation, Herdr desktop notification via `HerdrProcessAdapter::notify`, daemon-default escalation recipients with per-team override (any resolvable address), five doctor codes with catalog guidance | `sprint-AX.6-lead-notification-doctor.md` |
-| AX.7 | D | after AX.6 merges | Live Herdr dogfood evidence | `docs/plans/phase-ax/ax7-live-proof.md` | `sprint-AX.7-herdr-dogfood-evidence.md` |
+| AX.7 | D | superseded 2026-09-05 | Live Herdr dogfood evidence (moved to release readiness; no sprint carries live evidence, Rand) | none | `sprint-AX.7-herdr-dogfood-evidence.md` |
 
 Dependency graph:
 
@@ -350,7 +350,9 @@ test or evidence gate.
   replaces rebase.
 - PRs target `integrate/phase-ax` (bottom of each stack) or the branch
   below them in the stack; merge commits only (`--merge`); the phase PR
-  `integrate/phase-ax → develop` is opened after AX.7.
+  `integrate/phase-ax → develop` is opened after AX.6 merges and the
+  phase-ending critical review has run on the integrate head (AX.7 was
+  superseded on 2026-09-05; live proof is release readiness).
 - team-lead dispatches via j2 template over `atm send --stdin`;
   quality-mgr gates each PR with a posted Final Quality Report. `gh
   stack merge` checks only open/not-draft, so it is run only after every
@@ -399,7 +401,7 @@ gh stack merge <AX.6 PR#> --yes --merge
   the branch above before every dev or fix round once the lower branch's
   development is pushed; the lower PR merges first (`gh stack merge`
   does this bottom to top).
-- AX.7 runs on rand-m5 under fenix; the daemon is rebuilt from the
-  integrate head into `~/.atm-builds/` (outside `~/Documents`) for the
-  live proof.
+- AX.7 superseded (2026-09-05): the live dogfood matrix runs as release
+  readiness on the develop build once phase AW and AX have both landed,
+  not as a sprint or a phase merge gate.
 - `docs/project-plan.md` §55 (added with this plan) tracks sprint status.
