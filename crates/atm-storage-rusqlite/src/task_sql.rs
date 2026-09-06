@@ -6,8 +6,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::SqliteTaskStore;
 
-const TASK_COLUMNS: &str = "team, task_id, assignee, assigner, state, assignment_message_id, description, assigned_at, updated_at, last_reminded_at, reminder_count, lead_notified_count";
-const TASK_EVENT_COLUMNS: &str = "team, task_id, assignee, seq, at, event, from_state, to_state, actor, message_id, outcome, marker, detail";
+pub(crate) const TASK_COLUMNS: &str = "team, task_id, assignee, assigner, state, assignment_message_id, description, assigned_at, updated_at, last_reminded_at, reminder_count, lead_notified_count";
+pub(crate) const TASK_EVENT_COLUMNS: &str = "team, task_id, assignee, seq, at, event, from_state, to_state, actor, message_id, outcome, marker, detail";
 
 pub(crate) fn select_task_row(
     connection: &Connection,
@@ -24,22 +24,6 @@ pub(crate) fn select_task_row(
         .optional()
 }
 
-pub(crate) fn select_tasks_for_team(
-    connection: &Connection,
-    team: &TeamName,
-    member: Option<&AgentName>,
-) -> rusqlite::Result<Vec<TaskRow>> {
-    let mut statement = connection.prepare(&format!(
-        "SELECT {TASK_COLUMNS} FROM tasks WHERE team = ?1 AND (?2 IS NULL OR assignee = ?2) ORDER BY assigned_at DESC, task_id DESC"
-    ))?;
-    statement
-        .query_map(
-            params![team.as_str(), member.map(AgentName::as_str)],
-            SqliteTaskStore::decode_row,
-        )?
-        .collect()
-}
-
 pub(crate) fn select_open_tasks_for_member(
     connection: &Connection,
     team: &TeamName,
@@ -51,6 +35,22 @@ pub(crate) fn select_open_tasks_for_member(
     statement
         .query_map(
             params![team.as_str(), assignee.as_str()],
+            SqliteTaskStore::decode_row,
+        )?
+        .collect()
+}
+
+pub(crate) fn select_tasks_for_team(
+    connection: &Connection,
+    team: &TeamName,
+    member: Option<&AgentName>,
+) -> rusqlite::Result<Vec<TaskRow>> {
+    let mut statement = connection.prepare(&format!(
+        "SELECT {TASK_COLUMNS} FROM tasks WHERE team = ?1 AND (?2 IS NULL OR assignee = ?2) ORDER BY assigned_at DESC, task_id DESC"
+    ))?;
+    statement
+        .query_map(
+            params![team.as_str(), member.map(AgentName::as_str)],
             SqliteTaskStore::decode_row,
         )?
         .collect()

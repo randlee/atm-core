@@ -8,9 +8,10 @@ use atm_storage::{
     AgentName, AsyncTaskLedgerReader, AtmError, ReadDeadline, ReadLaneError, TaskEventRow, TaskId,
     TaskRow, TeamName,
 };
-use rusqlite::Connection;
+use rusqlite::{Connection, params};
 use std::sync::Arc;
 
+use crate::SqliteTaskStore;
 use crate::reader_pool::ReaderPool;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use crate::task_sql;
@@ -78,8 +79,17 @@ fn list_tasks(
     team: &TeamName,
     member: Option<&AgentName>,
 ) -> Result<Vec<TaskRow>, AtmError> {
-    task_sql::select_tasks_for_team(connection, team, member)
-        .map_err(|error| sqlite_error(target, "failed to list async tasks", error))
+    let mut statement = connection.prepare(&format!("SELECT {} FROM tasks WHERE team = ?1 AND (?2 IS NULL OR assignee = ?2) ORDER BY assigned_at DESC, task_id DESC", task_sql::TASK_COLUMNS)).map_err(|error| sqlite_error(target, "failed to prepare async task list", error))?;
+    statement
+        .query_map(
+            params![team.as_str(), member.map(AgentName::as_str)],
+            SqliteTaskStore::decode_row,
+        )
+        .map_err(|error| sqlite_error(target, "failed to list async tasks", error))?
+        .map(|row| {
+            row.map_err(|error| sqlite_error(target, "failed to decode async task row", error))
+        })
+        .collect()
 }
 
 fn list_task_events(
@@ -89,8 +99,21 @@ fn list_task_events(
     task_id: &TaskId,
     member: Option<&AgentName>,
 ) -> Result<Vec<TaskEventRow>, AtmError> {
-    task_sql::select_task_events(connection, team, task_id, member)
-        .map_err(|error| sqlite_error(target, "failed to list async task events", error))
+    let mut statement = connection.prepare(&format!("SELECT {} FROM task_events WHERE team = ?1 AND task_id = ?2 AND (?3 IS NULL OR assignee = ?3) ORDER BY seq ASC", task_sql::TASK_EVENT_COLUMNS)).map_err(|error| sqlite_error(target, "failed to prepare async task event list", error))?;
+    statement
+        .query_map(
+            params![
+                team.as_str(),
+                task_id.as_str(),
+                member.map(AgentName::as_str)
+            ],
+            SqliteTaskStore::decode_event_row,
+        )
+        .map_err(|error| sqlite_error(target, "failed to list async task events", error))?
+        .map(|row| {
+            row.map_err(|error| sqlite_error(target, "failed to decode async task event", error))
+        })
+        .collect()
 }
 
 fn read_lane_error(error: AtmError) -> ReadLaneError {

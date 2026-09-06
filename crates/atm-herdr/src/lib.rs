@@ -12,7 +12,6 @@ use atm_core::{HerdrSession, RequestDeadline};
 use serde_json::Value;
 use tokio::io::AsyncReadExt;
 
-pub const HERDR_WAKE_TEXT: &str = "You have unread ATM messages. Run: atm read";
 /// Oldest Herdr release this daemon supports (ADR-061). Keyed on the Herdr
 /// release version reported by `ping.version`, not on Herdr's bincode-only
 /// `PROTOCOL_VERSION`. Every Herdr release at or above this value must keep

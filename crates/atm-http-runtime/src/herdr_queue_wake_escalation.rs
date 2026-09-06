@@ -19,6 +19,12 @@ const TASK_READ_DEADLINE: Duration = Duration::from_secs(5);
 const MAX_BLOCKED_TASKS_IN_BODY: usize = 8;
 const MAX_BLOCKED_MAIL_BODY_BYTES: usize = 4_096;
 
+pub(crate) struct TaskReminderContext<'a> {
+    pub(crate) reader: &'a (dyn AsyncTaskLedgerReader + Send + Sync),
+    pub(crate) task_store: &'a Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+    pub(crate) member: &'a MemberKey,
+}
+
 pub(crate) async fn maybe_escalate_task(
     pump: &HerdrQueueWakePump,
     reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
