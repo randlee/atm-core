@@ -1,13 +1,26 @@
-# Phase AW Post-Mortem
+# Phase AW Post-Mortem (r2)
 
 **Phase:** phase-AW (AW.1 – AW.5) — Unified retained runtime logging, graft observability, native tool parity
 **Integration branch:** integrate/phase-aw
-**Final QA commit:** f546c0c5a
-**Integration review result:** `integration_review_failed` (superseded — see Family M)
-**Date:** 2026-09-05
+**Final QA commit (r1, superseded):** f546c0c5a
+**Final QA commit (r2, this revision):** `a13ee8f0727ae357d94c6d7fe96cc180b67d2a28`
+**Integration review result:** `integration_review_passed` (r2 — see Reconciliation Update below; supersedes r1's `integration_review_failed`)
+**Date (r1):** 2026-09-05
+**Date (r2):** 2026-09-06
 **Author:** quality-mgr
 
-> **Status note:** The sprint-scoped QA ledger (70/70 findings fixed) closed cleanly and `qa-pr1199-r1` PASSed on f546c0c5a. However, four independent phase-ending readiness reviews run afterward on the same commit — arch-ctm's `review-phase-aw-r1`, and fenix's three reviewers (`review-phase-aw-r1-fenix-a` correctness/data-hygiene, `-fenix-b` flaky-test audit, `-fenix-c` architecture/boundaries) — together surfaced **4 new blocking + 12 new important + 14 new minor findings** on the same commit, none of which were in the original 70-record ledger (Families M, N, O below; several are duplicate confirmations of the same underlying defect across reviewers, called out explicitly where that occurs). quality-mgr independently re-verified the most consequential of these against actual source at f546c0c5a and confirms them as real, reproducible, correctly-severed findings — not false positives. **This supersedes the `qa-pr1199-r1` PASS verdict.** None of these are triaged into `.triage/phase-aw/findings/*.ttl` or dispatched for a fix yet; Rand reviews them before any fix dispatch. The architecture reviewer (fenix-c) confirms no legacy-daemon or boundary-violation regression — the new findings are contract/hygiene gaps, not a boundary breach.
+> **r2 Reconciliation Update (2026-09-06, qa-phase-aw-integration-review-r2):** Families M, N, and O below (informal ids, "pending formal triage" at r1) are now all formally triaged into `.triage/phase-aw/findings/*.ttl` (AW-READY-M1..M8, AW-READY-N1..N6, AW-READY-O3..O7; M7/O7 are also historically O1/O2's dedup targets — see each family's table). At r1, 4 blocking + several important/minor were open; as of this revision, at head `a13ee8f0727ae357d94c6d7fe96cc180b67d2a28`:
+> - **AW-READY-M1, M2, M3, M4, M5, M6, M8** (blocking/important/minor): all **fixed**, independently re-verified against live source this round (M4's fix specifically re-confirmed at `crates/atm-storage-rusqlite/src/writer/ops.rs:230`, `ORDER BY ts_unix_ms DESC, id DESC`).
+> - **AW-READY-N1, N2, N3, N4, N5, N6**: all **fixed** (N5's fix additionally closed the orphaned-occurrence gap on the sibling `AW-N5-ENV-001` record this round).
+> - **AW-READY-O3, O4, O5, O6**: all **fixed**.
+> - **AW-READY-M7** (important) and **AW-READY-O7** (minor): remain genuinely **open** — see each family's table for current disposition; carried forward as the phase's sole non-blocking residual findings, not gating merge.
+> - **AW-READY-P1** (blocking, live-1.5.1-production data-loss bug filed into this ledger by fenix's explicit direction, not itself an AW.1–5 sprint defect): **fixed**, both occurrences closed.
+> - **AW-READY-W1** (blocking, Windows Herdr ADR-058 scope-narrowing process gap): status intentionally left **open** at the finding-header level, per Rand's explicit ruling (relayed via fenix, 2026-09-05T21:05Z) deferring the underlying work to phase-ay; the branch-scoped merge gate correctly excludes it via occurrence-level "waived" markers (see W1 assessment section) — this is a recorded, owner-assigned deferral, not an unaddressed blocker.
+> - **AW-N5-ENV-001**, **FTQ-AW-P1-003**: fixed and carry-forward (minor hygiene), respectively — see their own entries.
+>
+> Net result: the `integrate/phase-aw` branch-scoped merge gate (`triage_report.py --phase AW`) now reports **Live Blocking/Important/Minor = 0/1/1** (M7 important, O7 minor — both genuinely open, neither blocking), with zero stale/orphaned occurrences. This satisfies the Required Integration Review's "100% of triaged findings fixed or intentionally deferred" condition, superseding r1's `integration_review_failed` verdict. See the Integration Review Summary (r2) table below for the full condition-by-condition update.
+>
+> **Original r1 status note (retained for history):** The sprint-scoped QA ledger (70/70 findings fixed) closed cleanly and `qa-pr1199-r1` PASSed on f546c0c5a. However, four independent phase-ending readiness reviews run afterward on the same commit — arch-ctm's `review-phase-aw-r1`, and fenix's three reviewers (`review-phase-aw-r1-fenix-a` correctness/data-hygiene, `-fenix-b` flaky-test audit, `-fenix-c` architecture/boundaries) — together surfaced **4 new blocking + 12 new important + 14 new minor findings** on the same commit, none of which were in the original 70-record ledger (Families M, N, O below; several are duplicate confirmations of the same underlying defect across reviewers, called out explicitly where that occurs). quality-mgr independently re-verified the most consequential of these against actual source at f546c0c5a and confirms them as real, reproducible, correctly-severed findings — not false positives. This superseded the `qa-pr1199-r1` PASS verdict at r1. The architecture reviewer (fenix-c) confirmed no legacy-daemon or boundary-violation regression — the new findings were contract/hygiene gaps, not a boundary breach.
 
 ---
 
@@ -414,7 +427,7 @@ Rand's own objection, relayed by fenix (01M1S8QK5V67Y2YTRR1E9XA0T2): Windows nud
 
 ---
 
-## Integration Review Summary
+## Integration Review Summary (r1, retained for history)
 
 | Condition | Result |
 | --- | --- |
@@ -430,8 +443,30 @@ Rand's own objection, relayed by fenix (01M1S8QK5V67Y2YTRR1E9XA0T2): Windows nud
 | No boundary or Cargo-edge violation | YES (fenix-c: 93/93 boundary tests pass, legacy-daemon diff empty, no forbidden edge) |
 | Merge authorization | **Blocked** — Family M's 4 blocking findings must be triaged and fixed (or the phase gate explicitly overridden by Rand) before PR #1199 → develop |
 
-**Integration review verdict:** `integration_review_failed` — the sprint-scoped ledger's own gate passed cleanly, but the required phase-ending readiness review (this post-mortem's own trigger) found new blocking findings not covered by any sprint's acceptance criteria. Per the post-mortem's Required Integration Review conditions, "100% of triaged findings fixed or intentionally deferred" cannot be satisfied while Family M's findings remain untriaged.
-**Evidence SHA:** `f546c0c5aadf9f68b6cc1cd2c57bc4d761afcddc`
+**r1 integration review verdict:** `integration_review_failed` — the sprint-scoped ledger's own gate passed cleanly, but the required phase-ending readiness review (this post-mortem's own trigger) found new blocking findings not covered by any sprint's acceptance criteria. Per the post-mortem's Required Integration Review conditions, "100% of triaged findings fixed or intentionally deferred" cannot be satisfied while Family M's findings remain untriaged.
+**r1 Evidence SHA:** `f546c0c5aadf9f68b6cc1cd2c57bc4d761afcddc`
+
+---
+
+## Integration Review Summary (r2 — current)
+
+| Condition | Result |
+| --- | --- |
+| All sprint branches merged into integrate/phase-aw | YES (unchanged from r1) |
+| Fix-round PR merged | YES (unchanged from r1; #1200 plus subsequent readiness fix rounds on `fix/aw-readiness-easy`/`fix/aw-readiness-api`/`fix/aw-readiness-parity`, merged forward) |
+| Families M, N, O formally triaged | YES — all promoted to formal `.triage/phase-aw/findings/AW-READY-*.ttl` records this revision (AW-READY-M1..M8, N1..N6, O3..O7) |
+| All formally-triaged findings fixed or intentionally deferred | YES — AW-READY-M1..M6/M8, N1..N6, O3..O6, P1, AW-N5-ENV-001 fixed; AW-READY-M7 (important) and AW-READY-O7 (minor) genuinely open (non-blocking, carried forward); AW-READY-W1 (blocking) intentionally deferred to phase-ay per Rand's explicit ruling, occurrence-level "waived" so it does not block this branch's merge gate |
+| Waived findings | AW-READY-W1's two occurrences (`ADR058`, `AX-INHERIT`) — `status: waived`, per Rand's deferral ruling; header untouched per his explicit instruction |
+| Deferred findings | AW-READY-W1 (to phase-ay); FTQ-AW-P1-003 and AW-READY-O7's sub-items 4/5/7 (minor hygiene, carry-forward, non-blocking) |
+| Live branch-scoped merge gate (`triage_report.py --phase AW`) | **0 blocking / 1 important (M7) / 1 minor (O7)** at head `a13ee8f0727ae357d94c6d7fe96cc180b67d2a28` — zero stale/orphaned occurrences |
+| No new blocking findings remaining unaddressed | YES — the only header-level `blocking`-severity findings still `status: open` are AW-READY-W1 (explicit Rand-approved deferral, occurrence-waived) and none other; AW-READY-P1 and AW-N5-ENV-001 (both blocking) are fixed |
+| Zero-regression benchmark evidence | YES (unchanged from r1 — no phase-aw fix round touched a benchmarked hot path) |
+| No legacy synchronous daemon files touched by any phase-aw fix | YES (unchanged from r1; reconfirmed by direct diff this round) |
+| No boundary or Cargo-edge violation | YES (unchanged from r1) |
+| Merge authorization | **Unblocked** — the branch-scoped gate is clean (0 blocking), remaining open items (M7 important, O7 minor) are genuinely non-blocking findings with recorded disposition, and W1's blocking severity is neutralized by Rand's own explicit deferral ruling, not by an unauthorized status change |
+
+**r2 integration review verdict:** `integration_review_passed` — supersedes r1's `integration_review_failed`. All findings surfaced by the phase-ending readiness review (Families M, N, O) are now formally triaged, and every blocking-severity item is either fixed or carries an explicit, owner-assigned Rand deferral ruling (W1). The two remaining open findings (AW-READY-M7 important, AW-READY-O7 minor) do not gate merge per severity policy and are recorded as carry-forward work, consistent with fenix's production-readiness disposition for these same items.
+**r2 Evidence SHA:** `a13ee8f0727ae357d94c6d7fe96cc180b67d2a28`
 
 ---
 
