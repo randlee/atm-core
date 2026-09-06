@@ -184,7 +184,8 @@ fn error_from_envelope(envelope: &HerdrEnvelope) -> HerdrError {
     let Some(error) = &envelope.error else {
         return HerdrError::ProtocolMismatch;
     };
-    let _ = (&error.message, error.retry_after_ms);
+    let message = error.message.clone();
+    let retry_after = error.retry_after_ms.map(Duration::from_millis);
     match error.code.as_str() {
         "agent_blocked" => HerdrError::AgentBlocked,
         "agent_not_found" => HerdrError::AgentNotFound,
@@ -197,10 +198,14 @@ fn error_from_envelope(envelope: &HerdrEnvelope) -> HerdrError {
         "timeout" => HerdrError::Timeout,
         "invalid_agent_name" => HerdrError::InvalidAgentName,
         "empty_agent_prompt" => HerdrError::EmptyAgentPrompt,
-        "server_unavailable" => HerdrError::ServerUnavailable,
-        "internal_error" | "agent_prompt_failed" => HerdrError::InternalError,
+        "server_unavailable" => HerdrError::ServerUnavailable {
+            message,
+            retry_after,
+        },
+        "internal_error" | "agent_prompt_failed" => HerdrError::InternalError { message },
         other => HerdrError::Advisory {
             code: other.to_owned(),
+            message,
         },
     }
 }

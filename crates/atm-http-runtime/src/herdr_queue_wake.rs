@@ -1732,7 +1732,10 @@ mod tests {
 
         *now.lock().expect("clock") =
             IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("timestamp");
-        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable));
+        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+        }));
         pump.tick_once().await;
         assert_eq!(notifications(&fake), 0);
 
@@ -2263,7 +2266,10 @@ mod tests {
     async fn ac04_breaker_and_absent_emitter_leave_no_reminder_audit() {
         let (_root, _runtime, fake, pump, store, keys, _now) =
             build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-        fake.queue_prompt_result(Err(atm_herdr::HerdrError::ServerUnavailable));
+        fake.queue_prompt_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+        }));
         pump.tick_once().await;
         let task_id = "AX5-TASK-00".parse().expect("task id");
         assert_eq!(pump.stats().prompted, 0);
@@ -2749,7 +2755,10 @@ mod tests {
             })
             .expect("roster");
         let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
-        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable));
+        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+        }));
         let selector = Arc::new(FakeSelector {
             emitter: FakeEmitter {
                 process: Arc::clone(&fake),

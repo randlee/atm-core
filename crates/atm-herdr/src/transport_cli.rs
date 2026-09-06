@@ -97,11 +97,19 @@ async fn run_command(
     if let Some(session) = session {
         command.env("HERDR_SESSION", session.as_str());
     }
-    let mut child = command.spawn().map_err(|_| HerdrError::ServerUnavailable)?;
+    let mut child = command.spawn().map_err(|_| HerdrError::ServerUnavailable {
+        message: String::new(),
+        retry_after: None,
+    })?;
     let status =
         match tokio::time::timeout(effective_process_timeout(remaining), child.wait()).await {
             Ok(Ok(status)) => status,
-            Ok(Err(_)) => return Err(HerdrError::ServerUnavailable),
+            Ok(Err(_)) => {
+                return Err(HerdrError::ServerUnavailable {
+                    message: String::new(),
+                    retry_after: None,
+                });
+            }
             Err(_) => {
                 let _ = child.kill().await;
                 let _ = child.wait().await;
@@ -138,6 +146,7 @@ async fn capture_command_output(
             code: format!(
                 "output_truncated: stdout={stdout_truncated}, stderr={stderr_truncated}, limit={HERDR_MAX_OUTPUT_BYTES}"
             ),
+            message: String::new(),
         });
     }
     Ok((

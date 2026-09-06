@@ -95,11 +95,21 @@ pub enum HerdrError {
     Timeout,
     InvalidAgentName,
     EmptyAgentPrompt,
-    ServerUnavailable,
-    InternalError,
+    ServerUnavailable {
+        message: String,
+        retry_after: Option<Duration>,
+    },
+    InternalError {
+        message: String,
+    },
     TimedOut,
-    Unavailable { retry_after: Duration },
-    Advisory { code: String },
+    Unavailable {
+        retry_after: Duration,
+    },
+    Advisory {
+        code: String,
+        message: String,
+    },
 }
 
 impl From<HerdrError> for AtmError {
@@ -131,11 +141,18 @@ impl From<HerdrError> for AtmError {
             ),
             HerdrError::ServerNotRunning
             | HerdrError::ProtocolMismatch
-            | HerdrError::ServerUnavailable
             | HerdrError::TimedOut
             | HerdrError::Timeout => (
                 AtmErrorCode::HerdrUnavailable,
                 "Herdr server is unavailable".to_owned(),
+            ),
+            HerdrError::ServerUnavailable { message, .. } => (
+                AtmErrorCode::HerdrUnavailable,
+                if message.is_empty() {
+                    "Herdr server is unavailable".to_owned()
+                } else {
+                    format!("Herdr server is unavailable: {message}")
+                },
             ),
             HerdrError::InvalidAgentName => (
                 AtmErrorCode::HerdrPromptFailed,
@@ -145,17 +162,25 @@ impl From<HerdrError> for AtmError {
                 AtmErrorCode::HerdrPromptFailed,
                 "Herdr prompt is empty".to_owned(),
             ),
-            HerdrError::InternalError => (
+            HerdrError::InternalError { message } => (
                 AtmErrorCode::HerdrPromptFailed,
-                "Herdr returned an internal error".to_owned(),
+                if message.is_empty() {
+                    "Herdr returned an internal error".to_owned()
+                } else {
+                    format!("Herdr returned an internal error: {message}")
+                },
             ),
             HerdrError::Unavailable { retry_after } => (
                 AtmErrorCode::HerdrUnavailable,
                 format!("Herdr process breaker is open; retry after {retry_after:?}"),
             ),
-            HerdrError::Advisory { code } => (
+            HerdrError::Advisory { code, message } => (
                 AtmErrorCode::HerdrPromptFailed,
-                format!("Herdr command failed with {code}"),
+                if message.is_empty() {
+                    format!("Herdr command failed with {code}")
+                } else {
+                    format!("Herdr command failed with {code}: {message}")
+                },
             ),
         };
         AtmError::new(code, message)
@@ -174,12 +199,12 @@ impl HerdrError {
             }
             Self::AgentNotReady => "not_ready",
             Self::AgentPromptStalled => "prompt_stalled",
-            Self::ServerNotRunning | Self::ServerUnavailable => "server_outage",
+            Self::ServerNotRunning | Self::ServerUnavailable { .. } => "server_outage",
             Self::ProtocolMismatch => "protocol_incompatible",
             Self::Timeout | Self::TimedOut => "timed_out",
             Self::InvalidAgentName => "invalid_target",
             Self::EmptyAgentPrompt => "invalid_prompt",
-            Self::InternalError => "internal_failure",
+            Self::InternalError { .. } => "internal_failure",
             Self::Unavailable { .. } => "breaker_unavailable",
             Self::Advisory { .. } => "advisory_failure",
         }
@@ -190,9 +215,16 @@ impl HerdrError {
             self,
             Self::ServerNotRunning
                 | Self::ProtocolMismatch
-                | Self::ServerUnavailable
+                | Self::ServerUnavailable { .. }
                 | Self::TimedOut
         )
+    }
+
+    fn breaker_retry_after(&self) -> Option<Duration> {
+        match self {
+            Self::ServerUnavailable { retry_after, .. } => *retry_after,
+            _ => None,
+        }
     }
 }
 
@@ -258,6 +290,7 @@ struct BreakerState {
     consecutive_failures: u32,
     opened_at: Option<Instant>,
     half_open_probe: bool,
+    retry_after_override: Option<Duration>,
 }
 
 /// Supplies the current time to a [`HerdrSpawnBreaker`].
@@ -353,10 +386,15 @@ impl HerdrSpawnBreaker {
     }
 
     pub fn record_infrastructure_failure(&self) {
+        self.record_infrastructure_failure_with_retry_after(None);
+    }
+
+    fn record_infrastructure_failure_with_retry_after(&self, retry_after: Option<Duration>) {
         if let Ok(mut state) = self.state.lock() {
             state.consecutive_failures = state.consecutive_failures.saturating_add(1);
             state.opened_at = Some(self.clock.now());
             state.half_open_probe = false;
+            state.retry_after_override = retry_after;
         }
     }
 
@@ -379,8 +417,10 @@ fn breaker_state(state: &BreakerState, clock: &dyn BreakerClock) -> HerdrBreaker
     let Some(opened_at) = state.opened_at else {
         return HerdrBreakerState::Closed;
     };
-    let retry_after = breaker_backoff(state.consecutive_failures)
-        .saturating_sub(clock.now().saturating_duration_since(opened_at));
+    let backoff = state
+        .retry_after_override
+        .unwrap_or_else(|| breaker_backoff(state.consecutive_failures));
+    let retry_after = backoff.saturating_sub(clock.now().saturating_duration_since(opened_at));
     if retry_after.is_zero() || state.half_open_probe {
         HerdrBreakerState::HalfOpen
     } else {
@@ -548,7 +588,7 @@ impl HerdrProcessAdapter for HerdrProcessInvoker {
 fn record_result<T>(breaker: &HerdrSpawnBreaker, result: &Result<T, HerdrError>) {
     if let Err(error) = result {
         if error.is_infrastructure() {
-            breaker.record_infrastructure_failure();
+            breaker.record_infrastructure_failure_with_retry_after(error.breaker_retry_after());
         } else {
             // A typed lifecycle/target response proves that the Herdr
             // process was reachable. In particular, a lifecycle response
@@ -909,6 +949,66 @@ mod tests {
     }
 
     #[test]
+    fn preserves_wire_error_context_and_retry_hint() {
+        let internal = transport::unit_from_envelope(transport::HerdrEnvelope {
+            result: None,
+            error: Some(transport::HerdrErrorEnvelope {
+                code: "internal_error".to_owned(),
+                message: "database is busy".to_owned(),
+                retry_after_ms: None,
+            }),
+        });
+        assert_eq!(
+            internal,
+            Err(HerdrError::InternalError {
+                message: "database is busy".to_owned(),
+            })
+        );
+
+        let advisory = transport::unit_from_envelope(transport::HerdrEnvelope {
+            result: None,
+            error: Some(transport::HerdrErrorEnvelope {
+                code: "future_error".to_owned(),
+                message: "new server detail".to_owned(),
+                retry_after_ms: None,
+            }),
+        });
+        assert_eq!(
+            advisory,
+            Err(HerdrError::Advisory {
+                code: "future_error".to_owned(),
+                message: "new server detail".to_owned(),
+            })
+        );
+
+        let unavailable = transport::unit_from_envelope(transport::HerdrEnvelope {
+            result: None,
+            error: Some(transport::HerdrErrorEnvelope {
+                code: "server_unavailable".to_owned(),
+                message: "server is draining".to_owned(),
+                retry_after_ms: Some(12_345),
+            }),
+        });
+        assert_eq!(
+            unavailable,
+            Err(HerdrError::ServerUnavailable {
+                message: "server is draining".to_owned(),
+                retry_after: Some(Duration::from_millis(12_345)),
+            })
+        );
+
+        let clock = Arc::new(TestBreakerClock::new());
+        let breaker = HerdrSpawnBreaker::with_clock(clock);
+        record_result(&breaker, &unavailable);
+        assert_eq!(
+            breaker.state(),
+            HerdrBreakerState::Open {
+                retry_after: Duration::from_millis(12_345),
+            }
+        );
+    }
+
+    #[test]
     fn every_adapter_argv_matches_the_herdr_contract() {
         let agent: AgentName = "alice".parse().expect("agent");
         let text = "line one\nline two\nline three\nline four\nline five\nline six";
@@ -1075,9 +1175,25 @@ mod tests {
             ("timeout", HerdrError::Timeout),
             ("invalid_agent_name", HerdrError::InvalidAgentName),
             ("empty_agent_prompt", HerdrError::EmptyAgentPrompt),
-            ("server_unavailable", HerdrError::ServerUnavailable),
-            ("internal_error", HerdrError::InternalError),
-            ("agent_prompt_failed", HerdrError::InternalError),
+            (
+                "server_unavailable",
+                HerdrError::ServerUnavailable {
+                    message: String::new(),
+                    retry_after: None,
+                },
+            ),
+            (
+                "internal_error",
+                HerdrError::InternalError {
+                    message: String::new(),
+                },
+            ),
+            (
+                "agent_prompt_failed",
+                HerdrError::InternalError {
+                    message: String::new(),
+                },
+            ),
         ];
         for (code, expected) in cases {
             assert_eq!(
