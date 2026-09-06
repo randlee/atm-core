@@ -23,13 +23,15 @@ impl NudgeTemplateOverrideStore for SqliteNudgeTemplateOverrideStore {
         team: &TeamName,
         kind: BuiltInNudgeTemplateKind,
     ) -> Result<Option<TeamNudgeTemplateOverrideRow>, AtmError> {
-        self.db.with_connection(|connection| {
+        let db = Arc::clone(&self.db);
+        let team_key = team.clone();
+        self.db.read(move |connection| {
             connection
                 .query_row(
                     "SELECT mode, template_body, updated_at
                      FROM team_nudge_template_overrides
                      WHERE team_name = ?1 AND template_kind = ?2;",
-                    params![team.as_str(), kind.as_str()],
+                    params![team_key.as_str(), kind.as_str()],
                     |row| {
                         Ok((
                             row.get::<_, String>(0)?,
@@ -40,20 +42,19 @@ impl NudgeTemplateOverrideStore for SqliteNudgeTemplateOverrideStore {
                 )
                 .optional()
                 .map_err(|error| {
-                    self.db
-                        .error("failed to load team nudge template override row", error)
+                    db.error("failed to load team nudge template override row", error)
                 })?
                 .map(|(mode, template_body, updated_at)| {
                     let mode = normalize_loaded_override_mode(
                         connection,
-                        self.db.as_ref(),
-                        team,
+                        db.as_ref(),
+                        &team_key,
                         kind,
                         mode,
                         template_body,
                     )?;
                     Ok(TeamNudgeTemplateOverrideRow {
-                        team_name: team.clone(),
+                        team_name: team_key.clone(),
                         kind,
                         mode,
                         updated_at: parse_updated_at(updated_at)?,
