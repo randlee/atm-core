@@ -9,6 +9,18 @@ use crate::SqliteTaskStore;
 pub(crate) const TASK_COLUMNS: &str = "team, task_id, assignee, assigner, state, assignment_message_id, description, assigned_at, updated_at, last_reminded_at, reminder_count, lead_notified_count";
 pub(crate) const TASK_EVENT_COLUMNS: &str = "team, task_id, assignee, seq, at, event, from_state, to_state, actor, message_id, outcome, marker, detail";
 
+pub(crate) fn select_tasks_for_team_sql() -> String {
+    format!(
+        "SELECT {TASK_COLUMNS} FROM tasks WHERE team = ?1 AND (?2 IS NULL OR assignee = ?2) ORDER BY assigned_at DESC, task_id DESC"
+    )
+}
+
+pub(crate) fn select_task_events_sql() -> String {
+    format!(
+        "SELECT {TASK_EVENT_COLUMNS} FROM task_events WHERE team = ?1 AND task_id = ?2 AND (?3 IS NULL OR assignee = ?3) ORDER BY seq ASC"
+    )
+}
+
 pub(crate) fn select_task_row(
     connection: &Connection,
     team: &TeamName,
@@ -45,9 +57,7 @@ pub(crate) fn select_tasks_for_team(
     team: &TeamName,
     member: Option<&AgentName>,
 ) -> rusqlite::Result<Vec<TaskRow>> {
-    let mut statement = connection.prepare(&format!(
-        "SELECT {TASK_COLUMNS} FROM tasks WHERE team = ?1 AND (?2 IS NULL OR assignee = ?2) ORDER BY assigned_at DESC, task_id DESC"
-    ))?;
+    let mut statement = connection.prepare(&select_tasks_for_team_sql())?;
     statement
         .query_map(
             params![team.as_str(), member.map(AgentName::as_str)],
@@ -62,9 +72,7 @@ pub(crate) fn select_task_events(
     task_id: &TaskId,
     member: Option<&AgentName>,
 ) -> rusqlite::Result<Vec<TaskEventRow>> {
-    let mut statement = connection.prepare(&format!(
-        "SELECT {TASK_EVENT_COLUMNS} FROM task_events WHERE team = ?1 AND task_id = ?2 AND (?3 IS NULL OR assignee = ?3) ORDER BY seq ASC"
-    ))?;
+    let mut statement = connection.prepare(&select_task_events_sql())?;
     statement
         .query_map(
             params![

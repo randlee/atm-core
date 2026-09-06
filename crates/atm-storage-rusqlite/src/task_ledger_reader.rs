@@ -79,7 +79,9 @@ fn list_tasks(
     team: &TeamName,
     member: Option<&AgentName>,
 ) -> Result<Vec<TaskRow>, AtmError> {
-    let mut statement = connection.prepare(&format!("SELECT {} FROM tasks WHERE team = ?1 AND (?2 IS NULL OR assignee = ?2) ORDER BY assigned_at DESC, task_id DESC", task_sql::TASK_COLUMNS)).map_err(|error| sqlite_error(target, "failed to prepare async task list", error))?;
+    let mut statement = connection
+        .prepare(&task_sql::select_tasks_for_team_sql())
+        .map_err(|error| sqlite_error(target, "failed to prepare async task list", error))?;
     statement
         .query_map(
             params![team.as_str(), member.map(AgentName::as_str)],
@@ -99,7 +101,9 @@ fn list_task_events(
     task_id: &TaskId,
     member: Option<&AgentName>,
 ) -> Result<Vec<TaskEventRow>, AtmError> {
-    let mut statement = connection.prepare(&format!("SELECT {} FROM task_events WHERE team = ?1 AND task_id = ?2 AND (?3 IS NULL OR assignee = ?3) ORDER BY seq ASC", task_sql::TASK_EVENT_COLUMNS)).map_err(|error| sqlite_error(target, "failed to prepare async task event list", error))?;
+    let mut statement = connection
+        .prepare(&task_sql::select_task_events_sql())
+        .map_err(|error| sqlite_error(target, "failed to prepare async task event list", error))?;
     statement
         .query_map(
             params![
