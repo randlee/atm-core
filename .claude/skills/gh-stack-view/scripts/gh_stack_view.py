@@ -65,7 +65,14 @@ def stack_json_at(path: str) -> dict | None:
         data = json.loads(proc.stdout)
     except json.JSONDecodeError:
         return None
-    return data if data.get("branches") else None
+    if not isinstance(data, dict) or not isinstance(data.get("branches"), list) or not data["branches"]:
+        return None
+    if not isinstance(data.get("trunk"), str) or not all(
+        isinstance(b, dict) and isinstance(b.get("name"), str) for b in data["branches"]
+    ):
+        raise ToolError(f"gh stack view --json in {path} returned an unexpected shape; "
+                        "upgrade gh-stack (`gh extension upgrade stack`) or report the output")
+    return data
 
 
 def worktree_paths() -> list[str]:
@@ -350,7 +357,8 @@ def run_report(args: argparse.Namespace, trunk_filter: str | None) -> int:
     if fetched:
         fetch = run(["git", "fetch", "--quiet", "origin"], check=False)
         if fetch.returncode != 0:
-            sys.stderr.write("gh-stack-view: git fetch origin failed; origin comparison uses the last fetched state\n")
+            fetched = False
+            sys.stderr.write("gh-stack-view: git fetch origin failed; rebase column reported as unknown (❓)\n")
     numbers = sorted({b["pr"]["number"] for st in stacks for b in st["branches"] if b.get("pr")})
     prs = {} if args.no_pr else pr_details(numbers)
 

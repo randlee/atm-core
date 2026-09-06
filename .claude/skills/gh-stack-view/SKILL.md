@@ -41,9 +41,28 @@ trunk, `--all` shows everything.
 python3 .claude/skills/gh-stack-view/scripts/gh_stack_view.py --phase aw
 ```
 
-Exit code: `0` all coherent, `1` problems listed, `2` no stack found (a stack
-needs at least one layer checked out in a worktree; never `git checkout` in
-the main repo to get one).
+Exit codes:
+
+| Code | Meaning |
+|------|---------|
+| 0 | every shown stack coherent |
+| 1 | problems listed under a VERDICT |
+| 2 | nothing to show or the environment failed; stderr says which (see Errors) |
+
+## Errors
+
+Every failure is one `gh-stack-view: ...` line on stderr with the next action,
+never a traceback. Exit 2 covers all of these, so read the line:
+
+- `git`/`gh` not on PATH, gh-stack extension missing (`gh extension install github/gh-stack`), not inside a git repository.
+- `gh repo view` / `gh api graphql` failure: run `gh auth status`; `--no-pr` gives a local-only view meanwhile.
+- GraphQL errors, null data or non-JSON output: same, with the PR numbers named.
+- `gh stack view --json` returning an unexpected shape: upgrade gh-stack.
+- No open stack for the current phase or develop: the line reports how many merged/closed/other-phase stacks were hidden; use `--phase`, `--trunk` or `--all`.
+
+Non-fatal: a failed `git fetch origin` is warned once and the rebase column
+shows ❓ instead of comparing against stale refs. Pruned or unreadable
+worktrees are skipped silently (`git worktree prune` cleans them up).
 
 ## Output
 
