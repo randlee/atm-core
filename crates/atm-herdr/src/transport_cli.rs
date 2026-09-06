@@ -14,6 +14,7 @@ use crate::{HERDR_MAX_OUTPUT_BYTES, HERDR_PROCESS_CAP, HerdrError};
 #[derive(Clone, Debug)]
 pub(crate) struct CliIo {
     binary_path: Option<PathBuf>,
+    extra_environment: Vec<(String, String)>,
 }
 
 impl CliIo {
@@ -21,6 +22,18 @@ impl CliIo {
         let _ = config.socket_path();
         Self {
             binary_path: config.binary_path().cloned(),
+            extra_environment: Vec::new(),
+        }
+    }
+
+    #[cfg(feature = "test-utils")]
+    pub(crate) fn with_test_binary_and_environment(
+        binary_path: PathBuf,
+        extra_environment: Vec<(String, String)>,
+    ) -> Self {
+        Self {
+            binary_path: Some(binary_path),
+            extra_environment,
         }
     }
 
@@ -31,7 +44,14 @@ impl CliIo {
         deadline: RequestDeadline,
     ) -> Result<HerdrEnvelope, HerdrError> {
         let args = command_args(op);
-        let output = run_command(self.binary_path.as_deref(), &args, session, deadline).await?;
+        let output = run_command(
+            self.binary_path.as_deref(),
+            &self.extra_environment,
+            &args,
+            session,
+            deadline,
+        )
+        .await?;
         decode_envelope(&output)
     }
 }
@@ -80,6 +100,7 @@ pub(crate) fn command_args(op: HerdrOp<'_>) -> Vec<String> {
 
 async fn run_command(
     configured_binary: Option<&std::path::Path>,
+    extra_environment: &[(String, String)],
     args: &[String],
     session: Option<&HerdrSession>,
     deadline: RequestDeadline,
@@ -94,6 +115,7 @@ async fn run_command(
         .kill_on_drop(true)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    command.envs(extra_environment.iter().map(|(key, value)| (key, value)));
     if let Some(session) = session {
         command.env("HERDR_SESSION", session.as_str());
     }

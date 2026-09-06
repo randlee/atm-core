@@ -604,7 +604,6 @@ fn record_result<T>(breaker: &HerdrSpawnBreaker, result: &Result<T, HerdrError>)
 #[cfg(feature = "test-utils")]
 pub mod testing {
     use super::*;
-    use crate::transport::HerdrClientConfig;
     use crate::transport_cli::CliIo;
     use std::collections::VecDeque;
     use std::path::PathBuf;
@@ -655,9 +654,17 @@ pub mod testing {
 
     #[must_use]
     pub fn production_invoker_with_test_binary(binary: PathBuf) -> HerdrProcessInvoker {
+        production_invoker_with_test_binary_and_environment(binary, Vec::new())
+    }
+
+    #[must_use]
+    pub fn production_invoker_with_test_binary_and_environment(
+        binary: PathBuf,
+        environment: Vec<(String, String)>,
+    ) -> HerdrProcessInvoker {
         HerdrProcessInvoker {
             breaker: Arc::new(HerdrSpawnBreaker::default()),
-            io: HerdrIo::Cli(CliIo::new(&HerdrClientConfig::for_test_binary(binary))),
+            io: HerdrIo::Cli(CliIo::with_test_binary_and_environment(binary, environment)),
         }
     }
 
