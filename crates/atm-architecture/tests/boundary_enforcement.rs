@@ -3808,7 +3808,6 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
         "graft_receiver_register".to_owned(),
         "graft_receiver_refresh".to_owned(),
         "graft_receiver_unregister".to_owned(),
-        "graft_receiver_lookup".to_owned(),
     ]);
     assert_eq!(
         av3_bridge_run_call_sites_by_enclosing_fn(production_router),
