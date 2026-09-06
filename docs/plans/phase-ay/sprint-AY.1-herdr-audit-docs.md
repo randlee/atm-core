@@ -45,8 +45,6 @@ without creating a stack:
 
 ```bash
 test -n "$phase_ax_merge_sha"
-git merge-base --is-ancestor a7aebefb8 integrate/phase-ay
-git merge-base --is-ancestor "$phase_ax_merge_sha" integrate/phase-ay
 gh pr view --json headRefName,baseRefName,state
 ```
 
@@ -58,8 +56,8 @@ force-pushes.
 ## Preconditions
 
 - P-A — the Phase AY plan's P-A is satisfied: Phase AX has merged to develop,
-  `integrate/phase-ay` was cut from that exact fetched develop head, and both
-  merge-base commands above exit zero using the recorded Phase AX merge SHA.
+  `integrate/phase-ay` was cut from that exact fetched develop head, and the
+  recorded merge-base and symbol-presence checks all pass.
 - P-B — the Phase AY plan has dated approval from Rand.
 - The branch is created from the current `integrate/phase-ay`, not from another
   sprint branch.
