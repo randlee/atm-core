@@ -264,7 +264,7 @@ mod tests {
 
         let failure = timeline
             .db
-            .with_transaction(|transaction| {
+            .with_transaction(|transaction| -> Result<(), AtmError> {
                 transaction
                     .execute(
                         "INSERT INTO diagnostic_events (ts_unix_ms, level, component, origin, message) VALUES (43, 'error', 'timeline-test', 'test', 'rolled back')",
