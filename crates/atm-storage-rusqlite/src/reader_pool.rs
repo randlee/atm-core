@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 
 use atm_storage::{AtmError, ReadLaneError};
 use rusqlite::{Connection, InterruptHandle};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::shared_db::SharedDbTarget;
 use crate::shared_db_reader_lanes::open_read_connection_for_target;
@@ -237,9 +238,7 @@ pub(crate) struct ReaderPool {
     inner: Arc<PoolInner>,
 }
 
-/// Bounded knobs for one independent read lane. AV.1b adds the doctor lane to
-/// the same configuration surface; keeping the budget arithmetic here makes it
-/// impossible for a future lane to silently oversubscribe SQLite.
+/// Bounded knobs for the one shared SQLite read pool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ReaderPoolConfig {
     pub(crate) pool_size: NonZeroUsize,
@@ -247,101 +246,66 @@ pub(crate) struct ReaderPoolConfig {
     pub(crate) interrupt_grace: Duration,
     pub(crate) request_deadline: Duration,
     pub(crate) max_quarantined: NonZeroUsize,
+    /// Tool-class reads reserve fewer slots than the full shared pool. Agent
+    /// reads deliberately do not consume this budget and may use all workers.
+    pub(crate) tool_class_max_in_flight: usize,
 }
 
 impl ReaderPoolConfig {
-    pub(crate) const fn mailbox_defaults() -> Self {
+    pub(crate) const fn shared_defaults() -> Self {
         Self {
-            pool_size: NonZeroUsize::new(4).expect("non-zero mailbox pool size"),
-            queue_depth: NonZeroUsize::new(16).expect("non-zero mailbox queue depth"),
+            pool_size: NonZeroUsize::new(8).expect("non-zero shared read pool size"),
+            queue_depth: NonZeroUsize::new(32).expect("non-zero shared read queue depth"),
             interrupt_grace: Duration::from_millis(250),
             request_deadline: Duration::from_secs(10),
-            max_quarantined: NonZeroUsize::new(4).expect("non-zero mailbox quarantine budget"),
-        }
-    }
-
-    pub(crate) const fn search_defaults() -> Self {
-        Self {
-            pool_size: NonZeroUsize::new(2).expect("non-zero search pool size"),
-            queue_depth: NonZeroUsize::new(8).expect("non-zero search queue depth"),
-            interrupt_grace: Duration::from_millis(250),
-            request_deadline: Duration::from_secs(10),
-            max_quarantined: NonZeroUsize::new(2).expect("non-zero search quarantine budget"),
+            max_quarantined: NonZeroUsize::new(8).expect("non-zero shared read quarantine budget"),
+            tool_class_max_in_flight: 6,
         }
     }
 }
-
-/// AV.1b's doctor lane is included now so the connection cap remains stable as
-/// the stacked handler-cutover branch lands.
-pub(crate) const DEFAULT_DOCTOR_READER_CONFIG: ReaderPoolConfig = ReaderPoolConfig {
-    pool_size: NonZeroUsize::new(4).expect("non-zero doctor pool size"),
-    queue_depth: NonZeroUsize::new(16).expect("non-zero doctor queue depth"),
-    interrupt_grace: Duration::from_millis(250),
-    request_deadline: Duration::from_secs(10),
-    max_quarantined: NonZeroUsize::new(4).expect("non-zero doctor quarantine budget"),
-};
 
 pub(crate) const DEFAULT_MAX_READER_CONNECTIONS: NonZeroUsize =
     NonZeroUsize::new(32).expect("non-zero maximum reader connections");
 
-/// The one composition-owned `[reader_lanes]` configuration surface.
-///
-/// AV.1a keeps it backend-local because no HTTP handler reads it; the storage
-/// factory accepts one value and validates the whole connection budget before
-/// opening any worker. This prevents mailbox/search/doctor knobs from drifting
-/// into per-handler constants.
+/// The one composition-owned shared-read-pool configuration surface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ReaderLanesConfig {
-    pub(crate) mailbox: ReaderPoolConfig,
-    pub(crate) search: ReaderPoolConfig,
-    pub(crate) doctor: ReaderPoolConfig,
+pub(crate) struct SharedReadPoolConfig {
+    pub(crate) pool: ReaderPoolConfig,
     pub(crate) max_connections: NonZeroUsize,
 }
 
-impl Default for ReaderLanesConfig {
+impl Default for SharedReadPoolConfig {
     fn default() -> Self {
         Self {
-            mailbox: ReaderPoolConfig::mailbox_defaults(),
-            search: ReaderPoolConfig::search_defaults(),
-            doctor: DEFAULT_DOCTOR_READER_CONFIG,
+            pool: ReaderPoolConfig::shared_defaults(),
             max_connections: DEFAULT_MAX_READER_CONNECTIONS,
         }
     }
 }
 
-impl ReaderLanesConfig {
+impl SharedReadPoolConfig {
     pub(crate) fn validate(self) -> Result<(), AtmError> {
-        validate_connection_budget(self.mailbox, self.search, self.doctor, self.max_connections)
+        validate_connection_budget(self.pool, self.max_connections)
     }
 }
 
 pub(crate) fn validate_connection_budget(
-    mailbox: ReaderPoolConfig,
-    search: ReaderPoolConfig,
-    doctor: ReaderPoolConfig,
+    pool: ReaderPoolConfig,
     max_connections: NonZeroUsize,
 ) -> Result<(), AtmError> {
     let worst_case = 1usize
-        .saturating_add(mailbox.pool_size.get())
-        .saturating_add(search.pool_size.get())
-        .saturating_add(doctor.pool_size.get())
-        .saturating_add(mailbox.max_quarantined.get())
-        .saturating_add(search.max_quarantined.get())
-        .saturating_add(doctor.max_quarantined.get())
+        .saturating_add(pool.pool_size.get())
+        .saturating_add(pool.max_quarantined.get())
         .saturating_add(1); // analyst RO connection
-    if mailbox.max_quarantined > mailbox.pool_size
-        || search.max_quarantined > search.pool_size
-        || doctor.max_quarantined > doctor.pool_size
+    if pool.max_quarantined > pool.pool_size
+        || pool.tool_class_max_in_flight >= pool.pool_size.get()
         || worst_case > max_connections.get()
     {
         return Err(AtmError::validation(format!(
-            "SQLite reader connection budget exceeds max_connections: writer=1, mailbox_pool={}, search_pool={}, doctor_pool={}, mailbox_max_quarantined={}, search_max_quarantined={}, doctor_max_quarantined={}, analyst=1, total={worst_case}, max_connections={max_connections}",
-            mailbox.pool_size.get(),
-            search.pool_size.get(),
-            doctor.pool_size.get(),
-            mailbox.max_quarantined.get(),
-            search.max_quarantined.get(),
-            doctor.max_quarantined.get(),
+            "SQLite shared reader connection budget is invalid: writer=1, read_pool={}, read_max_quarantined={}, tool_class_max_in_flight={}, analyst=1, total={worst_case}, max_connections={max_connections}",
+            pool.pool_size.get(),
+            pool.max_quarantined.get(),
+            pool.tool_class_max_in_flight,
         )));
     }
     Ok(())
@@ -356,6 +320,7 @@ struct PoolInner {
     next_worker_index: AtomicUsize,
     next_worker_id: AtomicUsize,
     next_request: AtomicUsize,
+    tool_class_slots: Arc<Semaphore>,
     metrics: Arc<ReaderLaneMetrics>,
     #[cfg(test)]
     lifecycle_events: Mutex<Option<tokio::sync::mpsc::UnboundedSender<WorkerLifecycleEvent>>>,
@@ -392,6 +357,7 @@ struct Request {
     id: RequestId,
     queued_at: Instant,
     deadline: Instant,
+    _tool_class_slot: Option<OwnedSemaphorePermit>,
     run: Box<ReaderJob>,
 }
 
@@ -419,9 +385,11 @@ impl ReaderPool {
         target: Arc<SharedDbTarget>,
         config: ReaderPoolConfig,
     ) -> Result<Self, AtmError> {
-        if config.max_quarantined > config.pool_size {
+        if config.max_quarantined > config.pool_size
+            || config.tool_class_max_in_flight >= config.pool_size.get()
+        {
             return Err(AtmError::validation(format!(
-                "SQLite {lane} reader pool requires non-zero pool_size/queue_depth and max_quarantined <= pool_size"
+                "SQLite {lane} reader pool requires max_quarantined <= pool_size and tool_class_max_in_flight < pool_size"
             )));
         }
         let inner = Arc::new(PoolInner {
@@ -433,6 +401,7 @@ impl ReaderPool {
             next_worker_index: AtomicUsize::new(0),
             next_worker_id: AtomicUsize::new(config.pool_size.get()),
             next_request: AtomicUsize::new(0),
+            tool_class_slots: Arc::new(Semaphore::new(config.tool_class_max_in_flight)),
             metrics: Arc::new(ReaderLaneMetrics::new(lane, config.pool_size.get())),
             #[cfg(test)]
             lifecycle_events: Mutex::new(None),
@@ -465,7 +434,59 @@ impl ReaderPool {
         T: Send + 'static,
         F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
     {
+        self.submit_with_class(deadline, None, operation).await
+    }
+
+    pub(crate) async fn submit_tool<T, F>(
+        &self,
+        deadline: Duration,
+        operation: F,
+    ) -> Result<T, ReadLaneError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
+    {
         let expires_at = deadline_at(deadline)?;
+        let remaining = expires_at.saturating_duration_since(Instant::now());
+        let permit = tokio::time::timeout(
+            remaining,
+            Arc::clone(&self.inner.tool_class_slots).acquire_owned(),
+        )
+        .await
+        .map_err(|_| ReadLaneError::DeadlineExpired {
+            stage: "waiting for tool read capacity",
+        })?
+        .map_err(|_| ReadLaneError::Unavailable {
+            message: "tool read capacity closed".to_owned(),
+        })?;
+        self.submit_with_class_at(expires_at, Some(permit), operation)
+            .await
+    }
+
+    async fn submit_with_class<T, F>(
+        &self,
+        deadline: Duration,
+        tool_class_slot: Option<OwnedSemaphorePermit>,
+        operation: F,
+    ) -> Result<T, ReadLaneError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
+    {
+        self.submit_with_class_at(deadline_at(deadline)?, tool_class_slot, operation)
+            .await
+    }
+
+    async fn submit_with_class_at<T, F>(
+        &self,
+        expires_at: Instant,
+        tool_class_slot: Option<OwnedSemaphorePermit>,
+        operation: F,
+    ) -> Result<T, ReadLaneError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
+    {
         let reservation = self.reserve_worker()?;
         let request_id = RequestId::next(&self.inner.next_request);
         let (reply, response) = tokio::sync::oneshot::channel();
@@ -473,6 +494,7 @@ impl ReaderPool {
             id: request_id,
             queued_at: Instant::now(),
             deadline: expires_at,
+            _tool_class_slot: tool_class_slot,
             run: Box::new(move |connection, target, disposition| {
                 let result = match disposition {
                     RequestDisposition::Execute => operation(connection, target),
@@ -524,7 +546,7 @@ impl ReaderPool {
         }
     }
 
-    pub(crate) fn submit_blocking<T, F>(
+    pub(crate) fn submit_tool_blocking<T, F>(
         &self,
         deadline: Duration,
         operation: F,
@@ -534,6 +556,37 @@ impl ReaderPool {
         F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
     {
         let expires_at = deadline_at(deadline)?;
+        let permit = loop {
+            match Arc::clone(&self.inner.tool_class_slots).try_acquire_owned() {
+                Ok(permit) => break permit,
+                Err(tokio::sync::TryAcquireError::Closed) => {
+                    return Err(ReadLaneError::Unavailable {
+                        message: "tool read capacity closed".to_owned(),
+                    });
+                }
+                Err(tokio::sync::TryAcquireError::NoPermits) if Instant::now() >= expires_at => {
+                    return Err(ReadLaneError::DeadlineExpired {
+                        stage: "waiting for tool read capacity",
+                    });
+                }
+                Err(tokio::sync::TryAcquireError::NoPermits) => {
+                    thread::park_timeout(Duration::from_millis(2));
+                }
+            }
+        };
+        self.submit_blocking_with_class_at(expires_at, Some(permit), operation)
+    }
+
+    fn submit_blocking_with_class_at<T, F>(
+        &self,
+        expires_at: Instant,
+        tool_class_slot: Option<OwnedSemaphorePermit>,
+        operation: F,
+    ) -> Result<T, ReadLaneError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
+    {
         let reservation = self.reserve_worker()?;
         let request_id = RequestId::next(&self.inner.next_request);
         let (reply, response) = mpsc::sync_channel(1);
@@ -541,6 +594,7 @@ impl ReaderPool {
             id: request_id,
             queued_at: Instant::now(),
             deadline: expires_at,
+            _tool_class_slot: tool_class_slot,
             run: Box::new(move |connection, target, disposition| {
                 let result = match disposition {
                     RequestDisposition::Execute => operation(connection, target),
@@ -802,6 +856,14 @@ impl PoolInner {
         self.metrics.pool_size.fetch_sub(1, Ordering::Relaxed);
         let replacement_id = self.next_worker_id.fetch_add(1, Ordering::Relaxed);
         if self.spawn_worker(replacement_id).is_err() {
+            // A failed respawn must not permanently ratchet the advertised
+            // capacity downward; the retired worker was already removed.
+            self.metrics.pool_size.fetch_add(1, Ordering::Relaxed);
+            tracing::warn!(
+                worker_id,
+                replacement_id,
+                "reader worker replacement failed; capacity restored"
+            );
             return;
         }
         self.metrics.pool_size.fetch_add(1, Ordering::Relaxed);
@@ -883,15 +945,14 @@ fn run_worker(
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_DOCTOR_READER_CONFIG, DEFAULT_MAX_READER_CONNECTIONS, ReaderLaneMetrics,
-        ReaderPool, ReaderPoolConfig, WorkerLifecycleEvent, deadline_at,
-        validate_connection_budget,
+        DEFAULT_MAX_READER_CONNECTIONS, ReaderLaneMetrics, ReaderPool, ReaderPoolConfig,
+        WorkerLifecycleEvent, deadline_at, validate_connection_budget,
     };
     use crate::shared_db::SharedDbTarget;
     use std::num::NonZeroUsize;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, mpsc};
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     static NEXT_TEST_POOL_ID: AtomicUsize = AtomicUsize::new(1);
 
@@ -922,32 +983,26 @@ mod tests {
             request_deadline: Duration::from_secs(10),
             max_quarantined: NonZeroUsize::new(max_quarantined)
                 .expect("non-zero test quarantine budget"),
+            tool_class_max_in_flight: pool_size.saturating_sub(1),
         }
     }
 
     #[test]
     fn documented_default_connection_budget_is_within_the_cap() {
         validate_connection_budget(
-            ReaderPoolConfig::mailbox_defaults(),
-            ReaderPoolConfig::search_defaults(),
-            DEFAULT_DOCTOR_READER_CONFIG,
+            ReaderPoolConfig::shared_defaults(),
             DEFAULT_MAX_READER_CONNECTIONS,
         )
-        .expect("1 writer + 4 mailbox + 2 search + 4 doctor + 10 quarantine + 1 analyst = 22");
+        .expect("1 writer + 8 shared reads + 8 quarantined + 1 analyst = 18");
     }
 
     #[test]
-    fn reader_lane_default_deadline_is_config_owned() {
+    fn shared_reader_default_deadline_is_config_owned() {
         let expected = Duration::from_secs(10);
         assert_eq!(
-            ReaderPoolConfig::mailbox_defaults().request_deadline,
-            expected
+            ReaderPoolConfig::shared_defaults().request_deadline,
+            expected,
         );
-        assert_eq!(
-            ReaderPoolConfig::search_defaults().request_deadline,
-            expected
-        );
-        assert_eq!(DEFAULT_DOCTOR_READER_CONFIG.request_deadline, expected);
     }
 
     #[test]
@@ -966,17 +1021,14 @@ mod tests {
     #[test]
     fn connection_budget_fails_closed_and_names_each_contributor() {
         let error = validate_connection_budget(
-            ReaderPoolConfig::mailbox_defaults(),
-            ReaderPoolConfig::search_defaults(),
-            DEFAULT_DOCTOR_READER_CONFIG,
-            NonZeroUsize::new(21).expect("non-zero maximum connections"),
+            ReaderPoolConfig::shared_defaults(),
+            NonZeroUsize::new(17).expect("non-zero maximum connections"),
         )
-        .expect_err("22 reader connections must not fit under a cap of 21");
+        .expect_err("18 shared-read connections must not fit under a cap of 17");
         let message = error.message();
-        assert!(message.contains("mailbox_pool=4"));
-        assert!(message.contains("search_pool=2"));
-        assert!(message.contains("doctor_pool=4"));
-        assert!(message.contains("max_connections=21"));
+        assert!(message.contains("read_pool=8"));
+        assert!(message.contains("tool_class_max_in_flight=6"));
+        assert!(message.contains("max_connections=17"));
     }
 
     #[test]
@@ -1023,38 +1075,39 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mailbox_and_search_lanes_do_not_steal_each_others_capacity() {
-        let mailbox = Arc::new(test_pool(test_config(1, 1, Duration::from_millis(50), 1)));
-        let search = test_pool(test_config(1, 1, Duration::from_millis(50), 1));
+    async fn tool_reads_are_capped_below_shared_pool_capacity() {
+        let pool = Arc::new(test_pool(test_config(2, 2, Duration::from_millis(50), 2)));
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
-        let mailbox_task = {
-            let mailbox = Arc::clone(&mailbox);
+        let tool_task = {
+            let pool = Arc::clone(&pool);
             tokio::spawn(async move {
-                mailbox
-                    .submit(Duration::from_secs(1), move |_, _| {
-                        let _ = started_tx.send(());
-                        std::thread::park_timeout(Duration::from_millis(80));
-                        Ok::<_, atm_storage::ReadLaneError>(())
-                    })
-                    .await
+                pool.submit_tool(Duration::from_secs(1), move |_, _| {
+                    let _ = started_tx.send(());
+                    std::thread::park_timeout(Duration::from_millis(80));
+                    Ok::<_, atm_storage::ReadLaneError>(())
+                })
+                .await
             })
         };
-        started_rx.await.expect("mailbox worker started");
-        let started = Instant::now();
-        search
-            .submit(Duration::from_millis(100), |_, _| {
-                Ok::<_, atm_storage::ReadLaneError>("search")
+        started_rx.await.expect("tool read started");
+        let capped = pool
+            .submit_tool(Duration::from_millis(10), |_, _| {
+                Ok::<_, atm_storage::ReadLaneError>(())
             })
             .await
-            .expect("search lane stays available");
-        assert!(
-            started.elapsed() < Duration::from_millis(40),
-            "search must not wait behind a mailbox worker"
+            .expect_err("second tool read must respect the sub-cap");
+        assert_eq!(
+            capped,
+            atm_storage::ReadLaneError::DeadlineExpired {
+                stage: "waiting for tool read capacity"
+            }
         );
-        mailbox_task
-            .await
-            .expect("mailbox join")
-            .expect("mailbox result");
+        pool.submit(Duration::from_millis(50), |_, _| {
+            Ok::<_, atm_storage::ReadLaneError>("agent")
+        })
+        .await
+        .expect("agent traffic may use the second shared worker");
+        tool_task.await.expect("tool join").expect("tool result");
     }
 
     #[tokio::test]

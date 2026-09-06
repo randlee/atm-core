@@ -51,8 +51,8 @@ pub use diagnostics::{
 pub use error::AtmError;
 pub use error_codes::AtmErrorCode;
 pub use factory::{
-    EffectiveReaderLane, EffectiveReaderLanes, StorageFactory, StorageHandleParts, StorageHandles,
-    WriteThroughRosterStore,
+    EffectiveReaderPool, EffectiveReaderPoolMetrics, StorageFactory, StorageHandleParts,
+    StorageHandles, WriteThroughRosterStore,
 };
 pub use peer_catalog_audit::TrustedPeerCatalogAudit;
 pub use roles::ROLE_WORKER;

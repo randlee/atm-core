@@ -8,7 +8,6 @@
 //! message and roster contracts.
 
 mod analyst_query;
-mod control_path_pool;
 mod diagnostic_timeline;
 mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;
@@ -63,7 +62,7 @@ use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TemplateCatalogStore};
 use atm_storage::{
-    AtmError, EffectiveReaderLane, EffectiveReaderLanes, IsoTimestamp, StorageFactory,
+    AtmError, EffectiveReaderPool, EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory,
     StorageHandleParts, StorageHandles,
 };
 pub use diagnostic_timeline::{
@@ -586,7 +585,7 @@ impl std::fmt::Debug for SqliteStorageBackend {
 /// an executable composition root through [`StorageFactory`].
 pub struct SqliteStorageFactory {
     database_path: Option<PathBuf>,
-    reader_lanes: reader_pool::ReaderLanesConfig,
+    read_pool_config: reader_pool::SharedReadPoolConfig,
     observability: Arc<dyn SqliteObservability>,
     timeline_observer: Option<Arc<dyn Fn(Arc<SqliteDiagnosticTimeline>) + Send + Sync>>,
 }
@@ -595,7 +594,7 @@ impl Default for SqliteStorageFactory {
     fn default() -> Self {
         Self {
             database_path: None,
-            reader_lanes: reader_pool::ReaderLanesConfig::default(),
+            read_pool_config: reader_pool::SharedReadPoolConfig::default(),
             observability: Arc::new(observability::PassiveSqliteObservability),
             timeline_observer: None,
         }
@@ -606,7 +605,7 @@ impl Clone for SqliteStorageFactory {
     fn clone(&self) -> Self {
         Self {
             database_path: self.database_path.clone(),
-            reader_lanes: self.reader_lanes,
+            read_pool_config: self.read_pool_config,
             observability: Arc::clone(&self.observability),
             timeline_observer: self.timeline_observer.as_ref().map(Arc::clone),
         }
@@ -618,7 +617,7 @@ impl std::fmt::Debug for SqliteStorageFactory {
         formatter
             .debug_struct("SqliteStorageFactory")
             .field("database_path", &self.database_path)
-            .field("reader_lanes", &self.reader_lanes)
+            .field("read_pool_config", &self.read_pool_config)
             .field("timeline_observer", &self.timeline_observer.is_some())
             .finish_non_exhaustive()
     }
@@ -656,13 +655,13 @@ impl SqliteStorageFactory {
 
     #[allow(
         dead_code,
-        reason = "The composition root uses default ReaderLanesConfig until AV.1b exposes config-file parsing; this builder seam is intentionally testable now."
+        reason = "The composition root uses the default shared read-pool configuration until it is exposed through config-file parsing; this builder seam is intentionally testable now."
     )]
-    pub(crate) fn with_reader_lanes(
+    pub(crate) fn with_read_pool_config(
         mut self,
-        reader_lanes: reader_pool::ReaderLanesConfig,
+        read_pool_config: reader_pool::SharedReadPoolConfig,
     ) -> Self {
-        self.reader_lanes = reader_lanes;
+        self.read_pool_config = read_pool_config;
         self
     }
 
@@ -675,24 +674,44 @@ impl SqliteStorageFactory {
 
 impl StorageFactory for SqliteStorageFactory {
     fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError> {
-        let effective_reader_lanes = EffectiveReaderLanes {
-            mailbox: EffectiveReaderLane {
-                pool_size: self.reader_lanes.mailbox.pool_size.get(),
-                queue_depth: self.reader_lanes.mailbox.queue_depth.get(),
-            },
-            search: EffectiveReaderLane {
-                pool_size: self.reader_lanes.search.pool_size.get(),
-                queue_depth: self.reader_lanes.search.queue_depth.get(),
-            },
+        let effective_reader_pool = EffectiveReaderPool {
+            pool_size: self.read_pool_config.pool.pool_size.get(),
+            queue_depth: self.read_pool_config.pool.queue_depth.get(),
+            tool_class_max_in_flight: self.read_pool_config.pool.tool_class_max_in_flight,
         };
-        let backend = SqliteStorageBackend::new_with_observability_and_reader_lanes(
-            self.database_path(durable_state_root),
-            Arc::clone(&self.observability),
-            self.reader_lanes,
-        )?;
+        let backend = Arc::new(
+            SqliteStorageBackend::new_with_observability_and_read_pool_config(
+                self.database_path(durable_state_root),
+                Arc::clone(&self.observability),
+                self.read_pool_config,
+            )?,
+        );
         if let Some(observer) = &self.timeline_observer {
             observer(backend.diagnostic_timeline());
         }
+        let metrics_backend = Arc::clone(&backend);
+        let reader_pool_metrics: Arc<dyn Fn() -> Option<EffectiveReaderPoolMetrics> + Send + Sync> =
+            Arc::new(move || {
+                let snapshot = metrics_backend.reader_lane_metrics();
+                snapshot
+                    .lane("shared")
+                    .map(|lane| EffectiveReaderPoolMetrics {
+                        queue_depth: lane.queue_depth,
+                        saturated: lane.saturated,
+                        in_flight: lane.in_flight,
+                        wait_nanos: lane.wait_nanos,
+                        execution_nanos: lane.execution_nanos,
+                        expired_in_queue: lane.expired_in_queue,
+                        interrupted_while_active: lane.interrupted_while_active,
+                        quarantined: lane.quarantined,
+                        current_quarantined_workers: lane.current_quarantined_workers,
+                        retired_replaced_workers: lane.retired_replaced_workers,
+                        quarantine_exhausted_rejections: lane.quarantine_exhausted_rejections,
+                        pool_size: lane.pool_size,
+                        last_checkpoint_succeeded: lane.last_checkpoint_succeeded,
+                        current_wal_frames: lane.current_wal_frames,
+                    })
+            });
         // The write-through roster seam hydrates its RAM mirror here, fail
         // closed: a durable roster read failure at startup aborts backend
         // construction instead of silently starting with an incomplete RAM
@@ -711,7 +730,8 @@ impl StorageFactory for SqliteStorageFactory {
             message_search_store: backend.message_search_store(),
             async_message_search_store: backend.async_message_search_store(),
             diagnostic_timeline: backend.diagnostic_timeline(),
-            effective_reader_lanes: Some(effective_reader_lanes),
+            effective_reader_pool: Some(effective_reader_pool),
+            reader_pool_metrics: Some(reader_pool_metrics),
         }))
     }
 }
@@ -725,22 +745,22 @@ impl SqliteStorageBackend {
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
     ) -> Result<Self, AtmError> {
-        Self::new_with_observability_and_reader_lanes(
+        Self::new_with_observability_and_read_pool_config(
             path,
             observability,
-            reader_pool::ReaderLanesConfig::default(),
+            reader_pool::SharedReadPoolConfig::default(),
         )
     }
 
-    pub(crate) fn new_with_observability_and_reader_lanes(
+    pub(crate) fn new_with_observability_and_read_pool_config(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
-        reader_lanes: reader_pool::ReaderLanesConfig,
+        read_pool_config: reader_pool::SharedReadPoolConfig,
     ) -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_with_reader_lanes(
             path,
             observability,
-            reader_lanes,
+            read_pool_config,
         )?);
         Ok(Self {
             diagnostic_timeline: Arc::new(SqliteDiagnosticTimeline::from_shared_db(Arc::clone(
@@ -931,7 +951,7 @@ impl SqliteStorageBackend {
 #[cfg(test)]
 mod tests {
     use super::{SqliteStorageBackend, SqliteStorageFactory};
-    use crate::reader_pool::ReaderLanesConfig;
+    use crate::reader_pool::SharedReadPoolConfig;
     use atm_storage::contract::{
         AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, MailboxScope, Message,
         MessageKey, MessageQuery, ReadDeadline, ReadLaneError, RosterHarness, RosterMember,
@@ -977,19 +997,19 @@ mod tests {
     }
 
     #[test]
-    fn reader_lane_configuration_is_threaded_through_storage_factory_and_validated() {
+    fn shared_read_pool_configuration_is_threaded_through_storage_factory_and_validated() {
         let root = tempfile::tempdir().expect("temporary storage root");
-        let config = ReaderLanesConfig {
-            max_connections: std::num::NonZeroUsize::new(21).expect("non-zero maximum connections"),
-            ..ReaderLanesConfig::default()
+        let config = SharedReadPoolConfig {
+            max_connections: std::num::NonZeroUsize::new(17).expect("non-zero maximum connections"),
+            ..SharedReadPoolConfig::default()
         };
         let error = SqliteStorageFactory::at_path(root.path().join("mail.db"))
-            .with_reader_lanes(config)
+            .with_read_pool_config(config)
             .open(root.path())
-            .expect_err("over-budget reader lane configuration must fail startup");
+            .expect_err("over-budget shared read-pool configuration must fail startup");
         let message = error.message();
-        assert!(message.contains("mailbox_pool=4"));
-        assert!(message.contains("max_connections=21"));
+        assert!(message.contains("read_pool=8"));
+        assert!(message.contains("max_connections=17"));
     }
 
     #[tokio::test]
@@ -1018,15 +1038,11 @@ mod tests {
             .expect("bounded read");
         backend.checkpoint_wal().expect("checkpoint");
         let metrics = backend.reader_lane_metrics();
-        let mailbox = metrics.lane("mailbox").expect("mailbox lane metrics");
-        let search = metrics.lane("search").expect("search lane metrics");
-        assert_eq!(metrics.iter().count(), 2);
-        assert!(metrics.lane("doctor").is_none());
-        assert_eq!(mailbox.lane, "mailbox");
-        assert_eq!(search.lane, "search");
-        assert_eq!(mailbox.last_checkpoint_succeeded, Some(true));
-        assert!(mailbox.current_wal_frames.is_some());
-        assert_eq!(search.last_checkpoint_succeeded, Some(true));
+        let shared = metrics.lane("shared").expect("shared pool metrics");
+        assert_eq!(metrics.iter().count(), 1);
+        assert_eq!(shared.lane, "shared");
+        assert_eq!(shared.last_checkpoint_succeeded, Some(true));
+        assert!(shared.current_wal_frames.is_some());
     }
 
     #[tokio::test]
@@ -1095,8 +1111,8 @@ mod tests {
                     .expect("progressing checkpoint");
                 let metrics = sampler_backend.reader_lane_metrics();
                 let frames = metrics
-                    .lane("mailbox")
-                    .expect("mailbox lane metrics")
+                    .lane("shared")
+                    .expect("shared read-pool metrics")
                     .current_wal_frames
                     .expect("checkpoint records mailbox WAL frames");
                 assert!(frames <= 512, "WAL frames stay bounded during load");
@@ -1110,13 +1126,10 @@ mod tests {
         let samples = checkpoint_task.await.expect("checkpoint sampler join");
         assert_eq!(samples.len(), 24, "sample every writer commit during load");
         let metrics = backend.reader_lane_metrics();
-        let mailbox = metrics.lane("mailbox").expect("mailbox lane metrics");
-        let search = metrics.lane("search").expect("search lane metrics");
-        assert_eq!(mailbox.current_quarantined_workers, 0);
-        assert_eq!(mailbox.last_checkpoint_succeeded, Some(true));
-        assert!(mailbox.current_wal_frames.is_some());
-        assert_eq!(search.last_checkpoint_succeeded, Some(true));
-        assert!(search.current_wal_frames.is_some());
+        let shared = metrics.lane("shared").expect("shared read-pool metrics");
+        assert_eq!(shared.current_quarantined_workers, 0);
+        assert_eq!(shared.last_checkpoint_succeeded, Some(true));
+        assert!(shared.current_wal_frames.is_some());
     }
 
     fn message(key: &str, text: &str) -> Message {

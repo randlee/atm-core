@@ -32,8 +32,8 @@ pub use report::{
     GraftReceiversDoctorReport, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
     HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport, LegacyLiteralIpPeerDoctorReport,
     PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
-    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, ReaderLaneDoctorReport,
-    ReaderLanesDoctorReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
+    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, ReaderPoolDoctorReport,
+    ReaderPoolMetricsDoctorReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
 
 /// Async application port for the live Herdr visibility checks performed by

@@ -9,20 +9,35 @@ use crate::{
     RosterStore, TemplateCatalogStore,
 };
 
-/// Effective capacity settings for one reader lane, selected by the backend
-/// when it constructs the live pool.
+/// Backend-neutral effective capacity settings for the single shared reader
+/// pool, selected by the backend when it constructs the live pool. This is
+/// runtime data, not a benchmark-side default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EffectiveReaderLane {
+pub struct EffectiveReaderPool {
     pub pool_size: usize,
     pub queue_depth: usize,
+    pub tool_class_max_in_flight: usize,
 }
 
-/// Backend-neutral effective capacity settings for the benchmarked reader
-/// lanes. This is runtime data, not a benchmark-side default.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EffectiveReaderLanes {
-    pub mailbox: EffectiveReaderLane,
-    pub search: EffectiveReaderLane,
+/// Backend-neutral live metrics snapshot for the single shared reader pool,
+/// mirroring the backend's internal per-lane metrics now that there is only
+/// one lane (`"shared"`) to report.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EffectiveReaderPoolMetrics {
+    pub queue_depth: usize,
+    pub saturated: u64,
+    pub in_flight: usize,
+    pub wait_nanos: u64,
+    pub execution_nanos: u64,
+    pub expired_in_queue: u64,
+    pub interrupted_while_active: u64,
+    pub quarantined: u64,
+    pub current_quarantined_workers: usize,
+    pub retired_replaced_workers: u64,
+    pub quarantine_exhausted_rejections: u64,
+    pub pool_size: usize,
+    pub last_checkpoint_succeeded: Option<bool>,
+    pub current_wal_frames: Option<u64>,
 }
 
 /// A roster [`RosterStore`] handle proven, *by type*, to be the
@@ -105,7 +120,8 @@ pub struct StorageHandles {
     message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
     async_message_search_store: Arc<dyn AsyncMessageSearchStore + Send + Sync>,
     diagnostic_timeline: Arc<dyn DiagnosticTimelineStore + Send + Sync>,
-    effective_reader_lanes: Option<EffectiveReaderLanes>,
+    effective_reader_pool: Option<EffectiveReaderPool>,
+    reader_pool_metrics: Option<Arc<dyn Fn() -> Option<EffectiveReaderPoolMetrics> + Send + Sync>>,
 }
 
 /// Typed assembly input for [`StorageHandles`].
@@ -132,7 +148,9 @@ pub struct StorageHandleParts {
     pub message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
     pub async_message_search_store: Arc<dyn AsyncMessageSearchStore + Send + Sync>,
     pub diagnostic_timeline: Arc<dyn DiagnosticTimelineStore + Send + Sync>,
-    pub effective_reader_lanes: Option<EffectiveReaderLanes>,
+    pub effective_reader_pool: Option<EffectiveReaderPool>,
+    pub reader_pool_metrics:
+        Option<Arc<dyn Fn() -> Option<EffectiveReaderPoolMetrics> + Send + Sync>>,
 }
 
 impl fmt::Debug for StorageHandles {
@@ -155,7 +173,8 @@ impl fmt::Debug for StorageHandles {
             .field("template_catalog_store", &"dyn TemplateCatalogStore")
             .field("message_search_store", &"dyn MessageSearchStore")
             .field("async_message_search_store", &"dyn AsyncMessageSearchStore")
-            .field("effective_reader_lanes", &self.effective_reader_lanes)
+            .field("effective_reader_pool", &self.effective_reader_pool)
+            .field("reader_pool_metrics", &self.reader_pool_metrics.is_some())
             .finish()
     }
 }
@@ -176,7 +195,8 @@ impl StorageHandles {
             message_search_store: parts.message_search_store,
             async_message_search_store: parts.async_message_search_store,
             diagnostic_timeline: parts.diagnostic_timeline,
-            effective_reader_lanes: parts.effective_reader_lanes,
+            effective_reader_pool: parts.effective_reader_pool,
+            reader_pool_metrics: parts.reader_pool_metrics,
         }
     }
 
@@ -248,11 +268,18 @@ impl StorageHandles {
         Arc::clone(&self.diagnostic_timeline)
     }
 
-    /// Returns the effective reader-pool capacities selected by the backend,
-    /// when that backend exposes the benchmarked mailbox and search lanes.
+    /// Returns the effective shared reader-pool capacity selected by the
+    /// backend, when that backend exposes the benchmarked reader pool.
     #[must_use]
-    pub fn effective_reader_lanes(&self) -> Option<EffectiveReaderLanes> {
-        self.effective_reader_lanes
+    pub fn effective_reader_pool(&self) -> Option<EffectiveReaderPool> {
+        self.effective_reader_pool
+    }
+
+    /// Returns a live metrics snapshot for the shared reader pool, when the
+    /// backend exposes one.
+    #[must_use]
+    pub fn reader_pool_metrics(&self) -> Option<EffectiveReaderPoolMetrics> {
+        self.reader_pool_metrics.as_ref().and_then(|f| f())
     }
 }
 
