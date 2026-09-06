@@ -22,11 +22,33 @@ just smoke inbound-peer-combine --panes-dir <directory> --hosts <hosts> --output
 just smoke graft-hermes [arguments accepted by the Hermes graft smoke]
 ```
 
+`peer-pair` has no implicit loopback fixture.  It always requires both
+`--config` and `--evidence-dir`; the supplied role configuration owns its
+identities, public-client commands, and any runner-owned daemon paths.  Do not
+invoke bare `just smoke peer-pair`, do not synthesize a trust record, and do
+not substitute the `normal` fixture for this release-evidence lane.  If no
+approved role configuration is supplied, report peer-pair as not run with that
+exact input blocker.
+
 `just benchmark` is the separate, canonical performance gate; it is not a
 replacement for functional smoke coverage. Each successful run writes its
 immutable JSON, its XHTML panel, and the aggregate report beneath
 `site/reports/`; the recipe rebuilds the report automatically. Use
 `just benchmark-report` only to rebuild or inspect already-published evidence.
+The running benchmark agent reports minor blockers it fixes itself, is
+empowered to make any change necessary to meet or exceed benchmark floors, and
+fixes regressions itself as part of the same run without escalating to Rand or
+starting a separate agent dispatch loop.  The run is never interrupted or
+second-guessed mid-run; quality-mgr and team-lead review the resulting fixes
+afterward through the normal PR process.  Follow the [Phase AX pre-merge live
+proof policy](plans/phase-ax/premerge-live-proof.md) for the safeguards.
+Benchmark evidence follows a fixed, exclusive path: run
+`ATM_CAPACITY_HOST_LABEL=<host>-atmbench just benchmark`, then
+`just benchmark-report`, then `just benchmark-publish`; commit the per-lane
+result JSON, `<campaign>.campaign.json`, and `<campaign>.xhtml` under
+`site/reports/send-message-benchmark/`.  The report and evidence reply must go
+directly to the requester's full host-qualified address (`<agent>@<team>.<host>`)
+exactly as given in the task assignment; never guess from a bare agent name.
 Use its public peer-wire targets, not a Cargo feature or a private harness:
 
 ```bash

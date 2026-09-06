@@ -32,6 +32,27 @@ being a separate OS user; it is not an alternate scope for the interactive
 user. The account name is supplied by an operator/bootstrap workflow and is
 never a hardcoded identity or hostname.
 
+The running benchmark agent provisions its own disposable benchmark account
+as part of the workflow when needed; the workflow does not require a human to
+pre-provision that account. The agent reports minor blockers it fixes itself,
+may make any change needed to meet or exceed benchmark floors, and fixes
+regressions itself as part of the same run without escalating to Rand or
+starting a separate agent dispatch loop. The run is never interrupted or
+second-guessed mid-run; quality-mgr and team-lead judge the fixes afterward
+through normal PR review. Provisioning remains outside timed samples, and the
+runner must still validate the account-local manifest before touching state or
+starting a daemon.
+
+Benchmark completion reports are sent directly to the requester's full
+host-qualified address (`<agent>@<team>.<host>`) exactly as supplied in the
+task assignment; a bare agent name must never be resolved by guessing the
+host. Benchmark evidence uses the fixed sequence
+`ATM_CAPACITY_HOST_LABEL=<host>-atmbench just benchmark`,
+`just benchmark-report`, and `just benchmark-publish`. The per-lane result
+JSON, `<campaign>.campaign.json`, and `<campaign>.xhtml` are committed under
+`site/reports/send-message-benchmark/`; hand-written or ad-hoc XHTML or JSON
+is not accepted.
+
 The benchmark runner must validate an account-local manifest against the
 executing process before it can touch state or start a daemon. The manifest
 binds the benchmark workflow to the account's UID, home, canonical durable
