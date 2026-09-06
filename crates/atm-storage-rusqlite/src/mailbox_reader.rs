@@ -32,7 +32,7 @@ impl MailboxReader {
         }
         self.pool
             .submit(deadline.remaining(), move |connection, target| {
-                list_messages(connection, target, &scope, &query).map_err(storage_error)
+                list_messages(connection, target, &scope, &query).map_err(read_lane_storage_error)
             })
             .await
     }
@@ -57,7 +57,7 @@ impl MailboxReader {
     ) -> Result<bool, ReadLaneError> {
         self.pool
             .submit(deadline.remaining(), move |connection, target| {
-                mailbox_member_exists(connection, target, &scope).map_err(storage_error)
+                mailbox_member_exists(connection, target, &scope).map_err(read_lane_storage_error)
             })
             .await
     }
@@ -69,7 +69,7 @@ impl MailboxReader {
     ) -> Result<Option<IsoTimestamp>, ReadLaneError> {
         self.pool
             .submit(deadline.remaining(), move |connection, target| {
-                load_seen_watermark(connection, target, &scope).map_err(storage_error)
+                load_seen_watermark(connection, target, &scope).map_err(read_lane_storage_error)
             })
             .await
     }
@@ -121,10 +121,19 @@ impl AsyncMailboxReader for MailboxReader {
 
 impl atm_storage::contract::sealed::Sealed for MailboxReader {}
 
-fn storage_error(error: AtmError) -> ReadLaneError {
+pub(crate) fn read_lane_storage_error(error: AtmError) -> ReadLaneError {
     ReadLaneError::Unavailable {
-        message: error.message().to_owned(),
+        message: format!(
+            "{} (code: {:?}; cause: {})",
+            error.message(),
+            error.code(),
+            error.cause().unwrap_or("none")
+        ),
     }
+}
+
+fn storage_error(error: AtmError) -> ReadLaneError {
+    read_lane_storage_error(error)
 }
 
 fn list_messages(

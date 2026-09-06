@@ -2,8 +2,9 @@
 
 use std::time::Duration;
 
-use atm_storage::{AtmError, MessageSearchPage, MessageSearchQuery, ReadLaneError};
+use atm_storage::{AtmError, MessageSearchPage, MessageSearchQuery};
 
+use crate::mailbox_reader::read_lane_storage_error;
 use crate::reader_pool::{ReaderPool, ReaderPoolConfig};
 use crate::search_store::execute_search;
 
@@ -31,7 +32,7 @@ impl SearchReader {
     pub(crate) fn submit(&self, query: MessageSearchQuery) -> Result<MessageSearchPage, AtmError> {
         self.pool
             .submit_tool_blocking(self.request_deadline, move |connection, target| {
-                execute_search(&query, connection, target).map_err(read_lane_error)
+                execute_search(&query, connection, target).map_err(read_lane_storage_error)
             })
             .map_err(AtmError::from)
     }
@@ -43,7 +44,7 @@ impl SearchReader {
     ) -> Result<MessageSearchPage, AtmError> {
         self.pool
             .submit_tool(timeout, move |connection, target| {
-                execute_search(&query, connection, target).map_err(read_lane_error)
+                execute_search(&query, connection, target).map_err(read_lane_storage_error)
             })
             .await
             .map_err(AtmError::from)
@@ -57,12 +58,6 @@ impl SearchReader {
         Err(AtmError::daemon_unavailable(
             "SQLite search reader request expired before execution",
         ))
-    }
-}
-
-fn read_lane_error(error: AtmError) -> ReadLaneError {
-    ReadLaneError::Unavailable {
-        message: error.message().to_owned(),
     }
 }
 
