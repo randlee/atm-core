@@ -15,13 +15,16 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T18:55:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AWReadinessReview ;
   triage:foundAt "2026-09-05T18:50:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-AW-P1-003/AW-P1-003-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-AW-P1-003/AW-P1-003-2> ;
+  triage:triageRecordVersion "1" ;
+  triage:closedAt "2026-09-06T01:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
 
 <urn:atm:triage:occurrence/FTQ-AW-P1-003/AW-P1-003-1>
   a triage:Occurrence ;
@@ -40,6 +43,36 @@
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "450f36b91" ;
   triage:orderIndex 1 .
+
+# quality-mgr, 2026-09-06: closed via PR #1239 (fix/aw-gate-deadline, cipher),
+# merge commit ec098ae59 on integrate/phase-aw. PASS verdict on record
+# (message 01M1T5FNH8TYEF5RH5QHH6MZMT): all three Gate wait methods now
+# route through one wait_until() helper with a fixed 5s deadline via
+# changed.wait_timeout and an actionable timeout panic; test-only, no
+# production/legacy-daemon code touched. fenix disclosed the merge landed
+# with 15/19 checks green and the OS test matrix (4 checks) still pending at
+# merge time; she is watching the remaining run and post-merge integrate CI
+# and will fix-forward with a new PR if anything fails. Recorded here as
+# fixed on the strength of the code review and merge; if the pending OS
+# matrix surfaces a regression, that reopens as a new occurrence, not an
+# edit to this one (append-only).
+<urn:atm:triage:occurrence/FTQ-AW-P1-003/AW-P1-003-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 913 ;
+  triage:snippet "self.wait_until(state, \"entry\", |state| state.entered);" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ec098ae59" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-ftq003/ec098ae59> .
+
+<urn:atm:triage:worktree/integrate-phase-aw-ftq003/ec098ae59>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ec098ae59" ;
+  triage:orderIndex 2 .
 
 # quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: reconfirmed
 # still open, unchanged, at integrate/phase-aw@062cb44dd by two independent
