@@ -66,6 +66,34 @@ paths:
       responses:
         '200': { description: Daemon health, content: { application/json: { schema: { type: object } } } }
         default: { $ref: '#/components/responses/AtmError' }
+  /diagnostics:
+    get:
+      operationId: queryDiagnostics
+      description: Authenticated, bounded read-only query of the retained diagnostic timeline.
+      parameters:
+        - name: since
+          in: query
+          schema: { type: integer, format: int64 }
+        - name: until
+          in: query
+          schema: { type: integer, format: int64 }
+        - name: level
+          in: query
+          schema: { type: string }
+        - name: component
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        '200': { description: Retained diagnostic events, content: { application/json: { schema: { $ref: '#/components/schemas/DiagnosticTimelineResponse' } } } }
+        '400': { $ref: '#/components/responses/AtmError' }
+        '503': { $ref: '#/components/responses/AtmError' }
+        default: { $ref: '#/components/responses/AtmError' }
   /compatibility:
     post:
       operationId: compatibilityPreflight
@@ -218,6 +246,25 @@ components:
         message_at: { type: string, format: date-time }
         from_agent: { $ref: '#/components/schemas/AgentAddress' }
         to_agent: { $ref: '#/components/schemas/AgentAddress' }
+    DiagnosticTimelineRecord:
+      type: object
+      required: [ts_unix_ms, level, component, origin, message]
+      properties:
+        ts_unix_ms: { type: integer, format: int64 }
+        level: { type: string }
+        component: { type: string }
+        code: { type: string, nullable: true }
+        correlation_id: { type: string, nullable: true }
+        origin: { type: string }
+        message: { type: string }
+        detail: { type: string, nullable: true }
+    DiagnosticTimelineResponse:
+      type: object
+      required: [records, truncated]
+      properties:
+        records: { type: array, items: { $ref: '#/components/schemas/DiagnosticTimelineRecord' } }
+        truncated: { type: boolean }
+        next_cursor: { type: string, nullable: true }
         template_type: { type: string }
         category: { type: string }
         snippet: { type: string }

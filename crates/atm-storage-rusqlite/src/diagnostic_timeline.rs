@@ -243,6 +243,54 @@ mod tests {
     }
 
     #[test]
+    fn a_failed_diagnostic_transaction_preserves_a_populated_migrated_database() {
+        let directory = tempdir().expect("temporary database directory");
+        let timeline = SqliteDiagnosticTimeline::open(directory.path().join("mail.db"))
+            .expect("timeline opens and applies every migration");
+        timeline
+            .record_batch(&[DiagnosticEvent {
+                ts_unix_ms: 42,
+                level: "warn".to_owned(),
+                component: "timeline-test".to_owned(),
+                code: Some("ATM_EXISTING".to_owned()),
+                correlation_id: None,
+                origin: "tracing".to_owned(),
+                message: "existing diagnostic".to_owned(),
+                detail: None,
+                id: 0,
+            }])
+            .expect("seed diagnostic");
+        timeline.prune(0).expect("drain seeded writer operation");
+
+        let failure = timeline
+            .db
+            .with_transaction(|transaction| {
+                transaction
+                    .execute(
+                        "INSERT INTO diagnostic_events (ts_unix_ms, level, component, origin, message) VALUES (43, 'error', 'timeline-test', 'test', 'rolled back')",
+                        [],
+                    )
+                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                Err(AtmError::mailbox_write("force diagnostic rollback"))
+            })
+            .expect_err("the deliberately failed transaction must roll back");
+        assert!(failure.message().contains("force diagnostic rollback"));
+
+        let rows = timeline
+            .query(&DiagnosticQuery::default())
+            .expect("query migrated diagnostic timeline");
+        assert!(
+            rows.iter()
+                .any(|row| row.code.as_deref() == Some("ATM_EXISTING")),
+            "the populated migrated database must retain rows that predate the failed operation"
+        );
+        assert!(
+            !rows.iter().any(|row| row.message == "rolled back"),
+            "the failed operation must not leave a partial diagnostic row behind"
+        );
+    }
+
+    #[test]
     fn ac4_prune_reduces_a_25k_fixture_to_the_documented_row_bound() {
         const FIXTURE_ROWS: usize = 25_000;
         let directory = tempdir().expect("temporary database directory");
