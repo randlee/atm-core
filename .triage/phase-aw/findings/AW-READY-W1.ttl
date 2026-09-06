@@ -39,28 +39,49 @@
 # rejection of the ADR-058 feature deferral stands. This ruling only says
 # phase-aw is not the phase that delivers it; it does not relax the
 # release-readiness requirement.
-
+#
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: per the
+# branch-scoped open-findings query's own documented semantics
+# (open-findings-for-sprint.sparql header), only occurrence-level
+# closed/status fields are authoritative per-branch -- a comment-only ruling
+# (however authoritative) is invisible to the live merge gate. This is the
+# same class of gap already corrected this round for AW-READY-M4/M6/M8/N5/O6.
+# Per Rand's explicit instruction above, the header's
+# triage:severity/triage:status/triage:dispatchReady are NOT touched. Instead
+# both occurrences below get their triage:status set to "waived" (on the
+# SPARQL query's own terminal-status list), which excludes this finding from
+# the integrate/phase-aw branch-scoped live gate while leaving triage:closed
+# false (this was never fixed, only deferred) and the underlying code/doc
+# citations unchanged. Tracking ownership moves to phase-ay per the ruling
+# above; the release-readiness checklist obligation is unaffected.
 <urn:atm:triage:occurrence/AW-READY-W1/ADR058>
   a triage:Occurrence ;
   triage:file "docs/adr/ADR-058-herdr-local-steer-backend-contract.md" ;
   triage:line 576 ;
   triage:snippet "- Herdr on Windows (named-pipe transport exists but is out of AQ scope)." ;
-  triage:status "open" ;
+  triage:status "waived" ;
   triage:closed false ;
   triage:branch "integrate/phase-aw" ;
-  triage:headSha "db9b5666a" ;
-  triage:occursIn <urn:atm:triage:worktree/AWW1/db9b5666a> .
+  triage:headSha "062cb44dd" ;
+  triage:occursIn <urn:atm:triage:worktree/AWW1/062cb44dd> .
 
 <urn:atm:triage:occurrence/AW-READY-W1/AX-INHERIT>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md" ;
   triage:line 1 ;
   triage:snippet "## Out of scope\n\nWindows or Linux Herdr runs; hermes graft members; tmux members." ;
-  triage:status "open" ;
+  triage:status "waived" ;
   triage:closed false ;
   triage:branch "integrate/phase-aw" ;
-  triage:headSha "db9b5666a" ;
-  triage:occursIn <urn:atm:triage:worktree/AWW1/db9b5666a> .
+  triage:headSha "062cb44dd" ;
+  triage:occursIn <urn:atm:triage:worktree/AWW1/062cb44dd> .
+
+<urn:atm:triage:worktree/AWW1/062cb44dd>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "062cb44dd" ;
+  triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/AWW1/db9b5666a>
   a triage:WorktreeSnapshot ;

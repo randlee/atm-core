@@ -71,10 +71,15 @@
   triage:orderIndex 1 .
 
 # Developer branch status, PR #1215, 2026-09-05: severity-rank filtering is
-# present from 7f678a558 and remains fixed on d9fa67fcc. QA owns closure.
-<urn:atm:triage:finding/AW-READY-M7>
-  triage:status "fixed" .
-
+# present from 7f678a558 and remains fixed on d9fa67fcc for the server-side
+# query only. quality-mgr, 2026-09-06: the stale duplicate
+# `triage:status "fixed"` reassertion previously here has been removed -- a
+# second triage:status triple on the same finding subject produced a
+# duplicate row (with a stale "fixed" status value) in the branch-scoped
+# open-findings query, double-counting this finding in the live gate. The
+# finding-level status remains "open" in the header above, consistent with
+# the correction note recorded 2026-09-06: the CLI-bypass sub-condition this
+# finding's closure explicitly requires is still unmet.
 <urn:atm:triage:occurrence/AW-READY-M7/fix-aw-readiness-easy-d9fa67fcc>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/diagnostic_timeline.rs" ;

@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-05T16:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AW2 ;
@@ -23,36 +25,49 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-M4/aw-integrate-235> ;
   triage:triageRecordVersion "1" .
 
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: correcting a
+# pre-existing reconciliation gap found while re-running triage_report.py --
+# a prior round (PR #1215, 2026-09-05) reasserted the finding-level
+# triage:status as a separate "fixed" triple (a duplicate-predicate pattern
+# that both left the original branch-linked occurrence open, invisible to
+# the branch-scoped live-count gate, and produced a duplicate row in the
+# open-findings SPARQL query since rdflib returns one solution per matching
+# triage:status triple). Closing correctly in place: independently confirmed
+# by direct read of crates/atm-storage-rusqlite/src/writer/ops.rs:229-233 at
+# integrate/phase-aw@062cb44dd -- the query reads
+# "ORDER BY ts_unix_ms DESC, id DESC LIMIT ?1 OFFSET ?2", deleting the
+# newest-beyond-cap rows correctly (oldest rows survive). Landed via
+# 2603bbe56 (fix(atm-storage-rusqlite): prune oldest diagnostic rows, not
+# newest) and confirmed on fix/aw-readiness-easy@d9fa67fcc, both ancestors of
+# 062cb44dd. Independently confirmed by req-qa and rust-service-hardening-
+# agent in this round.
 <urn:atm:triage:occurrence/AW-READY-M4/aw-integrate-235>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
-  triage:line 235 ;
-  triage:snippet "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms ASC LIMIT ?1 OFFSET ?2)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 230 ;
+  triage:snippet "ORDER BY ts_unix_ms DESC, id DESC LIMIT ?1 OFFSET ?2" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-aw" ;
-  triage:headSha "7e61ad87e" ;
-  triage:occursIn <urn:atm:triage:worktree/aw-integrate/7e61ad87e> .
+  triage:headSha "062cb44dd" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/062cb44dd> .
 
-<urn:atm:triage:worktree/aw-integrate/7e61ad87e>
+<urn:atm:triage:worktree/integrate-phase-aw/062cb44dd>
   a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/integrate-aw" ;
+  triage:path "atm-core-worktrees/integrate/phase-aw" ;
   triage:branch "integrate/phase-aw" ;
-  triage:headSha "7e61ad87e" ;
-  triage:orderIndex 1 .
+  triage:headSha "062cb44dd" ;
+  triage:orderIndex 2 .
 
-# Developer branch status, PR #1215, 2026-09-05: the count-prune fix is
-# present from 2603bbe56 and remains fixed on d9fa67fcc. QA owns closure.
-<urn:atm:triage:finding/AW-READY-M4>
-  triage:status "fixed" .
-
+# Retained history occurrence (not the branch-linked one; kept for
+# provenance only).
 <urn:atm:triage:occurrence/AW-READY-M4/fix-aw-readiness-easy-d9fa67fcc>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
   triage:line 235 ;
   triage:snippet "ORDER BY ts_unix_ms DESC, id DESC LIMIT ?1 OFFSET ?2" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "d9fa67fcc" ;
   triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
@@ -62,4 +77,4 @@
   triage:path ".worktrees/fix-aw-readiness-easy" ;
   triage:branch "fix/aw-readiness-easy" ;
   triage:headSha "d9fa67fcc" ;
-  triage:orderIndex 2 .
+  triage:orderIndex 1 .
