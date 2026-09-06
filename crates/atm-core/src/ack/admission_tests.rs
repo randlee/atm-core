@@ -371,7 +371,10 @@ impl atm_storage::RosterStore for SingleMemberRoster {
     }
 
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
-        unreachable!("admission entry tests never enumerate teams")
+        // Runtime construction hydrates the RAM roster from the durable
+        // store exactly once at startup, exercising `list_teams` even though
+        // admission tests otherwise never enumerate teams themselves.
+        Ok(vec![TeamName::from_validated(TEST_TEAM)])
     }
 }
 

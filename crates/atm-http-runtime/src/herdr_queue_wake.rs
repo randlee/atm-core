@@ -1330,7 +1330,6 @@ mod tests {
                 refreshed_at: None,
             })
             .expect("changed roster");
-        runtime.clear_roster_cache();
         queue_message(root.path(), &runtime, &team, "aq27-agent");
         queue_message(root.path(), &runtime, &team, "aq27-agent-20");
         queue_message(root.path(), &runtime, &team, "aq27-agent-21");
@@ -1385,6 +1384,175 @@ mod tests {
         assert_eq!(
             runtime_state(HerdrAgentStatus::Unknown),
             RuntimeMemberState::Unknown
+        );
+    }
+
+    struct UnusedMailStore;
+    impl atm_storage::contract::sealed::Sealed for UnusedMailStore {}
+    impl atm_storage::MessageStore for UnusedMailStore {
+        fn save_message(&self, _message: &atm_storage::Message) -> Result<(), AtmError> {
+            unreachable!("herdr candidate test never touches the mail store boundary")
+        }
+
+        fn save_messages_atomically(
+            &self,
+            _messages: &[atm_storage::Message],
+        ) -> Result<(), AtmError> {
+            unreachable!("herdr candidate test never touches the mail store boundary")
+        }
+
+        fn load_message(
+            &self,
+            _key: &atm_storage::MessageKey,
+        ) -> Result<Option<atm_storage::Message>, AtmError> {
+            unreachable!("herdr candidate test never touches the mail store boundary")
+        }
+
+        fn list_messages(
+            &self,
+            _query: &atm_storage::MessageQuery,
+        ) -> Result<Vec<atm_storage::Message>, AtmError> {
+            unreachable!("herdr candidate test never touches the mail store boundary")
+        }
+
+        fn delete_message(&self, _key: &atm_storage::MessageKey) -> Result<(), AtmError> {
+            unreachable!("herdr candidate test never touches the mail store boundary")
+        }
+    }
+
+    struct NoopNudgeTemplateOverrideStore;
+    impl atm_storage::contract::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
+    impl atm_core::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
+        fn load_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: atm_core::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<Option<atm_core::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: atm_core::boundary::BuiltInNudgeTemplateKind,
+            _template_body: &str,
+        ) -> Result<atm_core::boundary::TeamNudgeTemplateOverrideRow, AtmError> {
+            unreachable!("herdr candidate test never touches the override-store boundary")
+        }
+
+        fn disable_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: atm_core::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<atm_core::boundary::TeamNudgeTemplateOverrideRow, AtmError> {
+            unreachable!("herdr candidate test never touches the override-store boundary")
+        }
+
+        fn clear_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: atm_core::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<bool, AtmError> {
+            unreachable!("herdr candidate test never touches the override-store boundary")
+        }
+    }
+
+    struct UnusedNonClaudeOutbound;
+    impl atm_core::boundary::sealed::Sealed for UnusedNonClaudeOutbound {}
+    impl atm_core::boundary::NonClaudeOutbound for UnusedNonClaudeOutbound {
+        fn deliver_payloads(
+            &self,
+            _request: atm_core::boundary::NonClaudeOutboundDeliveryRequest,
+        ) -> Result<atm_core::boundary::NonClaudeOutboundDeliveryResponse, AtmError> {
+            unreachable!("herdr candidate test never touches the non-Claude outbound boundary")
+        }
+    }
+
+    /// Durable roster store that counts every call so the test can prove
+    /// `herdr_candidates` reads exclusively from the RAM roster after the
+    /// one hydration read performed at runtime construction.
+    struct CountingRosterStore {
+        roster: RosterSnapshot,
+        load_roster_calls: std::sync::atomic::AtomicUsize,
+        list_teams_calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl atm_storage::contract::sealed::Sealed for CountingRosterStore {}
+    impl atm_storage::contract::RosterStore for CountingRosterStore {
+        fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError> {
+            self.load_roster_calls
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            assert_eq!(team, &self.roster.team_name, "unexpected team requested");
+            Ok(self.roster.clone())
+        }
+
+        fn save_roster(&self, _roster: &RosterSnapshot) -> Result<(), AtmError> {
+            unreachable!("herdr candidate test never mutates the durable roster")
+        }
+
+        fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
+            self.list_teams_calls
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(vec![self.roster.team_name.clone()])
+        }
+    }
+
+    #[test]
+    fn herdr_candidates_never_reads_the_durable_roster_store_after_hydration() {
+        let team: TeamName = "aq27-counting-team".parse().expect("team");
+        let member = herdr_member(&team, "aq27-counting-agent");
+        let durable = std::sync::Arc::new(CountingRosterStore {
+            roster: RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![member],
+                refreshed_at: None,
+            },
+            load_roster_calls: std::sync::atomic::AtomicUsize::new(0),
+            list_teams_calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+            std::sync::Arc::new(UnusedMailStore),
+            durable.clone(),
+            std::sync::Arc::new(NoopNudgeTemplateOverrideStore),
+            std::sync::Arc::new(UnusedNonClaudeOutbound),
+        );
+        // Hydration at construction performs exactly one read of each kind.
+        assert_eq!(
+            durable
+                .list_teams_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+        assert_eq!(
+            durable
+                .load_roster_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+
+        let pending = std::collections::HashSet::new();
+        for _ in 0..5 {
+            let roster_store = runtime.shared_roster_store_arc();
+            let candidates =
+                super::herdr_candidates(roster_store.as_ref(), &pending).expect("candidates");
+            assert_eq!(candidates.len(), 1);
+        }
+
+        // Five additional herdr_candidates calls must not touch the durable
+        // store again: RAM is the only read path once hydrated.
+        assert_eq!(
+            durable
+                .list_teams_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "herdr_candidates must not call list_teams on the durable store"
+        );
+        assert_eq!(
+            durable
+                .load_roster_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "herdr_candidates must not call load_roster on the durable store"
         );
     }
 }

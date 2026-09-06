@@ -1076,11 +1076,23 @@ mod tests {
         }
 
         fn save_roster(&self, _roster: &atm_storage::RosterSnapshot) -> Result<(), AtmError> {
-            unreachable!("doctor tests do not touch the roster store boundary")
+            unreachable!("doctor tests do not mutate the roster store boundary")
         }
 
         fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
-            unreachable!("doctor tests do not touch the roster store boundary")
+            // Runtime construction hydrates the RAM roster from the durable
+            // store exactly once at startup, so a real durable store's
+            // `list_teams` is exercised here even though doctor itself never
+            // mutates rosters. Mirror that by returning the distinct team
+            // names present in the fixture data.
+            let mut teams: Vec<TeamName> = self
+                .members
+                .iter()
+                .map(|member| member.team_name.clone())
+                .collect();
+            teams.sort();
+            teams.dedup();
+            Ok(teams)
         }
     }
 
