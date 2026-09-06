@@ -1996,7 +1996,12 @@ fn aw_ram_per_tick_roster_consumers_use_only_the_shared_store_construction_seam(
                 || source.contains("storage_backends.rosters")
                 || source.contains("roster_runtime_mirror()")
         })
-        .map(|(path, _)| path.strip_prefix(&root).unwrap_or(path).display().to_string())
+        .map(|(path, _)| {
+            path.strip_prefix(&root)
+                .unwrap_or(path)
+                .display()
+                .to_string()
+        })
         .collect::<Vec<_>>();
 
     assert!(
@@ -2006,6 +2011,26 @@ fn aw_ram_per_tick_roster_consumers_use_only_the_shared_store_construction_seam(
     assert!(
         violations.is_empty(),
         "per-tick durable roster consumers must construct their handle only via shared_roster_store_arc(): {violations:?}"
+    );
+}
+
+#[test]
+fn aw_pool_graft_receiver_lookup_uses_the_deadline_bounded_reader_lane() {
+    let root = workspace_root();
+    let source = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
+    let lookup = source
+        .split("    async fn graft_receiver_lookup(")
+        .nth(1)
+        .and_then(|rest| rest.split("\n    fn reload_runtime_view").next())
+        .expect("graft receiver lookup route must remain present");
+
+    assert!(
+        lookup.contains("tokio::task::spawn_blocking") && lookup.contains("lookup_with_deadline"),
+        "the unpaired graft receiver lookup must run through the deadline-bounded reader lane"
+    );
+    assert!(
+        !lookup.contains("control_path_sync_bridge"),
+        "the unpaired graft receiver lookup must not consume the writer-side control path"
     );
 }
 
