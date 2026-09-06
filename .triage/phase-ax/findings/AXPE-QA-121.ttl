@@ -5,6 +5,7 @@
 # belong in the agent input only and must not be copied into this record.
 # Identified by CI (Just lint, RULE-002 function-length) on PR #1256 merge/develop-aw-into-phase-ax at 11cb6e96c, run 34052404819 job 101538259016; reproduced locally by fenix with scripts/check-function-length.py --base-ref origin/integrate/phase-ax and --base-ref origin/develop. fenix-recorded. Not surfaced by QA-1/QA-2 (reviewers ran lint_boundaries.py and check_line_counts.py, not the full just lint).
 
+# Fixed 2026-09-06: merge/develop-aw-into-phase-ax @ b788f6839 (submit_blocking_with_class_at 80 -> 41 + enqueue_request 36; execute 81 -> 52 + execute_admit_template_message 34), verified locally by fenix (function-length vs origin/integrate/phase-ax and origin/develop passed; fmt; clippy -D warnings; cargo test --workspace 1821/0/3; lint_boundaries; check_line_counts) and landed on integrate/phase-ax at 102d16f19 per Rand's direct-merge ruling; closed 2026-09-06T19:00:49Z.
 <urn:atm:triage:finding/AXPE-QA-121>
   a triage:Finding ;
   triage:findingId "AXPE-QA-121" ;
@@ -16,7 +17,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "phase" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T19:00:49Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T18:51:19Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
@@ -30,8 +33,8 @@
   triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
   triage:line 646 ;
   triage:snippet "fn submit_blocking_with_class_at (lines 646-725, 80 lines)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "merge/develop-aw-into-phase-ax" ;
   triage:headSha "11cb6e96c9a9bb9099120b0ebd9e36904087abf1" ;
   triage:occursIn <urn:atm:triage:worktree/MERGE-AW/11cb6e96c9a9bb9099120b0ebd9e36904087abf1> .
@@ -41,8 +44,8 @@
   triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
   triage:line 135 ;
   triage:snippet "pub(crate) fn execute (lines 135-215, 81 lines)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "merge/develop-aw-into-phase-ax" ;
   triage:headSha "11cb6e96c9a9bb9099120b0ebd9e36904087abf1" ;
   triage:occursIn <urn:atm:triage:worktree/MERGE-AW/11cb6e96c9a9bb9099120b0ebd9e36904087abf1> .
