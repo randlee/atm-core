@@ -290,6 +290,42 @@ class BootstrapTests(unittest.TestCase):
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn('if os_family() == "windows" { "py -3.14" }', justfile)
 
+class GitHookTests(unittest.TestCase):
+    HOOK = Path(__file__).resolve().parents[2] / ".githooks" / "pre-push"
+
+    def test_pre_push_hook_is_tracked_and_executable(self) -> None:
+        self.assertTrue(self.HOOK.is_file())
+        self.assertTrue(self.HOOK.stat().st_mode & 0o111, "hook must be executable")
+        text = self.HOOK.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("#!/bin/sh"))
+        self.assertIn("cargo fmt --all --check", text)
+        self.assertIn("-D warnings", text)
+        self.assertIn("ATM_SKIP_PUSH_GATE", text)
+
+    def test_install_git_hooks_sets_repo_hooks_path(self) -> None:
+        with mock.patch.object(bootstrap, "run") as run:
+            bootstrap.install_git_hooks(dry_run=True)
+        run.assert_called_once_with(["git", "config", "core.hooksPath", ".githooks"], dry_run=True)
+
+    def test_install_git_hooks_skips_outside_a_checkout(self) -> None:
+        with (
+            mock.patch.object(bootstrap, "inside_git_checkout", return_value=False),
+            mock.patch.object(bootstrap, "run") as run,
+        ):
+            bootstrap.install_git_hooks(dry_run=False)
+        run.assert_not_called()
+
+    def test_install_git_hooks_refuses_when_hook_file_is_missing(self) -> None:
+        with (
+            mock.patch.object(bootstrap, "inside_git_checkout", return_value=True),
+            mock.patch.object(bootstrap, "ROOT", Path("/nonexistent-atm-root")),
+            mock.patch.object(bootstrap, "run") as run,
+        ):
+            with self.assertRaises(bootstrap.BootstrapError):
+                bootstrap.install_git_hooks(dry_run=False)
+        run.assert_not_called()
+
+
 
 if __name__ == "__main__":
     unittest.main()

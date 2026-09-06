@@ -639,6 +639,29 @@ def verify_installed_tools(manifest: BootstrapManifest, python: Path) -> None:
             raise BootstrapError(f"Python package {package} must be exactly {version}; found {actual}.")
 
 
+HOOKS_DIR = ".githooks"
+
+
+def inside_git_checkout() -> bool:
+    """True when ROOT is a git worktree (a `.git` directory or worktree file)."""
+    return (ROOT / ".git").exists()
+
+
+def install_git_hooks(*, dry_run: bool) -> None:
+    """Point core.hooksPath at the tracked hooks so pushes run the fmt/clippy gate.
+
+    The setting lives in the repository config, so one install covers every
+    worktree. Outside a git checkout (an exported tarball) there is nothing
+    to configure and the step is skipped rather than failed.
+    """
+    if not inside_git_checkout():
+        print("bootstrap: not a git checkout; skipping git hook install")
+        return
+    if not (ROOT / HOOKS_DIR / "pre-push").is_file():
+        raise BootstrapError(f"{HOOKS_DIR}/pre-push is missing; the tracked pre-push gate must exist")
+    run(["git", "config", "core.hooksPath", HOOKS_DIR], dry_run=dry_run)
+
+
 def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
     """Install the complete contract, then verify it rather than trusting installs."""
     synchronize_macos_seed_tools(manifest, dry_run=dry_run)
@@ -673,6 +696,7 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
     run(pip_install_command(python), dry_run=dry_run)
     if not dry_run:
         verify_installed_tools(manifest, python)
+    install_git_hooks(dry_run=dry_run)
 
 
 def main(argv: Sequence[str]) -> int:

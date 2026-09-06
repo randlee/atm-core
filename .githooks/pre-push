@@ -1,0 +1,56 @@
+#!/bin/sh
+# Pre-push gate: CI must never fail on formatting or clippy. Every push of
+# Rust changes runs the same two checks CI runs, locally, before the push
+# leaves this machine. Installed by `just bootstrap` (or `just hooks`) via
+# `git config core.hooksPath .githooks`; the setting is repo-wide, so one
+# install covers every worktree.
+#
+# Explicit opt-out only: ATM_SKIP_PUSH_GATE=1 skips the gate and says so.
+# There is no implicit bypass.
+set -u
+
+if [ "${ATM_SKIP_PUSH_GATE:-}" = "1" ]; then
+    echo "pre-push: ATM_SKIP_PUSH_GATE=1 set; skipping fmt/clippy gate" >&2
+    exit 0
+fi
+
+zero=0000000000000000000000000000000000000000
+needs_gate=0
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue   # branch delete: nothing to check
+    if [ "$remote_sha" = "$zero" ]; then
+        range="$local_sha"
+    else
+        range="$remote_sha..$local_sha"
+    fi
+    if git rev-list "$range" 2>/dev/null | head -n 1 | grep -q .; then
+        if git diff --name-only "$range" 2>/dev/null | grep -Eq '\.rs$|^Cargo\.(toml|lock)$|/Cargo\.toml$'; then
+            needs_gate=1
+        fi
+    fi
+done
+
+if [ "$needs_gate" -eq 0 ]; then
+    exit 0
+fi
+
+echo "pre-push: running cargo fmt --all --check" >&2
+if ! cargo fmt --all --check; then
+    echo "pre-push: REFUSED. Formatting differs from rustfmt; run 'just fmt write' and amend." >&2
+    exit 1
+fi
+
+echo "pre-push: running clippy -D warnings (same invocation as CI)" >&2
+# `just _lint-clippy` pins PYO3_PYTHON to the bootstrap venv; fall back to plain
+# cargo clippy in a worktree that has not run `just bootstrap` yet.
+if command -v just >/dev/null 2>&1 && [ -x .bootstrap-venv/bin/python ]; then
+    just _lint-clippy
+else
+    cargo clippy --workspace --all-targets -- -D warnings
+fi
+status=$?
+if [ "$status" -ne 0 ]; then
+    echo "pre-push: REFUSED. Clippy reported warnings; fix them before pushing." >&2
+    exit "$status"
+fi
+exit 0
