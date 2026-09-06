@@ -23,13 +23,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
 
-def run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, text=True, capture_output=True, check=check)
+class ToolError(Exception):
+    """A required external command is missing or failed; message is actionable."""
+
+
+def run(cmd: list[str], *, check: bool = True, cwd: str | None = None) -> subprocess.CompletedProcess[str]:
+    try:
+        proc = subprocess.run(cmd, text=True, capture_output=True, cwd=cwd)
+    except FileNotFoundError as exc:
+        missing = cmd[0] if exc.filename in (None, cmd[0]) else f"directory {exc.filename}"
+        raise ToolError(f"cannot run {' '.join(cmd[:3])}: {missing} not found "
+                        f"(install gh + gh-stack extension and git; prune stale worktrees with `git worktree prune`)") from exc
+    except OSError as exc:
+        raise ToolError(f"cannot run {' '.join(cmd[:3])}: {exc}") from exc
+    if check and proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout).strip().splitlines()
+        raise ToolError(f"{' '.join(cmd[:3])} failed (exit {proc.returncode}): {detail[-1] if detail else 'no output'}"
+                        + ("; run `gh auth status`" if "auth" in " ".join(detail).lower() or "401" in " ".join(detail) else ""))
+    return proc
 
 
 def short(sha: str | None) -> str:
@@ -37,7 +54,11 @@ def short(sha: str | None) -> str:
 
 
 def stack_json_at(path: str) -> dict | None:
-    proc = subprocess.run(["gh", "stack", "view", "--json"], cwd=path, text=True, capture_output=True)
+    """None when this worktree is not on a stack (or is pruned/unreadable)."""
+    try:
+        proc = run(["gh", "stack", "view", "--json"], check=False, cwd=path)
+    except ToolError:
+        return None
     if proc.returncode != 0:
         return None
     try:
@@ -100,6 +121,7 @@ def discover_stacks(trunk_filter: str | None, *, include_merged: bool) -> list[d
 
 
 def origin_sha(ref: str) -> str | None:
+    """None when the branch is not on origin (unpushed or deleted after merge)."""
     proc = run(["git", "rev-parse", "--verify", "--quiet", f"origin/{ref}"], check=False)
     return proc.stdout.strip() or None
 
@@ -109,7 +131,10 @@ def pr_details(numbers: list[int]) -> dict[int, dict]:
     if not numbers:
         return {}
     remote = run(["gh", "repo", "view", "--json", "owner,name"]).stdout
-    repo = json.loads(remote)
+    try:
+        repo = json.loads(remote)
+    except json.JSONDecodeError as exc:
+        raise ToolError(f"gh repo view returned non-JSON: {remote[:200]!r}") from exc
     owner, name = repo["owner"]["login"], repo["name"]
     fields = (
         "number isDraft mergeable mergeStateStatus baseRefName headRefOid "
@@ -119,7 +144,16 @@ def pr_details(numbers: list[int]) -> dict[int, dict]:
     aliases = " ".join(f"pr{n}: pullRequest(number:{n}) {{ {fields} }}" for n in numbers)
     query = f'query($owner:String!,$name:String!){{ repository(owner:$owner,name:$name) {{ {aliases} }} }}'
     proc = run(["gh", "api", "graphql", "-f", f"query={query}", "-F", f"owner={owner}", "-F", f"name={name}"])
-    data = json.loads(proc.stdout)["data"]["repository"]
+    try:
+        payload = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise ToolError(f"gh api graphql returned non-JSON: {proc.stdout[:200]!r}") from exc
+    if payload.get("errors"):
+        msgs = "; ".join(e.get("message", "?") for e in payload["errors"][:3])
+        raise ToolError(f"GraphQL errors: {msgs} (PRs {numbers}; use --no-pr for a local-only view)")
+    data = (payload.get("data") or {}).get("repository")
+    if not data:
+        raise ToolError("GraphQL returned no repository data; run `gh auth status` or use --no-pr")
     out: dict[int, dict] = {}
     for n in numbers:
         pr = data.get(f"pr{n}") or {}
@@ -272,6 +306,25 @@ def main() -> int:
     args = ap.parse_args()
     trunk_filter = args.trunk or (f"integrate/phase-{args.phase.lower()}" if args.phase else None)
 
+    try:
+        return run_report(args, trunk_filter)
+    except ToolError as exc:
+        sys.stderr.write(f"gh-stack-view: {exc}\n")
+        return 2
+
+
+def preflight() -> None:
+    for tool in ("git", "gh"):
+        if not shutil.which(tool):
+            raise ToolError(f"`{tool}` not on PATH")
+    if run(["gh", "stack", "--help"], check=False).returncode != 0:
+        raise ToolError("gh-stack extension missing: `gh extension install github/gh-stack`")
+    if run(["git", "rev-parse", "--git-dir"], check=False).returncode != 0:
+        raise ToolError("not inside a git repository")
+
+
+def run_report(args: argparse.Namespace, trunk_filter: str | None) -> int:
+    preflight()
     stacks = discover_stacks(trunk_filter, include_merged=args.all)
     if not stacks:
         where = f" with trunk {trunk_filter}" if trunk_filter else ""
@@ -282,7 +335,9 @@ def main() -> int:
         return 2
     fetched = not args.no_fetch
     if fetched:
-        run(["git", "fetch", "--quiet", "origin"], check=False)
+        fetch = run(["git", "fetch", "--quiet", "origin"], check=False)
+        if fetch.returncode != 0:
+            sys.stderr.write("gh-stack-view: git fetch origin failed; origin comparison uses the last fetched state\n")
     numbers = sorted({b["pr"]["number"] for st in stacks for b in st["branches"] if b.get("pr")})
     prs = {} if args.no_pr else pr_details(numbers)
 
