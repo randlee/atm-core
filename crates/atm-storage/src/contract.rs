@@ -395,10 +395,20 @@ impl ReadDeadline {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReadLaneError {
     UnauthorizedScope,
-    Saturated { reason: &'static str },
-    DeadlineExpired { stage: &'static str },
-    Unavailable { message: String },
-    Storage { code: AtmErrorCode, message: String },
+    Saturated {
+        reason: &'static str,
+    },
+    DeadlineExpired {
+        stage: &'static str,
+    },
+    Unavailable {
+        message: String,
+    },
+    Storage {
+        code: AtmErrorCode,
+        message: String,
+        cause: Option<String>,
+    },
 }
 
 impl fmt::Display for ReadLaneError {
@@ -416,8 +426,12 @@ impl fmt::Display for ReadLaneError {
             Self::Unavailable { message } => {
                 write!(formatter, "mailbox reader lane is unavailable: {message}")
             }
-            Self::Storage { message, .. } => {
-                write!(formatter, "mailbox reader storage failure: {message}")
+            Self::Storage { message, cause, .. } => {
+                write!(formatter, "mailbox reader storage failure: {message}")?;
+                if let Some(cause) = cause {
+                    write!(formatter, "; cause: {cause}")?;
+                }
+                Ok(())
             }
         }
     }

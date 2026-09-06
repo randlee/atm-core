@@ -165,6 +165,7 @@ pub(crate) fn read_lane_storage_error(error: AtmError) -> ReadLaneError {
     ReadLaneError::Storage {
         code: error.code(),
         message: error.message().to_owned(),
+        cause: error.cause().map(str::to_owned),
     }
 }
 
