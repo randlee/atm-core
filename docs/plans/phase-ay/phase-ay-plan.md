@@ -1,6 +1,6 @@
 ---
 phase: AY
-title: Phase AY, Windows Herdr parity and UDS/named-pipe transport (same command set, same feature set on macOS, Linux, Windows)
+title: "Phase AY: native-IPC transport cutover for Herdr"
 canonical_path: docs/plans/phase-ay/phase-ay-plan.md
 integration_branch: develop (plan) / integrate/phase-ay (dev)
 status: draft, not approved (Rand, 2026-09-05)
@@ -12,17 +12,37 @@ supersedes:
   - docs/plans/phase-aq/sprint-AQ2-6-herdr-steer-backend.md:728-730 (deliverable 5 Windows deferral)
 ---
 
-# Phase AY: Windows Herdr parity and UDS/named-pipe transport
+# Phase AY: native-IPC transport cutover for Herdr
 
 ## Why this plan exists
 
-The 1.5.0 Herdr integration was meant to establish Windows parity for
-agent nudging without tmux or WSL. Phase AQ instead recorded Windows as
-out of scope in three planning documents without ever surfacing that
-narrowing as a decision. That scope-out was never approved. The
-expectation is that macOS, Linux and Windows have the same feature set:
-the daemon talks to Herdr with one command set, over a Unix domain socket
-on macOS/Linux and over Herdr's named pipe on Windows.
+Herdr already runs on Windows. Rand manually verified an atm 1.5.0
+self-send there, and nothing in atm's current Herdr client code blocks the
+platform. Phase AY exists because Phase AX makes Herdr nudges carry a much
+larger notification system, as enumerated by the authoritative sprint table in
+[`phase-ax-plan.md`](../phase-ax/phase-ax-plan.md): AX.1 adds the queue template
+class and fixes default templates; AX.2 renders the built-in nudge template through Herdr;
+AX.3 adds the task state machine and storage; AX.4 adds task completion and
+inspection CLI; AX.5 runs the task reminder cycle in the Herdr pump; and AX.6
+adds lead notification and doctor, including desktop notification through
+`HerdrProcessAdapter::notify`. All of that machinery currently rides a
+per-nudge CLI process transport.
+
+That transport exposes every notification path to process-spawn latency,
+argv limits (randlee/atm-core#1193, where one oversized message can trip the
+shared breaker), console-window flash, orphaned children after timeout, and
+PATH/binary drift. Separately, the daemon has no explicit startup and failure
+model for Herdr being absent, not running yet, or crashing later. Phase AY
+defines that optional-dependency model and cuts the six-operation client from
+per-spawn CLI invocation to Herdr's native IPC: a Unix-domain socket on
+macOS/Linux and a named pipe on Windows.
+
+Windows remains an explicit documentation-and-tests deliverable, not the
+motivation for the phase. AY removes the three unapproved Windows scope-out
+statements, closes the `#[cfg(unix)]` process-test gap in the Windows CI lane,
+and records Windows process coverage. Live platform proof and the one official
+benchmark remain release-readiness activities after the phase lands; neither
+is a sprint.
 
 Transport decision (AYP-R13-005; recorded by fenix for Rand's approval
 with P-B; rulings 1 to 5 unchanged): the phase moves all three platforms
@@ -40,8 +60,8 @@ ownership: AY.8's equivalence suite proves the socket client emits the
 same request set and error mapping as the CLI transport for every Herdr
 release at or above `HERDR_MINIMUM_VERSION`; AY.9 keeps the CLI transport
 as an explicit fallback for one minor release so a Herdr drift can be
-absorbed without a hotfix. AY.8 and AY.9 are therefore part of the parity
-phase, not a separate modernization.
+absorbed without a hotfix. AY.8 and AY.9 are therefore the design answer to
+the phase's transport and failure-model drivers, not a separate modernization.
 
 Post-mortem entry: filed as AW-READY-W1 (blocking) with a
 planning-process-improvement action (scope narrowings hidden inside ADR
@@ -117,7 +137,7 @@ corrects the ADR-058 Herdr pin, and (AY.8 only) revises the boundary TOML
 io_owns. Everything else in the AX contract is carried unchanged, and the
 "Request set" section below lists it from the AX.6 head.
 
-## What blocks Windows today (verified 2026-09-05, integrate/phase-aw)
+## Windows documentation and test gaps (verified 2026-09-05, integrate/phase-aw)
 
 Nothing in the code. `crates/atm-herdr/src/lib.rs` production code has
 no platform branches; it spawns the `herdr` binary by name and Herdr's
@@ -155,7 +175,8 @@ The real gaps:
 
 Ruling (Rand, 2026-09-05; authority: ADR-061
 `docs/adr/ADR-061-governed-interface-schema-versioning.md`, landing on PR
-#1218 together with the constant itself at 29e483e50; discussion in
+#1218 in authoring commit `29e483e50`, merged to `develop` as `a7aebefb8`;
+discussion in
 randlee/atm-core#1217): Herdr drifts
 outside our control, and atm-core is responsible for supporting **every
 Herdr version at or above `HERDR_MINIMUM_VERSION`**, following the same
@@ -179,8 +200,9 @@ Plan-declared schema rules (checked by the `schema-reviewer` agent, PR
 
 1. `crates/atm-herdr` declares `pub const HERDR_MINIMUM_VERSION` = 0.8.0
    (Herdr release version, semver, as reported by `ping.version` and
-   `herdr --version`). Rand set it on PR #1218 (29e483e50,
-   `crates/atm-herdr/src/lib.rs`, with a guard test); AY.3 builds the
+   `herdr --version`). Rand set it on PR #1218 (authoring commit `29e483e50`,
+   merged to `develop` as `a7aebefb8`; `crates/atm-herdr/src/lib.rs`, with a
+   guard test); AY.3 builds the
    doctor check on that constant and does not introduce it. Changing the
    value is a separate PR after #1218 completes. One daemon build supports every Herdr version at or above
    it simultaneously. Herdr's integer `PROTOCOL_VERSION` (19 at v0.8.0,
@@ -914,21 +936,22 @@ Common preconditions:
 - P-A: first merge `integrate/phase-ax` into `develop`. Immediately after a
   fresh fetch, set `phase_ax_merge_sha=$(git rev-parse origin/develop)`, record
   that exact SHA in the AY.1 PR, and create `integrate/phase-ay` directly from
-  that exact `origin/develop` head—never from `integrate/phase-ax`. Both
-  `git merge-base --is-ancestor a7aebefb8 origin/develop` and
-  `git merge-base --is-ancestor "$phase_ax_merge_sha" origin/develop` must exit
-  0, and the same two checks against `integrate/phase-ay` must exit 0.
+  that exact `origin/develop` head—never from `integrate/phase-ax`.
+  `git merge-base --is-ancestor a7aebefb8 origin/develop` must exit 0, and
+  both the PR #1218 merge and the recorded Phase AX merge must be ancestors of
+  `integrate/phase-ay`.
   Finally, presence checks on `integrate/phase-ay` must find
   `HERDR_MINIMUM_VERSION`, ADR-061, HR-CORE-010, `herdr_escalation`,
   `EscalationOutcome`, `EscalationKind`, and `HERDR_NOTIFY_DEADLINE`. PR #1218
   is already on `origin/develop` as `a7aebefb8`; the Phase AX symbols arrive
-  through the recorded Phase AX develop merge. Owner: fenix.
+  through the recorded Phase AX develop merge. Phase-execution owner: fenix;
+  this is distinct from solar's ownership of the plan document.
 
   ```bash
   git fetch origin
   phase_ax_merge_sha=$(git rev-parse origin/develop)
   git merge-base --is-ancestor a7aebefb8 origin/develop
-  git merge-base --is-ancestor "$phase_ax_merge_sha" origin/develop
+  git switch --create integrate/phase-ay "$phase_ax_merge_sha"
   git merge-base --is-ancestor a7aebefb8 integrate/phase-ay
   git merge-base --is-ancestor "$phase_ax_merge_sha" integrate/phase-ay
   git grep -n 'pub const HERDR_MINIMUM_VERSION' integrate/phase-ay -- crates/atm-herdr/src/lib.rs
@@ -936,6 +959,7 @@ Common preconditions:
   git grep -n 'HR-CORE-010' integrate/phase-ay -- docs/atm-herdr/requirements.md
   git grep -n 'EscalationOutcome\|EscalationKind\|HERDR_NOTIFY_DEADLINE' integrate/phase-ay -- crates/atm-http-runtime
   git ls-tree -r --name-only integrate/phase-ay -- crates/atm-http-runtime/src | rg 'herdr_escalation.rs|herdr_queue_wake_escalation.rs'
+  git push --set-upstream origin integrate/phase-ay
   ```
 - P-B: this plan is approved by Rand (dated line in this file).
 - P-C (release-readiness prerequisite, not a sprint precondition; no AY
@@ -961,8 +985,9 @@ Common preconditions:
   parked reporter agent remains the source of truth for evidence.
 - P-E (AY.3 and AY.8): two boundary rulings, each reviewed by the
   `boundary-guard` agent, run by fenix before the owning sprint is
-  dispatched; devs never author boundary TOML without this ruling. Owner:
-  fenix. (a) AY.3: the new `boundaries/atm-core/herdr-endpoint-doctor.toml`
+  dispatched; devs never author boundary TOML without this ruling.
+  Phase-execution owner: fenix, distinct from solar's plan-document
+  ownership. (a) AY.3: the new `boundaries/atm-core/herdr-endpoint-doctor.toml`
   described under "Failure behaviour" (AYP-R4-003), together with AY.3's
   public-contract inventory update to the atm-herdr boundary record,
   reviewed after AY.2's transport foundation and recordings are pushed and before AY.3
@@ -1537,3 +1562,14 @@ version, and lifecycle-label shapes.
   release across AY.4/AY.8/AY.9. Minor AYP-R14-M1 removes illustrative `Copy`,
   AYP-R25-RBQA-002 corrects `HerdrEndpoint` visibility wording, and
   AYP-R25-RBP-003 makes `HerdrVersion` private and validated.
+- r27 (2026-09-06, solar): applied Rand's reframing ruling. Renamed Phase AY
+  around the native-IPC transport cutover, stated plainly that Herdr already
+  runs on Windows, and made Phase AX's queue/task notification stack plus the
+  CLI transport and optional-dependency failure classes the actual drivers.
+  The sprint set, Windows docs/tests scope, single release-readiness benchmark,
+  and no-live-evidence rule are unchanged. Closed quality-mgr's six optional
+  r26 minors: reconciled the authoring and develop-merge SHAs for PR #1218,
+  added the integration-branch creation commands, distinguished plan ownership
+  from phase-execution ownership, named AY.4's `daemon_herdr_config` reader in
+  AY.9, moved AY.8/AY.9 quality-manager gates into acceptance criteria, and
+  removed the tautological merge-base check.

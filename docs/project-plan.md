@@ -1624,16 +1624,21 @@ Phase AX sprint status:
 | `AX.6` | C | after AX.5 | `planned` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
 | `AX.7` | D | superseded 2026-09-05 (live proof moved to release readiness) | `superseded` | none | `docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md` |
 
-## 56. Phase AY — Windows Herdr Parity And Socket/Pipe Transport [PLANNING — DRAFT, NOT APPROVED]
+## 56. Phase AY — Native-IPC Transport Cutover For Herdr [PLANNING — DRAFT, NOT APPROVED]
 
-Phase AY restores the unapproved Windows scope-out in the Herdr integration
-and moves the same six-operation client contract to Herdr's Unix-domain
-socket on macOS/Linux and named pipe on Windows. It retains the CLI path as
-a bounded fallback, adds typed per-endpoint doctor and installer behavior,
-and leaves live macOS/Windows proof to release readiness (no sprint
-carries live evidence, Rand 2026-09-05). It does not remodel the
-legacy synchronous daemon: all composition work targets the Tokio/Axum
-`atm-http-runtime` cutover architecture.
+Herdr already runs on Windows: Rand manually verified an atm 1.5.0 self-send,
+and nothing in the current client code blocks it. Phase AY instead moves the
+six-operation client from a per-nudge CLI process to Herdr's native IPC—a
+Unix-domain socket on macOS/Linux and named pipe on Windows—because Phase AX's
+queue templates, built-in nudge rendering, task state/CLI, reminder cycle,
+lead notification, and doctor all depend on that delivery path. It also
+defines the daemon's optional-dependency behavior when Herdr is absent, late,
+or crashed. The CLI remains a bounded fallback. Windows remains a docs-and-tests
+deliverable: remove three stale scope-outs, close the `cfg(unix)` process-test
+gap, and prove process behavior in Windows CI. Live macOS/Windows proof stays
+in release readiness (no sprint carries live evidence, Rand 2026-09-05). No
+work remodels the legacy synchronous daemon; all composition targets the
+Tokio/Axum `atm-http-runtime` cutover architecture.
 
 Nine sprints execute in a documentation lane, a linear implementation
 stack, an independent socket lane, and a code join. AY.1

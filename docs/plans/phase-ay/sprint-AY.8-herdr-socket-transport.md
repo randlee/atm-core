@@ -280,6 +280,9 @@ be amended and re-reviewed before implementation continues.
 8. `gh pr view feature/ay8-herdr-socket-transport --json
    headRefName,baseRefName,state` reports base `integrate/phase-ay`; AY.8 is not
    linked into the implementation stack.
+9. The sprint meets the common phase merge gate: zero blocking, important, or
+   in-scope minor findings; quality-mgr posts PASS; all three CI lanes are green
+   at merge time; no flaky-test allowance applies.
 
 ## Required validation
 
@@ -287,7 +290,6 @@ be amended and re-reviewed before implementation continues.
 - `cargo test -p atm-herdr`.
 - `python3 .just/check_line_counts.py`.
 - Compare the PR file list mechanically against C3.
-- quality-mgr Final Quality Report: 0 blocking, 0 important, 0 minor in scope.
 
 ## Out of scope
 

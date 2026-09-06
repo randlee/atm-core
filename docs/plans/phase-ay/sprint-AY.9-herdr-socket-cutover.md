@@ -51,9 +51,10 @@ This is the authoritative deliverable checklist. Every listed deliverable
 lands production-ready for the scope this sprint claims; partial or shape-only
 completion fails the sprint.
 
-- [ ] D1 — extend AY.3's `deny_unknown_fields` reader in
-  `crates/atm-daemon-bootstrap/src/herdr_config.rs` to accept exactly the new
-  optional `transport` key. At the single production `HerdrProcessInvoker::new`
+- [ ] D1 — extend AY.4's `daemon_herdr_config` reader and
+  `DaemonHerdrConfig` in `crates/atm-daemon-bootstrap/src/herdr_config.rs` to
+  accept exactly the new optional `transport` key while retaining
+  `deny_unknown_fields`. At the single production `HerdrProcessInvoker::new`
   composition site in `crates/atm-daemon-bootstrap/src/replacement_handler.rs`,
   pass the C1 transport selection as part of `HerdrClientConfig`. Inside
   `atm-herdr`, the invoker factory builds `HerdrIo::Socket` or `HerdrIo::Cli`;
@@ -252,12 +253,14 @@ serialized JSON, human output, snapshots, or transport logs.
    parent PRs merged; AY.9 is not linked into the implementation stack.
 9. No path under `docs/plans/phase-ay/evidence/` is added or changed by AY.9;
    no sprint carries live evidence.
+10. The sprint meets the common phase merge gate: zero blocking, important, or
+    in-scope minor findings; quality-mgr posts PASS; all three CI lanes are
+    green at merge time; no flaky-test allowance applies.
 
 ## Required validation
 
 - `just validate` on all three CI lanes.
 - Socket-default and CLI-fallback lifecycle suites on all three lanes.
-- quality-mgr Final Quality Report: 0 blocking, 0 important, 0 minor in scope.
 
 ## Out of scope
 
