@@ -14,7 +14,9 @@ use atm_core::delivery_channel::{
     DeliveryChannel, classify_delivery_channel, graft_lease_state, local_message_received_backend,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::nudge_dispatch::rebuild_received_hook_dispatch;
+use atm_core::nudge_dispatch::{
+    load_received_hook_dispatch_message, rebuild_received_hook_dispatch,
+};
 use atm_core::protocol::RuntimeMemberState;
 use atm_http_runtime::{MemberStateTransitionSink, RuntimeHealth};
 use tokio::sync::watch;
@@ -337,47 +339,52 @@ async fn claim_next_dispatch(
     )>,
     AtmError,
 > {
+    let runtime_for_channel = runtime.clone();
+    let member_for_channel = member.clone();
+    let channel_allowed = run_blocking("classify queue delivery channel", move || {
+        queue_drain_channel_allowed(&runtime_for_channel, &member_for_channel)
+    })
+    .await?;
+    if !channel_allowed {
+        return Ok(None);
+    }
+
     let runtime_for_claim = runtime.clone();
     let member_for_claim = member.clone();
-    run_blocking("claim pending queue message", move || {
-        if !queue_drain_channel_allowed(&runtime_for_claim, &member_for_claim)? {
-            return Ok(None);
-        }
+    let claim = run_blocking("claim pending queue message", move || {
         let store = runtime_for_claim.pending_nudge_store()?;
-        let Some(claim) = store.claim_next_pending(&member_for_claim)? else {
-            return Ok(None);
-        };
-        let mut claim_guard =
-            ClaimedPendingMessage::new(runtime_for_claim.clone(), member_for_claim.clone(), claim);
-        let message_id = claim_guard.message_id();
-        let dispatch = match rebuild_received_hook_dispatch(
-            &runtime_for_claim,
-            &member_for_claim,
-            message_id,
-            NudgeKind::Queue,
-        ) {
-            Ok(Some(dispatch)) => dispatch,
-            Ok(None) => {
-                let result = store.requeue_pending(&member_for_claim, claim_guard.claim());
-                if result.is_ok() {
-                    claim_guard.disarm();
-                }
-                result?;
-                return Ok(None);
-            }
-            Err(error) => {
-                if store
-                    .requeue_pending(&member_for_claim, claim_guard.claim())
-                    .is_ok()
-                {
-                    claim_guard.disarm();
-                }
-                return Err(error);
-            }
-        };
-        Ok(Some((claim_guard, dispatch)))
+        store.claim_next_pending(&member_for_claim)
     })
-    .await
+    .await?;
+    let Some(claim) = claim else {
+        return Ok(None);
+    };
+
+    let mut claim_guard = ClaimedPendingMessage::new(runtime.clone(), member.clone(), claim);
+    let message_id = claim_guard.message_id();
+    let runtime_for_load = runtime.clone();
+    let member_for_load = member.clone();
+    let message = run_blocking("load queued message dispatch", move || {
+        load_received_hook_dispatch_message(&runtime_for_load, &member_for_load, message_id)
+    })
+    .await;
+    match message {
+        Ok(Some(message)) => {
+            rebuild_received_hook_dispatch(runtime, member, message_id, NudgeKind::Queue, &message)
+                .map(|dispatch| dispatch.map(|dispatch| (claim_guard, dispatch)))
+        }
+        Ok(None) => {
+            requeue_claim(runtime, member, &claim_guard).await?;
+            claim_guard.disarm();
+            Ok(None)
+        }
+        Err(error) => {
+            if requeue_claim(runtime, member, &claim_guard).await.is_ok() {
+                claim_guard.disarm();
+            }
+            Err(error)
+        }
+    }
 }
 
 async fn requeue_claim(
