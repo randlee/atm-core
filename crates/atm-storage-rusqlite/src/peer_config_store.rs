@@ -21,15 +21,15 @@ impl atm_storage::contract::sealed::Sealed for SqlitePeerConfigStore {}
 
 impl PeerConfigStore for SqlitePeerConfigStore {
     fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, atm_storage::AtmError> {
-        self.db.with_connection(|connection| {
+        let db = Arc::clone(&self.db);
+        self.db.read(move |connection| {
             let mut statement = connection
                 .prepare(
                     "SELECT bind_addr, advertise_host, enabled
                      FROM peer_https_interfaces ORDER BY bind_addr",
                 )
                 .map_err(|error| {
-                    self.db
-                        .error("failed to prepare HTTPS interface query", error)
+                    db.error("failed to prepare HTTPS interface query", error)
                 })?;
             statement
                 .query_map([], |row| {
@@ -39,10 +39,10 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                         row.get::<_, i64>(2)?,
                     ))
                 })
-                .map_err(|error| self.db.error("failed to query HTTPS interfaces", error))?
+                .map_err(|error| db.error("failed to query HTTPS interfaces", error))?
                 .map(|row| {
                     let (bind_addr, advertise_host, enabled) = row
-                        .map_err(|error| self.db.error("failed to read HTTPS interface", error))?;
+                        .map_err(|error| db.error("failed to read HTTPS interface", error))?;
                     Ok(HttpsInterface {
                         bind_addr: parse_bind_addr(&bind_addr)?,
                         advertise_host: parse_host(&advertise_host)?,
