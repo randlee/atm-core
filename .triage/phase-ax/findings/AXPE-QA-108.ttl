@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AX-PHASE-END-1788655446 (phase-ending review) on merge/develop-into-phase-ax at 3afa39160; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1232#issuecomment-5556008121 Native id: ATM-QA-AX-PE-005
+
+<urn:atm:triage:finding/AXPE-QA-108>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-108" ;
+  triage:title "phase-ax-plan.md frontmatter still models AX.7 as a scheduled dependent sprint" ;
+  triage:description "phase-ax-plan.md frontmatter dependency_relations still lists AX.7 as a scheduled sprint dependent on AX.6 while the body says AX.7 was superseded on 2026-09-05. Remediation: remove or mark the AX.7 relation as superseded in frontmatter so the authoritative plan is internally consistent." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "req-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T01:17:12Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T01:14:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-108/MERGE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-108/MERGE-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ax/phase-ax-plan.md" ;
+  triage:line 1 ;
+  triage:snippet "dependency_relations: ... AX.7 must_follow AX.6" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "merge/develop-into-phase-ax" ;
+  triage:headSha "3afa39160df6a8ca2e26d690784d80f1c53844d4" ;
+  triage:occursIn <urn:atm:triage:worktree/MERGE/3afa39160df6a8ca2e26d690784d80f1c53844d4> .
+
+<urn:atm:triage:worktree/MERGE/3afa39160df6a8ca2e26d690784d80f1c53844d4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/merge-develop-into-phase-ax" ;
+  triage:branch "merge/develop-into-phase-ax" ;
+  triage:headSha "3afa39160df6a8ca2e26d690784d80f1c53844d4" ;
+  triage:orderIndex 11 .
