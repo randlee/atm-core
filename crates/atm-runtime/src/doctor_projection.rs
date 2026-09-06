@@ -11,7 +11,7 @@ use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::doctor::{
     DoctorExecutionContext, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity,
-    HerdrPresenceDoctor, ReaderLanesDoctorReport, RuntimeDoctorPorts, append_doctor_findings,
+    HerdrPresenceDoctor, ReaderPoolDoctorReport, RuntimeDoctorPorts, append_doctor_findings,
     run_doctor_with_runtime_ports,
 };
 use atm_core::observability::ObservabilityPort;
@@ -27,7 +27,7 @@ pub struct DoctorProjectionConfig {
     pub queue_depth: usize,
     /// Effective capacities selected by the live storage assembly. The field
     /// remains absent for projections not attached to a running daemon.
-    pub reader_lanes: Option<ReaderLanesDoctorReport>,
+    pub reader_lanes: Option<ReaderPoolDoctorReport>,
 }
 
 impl Default for DoctorProjectionConfig {
@@ -65,7 +65,7 @@ pub trait DoctorProjection: Send + Sync {
 pub struct StorageDoctorProjection {
     sender: tokio::sync::mpsc::Sender<DoctorJob>,
     presence: Arc<dyn HerdrPresenceDoctor>,
-    reader_lanes: Option<ReaderLanesDoctorReport>,
+    reader_lanes: Option<ReaderPoolDoctorReport>,
     workers: Arc<DoctorWorkers>,
 }
 

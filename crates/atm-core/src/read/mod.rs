@@ -570,7 +570,7 @@ fn validate_target_member_in_roster<R: RetainedServiceRuntime>(
     }
 
     if runtime
-        .load_roster_member(&target.team, &target.agent)?
+        .load_roster_member(&target.team, &target.agent)
         .is_none()
     {
         return Err(AtmError::agent_not_found(&target.agent, &target.team));
@@ -1102,8 +1102,8 @@ mod tests {
             &self,
             team: &TeamName,
             agent: &AgentName,
-        ) -> Result<Option<boundary::RosterEntry>, crate::error::AtmError> {
-            Ok(self.roster_present.then(|| boundary::RosterEntry {
+        ) -> Option<boundary::RosterEntry> {
+            self.roster_present.then(|| boundary::RosterEntry {
                 team_name: team.clone(),
                 agent_name: agent.clone(),
                 member_kind: RosterMemberKind::Permanent,
@@ -1112,14 +1112,11 @@ mod tests {
                 model: crate::types::ModelName::default(),
                 recipient_pane_id: None,
                 metadata_json: Map::new(),
-            }))
+            })
         }
 
-        fn load_team_roster(
-            &self,
-            _team: &TeamName,
-        ) -> Result<Vec<boundary::RosterEntry>, crate::error::AtmError> {
-            Ok(Vec::new())
+        fn load_team_roster(&self, _team: &TeamName) -> Vec<boundary::RosterEntry> {
+            Vec::new()
         }
     }
 

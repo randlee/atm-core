@@ -704,11 +704,20 @@ impl HerdrQueueWakePump {
             Ok(Some(claim)) => claim,
             Ok(None) | Err(_) => return false,
         };
+        // A claimed nudge is now a real, in-flight Herdr wake attempt for this
+        // member: mark the ephemeral roster state pending. `ReleasePendingOnDrop`
+        // clears it unconditionally when the attempt concludes below.
+        self.service_runtime.set_roster_herdr_wake_pending(
+            member.key.team(),
+            member.key.agent(),
+            true,
+        );
         let mut release = ReleasePendingOnDrop::new(
             Arc::clone(pending_store),
             member.key.clone(),
             claim.clone(),
             Arc::clone(&self.release_streaks),
+            self.service_runtime.clone(),
         );
         let dispatch = match self.rebuild_dispatch(member, claim.msg).await {
             Ok(Some(dispatch)) => dispatch,
@@ -998,6 +1007,13 @@ struct ReleasePendingOnDrop {
     member: MemberKey,
     claim: atm_core::boundary::NudgeClaim,
     release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
+    /// Clears the member's ephemeral Herdr wake-pending roster flag when this
+    /// claim attempt concludes (success, requeue, or release), regardless of
+    /// which exit path was taken. Set alongside claiming a pending nudge in
+    /// [`HerdrQueueWakePump::process_candidate`]; this is the real production
+    /// transition the ephemeral roster state exists to track (FTQ-AW finding
+    /// 4 on PR #1240 -- previously this state had no production caller).
+    service_runtime: LocalServiceRuntime,
     armed: bool,
 }
 
@@ -1007,12 +1023,14 @@ impl ReleasePendingOnDrop {
         member: MemberKey,
         claim: atm_core::boundary::NudgeClaim,
         release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
+        service_runtime: LocalServiceRuntime,
     ) -> Self {
         Self {
             store,
             member,
             claim,
             release_streaks,
+            service_runtime,
             armed: true,
         }
     }
@@ -1080,6 +1098,11 @@ impl ReleasePendingOnDrop {
 impl Drop for ReleasePendingOnDrop {
     fn drop(&mut self) {
         self.release_without_input();
+        self.service_runtime.set_roster_herdr_wake_pending(
+            self.member.team(),
+            self.member.agent(),
+            false,
+        );
     }
 }
 
@@ -2117,11 +2140,13 @@ mod tests {
             .load_roster(key.team())
             .expect("load roster");
         roster.members.push(herdr_member(key.team(), "sender"));
+        // `shared_roster_store_arc()` is the write-through roster boundary:
+        // this save already updated the RAM roster mirror in the same
+        // operation, so no separate cache invalidation is needed here.
         runtime
             .shared_roster_store_arc()
             .save_roster(&roster)
             .expect("add task sender to roster");
-        runtime.clear_roster_cache();
         clear_pending_markers(&runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
@@ -2399,11 +2424,13 @@ mod tests {
             .load_roster(key.team())
             .expect("load roster");
         roster.members.push(herdr_member(key.team(), "sender"));
+        // `shared_roster_store_arc()` is the write-through roster boundary:
+        // this save already updated the RAM roster mirror in the same
+        // operation, so no separate cache invalidation is needed here.
         runtime
             .shared_roster_store_arc()
             .save_roster(&roster)
             .expect("add task sender to roster");
-        runtime.clear_roster_cache();
         ack_task_assignment(root.path(), &runtime, key.team(), first_message);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
@@ -2759,9 +2786,15 @@ mod tests {
             .service_runtime
             .async_task_ledger_reader()
             .expect("task reader");
+        let (roster_store, roster_runtime_mirror) =
+            atm_runtime_test_support::build_write_through_roster_for_test(
+                assembly.shared_roster_store_arc(),
+            )
+            .expect("write-through roster fixture hydrates from the isolated sqlite assembly");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             assembly.message_store_arc(),
-            assembly.shared_roster_store_arc(),
+            roster_store,
+            roster_runtime_mirror,
             assembly.nudge_template_override_store.clone(),
             Arc::new(atm_core::LocalFileNonClaudeOutbound::new()),
         )
@@ -2824,6 +2857,55 @@ mod tests {
                 .expect("pending members")
                 .contains(&key)
         );
+    }
+
+    /// Proves the ephemeral roster wake-pending flag actually mutates on a
+    /// real Herdr wake attempt (FTQ-AW finding 4 on PR #1240): it is unset
+    /// before any attempt, set while a claim's prompt is in flight, and
+    /// clears again once the attempt concludes -- regardless of the claim
+    /// eventually succeeding.
+    #[tokio::test]
+    async fn ac13_herdr_wake_pending_ephemeral_state_tracks_the_in_flight_claim() {
+        let (root, runtime, fake, pump, _health, key) = build_test_pump();
+        assert_eq!(
+            runtime.roster_ephemeral_state(key.team(), key.agent()),
+            Some(atm_storage::RosterMemberEphemeralState::default()),
+            "no wake attempt is in flight before the first tick"
+        );
+
+        let prompt_gate = fake.block_next_prompt();
+        let (shutdown_tx, shutdown_rx) = watch::channel(());
+        let task = pump.start(shutdown_rx);
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if runtime
+                    .roster_ephemeral_state(key.team(), key.agent())
+                    .expect("member present in RAM roster")
+                    .herdr_wake_pending
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("wake-pending ephemeral state must be set while a claim is in flight");
+
+        drop(prompt_gate);
+        shutdown_tx.send(()).expect("shutdown notification");
+        tokio::time::timeout(Duration::from_secs(1), task)
+            .await
+            .expect("pump joins after shutdown notification")
+            .expect("poll task join");
+
+        assert!(
+            !runtime
+                .roster_ephemeral_state(key.team(), key.agent())
+                .expect("member present in RAM roster")
+                .herdr_wake_pending,
+            "wake-pending must clear once the claim attempt concludes"
+        );
+        let _ = root;
     }
 
     #[tokio::test]
@@ -3271,7 +3353,6 @@ mod tests {
                 refreshed_at: None,
             })
             .expect("changed roster");
-        runtime.clear_roster_cache();
         queue_message(root.path(), &runtime, &team, "aq27-agent");
         queue_message(root.path(), &runtime, &team, "aq27-agent-20");
         queue_message(root.path(), &runtime, &team, "aq27-agent-21");
@@ -3326,6 +3407,180 @@ mod tests {
         assert_eq!(
             runtime_state(HerdrAgentStatus::Unknown),
             RuntimeMemberState::Unknown
+        );
+    }
+
+    struct UnusedMailStore;
+    impl atm_storage::contract::sealed::Sealed for UnusedMailStore {}
+    impl atm_storage::MessageStore for UnusedMailStore {
+        fn save_message(&self, _message: &atm_storage::Message) -> Result<(), AtmError> {
+            unreachable!("herdr candidate test never touches the mail store boundary")
+        }
+
+        fn save_messages_atomically(
+            &self,
+            _messages: &[atm_storage::Message],
+        ) -> Result<(), AtmError> {
+            unreachable!("herdr candidate test never touches the mail store boundary")
+        }
+
+        fn load_message(
+            &self,
+            _key: &atm_storage::MessageKey,
+        ) -> Result<Option<atm_storage::Message>, AtmError> {
+            unreachable!("herdr candidate test never touches the mail store boundary")
+        }
+
+        fn list_messages(
+            &self,
+            _query: &atm_storage::MessageQuery,
+        ) -> Result<Vec<atm_storage::Message>, AtmError> {
+            unreachable!("herdr candidate test never touches the mail store boundary")
+        }
+
+        fn delete_message(&self, _key: &atm_storage::MessageKey) -> Result<(), AtmError> {
+            unreachable!("herdr candidate test never touches the mail store boundary")
+        }
+    }
+
+    struct NoopNudgeTemplateOverrideStore;
+    impl atm_storage::contract::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
+    impl atm_core::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
+        fn load_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: atm_core::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<Option<atm_core::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: atm_core::boundary::BuiltInNudgeTemplateKind,
+            _template_body: &str,
+        ) -> Result<atm_core::boundary::TeamNudgeTemplateOverrideRow, AtmError> {
+            unreachable!("herdr candidate test never touches the override-store boundary")
+        }
+
+        fn disable_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: atm_core::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<atm_core::boundary::TeamNudgeTemplateOverrideRow, AtmError> {
+            unreachable!("herdr candidate test never touches the override-store boundary")
+        }
+
+        fn clear_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: atm_core::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<bool, AtmError> {
+            unreachable!("herdr candidate test never touches the override-store boundary")
+        }
+    }
+
+    struct UnusedNonClaudeOutbound;
+    impl atm_core::boundary::sealed::Sealed for UnusedNonClaudeOutbound {}
+    impl atm_core::boundary::NonClaudeOutbound for UnusedNonClaudeOutbound {
+        fn deliver_payloads(
+            &self,
+            _request: atm_core::boundary::NonClaudeOutboundDeliveryRequest,
+        ) -> Result<atm_core::boundary::NonClaudeOutboundDeliveryResponse, AtmError> {
+            unreachable!("herdr candidate test never touches the non-Claude outbound boundary")
+        }
+    }
+
+    /// Durable roster store that counts every call so the test can prove
+    /// `herdr_candidates` reads exclusively from the RAM roster after the
+    /// one hydration read performed at runtime construction.
+    struct CountingRosterStore {
+        roster: RosterSnapshot,
+        load_roster_calls: std::sync::atomic::AtomicUsize,
+        list_teams_calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl atm_storage::contract::sealed::Sealed for CountingRosterStore {}
+    impl atm_storage::contract::RosterStore for CountingRosterStore {
+        fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError> {
+            self.load_roster_calls
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            assert_eq!(team, &self.roster.team_name, "unexpected team requested");
+            Ok(self.roster.clone())
+        }
+
+        fn save_roster(&self, _roster: &RosterSnapshot) -> Result<(), AtmError> {
+            unreachable!("herdr candidate test never mutates the durable roster")
+        }
+
+        fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
+            self.list_teams_calls
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(vec![self.roster.team_name.clone()])
+        }
+    }
+
+    #[test]
+    fn herdr_candidates_never_reads_the_durable_roster_store_after_hydration() {
+        let team: TeamName = "aq27-counting-team".parse().expect("team");
+        let member = herdr_member(&team, "aq27-counting-agent");
+        let durable = std::sync::Arc::new(CountingRosterStore {
+            roster: RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![member],
+                refreshed_at: None,
+            },
+            load_roster_calls: std::sync::atomic::AtomicUsize::new(0),
+            list_teams_calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let (roster_store, roster_runtime_mirror) =
+            atm_runtime_test_support::build_write_through_roster_for_test(durable.clone())
+                .expect("write-through roster fixture hydrates from the counting fake");
+        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+            std::sync::Arc::new(UnusedMailStore),
+            roster_store,
+            roster_runtime_mirror,
+            std::sync::Arc::new(NoopNudgeTemplateOverrideStore),
+            std::sync::Arc::new(UnusedNonClaudeOutbound),
+        );
+        // Hydration (now performed by build_write_through_roster_for_test)
+        // performs exactly one read of each kind.
+        assert_eq!(
+            durable
+                .list_teams_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+        assert_eq!(
+            durable
+                .load_roster_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+
+        let pending = std::collections::HashSet::new();
+        for _ in 0..5 {
+            let roster_store = runtime.shared_roster_store_arc();
+            let candidates =
+                super::herdr_candidates(roster_store.as_ref(), &pending).expect("candidates");
+            assert_eq!(candidates.len(), 1);
+        }
+
+        // Five additional herdr_candidates calls must not touch the durable
+        // store again: RAM is the only read path once hydrated.
+        assert_eq!(
+            durable
+                .list_teams_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "herdr_candidates must not call list_teams on the durable store"
+        );
+        assert_eq!(
+            durable
+                .load_roster_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "herdr_candidates must not call load_roster on the durable store"
         );
     }
 }

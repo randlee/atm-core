@@ -134,6 +134,11 @@ owner_manifest_path = "crates/atm-core/Cargo.toml"
 allowed_dependencies = ["async-trait", "atm-error", "atm-runtime-test-support", "atm-storage", "base64", "chrono", "fs4", "interprocess", "libc", "parking_lot", "sc-lint-attributes", "semver", "serde", "serde_json", "serial_test", "tempfile", "toml", "tracing", "tracing-subscriber", "ulid", "windows-sys"]
 
 [[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-observability/Cargo.toml"
+boundary_record_path = "boundaries/atm-observability/tracing-bridge.toml"
+allowed_dependencies = ["atm-core", "sc-observability", "sc-observability-types", "serde_json", "serial_test", "tempfile", "tracing", "tracing-subscriber"]
+
+[[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-error/Cargo.toml"
 boundary_record_path = "boundaries/atm-error/error-codes.toml"
 allowed_dependencies = ["serde", "serde_json"]
@@ -141,7 +146,7 @@ allowed_dependencies = ["serde", "serde_json"]
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-bootstrap/Cargo.toml"
 boundary_record_path = "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"
-allowed_dependencies = ["atm-core", "atm-observability", "atm-herdr", "atm-http-runtime", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "chrono", "fs4", "peer-tls", "sc-observability", "sc-observability-types", "serial_test", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
+allowed_dependencies = ["atm-core", "atm-observability", "atm-herdr", "atm-http-runtime", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "chrono", "fs4", "peer-tls", "serial_test", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-client/Cargo.toml"
@@ -153,7 +158,7 @@ allowed_dependencies = ["async-trait", "atm-core", "atm-daemon-client", "atm-htt
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-graft-python/Cargo.toml"
-allowed_dependencies = ["atm-core", "atm-graft", "pyo3", "tempfile", "tokio"]
+allowed_dependencies = ["atm-core", "atm-graft", "pyo3", "serde_json", "tempfile", "tokio"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-query-python/Cargo.toml"
@@ -161,6 +166,7 @@ allowed_dependencies = ["atm-storage", "atm-storage-rusqlite", "pyo3", "tempfile
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
+boundary_record_path = "boundaries/atm-http-runtime/http-runtime.toml"
 allowed_dependencies = ["async-trait", "atm-core", "atm-herdr", "atm-runtime", "atm-runtime-test-support", "axum", "base64", "fs4", "http-body-util", "hyper", "hyper-util", "reqwest", "serde", "serde_json", "serde_yaml", "tempfile", "tokio", "tower", "tracing", "ulid", "windows-sys"]
 
 [[boundaries.manifest_dependency_allowlists]]
@@ -220,6 +226,24 @@ owner_manifest_path = "crates/atm-daemon/Cargo.toml"
 dependency_package = "atm-storage-rusqlite"
 allowed_sections = ["dependencies"]
 message = "atm-daemon may depend on atm-storage-rusqlite only through the documented runtime-owned SQLite boundaries"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
+dependency_package = "atm-runtime-test-support"
+allowed_sections = ["dev-dependencies"]
+message = "atm-http-runtime must not depend on atm-runtime-test-support in production; it is a test-only fixture dependency"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
+dependency_package = "serde_yaml"
+allowed_sections = ["dev-dependencies"]
+message = "atm-http-runtime must not depend on serde_yaml in production; it is a test-only fixture dependency"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
+dependency_package = "tempfile"
+allowed_sections = ["dev-dependencies"]
+message = "atm-http-runtime must not depend on tempfile in production; it is a test-only fixture dependency"
 
 [version_sync.winget]
 enabled = true

@@ -293,19 +293,38 @@ pub struct HerdrQueuePumpDoctorReport {
     pub breaker: HerdrBreakerDoctorReport,
 }
 
-/// Effective capacity selected by the running daemon for one reader lane.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ReaderLaneDoctorReport {
-    pub pool_size: usize,
+/// Live metrics snapshot for the single shared reader pool, surfaced
+/// alongside its effective capacity.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ReaderPoolMetricsDoctorReport {
     pub queue_depth: usize,
+    pub saturated: u64,
+    pub in_flight: usize,
+    pub wait_nanos: u64,
+    pub execution_nanos: u64,
+    pub expired_in_queue: u64,
+    pub interrupted_while_active: u64,
+    pub quarantined: u64,
+    pub current_quarantined_workers: usize,
+    pub retired_replaced_workers: u64,
+    pub quarantine_exhausted_rejections: u64,
+    pub pool_size: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_checkpoint_succeeded: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_wal_frames: Option<u64>,
 }
 
-/// Effective mailbox and search reader-lane capacities supplied by the
-/// replacement runtime's live storage assembly.
+/// Effective capacity and live metrics selected by the running daemon for
+/// the single shared reader pool (mailbox and search reads draw from the
+/// same pool, so this is one report, not two).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ReaderLanesDoctorReport {
-    pub mailbox: ReaderLaneDoctorReport,
-    pub search: ReaderLaneDoctorReport,
+pub struct ReaderPoolDoctorReport {
+    pub pool_size: usize,
+    pub queue_depth: usize,
+    pub tool_class_max_in_flight: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<ReaderPoolMetricsDoctorReport>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -319,7 +338,7 @@ pub struct DoctorReport {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub daemon_context: Option<DoctorExecutionContext>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reader_lanes: Option<ReaderLanesDoctorReport>,
+    pub reader_lanes: Option<ReaderPoolDoctorReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_roster: Option<MembersList>,
     #[serde(default)]

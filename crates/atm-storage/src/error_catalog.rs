@@ -218,12 +218,14 @@ const fn local_http_guidance(code: AtmErrorCode) -> Option<&'static str> {
 
 const fn observability_guidance(code: AtmErrorCode) -> Option<&'static str> {
     match code {
-        AtmErrorCode::ObservabilityEmitFailed
-        | AtmErrorCode::ObservabilityQueryFailed
-        | AtmErrorCode::ObservabilityFollowFailed
-        | AtmErrorCode::ObservabilityHealthFailed
-        | AtmErrorCode::ObservabilityBootstrapFailed => {
-            Some("Repair the observability backend or retry the operation later.")
+        AtmErrorCode::ObservabilityBootstrapFailed => {
+            Some("Check the retained-log directory and file permissions, then restart the daemon.")
+        }
+        AtmErrorCode::ObservabilityEmitFailed | AtmErrorCode::ObservabilityHealthFailed => Some(
+            "Retry the operation; if it persists, inspect daemon health for a logger or lock failure.",
+        ),
+        AtmErrorCode::ObservabilityQueryFailed | AtmErrorCode::ObservabilityFollowFailed => {
+            Some("Check the retained-log path and permissions before retrying the log operation.")
         }
         AtmErrorCode::ObservabilityHealthOk => Some("No operator action is required."),
         _ => None,

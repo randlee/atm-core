@@ -8,18 +8,21 @@
 //! message and roster contracts.
 
 mod analyst_query;
-mod control_path_pool;
+mod diagnostic_timeline;
 mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;
 mod mail_messages_schema;
 #[cfg(test)]
 mod mailbox_metadata;
+#[cfg(test)]
+mod mailbox_metadata_types;
 mod mailbox_reader;
 mod nudge_template_override_store;
 mod observability;
 mod peer_config_store;
 mod pending_nudge_store;
 mod reader_pool;
+pub mod roster_runtime;
 mod roster_store;
 mod schema_support;
 mod search_reader;
@@ -36,6 +39,8 @@ mod team_roster_schema;
 mod template_catalog_schema;
 mod template_catalog_store;
 mod template_override_migration;
+#[cfg(any(test, feature = "test-support"))]
+mod test_support;
 mod writer;
 
 pub use reader_pool::{ReaderLaneMetricsSnapshot, ReaderLanesMetricsSnapshot};
@@ -48,9 +53,10 @@ pub use crate::analyst_query::{
 };
 #[cfg(test)]
 use crate::mailbox_metadata::query_mailbox_metadata_rows;
+#[cfg(test)]
+pub use crate::observability::NullSqliteObservability;
 pub use crate::observability::{
-    NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
-    SqliteObservabilityOutcome,
+    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMailboxReader,
@@ -58,13 +64,15 @@ use atm_storage::contract::{
     MailboxScope, Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 use atm_storage::schema::MessageEnvelope;
-#[cfg(test)]
-use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TaskStore, TemplateCatalogStore};
 use atm_storage::{
-    AtmError, EffectiveReaderLane, EffectiveReaderLanes, IsoTimestamp, StorageFactory,
+    AtmError, EffectiveReaderPool, EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory,
     StorageHandleParts, StorageHandles,
+};
+pub use diagnostic_timeline::{
+    DIAGNOSTIC_DETAIL_MAX_BYTES, DIAGNOSTIC_MAX_AGE_DAYS, DIAGNOSTIC_MAX_ROWS,
+    DIAGNOSTIC_PRUNE_BATCH, DIAGNOSTIC_PRUNE_CHECK_EVERY, SqliteDiagnosticTimeline,
 };
 use graft_receiver_endpoint_store::SqliteGraftReceiverEndpointStore;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -74,6 +82,12 @@ use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use template_catalog_store::template_catalog_store;
+#[cfg(any(test, feature = "test-support"))]
+pub use test_support::{
+    TemplateAdmissionMessage, TemplateAdmissionSnapshot, diagnostic_queue_batches_for_test,
+    inspect_template_admission_for_test,
+};
+pub use writer::DiagnosticTimelinePersistenceStats;
 
 #[cfg(any(test, feature = "test-support"))]
 #[derive(Debug)]
@@ -92,33 +106,6 @@ impl Drop for SqliteWriterLockGuard {
 #[cfg(any(test, feature = "test-support"))]
 pub struct TestOnlySqliteWriterLockGuard {
     _guard: SqliteWriterLockGuard,
-}
-
-/// Test-only projection of template-admission state.
-///
-/// Keeping this probe in SQLite test support lets the replacement HTTP runtime
-/// prove durable rows without importing SQLite or opening a database itself.
-#[doc(hidden)]
-#[cfg(any(test, feature = "test-support"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TemplateAdmissionSnapshot {
-    pub template_count: usize,
-    pub decomposed_count: usize,
-    pub messages: Vec<TemplateAdmissionMessage>,
-}
-
-/// One durable message projection returned by [`TemplateAdmissionSnapshot`].
-#[doc(hidden)]
-#[cfg(any(test, feature = "test-support"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TemplateAdmissionMessage {
-    pub message_key: String,
-    pub template_sha: Option<String>,
-    pub vars_json: Option<String>,
-    pub category: Option<String>,
-    pub content_format: Option<String>,
-    pub tags_json: String,
-    pub message_text: Option<String>,
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -142,73 +129,6 @@ pub fn hold_sqlite_writer_lock_for_test(
     path: impl AsRef<Path>,
 ) -> Result<TestOnlySqliteWriterLockGuard, AtmError> {
     hold_sqlite_writer_lock(path).map(|guard| TestOnlySqliteWriterLockGuard { _guard: guard })
-}
-
-/// Reads only durable template-admission projections for black-box tests.
-///
-/// Production code must use the sealed storage contracts. This helper is
-/// test-support-only so the Tokio HTTP runtime never owns a database handle.
-#[doc(hidden)]
-#[cfg(any(test, feature = "test-support"))]
-pub fn inspect_template_admission_for_test(
-    path: impl AsRef<Path>,
-    message_keys: &[String],
-) -> Result<TemplateAdmissionSnapshot, AtmError> {
-    let connection = Connection::open(path.as_ref()).map_err(|error| {
-        AtmError::mailbox_read(format!(
-            "failed to inspect template-admission fixture: {error}"
-        ))
-    })?;
-    let (template_count, decomposed_count): (i64, i64) = connection
-        .query_row(
-            "SELECT
-                (SELECT COUNT(*) FROM message_templates),
-                (SELECT COUNT(*) FROM decomposed_messages)",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .map_err(|error| {
-            AtmError::mailbox_read(format!(
-                "failed to count template-admission fixture rows: {error}"
-            ))
-        })?;
-    let messages = message_keys
-        .iter()
-        .map(|message_key| {
-            connection
-                .query_row(
-                    "SELECT message_key, template_sha, vars_json, category, content_format,
-                            tags_json, message_text
-                     FROM mail_messages WHERE message_key = ?1",
-                    params![message_key],
-                    |row| {
-                        Ok(TemplateAdmissionMessage {
-                            message_key: row.get(0)?,
-                            template_sha: row.get(1)?,
-                            vars_json: row.get(2)?,
-                            category: row.get(3)?,
-                            content_format: row.get(4)?,
-                            tags_json: row.get(5)?,
-                            message_text: row.get(6)?,
-                        })
-                    },
-                )
-                .map_err(|error| {
-                    AtmError::mailbox_read(format!(
-                        "failed to inspect template-admission message '{message_key}': {error}"
-                    ))
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(TemplateAdmissionSnapshot {
-        template_count: usize::try_from(template_count).map_err(|_| {
-            AtmError::mailbox_read("template-admission fixture count exceeds usize range")
-        })?,
-        decomposed_count: usize::try_from(decomposed_count).map_err(|_| {
-            AtmError::mailbox_read("template-admission fixture count exceeds usize range")
-        })?,
-        messages,
-    })
 }
 
 /// Installs a test-only SQLite trigger that deterministically rejects mailbox
@@ -238,28 +158,7 @@ pub fn install_message_write_failure_for_test(path: impl AsRef<Path>) -> Result<
 }
 
 #[cfg(test)]
-#[allow(
-    dead_code,
-    reason = "metadata positive-path fields are owned by the query DTO while current tests exercise malformed-row validation"
-)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SqliteMailboxMetadataRow {
-    pub message_key: MessageKey,
-    pub message_id: Option<AtmMessageId>,
-    pub parent_message_id: Option<AtmMessageId>,
-    pub thread_mode: Option<ThreadMode>,
-    pub from_agent: AgentName,
-    pub source_chat_id: Option<atm_storage::types::ChatId>,
-    pub destination_chat_id: Option<atm_storage::types::ChatId>,
-    pub summary: Option<String>,
-    pub message_at: IsoTimestamp,
-    pub read: bool,
-    pub requires_ack: bool,
-    pub pending_ack: bool,
-    pub acknowledged_at: Option<IsoTimestamp>,
-    pub expires_at: Option<IsoTimestamp>,
-    pub task_id: Option<atm_storage::types::TaskId>,
-}
+pub(crate) use mailbox_metadata_types::SqliteMailboxMetadataRow;
 
 #[derive(Debug)]
 struct SqliteMessageStore {
@@ -318,7 +217,7 @@ impl SqliteMessageStore {
     }
 
     fn load_message_state_row(
-        &self,
+        db: &SharedDb,
         connection: &Connection,
         team: &TeamName,
         agent: &AgentName,
@@ -340,10 +239,7 @@ impl SqliteMessageStore {
                 },
             )
             .optional()
-            .map_err(|error| {
-                self.db
-                    .error("failed to load sqlite message-state row", error)
-            })?
+            .map_err(|error| db.error("failed to load sqlite message-state row", error))?
             .map(|(read, pending_ack_at, acknowledged_at, expires_at)| {
                 Ok(StoredMailMessageState {
                     read: read != 0,
@@ -429,13 +325,16 @@ impl MessageStore for SqliteMessageStore {
     }
 
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError> {
-        let record = self.db.with_connection(|connection| {
+        let key = key.clone();
+        let query_key = key.clone();
+        let db = Arc::clone(&self.db);
+        let record = self.db.read(move |connection| {
             let loaded = connection
                 .query_row(
                     "SELECT team, agent, envelope_json
                      FROM mail_messages
                      WHERE message_key = ?1;",
-                    params![key.as_ref()],
+                    params![query_key.as_ref()],
                     |row| {
                         Ok((
                             row.get::<_, String>(0)?,
@@ -445,20 +344,21 @@ impl MessageStore for SqliteMessageStore {
                     },
                 )
                 .optional()
-                .map_err(|error| self.db.error("failed to load sqlite message", error))?;
+                .map_err(|error| db.error("failed to load sqlite message", error))?;
 
             if let Some((team, agent, envelope_json)) = loaded {
                 let team: TeamName = team.parse().map_err(|error| {
                     AtmError::validation(format!(
-                        "failed to parse sqlite team for message {key}: {error}"
+                        "failed to parse sqlite team for message {query_key}: {error}"
                     ))
                 })?;
                 let agent: AgentName = agent.parse().map_err(|error| {
                     AtmError::validation(format!(
-                        "failed to parse sqlite agent for message {key}: {error}"
+                        "failed to parse sqlite agent for message {query_key}: {error}"
                     ))
                 })?;
-                let state = self.load_message_state_row(connection, &team, &agent, key)?;
+                let state =
+                    Self::load_message_state_row(&db, connection, &team, &agent, &query_key)?;
                 Ok(Some((team, agent, envelope_json, state)))
             } else {
                 Ok(None)
@@ -480,7 +380,9 @@ impl MessageStore for SqliteMessageStore {
     }
 
     fn list_messages(&self, query: &MessageQuery) -> Result<Vec<Message>, AtmError> {
-        self.db.with_connection(|connection| {
+        let query = query.clone();
+        let db = Arc::clone(&self.db);
+        self.db.read(move |connection| {
             let limit = query
                 .limit
                 // The shared contract accepts usize, but SQLite LIMIT is i64.
@@ -508,7 +410,7 @@ impl MessageStore for SqliteMessageStore {
                      ORDER BY mail_messages.message_at DESC, mail_messages.message_key DESC
                      LIMIT ?5;",
                 )
-                .map_err(|error| self.db.error("failed to prepare sqlite message list query", error))?;
+                .map_err(|error| db.error("failed to prepare sqlite message list query", error))?;
             let rows = statement
                 .query_map(
                     params![
@@ -520,12 +422,12 @@ impl MessageStore for SqliteMessageStore {
                     ],
                     |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
                 )
-                .map_err(|error| self.db.error("failed to execute sqlite message list query", error))?;
+                .map_err(|error| db.error("failed to execute sqlite message list query", error))?;
 
             let mut messages = Vec::new();
             for row in rows {
                 let (message_key, envelope_json) =
-                    row.map_err(|error| self.db.error("failed to decode sqlite message row", error))?;
+                    row.map_err(|error| db.error("failed to decode sqlite message row", error))?;
                 let message_key = MessageKey::new(message_key).map_err(|error| {
                     AtmError::validation(format!(
                         "failed to parse sqlite message key during list: {error}"
@@ -533,7 +435,13 @@ impl MessageStore for SqliteMessageStore {
 
                 })?;
                 let state =
-                    self.load_message_state_row(connection, &query.team, &query.agent, &message_key)?;
+                    Self::load_message_state_row(
+                        &db,
+                        connection,
+                        &query.team,
+                        &query.agent,
+                        &message_key,
+                    )?;
                 let envelope: MessageEnvelope =
                     deserialize_json(&envelope_json, "sqlite message envelope")?;
                 let envelope = Self::apply_loaded_state(envelope, state.as_ref());
@@ -553,7 +461,10 @@ impl MessageStore for SqliteMessageStore {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Option<MailboxBucketCounts>, AtmError> {
-        self.db.with_connection(|connection| {
+        let team = team.clone();
+        let agent = agent.clone();
+        let db = Arc::clone(&self.db);
+        self.db.read(move |connection| {
             let sql = "WITH visible AS (
                     SELECT
                         mail_messages.message_id,
@@ -607,8 +518,7 @@ impl MessageStore for SqliteMessageStore {
                     Ok((row.get(0)?, row.get(1)?, row.get(2)?))
                 })
                 .map_err(|error| {
-                    self.db
-                        .error("failed to aggregate sqlite mailbox bucket counts", error)
+                    db.error("failed to aggregate sqlite mailbox bucket counts", error)
                 })?;
             Ok(Some(MailboxBucketCounts {
                 unread: usize::try_from(unread).map_err(|_| {
@@ -709,6 +619,7 @@ pub struct SqliteStorageBackend {
     async_message_search_store: Arc<dyn AsyncMessageSearchStore>,
     async_mailbox_reader: Arc<dyn AsyncMailboxReader>,
     async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader>,
+    diagnostic_timeline: Arc<SqliteDiagnosticTimeline>,
 }
 
 impl std::fmt::Debug for SqliteStorageBackend {
@@ -721,10 +632,44 @@ impl std::fmt::Debug for SqliteStorageBackend {
 
 /// Concrete SQLite selection owned by the SQLite backend and consumed only at
 /// an executable composition root through [`StorageFactory`].
-#[derive(Debug, Clone, Default)]
 pub struct SqliteStorageFactory {
     database_path: Option<PathBuf>,
-    reader_lanes: reader_pool::ReaderLanesConfig,
+    read_pool_config: reader_pool::SharedReadPoolConfig,
+    observability: Arc<dyn SqliteObservability>,
+    timeline_observer: Option<Arc<dyn Fn(Arc<SqliteDiagnosticTimeline>) + Send + Sync>>,
+}
+
+impl Default for SqliteStorageFactory {
+    fn default() -> Self {
+        Self {
+            database_path: None,
+            read_pool_config: reader_pool::SharedReadPoolConfig::default(),
+            observability: Arc::new(observability::PassiveSqliteObservability),
+            timeline_observer: None,
+        }
+    }
+}
+
+impl Clone for SqliteStorageFactory {
+    fn clone(&self) -> Self {
+        Self {
+            database_path: self.database_path.clone(),
+            read_pool_config: self.read_pool_config,
+            observability: Arc::clone(&self.observability),
+            timeline_observer: self.timeline_observer.as_ref().map(Arc::clone),
+        }
+    }
+}
+
+impl std::fmt::Debug for SqliteStorageFactory {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SqliteStorageFactory")
+            .field("database_path", &self.database_path)
+            .field("read_pool_config", &self.read_pool_config)
+            .field("timeline_observer", &self.timeline_observer.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 impl SqliteStorageFactory {
@@ -736,19 +681,36 @@ impl SqliteStorageFactory {
     pub fn at_path(path: impl Into<PathBuf>) -> Self {
         Self {
             database_path: Some(path.into()),
-            reader_lanes: reader_pool::ReaderLanesConfig::default(),
+            ..Self::default()
         }
+    }
+
+    /// Bootstrap supplies the retained JSONL adapter at the concrete storage
+    /// composition root. Tests retain the null adapter by default.
+    pub fn with_observability(mut self, observability: Arc<dyn SqliteObservability>) -> Self {
+        self.observability = observability;
+        self
+    }
+
+    /// Called after the backend opens so the bridge sink uses its existing
+    /// writer worker rather than creating a competing SQLite connection.
+    pub fn with_timeline_observer(
+        mut self,
+        observer: Arc<dyn Fn(Arc<SqliteDiagnosticTimeline>) + Send + Sync>,
+    ) -> Self {
+        self.timeline_observer = Some(observer);
+        self
     }
 
     #[allow(
         dead_code,
-        reason = "The composition root uses default ReaderLanesConfig until AV.1b exposes config-file parsing; this builder seam is intentionally testable now."
+        reason = "The composition root uses the default shared read-pool configuration until it is exposed through config-file parsing; this builder seam is intentionally testable now."
     )]
-    pub(crate) fn with_reader_lanes(
+    pub(crate) fn with_read_pool_config(
         mut self,
-        reader_lanes: reader_pool::ReaderLanesConfig,
+        read_pool_config: reader_pool::SharedReadPoolConfig,
     ) -> Self {
-        self.reader_lanes = reader_lanes;
+        self.read_pool_config = read_pool_config;
         self
     }
 
@@ -761,26 +723,55 @@ impl SqliteStorageFactory {
 
 impl StorageFactory for SqliteStorageFactory {
     fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError> {
-        let effective_reader_lanes = EffectiveReaderLanes {
-            mailbox: EffectiveReaderLane {
-                pool_size: self.reader_lanes.mailbox.pool_size.get(),
-                queue_depth: self.reader_lanes.mailbox.queue_depth.get(),
-            },
-            search: EffectiveReaderLane {
-                pool_size: self.reader_lanes.search.pool_size.get(),
-                queue_depth: self.reader_lanes.search.queue_depth.get(),
-            },
+        let effective_reader_pool = EffectiveReaderPool {
+            pool_size: self.read_pool_config.pool.pool_size.get(),
+            queue_depth: self.read_pool_config.pool.queue_depth.get(),
+            tool_class_max_in_flight: self.read_pool_config.pool.tool_class_max_in_flight,
         };
-        let backend = SqliteStorageBackend::new_with_reader_lanes(
-            self.database_path(durable_state_root),
-            self.reader_lanes,
-        )?;
+        let backend = Arc::new(
+            SqliteStorageBackend::new_with_observability_and_read_pool_config(
+                self.database_path(durable_state_root),
+                Arc::clone(&self.observability),
+                self.read_pool_config,
+            )?,
+        );
+        if let Some(observer) = &self.timeline_observer {
+            observer(backend.diagnostic_timeline());
+        }
+        let metrics_backend = Arc::clone(&backend);
+        let reader_pool_metrics: Arc<dyn Fn() -> Option<EffectiveReaderPoolMetrics> + Send + Sync> =
+            Arc::new(move || {
+                let snapshot = metrics_backend.reader_lane_metrics();
+                snapshot
+                    .lane("shared")
+                    .map(|lane| EffectiveReaderPoolMetrics {
+                        queue_depth: lane.queue_depth,
+                        saturated: lane.saturated,
+                        in_flight: lane.in_flight,
+                        wait_nanos: lane.wait_nanos,
+                        execution_nanos: lane.execution_nanos,
+                        expired_in_queue: lane.expired_in_queue,
+                        interrupted_while_active: lane.interrupted_while_active,
+                        quarantined: lane.quarantined,
+                        current_quarantined_workers: lane.current_quarantined_workers,
+                        retired_replaced_workers: lane.retired_replaced_workers,
+                        quarantine_exhausted_rejections: lane.quarantine_exhausted_rejections,
+                        pool_size: lane.pool_size,
+                        last_checkpoint_succeeded: lane.last_checkpoint_succeeded,
+                        current_wal_frames: lane.current_wal_frames,
+                    })
+            });
+        // The write-through roster seam hydrates its RAM mirror here, fail
+        // closed: a durable roster read failure at startup aborts backend
+        // construction instead of silently starting with an incomplete RAM
+        // roster for the process lifetime.
+        let roster = roster_runtime::build_write_through_roster(backend.roster_store())?;
         Ok(StorageHandles::from_parts(StorageHandleParts {
             message_store: backend.message_store(),
             async_message_store: backend.async_message_store(),
             async_mailbox_reader: backend.async_mailbox_reader(),
             async_task_ledger_reader: backend.async_task_ledger_reader(),
-            roster_store: backend.roster_store(),
+            roster,
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
             task_store: backend.task_store(),
@@ -789,49 +780,43 @@ impl StorageFactory for SqliteStorageFactory {
             template_catalog_store: backend.template_catalog_store(),
             message_search_store: backend.message_search_store(),
             async_message_search_store: backend.async_message_search_store(),
-            effective_reader_lanes: Some(effective_reader_lanes),
+            diagnostic_timeline: backend.diagnostic_timeline(),
+            effective_reader_pool: Some(effective_reader_pool),
+            reader_pool_metrics: Some(reader_pool_metrics),
         }))
     }
 }
 
 impl SqliteStorageBackend {
     pub fn new(path: impl AsRef<Path>) -> Result<Self, AtmError> {
-        Self::new_with_observability(path, Arc::new(NullSqliteObservability))
-    }
-
-    pub(crate) fn new_with_reader_lanes(
-        path: impl AsRef<Path>,
-        reader_lanes: reader_pool::ReaderLanesConfig,
-    ) -> Result<Self, AtmError> {
-        Self::new_with_observability_and_reader_lanes(
-            path,
-            Arc::new(NullSqliteObservability),
-            reader_lanes,
-        )
+        Self::new_with_observability(path, Arc::new(observability::PassiveSqliteObservability))
     }
 
     pub fn new_with_observability(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
     ) -> Result<Self, AtmError> {
-        Self::new_with_observability_and_reader_lanes(
+        Self::new_with_observability_and_read_pool_config(
             path,
             observability,
-            reader_pool::ReaderLanesConfig::default(),
+            reader_pool::SharedReadPoolConfig::default(),
         )
     }
 
-    fn new_with_observability_and_reader_lanes(
+    pub(crate) fn new_with_observability_and_read_pool_config(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
-        reader_lanes: reader_pool::ReaderLanesConfig,
+        read_pool_config: reader_pool::SharedReadPoolConfig,
     ) -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_with_reader_lanes(
             path,
             observability,
-            reader_lanes,
+            read_pool_config,
         )?);
         Ok(Self {
+            diagnostic_timeline: Arc::new(SqliteDiagnosticTimeline::from_shared_db(Arc::clone(
+                &db,
+            ))),
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
             nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
@@ -855,6 +840,9 @@ impl SqliteStorageBackend {
     pub(crate) fn in_memory_for_test() -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_in_memory_for_test()?);
         Ok(Self {
+            diagnostic_timeline: Arc::new(SqliteDiagnosticTimeline::from_shared_db(Arc::clone(
+                &db,
+            ))),
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
             nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
@@ -888,6 +876,11 @@ impl SqliteStorageBackend {
 
     pub fn async_task_ledger_reader(&self) -> Arc<dyn AsyncTaskLedgerReader + Send + Sync> {
         self.async_task_ledger_reader.clone()
+    }
+
+    /// Best-effort diagnostic timeline sharing this backend's sole writer.
+    pub fn diagnostic_timeline(&self) -> Arc<SqliteDiagnosticTimeline> {
+        Arc::clone(&self.diagnostic_timeline)
     }
 
     pub fn save_message_record(
@@ -1021,7 +1014,7 @@ impl SqliteStorageBackend {
 #[cfg(test)]
 mod tests {
     use super::{SqliteStorageBackend, SqliteStorageFactory};
-    use crate::reader_pool::ReaderLanesConfig;
+    use crate::reader_pool::SharedReadPoolConfig;
     use atm_storage::contract::{
         AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, MailboxScope, Message,
         MessageKey, MessageQuery, ReadDeadline, ReadLaneError, RosterHarness, RosterMember,
@@ -1035,8 +1028,9 @@ mod tests {
         MessageWriteOrigin, SearchAtom, SearchDeadline, SearchExpression, SearchGroupBy,
         SearchGroupField, SearchKey, SearchLimit, SearchMetadataMatch, SearchValue,
         SimpleAggregate, StorageFactory, TaskEvent, TaskEventKind, TaskState, TemplateFirstSeen,
-        TemplateFrontmatter, TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
-        TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
+        TemplateFrontmatter, TemplateListFilter, TemplateMessageAdmission, TemplateOutputFormat,
+        TemplateRegistration, TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission,
+        WorkflowScopeId,
     };
     use chrono::Utc;
     use rusqlite::{Connection, OptionalExtension, params};
@@ -1068,19 +1062,19 @@ mod tests {
     }
 
     #[test]
-    fn reader_lane_configuration_is_threaded_through_storage_factory_and_validated() {
+    fn shared_read_pool_configuration_is_threaded_through_storage_factory_and_validated() {
         let root = tempfile::tempdir().expect("temporary storage root");
-        let config = ReaderLanesConfig {
-            max_connections: std::num::NonZeroUsize::new(21).expect("non-zero maximum connections"),
-            ..ReaderLanesConfig::default()
+        let config = SharedReadPoolConfig {
+            max_connections: std::num::NonZeroUsize::new(17).expect("non-zero maximum connections"),
+            ..SharedReadPoolConfig::default()
         };
         let error = SqliteStorageFactory::at_path(root.path().join("mail.db"))
-            .with_reader_lanes(config)
+            .with_read_pool_config(config)
             .open(root.path())
-            .expect_err("over-budget reader lane configuration must fail startup");
+            .expect_err("over-budget shared read-pool configuration must fail startup");
         let message = error.message();
-        assert!(message.contains("mailbox_pool=4"));
-        assert!(message.contains("max_connections=21"));
+        assert!(message.contains("read_pool=8"));
+        assert!(message.contains("max_connections=17"));
     }
 
     #[tokio::test]
@@ -1109,15 +1103,11 @@ mod tests {
             .expect("bounded read");
         backend.checkpoint_wal().expect("checkpoint");
         let metrics = backend.reader_lane_metrics();
-        let mailbox = metrics.lane("mailbox").expect("mailbox lane metrics");
-        let search = metrics.lane("search").expect("search lane metrics");
-        assert_eq!(metrics.iter().count(), 2);
-        assert!(metrics.lane("doctor").is_none());
-        assert_eq!(mailbox.lane, "mailbox");
-        assert_eq!(search.lane, "search");
-        assert_eq!(mailbox.last_checkpoint_succeeded, Some(true));
-        assert!(mailbox.current_wal_frames.is_some());
-        assert_eq!(search.last_checkpoint_succeeded, Some(true));
+        let shared = metrics.lane("shared").expect("shared pool metrics");
+        assert_eq!(metrics.iter().count(), 1);
+        assert_eq!(shared.lane, "shared");
+        assert_eq!(shared.last_checkpoint_succeeded, Some(true));
+        assert!(shared.current_wal_frames.is_some());
     }
 
     #[tokio::test]
@@ -1186,8 +1176,8 @@ mod tests {
                     .expect("progressing checkpoint");
                 let metrics = sampler_backend.reader_lane_metrics();
                 let frames = metrics
-                    .lane("mailbox")
-                    .expect("mailbox lane metrics")
+                    .lane("shared")
+                    .expect("shared read-pool metrics")
                     .current_wal_frames
                     .expect("checkpoint records mailbox WAL frames");
                 assert!(frames <= 512, "WAL frames stay bounded during load");
@@ -1201,13 +1191,10 @@ mod tests {
         let samples = checkpoint_task.await.expect("checkpoint sampler join");
         assert_eq!(samples.len(), 24, "sample every writer commit during load");
         let metrics = backend.reader_lane_metrics();
-        let mailbox = metrics.lane("mailbox").expect("mailbox lane metrics");
-        let search = metrics.lane("search").expect("search lane metrics");
-        assert_eq!(mailbox.current_quarantined_workers, 0);
-        assert_eq!(mailbox.last_checkpoint_succeeded, Some(true));
-        assert!(mailbox.current_wal_frames.is_some());
-        assert_eq!(search.last_checkpoint_succeeded, Some(true));
-        assert!(search.current_wal_frames.is_some());
+        let shared = metrics.lane("shared").expect("shared read-pool metrics");
+        assert_eq!(shared.current_quarantined_workers, 0);
+        assert_eq!(shared.last_checkpoint_succeeded, Some(true));
+        assert!(shared.current_wal_frames.is_some());
     }
 
     fn message(key: &str, text: &str) -> Message {
@@ -2290,6 +2277,21 @@ mod tests {
         assert_eq!(loaded.content_bytes, template.content_bytes);
         assert_eq!(loaded.content_text, template.content_text);
         assert_eq!(
+            catalog
+                .load_for_tool(&template.sha)
+                .expect("tool-capped load")
+                .expect("template exists")
+                .sha,
+            template.sha
+        );
+        assert_eq!(
+            catalog
+                .list_for_tool(TemplateListFilter::default())
+                .expect("tool-capped list")
+                .len(),
+            1
+        );
+        assert_eq!(
             loaded
                 .frontmatter
                 .template_tags
@@ -3268,6 +3270,21 @@ mod tests {
         assert_eq!(listed.len(), 2);
         assert!(listed.contains(&first));
         assert!(listed.contains(&second));
+        let tool_listed = reader
+            .list_messages_for_tool(
+                scope.clone(),
+                MessageQuery {
+                    team: team(),
+                    agent: agent(),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                },
+                deadline,
+            )
+            .await
+            .expect("tool-class reader list");
+        assert_eq!(tool_listed, listed);
         assert_eq!(
             reader
                 .load_message(scope.clone(), first.message_key.clone(), deadline)

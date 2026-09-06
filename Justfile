@@ -87,6 +87,10 @@ _lint-silent-emit:
     {{python_cmd}} scripts/check-silent-emit.py
 
 [private]
+_lint-runtime-stderr:
+    {{python_cmd}} scripts/check-runtime-stderr.py
+
+[private]
 _lint-function-length:
     {{python_cmd}} scripts/check-function-length.py
 

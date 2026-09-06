@@ -404,6 +404,12 @@ pub trait TemplateCatalogStore: crate::contract::sealed::Sealed + Send + Sync {
         request: TemplateRegistration,
     ) -> Result<TemplateRegistrationOutcome, AtmError>;
     fn load(&self, sha: &TemplateSha) -> Result<Option<StoredTemplate>, AtmError>;
+    /// Loads one immutable template for a human-facing inspection command.
+    /// Backends with bounded reader pools may account this against their tool
+    /// capacity; the default preserves existing lightweight test doubles.
+    fn load_for_tool(&self, sha: &TemplateSha) -> Result<Option<StoredTemplate>, AtmError> {
+        self.load(sha)
+    }
     /// Loads the immutable decomposition columns for one canonical message.
     ///
     /// The default keeps narrow legacy doubles source-compatible; concrete
@@ -417,6 +423,10 @@ pub trait TemplateCatalogStore: crate::contract::sealed::Sealed + Send + Sync {
         Ok(None)
     }
     fn list(&self, filter: TemplateListFilter) -> Result<Vec<TemplateSummary>, AtmError>;
+    /// Lists immutable templates for a human-facing inspection command.
+    fn list_for_tool(&self, filter: TemplateListFilter) -> Result<Vec<TemplateSummary>, AtmError> {
+        self.list(filter)
+    }
     fn admit_decomposed_message(
         &self,
         admission: DecomposedMessageAdmission,

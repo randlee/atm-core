@@ -1,7 +1,9 @@
 ---
 sprint: AW.3
 title: "Health counters, atm log query modes, retained-log contract docs"
+status: complete
 branch: feature/aw3-health-and-log-query
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aw3-health-and-log-query
 base: integrate/phase-aw
 issues: "#905 ids 905-6 (health), 905-7, 905-8 (merge/order), 905-9; #904 ids 904-4, 904-7 (merge/order)"
 must_follow: [AW.2, AW.4]
@@ -18,7 +20,7 @@ parallel_safe: [AW.5]
    dropped_queue_full_total, dropped_persist_error_total }, degraded:
    ["jsonl"|"timeline"...] }` sourced from the
    `Arc<dyn DiagnosticCountersSource>` (phase plan §2) that
-   `atm-daemon-bootstrap` injects into `RuntimeHealth` via
+   `atm-daemon-bootstrap` injects into the HTTP runtime builder via
    `HttpRuntimeBuilder::with_diagnostic_counters(...)`; `atm-http-runtime`
    depends only on the `atm-core` snapshot type it already reaches — no new
    crate edge, no `.just/lint-config.toml` change. Doctor prints a WARN line

@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-POOL-V5>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V5" ;
+  triage:title "atm templates CLI command reads run on the writer-side control_path_pool" ;
+  triage:description "fenix writer-pool audit V5: crates/atm/src/commands/templates.rs:36-64,89. A CLI list/show command reading the template catalog for display -- content-addressed by sha per 01M1T3THS8P4JDMGR3M6D2HSV2, so immutable and never RMW-eligible; it belongs on the read pool, tool-class capped (this is a diagnostics/inspection-style command, not agent send/read traffic). Severity important (fenix's proposal): a CLI-only, low-frequency path, correctness-neutral today, but it currently reads through the same writer-side pool AW-POOL-V9 removes." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "concurrency-architecture" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-05T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V5/templates-cmd> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V5/templates-cmd>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/templates.rs" ;
+  triage:line 36 ;
+  triage:snippet "templates list/show command reads at 36-64,89 on the writer-side pool" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v5/ac1088c82> .
+
+<urn:atm:triage:worktree/integrate-phase-aw-v5/ac1088c82>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AW-POOL-V5/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V5" ;
+  triage:resolutionNote "quality-mgr phase-end gate @94e29a586, fenix ledger hygiene: crates/atm/src/commands/templates.rs (4 lines changed in this commit) reads the template catalog via the same reader-pool path as V3." ;
+  triage:resolvedAt "2026-09-06T06:46:36Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "2ca7148daa93" ;
+  triage:resolvedBranch "integrate/phase-aw" .

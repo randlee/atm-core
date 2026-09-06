@@ -156,7 +156,7 @@ impl Command {
             Self::Search(command) => command.run(observability).await,
             Self::Ack(command) => command.run(observability).await,
             Self::Clear(command) => command.run(observability).await,
-            Self::Log(command) => command.run(observability),
+            Self::Log(command) => command.run(observability).await,
             Self::Doctor(command) => command.run(observability).await,
             Self::Escalation(command) => command.run().await,
             Self::Help(command) => command.run(observability),

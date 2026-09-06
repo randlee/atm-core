@@ -330,11 +330,12 @@ class AdmissionCapacityTests(unittest.TestCase):
         probe = RUNNER.ROOT / "target" / "release" / f"atm-daemon-benchmark{suffix}"
         completed = subprocess.CompletedProcess(["cargo"], 0, "", "")
         with (
-            mock.patch.object(RUNNER.Path, "is_file", side_effect=[False, True]),
+            mock.patch.object(RUNNER.Path, "is_file", return_value=True),
             mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as command,
         ):
             self.assertEqual(RUNNER.sqlite_writer_probe(), probe)
-        command.assert_called_once()
+            self.assertEqual(RUNNER.sqlite_writer_probe(), probe)
+        self.assertEqual(command.call_count, 2)
         self.assertIn("atm-daemon-bootstrap", command.call_args.args[0])
         self.assertIn("benchmark-harness", command.call_args.args[0])
 

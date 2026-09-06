@@ -2,6 +2,8 @@
 sprint: AW.1
 title: "Tracing bridge into sc-observability and runtime stderr retirement"
 branch: feature/aw1-tracing-bridge
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aw1-tracing-bridge
+status: complete
 base: integrate/phase-aw
 issues: "#905 ids 905-1, 905-2, 905-8 (fields/filtering/recursion/non-interference/redaction), 905-9 (allowlist doc)"
 must_follow: []
@@ -59,10 +61,10 @@ parallel_safe: []
    `file:function` entries in the script, initially the log-dir-unwritable
    and observability-init-failed paths that run before a logger exists).
    The allowlist is reproduced in `docs/atm-daemon/logging.md`.
-4. **Shared path constants** in `crates/atm-observability`:
-   `CANONICAL_LOG_FILE_NAME = "atm.log.jsonl"` and
-   `GRAFT_FALLBACK_LOG_FILE_NAME = "atm-graft-fallback.jsonl"`, plus
-   `pub fn graft_fallback_log_path(log_dir: &Path) -> PathBuf`. AW.4
+4. **Shared path constants**: `CANONICAL_LOG_FILE_NAME =
+   "atm.log.jsonl"`, the graft satellite filename, and
+   `pub fn graft_fallback_log_path(log_dir: &Path) -> PathBuf` are owned by
+   `atm-core` so lightweight producers do not pull the tracing bridge. AW.4
    consumes these; nothing else in AW.1 touches graft.
 5. **Doc alignment**: `docs/atm-daemon/logging.md` "default retained event
    set" section rewritten to describe what is actually bridged (levels,
@@ -81,7 +83,7 @@ parallel_safe: []
    - `[dependencies].allowed_dependencies` = the exact dependency set of
      `crates/atm-observability/Cargo.toml` after this sprint: today
      `atm-core`, `sc-observability-types` plus the additions
-     `sc-observability`, `tracing`, `tracing-subscriber` (the PR must show
+     `sc-observability`, `serde_json`, `tracing`, `tracing-subscriber` (the PR must show
      the TOML and the manifest agree; `lint_boundaries.py` fails otherwise);
    - `forbidden_edges = ["atm-daemon -> atm-observability",
      "atm-observability -> atm-daemon-bootstrap",

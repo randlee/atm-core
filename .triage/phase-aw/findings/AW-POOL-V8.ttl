@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-POOL-V8>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V8" ;
+  triage:title "queue_drain_channel_allowed's roster/lease lookups run inside the writer path though they are not part of claim_next_pending's genuine read-modify-write" ;
+  triage:description "fenix writer-pool audit V8: crates/atm-daemon-bootstrap/src/queue_drain.rs, claim_next_dispatch and queue_drain_channel_allowed. RULING (Rand, verbatim, 01M1T3JH573BR8Z9813EAKGY5B): 'yes, only in a case there is a read-modify-write would there need to be a transaction w/ read in it. We limited this by design' -- naming queue_drain_channel_allowed's roster/lease lookups as the standalone-reads-bundled-for-convenience example, alongside rebuild_received_hook_dispatch's post-claim load_message (both must move to the read pool). claim_next_dispatch/claim_next_pending itself IS the genuine RMW (Rand's deciding test, 01M1T3QFQ3MXYB5NM5VXEG41EP: a concurrent claim between read and write would double-dispatch if not serialized) and stays inside the writer transaction unmodified -- not part of this finding. Acceptance: extract queue_drain_channel_allowed's roster/lease checks (and rebuild_received_hook_dispatch's post-claim load_message) to run on the read pool ahead of or independent from the claim's writer transaction; claim_next_dispatch/claim_next_pending's own read-then-write pairing is explicitly out of scope and correct as-is. Severity minor, carry-forward (fenix's proposal): narrow, well-bounded extraction with no correctness defect in the current behavior, only a pool-boundary violation." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "concurrency-architecture" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-05T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V8/channel-allowed> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V8/channel-allowed>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/queue_drain.rs" ;
+  triage:line 1 ;
+  triage:snippet "queue_drain_channel_allowed roster/lease lookups bundled onto the writer path; claim_next_dispatch's own RMW is out of scope" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v8/ac1088c82> .
+
+<urn:atm:triage:worktree/integrate-phase-aw-v8/ac1088c82>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:orderIndex 1 .

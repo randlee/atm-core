@@ -185,6 +185,15 @@ impl fmt::Debug for GraftClient {
 }
 
 impl GraftClient {
+    /// Return the selected local transport without exposing endpoint details.
+    pub fn local_transport_label(&self) -> Result<&'static str, AtmError> {
+        Ok(match atm_daemon_client::local_daemon_transport()? {
+            #[cfg(unix)]
+            atm_daemon_client::LocalDaemonTransport::UnixDomainSocket => "unix_domain_socket",
+            atm_daemon_client::LocalDaemonTransport::TcpLoopback => "tcp_loopback",
+        })
+    }
+
     /// Connect only to the daemon selected and already running for this host.
     ///
     /// This deliberately never resolves a daemon executable or invokes the

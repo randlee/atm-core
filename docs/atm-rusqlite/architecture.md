@@ -108,6 +108,21 @@ Within `RosterStore`, the current approved durable shape is:
 - no whole-roster JSON snapshot table
 - no durable member `pid`
 
+Diagnostic timeline storage rule:
+- `diagnostic_events` retains already-redacted, best-effort observability
+  events produced by the optional `DiagnosticTimelineStore` adapter.
+- Its schema is `id` (the SQLite row identity), `ts_unix_ms`, `level`,
+  `component`, optional `code` and `correlation_id`, `origin`,
+  `message`, and optional bounded `detail`.
+- `idx_diagnostic_events_ts_unix_ms` supports the timestamp-first timeline
+  scan; `idx_diagnostic_events_component_ts_unix_ms` supports a component
+  prefix narrowed timeline scan.
+- Retention is bounded to `DIAGNOSTIC_MAX_ROWS` (20,000 rows) and
+  `DIAGNOSTIC_MAX_AGE_DAYS` (seven days). Pruning is performed in
+  `DIAGNOSTIC_PRUNE_BATCH` (1,000-row) writer-lane batches, checked every
+  `DIAGNOSTIC_PRUNE_CHECK_EVERY` (500) diagnostic writes, so telemetry
+  cannot create an unbounded durable table or an independent SQLite writer.
+
 Built-in nudge override storage rule:
 - the first concrete override-store implementation for `AD.21` lives in
   `atm-storage-rusqlite`

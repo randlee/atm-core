@@ -7,7 +7,7 @@ use crate::delivery_channel::{
 use crate::error::AtmError;
 use crate::provenance::ValidatedWriteProvenance;
 use crate::schema::{AtmMessageId, ThreadMode};
-use crate::service_runtime::RetainedServiceRuntime;
+use crate::service_runtime::{GRAFT_RECEIVER_LEASE_LOOKUP_DEADLINE, RetainedServiceRuntime};
 use crate::types::{AgentName, PaneId, TeamName};
 
 #[expect(
@@ -353,9 +353,10 @@ impl DeliveryPolicyCoordinator {
         agent: &AgentName,
     ) -> Result<DeliveryRecipientSnapshot, AtmError> {
         let member = runtime
-            .load_roster_member(team, agent)?
+            .load_roster_member(team, agent)
             .ok_or_else(|| AtmError::agent_not_found(agent, team))?;
-        let lease = runtime.graft_receiver_lease(team, agent)?;
+        let lease =
+            runtime.graft_receiver_lease(team, agent, GRAFT_RECEIVER_LEASE_LOOKUP_DEADLINE)?;
         Ok(DeliveryRecipientSnapshot::from_roster(
             member,
             graft_lease_state(lease.as_ref()),
@@ -670,16 +671,12 @@ mod tests {
             Ok(())
         }
 
-        fn load_roster_member(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<Option<RosterEntry>, AtmError> {
-            Ok(None)
+        fn load_roster_member(&self, _team: &TeamName, _agent: &AgentName) -> Option<RosterEntry> {
+            None
         }
 
-        fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
-            Ok(Vec::new())
+        fn load_team_roster(&self, _team: &TeamName) -> Vec<RosterEntry> {
+            Vec::new()
         }
     }
 

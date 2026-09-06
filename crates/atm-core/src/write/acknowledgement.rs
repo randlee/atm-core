@@ -441,7 +441,7 @@ fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
     agent: &AgentName,
     recovery: &str,
 ) -> Result<(), AtmError> {
-    if runtime.load_roster_member(team, agent)?.is_none() {
+    if runtime.load_roster_member(team, agent).is_none() {
         return Err(AtmError::new(
             crate::error_codes::AtmErrorCode::AgentNotFound,
             format!("agent '{agent}' was not found in team '{team}'\n  Recovery: {recovery}"),

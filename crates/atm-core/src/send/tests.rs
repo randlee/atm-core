@@ -174,15 +174,11 @@ impl RetainedServiceRuntime for TestRuntime {
         Ok(())
     }
 
-    fn load_roster_member(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<Option<crate::boundary::RosterEntry>, AtmError> {
+    fn load_roster_member(&self, team: &TeamName, agent: &AgentName) -> Option<RosterEntry> {
         if self.roster_member_missing {
-            return Ok(None);
+            return None;
         }
-        Ok(Some(RosterEntry {
+        Some(RosterEntry {
             team_name: team.clone(),
             agent_name: agent.clone(),
             member_kind: RosterMemberKind::Permanent,
@@ -194,17 +190,14 @@ impl RetainedServiceRuntime for TestRuntime {
             model: crate::types::ModelName::default(),
             recipient_pane_id: None,
             metadata_json: Map::new(),
-        }))
+        })
     }
 
-    fn load_team_roster(
-        &self,
-        team: &TeamName,
-    ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError> {
+    fn load_team_roster(&self, team: &TeamName) -> Vec<RosterEntry> {
         if self.roster_member_missing {
-            return Ok(Vec::new());
+            return Vec::new();
         }
-        Ok(vec![RosterEntry {
+        vec![RosterEntry {
             team_name: team.clone(),
             agent_name: AgentName::from_validated("recipient"),
             member_kind: RosterMemberKind::Permanent,
@@ -216,7 +209,7 @@ impl RetainedServiceRuntime for TestRuntime {
             model: crate::types::ModelName::default(),
             recipient_pane_id: None,
             metadata_json: Map::new(),
-        }])
+        }]
     }
 }
 
@@ -533,6 +526,9 @@ impl ObservabilityPort for RecordingObservability {
             query_state: Some(AtmObservabilityHealthState::Unavailable),
             maintenance: None,
             diagnostic: None,
+            jsonl: Default::default(),
+            timeline: Default::default(),
+            degraded: Vec::new(),
             detail: Some("test observer".to_string()),
         })
     }

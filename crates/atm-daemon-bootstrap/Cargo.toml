@@ -29,8 +29,6 @@ atm-template-sc-compose.workspace = true
 peer-tls.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-sc-observability.workspace = true
-sc-observability-types.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 fs4 = "0.13"
 serde_json.workspace = true
@@ -41,6 +39,7 @@ atm-core = { workspace = true, features = ["test-utils"] }
 atm-herdr = { workspace = true, features = ["test-utils"] }
 atm-http-runtime = { workspace = true, features = ["test-support"] }
 atm-runtime-test-support.workspace = true
+atm-storage-rusqlite = { workspace = true, features = ["test-support"] }
 serial_test = "3"
 serde_json.workspace = true
 tempfile = "3"

@@ -1560,6 +1560,22 @@ The authoritative plan is
 critical review round 1 folded in); phase-au sprint docs are being cut from
 it under `docs/plans/phase-au/` on branch `plan/boundary-regression`.
 
+## 55. Phase AW — Unified Retained Runtime Logging [COMPLETE — INTEGRATION PR #1199]
+
+Phase AW makes replacement-runtime tracing retained and safely observable:
+AW.1 installs the allowlisted non-blocking tracing bridge, AW.2 persists the
+SQLite diagnostic timeline, AW.3 exposes health and log queries, AW.4 adds
+graft fallback observability, and AW.5 aligns native tool projections.
+The authoritative plan is [phase-aw-plan](./plans/phase-aw/phase-aw-plan.md).
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AW.1` | `complete` | `feature/aw1-tracing-bridge` | `docs/plans/phase-aw/sprint-AW.1-tracing-bridge.md` |
+| `AW.2` | `complete` | `feature/aw2-sqlite-diagnostic-timeline` | `docs/plans/phase-aw/sprint-AW.2-sqlite-diagnostic-timeline.md` |
+| `AW.3` | `complete` | `feature/aw3-health-and-log-query` | `docs/plans/phase-aw/sprint-AW.3-health-and-log-query.md` |
+| `AW.4` | `complete` | `feature/aw4-graft-fallback-observability` | `docs/plans/phase-aw/sprint-AW.4-graft-fallback-observability.md` |
+| `AW.5` | `complete` | `feature/aw5-native-tool-parity` | `docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md` |
+
 ## 54. Phase AV — Async Mailbox-Read Cutover Completion [COMPLETE — INTEGRATION PR #1120]
 
 Phase AV fixes the mailbox-read serialization regression: every core job —

@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-POOL-V9-FIX-4>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9-FIX-4" ;
+  triage:title "Flaky timing-based test: primary_write_latency_stays_bounded_under_a_full_prune_backlog asserts a fixed wall-clock deadline against a real SQLite insert" ;
+  triage:description "quality-mgr's PR #1242 QA verdict (flaky-test-qa): crates/atm-storage-rusqlite/src/writer/mod.rs's primary_write_latency_stays_bounded_under_a_full_prune_backlog test asserts wall-clock elapsed() <= 100ms for a real SQLite insert against a fixed deadline, on a current_thread runtime -- can intermittently fail under CI load with no functional regression. Acceptance: replace the absolute-latency assertion with an ordering/synchronization proof (e.g. assert the primary write completes before/independent of prune-backlog processing via an explicit signal, not a wall-clock race), or move the latency measurement to a separate perf-labeled test excluded from the correctness gate. No sleep/retry/timeout-widening compensating logic." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-flakiness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-06T02:00:01Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-4/aw-pool-v9-fix-4-a1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-4/aw-pool-v9-fix-4-a1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/mod.rs" ;
+  triage:line 1201 ;
+  triage:snippet "assert!(started.elapsed() <= PRIMARY_WRITE_DEADLINE, \"primary write must complete within its hard bound while prune work is queued\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "27c87de22" ;
+  triage:occursIn <urn:atm:triage:worktree/A1/27c87de22> .
+
+<urn:atm:triage:worktree/A1/27c87de22>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/aw-pool-consolidate" ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "27c87de22" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/A2/27c87de22>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/aw-pool-read-migration" ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "27c87de22" ;
+  triage:orderIndex 2 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-4/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-4" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. primary_write_latency_stays_bounded_under_a_full_prune_backlog (writer/mod.rs:696) is now annotated #[ignore = "perf probe; wall-clock bound is not a correctness gate"], satisfying the acceptance criteria's stated alternative disposition (move the latency measurement out of the correctness gate) rather than restructuring the assertion itself. Confirmed by direct read of the test and its ignore attribute on the merged head." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .
