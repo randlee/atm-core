@@ -18,9 +18,10 @@ pub struct EffectiveReaderPool {
     pub tool_class_max_in_flight: usize,
 }
 
+pub type EffectiveReaderLane = EffectiveReaderPool;
+
 /// Backend-neutral effective capacity settings for the benchmarked reader
 /// lanes. This is runtime data, not a benchmark-side default.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub type EffectiveReaderLanes = EffectiveReaderPool;
 
 /// A roster [`RosterStore`] handle proven, *by type*, to be the
