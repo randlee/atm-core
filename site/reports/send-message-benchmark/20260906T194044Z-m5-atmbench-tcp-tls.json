@@ -1,0 +1,26 @@
+{
+  "baseline": {
+    "p50_floor": 13500.0,
+    "revision": 1
+  },
+  "binary_hashes": {
+    "atm": "db51aab798c167b05776849b0685e809119e31299a081e4cc35866629daba461",
+    "atm-daemon": "03c8b814b54a2b325bcb4c4533364d9388a9211a3507c56a1e08b073e5b41c55"
+  },
+  "campaign_id": "20260906T194044Z-m5-atmbench",
+  "direct_sqlite_message_write": null,
+  "durability_after_restart": null,
+  "frames_per_connection": 8,
+  "generated_at": "2026-09-06T19:40:45.129396Z",
+  "host_label": "m5-atmbench",
+  "incomplete_reason": "benchmark snapshot phase failed: capacity doctor failed: summary status 'warning'; recovery: keep the benchmark daemon stopped and inspect retained snapshot staging material",
+  "messages_admitted": 0,
+  "messages_durable": 0,
+  "messages_requested": 0,
+  "metrics": null,
+  "os": "macos",
+  "schema_version": 4,
+  "source_revision": "46e9044cfb4664faaadcb0e0e5e204d0d7f614cb",
+  "status": "INCOMPLETE",
+  "target": "tcp-tls"
+}
