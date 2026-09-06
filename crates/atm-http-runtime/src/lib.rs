@@ -61,6 +61,7 @@ mod peer_connection_pool;
 mod peer_dial;
 mod peer_stream;
 mod private_staging;
+mod router_support;
 mod runtime_health;
 mod runtime_maintenance;
 mod runtime_setup;

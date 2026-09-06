@@ -256,7 +256,7 @@ pub fn peer_config_doctor_report(
     store: &(dyn PeerConfigStore + Send + Sync),
 ) -> (PeerConfigDoctorReport, Vec<DoctorFinding>) {
     match peer_config_doctor_report_inner(store) {
-        Ok(report) => (report, Vec::new()),
+        Ok((report, findings)) => (report, findings),
         Err(error) => {
             let finding = DoctorFinding {
                 severity: DoctorSeverity::Error,
@@ -280,30 +280,77 @@ pub fn peer_config_doctor_report(
 
 fn peer_config_doctor_report_inner(
     store: &(dyn PeerConfigStore + Send + Sync),
-) -> Result<PeerConfigDoctorReport, crate::error::AtmError> {
+) -> Result<(PeerConfigDoctorReport, Vec<DoctorFinding>), crate::error::AtmError> {
     let interfaces = store.list_interfaces()?;
     let peers = store.list_trusted_peers()?;
     let certificate = store.local_certificate()?;
-    Ok(PeerConfigDoctorReport {
-        configured_interface_count: interfaces.len(),
-        enabled_interface_count: interfaces
-            .iter()
-            .filter(|interface| interface.enabled)
-            .count(),
-        certificate_fingerprint: certificate.map(|certificate| certificate.fingerprint.to_string()),
-        trusted_peer_count: peers.len(),
-        enabled_trusted_peer_count: peers.iter().filter(|peer| peer.enabled).count(),
-        trusted_peers: peers
-            .iter()
-            .map(|peer| PeerAuthorityDoctorReport {
-                host: peer.host.to_string(),
-                https_port: peer.https_port.get(),
-                enabled: peer.enabled,
-            })
-            .collect(),
-        legacy_literal_ip_peers: legacy_literal_ip_peer_reports(&peers),
-        validation_failure: None,
-    })
+    let findings = peer_config_doctor_warnings(&interfaces, &peers);
+    Ok((
+        PeerConfigDoctorReport {
+            configured_interface_count: interfaces.len(),
+            enabled_interface_count: interfaces
+                .iter()
+                .filter(|interface| interface.enabled)
+                .count(),
+            certificate_fingerprint: certificate
+                .map(|certificate| certificate.fingerprint.to_string()),
+            trusted_peer_count: peers.len(),
+            enabled_trusted_peer_count: peers.iter().filter(|peer| peer.enabled).count(),
+            trusted_peers: peers
+                .iter()
+                .map(|peer| PeerAuthorityDoctorReport {
+                    host: peer.host.to_string(),
+                    https_port: peer.https_port.get(),
+                    enabled: peer.enabled,
+                })
+                .collect(),
+            legacy_literal_ip_peers: legacy_literal_ip_peer_reports(&peers),
+            validation_failure: None,
+        },
+        findings,
+    ))
+}
+
+fn peer_config_doctor_warnings(
+    interfaces: &[atm_storage::HttpsInterface],
+    peers: &[atm_storage::TrustedPeer],
+) -> Vec<DoctorFinding> {
+    let malformed_fingerprint_findings = peers
+        .iter()
+        .filter(|peer| {
+            let fingerprint = peer.fingerprint.as_str();
+            fingerprint.len() != 64 || !fingerprint.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
+        .map(|peer| DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::PeerConfigValidationFailed,
+            message: format!(
+                "trusted peer '{}' has a malformed certificate fingerprint",
+                peer.host
+            ),
+            remediation: Some(
+                "Replace the trusted peer fingerprint with exactly 64 hexadecimal characters."
+                    .to_string(),
+            ),
+        });
+    let literal_advertise_host_findings = interfaces
+        .iter()
+        .filter(|interface| !interface.advertise_host.is_durable_hostname())
+        .map(|interface| DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::PeerConfigValidationFailed,
+            message: format!(
+                "peer interface {} advertises literal IP '{}' instead of a stable hostname",
+                interface.bind_addr, interface.advertise_host
+            ),
+            remediation: Some(
+                "Set --advertise-host to a stable hostname; literal IP addresses remain supported for compatibility."
+                    .to_string(),
+            ),
+        });
+    malformed_fingerprint_findings
+        .chain(literal_advertise_host_findings)
+        .collect()
 }
 
 /// Projects legacy literal-IP trusted-peer rows (enabled or disabled) with
@@ -1147,18 +1194,43 @@ mod tests {
 
     struct StubPeerConfigStore {
         failure: Option<AtmError>,
+        interfaces: Vec<HttpsInterface>,
+        peers: Vec<TrustedPeer>,
     }
 
     impl atm_storage::contract::sealed::Sealed for StubPeerConfigStore {}
 
     impl StubPeerConfigStore {
         fn healthy() -> Self {
-            Self { failure: None }
+            Self {
+                failure: None,
+                interfaces: vec![HttpsInterface {
+                    bind_addr: "127.0.0.1:43101".parse().expect("socket address"),
+                    advertise_host: "localhost".parse().expect("host name"),
+                    enabled: true,
+                }],
+                peers: vec![TrustedPeer {
+                    host: "peer.example".parse::<HostName>().expect("host name"),
+                    fingerprint: "a".repeat(64).parse().expect("fingerprint"),
+                    enabled: true,
+                    https_port: std::num::NonZeroU16::new(43101).expect("non-zero port"),
+                }],
+            }
         }
 
         fn failing(error: AtmError) -> Self {
             Self {
                 failure: Some(error),
+                interfaces: Vec::new(),
+                peers: Vec::new(),
+            }
+        }
+
+        fn with_peer_config(interfaces: Vec<HttpsInterface>, peers: Vec<TrustedPeer>) -> Self {
+            Self {
+                failure: None,
+                interfaces,
+                peers,
             }
         }
 
@@ -1169,11 +1241,7 @@ mod tests {
 
     impl PeerConfigStore for StubPeerConfigStore {
         fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError> {
-            self.result(vec![HttpsInterface {
-                bind_addr: "127.0.0.1:43101".parse().expect("socket address"),
-                advertise_host: "localhost".parse().expect("host name"),
-                enabled: true,
-            }])
+            self.result(self.interfaces.clone())
         }
 
         fn save_interface(&self, _interface: &HttpsInterface) -> Result<(), AtmError> {
@@ -1200,14 +1268,7 @@ mod tests {
         }
 
         fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError> {
-            self.result(vec![TrustedPeer {
-                host: "peer.example".parse::<HostName>().expect("host name"),
-                fingerprint: "sha256:peer"
-                    .parse::<CertificateFingerprint>()
-                    .expect("fingerprint"),
-                enabled: true,
-                https_port: std::num::NonZeroU16::new(43101).expect("non-zero port"),
-            }])
+            self.result(self.peers.clone())
         }
 
         fn trusted_peer(&self, _host: &HostName) -> Result<Option<TrustedPeer>, AtmError> {
@@ -2188,6 +2249,41 @@ mod tests {
         let serialized = serde_json::to_string(&report).expect("serialize doctor projection");
         assert!(!serialized.contains("keychain:secret"));
         assert!(!serialized.contains("private_key_ref"));
+    }
+
+    #[test]
+    fn peer_config_doctor_warns_on_malformed_pins_and_literal_advertise_hosts() {
+        let store = StubPeerConfigStore::with_peer_config(
+            vec![HttpsInterface {
+                bind_addr: "0.0.0.0:43101".parse().expect("socket address"),
+                advertise_host: "192.168.128.82".parse().expect("literal IP host"),
+                enabled: true,
+            }],
+            vec![TrustedPeer {
+                host: "peer.example".parse().expect("host name"),
+                fingerprint: "sha256:test-peer".parse().expect("legacy fingerprint"),
+                enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero port"),
+            }],
+        );
+
+        let (_report, findings) = peer_config_doctor_report(&store);
+
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().all(|finding| {
+            finding.severity == DoctorSeverity::Warning
+                && finding.code == AtmErrorCode::PeerConfigValidationFailed
+        }));
+        assert!(findings.iter().any(|finding| {
+            finding
+                .message
+                .contains("malformed certificate fingerprint")
+        }));
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.message.contains("literal IP"))
+        );
     }
 
     #[test]
