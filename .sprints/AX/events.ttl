@@ -550,3 +550,5 @@ triage:r117 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-R
 triage:r118 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-118> ; triage:resolvedAt "2026-09-06T18:44:00Z"^^xsd:dateTime .
 # GO-AX-FLAKY-ATM-TEMP-1788719298 (arch-ctm) completed 2026-09-06T18:43:32Z: fix/ax-flaky-atm-temp-tracing-capture 2de3a3070 (from 253a91973), PR #1257 -> integrate/phase-ax (AXPE-QA-119: thread-local tracing capture stack in crates/atm-core/src/test_support.rs; 20/20 runs at --test-threads=8).
 triage:c28 a triage:Completion ; triage:ofSprint triage:AX6 ; triage:at "2026-09-06T18:45:08Z"^^xsd:dateTime .
+# QA-AXMERGE-AW-R2-1788720008 on PR #1256 (11cb6e96c) PASS 0/0/0 at 2026-09-06T18:46:57Z; AXPE-QA-120 closed (fixed). Merge of #1256 at CI-green.
+triage:r119 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-120> ; triage:resolvedAt "2026-09-06T18:47:42Z"^^xsd:dateTime .

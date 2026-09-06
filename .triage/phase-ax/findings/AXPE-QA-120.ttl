@@ -6,6 +6,7 @@
 # Filed by quality-mgr (arch-qa) during QA-AXMERGE-AW-R1-1788718929 (QA-1 on PR #1256) on merge/develop-aw-into-phase-ax at db7f31cba; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1256#issuecomment-5561300893 Native id: ARCH-QA-MERGE-001.
 # Fix: fenix (merge resolver) deleted the block at 11cb6e96c on the same branch; .just/lint-config.toml is a frozen file, so no dev agent was dispatched.
 
+# Fixed 2026-09-06: PR #1256 merge/develop-aw-into-phase-ax @ 11cb6e96c, QA-2 PASS (QA-AXMERGE-AW-R2-1788720008, https://github.com/randlee/atm-core/pull/1256#issuecomment-5561359615); closed by fenix on the verdict, 2026-09-06T18:47:42Z.
 <urn:atm:triage:finding/AXPE-QA-120>
   a triage:Finding ;
   triage:findingId "AXPE-QA-120" ;
@@ -17,7 +18,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "phase" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T18:47:42Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T18:40:06Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
@@ -30,8 +33,8 @@
   triage:file ".just/lint-config.toml" ;
   triage:line 230 ;
   triage:snippet "[[boundaries.manifest_section_rules]] owner_manifest_path = \"crates/atm-http-runtime/Cargo.toml\" dependency_package = \"atm-storage\" allowed_sections = [\"dev-dependencies\"]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "merge/develop-aw-into-phase-ax" ;
   triage:headSha "db7f31cba713f40e1d3d75584e1edab5c091fe30" ;
   triage:occursIn <urn:atm:triage:worktree/MERGE-AW/db7f31cba713f40e1d3d75584e1edab5c091fe30> .
