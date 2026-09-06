@@ -76,3 +76,38 @@ pub(crate) fn select_task_events(
         )?
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn task_projection_column_lists_have_one_crate_owner() {
+        let task_sources = [
+            include_str!("task_sql.rs"),
+            include_str!("task_store.rs"),
+            include_str!("task_ledger_reader.rs"),
+            include_str!("writer/task_ops.rs"),
+        ];
+        assert_eq!(
+            task_sources
+                .iter()
+                .map(|source| source
+                    .matches(concat!("const TASK_", "COLUMNS: &str ="))
+                    .count())
+                .sum::<usize>(),
+            1,
+            "task row column projection must remain owned by task_sql",
+        );
+        assert_eq!(
+            task_sources
+                .iter()
+                .map(|source| {
+                    source
+                        .matches(concat!("const TASK_EVENT_", "COLUMNS: &str ="))
+                        .count()
+                })
+                .sum::<usize>(),
+            1,
+            "task event column projection must remain owned by task_sql",
+        );
+    }
+}
