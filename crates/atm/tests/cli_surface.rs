@@ -68,9 +68,14 @@ fn live_surface_json() -> Value {
 
 #[test]
 fn legacy_environment_variable_cannot_bypass_clap_parsing() {
+    let fixture = tempfile::tempdir().expect("temporary ATM environment");
     let atm_bin = env!("CARGO_BIN_EXE_atm");
     let output = Command::new(atm_bin)
         .env("ATM_CLI_SURFACE_DUMP", "json")
+        .env("ATM_HOME", fixture.path())
+        .env("ATM_CONFIG_HOME", fixture.path().join("config"))
+        .env("ATM_LOG_DIR", fixture.path().join("logs"))
+        .env("ATM_TEAMS_DIR", fixture.path().join("teams"))
         .arg("--version")
         .output()
         .expect("failed to run `atm --version`");

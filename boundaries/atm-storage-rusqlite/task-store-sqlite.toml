@@ -22,7 +22,7 @@ io_forbidden = ["message_delivery", "process_spawn"]
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
 allowed_dependencies = ["atm-storage", "rusqlite"]
-forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime"]
+forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime", "atm-daemon -> atm-storage-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"

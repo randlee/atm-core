@@ -36,6 +36,13 @@ boundary record, and ADR-062. The CLI and user docs are AX.4; the
 reminder cycle is AX.5. This sprint **executes in parallel with AX.1 and
 AX.2** on its own gh-stack rooted on `integrate/phase-ax`.
 
+### Frozen-file rulings
+
+The additive changes to `.just/lint-config.toml` and
+`.just/lint_boundaries.py` are approved frozen-file changes for AX.3:
+they preserve the existing rules and add the AX.3 false-positive regression
+test in `.just/tests/test_lint_boundaries.py:1426`.
+
 ## State machine
 
 One row per (`team`, `task_id`, `assignee`). States and events are
@@ -753,8 +760,8 @@ paths; `atm read` / `atm ack` argument shapes; `DeliveryRecipientSnapshot`;
    unchanged allowlist; `boundary-guard` review of `task-store.toml`
    and `task-store-sqlite.toml` passes; ADR-062, the ADR-054 amendment, and requirements §7 merged;
    `just validate` green; contract.rs size gate:
-   `awk '/^#\[cfg\(test\)\]/{exit} {n++} END{exit n>1000}' crates/atm-storage/src/contract.rs`
-   succeeds (non-test lines ≤ 1000); backend neutrality:
+   `python3 .just/check_line_counts.py` succeeds (non-test lines ≤ 1000);
+   backend neutrality:
    `cargo tree -p atm-storage -e normal | grep -c rusqlite` prints 0 and
    `cargo check -p atm-storage-sqlserver-proof` passes with that crate
    unchanged (it keeps the provenance defaults and `DummyTaskStore`).
