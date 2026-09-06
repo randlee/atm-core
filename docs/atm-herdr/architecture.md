@@ -219,6 +219,14 @@ pub trait HerdrProcessAdapter: Send + Sync {
         session: Option<&'a atm_core::HerdrSession>,
         deadline: atm_core::RequestDeadline,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<HerdrListOutcome, HerdrError>> + Send + 'a>>;
+
+    /// Shows a desktop notification without targeting a Herdr pane.
+    fn notify<'a>(
+        &'a self,
+        title: &'a str,
+        body: &'a str,
+        deadline: atm_core::RequestDeadline,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), HerdrError>> + Send + 'a>>;
 }
 
 // -- breaker ------------------------------------------------------------------
