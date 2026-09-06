@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-RAM-B1>
+  a triage:Finding ;
+  triage:findingId "AW-RAM-B1" ;
+  triage:title "RosterRuntimeView implements the sealed atm_storage::RosterStore trait in atm-core with no ADR/boundary-record authorizing a second impl site" ;
+  triage:description "quality-mgr, qa-pr1240-r1 (arch-qa, independently confirmed): crates/atm-core/src/service_runtime.rs:240-261, RosterRuntimeView implements atm_storage::contract::sealed::Sealed and atm_storage::RosterStore directly in atm-core. The only boundary record for this sealed trait, boundaries/atm-storage-rusqlite/roster-store-sqlite.toml, names exactly one permitted impl site (atm_storage_rusqlite::SqliteStorageBackend::new). boundaries/atm-storage/roster-store.toml lists atm-core only as an allowed_dependents consumer, not a permitted implementer. No ADR or team-lead ruling record documents this second sealed-trait impl site; the AW-POOL-V7 triage record captures a functional ruling on write-through behavior, not the ADR + boundary-record update RULE-012 requires before a second crate implements a sealed storage trait. Per RULE-012 this is blocking regardless of functional correctness -- passing tests does not authorize widening who may implement a sealed boundary trait." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "boundary-governance" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T02:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWReadinessReview ;
+  triage:foundAt "2026-09-06T01:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-RAM-B1/roster-runtime-view> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-RAM-B1/roster-runtime-view>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 240 ;
+  triage:snippet "impl atm_storage::contract::sealed::Sealed for RosterRuntimeView {} / impl SharedRosterStore for RosterRuntimeView" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "98cea18d7" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-ram-roster/98cea18d7> .
+
+<urn:atm:triage:worktree/fix-aw-ram-roster/98cea18d7>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-ram-roster" ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "98cea18d7" ;
+  triage:orderIndex 1 .

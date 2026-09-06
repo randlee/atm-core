@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-RAM-I3>
+  a triage:Finding ;
+  triage:findingId "AW-RAM-I3" ;
+  triage:title "RosterRuntimeState.teams is one process-wide RwLock over every team's roster; set_ephemeral_state takes a whole-map write lock for a single-team, single-agent mutation" ;
+  triage:description "quality-mgr, qa-pr1240-r1 (rust-best-practices-agent's RBP-F002, independently confirmed by quality-mgr reading crates/atm-core/src/service_runtime.rs:116 and 197-226 directly). RosterRuntimeState.teams: RwLock<BTreeMap<TeamName, Arc<TeamRosterRecord>>> covers every team in the process behind one lock. set_ephemeral_state (lines 197-226) takes an exclusive write lock on the entire map just to mutate one agent's ephemeral state in one team, meaning every high-frequency herdr-wake update (AW-POOL-V7's own motivating hot-path use case) blocks roster reads and writes for every other team in the process. Not a correctness defect (race-tolerance is explicitly by design per Rand's ruling), but it works directly against the throughput goal of moving off per-tick SQL onto a RAM mirror, and will become a contention bottleneck as team count and herdr-wake frequency grow. Acceptance: move to per-team locking (e.g. RwLock<BTreeMap<TeamName, RwLock<TeamRosterRecord>>>, or a sharded map, or an Arc-swap per team entry) so a mutation to one team's ephemeral state does not block any other team's roster reads/writes." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "concurrency-architecture" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T02:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWReadinessReview ;
+  triage:foundAt "2026-09-06T01:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-RAM-I3/whole-map-lock> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-RAM-I3/whole-map-lock>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 116 ;
+  triage:snippet "teams: RwLock<BTreeMap<TeamName, Arc<TeamRosterRecord>>> -- single process-wide lock; set_ephemeral_state takes a full write lock for one team's mutation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "98cea18d7" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-ram-roster/98cea18d7-i3> .
+
+<urn:atm:triage:worktree/fix-aw-ram-roster/98cea18d7-i3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-ram-roster" ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "98cea18d7" ;
+  triage:orderIndex 1 .

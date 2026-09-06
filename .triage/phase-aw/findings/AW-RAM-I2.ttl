@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-RAM-I2>
+  a triage:Finding ;
+  triage:findingId "AW-RAM-I2" ;
+  triage:title "Ephemeral herdr-wake-pending roster API has zero production callers -- AW-POOL-V7's ephemeral-state requirement is scaffolded but not wired" ;
+  triage:description "quality-mgr, qa-pr1240-r1 (arch-qa and ruthless-boundary-qa independently, same finding). RosterMemberEphemeralState::herdr_wake_pending and its accessors (LocalServiceRuntime::roster_ephemeral_state at service_runtime.rs:848 and set_roster_herdr_wake_pending at 859) are unused: herdr_queue_wake.rs (the only stated consumer per the doc comment at service_runtime.rs:44-46) contains no call to either method and no reference to wake_pending/WakePending/pending_wake anywhere in the crate. The doc comment asserts a wiring that does not exist yet, which will mislead the next reader into believing the ephemeral-state layer is already load-bearing for Herdr. AW-POOL-V7 explicitly required '(c) ephemeral state mutates in RAM only, on state changes' as part of the retained design; this PR builds the mechanism but does not satisfy that requirement for any real state change. Acceptance: either wire herdr_queue_wake.rs's actual wake-pending bookkeeping through set_roster_herdr_wake_pending/roster_ephemeral_state in this same fix round, or delete the unused public surface until a real caller lands, and soften the doc comment so it doesn't claim current behavior that doesn't exist." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "requirement-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T02:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWReadinessReview ;
+  triage:foundAt "2026-09-06T01:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-RAM-I2/unwired-ephemeral-api> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-RAM-I2/unwired-ephemeral-api>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 848 ;
+  triage:snippet "roster_ephemeral_state / set_roster_herdr_wake_pending have zero callers in herdr_queue_wake.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "98cea18d7" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-ram-roster/98cea18d7-i2> .
+
+<urn:atm:triage:worktree/fix-aw-ram-roster/98cea18d7-i2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-ram-roster" ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "98cea18d7" ;
+  triage:orderIndex 1 .

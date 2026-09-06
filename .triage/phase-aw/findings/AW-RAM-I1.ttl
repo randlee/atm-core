@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-RAM-I1>
+  a triage:Finding ;
+  triage:findingId "AW-RAM-I1" ;
+  triage:title "hydrate_roster_runtime_from_durable is fail-open: a startup durable-read failure permanently masks a team's roster as absent with no signal" ;
+  triage:description "quality-mgr, qa-pr1240-r1 (independently flagged by rust-service-hardening-agent, rust-best-practices-agent, and rust-qa-agent). crates/atm-core/src/service_runtime.rs:271, hydrate_roster_runtime_from_durable: a list_teams() or per-team load_roster() failure during startup hydration only logs tracing::warn! and leaves that team's roster silently absent from RAM, forever, until an explicit control-plane reload. Previously every roster read went to SQLite per-team on demand, so a transient startup DB hiccup self-healed on the next successful read. Now load_roster_member/load_team_roster always return Ok from RAM and can never distinguish 'team truly has no roster' from 'hydration failed to load this team at boot' -- a transient SQLite blip at daemon startup silently converts every member of the affected team into 'not found' for the remaining lifetime of the daemon (admission, send/recipient resolution, Herdr wake, graft receiver all read this same RAM view), with no doctor check or other signal surfacing the degraded state. Acceptance: either fail runtime construction / raise a dedicated startup doctor finding when hydration of any known team fails, or track per-team hydration-failure state distinctly from legitimate empty-roster state so a doctor projection can report it and an operator can trigger reload_roster_from_durable_store()." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "runtime-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T02:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWReadinessReview ;
+  triage:foundAt "2026-09-06T01:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-RAM-I1/hydrate-fail-open> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-RAM-I1/hydrate-fail-open>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 271 ;
+  triage:snippet "Err(error) => { tracing::warn!(...); return; } / per-team Err(error) => { tracing::warn!(...); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "98cea18d7" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-ram-roster/98cea18d7-i1> .
+
+<urn:atm:triage:worktree/fix-aw-ram-roster/98cea18d7-i1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-ram-roster" ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "98cea18d7" ;
+  triage:orderIndex 1 .
