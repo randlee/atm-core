@@ -5,6 +5,7 @@
 # belong in the agent input only and must not be copied into this record.
 # Filed by quality-mgr during QA-AXPE-RECHECK-FIX-R1-1788718441 (QA-1 on PR #1255) on fix/ax-phase-end-recheck-fixes at 6dd403525; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1255#issuecomment-5561237864 Native id: ATM-QA-205. Follows AXPE-RSH-003 (partial fix).
 
+# Fixed 2026-09-06: PR #1255 fix/ax-phase-end-recheck-fixes @ c02ccbe6b, QA-2 PASS (QA-AXPE-RECHECK-FIX-R2-1788719605, https://github.com/randlee/atm-core/pull/1255#issuecomment-5561333419); closed by fenix on the verdict, 2026-09-06T18:44:00Z.
 <urn:atm:triage:finding/AXPE-QA-118>
   a triage:Finding ;
   triage:findingId "AXPE-QA-118" ;
@@ -16,7 +17,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "phase" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T18:44:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T18:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
@@ -29,8 +32,8 @@
   triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
   triage:line 445 ;
   triage:snippet "tracing::warn!(subsystem = \"received_hook_selector\", action = \"herdr_prompt\", backend = \"herdr\", member = %dispatch.event.recipient, error = ?error, outcome, \"Herdr wake-up was not accepted\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ax-phase-end-recheck-fixes" ;
   triage:headSha "6dd4035257dc8eb65c66b622b1a2572af54badfe" ;
   triage:occursIn <urn:atm:triage:worktree/FIX/6dd4035257dc8eb65c66b622b1a2572af54badfe> .

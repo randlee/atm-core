@@ -542,3 +542,9 @@ triage:a29 a triage:Assignment ; triage:ofSprint triage:AX6 ; triage:assignedTo 
 # GO-AX-PHASE-END-RECHECK-FIX2-1788719298 (cipher) completed 2026-09-06T18:30:11Z: fix/ax-phase-end-recheck-fixes c02ccbe6b, PR #1255 -> integrate/phase-ax (AXPE-QA-118: received_hook_selector.rs:445 subsystem = "herdr_queue_wake"; one-line diff, verified by fenix).
 triage:c27 a triage:Completion ; triage:ofSprint triage:AX6 ; triage:at "2026-09-06T18:32:41Z"^^xsd:dateTime .
 # QA-AXMERGE-AW-R1-1788718929 on PR #1256 (db7f31cba) FAIL 0/1/0: AXPE-QA-120 (important, stale lint-config.toml section rule left by the merge reconciliation). Fixed by fenix as merge resolver (frozen file) at 11cb6e96c; QA-2 dispatched. Observation (not a finding): docs/project-plan.md section numbering at the AV/AW/AX boundary is scrambled identically on develop dba42148d; pre-existing develop debt to clean before the AX -> develop PR.
+# QA-AXPE-RECHECK-FIX-R2-1788719605 on PR #1255 (c02ccbe6b) PASS 0/0/0 at 2026-09-06T18:42:32Z; AXPE-QA-117, RSH-003, RBP-003, RBP-004, QA-118 closed (fixed). Merge of #1255 pending Windows test check.
+triage:r114 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-117> ; triage:resolvedAt "2026-09-06T18:44:00Z"^^xsd:dateTime .
+triage:r115 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-RSH-003> ; triage:resolvedAt "2026-09-06T18:44:00Z"^^xsd:dateTime .
+triage:r116 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-RBP-003> ; triage:resolvedAt "2026-09-06T18:44:00Z"^^xsd:dateTime .
+triage:r117 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-RBP-004> ; triage:resolvedAt "2026-09-06T18:44:00Z"^^xsd:dateTime .
+triage:r118 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AXPE-QA-118> ; triage:resolvedAt "2026-09-06T18:44:00Z"^^xsd:dateTime .

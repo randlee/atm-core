@@ -5,6 +5,7 @@
 # belong in the agent input only and must not be copied into this record.
 # Filed by quality-mgr during QA-AX-PHASE-END-RECHECK-1788716803 (phase-end recheck) on integrate/phase-ax at 6e8f33ba5; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1253#issuecomment-5561091832 Native id: RSH-AXPE-003
 
+# Fixed 2026-09-06: PR #1255 fix/ax-phase-end-recheck-fixes @ c02ccbe6b, QA-2 PASS (QA-AXPE-RECHECK-FIX-R2-1788719605, https://github.com/randlee/atm-core/pull/1255#issuecomment-5561333419); closed by fenix on the verdict, 2026-09-06T18:44:00Z.
 <urn:atm:triage:finding/AXPE-RSH-003>
   a triage:Finding ;
   triage:findingId "AXPE-RSH-003" ;
@@ -16,7 +17,9 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "phase" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T18:44:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T18:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AX6 ;
@@ -29,8 +32,8 @@
   triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
   triage:line 445 ;
   triage:snippet "tracing::warn!(backend = \"herdr\", member = %dispatch.event.recipient, error = ?error, outcome, \"Herdr wake-up was not accepted\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ax" ;
   triage:headSha "6e8f33ba59a1167127e94222bbed0405a3680cf0" ;
   triage:occursIn <urn:atm:triage:worktree/INTEGRATE/6e8f33ba59a1167127e94222bbed0405a3680cf0> .
