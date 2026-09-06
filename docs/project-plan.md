@@ -1591,7 +1591,7 @@ Phase AV sprint status:
 | `AV.3` | `complete` (PR #1113 merged) | `feature/av3-read-concurrency-gates` | `docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md` |
 | `AV.4` | `complete` (PR #1114 merged) | `feature/av4-read-query-benchmarks` | `docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md` |
 
-## 55. Phase AX — Nudge Templates On Every Backend And Task-State Tracking [PLANNING — PLAN HARDENING]
+## 55. Phase AX — Nudge Templates On Every Backend And Task-State Tracking [EXECUTING — PHASE CLOSEOUT]
 
 Phase AX closes three delivery defects found in the 2026-09-04 Herdr
 dogfood run (issue #1173): the Herdr sink bypasses the built-in nudge
@@ -1608,6 +1608,9 @@ AX.2→AX.5, AX.4→AX.5, AX.5→AX.6, AX.6→AX.7. Branches are worktrees via
 `sc-git-worktree`; PR bases and merges via `gh stack` (sequence in the
 phase plan §6).
 
+Current phase status: AX.1-AX.6 merged into `integrate/phase-ax`; AX.7
+superseded 2026-09-05.
+
 The authoritative plan is
 [phase-ax-plan](./plans/phase-ax/phase-ax-plan.md) with per-sprint docs
 under `docs/plans/phase-ax/`, authored on branch `integrate/phase-ax`.
@@ -1622,7 +1625,7 @@ Phase AX sprint status:
 | `AX.4` | B | after AX.3; parallel with AX.1/AX.2 | `complete` | `feature/ax4-task-cli-and-docs` | `docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md`, `docs/user-documents/tasks.md` |
 | `AX.5` | C | after A and B merge | `complete` | `feature/ax5-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md`, ADR-062 reminder-cycle section |
 | `AX.6` | C | after AX.5 | `complete` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
-| `AX.7` | D | after AX.6 merges | `planned` | none (proof on `integrate/phase-ax`) | `docs/plans/phase-ax/ax7-live-proof.md` |
+| `AX.7` | D | after AX.6 merges | `superseded` (2026-09-05) | none (proof moved to `docs/plans/phase-ay/release-readiness-herdr-live-proof.md`) | `docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md` |
 
 ## Daemon-Switch Scope Reduction
 

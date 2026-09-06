@@ -2,7 +2,7 @@
 title: "Phase AX — Nudge templates on every backend and task-state tracking"
 phase: AX
 branch: integrate/phase-ax
-status: draft
+status: closeout
 owner: fenix (plan author); team-lead (dispatch); arch-ctm / Cipher-311d (implementation)
 base_revision: 5b1baacef (develop)
 integration_branch: integrate/phase-ax
@@ -40,10 +40,6 @@ dependency_relations:
     dependent: AX.6
     relation: must_follow
     rationale: the lead notification is triggered from the reminder counter AX.5 maintains inside the same pump function, and doctor ATM_TASK_STALLED reads it.
-  - prerequisite: AX.6
-    dependent: AX.7
-    relation: must_follow
-    rationale: AX.7 is a proof sprint on the merged integrate head.
 execution_tracks:
   - track: A
     sprints: [AX.1, AX.2]

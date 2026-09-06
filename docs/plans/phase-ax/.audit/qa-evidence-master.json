@@ -557,7 +557,7 @@
       "important": 4,
       "minor": 2,
       "count_basis": "headline/reviewer",
-      "evidence": "Sprint AX.6 QA-2: FAIL (5 blocking / 4 important / 2 minor), PR #1204 @ c3268df8a. Final Quality Report: https://github.com/randlee/atm-core/pull/1204#issuecomment-5554091903. 22/25 carry-forward findings CLOSED (AX6-QA1-001,004,006-024, AX5-QA4-001); STILL OPEN 002 (partial), 003, 005 (partial). New: ARCH-001/002 RULE-008 atm-dev literals, ARCH-003 RULE-011 run_atm lacks ATM_CONFIG_HOME, ATM-QA-005 cli-reference not regenerated, QA-2-001 vacuous HR-SAFE-003 guard, ATM-QA-004 project-plan row, QA-2-002 TOCTOU cap check. RULE-003 confirmed by fenix with .just/check_line_counts.py at c3268df8a: herdr_queue_wake.rs 997 prod lines (pass). CI: windows-latest Test FAILURE (escalation_cli exit 5 vs 3)."
+      "evidence": "Sprint AX.6 QA-2: FAIL (5 blocking / 4 important / 2 minor), PR #1204 @ c3268df8a. Final Quality Report: https://github.com/randlee/atm-core/pull/1204#issuecomment-5554091903. 22/25 carry-forward findings CLOSED (AX6-QA1-001,004,006-024, AX5-QA4-001); STILL OPEN 002 (partial), 003, 005 (partial). New: ARCH-001/002 RULE-008 atm-dev literals, ARCH-003 RULE-011 run_atm lacks ATM_CONFIG_HOME, ATM-QA-005 cli-reference not regenerated, QA-2-001 vacuous HR-SAFE-003 guard, AX6-QA2-009 project-plan row, QA-2-002 TOCTOU cap check. RULE-003 confirmed by fenix with .just/check_line_counts.py at c3268df8a: herdr_queue_wake.rs 997 prod lines (pass). CI: windows-latest Test FAILURE (escalation_cli exit 5 vs 3)."
     },
     {
       "run_id": "AX6-QA3",
@@ -640,6 +640,6 @@
     "AX5-QA1 headline counts (4/8/7) differ from the deduplicated triage records (4/8/5); the triage records are the lifecycle source.",
     "AX.6: closed at QA-5 PASS (PR #1204).",
     "AX.7: superseded 2026-09-05; live Windows/macOS Herdr proof moved to release readiness (docs/plans/phase-ay/release-readiness-herdr-live-proof.md).",
-    "Nine AXPE phase-end findings are tracked in .triage/phase-ax/findings and fixed on stack #1235."
+    "AXPE-* phase-end findings are tracked in .triage/phase-ax/findings on integrate/phase-ax; fixes land via stack #1235 and closure (record status plus Resolution events) is recorded by fenix at stack merge."
   ]
 }
