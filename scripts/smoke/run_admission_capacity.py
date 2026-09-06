@@ -1072,12 +1072,15 @@ def prepare_capacity_roster(
     roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
 ) -> None:
     """Create the disposable roster used exclusively by public benchmark writes."""
-    for team, member in (
-        (roster.team, roster.agent),
-        (roster.team, roster.recipient),
+    for team, member, agent_type in (
+        (roster.team, roster.agent, "lead"),
+        (roster.team, roster.recipient, "general-purpose"),
     ):
         result = command_result(
-            [str(atm), "teams", "add-member", team, member, "--home-dir", str(home), "--json"],
+            [
+                str(atm), "teams", "add-member", team, member,
+                "--agent-type", agent_type, "--home-dir", str(home), "--json",
+            ],
             timeout=15.0,
             env=env,
         )
