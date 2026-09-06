@@ -132,7 +132,10 @@ create a cycle.
 
 - `AtmError` — the workspace-wide error type a caller may fold a
   `HerdrError` into at its own boundary via `From<HerdrError> for
-  AtmError`; `atm-herdr` itself never constructs an `AtmError` internally
+  AtmError`. From AY.3 (P-E(a) ruling) this crate has exactly two
+  `AtmError` construction sites — `From<HerdrError> for AtmError` and
+  `HerdrClientConfig::try_new` (`AtmErrorCode::ConfigParseFailed`) — and
+  adds no other construction site and no new error family
 - `HerdrError` — this crate's own closed error enum (see
   [`architecture.md`](./architecture.md) §4, §7), covering every Herdr
   `error.code` this crate's contract parses plus this crate's own

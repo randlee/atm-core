@@ -137,7 +137,7 @@ closure; there is no stage-only or boundary-only completion claim.
 
 | Ownership | Exact targets |
 | --- | --- |
-| Core DTO/port/projection | `crates/atm-core/src/doctor/herdr_state.rs`, `crates/atm-core/src/doctor/mod.rs`, `crates/atm-core/src/doctor/report.rs`, `crates/atm-core/src/herdr_configured.rs` |
+| Core DTO/port/projection | `crates/atm-core/src/boundary/herdr_endpoint.rs` (sealed `HerdrEndpointDoctor` trait; the architecture guard resolves trait-only core contracts from `crates/atm-core/src/boundary` only), `crates/atm-core/src/doctor/herdr_state.rs`, `crates/atm-core/src/doctor/mod.rs`, `crates/atm-core/src/doctor/report.rs`, `crates/atm-core/src/herdr_configured.rs` |
 | Async doctor projection | `crates/atm-runtime/src/doctor_projection.rs` and Tokio/Axum doctor composition only |
 | Herdr public config/probe | `crates/atm-herdr/src/transport.rs`, `crates/atm-herdr/src/doctor_probe.rs`, and `crates/atm-herdr/src/lib.rs` over AY.2's private transport seam |
 | Composition/config | `crates/atm-daemon-bootstrap/src/herdr_config.rs`, `crates/atm-daemon-bootstrap/src/replacement_handler.rs`, and focused bootstrap tests |
