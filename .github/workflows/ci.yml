@@ -37,7 +37,7 @@ jobs:
           fi
 
           changed_files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "$GITHUB_SHA")"
-          if [[ -z "$changed_files" ]] || grep -qvE '^(docs/|site/|.*\.md$)' <<< "$changed_files"; then
+          if [[ -z "$changed_files" ]] || grep -qvE '^(docs/|site/|\.triage/|.*\.md$)' <<< "$changed_files"; then
             echo "runtime=true" >> "$GITHUB_OUTPUT"
           else
             echo "runtime=false" >> "$GITHUB_OUTPUT"
@@ -157,36 +157,45 @@ jobs:
 
   clippy:
     name: Clippy
-    needs: [fmt]
+    needs: [fmt, ci-scope]
     runs-on: ubuntu-latest
     steps:
+      - name: Documentation-only clippy skip
+        if: ${{ needs.ci-scope.outputs.runtime != 'true' }}
+        run: echo "Clippy is intentionally skipped for documentation-only changes."
       - uses: actions/checkout@v4
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
 
       - name: Install Rust toolchain
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.94.1"
           components: clippy, rustfmt
 
       - name: Cache cargo registry
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ubuntu-clippy-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo index
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ubuntu-clippy-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo build
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/cache@v4
         with:
           path: target
           key: ubuntu-clippy-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run clippy
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: cargo clippy --workspace --all-targets -- -D warnings
 
   test:
@@ -203,7 +212,9 @@ jobs:
             release_artifact: macos-aarch64
           - os: windows-latest
             release_artifact: windows-x86_64
-    runs-on: ${{ matrix.os }}
+    # Documentation-only changes keep the required check names but run the
+    # skip step on ubuntu instead of waiting for a macOS/Windows runner slot.
+    runs-on: ${{ needs.ci-scope.outputs.runtime == 'true' && matrix.os || 'ubuntu-latest' }}
     steps:
       - name: Documentation-only runtime skip
         if: ${{ needs.ci-scope.outputs.runtime != 'true' }}
