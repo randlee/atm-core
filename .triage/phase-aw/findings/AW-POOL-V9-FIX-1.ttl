@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-POOL-V9-FIX-1>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9-FIX-1" ;
+  triage:title "shared_db.rs:212 with_connection/with_transaction still route non-roster store reads to the writer connection instead of the shared ReaderPool" ;
+  triage:description "quality-mgr's PR #1242 QA verdict (req-qa, independently re-verified against AW-POOL-V9's own triage text): AW-POOL-V9.ttl names shared_db.rs:212 as one of its two required-fix occurrences alongside control_path_pool.rs itself, because 'SharedDb::with_connection/with_transaction are the only debug_assert_blocking_only callers, both invoked from control_path_pool on the writer side.' The A1 fix deleted control_path_pool.rs but shared_db.rs:212's with_connection/with_transaction still delegate to self.writer_queue.with_connection(operation) -- confirmed by direct code read. Reads in peer_config_store.rs, pending_nudge_store.rs, nudge_template_override_store.rs, graft_receiver_endpoint_store.rs, and template_catalog_store.rs all still call self.db.with_connection(...), which resolves to the single writer-side connection, not the shared ReaderPool. TEAM-LEAD ROUTING DECISION: roster_store.rs is explicitly OUT OF SCOPE (Stack B, fix/aw-ram-roster, AW-POOL-V7). The remaining five non-roster stores are promoted to A2 (fix/aw-pool-read-migration) as an amendment to arch-ctm's already-active A2 assignment, avoiding same-file conflicts between A1 hotfix and A2's concurrent edits." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "concurrency-architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T19:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-06T02:00:01Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/shared-db-212> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-1/shared-db-212>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 246 ;
+  triage:snippet "pub(crate) fn with_connection -- delegates reads to self.writer_queue instead of shared ReaderPool" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "27c87de22" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-pool-read-migration/27c87de22> .
+
+<urn:atm:triage:worktree/fix-aw-pool-consolidate/27c87de22>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-pool-consolidate" ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "27c87de22" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/fix-aw-pool-read-migration/27c87de22>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-pool-read-migration" ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "27c87de22" ;
+  triage:orderIndex 2 .

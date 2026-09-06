@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-POOL-V9-FIX-3>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9-FIX-3" ;
+  triage:title "writer/mod.rs is ~1011 non-test lines, marginally over the 1000-line decomposition cap after SerialWriterQueue was folded in" ;
+  triage:description "quality-mgr's PR #1242 QA verdict (arch-qa): crates/atm-core/src/writer/mod.rs is ~1011 non-test lines after SerialWriterQueue was folded in alongside the existing batch/diagnostics/shutdown pipeline, marginally over the 1000-line decomposition cap (~1% overage, mechanical in nature, rated important not blocking). Acceptance: extract the batch-processing pipeline (writer_loop, process_batch, process_message_admission_group, process_queued_write) into a new crates/atm-core/src/writer/batch.rs module, re-exported from writer/mod.rs, bringing writer/mod.rs back under the 1000-line cap with no behavior change." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-decomposition" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T02:04:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-06T02:00:01Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-3/A1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-3/A1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/writer/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "writer/mod.rs ~1011 non-test lines, over the 1000-line decomposition cap; extract writer_loop/process_batch/process_message_admission_group/process_queued_write to writer/batch.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "27c87de22" ;
+  triage:occursIn <urn:atm:triage:worktree/A1/27c87de22> .
+
+<urn:atm:triage:worktree/A1/27c87de22>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/A1" ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "27c87de22" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/A2/27c87de22>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/A2" ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "27c87de22" ;
+  triage:orderIndex 2 .
