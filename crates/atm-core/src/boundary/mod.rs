@@ -5,13 +5,16 @@ use crate::error::AtmError;
 pub use crate::protocol::{NotificationEvent, RuntimeStatusSnapshot};
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, ChatId, HostName, PaneId, TaskId, TeamName};
+pub use atm_storage::TaskState;
 /// Durable roster store used by replacement-runtime maintenance projections.
 #[doc(inline)]
 pub use atm_storage::contract::RosterStore as DurableRosterStore;
-pub use atm_storage::contract::{AckTransition, Message, MessageKey, TaskState};
+pub use atm_storage::contract::{AckTransition, Message, MessageKey};
 pub use atm_storage::{
-    BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, TeamNudgeTemplateOverrideMode,
-    TeamNudgeTemplateOverrideRow,
+    AsyncTaskLedgerReader, BuiltInNudgeTemplateKind, DAEMON_ACTOR_NAME, EscalationScope,
+    MAX_ESCALATION_RECIPIENTS, NudgeTemplateOverrideStore, ReadDeadline, ReminderOutcome,
+    TASK_STALLED_REMINDER_THRESHOLD, TaskEventKind, TaskEventRow, TaskRow, TaskStore,
+    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
 };
 
 /// Durable at-most-once delivery state for deferred (`atm queue`) nudges.
@@ -134,14 +137,22 @@ impl PostSendHookEvent {
 
 pub fn built_in_nudge_template_kind_from_post_send_event(
     event: &PostSendHookEvent,
+    delivery_kind: NudgeKind,
 ) -> BuiltInNudgeTemplateKind {
-    match (event.is_ack, event.task_id.is_some(), event.requires_ack) {
-        (true, true, _) => BuiltInNudgeTemplateKind::AcknowledgeTask,
-        (true, false, _) => BuiltInNudgeTemplateKind::Acknowledge,
-        (false, true, true) => BuiltInNudgeTemplateKind::DeliveryTaskAck,
-        (false, true, false) => BuiltInNudgeTemplateKind::DeliveryTask,
-        (false, false, true) => BuiltInNudgeTemplateKind::DeliveryAck,
-        (false, false, false) => BuiltInNudgeTemplateKind::Delivery,
+    use BuiltInNudgeTemplateKind as K;
+    match (
+        event.is_ack,
+        event.task_id.is_some(),
+        event.requires_ack,
+        delivery_kind,
+    ) {
+        (true, true, _, _) => K::AcknowledgeTask,
+        (true, false, _, _) => K::Acknowledge,
+        (false, true, _, _) => K::Task,
+        (false, false, false, NudgeKind::Steer) => K::Delivery,
+        (false, false, true, NudgeKind::Steer) => K::DeliveryAck,
+        (false, false, false, NudgeKind::Queue) => K::Queue,
+        (false, false, true, NudgeKind::Queue) => K::QueueAck,
     }
 }
 
@@ -172,10 +183,12 @@ pub struct LocalTmuxNudgeTarget {
 }
 
 /// Target metadata for a Herdr prompt. The live agent name is carried by the
-/// dispatch event; only the optional per-member session is persisted.
+/// dispatch event; the optional per-member session and rendered template are
+/// resolved before the dispatch crosses into the process adapter.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct HerdrNudgeTarget {
     pub session: Option<crate::HerdrSession>,
+    pub rendered_nudge: String,
 }
 
 /// Backend-specific payload for a local steer.

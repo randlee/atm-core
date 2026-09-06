@@ -187,6 +187,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            task_complete: None,
             extra: Map::new(),
         };
         let host: HostName = "peer.example.test".parse().expect("host");
@@ -295,6 +296,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            task_complete: None,
             extra: Map::new(),
         };
         set_peer_delivery_target(&mut envelope, &host);

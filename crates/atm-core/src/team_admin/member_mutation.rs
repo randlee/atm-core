@@ -7,6 +7,7 @@ use serde_json::json;
 use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind, RosterStore};
 use crate::delivery_channel::{HerdrSession, LocalMessageReceivedBackend};
 use crate::error::AtmError;
+use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY};
 use crate::types::{AgentName, HostName, ModelName, PaneId, TeamName};
@@ -339,6 +340,7 @@ pub fn update_member_with_roster_store(
     validate_update_member_caller(roster_store, &request)?;
     let mut existing_roster = projection::load_team_roster(roster_store, &request.team)?;
     let member_name = request.member.0.clone();
+    ensure_member_name_available(&member_name)?;
     let member = existing_roster
         .iter_mut()
         .find(|existing_member| existing_member.agent_name == member_name)
@@ -395,6 +397,7 @@ fn ensure_member_absent(
     team: &TeamName,
     member: &AgentName,
 ) -> Result<(), AtmError> {
+    ensure_member_name_available(member)?;
     if existing_roster
         .iter()
         .any(|existing_member| existing_member.agent_name == *member)
@@ -402,6 +405,16 @@ fn ensure_member_absent(
         return Err(AtmError::member_already_exists(
             member.as_str(),
             team.as_str(),
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_member_name_available(member: &AgentName) -> Result<(), AtmError> {
+    if member.as_str() == atm_storage::DAEMON_ACTOR_NAME {
+        return Err(AtmError::new(
+            AtmErrorCode::MessageValidationFailed,
+            "atm-daemon is a reserved sender name",
         ));
     }
     Ok(())
@@ -759,8 +772,84 @@ fn nonstandard_tmux_warning(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
+
     use super::*;
     use crate::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
+
+    #[derive(Default)]
+    struct TestRosterStore {
+        teams: Mutex<BTreeMap<TeamName, Vec<RosterEntry>>>,
+    }
+
+    impl TestRosterStore {
+        fn seed(&self, team: &TeamName, members: Vec<RosterEntry>) {
+            self.teams
+                .lock()
+                .expect("roster lock")
+                .insert(team.clone(), members);
+        }
+
+        fn members(&self, team: &TeamName) -> Vec<RosterEntry> {
+            self.teams
+                .lock()
+                .expect("roster lock")
+                .get(team)
+                .cloned()
+                .unwrap_or_default()
+        }
+    }
+
+    impl crate::boundary::sealed::Sealed for TestRosterStore {}
+
+    #[allow(
+        deprecated,
+        reason = "tests cover the retained member mutation boundary"
+    )]
+    impl RosterStore for TestRosterStore {
+        fn replace_roster(&self, team: &TeamName, members: &[RosterEntry]) -> Result<(), AtmError> {
+            self.seed(team, members.to_vec());
+            Ok(())
+        }
+
+        fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
+            Ok(self.members(team))
+        }
+
+        fn query_membership(
+            &self,
+            team: &TeamName,
+            member: &AgentName,
+        ) -> Result<Option<RosterEntry>, AtmError> {
+            Ok(self
+                .members(team)
+                .into_iter()
+                .find(|entry| entry.agent_name == *member))
+        }
+
+        fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
+            Ok(self
+                .teams
+                .lock()
+                .expect("roster lock")
+                .keys()
+                .cloned()
+                .collect())
+        }
+
+        fn health_snapshot(
+            &self,
+            team: &TeamName,
+        ) -> Result<crate::boundary::RosterStoreHealthSnapshot, AtmError> {
+            Ok(crate::boundary::RosterStoreHealthSnapshot {
+                team: team.clone(),
+                member_count: self.members(team).len() as u64,
+                stale: false,
+                refreshed_at: None,
+            })
+        }
+    }
 
     fn roster_member(team: &str, agent: &str) -> RosterEntry {
         RosterEntry {
@@ -773,6 +862,65 @@ mod tests {
             recipient_pane_id: None,
             metadata_json: serde_json::Map::new(),
         }
+    }
+
+    fn lead_member(team: &str, agent: &str) -> RosterEntry {
+        let mut member = roster_member(team, agent);
+        member.agent_type = AgentType::Lead;
+        member
+    }
+
+    #[test]
+    fn add_member_rejects_reserved_daemon_name_without_changing_roster() {
+        let store = TestRosterStore::default();
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        let initial = vec![lead_member(TEST_TEAM, ROLE_TEAM_LEAD)];
+        store.seed(&team, initial.clone());
+        let root = tempfile::tempdir().expect("tempdir");
+        let request = AddMemberRequest::new(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            atm_storage::DAEMON_ACTOR_NAME,
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("member-home"),
+            None,
+        )
+        .expect("request");
+
+        let error = add_member_with_roster_store(&store, request).expect_err("reserved name");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert_eq!(store.members(&team), initial);
+    }
+
+    #[test]
+    fn update_member_rejects_reserved_daemon_name_without_changing_roster() {
+        let store = TestRosterStore::default();
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        let initial = vec![
+            lead_member(TEST_TEAM, ROLE_TEAM_LEAD),
+            roster_member(TEST_TEAM, atm_storage::DAEMON_ACTOR_NAME),
+        ];
+        store.seed(&team, initial.clone());
+        let request = UpdateMemberRequest::new(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            team.clone(),
+            TEST_TEAM,
+            atm_storage::DAEMON_ACTOR_NAME,
+            None,
+            None,
+            None,
+            Some("lead".to_owned()),
+            None,
+            None,
+        )
+        .expect("request");
+
+        let error = update_member_with_roster_store(&store, request).expect_err("reserved name");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert_eq!(store.members(&team), initial);
     }
 
     /// Regression test: `apply_member_metadata_update` used to insert the

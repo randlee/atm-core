@@ -1,0 +1,112 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA2-002>
+  a triage:Finding ;
+  triage:findingId "AX6-QA2-002" ;
+  triage:title "RULE-008: reserved production team literal atm-dev hardcoded in crates/atm-core/src/escalation_admin.rs unit test fixture and assertions" ;
+  triage:description "AX.6 QA-2 (quality-mgr QA-AX6-R2-1788630712, PR #1204 report 2026-09-05T19:01Z, arch-qa ARCH-002) at head c3268df8a3dfa5c84f4465459c5d2ba86df1c857. crates/atm-core/src/escalation_admin.rs lines 96, 99, 101 hardcode the reserved production team literal atm-dev inside the in-process unit test fixture and its assertions, violating RULE-008 (no TEST_TEAM-style constant, no justification). Fix: use a test-local non-production team constant." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T19:45:51Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr AX.6 QA-3 recheck (QA-AX6-R3-1788637011) at head 43e1d40b33357024dea87742b4f8a114e7fd4966; fixed by arch-ctm fix pass GO-AX6-FIX2-1788635243 (Completion c22). Report: PR #1204 comment 5554337367. Sprint verdict remains FAIL on AX6-QA3-001/002." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T19:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T19:01:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-002/AX6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-002/AX6-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-002/AX6-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-002/AX7-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-002/AX7-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-002/AX7-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA2-002/AX6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/escalation_admin.rs" ;
+  triage:line 96 ;
+  triage:snippet "add(&store, &target, \" ops@atm-dev \", timestamp)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "c3268df8a3dfa5c84f4465459c5d2ba86df1c857" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/c3268df8a3dfa5c84f4465459c5d2ba86df1c857> .
+
+<urn:atm:triage:occurrence/AX6-QA2-002/AX6-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/escalation_admin.rs" ;
+  triage:line 99 ;
+  triage:snippet "vec![\"ops@atm-dev\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "c3268df8a3dfa5c84f4465459c5d2ba86df1c857" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/c3268df8a3dfa5c84f4465459c5d2ba86df1c857> .
+
+<urn:atm:triage:occurrence/AX6-QA2-002/AX6-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/escalation_admin.rs" ;
+  triage:line 101 ;
+  triage:snippet "remove(&store, &target, \" ops@atm-dev \")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "c3268df8a3dfa5c84f4465459c5d2ba86df1c857" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/c3268df8a3dfa5c84f4465459c5d2ba86df1c857> .
+
+<urn:atm:triage:occurrence/AX6-QA2-002/AX7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/escalation_admin.rs" ;
+  triage:line 96 ;
+  triage:snippet "add(&store, &target, \" ops@atm-dev \", timestamp)" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e249e2f2da915fc57cd5de0931c08f73> .
+
+<urn:atm:triage:occurrence/AX6-QA2-002/AX7-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/escalation_admin.rs" ;
+  triage:line 99 ;
+  triage:snippet "vec![\"ops@atm-dev\"]" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e249e2f2da915fc57cd5de0931c08f73> .
+
+<urn:atm:triage:occurrence/AX6-QA2-002/AX7-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/escalation_admin.rs" ;
+  triage:line 101 ;
+  triage:snippet "remove(&store, &target, \" ops@atm-dev \")" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e249e2f2da915fc57cd5de0931c08f73> .
+
+<urn:atm:triage:worktree/AX6/c3268df8a3dfa5c84f4465459c5d2ba86df1c857>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX6" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "c3268df8a3dfa5c84f4465459c5d2ba86df1c857" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/d101fee2e249e2f2da915fc57cd5de0931c08f73>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX7" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:orderIndex 7 .

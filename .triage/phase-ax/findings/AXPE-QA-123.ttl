@@ -1,0 +1,94 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by req-qa in QA-AX-PHASE-END-RECHECK2-1788721613 on PR #1253 (cc9c4f2a6), report:
+# https://github.com/randlee/atm-core/pull/1253#issuecomment-5561581957 .
+# Location correction (team-lead, verified via repo-wide grep for the literal wrong path
+# before dispatch): quality-mgr's report cited "phase-ax-plan.md section 3", but
+# docs/plans/phase-ax/phase-ax-plan.md's own AX.3 row (line 237) already correctly cites
+# ADR-062. The actual wrong citation lives in docs/project-plan.md's Phase AX sprint status
+# table (same table as AXPE-QA-122, AX.3 row, Artifacts column) and is duplicated in
+# docs/plans/phase-ay/phase-ay-plan.md:196. Recorded against both real locations.
+#
+# Amendment (team-lead, 2026-09-06T20:xx Z): quality-mgr's QA-2 recheck on PR #1260
+# (fix/ax-recheck2-findings, 3946deacb) found a THIRD occurrence of the identical
+# misattribution that this record's original sweep missed: docs/project-plan.md:1642,
+# the AX.5 row's Artifacts column ("ADR-061 reminder-cycle section"). The actual
+# "## Reminder cycle" section is in docs/adr/ADR-062-task-state-machine.md:42, not
+# ADR-061. This confirms the repeatable/phase sweepScope was warranted -- the initial
+# sweep undercounted. Occurrence RECHECK2-3 added below; this finding stays "open"
+# until all three occurrences are fixed. Report:
+# https://github.com/randlee/atm-core/pull/1260#issuecomment-5561845354 .
+
+<urn:atm:triage:finding/AXPE-QA-123>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-123" ;
+  triage:title "Three docs cite the nonexistent docs/adr/ADR-061-task-state-machine.md; the real file is ADR-062" ;
+  triage:description "ADR-061 is docs/adr/ADR-061-governed-interface-schema-versioning.md, not a task-state-machine ADR. The AX.3 task-state-machine ADR is docs/adr/ADR-062-task-state-machine.md (confirmed present; docs/plans/phase-ax/phase-ax-plan.md itself already cites it correctly at line 227 and in its own AX.3 sprint table row at line 237). Three locations cite the nonexistent path docs/adr/ADR-061-task-state-machine.md: (1) docs/project-plan.md line 1640, the AX.3 row's Artifacts column, in the same Phase AX sprint status table as AXPE-QA-122; (2) docs/plans/phase-ay/phase-ay-plan.md line 196; (3) docs/project-plan.md line 1642, the AX.5 row's Artifacts column ('ADR-061 reminder-cycle section'), found by quality-mgr's QA-2 recheck on PR #1260 after the first two were fixed. Remediation: change all three citations from ADR-061-task-state-machine.md to ADR-062-task-state-machine.md; the AX.5 row's text should read 'ADR-062 reminder-cycle section' (the actual section is docs/adr/ADR-062-task-state-machine.md:42)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "ci_gate" ;
+  triage:category "req-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "phase" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-09-06T20:28:23Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "QA-AX-1260-FINAL-RECHECK2 PASS 0/0/0 on PR #1260 (f5c1a577d): all 3 occurrences confirmed fixed; fresh repo-wide sweep by req-qa and quality-mgr found no other ADR-061/062 misattribution. Report: https://github.com/randlee/atm-core/pull/1260#issuecomment-5561957376" ;
+  triage:triagedAt "2026-09-06T19:49:16Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T19:24:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-123/RECHECK2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-123/RECHECK2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-123/RECHECK2-3> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AXPE-QA-123/RECHECK2-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1640 ;
+  triage:snippet "AX.3 row, Artifacts column: `docs/adr/ADR-061-task-state-machine.md` (should be ADR-062-task-state-machine.md)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "cc9c4f2a6" ;
+  triage:occursIn <urn:atm:triage:worktree/RECHECK2/cc9c4f2a6> .
+
+<urn:atm:triage:occurrence/AXPE-QA-123/RECHECK2-2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/phase-ay-plan.md" ;
+  triage:line 196 ;
+  triage:snippet "`docs/adr/ADR-061-task-state-machine.md` on `integrate/phase-ax`, not yet ... (should be ADR-062-task-state-machine.md)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "cc9c4f2a6" ;
+  triage:occursIn <urn:atm:triage:worktree/RECHECK2/cc9c4f2a6> .
+
+<urn:atm:triage:occurrence/AXPE-QA-123/RECHECK2-3>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1642 ;
+  triage:snippet "AX.5 row, Artifacts column: `ADR-061 reminder-cycle section` (should be `ADR-062 reminder-cycle section`; actual section is docs/adr/ADR-062-task-state-machine.md:42)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ax-recheck2-findings" ;
+  triage:headSha "3946deacb" ;
+  triage:occursIn <urn:atm:triage:worktree/RECHECK2-QA2/3946deacb> .
+
+<urn:atm:triage:worktree/RECHECK2/cc9c4f2a6>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ax" ;
+  triage:branch "integrate/phase-ax" ;
+  triage:headSha "cc9c4f2a6" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/RECHECK2-QA2/3946deacb>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/ax-recheck2-findings" ;
+  triage:branch "fix/ax-recheck2-findings" ;
+  triage:headSha "3946deacb" ;
+  triage:orderIndex 1 .

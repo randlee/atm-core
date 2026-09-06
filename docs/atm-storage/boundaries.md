@@ -2,6 +2,18 @@
 
 This document records shared storage-neutral contracts owned by `atm-storage`.
 
+## TaskStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/task-store.toml](../../boundaries/atm-storage/task-store.toml)
+
+`TaskStore` is the sealed, backend-neutral task-ledger read and audit
+capability. It reads `TaskRow` and append-only `TaskEventRow` values, and only
+appends reminder or lead-notification audit rows. The backend message-writer
+transaction alone applies `Assigned`, `Acked`, and `Completed` state changes.
+`MessageWriteOrigin::Peer` deliberately persists a peer receipt without
+changing the local task ledger.
+
 ## TemplateCatalogStore
 
 Canonical machine-readable boundary source:

@@ -143,8 +143,10 @@ Required rules:
     - `template_body TEXT NOT NULL`
     - `updated_at TEXT NOT NULL`
     - primary key `(team_name, template_kind)`
-    - template-kind values constrained to the six built-in template kinds
-      accepted in `AD.21`
+    - template-kind values constrained to the seven built-in template kinds
+      accepted in `AD.21`: `delivery`, `delivery_ack`, `queue`, `queue_ack`,
+      `task`, `acknowledge`, and `acknowledge_task`; `NudgeKind` selects the
+      delivery or queue family and task-tagged messages select `task`
     - `mode` values constrained to `override` or `disabled`
     - reset-to-default modeled as row deletion, not as a third persisted mode
 - weak provenance round-trip fields such as `imported_from` must not be part

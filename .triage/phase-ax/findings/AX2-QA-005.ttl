@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX2-QA-005>
+  a triage:Finding ;
+  triage:findingId "AX2-QA-005" ;
+  triage:title "Stale doc comment on render_built_in_nudge_for_dispatch names only Tmux and graft as consumers of the identical text" ;
+  triage:description "Follow-up after cipher's fix pass. quality-mgr QA-2 (PR #1186 Final Quality Report, 2026-09-05T07:36:04Z) verified fixed at e7d4d5453: the doc comment on render_built_in_nudge_for_dispatch in crates/atm-core/src/send/hook.rs now names Tmux, Herdr and graft as consumers. Confirm at HEAD and record the finding as fixed on feature/ax2-herdr-template-rendering at e7d4d5453." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T07:37:02Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r8 in .sprints/AX/events.ttl; final sprint verdict AX2-QA2 PASS (PR #1186 comment 5550327947)." ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX2 ;
+  triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-005/AX2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX2-QA-005/AX2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 100 ;
+  triage:snippet "Tmux, Herdr, and graft therefore receive identical XML text." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2/e7d4d545> .
+
+<urn:atm:triage:worktree/ax2/e7d4d545>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:orderIndex 1 .

@@ -2,7 +2,7 @@
 title: "Phase AX — Nudge templates on every backend and task-state tracking"
 phase: AX
 branch: integrate/phase-ax
-status: draft
+status: closeout
 owner: fenix (plan author); team-lead (dispatch); arch-ctm / Cipher-311d (implementation)
 base_revision: 5b1baacef (develop)
 integration_branch: integrate/phase-ax
@@ -15,7 +15,7 @@ dependency_relations:
   - prerequisite: AX.1
     dependent: AX.3
     relation: parallel_safe
-    rationale: AX.3 changes no nudge behaviour; the only overlap is additive edits in different regions of crates/atm-storage/src/contract.rs, resolved by merge-forward before the AX.3 PR.
+    rationale: AX.3 changes no nudge behaviour. Overlap (team-lead review, 2026-09-05): both edit prepare_persisted_write and prepare_persisted_write_async in crates/atm-core/src/write/pipeline.rs (AX.1 assigns request.nudge_mode = send_mode_for_task_request(...) there, landed at 1452df008 lines 526/595; AX.3 threads MessageWriteOrigin through the same two functions), both add lines to crates/atm-core/src/boundary/mod.rs, and both add to crates/atm-storage/src/contract.rs. Merge-forward order: AX.3 merges origin/feature/ax1-queue-template-class before editing pipeline.rs and again before its PR; AX.1's nudge_mode lines stay verbatim and AX.3's provenance edits go after them in each function.
   - prerequisite: AX.2
     dependent: AX.3
     relation: parallel_safe
@@ -40,10 +40,6 @@ dependency_relations:
     dependent: AX.6
     relation: must_follow
     rationale: the lead notification is triggered from the reminder counter AX.5 maintains inside the same pump function, and doctor ATM_TASK_STALLED reads it.
-  - prerequisite: AX.6
-    dependent: AX.7
-    relation: must_follow
-    rationale: AX.7 is a proof sprint on the merged integrate head.
 execution_tracks:
   - track: A
     sprints: [AX.1, AX.2]
@@ -157,7 +153,7 @@ cycle-1 hardening findings; binding unless Rand objects at plan review):
   Daemon-down behaviour is identical to queued mail today: nothing is
   nudged until the daemon pump runs.
 - `TaskStore` is the seventh optional storage capability trait under
-  ADR-018 §3 as re-counted by ADR-054; ADR-061 is the follow-up ADR that
+  ADR-018 §3 as re-counted by ADR-054; ADR-062 is the follow-up ADR that
   rule requires.
 - An ack whose task id has no local `tasks` row is **never rejected**:
   the machine is a no-op for it (pre-upgrade mail, peer-delivered tasks).
@@ -213,11 +209,22 @@ follow-up options on #1173, not open questions.
 | Re-sending an open task id to the same assignee | accepted: state unchanged, `assignment_message_id` and `description` updated, one `Assigned` event row with detail `resend` | rejected as a duplicate |
 | Completing a task that was never acked | accepted; the assignment message is marked acknowledged in the same transaction so it does not stay pending-ack forever | reject and require an ack first |
 
+- **The design is storage-backend neutral** (Rand, 2026-09-05: "the
+  design should not be dependent on sqlite, i.e. we can replace w/
+  sql"). Everything that defines a task lives in `atm-storage` with no
+  rusqlite dependency: the types, the pure transition function, the
+  `TaskStore` trait and its `DummyTaskStore`, the `MessageWriteOrigin`
+  carrier and the defaulted provenance methods on `MessageStore` /
+  `AsyncMessageStore`. The SQL in the sprint docs is the rusqlite
+  backend's DDL, written in portable SQL; a SQL Server backend
+  implements `TaskStore` and overrides the two provenance methods with
+  its own DDL and changes nothing above the trait. AX.3 AC 6 gates
+  `atm-storage` compiling with no `rusqlite` in its dependency tree.
 - **Task storage is approved; the Phase-AC deferral is superseded.**
   `docs/requirements.md` (Phase-AC supersession note) and
   `docs/architecture.md` ("Task Storage (Deferred)") still say a later
   task store would start from Claude-code task schema plus Pydantic.
-  AX.3 D10 amends both: the canonical task model is ADR-061's
+  AX.3 D10 amends both: the canonical task model is ADR-062's
   message-derived state machine in Rust, the `AC.6` deletion stands, and
   nothing deleted there is revived.
 
@@ -227,11 +234,11 @@ follow-up options on #1173, not open questions.
 | --- | --- | --- | --- | --- | --- |
 | AX.1 | A | **parallel with AX.3/AX.4** | Queue template class and default template fixes | `BuiltInNudgeTemplateKind`, override-table migration, kind selection, task sends forced deferred, default bodies, CLI kind strings, six-kind statements in docs and ADR-019 amendment, nudge scripts | `sprint-AX.1-queue-template-class.md` |
 | AX.2 | A | after AX.1; **parallel with AX.3/AX.4** | Herdr renders the built-in template | `HerdrNudgeTarget`, `send/hook.rs` Herdr branch, `HerdrProcessAdapter::prompt` and its three impls, bootstrap selector call site, ADR-058 amendment, `HR-CORE-002`/`HR-SAFE-003`, Herdr boundary record, contract fixture | `sprint-AX.2-herdr-template-rendering.md` |
-| AX.3 | B | **parallel with AX.1/AX.2** | Task state machine and storage | `atm-storage` task types and pure transition, `TaskStore` and wiring, `MessageWriteOrigin` carrier on both insert paths, rusqlite tables and in-transaction application, ack gate, `SendRequest::with_task_complete`, two boundary records, ADR-061, ADR-054 amendment (trait re-count), requirements §7 | `sprint-AX.3-task-state-machine.md` |
+| AX.3 | B | **parallel with AX.1/AX.2** | Task state machine and storage | `atm-storage` task types and pure transition, `TaskStore` and wiring, `MessageWriteOrigin` carrier on both insert paths, rusqlite tables and in-transaction application, ack gate, `SendRequest::with_task_complete`, two boundary records, ADR-062, ADR-054 amendment (trait re-count), requirements §7 | `sprint-AX.3-task-state-machine.md` |
 | AX.4 | B | after AX.3; **parallel with AX.1/AX.2** | Task completion and inspection CLI | `atm send --task-complete`, `atm list --tasks` / `--task-events`, requirements §6.5/§6.6/§15.4, team-protocol, `docs/user-documents/tasks.md` | `sprint-AX.4-task-cli-and-docs.md` |
 | AX.5 | C | after A and B merge | Task reminder cycle in the Herdr pump | pump task step, idle-set widening, clock seam, `RuntimeMemberState::Blocked`, blocked-assignee reminder outcome, task-row reminder rendering, drain-first ordering (no marker exception) | `sprint-AX.5-task-reminder-cycle.md` |
 | AX.6 | C | after AX.5 | Lead notification and doctor | `atm-daemon` reserved sender, lead message, blocked escalation, Herdr desktop notification via `HerdrProcessAdapter::notify`, daemon-default escalation recipients with per-team override (any resolvable address), five doctor codes with catalog guidance | `sprint-AX.6-lead-notification-doctor.md` |
-| AX.7 | D | after AX.6 merges | Live Herdr dogfood evidence | `docs/plans/phase-ax/ax7-live-proof.md` | `sprint-AX.7-herdr-dogfood-evidence.md` |
+| AX.7 | D | superseded 2026-09-05 | Live Herdr dogfood evidence (moved to release readiness; no sprint carries live evidence, Rand) | none | `sprint-AX.7-herdr-dogfood-evidence.md` |
 
 Dependency graph:
 
@@ -339,7 +346,9 @@ test or evidence gate.
   replaces rebase.
 - PRs target `integrate/phase-ax` (bottom of each stack) or the branch
   below them in the stack; merge commits only (`--merge`); the phase PR
-  `integrate/phase-ax → develop` is opened after AX.7.
+  `integrate/phase-ax → develop` is opened after AX.6 merges and the
+  phase-ending critical review has run on the integrate head (AX.7 was
+  superseded on 2026-09-05; live proof is release readiness).
 - team-lead dispatches via j2 template over `atm send --stdin`;
   quality-mgr gates each PR with a posted Final Quality Report. `gh
   stack merge` checks only open/not-draft, so it is run only after every
@@ -388,7 +397,7 @@ gh stack merge <AX.6 PR#> --yes --merge
   the branch above before every dev or fix round once the lower branch's
   development is pushed; the lower PR merges first (`gh stack merge`
   does this bottom to top).
-- AX.7 runs on rand-m5 under fenix; the daemon is rebuilt from the
-  integrate head into `~/.atm-builds/` (outside `~/Documents`) for the
-  live proof.
+- AX.7 superseded (2026-09-05): the live dogfood matrix runs as release
+  readiness on the develop build once phase AW and AX have both landed,
+  not as a sprint or a phase merge gate.
 - `docs/project-plan.md` §55 (added with this plan) tracks sprint status.

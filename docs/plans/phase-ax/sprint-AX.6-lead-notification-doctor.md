@@ -5,7 +5,7 @@ title: Lead notification and doctor
 branch: feature/ax6-lead-notification-doctor
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ax6-lead-notification-doctor
 integration_branch: integrate/phase-ax
-status: draft
+status: complete
 recommended_agent: Cipher-311d
 recommended_model: fast
 execution_track: C
@@ -114,7 +114,7 @@ This is the authoritative deliverable checklist. Every listed deliverable
 lands production-ready for the scope this sprint claims; partial or
 shape-only completion fails the sprint.
 
-- [ ] D1 — reserved sender `atm-daemon`: the string is
+- [x] D1 — reserved sender `atm-daemon`: the string is
   `atm_storage::task_store::DAEMON_ACTOR_NAME` (defined in AX.3 beside
   `TaskActor`; this sprint defines no second constant); `add_member_with_roster_store`
   and `update_member_with_roster_store` in
@@ -125,7 +125,7 @@ shape-only completion fails the sprint.
   `ATM_ROSTER_RESERVED_NAME` (D3). Verified in the cycle-1 review: the
   core write path performs no sender-membership check and no sender hook
   lookup, so no fallback is needed for a non-roster sender.
-- [ ] D2 — lead notification in the pump task step
+- [x] D2 — lead notification in the pump task step
   (`crates/atm-http-runtime/src/herdr_queue_wake.rs`) per the rule; the
   write calls `write_mail_with_runtime` with `NudgeMode::Deferred`
   **inside the pump's existing `run_blocking` helper** (defined at line
@@ -134,7 +134,7 @@ shape-only completion fails the sprint.
   `LeadNotified` row (same shape as the AX.5 emit-failure rule);
   `HerdrQueueWakeStats` and the `herdr_queue_poll_tick` record gain
   `lead_notifications: usize`.
-- [ ] D3 — doctor (`crates/atm-core/src/doctor/mod.rs`, reading task
+- [x] D3 — doctor (`crates/atm-core/src/doctor/mod.rs`, reading task
   rows through `runtime.task_store()` inside
   `run_doctor_with_runtime_ports`, line 174; no new `RuntimeDoctorPorts`
   field):
@@ -153,26 +153,27 @@ shape-only completion fails the sprint.
   `herdr_and_mixed_backend_codes_have_specific_catalog_guidance` in
   `crates/atm-storage/src/error.rs` extended to the five codes. Code
   contract C2.
-- [ ] D4 — docs: `docs/requirements.md` §1 adds, beside the Phase `Y`
+- [x] D4 — docs: `docs/requirements.md` §1 adds, beside the Phase `Y`
   `atm help` entry, "Approved additive CLI feature for the Phase `AX`
   line: `atm escalation`" so `REQ-P-PRODUCT-001` records the new surface
   the same way `atm help` was recorded, and §2.1 In Scope lists it;
   §11.3 lists the five doctor
   codes with remediation; §12.3 (or the reserved-identifier section)
-  lists `atm-daemon`; ADR-061 gains a "Lead notification" section;
+  lists `atm-daemon`; ADR-062 gains a "Lead notification" section;
   `docs/user-documents/nudge-templates.md` and `docs/team-protocol.md`
   describe the lead message.
-- [ ] D5 — tests listed under Required validation.
-- [ ] D6 — blocked escalation in the pump
+- [x] D5 — tests listed under Required validation.
+- [x] D6 — blocked escalation in the pump
   (`crates/atm-http-runtime/src/herdr_queue_wake.rs`) per the rule:
-  pump-private `blocked_since` and `last_blocked_notice` maps keyed by
-  `MemberKey`, cleared when a member leaves `Blocked`; the shared
-  `escalate` helper used by both rules, with its writes inside
-  `run_blocking` exactly as D2 requires for the lead write;
+  `EscalationState` in `herdr_escalation.rs` owns the pump-private
+  `blocked_since` and `last_blocked_notice` maps keyed by `MemberKey`,
+  cleared when a member leaves `Blocked`; the shared `escalate` helper is
+  used by both rules, with its writes inside `run_blocking` exactly as D2
+  requires for the lead write;
   `HerdrQueueWakeStats` and the `herdr_queue_poll_tick` record gain
   `blocked_escalations: usize`, `escalation_writes_failed: usize` and
   `notifications_failed: usize`.
-- [ ] D7 — Herdr desktop notification through the public,
+- [x] D7 — Herdr desktop notification through the public,
   boundary-toml-enforced adapter trait (`HerdrProcessAdapter` is
   intentionally public per `boundaries/atm-herdr/herdr-process-adapter.toml`
   `visibility = "public"`; nothing here seals it):
@@ -188,8 +189,8 @@ shape-only completion fails the sprint.
   `[contracts]` note that notification text is caller-composed and
   contains member, task id, ages and a remediation command only, never a
   message body (HR-SAFE-003 holds); `docs/atm-herdr/requirements.md`
-  gains `HR-CORE-004` (notification verb, fixed argv shape, fail-soft).
-- [ ] D8 — escalation recipients (code contract C5): `TaskStore` gains
+  gains `HR-CORE-010` (notification verb, fixed argv shape, fail-soft).
+- [x] D8 — escalation recipients (code contract C5): `TaskStore` gains
   `list_escalation_recipients`, `add_escalation_recipient`,
   `remove_escalation_recipient`, each keyed by `EscalationScope::Daemon`
   or `EscalationScope::Team(name)` (trait in
@@ -217,14 +218,14 @@ shape-only completion fails the sprint.
   notes. `docs/team-protocol.md` and `docs/user-documents/tasks.md`
   describe the three layers and the commands.
 
-- [ ] D9 — pump file size (arch-qa RULE-003): `herdr_queue_wake.rs` is
-  613 non-test lines today (tests start at line 614) and AX.5 adds the
-  task step. This sprint puts `escalate`, `EscalationOutcome`, the
-  `blocked_since` / `last_blocked_notice` maps and the four constants in
-  a new `pub(crate)` sibling module
-  `crates/atm-http-runtime/src/herdr_escalation.rs`, leaving only the two
-  rule call sites in `herdr_queue_wake.rs`. Gate (AC 8): both files stay
-  under 1000 non-test lines.
+- [x] D9 — pump file size (arch-qa RULE-003): the escalation state,
+  notification payload, shared delivery, and recipient policy live in
+  `crates/atm-http-runtime/src/herdr_escalation.rs`; task-threshold and
+  blocked-member policy helpers live in
+  `crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs`; and
+  `herdr_queue_wake.rs` owns polling, candidate collection, and thin rule
+  call sites. Gate (AC 8): all three production modules stay under 1000
+  non-test lines.
 
 ### Paths to delete
 
@@ -271,6 +272,7 @@ fn effective_escalation_recipients(&self, team: &TeamName) -> Result<Vec<String>
 ```
 
 ```sql
+-- rusqlite backend DDL (portable SQL apart from IF NOT EXISTS); another backend supplies its own for the same rows
 CREATE TABLE IF NOT EXISTS escalation_recipients (
     scope_key TEXT NOT NULL,      -- 'daemon' or 'team:<team_name>'
     address TEXT NOT NULL,        -- ADR-040 form as typed; resolved at send time
@@ -313,7 +315,7 @@ MemberBlocked,       // "ATM_MEMBER_BLOCKED"
 
 `TaskStore` methods introduced by AX.3 (this sprint adds the three C5
 methods); the AX.5 reminder cadence and pseudo-rule (this
-sprint adds `record_lead_notified` and `list_task_events` calls inside
+sprint adds `record_lead_notified` and an async task-ledger `list_task_events` read inside
 the task step, which AX.5 property 6 already permits); roster schema;
 `AgentType` enum; every existing doctor code; `HerdrProcessAdapter`
 visibility (public).
@@ -332,8 +334,8 @@ visibility (public).
    `ATM_MEMBER_BLOCKED`; each with the C2 remediation text. Ten
    `blocked` reminders produce the lead message with `last outcome
    blocked`.
-4. `just validate` green; requirements §11.3/§12.3, ADR-061, ADR-058
-   amendment and `HR-CORE-004` updated.
+4. `just validate` green; requirements §11.3/§12.3, ADR-062, ADR-058
+   amendment and `HR-CORE-010` updated.
 5. A member observed `blocked` for 60 s produces exactly one lead message
    with the C3 body and one `notify` call with the C4 argv; still blocked
    at 5 min produces nothing more; at 10 min a second pair; returning to
@@ -354,16 +356,14 @@ visibility (public).
    escalation whose lead write, every recipient write and `notify` all
    fail leaves `last_blocked_notice` unset and is retried on the next
    tick; one that reaches anyone is stamped.
-8. `awk '/^#\[cfg\(test\)\]/{exit} {n++} END{exit n>1000}'` passes for
-   `crates/atm-http-runtime/src/herdr_queue_wake.rs` and
-   `crates/atm-http-runtime/src/herdr_escalation.rs`; `docs/requirements.md`
-   §1 lists `atm escalation` as the Phase `AX` additive CLI feature.
+8. `python3 .just/check_line_counts.py` passes; `docs/requirements.md` §1
+   lists `atm escalation` as the Phase `AX` additive CLI feature.
 
 ## Required validation
 
 - `crates/atm-http-runtime/src/herdr_queue_wake.rs` tests (`ax6_01_*`
   naming): the AX.5 property-6 test extended to assert that
-  `record_lead_notified` and `list_task_events` are the only additional
+  `record_lead_notified` and the async task-ledger `list_task_events` read are the only additional
   `TaskStore` calls and that no state transition occurs; AC 1 scenarios,
   including no-lead and two-lead teams
   (no message, warn log, no `LeadNotified` row).

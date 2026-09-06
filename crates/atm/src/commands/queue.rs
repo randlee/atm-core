@@ -20,3 +20,21 @@ impl QueueCommand {
             .await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    #[test]
+    fn queue_inherits_the_task_completion_flag_from_send() {
+        crate::commands::Cli::try_parse_from([
+            "atm",
+            "queue",
+            "cipher",
+            "--task-complete",
+            "t-42",
+            "--stdin",
+        ])
+        .expect("queue inherits flattened send flags");
+    }
+}

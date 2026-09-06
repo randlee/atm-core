@@ -2733,9 +2733,10 @@ Architectural rules:
   (ADR-054), and neither kind ever precedes persistence
 - the shipped default emitter path is the receiver-only
   `MessageReceivedHookEmitter` delivery path
-- the built-in renderer selects exactly one of six named template kinds:
-  `delivery`, `delivery_ack`, `delivery_task`, `delivery_task_ack`,
-  `acknowledge`, and `acknowledge_task`
+- the built-in renderer selects exactly one of seven named template kinds:
+  `delivery`, `delivery_ack`, `queue`, `queue_ack`, `task`, `acknowledge`,
+  and `acknowledge_task`; `NudgeKind` selects the delivery or queue family,
+  while task-tagged messages select `task`
 - any team-scoped built-in template override row must be resolved through the
   storage-neutral `NudgeTemplateOverrideStore` contract before the built-in
   emitter/render path runs; `atm` and `atm-core` must not perform direct
@@ -2878,6 +2879,15 @@ Phase `AC` closeout note:
 - if approved later, task storage starts from canonical Claude-code task
   schema plus Pydantic validation rather than from preserved transition
   scaffolding
+
+Phase-AX amendment (2026-09-04): superseded. Task storage is approved in
+Phase AX (phase plan §2). ADR-062 defines the daemon-owned,
+message-derived Rust state machine implemented by `atm-storage` and
+`atm-storage-rusqlite`; the Claude-code-schema-plus-Pydantic direction is
+withdrawn because the daemon already persists source messages, its write path
+has no Python, and a Claude Code task list is a per-session harness artifact,
+not a cross-host record. The AC.6 deletion stands: ADR-062 is a fresh design,
+not a revival of deleted scaffolding.
 
 #### RosterStore
 

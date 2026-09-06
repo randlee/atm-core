@@ -167,7 +167,7 @@ allowed_dependencies = ["atm-storage", "atm-storage-rusqlite", "pyo3", "tempfile
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
 boundary_record_path = "boundaries/atm-http-runtime/http-runtime.toml"
-allowed_dependencies = ["async-trait", "atm-core", "atm-herdr", "atm-runtime", "atm-runtime-test-support", "atm-storage", "axum", "base64", "fs4", "http-body-util", "hyper", "hyper-util", "reqwest", "serde", "serde_json", "serde_yaml", "tempfile", "tokio", "tower", "tracing", "ulid", "windows-sys"]
+allowed_dependencies = ["async-trait", "atm-core", "atm-herdr", "atm-runtime", "atm-runtime-test-support", "axum", "base64", "fs4", "http-body-util", "hyper", "hyper-util", "reqwest", "serde", "serde_json", "serde_yaml", "tempfile", "tokio", "tower", "tracing", "ulid", "windows-sys"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-herdr/Cargo.toml"
@@ -226,12 +226,6 @@ owner_manifest_path = "crates/atm-daemon/Cargo.toml"
 dependency_package = "atm-storage-rusqlite"
 allowed_sections = ["dependencies"]
 message = "atm-daemon may depend on atm-storage-rusqlite only through the documented runtime-owned SQLite boundaries"
-
-[[boundaries.manifest_section_rules]]
-owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
-dependency_package = "atm-storage"
-allowed_sections = ["dev-dependencies"]
-message = "atm-http-runtime must not depend on atm-storage in production; it is a test-only fixture dependency"
 
 [[boundaries.manifest_section_rules]]
 owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"

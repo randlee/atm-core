@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Identified by CI (Just lint, RULE-002 function-length) on PR #1256 merge/develop-aw-into-phase-ax at 11cb6e96c, run 34052404819 job 101538259016; reproduced locally by fenix with scripts/check-function-length.py --base-ref origin/integrate/phase-ax and --base-ref origin/develop. fenix-recorded. Not surfaced by QA-1/QA-2 (reviewers ran lint_boundaries.py and check_line_counts.py, not the full just lint).
+
+# Fixed 2026-09-06: merge/develop-aw-into-phase-ax @ b788f6839 (submit_blocking_with_class_at 80 -> 41 + enqueue_request 36; execute 81 -> 52 + execute_admit_template_message 34), verified locally by fenix (function-length vs origin/integrate/phase-ax and origin/develop passed; fmt; clippy -D warnings; cargo test --workspace 1821/0/3; lint_boundaries; check_line_counts) and landed on integrate/phase-ax at 102d16f19 per Rand's direct-merge ruling; closed 2026-09-06T19:00:49Z.
+<urn:atm:triage:finding/AXPE-QA-121>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-121" ;
+  triage:title "AW merge union pushes two atm-storage-rusqlite functions over the RULE-002 80-line hard limit" ;
+  triage:description "On the Phase AW -> integrate/phase-ax merge branch, two functions in crates/atm-storage-rusqlite exceed the RULE-002 hard threshold (80 lines) and overlap the PR diff, so CI's Just lint fails and the merge gate cannot pass. reader_pool.rs submit_blocking_with_class_at is 80 lines at 11cb6e96c (75 lines on develop 7c2947279; the function does not exist on integrate/phase-ax 6e8f33ba5, the merge union of AX's reader-pool shutdown-guard changes and AW's version added five lines). writer/ops.rs execute is 81 lines (69 on develop, 77 on integrate/phase-ax; the union of AX's UpsertMessage { record, provenance } arms and AW's changes added the rest). Neither parent violates the rule on its own; the violation is merge integration fallout. Remediation: extract small private helpers so both functions are at most 70 production lines with no behavior change; verify with python3 scripts/check-function-length.py --base-ref origin/integrate/phase-ax and the crate's fmt/clippy/tests. QA-3 must run the full function-length check, not only lint_boundaries.py." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "ci_gate" ;
+  triage:category "ci-lint-rule-002" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T19:00:49Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T18:51:19Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T18:47:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-121/MERGE-AW-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-121/MERGE-AW-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-121/MERGE-AW-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 646 ;
+  triage:snippet "fn submit_blocking_with_class_at (lines 646-725, 80 lines)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "merge/develop-aw-into-phase-ax" ;
+  triage:headSha "11cb6e96c9a9bb9099120b0ebd9e36904087abf1" ;
+  triage:occursIn <urn:atm:triage:worktree/MERGE-AW/11cb6e96c9a9bb9099120b0ebd9e36904087abf1> .
+
+<urn:atm:triage:occurrence/AXPE-QA-121/MERGE-AW-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 135 ;
+  triage:snippet "pub(crate) fn execute (lines 135-215, 81 lines)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "merge/develop-aw-into-phase-ax" ;
+  triage:headSha "11cb6e96c9a9bb9099120b0ebd9e36904087abf1" ;
+  triage:occursIn <urn:atm:triage:worktree/MERGE-AW/11cb6e96c9a9bb9099120b0ebd9e36904087abf1> .
+
+<urn:atm:triage:worktree/MERGE-AW/11cb6e96c9a9bb9099120b0ebd9e36904087abf1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/merge-develop-aw-into-phase-ax" ;
+  triage:branch "merge/develop-aw-into-phase-ax" ;
+  triage:headSha "11cb6e96c9a9bb9099120b0ebd9e36904087abf1" ;
+  triage:orderIndex 14 .

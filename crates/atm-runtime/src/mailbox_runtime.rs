@@ -768,7 +768,7 @@ fn selection_candidate(message: Message) -> MailboxSelectionCandidate {
     }
 }
 
-fn read_deadline(deadline: RequestDeadline) -> Result<ReadDeadline, AtmError> {
+pub fn read_deadline(deadline: RequestDeadline) -> Result<ReadDeadline, AtmError> {
     deadline
         .remaining()
         .ok_or_else(|| AtmError::daemon_unavailable("mailbox request deadline expired"))
@@ -838,6 +838,7 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                task_complete: None,
                 extra: serde_json::Map::new(),
             },
         }

@@ -16,6 +16,6 @@ name = "atm_runtime_test_support"
 [dependencies]
 atm-core = { workspace = true, features = ["test-utils"] }
 atm-runtime.workspace = true
-atm-storage.workspace = true
+atm-storage = { workspace = true, features = ["test-utils"] }
 atm-storage-rusqlite = { workspace = true, features = ["test-support"] }
 async-trait.workspace = true

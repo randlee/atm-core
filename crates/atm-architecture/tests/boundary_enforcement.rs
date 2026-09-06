@@ -35,6 +35,7 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-daemon-client", "atm-storage-rusqlite"),
     ("atm-error", "atm-core"),
     ("atm-error", "atm-storage-rusqlite"),
+    ("atm-http-runtime", "atm-storage"),
     ("atm-observability", "atm-daemon-bootstrap"),
     ("atm-observability", "atm-http-runtime"),
     ("atm-observability", "atm-storage-rusqlite"),
@@ -3875,6 +3876,78 @@ fn herdr_constructors_have_one_composition_root_call_site() {
 }
 
 #[test]
+fn herdr_prompt_calls_stay_behind_the_selector_emitter_boundary() {
+    let root = workspace_root();
+    let mut rust_files = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut rust_files);
+    rust_files.retain(|path| !path.starts_with(root.join("crates/atm-architecture/tests")));
+
+    let mut calls = Vec::new();
+    for path in rust_files {
+        let source = read_source(&path);
+        let syntax = syn::parse_file(&source)
+            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+        let mut visitor = HerdrPromptCallVisitor::default();
+        visitor.visit_file(&syntax);
+        calls.extend(visitor.calls.into_iter().map(|function| {
+            format!(
+                "{}::{function}",
+                path.display().to_string().replace('\\', "/")
+            )
+        }));
+    }
+
+    assert_eq!(
+        calls.len(),
+        1,
+        "the selector emitter must own the only production Herdr prompt call: {calls:?}"
+    );
+    assert!(
+        calls[0].contains("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"),
+        "Herdr prompt must cross the selector emitter boundary: {calls:?}"
+    );
+}
+
+#[derive(Default)]
+struct HerdrPromptCallVisitor {
+    calls: Vec<String>,
+    current_function: Option<String>,
+    in_test_module: bool,
+}
+
+impl<'ast> Visit<'ast> for HerdrPromptCallVisitor {
+    fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
+        let previous = self.current_function.replace(node.sig.ident.to_string());
+        syn::visit::visit_item_fn(self, node);
+        self.current_function = previous;
+    }
+
+    fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
+        let previous = self.current_function.replace(node.sig.ident.to_string());
+        syn::visit::visit_impl_item_fn(self, node);
+        self.current_function = previous;
+    }
+
+    fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
+        let previous = self.in_test_module;
+        self.in_test_module = previous || node.attrs.iter().any(is_cfg_test_attribute);
+        syn::visit::visit_item_mod(self, node);
+        self.in_test_module = previous;
+    }
+
+    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
+        if node.method == "prompt" && !self.in_test_module {
+            self.calls.push(
+                self.current_function
+                    .clone()
+                    .unwrap_or_else(|| "<module-level expression>".to_owned()),
+            );
+        }
+        syn::visit::visit_expr_method_call(self, node);
+    }
+}
+
+#[test]
 fn herdr_test_utils_are_dev_dependencies_only() {
     let root = workspace_root();
     for crate_name in ["atm-daemon-bootstrap", "atm-http-runtime"] {
@@ -3989,6 +4062,41 @@ fn guarded_boundaries_include_every_boundary_record() {
         all_boundary_files().into_iter().collect::<BTreeSet<_>>(),
         "the architecture guard must sweep every boundaries/*/*.toml record"
     );
+}
+
+#[test]
+fn ax6_herdr_notification_does_not_reuse_mail_body() {
+    let root = workspace_root();
+    let source = read_source(&root.join("crates/atm-http-runtime/src/herdr_escalation.rs"));
+    let construction =
+        read_source(&root.join("crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs"));
+    let notify = extract_fn_body(&source, "notify");
+    let escalate = extract_fn_body(&source, "escalate");
+    assert!(
+        notify.contains("&notification.body"),
+        "Herdr notify must receive the fixed EscalationNotification body"
+    );
+    assert!(
+        escalate.contains("mail_body") && escalate.contains("notification"),
+        "mail and Herdr notification payloads must remain separate at escalation wiring"
+    );
+    assert!(
+        !source.contains("notify(herdr_process, body)"),
+        "HR-SAFE-003 forbids forwarding the queued mail body as Herdr argv"
+    );
+    assert!(
+        construction.contains("let body = task_escalation_body")
+            && construction.contains("let notification = task_escalation_notification"),
+        "task escalation must construct distinct queued-mail and Herdr payload bindings"
+    );
+    assert!(
+        !construction.contains("body: body")
+            && !construction.contains("body: task_escalation_body")
+            && !construction.contains("SendMessageSource::Inline"),
+        "HR-SAFE-003 forbids routing a task mail body or inline mail source into Herdr notification construction"
+    );
+    let boundary = read_source(&root.join("boundaries/atm-herdr/herdr-process-adapter.toml"));
+    assert!(boundary.contains("HR-SAFE-003"));
 }
 
 fn daemon_boundary_files() -> Vec<PathBuf> {

@@ -3,10 +3,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::{
-    AsyncMailboxReader, AsyncMessageSearchStore, AsyncMessageStore, AtmError,
-    DiagnosticTimelineStore, GraftReceiverEndpointStore, MessageSearchStore, MessageStore,
-    NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, RosterRuntimeMirror,
-    RosterStore, TemplateCatalogStore,
+    AsyncMailboxReader, AsyncMessageSearchStore, AsyncMessageStore, AsyncTaskLedgerReader,
+    AtmError, DiagnosticTimelineStore, GraftReceiverEndpointStore, MessageSearchStore,
+    MessageStore, NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore,
+    RosterRuntimeMirror, RosterStore, TaskStore, TemplateCatalogStore,
 };
 
 /// Backend-neutral effective capacity settings for the single shared reader
@@ -107,6 +107,7 @@ pub struct StorageHandles {
     message_store: Arc<dyn MessageStore + Send + Sync>,
     async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
     async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
+    async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
     roster_store: Arc<dyn RosterStore + Send + Sync>,
     /// Runtime-owned, write-through RAM roster mirror paired with
     /// `roster_store`. Every roster consumer reads through this handle
@@ -114,6 +115,7 @@ pub struct StorageHandles {
     roster_runtime_mirror: Arc<dyn RosterRuntimeMirror + Send + Sync>,
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+    task_store: Arc<dyn TaskStore + Send + Sync>,
     graft_receiver_endpoint_store: Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
@@ -134,6 +136,7 @@ pub struct StorageHandleParts {
     pub message_store: Arc<dyn MessageStore + Send + Sync>,
     pub async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
     pub async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
+    pub async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
     /// The write-through roster seam: the durable-write [`RosterStore`]
     /// handle and its paired RAM [`RosterRuntimeMirror`], carried as one
     /// value that only [`WriteThroughRosterStore::from_write_through_view`]
@@ -142,6 +145,7 @@ pub struct StorageHandleParts {
     pub roster: WriteThroughRosterStore,
     pub nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pub pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+    pub task_store: Arc<dyn TaskStore + Send + Sync>,
     pub graft_receiver_endpoint_store: Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     pub template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
@@ -158,6 +162,7 @@ impl fmt::Debug for StorageHandles {
         f.debug_struct("StorageHandles")
             .field("message_store", &"dyn MessageStore")
             .field("async_message_store", &"dyn AsyncMessageStore")
+            .field("async_task_ledger_reader", &"dyn AsyncTaskLedgerReader")
             .field("roster_store", &"dyn RosterStore")
             .field("roster_runtime_mirror", &"dyn RosterRuntimeMirror")
             .field(
@@ -165,6 +170,7 @@ impl fmt::Debug for StorageHandles {
                 &"dyn NudgeTemplateOverrideStore",
             )
             .field("pending_nudge_store", &"dyn PendingNudgeStore")
+            .field("task_store", &"dyn TaskStore")
             .field(
                 "graft_receiver_endpoint_store",
                 &"dyn GraftReceiverEndpointStore",
@@ -185,10 +191,12 @@ impl StorageHandles {
             message_store: parts.message_store,
             async_message_store: parts.async_message_store,
             async_mailbox_reader: parts.async_mailbox_reader,
+            async_task_ledger_reader: parts.async_task_ledger_reader,
             roster_store: parts.roster.store(),
             roster_runtime_mirror: parts.roster.mirror(),
             nudge_template_override_store: parts.nudge_template_override_store,
             pending_nudge_store: parts.pending_nudge_store,
+            task_store: parts.task_store,
             graft_receiver_endpoint_store: parts.graft_receiver_endpoint_store,
             peer_config_store: parts.peer_config_store,
             template_catalog_store: parts.template_catalog_store,
@@ -214,6 +222,11 @@ impl StorageHandles {
         Arc::clone(&self.async_mailbox_reader)
     }
 
+    /// Returns the bounded read-only task-ledger lane selected by composition.
+    pub fn async_task_ledger_reader(&self) -> Arc<dyn AsyncTaskLedgerReader + Send + Sync> {
+        Arc::clone(&self.async_task_ledger_reader)
+    }
+
     pub fn roster_store(&self) -> Arc<dyn RosterStore + Send + Sync> {
         Arc::clone(&self.roster_store)
     }
@@ -235,6 +248,11 @@ impl StorageHandles {
     /// (`atm queue`) nudges.
     pub fn pending_nudge_store(&self) -> Arc<dyn PendingNudgeStore + Send + Sync> {
         Arc::clone(&self.pending_nudge_store)
+    }
+
+    /// Returns the durable task-ledger capability selected by composition.
+    pub fn task_store(&self) -> Arc<dyn TaskStore + Send + Sync> {
+        Arc::clone(&self.task_store)
     }
 
     pub fn graft_receiver_endpoint_store(

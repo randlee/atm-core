@@ -10,10 +10,11 @@ use std::sync::{Arc, MutexGuard, RwLock};
 use std::time::{Duration, Instant};
 
 use atm_storage::{
-    AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore, GraftEndpointStoreError,
-    GraftReceiverEndpointStore, GraftReceiverLease, MessageStore as SharedMessageStore,
-    OwnerGeneration, PendingNudgeStore, RosterMemberEphemeralState, RosterRuntimeMirror,
-    RosterStore as SharedRosterStore, TemplateCatalogStore,
+    AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore, AsyncTaskLedgerReader,
+    GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
+    MessageStore as SharedMessageStore, OwnerGeneration, PendingNudgeStore,
+    RosterMemberEphemeralState, RosterRuntimeMirror, RosterStore as SharedRosterStore, TaskStore,
+    TemplateCatalogStore,
 };
 
 use crate::boundary::TemplateComposer;
@@ -299,6 +300,7 @@ pub struct LocalServiceRuntime {
     pub(crate) message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
     async_message_store: Option<std::sync::Arc<dyn SharedAsyncMessageStore + Send + Sync>>,
     async_mailbox_reader: Option<std::sync::Arc<dyn atm_storage::AsyncMailboxReader + Send + Sync>>,
+    async_task_ledger_reader: Option<std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>>,
     async_message_search_store: Option<std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>>,
     pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
     pub(crate) nudge_template_override_store:
@@ -309,6 +311,7 @@ pub struct LocalServiceRuntime {
     /// (`atm queue`) nudges. Unset in runtimes that never enqueue a deferred
     /// nudge, e.g. plain-text mailbox tests.
     pending_nudge_store: Option<std::sync::Arc<dyn PendingNudgeStore + Send + Sync>>,
+    task_store: Option<std::sync::Arc<dyn TaskStore + Send + Sync>>,
     graft_receiver_endpoint_store:
         Option<std::sync::Arc<dyn GraftReceiverEndpointStore + Send + Sync>>,
     /// Optional renderer selected by the bootstrap composition root. Core send
@@ -356,11 +359,13 @@ impl LocalServiceRuntime {
             message_store,
             async_message_store: None,
             async_mailbox_reader: None,
+            async_task_ledger_reader: None,
             async_message_search_store: None,
             roster_store,
             nudge_template_override_store,
             non_claude_outbound,
             pending_nudge_store: None,
+            task_store: None,
             graft_receiver_endpoint_store: None,
             template_composer: None,
             template_catalog_store: None,
@@ -417,6 +422,28 @@ impl LocalServiceRuntime {
         })
     }
 
+    /// Attaches the bounded read-only task-ledger capability selected by the
+    /// storage composition root.
+    #[must_use]
+    pub fn with_async_task_ledger_reader(
+        mut self,
+        reader: std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+    ) -> Self {
+        self.async_task_ledger_reader = Some(reader);
+        self
+    }
+
+    /// Returns the runtime-selected bounded task-ledger reader.
+    pub fn async_task_ledger_reader(
+        &self,
+    ) -> Result<std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>, AtmError> {
+        self.async_task_ledger_reader.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio task-ledger reader was not installed in this runtime",
+            )
+        })
+    }
+
     /// Attaches the Tokio-safe typed search capability selected by the one
     /// storage composition root.  HTTP awaits this port directly; it never
     /// opens a synchronous SQLite reader on a request worker.
@@ -464,6 +491,23 @@ impl LocalServiceRuntime {
             AtmError::daemon_unavailable(
                 "the deferred-nudge pending store was not installed in this runtime",
             )
+        })
+    }
+
+    /// Attaches the durable task-ledger capability selected by composition.
+    #[must_use]
+    pub fn with_task_store(
+        mut self,
+        task_store: std::sync::Arc<dyn TaskStore + Send + Sync>,
+    ) -> Self {
+        self.task_store = Some(task_store);
+        self
+    }
+
+    /// Returns the runtime-selected task ledger capability.
+    pub fn task_store(&self) -> Result<std::sync::Arc<dyn TaskStore + Send + Sync>, AtmError> {
+        self.task_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable("the task store was not installed in this runtime")
         })
     }
 
@@ -543,6 +587,21 @@ impl LocalServiceRuntime {
             )
         })?;
         store.save_message_if_absent_async(message).await
+    }
+
+    pub async fn save_message_if_absent_with_provenance_async(
+        &self,
+        message: crate::boundary::Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<Option<crate::boundary::Message>, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio durable message admission was not installed in this runtime",
+            )
+        })?;
+        store
+            .save_message_if_absent_with_provenance_async(message, provenance)
+            .await
     }
 
     /// One durable Tokio admission for a decomposed template message.
@@ -686,6 +745,10 @@ impl fmt::Debug for LocalServiceRuntime {
                 &std::sync::Arc::as_ptr(&self.message_store),
             )
             .field("async_message_store", &self.async_message_store.is_some())
+            .field(
+                "async_task_ledger_reader",
+                &self.async_task_ledger_reader.is_some(),
+            )
             .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
             .field(
                 "nudge_template_override_store",
@@ -1000,6 +1063,154 @@ mod tests {
     const RACE_ATTEMPTS: usize = 64;
     use tempfile::tempdir;
 
+    struct UnusedRuntimeStore;
+
+    impl atm_storage::contract::sealed::Sealed for UnusedRuntimeStore {}
+
+    #[allow(
+        deprecated,
+        reason = "the task-store absence test only constructs the retained runtime"
+    )]
+    impl atm_storage::MessageStore for UnusedRuntimeStore {
+        fn save_message(
+            &self,
+            _message: &atm_storage::Message,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("task-store absence test does not write messages")
+        }
+
+        fn save_messages_atomically(
+            &self,
+            _messages: &[atm_storage::Message],
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("task-store absence test does not write messages")
+        }
+
+        fn load_message(
+            &self,
+            _key: &atm_storage::MessageKey,
+        ) -> Result<Option<atm_storage::Message>, crate::error::AtmError> {
+            unreachable!("task-store absence test does not read messages")
+        }
+
+        fn list_messages(
+            &self,
+            _query: &atm_storage::MessageQuery,
+        ) -> Result<Vec<atm_storage::Message>, crate::error::AtmError> {
+            unreachable!("task-store absence test does not list messages")
+        }
+
+        fn delete_message(
+            &self,
+            _key: &atm_storage::MessageKey,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("task-store absence test does not delete messages")
+        }
+    }
+
+    #[allow(
+        deprecated,
+        reason = "the task-store absence test only constructs the retained runtime"
+    )]
+    impl atm_storage::RosterStore for UnusedRuntimeStore {
+        fn load_roster(
+            &self,
+            _team: &TeamName,
+        ) -> Result<atm_storage::RosterSnapshot, crate::error::AtmError> {
+            unreachable!("task-store absence test does not read rosters")
+        }
+
+        fn save_roster(
+            &self,
+            _roster: &atm_storage::RosterSnapshot,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("task-store absence test does not write rosters")
+        }
+
+        fn list_teams(&self) -> Result<Vec<TeamName>, crate::error::AtmError> {
+            unreachable!("task-store absence test does not list teams")
+        }
+    }
+
+    #[allow(
+        deprecated,
+        reason = "the task-store absence test only constructs the retained runtime"
+    )]
+    impl atm_storage::RosterRuntimeMirror for UnusedRuntimeStore {
+        fn load_team_roster(&self, _team: &TeamName) -> Vec<atm_storage::RosterMember> {
+            unreachable!("task-store absence test does not read the roster mirror")
+        }
+
+        fn load_roster_member(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Option<atm_storage::RosterMember> {
+            unreachable!("task-store absence test does not read the roster mirror")
+        }
+
+        fn list_teams(&self) -> Vec<TeamName> {
+            unreachable!("task-store absence test does not list teams")
+        }
+
+        fn ephemeral_state(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Option<atm_storage::RosterMemberEphemeralState> {
+            unreachable!("task-store absence test does not read ephemeral roster state")
+        }
+
+        fn set_herdr_wake_pending(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _pending: bool,
+        ) -> bool {
+            unreachable!("task-store absence test does not mutate ephemeral roster state")
+        }
+
+        fn reload_from_durable(&self) -> Result<(), crate::error::AtmError> {
+            unreachable!("task-store absence test does not reload the roster mirror")
+        }
+    }
+
+    impl crate::boundary::NudgeTemplateOverrideStore for UnusedRuntimeStore {
+        fn load_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, crate::error::AtmError>
+        {
+            unreachable!("task-store absence test does not read nudge templates")
+        }
+
+        fn save_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+            _template_body: &str,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
+            unreachable!("task-store absence test does not write nudge templates")
+        }
+
+        fn disable_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
+            unreachable!("task-store absence test does not write nudge templates")
+        }
+
+        fn clear_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<bool, crate::error::AtmError> {
+            unreachable!("task-store absence test does not write nudge templates")
+        }
+    }
+
     fn message() -> InboxMessage {
         InboxMessage {
             from: "sender".parse::<AgentName>().expect("sender"),
@@ -1019,6 +1230,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            task_complete: None,
             extra: serde_json::Map::new(),
         }
     }
@@ -1074,6 +1286,29 @@ mod tests {
         assert!(error.message().contains("exceeded"));
         assert!(error.message().contains("Recovery:"));
         assert!(!output_path.exists());
+    }
+
+    #[test]
+    fn task_store_reports_the_not_installed_error() {
+        let runtime = super::LocalServiceRuntime::new_with_delivery_boundaries(
+            Arc::new(UnusedRuntimeStore),
+            Arc::new(UnusedRuntimeStore),
+            Arc::new(UnusedRuntimeStore),
+            Arc::new(UnusedRuntimeStore),
+            Arc::new(super::LocalFileNonClaudeOutbound::new()),
+        );
+
+        let error = match runtime.task_store() {
+            Ok(_) => panic!("task store is not installed"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert!(
+            error
+                .message()
+                .starts_with("the task store was not installed in this runtime")
+        );
     }
 
     #[test]

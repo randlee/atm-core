@@ -5,7 +5,7 @@ title: Herdr renders the built-in nudge template
 branch: feature/ax2-herdr-template-rendering
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ax2-herdr-template-rendering
 integration_branch: integrate/phase-ax
-status: draft
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: A
@@ -39,13 +39,13 @@ This is the authoritative deliverable checklist. Every listed deliverable
 lands production-ready for the scope this sprint claims; partial or
 shape-only completion fails the sprint.
 
-- [ ] D1 — `HerdrNudgeTarget` carries `rendered_nudge: String`
+- [x] D1 — `HerdrNudgeTarget` carries `rendered_nudge: String`
   (`crates/atm-core/src/boundary/mod.rs`, code contract C1). The Herdr
   branch of `build_built_in_dispatch` in `crates/atm-core/src/send/hook.rs`
   calls `render_built_in_nudge_for_dispatch(runtime, event, kind)` exactly
   as the tmux branch does and returns `None` on render failure the same
   way.
-- [ ] D2 — `HerdrProcessAdapter::prompt` gains the text parameter
+- [x] D2 — `HerdrProcessAdapter::prompt` gains the text parameter
   (`crates/atm-herdr/src/lib.rs`, code contract C2). Implementations
   updated: `HerdrProcessInvoker` (lib.rs, `impl HerdrProcessAdapter for
   HerdrProcessInvoker`), `atm_herdr::testing::FakeHerdrProcessAdapter`,
@@ -55,7 +55,7 @@ shape-only completion fails the sprint.
   `prompt_text_is_fixed_and_non_empty` are deleted. Empty or
   whitespace-only text is rejected before spawning with the existing
   `empty_agent_prompt` error (ADR-058 D8).
-- [ ] D3 — callers pass the text through: the single production call
+- [x] D3 — callers pass the text through: the single production call
   site in `crates/atm-daemon-bootstrap/src/received_hook_selector.rs`
   (Herdr emitter, currently around line 420) reads
   `target.rendered_nudge`. The pump in
@@ -64,10 +64,10 @@ shape-only completion fails the sprint.
   `rebuild_received_hook_dispatch` → `build_built_in_dispatch` and passes
   the dispatch to the same emitter. No change to
   `crates/atm-http-runtime/src/storage_and_nudge_router.rs`.
-- [ ] D4 — PTY line-safety fixture test in `atm-herdr` asserting the
+- [x] D4 — PTY line-safety fixture test in `atm-herdr` asserting the
   emitter passes multi-line text through unmodified (no newline stripping
   or joining) and that argv has exactly four elements.
-- [ ] D5 — ADR-058 amendment
+- [x] D5 — ADR-058 amendment
   (`docs/adr/ADR-058-herdr-local-steer-backend-contract.md`): D2 and D4
   replace "fixed prompt text" with "the rendered built-in nudge template
   resolved for the recipient team and kind"; argv shape unchanged
@@ -76,11 +76,11 @@ shape-only completion fails the sprint.
   recorded; dated history entry; the status line changes from
   "Proposed" to "Accepted" (the contract has been operative since
   AQ2.6/AQ2.7).
-- [ ] D6 — `boundaries/atm-herdr/herdr-process-adapter.toml`:
+- [x] D6 — `boundaries/atm-herdr/herdr-process-adapter.toml`:
   `[contracts]` notes record that prompt text is caller-supplied rendered
   template text and that the adapter never composes text; `[status]`
   note dated.
-- [ ] D7 — `docs/atm-herdr/requirements.md`: `HR-CORE-002` (line 112)
+- [x] D7 — `docs/atm-herdr/requirements.md`: `HR-CORE-002` (line 112)
   rewritten to "emits exactly `herdr agent prompt <AgentName> <text>`
   where `<text>` is the caller-supplied rendered built-in nudge template
   (ADR-058 D2 as amended); no `--wait` and no other flag; the crate never
@@ -100,7 +100,7 @@ shape-only completion fails the sprint.
   line 51: the prompt row becomes
   `["herdr","agent","prompt","agent-a","<rendered built-in nudge template>"]`
   with one sentence stating the fourth element is the rendered template.
-- [ ] D8 — tests listed under Required validation.
+- [x] D8 — tests listed under Required validation.
 
 ### Paths to delete
 

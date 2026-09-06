@@ -2,6 +2,7 @@ mod ops;
 mod ops_envelope;
 mod shutdown_support;
 mod stmt_cache;
+mod task_ops;
 
 pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
 use shutdown_support::{
@@ -561,7 +562,7 @@ mod tests {
     use super::*;
     use crate::observability::NullSqliteObservability;
     use crate::shared_db::{SharedDbTarget, ensure_schema, open_writer_connection_for_target};
-    use atm_storage::contract::{Message, MessageKey};
+    use atm_storage::contract::{Message, MessageKey, MessageWriteOrigin};
     use atm_storage::schema::MessageEnvelope;
     use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
     use chrono::Utc;
@@ -859,6 +860,7 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                task_complete: None,
                 extra: Map::new(),
             },
         }
@@ -870,7 +872,10 @@ mod tests {
         let (reply, receiver) = mpsc::sync_channel(1);
         (
             QueuedWrite {
-                op: Box::new(WriteOp::UpsertMessage(Box::new(message))),
+                op: Box::new(WriteOp::UpsertMessage {
+                    record: Box::new(message),
+                    provenance: MessageWriteOrigin::Local,
+                }),
                 reply: ReplyTx::Sync(reply),
             },
             receiver,

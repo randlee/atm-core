@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA1-002>
+  a triage:Finding ;
+  triage:findingId "AX6-QA1-002" ;
+  triage:title "Required Validation test suite (ax6_01/02/03) absent: no tests for AC1 lead-notification threshold, AC5/AC6 blocked-escalation timing, AC7 recipient fan-out" ;
+  triage:description "AX.6 QA-1 (quality-mgr QA-AX6-R1-1788626395, PR #1204 Final Quality Report 2026-09-05T16:56Z) at head 490a6c42a0f3283c251875d9a61fcf99b641c2a2. Of the 9 Required Validation test bullets in the sprint doc only 2 are satisfied (escalation_admin.rs unit tests; notify argv-shape assertion). Zero tests cover the 10th/20th-reminder lead notification (no-lead and two-lead teams, failed-write retry), the 60s blocked escalation and 10m re-notify cadence, and daemon/team recipient fan-out with the replace-not-augment override. Production code exists but is untested. Fix: add the ax6_01/02/03 suites named by the sprint doc in crates/atm-http-runtime (tests do not count toward RULE-003 production lines)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T19:45:51Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr AX.6 QA-3 recheck (QA-AX6-R3-1788637011) at head 43e1d40b33357024dea87742b4f8a114e7fd4966; fixed by arch-ctm fix pass GO-AX6-FIX2-1788635243 (Completion c22). Report: PR #1204 comment 5554337367. Sprint verdict remains FAIL on AX6-QA3-001/002." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T17:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T16:56:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-002/AX6-occ-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA1-002/AX7-occ-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA1-002/AX6-occ-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1 ;
+  triage:snippet "module lacks the ax6_01/02/03 Required Validation suites named by the sprint doc" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/490a6c42a0f3283c251875d9a61fcf99b641c2a2> .
+
+<urn:atm:triage:occurrence/AX6-QA1-002/AX7-occ-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1 ;
+  triage:snippet "module lacks the ax6_01/02/03 Required Validation suites named by the sprint doc" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/1931acea5> .
+
+<urn:atm:triage:worktree/AX6/490a6c42a0f3283c251875d9a61fcf99b641c2a2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX6" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "490a6c42a0f3283c251875d9a61fcf99b641c2a2" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/1931acea5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX7" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "1931acea5" ;
+  triage:orderIndex 7 .

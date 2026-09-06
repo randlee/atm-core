@@ -1,0 +1,6 @@
+<atm from="{{from}}" message-id="{{message_id}}">
+  <action>atm read --message-id {{message_id}}</action>
+  <description>{{description}}</description>
+  <action>execute the assigned task</action>
+  <console announce="concise" pause="false"/>
+</atm>

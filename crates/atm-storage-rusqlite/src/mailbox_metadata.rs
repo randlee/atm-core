@@ -181,6 +181,7 @@ fn decode_mailbox_metadata_row(
         thread_mode: parsed_thread_mode,
         expires_at: parsed_expires_at,
         task_id: parsed_task_id.clone(),
+        task_complete: None,
         extra: Map::new(),
     });
     Ok(SqliteMailboxMetadataRow {

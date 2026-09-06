@@ -171,3 +171,26 @@ The accepted architecture above stayed fixed while implementation converged:
   readiness
 - any remaining operational dependency on Claude inbox-append runtime artifacts
   must be replaced before release
+
+## Amendment — Phase AX seven-kind queue template surface (2026-09-05)
+
+Phase AX adds queue-specific built-in template kinds and retires the two
+unreachable task-steer kinds. The complete seven-kind inventory is:
+
+- `delivery`
+- `delivery_ack`
+- `queue`
+- `queue_ack`
+- `task`
+- `acknowledge`
+- `acknowledge_task`
+
+`NudgeKind` selects the delivery or queue family. Task-tagged messages always
+select `task` and are deferred on every backend. The former
+`delivery_task` and `delivery_task_ack` values are rejected on input with a
+recovery hint to use `task`.
+
+Existing SQLite override tables are rebuilt on database open when their
+constraint does not include `queue`; accepted rows are copied, retired rows
+are dropped with a warning naming the team and kind, and unknown rows fail the
+open loudly. Fresh databases use the seven-value constraint directly.

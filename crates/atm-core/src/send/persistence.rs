@@ -32,6 +32,7 @@ pub(crate) fn persist_message(
         require_existing_inbox,
         same_store_peer_receipt,
         None,
+        atm_storage::MessageWriteOrigin::Local,
     )
 }
 
@@ -48,6 +49,7 @@ pub(crate) fn persist_message_with_ack_update(
     require_existing_inbox: bool,
     same_store_peer_receipt: Option<(&HostName, &HostName)>,
     acknowledgement_source_update: Option<boundary::Message>,
+    provenance: atm_storage::MessageWriteOrigin,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     if require_existing_inbox && !inbox_path.exists() {
         return Ok(DeliveryPersistenceResult::persisted(envelope.clone()));
@@ -72,6 +74,7 @@ pub(crate) fn persist_message_with_ack_update(
         &prepared,
         same_store_peer_receipt,
         acknowledgement_source_update,
+        provenance,
     ) {
         Ok(DuplicateWriteDisposition::NotDuplicate) => {
             Ok(DeliveryPersistenceResult::persisted(prepared))
@@ -124,6 +127,7 @@ async fn load_store_backed_mailbox_projection_async(
 /// only the storage transition is asynchronous. The future enqueues exactly
 /// one ordered record in the backend-owned write lane and awaits its durable
 /// reply, so no Tokio worker waits on SQLite or a blocking bridge.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn persist_message_with_async_admission(
     runtime: &LocalServiceRuntime,
     _home_dir: &Path,
@@ -132,6 +136,7 @@ pub(crate) async fn persist_message_with_async_admission(
     envelope: &InboxMessage,
     require_existing_inbox: bool,
     same_store_peer_receipt: Option<(&HostName, &HostName)>,
+    provenance: atm_storage::MessageWriteOrigin,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     if require_existing_inbox && !inbox_path.exists() {
         return Ok(DeliveryPersistenceResult::persisted(envelope.clone()));
@@ -152,6 +157,7 @@ pub(crate) async fn persist_message_with_async_admission(
         &recipient.agent,
         &prepared,
         same_store_peer_receipt,
+        provenance,
     )
     .await
     {
@@ -201,6 +207,7 @@ fn load_store_backed_mailbox_projection(
     Ok(messages)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn mirror_message_to_store(
     runtime: &(impl RetainedMailboxRuntime + ?Sized),
     home_dir: &Path,
@@ -209,6 +216,7 @@ fn mirror_message_to_store(
     envelope: &InboxMessage,
     same_store_peer_receipt: Option<(&HostName, &HostName)>,
     acknowledgement_source_update: Option<boundary::Message>,
+    provenance: atm_storage::MessageWriteOrigin,
 ) -> Result<DuplicateWriteDisposition, AtmError> {
     let Some(message_id) = envelope.message_id else {
         return Ok(DuplicateWriteDisposition::NotDuplicate);
@@ -233,7 +241,9 @@ fn mirror_message_to_store(
         }
         runtime.persist_message_records_atomically(vec![record, source_update])?;
     } else {
-        if let Some(existing) = runtime.admit_message_record(home_dir, record)? {
+        if let Some(existing) =
+            runtime.admit_message_record_with_provenance(home_dir, record, provenance)?
+        {
             return classify_existing_message(
                 existing,
                 envelope,
@@ -253,6 +263,7 @@ async fn mirror_message_to_store_async(
     agent: &AgentName,
     envelope: &InboxMessage,
     same_store_peer_receipt: Option<(&HostName, &HostName)>,
+    provenance: atm_storage::MessageWriteOrigin,
 ) -> Result<DuplicateWriteDisposition, AtmError> {
     let Some(message_id) = envelope.message_id else {
         return Ok(DuplicateWriteDisposition::NotDuplicate);
@@ -264,7 +275,10 @@ async fn mirror_message_to_store_async(
         message_key,
         envelope: envelope.clone(),
     };
-    if let Some(existing) = runtime.save_message_if_absent_async(record).await? {
+    if let Some(existing) = runtime
+        .save_message_if_absent_with_provenance_async(record, provenance)
+        .await?
+    {
         return classify_existing_message(
             existing,
             envelope,

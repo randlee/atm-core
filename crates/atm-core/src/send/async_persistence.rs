@@ -198,6 +198,11 @@ fn build_template_admission(
                 workflow: None,
             },
         },
+        provenance: if request.authenticated_source_host.is_some() {
+            atm_storage::MessageWriteOrigin::Peer
+        } else {
+            atm_storage::MessageWriteOrigin::Local
+        },
     };
     if let Some(snapshot) = workflow_snapshot {
         admission.decomposition.message.workflow = Some(atm_storage::WorkflowAdmission {
@@ -278,6 +283,11 @@ async fn persist_plain_async_message(
             .authenticated_source_host
             .as_ref()
             .zip(request.to.as_ref().and_then(|recipient| recipient.host())),
+        if request.authenticated_source_host.is_some() {
+            atm_storage::MessageWriteOrigin::Peer
+        } else {
+            atm_storage::MessageWriteOrigin::Local
+        },
     )
     .await
 }
