@@ -330,6 +330,7 @@ pub fn add_member_with_roster_store(
     )?;
     let created_inbox = filesystem::ensure_inbox_exists(&inbox_path)?;
     existing_roster.push(build_member_add_roster_record(&request));
+    preflight_roster_unique_names(roster_store, &request.team, &existing_roster)?;
     replace_roster_for_member_add(roster_store, &request.team, &existing_roster)?;
 
     Ok(AddMemberOutcome {
@@ -362,14 +363,9 @@ pub fn update_member_with_roster_store(
         .find(|existing_member| existing_member.agent_name == member_name)
         .ok_or_else(|| AtmError::member_not_found(member_name.as_str(), request.team.as_str()))?;
 
-    if request.alias == Some(None) {
-        ensure_canonical_member_name_available(roster_store, &request.team, &member_name)?;
-    }
     validate_effective_herdr_agent_name(member, &request)?;
-    if let Some(alias) = request.alias.as_ref().and_then(|value| value.as_deref()) {
-        ensure_alias_available(roster_store, alias)?;
-    }
     apply_member_metadata_update(member, &request);
+    preflight_roster_unique_names(roster_store, &request.team, &existing_roster)?;
     roster_store.replace_roster(&request.team, &existing_roster)?;
 
     Ok(UpdateMemberOutcome {
@@ -428,12 +424,6 @@ fn load_member_add_context(
 ) -> Result<MemberAddContext, AtmError> {
     let existing_roster = projection::load_team_roster(roster_store, &request.team)?;
     ensure_member_absent(&existing_roster, &request.team, &request.member)?;
-    if request.alias.is_none() {
-        ensure_canonical_member_name_available(roster_store, &request.team, &request.member)?;
-    }
-    if let Some(alias) = request.alias.as_deref() {
-        ensure_alias_available(roster_store, alias)?;
-    }
     Ok(MemberAddContext { existing_roster })
 }
 
@@ -455,46 +445,43 @@ fn ensure_member_absent(
     Ok(())
 }
 
-fn ensure_alias_available(roster_store: &dyn RosterStore, alias: &str) -> Result<(), AtmError> {
-    for conflicting_team in roster_store.list_teams()? {
-        for entry in roster_store.load_roster(&conflicting_team)? {
-            if entry.agent_name.as_str() == alias
-                || entry
-                    .metadata_json
-                    .get("alias")
-                    .and_then(serde_json::Value::as_str)
-                    == Some(alias)
-            {
-                return Err(AtmError::validation(format!(
-                    "alias '{alias}' is already assigned in team '{conflicting_team}'"
-                )));
-            }
-        }
-    }
-    Ok(())
-}
-
-fn ensure_canonical_member_name_available(
+/// Produces the same collision diagnostic as durable enforcement without
+/// claiming authority over the write. The caller's proposed roster replaces
+/// its persisted snapshot while every other team's database-owned projection
+/// stays in the comparison.
+fn preflight_roster_unique_names(
     roster_store: &dyn RosterStore,
     team: &TeamName,
-    member: &AgentName,
+    proposed_roster: &[RosterEntry],
 ) -> Result<(), AtmError> {
-    for conflicting_team in roster_store.list_teams()? {
-        if conflicting_team == *team {
-            continue;
-        }
-        if roster_store
-            .load_roster(&conflicting_team)?
+    let mut names = roster_store
+        .unique_names()?
+        .into_iter()
+        .filter(|name| name.team_name != *team)
+        .collect::<Vec<_>>();
+    names.extend(
+        proposed_roster
             .iter()
-            .any(|entry| entry.agent_name == *member)
-        {
-            return Err(AtmError::validation(format!(
-                "member '{}' already exists in team '{conflicting_team}'; add it with a unique --alias",
-                member
-            )));
+            .map(atm_storage::RosterUniqueName::from_member),
+    );
+    names.sort_by(|left, right| left.unique_name.cmp(&right.unique_name));
+    let mut collisions = Vec::new();
+    let mut start = 0;
+    while start < names.len() {
+        let end = names[start + 1..]
+            .iter()
+            .position(|entry| entry.unique_name != names[start].unique_name)
+            .map_or(names.len(), |offset| start + offset + 1);
+        if end - start > 1 {
+            collisions.extend_from_slice(&names[start..end]);
         }
+        start = end;
     }
-    Ok(())
+    if collisions.is_empty() {
+        Ok(())
+    } else {
+        Err(atm_storage::roster_unique_name_collision_error(&collisions))
+    }
 }
 
 fn validate_effective_herdr_agent_name(
@@ -881,7 +868,7 @@ fn parse_backend(
 fn parse_alias(
     alias: Option<&str>,
     clear_alias: bool,
-    allow_clear: bool,
+    _allow_clear: bool,
 ) -> Result<Option<Option<String>>, AtmError> {
     if clear_alias && alias.is_some_and(|value| !value.trim().is_empty()) {
         return Err(AtmError::validation(
@@ -889,11 +876,9 @@ fn parse_alias(
         ));
     }
     if clear_alias || alias.is_some_and(|value| value.trim().is_empty()) {
-        return if allow_clear {
-            Ok(Some(None))
-        } else {
-            Err(AtmError::validation("add-member --alias must not be blank"))
-        };
+        // A blank add-member alias means no alias; on update the same inner
+        // `None` remains the established explicit-clear request shape.
+        return Ok(Some(None));
     }
     let Some(alias) = alias else {
         return Ok(None);
@@ -1178,7 +1163,7 @@ mod tests {
     }
 
     #[test]
-    fn alias_must_not_collide_with_member_name_or_team_alias() {
+    fn unique_name_a09_canonical_name_of_aliased_member_is_available() {
         let store = TestRosterStore::default();
         let team: TeamName = TEST_TEAM.parse().expect("team");
         let mut worker = roster_member(TEST_TEAM, "worker");
@@ -1188,27 +1173,67 @@ mod tests {
         store.seed(&team, vec![lead_member(TEST_TEAM, ROLE_TEAM_LEAD), worker]);
         let root = tempfile::tempdir().expect("tempdir");
 
-        for alias in ["worker", "worker_atm-dev"] {
-            let request = AddMemberRequest::new_with_backend(
-                root.path().to_path_buf(),
-                TEST_TEAM,
-                "other",
-                "worker".to_owned(),
-                "gpt-5".to_owned(),
-                root.path().join("other-home"),
-                BackendOptions {
-                    backend: None,
-                    target: None,
-                    session: None,
-                    alias: Some(alias),
-                    clear_alias: false,
-                },
-            )
-            .expect("request");
+        let allowed = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "other",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("other-home"),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("worker"),
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+        add_member_with_roster_store(&store, allowed).expect("canonical name is hidden by alias");
 
-            let error = add_member_with_roster_store(&store, request).expect_err("alias collision");
-            assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
-        }
+        let rejected = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "another",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("another-home"),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("worker_atm-dev"),
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+        let error =
+            add_member_with_roster_store(&store, rejected).expect_err("effective-name collision");
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains(&format!("({TEST_TEAM}, worker)")));
+        assert!(error.message().contains("--alias"));
+    }
+
+    #[test]
+    fn unique_name_a18_blank_add_alias_is_normalized_to_none() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let request = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "worker",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("worker-home"),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("  "),
+                clear_alias: false,
+            },
+        )
+        .expect("blank alias is no alias");
+        assert_eq!(request.alias, None);
     }
 
     #[test]

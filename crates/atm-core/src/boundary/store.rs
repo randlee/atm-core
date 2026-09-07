@@ -197,6 +197,22 @@ pub trait RosterStore: sealed::Sealed {
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
     /// # Errors
     ///
+    /// Returns every effective (alias-or-canonical) durable roster name for
+    /// preflight diagnostics. The durable store transaction remains the sole
+    /// authority for enforcing this invariant.
+    fn unique_names(&self) -> Result<Vec<atm_storage::RosterUniqueName>, AtmError> {
+        let mut names = Vec::new();
+        for team in self.list_teams()? {
+            names.extend(
+                self.load_roster(&team)?
+                    .iter()
+                    .map(atm_storage::RosterUniqueName::from_member),
+            );
+        }
+        Ok(names)
+    }
+    /// # Errors
+    ///
     /// Returns `AtmError` when roster health cannot be collected.
     fn health_snapshot(&self, team: &TeamName) -> Result<RosterStoreHealthSnapshot, AtmError>;
 }
