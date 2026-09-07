@@ -860,11 +860,11 @@ contracts, artifacts, and ownership.
 | AY.1 | Audit, version ledger, requirements, ADR, architecture/history correction | S | Docs | P-A, P-B | AY.2 | any |
 | AY.2 | Private CLI transport foundation plus portable fake/replay fixtures | M | Core stack | P-A, P-B | AY.1 | macOS/Linux + Windows CI |
 | AY.3 | Endpoint doctor/config boundary and end-to-end activation | M | Core stack | AY.2, P-E(a) | none | macOS/Linux + Windows CI |
-| AY.4 | Breaker escalation and real-composition failure/recovery lifecycle | M | Core stack | AY.3 | AY.8 | macOS/Linux + Windows CI |
-| AY.5 | Transactional Herdr entry install/remove/status/repair | M | Core stack | AY.4 | AY.8 | macOS/Linux + platform fakes |
-| AY.6 | Coordinated Herdr restart/live-handoff and ATM-restart preflight | M | Core stack | AY.5 | AY.8 | macOS/Linux + platform fakes |
-| AY.7 | Windows process correctness and installer Windows branch | S | Core/Windows stack | AY.6 | AY.8 | Windows CI lane |
-| AY.8 | Direct socket/pipe transport, fake server, compatibility/equivalence | L | Socket | AY.1, AY.2, AY.3, P-E(b) | AY.4, AY.5, AY.6, AY.7 | macOS/Linux + Windows CI |
+| AY.4 | Breaker escalation and real-composition failure/recovery lifecycle | M | Core stack | AY.3 | AY.5, AY.6, AY.7, AY.8 | macOS/Linux + Windows CI |
+| AY.5 | Transactional Herdr entry install/remove/status/repair | M | Control-plane stack | AY.3 | AY.4, AY.8 | macOS/Linux + platform fakes |
+| AY.6 | Coordinated Herdr restart/live-handoff and ATM-restart preflight | M | Control-plane stack | AY.5 | AY.4, AY.8 | macOS/Linux + platform fakes |
+| AY.7 | Windows process correctness and installer Windows branch | S | Control-plane/Windows stack | AY.6 | AY.4, AY.8 | Windows CI lane |
+| AY.8 | Direct socket/pipe transport, fake server, compatibility/equivalence | L | Transport | AY.1, AY.2, P-E(b) | AY.3, AY.4, AY.5, AY.6, AY.7 | macOS/Linux + Windows CI |
 | AY.9 | Socket-default cutover, CLI fallback, doctor projection, lifecycle/CI | M | Join | AY.7, AY.8 | none | all CI lanes |
 
 Execution waves are explicit:
@@ -873,15 +873,16 @@ Execution waves are explicit:
 | --- | --- | --- |
 | 1 | AY.1 and AY.2 | Both start after P-A/P-B; AY.1 is standalone and AY.2 is the stack bottom. |
 | 2 | AY.1 completion, AY.2 review, AY.3 development | AY.3 starts after AY.2 development/contracts are pushed and P-E(a) is approved; AY.2 merges before AY.3. |
-| 3 | AY.3 review and AY.4 development | AY.4 is stacked after AY.3 development is pushed; AY.3 merges before AY.4. |
-| 4 | AY.4 and AY.8 | AY.8 starts independently only after AY.1, AY.2, and AY.3 merge and P-E(b) is approved. |
-| 5 | AY.5 and AY.8 | AY.5 stays in the linear stack; AY.8 remains an independent sibling. |
-| 6 | AY.6 and AY.8 | Same independent concurrency; neither branch merges the unmerged sibling. |
-| 7 | AY.7 and AY.8 | Neither has a physical-host gate; AY.7's gate is the Windows CI lane (ruling 5). |
-| 8 | AY.9 | Starts from `integrate/phase-ay` only after AY.7 and AY.8 merge; the last sprint. |
+| 3 | AY.3 review, AY.4 development, AY.8 development | AY.4 is stacked after AY.3 development is pushed; AY.3 merges before AY.4. AY.8 starts from `integrate/phase-ay` the moment AY.1 and AY.2 have merged and P-E(b) is approved (both true 2026-09-06); it never waits on AY.3. |
+| 4 | AY.4, AY.5, AY.8 | AY.5 starts from `integrate/phase-ay` when AY.3 merges and develops in parallel with AY.4 (disjoint files); AY.4 merges before AY.5. |
+| 5 | AY.6, AY.7, AY.8 | Contracts first: AY.6 is stacked on AY.5 as soon as AY.5's contracts are pushed, AY.7 on AY.6 likewise; AY.8 completes independently. Neither stack merges the unmerged sibling; AY.7's gate is the Windows CI lane (ruling 5). |
+| 6 | AY.9 | Starts from `integrate/phase-ay` only after AY.7 and AY.8 merge; the last sprint. |
 
-The sole linear stack is AY.2 -> AY.3 -> AY.4 -> AY.5 -> AY.6 ->
-AY.7. Use the `/gh-stack` skill for every operation on that stack.
+There are two linear stacks (rework 2026-09-06): the core stack AY.2 ->
+AY.3 -> AY.4 and the control-plane stack AY.5 -> AY.6 -> AY.7, each
+based on `integrate/phase-ay`. AY.8 is a standalone transport branch and
+AY.9 the final join. Use the `/gh-stack` skill for every operation on
+either stack.
 Branches are created with `sc-git-worktree` from the immediate parent so
 each child carries the parent's unmerged work. Because this is an external
 worktree/PR workflow, use `gh stack link` to create or update remote stack
@@ -891,7 +892,8 @@ state, then verify actual PR bases directly:
 gh stack link --base integrate/phase-ay \
   feature/ay2-herdr-transport-seam \
   feature/ay3-herdr-endpoint-doctor-config \
-  feature/ay4-herdr-breaker-lifecycle \
+  feature/ay4-herdr-breaker-lifecycle
+gh stack link --base integrate/phase-ay \
   feature/ay5-herdr-entry-control-plane \
   feature/ay6-herdr-restart-coordination \
   feature/ay7-windows-herdr-process-installer
@@ -996,8 +998,10 @@ Common preconditions:
   public-contract inventory update to the atm-herdr boundary record,
   reviewed after AY.2's transport foundation and recordings are pushed and before AY.3
   development starts; AY.2 still merges before AY.3. The approved file is
-  AY.3's first commit. (b) AY.8: the revision below, reviewed after AY.3
-  merges and before AY.8 dispatch; the approved diff is AY.8's first commit.
+  AY.3's first commit. (b) AY.8: the revision below, reviewed before AY.8 dispatch; the approved
+  diff is AY.8's first commit. Ruled 2026-09-06 by boundary-guard: approved
+  as written; the endpoint resolver and its types stay crate-private, no
+  architecture-test exemption exists, and AY.8 does not wait on AY.3.
   Proposed diff to `boundaries/atm-herdr/herdr-process-adapter.toml`:
 
   ```toml
@@ -1055,8 +1059,7 @@ readiness on the develop build (Rand, 2026-09-05; closes AYP-R13-002).
   public types, pins and exports; the Tokio `net` feature; the `transport`
   and `socket_path` configuration keys and their validation; the socket
   values of the doctor `transport`/`endpoint` fields and their snapshots;
-  the `herdr_local_socket_client` ownership key, the AI.11 exemption line
-  and the NDJSON columns; operator documentation of the socket default.
+  the `herdr_local_socket_client` ownership key and the NDJSON columns; operator documentation of the socket default.
   The AY.8 and AY.9 sprint docs are marked superseded. Gate checks for
   Cancel are mechanical on the integrate head: `test ! -e
   crates/atm-herdr/src/transport_socket.rs`; `grep -rn
@@ -1587,3 +1590,47 @@ version, and lifecycle-label shapes.
   a bounded kill-then-reap grace period, per-call binary re-resolution, and
   CRLF-tolerant decoding) alongside its documentation and Windows-CI coverage;
   no live-hardware sprint gate was introduced.
+
+## Rework record (2026-09-06, PR from `plan/phase-ay-rework` to develop)
+
+Trigger: AY.3 ran for three hours in one dev session and the remaining
+six sprints were serialized behind it. Rand's rulings, applied verbatim:
+
+1. Sprints are designed to complete in one context window. AY.3's shape
+   (twenty commits, five crates) is the reference for "too large"; no
+   remaining sprint may exceed it, and any sprint that grows past one
+   window is split at the next contract boundary rather than continued.
+2. An eight-item serial plan is a design smell: work written against code
+   rather than traits. All Herdr implementation lives in the independent
+   `atm-herdr` crate behind `HerdrProcessAdapter`.
+3. Swapping CLI calls for UDS/named-pipe is completely hidden from the
+   rest of the application, changes no functionality, and is developed
+   independently of every feature sprint. AY.8 therefore depends only on
+   AY.1, AY.2 and P-E(b), is parallel-safe with AY.3 through AY.7, and is
+   dispatched now (cipher, fast model). AY.9 remains the composition flip.
+4. The AI.11 retired-transport guard kept named pipes out of daemon HTTP on
+   Windows; it has nothing to do with Herdr, which requires a named pipe
+   there. It is obsolete and was deleted on AY.3 (PR #1273, 45701a81e).
+   There are no named pipes in the repo other than the ones Herdr requires,
+   and AY.8 needs no exemption (D2 removed; endpoint types crate-private;
+   public-item pin unchanged).
+5. The AY.4 -> AY.5 edge was a design principle, not a file dependency.
+   AY.5 now depends on AY.3 only, branches from `integrate/phase-ay`, and
+   heads the control-plane stack AY.5 -> AY.6 -> AY.7. AY.6 and AY.7 start
+   contracts-first on their parent's pushed contracts, as AY.3 did on AY.2.
+
+Resulting concurrency after AY.3 merges: AY.4 (arch-ctm), AY.5 (arch-ctm
+or cipher), AY.8 (cipher) run at once; AY.6/AY.7 follow AY.5's contracts;
+AY.9 joins. Orchestration state in `.sprints/AY/structure.ttl` on
+`integrate/phase-ay` is updated to this order after this PR merges.
+
+Files changed by the rework: this plan (sprint map, waves, stack
+description, P-E(b), Cancel gate, this record), sprint-AY.1 (superseded
+exemption note), sprint-AY.4/AY.5/AY.6 (edges and rationales), sprint-AY.8
+(D2 removed, D4/D9/C1/C3, required work 1, acceptance 1 and 7, dispatch
+section, recommended agent).
+
+### Hardening rounds
+
+Recorded inline as each reviewer returns; the PR does not merge before every
+round below is PASS or every finding has an accepted disposition.

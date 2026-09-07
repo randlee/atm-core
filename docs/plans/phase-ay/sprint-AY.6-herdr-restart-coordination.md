@@ -26,7 +26,7 @@ dependency_relations:
   - prerequisite: AY.6
     dependent: AY.8
     relation: parallel_safe
-    rationale: AY.6 edits daemon-switch restart logic/tests and operator governance/docs; AY.8 edits atm-herdr socket transport, protocol fixtures, boundary revision, and architecture exemption after shared AY.3 contracts merge.
+    rationale: AY.6 edits daemon-switch restart logic/tests and operator governance/docs; AY.8 edits atm-herdr socket transport, protocol fixtures, and one boundary-ownership key; no file is shared.
 ---
 
 # AY.6 — Coordinated Herdr endpoint restart

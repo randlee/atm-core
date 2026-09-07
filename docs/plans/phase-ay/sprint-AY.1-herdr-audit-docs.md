@@ -143,6 +143,9 @@ The amendment states all of the following without changing their meaning:
 - the AI.11 retired-listener ban governs ATM's own IPC listener. AY.8 may exempt
   only `crates/atm-herdr/src/transport_socket.rs` for the Herdr client, while
   `named_pipe` / `NamedPipe` remain banned everywhere else under `crates/`.
+  (Superseded 2026-09-06, after AY.1 merged: Rand ruled the guard obsolete,
+  it was deleted on AY.3, and AY.8 needs no exemption; ADR-058 carries no
+  exemption wording. See phase-ay-plan.md "Rework record".)
 
 ### C3 — drift ledger procedure
 

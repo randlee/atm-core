@@ -10,8 +10,9 @@ stack_parent: none
 pr_target: integrate/phase-ay
 target: integrate/phase-ay
 status: draft
-recommended_agent: arch-ctm
-recommended_model: deep-reasoning
+recommended_agent: cipher
+recommended_model: fast
+rework: 2026-09-06 (transport isolation ruling; see phase-ay-plan.md "Rework record")
 execution_track: socket
 parallel_with: [AY.4, AY.5, AY.6, AY.7]
 dependency_relations:
@@ -25,8 +26,8 @@ dependency_relations:
     rationale: HerdrIo, HerdrClientConfig, replay recordings, and the portable fake-Herdr process must exist before the socket variant is added.
   - prerequisite: AY.3
     dependent: AY.8
-    relation: must_follow
-    rationale: both sprints edit boundary_enforcement.rs, so AY.3's long-lived-child guard must land before AY.8 adds the one AI.11 exemption.
+    relation: parallel_safe
+    rationale: AY.8 changes no behavior and touches only atm-herdr internals behind `HerdrProcessAdapter`; the AI.11 gate it once had to exempt was retired on AY.3. P-E(b) was ruled on 2026-09-06 (boundary-guard, TOML diff approved unchanged). AY.8's D1 TOML edit layers onto whatever contract inventory AY.3 lands; resolve at merge-forward, never by waiting.
   - prerequisite: AY.4
     dependent: AY.8
     relation: parallel_safe
@@ -58,11 +59,14 @@ this sprint.
 
 ## Dispatch, parallelism, and PR topology
 
-AY.8 is a multi-parent join. Dispatch it only after AY.1, AY.2, and AY.3 have
-merged into `integrate/phase-ay` and the P-E boundary revision has been
-approved. Create the branch from that integration head. It is not a child of
-AY.3 and is not part of the implementation stack: `/gh-stack` stacks are linear and
-cannot encode three prerequisites or a branch shared across stacks.
+AY.8 is the independent transport track. Dispatch it as soon as AY.1 and AY.2
+have merged into `integrate/phase-ay` and P-E(b) is approved (both true as of
+2026-09-06). Create the branch from that integration head. It is not a child
+of AY.3 and is not part of the implementation stack. Governing rule (Rand,
+2026-09-06): the CLI to UDS/named-pipe swap changes no functionality and is
+completely hidden behind `HerdrProcessAdapter`; every other phase feature is
+developed independently of it, and AY.8 must not wait on, or be waited on by,
+any feature sprint.
 
 AY.8 runs in parallel with AY.4, AY.5, AY.6, and AY.7 because the exact changed-file
 allowlist below does not intersect their owned files or public artifacts. Use
@@ -84,18 +88,19 @@ completion fails the sprint.
   `boundaries/atm-herdr/herdr-process-adapter.toml` is the first commit. It adds
   only `herdr_local_socket_client` to `io_owns`; `io_forbidden` is unchanged and
   the CLI ownership keys remain while the fallback exists.
-- [ ] D2 — `ai11_guarded_workspace_sources` in
-  `crates/atm-architecture/tests/boundary_enforcement.rs` excludes exactly
-  `crates/atm-herdr/src/transport_socket.rs`, with a rationale citing ADR-058 D3
-  and AY.8. A pin test asserts that this is the only exemption. This is the
-  second commit, after D1.
+- [x] D2 — removed 2026-09-06. The AI.11 retired-Windows-transport gate was
+  deleted on AY.3 (PR #1273): the repo has no named pipes other than the ones
+  Herdr requires, so there is nothing to exempt. AY.8 does not edit
+  `boundary_enforcement.rs`.
 - [ ] D3 — add `crates/atm-herdr/src/transport_socket.rs` with crate-private
   `SocketIo` and `HerdrIo::Socket(SocketIo)`. Use
   `tokio::net::UnixStream` on Unix and
   `tokio::net::windows::named_pipe::ClientOptions` on Windows; add only Tokio's
   `net` feature if it is not already enabled. No process is spawned and no
   dependency on `interprocess` is added.
-- [ ] D4 — add the pure endpoint resolver and public endpoint types in C1.
+- [ ] D4 — add the pure endpoint resolver and crate-private endpoint types in
+  C1. Byte fixtures for every C1 case live in a `#[cfg(test)]` module inside
+  `transport_socket.rs`, so no item needs to be public for testing.
   Precedence is explicit `socket_path`, then the per-call session-derived path,
   then default. Environment values are captured once at composition and
   injected; transport code never reads ambient `XDG_CONFIG_HOME`, `APPDATA`, or
@@ -127,9 +132,10 @@ completion fails the sprint.
   `docs/atm-herdr/herdr-versions.md` gains ping/request/response/error-code
   NDJSON columns for every release from 0.8.0, keyed on `ping.version` and
   capabilities rather than `PROTOCOL_VERSION`.
-- [ ] D9 — amend the AY.2 public-item pin by adding exactly
-  `herdr_api_endpoint`, `HerdrHostEnv`, and `HerdrEndpoint`; `SocketIo` remains
-  `pub(crate)`.
+- [ ] D9 — no net additions to the AY.2 public-item pin: `herdr_api_endpoint`,
+  `HerdrHostEnv`, `HerdrEndpoint`, and `SocketIo` are all `pub(crate)`. The
+  only public item of `atm-herdr` remains `HerdrProcessAdapter` and its
+  existing contract types.
 - [ ] D10 — preserve the no-cutover guard: no change under
   `crates/atm-daemon-bootstrap`, and an architecture allowlist permits
   `HerdrIo::Socket(` construction only in `transport_socket.rs` test modules
@@ -146,20 +152,20 @@ None.
 
 ```rust
 /// Pure; performs no probe or I/O.
-pub fn herdr_api_endpoint(
+pub(crate) fn herdr_api_endpoint(
     cfg: &HerdrClientConfig,
     session: Option<&HerdrSession>,
     env: &HerdrHostEnv,
 ) -> HerdrEndpoint;
 
-pub struct HerdrHostEnv {
-    pub xdg_config_home: Option<PathBuf>,
-    pub appdata: Option<PathBuf>,
-    pub home: Option<PathBuf>,
-    pub platform: Platform,
+pub(crate) struct HerdrHostEnv {
+    pub(crate) xdg_config_home: Option<PathBuf>,
+    pub(crate) appdata: Option<PathBuf>,
+    pub(crate) home: Option<PathBuf>,
+    pub(crate) platform: Platform,
 }
 
-pub enum HerdrEndpoint {
+pub(crate) enum HerdrEndpoint {
     UnixSocket(PathBuf),
     NamedPipe(String), // full \\.\pipe\... name
 }
@@ -238,10 +244,8 @@ AY.8 may add or edit only:
 - `crates/atm-herdr/src/transport_socket.rs`
 - `crates/atm-herdr/tests/support/fake_herdr_socket/**`
 - `crates/atm-herdr/src/transport.rs`
-- `crates/atm-herdr/src/lib.rs` (one module declaration and exports for C1)
+- `crates/atm-herdr/src/lib.rs` (one module declaration; no new public exports)
 - `crates/atm-herdr/Cargo.toml` (Tokio `net` feature only if needed)
-- `crates/atm-architecture/tests/boundary_enforcement.rs`
-- the AY.2 public-item pin test under `crates/atm-architecture/tests/`
 - `boundaries/atm-herdr/herdr-process-adapter.toml`
 - `docs/atm-herdr/herdr-versions.md`
 
@@ -250,8 +254,8 @@ be amended and re-reviewed before implementation continues.
 
 ## Required work
 
-1. Land the approved boundary record first and the pinned AI.11 exemption
-   second; do not begin socket code until both diffs match P-E(b).
+1. Land the approved boundary record first; do not begin socket code until
+   the diff matches P-E(b).
 2. Implement endpoint resolution and the bounded one-request protocol as one
    transport boundary, then close every Unix-socket and named-pipe failure with
    the fake server on its owning CI lane.
@@ -261,8 +265,7 @@ be amended and re-reviewed before implementation continues.
 
 ## Acceptance criteria
 
-1. D1 is the first commit and exactly matches the P-E ruling; D2 is the second
-   commit and pins one exemption.
+1. D1 is the first commit and exactly matches the P-E ruling.
 2. Endpoint-resolution byte fixtures pass for every C1 case, including the
    full Windows pipe string.
 3. Both transports pass the same adapter equivalence suite on macOS, Linux,
@@ -276,7 +279,8 @@ be amended and re-reviewed before implementation continues.
    of C3.
 6. `herdr-versions.md` contains complete NDJSON columns for every listed
    release from 0.8.0.
-7. The public-item pin contains exactly the three D9 additions.
+7. The AY.2 public-item pin is unchanged by this sprint; `cargo doc` or the pin
+   test shows no new public items in `atm-herdr`.
 8. `gh pr view feature/ay8-herdr-socket-transport --json
    headRefName,baseRefName,state` reports base `integrate/phase-ay`; AY.8 is not
    linked into the implementation stack.
