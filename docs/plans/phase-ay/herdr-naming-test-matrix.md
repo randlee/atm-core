@@ -88,7 +88,7 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | D-10 | `atm ack` as alias | canonical | covered `unique_name_d10_ack_alias_is_canonicalized_before_pending_source_lookup` (atm-core/src/ack/admission_tests.rs) |
 | D-11 | `set-member <alias>` / `remove-member <alias>` | canonical before persistence | covered `update_and_remove_member_canonicalize_alias_arguments_before_persistence` (member_mutation.rs:1334) |
 | D-12 | self-send via own alias | rejected as self-send after replacement | covered `unique_name_d12_self_send_via_alias_is_rejected_after_ingress_resolution` (atm-core/src/send/tests.rs) |
-| D-13 | `alias@team.host` (cross-host) | delivered to the canonical member on the remote host; persisted rows canonical on both hosts; sending daemon forwards the alias unchanged, receiving daemon ingress substitutes | **GAP** — Rand (2026-09-07): "alias@team.host works" |
+| D-13 | `alias@team.host` (cross-host) | delivered to the canonical member on the remote host; persisted rows canonical on both hosts; sending daemon forwards the alias unchanged, receiving daemon ingress substitutes | covered `unique_name_d13_host_qualified_alias_keeps_wire_token_and_resolves_on_ingress` (atm-core/src/send/tests.rs) |
 | D-14 | alias used as `--chat-id`/qualified identity forms | canonical | **GAP** |
 | D-15 | inventory: every clap argument/option/env var in `crates/atm/src` that names a member, listed here by command and flag | each entry is exercised by D-16 | **GAP** — arch-ctm produces the inventory in this row's sub-table (REQ-ROSTER-NAME-010) |
 | D-16 | for every D-15 entry: run once with canonical name, once with alias (bare and `@team`) | CLI forwards the token unchanged; daemon ingress substitutes; identical daemon-side handling and identical persisted rows; observation attested to alias dropped | **GAP** (REQ-ROSTER-NAME-010; Rand: "if all prompts are written for either member name or alias, it will work the same"; substitution at daemon ingress, not the CLI) |
@@ -111,7 +111,7 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | F-03 | roster alias absent | one line | covered (commands/doctor.rs:317) |
 | F-04 | pane without alias key / other team's pane | ignored | covered (commands/doctor.rs:346) |
 | F-05 | no `.atm.toml` | check skipped | covered (commands/doctor.rs:369) |
-| F-06 | `--all-teams` | check not widened | **GAP** |
+| F-06 | `--all-teams` | check not widened | covered `unique_name_f06_all_teams_does_not_widen_pane_alias_scope` (atm/src/commands/doctor.rs) |
 | F-07 | db holds duplicate effective names involving the caller's team | doctor lists each conflicting `(team, member)` pair and the `--alias` remedy | covered `unique_name_f07_reports_legacy_effective_name_conflicts_for_the_scoped_team` (doctor/mod.rs) |
 
 ## G. Operator-facing errors (REQ-ROSTER-NAME-003)

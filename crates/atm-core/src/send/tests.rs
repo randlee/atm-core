@@ -453,6 +453,60 @@ fn write_ingress_resolves_a_bare_alias_to_its_remote_owner() {
 }
 
 #[test]
+fn unique_name_d13_host_qualified_alias_keeps_wire_token_and_resolves_on_ingress() {
+    let root = tempdir().expect("root");
+    let local_team = TeamName::from_validated(TEST_TEAM);
+    let remote_team = TeamName::from_validated("remote-team");
+    let mut alias_metadata = Map::new();
+    alias_metadata.insert(
+        "alias".to_owned(),
+        serde_json::Value::String("remote-alias".to_owned()),
+    );
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode).with_team_roster(vec![
+        RosterEntry {
+            team_name: local_team.clone(),
+            agent_name: AgentName::from_validated("sender"),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: crate::schema::AgentType::Worker,
+            model: crate::types::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json: Map::new(),
+        },
+        RosterEntry {
+            team_name: remote_team.clone(),
+            agent_name: AgentName::from_validated("recipient"),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: crate::schema::AgentType::Worker,
+            model: crate::types::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json: alias_metadata,
+        },
+    ]);
+    let mut request = send_request(root.path());
+    request.caller_identity = AgentName::from_validated("sender");
+    request.caller_team = local_team;
+    request.to = Some(
+        "remote-alias@remote-team.remote.example.test"
+            .parse()
+            .expect("host-qualified alias target"),
+    );
+
+    let context = prepare_send_context(&runtime, &mut request).expect("admitted context");
+
+    assert_eq!(context.recipient.team, remote_team);
+    assert_eq!(context.recipient.agent.as_str(), "recipient");
+    let forwarded = request.to.expect("wire target remains present");
+    assert_eq!(forwarded.agent().as_str(), "remote-alias");
+    assert_eq!(forwarded.team().map(TeamName::as_str), Some("remote-team"));
+    assert_eq!(
+        forwarded.host().map(|host| host.as_str()),
+        Some("remote.example.test")
+    );
+}
+
+#[test]
 fn unique_name_d12_self_send_via_alias_is_rejected_after_ingress_resolution() {
     let root = tempdir().expect("root");
     let team = TeamName::from_validated(TEST_TEAM);

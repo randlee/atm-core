@@ -366,6 +366,34 @@ env = { ATM_TEAM = "other" }
     }
 
     #[test]
+    fn unique_name_f06_all_teams_does_not_widen_pane_alias_scope() {
+        let config = pane_config(
+            r#"[[rmux.windows.panes]]
+name = "member-a"
+alias = "wrong-workspace-alias"
+env = { ATM_TEAM = "workspace" }
+
+[[rmux.windows.panes]]
+name = "member-b"
+alias = "wrong-other-alias"
+env = { ATM_TEAM = "other" }
+"#,
+        );
+
+        // Even when the service report contains every roster (`--all-teams`),
+        // this CLI-only .atm.toml check is anchored to the invoking workspace.
+        let mismatches = pane_alias_mismatches(
+            config,
+            &workspace_team(),
+            &alias_map(&[("member-a", Some("workspace-alias")), ("member-b", None)]),
+        );
+
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].team, workspace_team());
+        assert_eq!(mismatches[0].member.as_str(), "member-a");
+    }
+
+    #[test]
     fn pane_alias_check_skips_when_no_atm_toml_is_discovered() {
         let temporary_directory = TempDir::new().expect("temporary directory");
 
