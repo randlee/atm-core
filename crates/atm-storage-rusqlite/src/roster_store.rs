@@ -437,7 +437,9 @@ mod tests {
     fn unique_name_permutations() {
         struct Case {
             id: &'static str,
+            existing_name: &'static str,
             existing_alias: Option<&'static str>,
+            proposed_team: &'static str,
             proposed_name: &'static str,
             proposed_alias: Option<&'static str>,
             expected_accept: bool,
@@ -445,29 +447,64 @@ mod tests {
 
         let cases = [
             Case {
-                id: "unique_name_a06_canonical_collides_other_team_canonical",
+                id: "unique_name_a01_same_team_canonical_duplicate",
+                existing_name: "bob",
                 existing_alias: None,
+                proposed_team: "team-a",
+                proposed_name: "bob",
+                proposed_alias: None,
+                expected_accept: false,
+            },
+            Case {
+                id: "unique_name_a05_alias_collides_other_team_canonical",
+                existing_name: "bob",
+                existing_alias: None,
+                proposed_team: "team-b",
+                proposed_name: "robert",
+                proposed_alias: Some("bob"),
+                expected_accept: false,
+            },
+            Case {
+                id: "unique_name_a08_alias_collides_other_team_alias",
+                existing_name: "robert",
+                existing_alias: Some("bob"),
+                proposed_team: "team-b",
+                proposed_name: "sam",
+                proposed_alias: Some("bob"),
+                expected_accept: false,
+            },
+            Case {
+                id: "unique_name_a06_canonical_collides_other_team_canonical",
+                existing_name: "alex",
+                existing_alias: None,
+                proposed_team: "team-b",
                 proposed_name: "alex",
                 proposed_alias: None,
                 expected_accept: false,
             },
             Case {
                 id: "unique_name_a07_alias_collides_other_team_canonical",
+                existing_name: "alex",
                 existing_alias: None,
+                proposed_team: "team-b",
                 proposed_name: "bobby",
                 proposed_alias: Some("alex"),
                 expected_accept: false,
             },
             Case {
                 id: "unique_name_a09_canonical_may_match_aliased_member",
+                existing_name: "alex",
                 existing_alias: Some("owner-alias"),
+                proposed_team: "team-b",
                 proposed_name: "alex",
                 proposed_alias: None,
                 expected_accept: true,
             },
             Case {
                 id: "unique_name_a18_whitespace_alias_is_absent",
+                existing_name: "alex",
                 existing_alias: None,
+                proposed_team: "team-b",
                 proposed_name: "alex",
                 proposed_alias: Some("  "),
                 expected_accept: false,
@@ -481,29 +518,40 @@ mod tests {
             store
                 .save_roster(&roster(
                     "team-a",
-                    vec![roster_member("team-a", "alex", case.existing_alias)],
+                    vec![roster_member(
+                        "team-a",
+                        case.existing_name,
+                        case.existing_alias,
+                    )],
                 ))
                 .expect(case.id);
-            let result = store.save_roster(&roster(
-                "team-b",
+            let proposed_members = if case.proposed_team == "team-a" {
+                vec![
+                    roster_member("team-a", case.existing_name, case.existing_alias),
+                    roster_member("team-a", case.proposed_name, case.proposed_alias),
+                ]
+            } else {
                 vec![roster_member(
-                    "team-b",
+                    case.proposed_team,
                     case.proposed_name,
                     case.proposed_alias,
-                )],
-            ));
+                )]
+            };
+            let result = store.save_roster(&roster(case.proposed_team, proposed_members));
             assert_eq!(result.is_ok(), case.expected_accept, "{}", case.id);
             if !case.expected_accept {
                 let error = result.expect_err(case.id);
                 assert!(
-                    error.message().contains("(team-a, alex)"),
+                    error
+                        .message()
+                        .contains(&format!("(team-a, {})", case.existing_name)),
                     "{}: {error}",
                     case.id
                 );
                 assert!(
                     error
                         .message()
-                        .contains(&format!("(team-b, {})", case.proposed_name)),
+                        .contains(&format!("({}, {})", case.proposed_team, case.proposed_name)),
                     "{}: {error}",
                     case.id
                 );

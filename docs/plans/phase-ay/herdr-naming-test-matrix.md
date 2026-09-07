@@ -17,14 +17,14 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 
 | ID | Existing rows | Write | Expected | Status |
 |----|---------------|-------|----------|--------|
-| A-01 | T1:bob | add T1:bob | reject, same-team duplicate | **GAP** (AY-QA-003: `ensure_member_absent` is production code, no test asserts the rejection; AY.15 D4a) |
+| A-01 | T1:bob | add T1:bob | reject, same-team duplicate | covered `unique_name_permutations` (atm-storage-rusqlite/src/roster_store.rs:437) |
 | A-02 | none | add T1:bob (no alias) | accept, first of its name | covered `cross_team_member_names_require_alias_but_first_occurrence_does_not` (member_mutation.rs:1215) |
 | A-03 | T1:bob | add T2:bob (no alias) | reject, names T1 and `--alias` remedy | covered (same test) |
 | A-04 | T1:bob | add T2:bob (bobby) | accept | covered (same test) |
-| A-05 | T1:bob | add T2:robert (bob) | reject, alias equals a unique_name | **GAP** (AY-QA-003: cited test is same-team only; AY.15 D4a) |
+| A-05 | T1:bob | add T2:robert (bob) | reject, alias equals a unique_name | covered `unique_name_permutations` (atm-storage-rusqlite/src/roster_store.rs:437) |
 | A-06 | T1:robert (bob) | add T2:bob (no alias) | reject, canonical equals an existing alias | **GAP** — AY14-QA-003 (quality-mgr, 2026-09-07); `ensure_canonical_member_name_available` (member_mutation.rs:480) ignores alias fields |
 | A-07 | T1:robert (bob) | add T1:bob (no alias) | reject, same team, canonical equals alias | **GAP** — same defect, own team is skipped |
-| A-08 | T1:robert (bob) | add T2:sam (bob) | reject, alias vs alias | **GAP** (AY-QA-003: cited test is same-team only; AY.15 D4a) |
+| A-08 | T1:robert (bob) | add T2:sam (bob) | reject, alias vs alias | covered `unique_name_permutations` (atm-storage-rusqlite/src/roster_store.rs:437) |
 | A-09 | T1:bob (bobby) | add T2:bob (no alias) | accept: unique_names are bobby and bob | **GAP** — currently rejected; over-strict, `ensure_canonical_member_name_available` compares canonical names only |
 | A-10 | T1:bob (bobby) | add T2:sam (bob) | accept: unique_names bobby, bob | **GAP** — currently rejected by `ensure_alias_available` (alias vs canonical of an aliased member) |
 | A-11 | T1:bob (bobby) | add T2:bob (bobby) | reject, alias vs alias | covered (member_mutation.rs:1181) |
@@ -51,10 +51,10 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 
 | ID | Input | Expected | Status |
 |----|-------|----------|--------|
-| B-01 | alias with `/`, space, `@`, `.` | reject (ATM segment rule) | **GAP** (AY-QA-004: cited tests exercise the legacy `.atm.toml` resolver, not roster-alias validation at add/set-member; AY.15 D2, D4a) |
+| B-01 | alias with `/`, space, `@`, `.` | reject (ATM segment rule) | covered `unique_name_b01_rejects_invalid_atm_aliases_at_add_and_update` (atm-core/src/team_admin/member_mutation.rs:1166) |
 | B-02 | Herdr member, alias `Team_Lead` (uppercase) | reject | covered `herdr_alias_uses_herdr_agent_name_validation` (member_mutation.rs:1158) |
 | B-03 | Herdr member, no alias, canonical `Team-Lead` | reject at add (effective name fails Herdr grammar) | **GAP** |
-| B-04 | Herdr member, alias 33 chars / leading digit / leading `-` | reject | **GAP** (AY-QA-004: `herdr_agent_name_uses_the_live_agent_grammar` covers the grammar only, not add/set-member rejection; AY.15 D2, D4a) |
+| B-04 | Herdr member, alias 33 chars / leading digit / leading `-` | reject | covered `unique_name_b04_rejects_invalid_herdr_aliases_at_add_and_update` (atm-core/src/team_admin/member_mutation.rs:1219) |
 | B-05 | non-Herdr member, alias `Team_Lead` | accept (ATM rule only) | covered `add_member_persists_alias_without_a_herdr_backend` (member_mutation.rs:1122) — uppercase variant **GAP** |
 | B-06 | set-member backend → Herdr on a member whose effective name fails Herdr grammar | reject | covered `validate_effective_herdr_agent_name` (member_mutation.rs:500) — test **GAP** |
 | B-07 | alias equal to reserved `atm-daemon` | reject | **GAP** |

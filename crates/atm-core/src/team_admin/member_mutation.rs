@@ -1163,6 +1163,113 @@ mod tests {
     }
 
     #[test]
+    fn unique_name_b01_rejects_invalid_atm_aliases_at_add_and_update() {
+        let root = tempfile::tempdir().expect("tempdir");
+        for alias in ["bad/name", "has space", "member@team", "member.name"] {
+            let add_error = AddMemberRequest::new_with_backend(
+                root.path().to_path_buf(),
+                TEST_TEAM,
+                "worker",
+                "worker".to_owned(),
+                "gpt-5".to_owned(),
+                root.path().join("worker-home"),
+                BackendOptions {
+                    backend: None,
+                    target: None,
+                    session: None,
+                    alias: Some(alias),
+                    clear_alias: false,
+                },
+            )
+            .expect_err("invalid ATM alias must be rejected at add-member");
+            assert_eq!(
+                add_error.code(),
+                AtmErrorCode::AddressParseFailed,
+                "{alias}"
+            );
+
+            let update_error = UpdateMemberRequest::new_with_backend(
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                TEST_TEAM.parse().expect("team"),
+                TEST_TEAM,
+                "worker",
+                None,
+                None,
+                None,
+                None,
+                None,
+                BackendOptions {
+                    backend: None,
+                    target: None,
+                    session: None,
+                    alias: Some(alias),
+                    clear_alias: false,
+                },
+            )
+            .expect_err("invalid ATM alias must be rejected at set-member");
+            assert_eq!(
+                update_error.code(),
+                AtmErrorCode::AddressParseFailed,
+                "{alias}"
+            );
+        }
+    }
+
+    #[test]
+    fn unique_name_b04_rejects_invalid_herdr_aliases_at_add_and_update() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let too_long = "a".repeat(33);
+        for alias in [too_long.as_str(), "1member", "-member"] {
+            let add_error = AddMemberRequest::new_with_backend(
+                root.path().to_path_buf(),
+                TEST_TEAM,
+                "worker",
+                "worker".to_owned(),
+                "gpt-5".to_owned(),
+                root.path().join("worker-home"),
+                BackendOptions {
+                    backend: Some("herdr"),
+                    target: None,
+                    session: None,
+                    alias: Some(alias),
+                    clear_alias: false,
+                },
+            )
+            .expect_err("invalid Herdr alias must be rejected at add-member");
+            assert_eq!(
+                add_error.code(),
+                AtmErrorCode::MessageValidationFailed,
+                "{alias}"
+            );
+
+            let update_error = UpdateMemberRequest::new_with_backend(
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                TEST_TEAM.parse().expect("team"),
+                TEST_TEAM,
+                "worker",
+                None,
+                None,
+                None,
+                None,
+                None,
+                BackendOptions {
+                    backend: Some("herdr"),
+                    target: None,
+                    session: None,
+                    alias: Some(alias),
+                    clear_alias: false,
+                },
+            )
+            .expect_err("invalid Herdr alias must be rejected at set-member");
+            assert_eq!(
+                update_error.code(),
+                AtmErrorCode::MessageValidationFailed,
+                "{alias}"
+            );
+        }
+    }
+
+    #[test]
     fn unique_name_a09_canonical_name_of_aliased_member_is_available() {
         let store = TestRosterStore::default();
         let team: TeamName = TEST_TEAM.parse().expect("team");
