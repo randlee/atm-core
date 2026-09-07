@@ -150,12 +150,10 @@ conflicting team and the `--alias` remedy. Applies to every backend, as
 written. Consequence for operators: a second team gaining `team-lead` or
 `quality-mgr` must supply an alias at add time; the hmux spawn path that
 creates teams outside ATM must pass one.
-- "we could even reject 'team-lead', 'quality-mgr', 'publisher' on
-  principle because they show up on many teams today." (Rand, 2026-09-07,
-  restated after the consequence above was pointed out; taken as the
-  ruling.) `add-member` rejects those three canonical names without an
-  `--alias` regardless of whether another team already has them. The list
-  lives in one constant; no other names are on it.
+- Considered and withdrawn (Rand, 2026-09-07): rejecting `team-lead`,
+  `quality-mgr`, `publisher` by name. Rand: "this is probably extreme for
+  requirements, naming hardcoded commonly used names." No hardcoded name
+  list; AC8's duplicate-name rule is the only gate.
 
 Uniqueness is enforced where the alias is written (`add-member --alias`,
 `set-member --alias`): the roster store rejects an alias already held by
@@ -199,9 +197,6 @@ that leaks the alias past the edge is a blocking finding.
   call with a unique `--alias` succeeds; the first member of that name in
   the database is accepted without an alias. Same check on the daemon
   member-add path so the CLI cannot be bypassed.
-- AC9 `add-member team-lead|quality-mgr|publisher` without `--alias` is
-  rejected even on an otherwise empty roster store; with a unique `--alias`
-  it succeeds. Existing members with those names are untouched.
 - AC5 Boundary TOMLs untouched unless the boundary guard requires a
   record update for the new newtype; if so, say which in the PR.
 
