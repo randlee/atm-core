@@ -100,9 +100,11 @@ P0 exit gate:
   uncorrelated D7 event, missing in-record provenance, and unexplained doctor
   warnings. Fenix disposition `01M1WYKDT478BT9SA5YP9R1VJN` requires all five
   harness/contract repairs (A1, D7, provenance, doctor capture, and HGC-023)
-  at one named testbed SHA before execution is authorized. The peer authority,
-  4 CPU / 4 GiB Colima allocation, `suite/v2`, no-`sudo` marker protocol, and
-  primary matrix are frozen.
+  at one named testbed SHA. Under pre-authorization
+  `01M1WYX8TMT899ZFB4T8YJ27Z7`, Solar verifies that SHA and either holds on a
+  named omission or authorizes exactly one final full-matrix plus prompt-suite
+  run. The peer authority, 4 CPU / 4 GiB Colima allocation, `suite/v2`,
+  no-`sudo` marker protocol, and primary matrix are frozen.
 - The first P2 infrastructure run is preserved with no reruns. Tier C passed
   6/6; Tier A passed 7/8 with A1 failed, Tier B passed 3/6 with B2a/B2b/B2c
   failed, and Tier D passed 5/6 with D7 failed. The prompt suite remains
@@ -447,16 +449,20 @@ rows; do not rerun until their dispositions are durable:
   Therefore A1 asserts acceptance, actionable selection, and the selected
   message ID, then polls `atm list --json` with a bounded deadline until
   `unread == 0` and `history == 1`; it does not require the returned message to
-  say `read == true`. The conflicting requirements 7.12 sentence is corrected
-  by an `arch-ctm` docs/tests PR with no product behavior change.
+  say `read == true`. PR #1278 at `ca99dcc06` corrects the conflicting
+  requirements 7.12 sentence with no product behavior change. Attribute the
+  A1 v2 CATALOG entry exactly to `PR #1278 / ADR-059 / requirements 7.13`;
+  QA and merge of that PR are not a gate for preparing the named testbed SHA.
 
 Fenix authorized the A1/B2/D7 expectation repairs, HGC-023 calibration handoff,
 mandatory in-record provenance, and sanitized doctor capture as testbed-only
 changes. Each change has a CATALOG entry naming its finding or decision message.
-Loki first names the single testbed SHA carrying all five; only after Fenix
-authorizes that SHA does one full matrix, including the prompt suite, run on the
-same pinned image. This is a contract-fix confirmation, not rerun-until-green.
-This runbook author makes no ATM product change and no synchronous-daemon change.
+Loki first names the single testbed SHA carrying all five. Under Fenix
+pre-authorization `01M1WYX8TMT899ZFB4T8YJ27Z7`, Solar verifies that bundle and
+then explicitly authorizes one full matrix, including the prompt suite, on the
+same pinned image. Solar reports the SHA and start time to Fenix. This is a
+contract-fix confirmation, not rerun-until-green. This runbook author makes no
+ATM product change and no synchronous-daemon change.
 
 ### Result handling
 
@@ -576,7 +582,7 @@ Every issue becomes a row before work continues.
 | HGC-019 | P2 | First image reported ATM 1.4.6 despite a 1.5.3 override | Testbed `build.sh` selected the alphabetically first stale `atm_*` archive instead of the explicit override | Discard image `670edd12`; testbed commit `b468321` pins override artifacts exactly and purges stale archives. Accept only the rebuilt image whose in-container version triple and baked digests match P0 | resolved before test evidence |
 | HGC-020 | P2 | B2a/B2b/B2c byte-exact envelope checks failed on the first run | Testbed `expected_envelope` still uses `read atm --team` and gives Task a `<when>` element; ATM commit `b84a9d2ef0cb7a3911ffe84642cb3e6f05b033e9` changed the accepted contract to `atm read --message-id <MID>` and intentionally omits `<when>` for Task | Preserve the failed first-run JSON; Fenix authorized Loki to update only the testbed expectations, bump `suite/v2`, add the commit-attributed CATALOG entry, and run the full matrix once on the pinned image | confirmed testbed drift; repair authorized |
 | HGC-021 | P2 | D7 routing completed but its message-ID log grep failed | The test couples routing success to an obsolete observability serialization even though its own contract is roster metadata, successful dispatch, sent outcome, and Herdr reachability | Preserve the failed row; Fenix authorized Loki to assert the supported routing contract without requiring the ULID in that log record, then include D7 in the one full-matrix confirmation | confirmed testbed drift; repair authorized |
-| HGC-022 | P2 | A1 reports an accepted mutation handoff but the returned message and immediate list still show unread state | Phase AV deliberately removed read-your-writes: `mutation_applied` means the supervised handoff accepted the transition, while durability is asynchronous. The requirements 7.12 post-mutation-count sentence conflicts with requirements 7.13 and ADR-059 | Fenix/`arch-ctm` ruled no behavior change: correct the conflicting docs/tests separately; Loki may assert acceptance and then poll `atm list --json` to durable state with a bounded deadline, applying accepted-vs-durable to every read-state assertion | resolved contract; suite/v2 repair authorized |
+| HGC-022 | P2 | A1 reports an accepted mutation handoff but the returned message and immediate list still show unread state | Phase AV deliberately removed read-your-writes: `mutation_applied` means the supervised handoff accepted the transition, while durability is asynchronous. The requirements 7.12 post-mutation-count sentence conflicts with requirements 7.13 and ADR-059 | Fenix/`arch-ctm` ruled no behavior change: PR #1278 at `ca99dcc06` corrects docs/tests separately; Loki asserts acceptance and then polls `atm list --json` to durable state with a bounded deadline, applying accepted-vs-durable to every read-state assertion. CATALOG attribution is `PR #1278 / ADR-059 / requirements 7.13` | resolved contract; suite/v2 repair authorized; PR merge is not a testbed-SHA gate |
 | HGC-023 | P2/P3 | AT8 requires the outer coordinator to derive Phase-B `--after` from the fixture agent's warm-up RTT, but exposes no value before Phase B | The prompt records `warmup_rtt_ms` only in its final report; `freeze-daemon.sh` exposes only armed/done markers, so the blocking coordinator has no executable calibration input | Fenix authorized an `at8-rtt` agent-to-coordinator marker, a 120-second fail-closed wait, validation over 1..60000 ms, `clamp(round(rtt/2), 300, 1500)`, and `at8-armed` provenance. Loki applies the prompt/harness/CATALOG changes; no product code changes | confirmed; repair authorized in `01M1WXW9R9Z7KH69CDVR4F6122` |
 | HGC-024 | P2/P3 | A Hermes-owned worker stops acknowledging several delivered coordination messages | Busy-agent silence and a cross-host delivery incident are distinguishable only after bounded coordination and host-side receiver diagnostics | Do not repeatedly resend or use tmux. A second sender emits one consolidated re-ping, all senders wait to the named deadline, then one owner captures sanitized host-side doctor `graft_receivers` and runtime status. Escalate the durable send IDs plus diagnostics to Fenix | resolved before 03:40Z; Loki acknowledged and returned checkpoint `c0aa6cb` |
 | HGC-025 | P2 | D7 reports PASS after dropping the obsolete ULID log grep | The replacement `grep -c '"outcome":"sent"'` scans the entire existing log and requires only a nonzero historical count; it does not prove the D7 send emitted a fresh event | Preserve `c0aa6cb`; at the named five-fix SHA, capture a pre-send count/cursor, require an increase of at least one, and correlate the new line to the D7 message ID or marker | resolved contract; named-SHA repair required by `01M1WYKDT478BT9SA5YP9R1VJN` |
