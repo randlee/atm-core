@@ -374,7 +374,7 @@ grounded in the tag rather than assumed.
 | `herdr server` | Entry unchanged (`src/main.rs:542`); `run_server` moved to `src/server/headless/bootstrap.rs` (207be3c7) with identical duplicate detection and restore | No change |
 | Endpoint resolution: `ipc.rs`, `session.rs`, `api/client.rs`, `socket_paths.rs` | Byte-identical across the range | No change |
 | NDJSON envelope, `agent.*` shapes, limits, `notification show`, CLI argv and exit codes | No change; additive methods and fields only (`ping.capabilities.endpoint_protocol_generation`, `workspace.close.close_group`, `worktree.*.trust_repository`, new `pane.*`, `command.invoke`, `integration.list`) | Parsers must tolerate unknown fields; AY.1 asserts it |
-| `events.subscribe` | Starts at the live sequence, no replay (20a500a7) | Irrelevant unless AY.8 subscribes; documented |
+| `events.subscribe` | Starts at the live sequence, no replay (20a500a7); present since fbd20ad6 (v0.8.2), absent at v0.8.0 | AY.10 subscribes; no replay is why every (re)subscribe takes an `agent.list` baseline |
 | Autostart | Still none at HEAD (grep for login item / LaunchAgent / RunAtLoad / autostart / schtasks / Register-ScheduledTask / systemd / SMAppService: only SSH keepalive hits) | Confirms the installer-owned start-at-login entry design |
 | API pipe ACL | Unchanged: `restrict_socket_permissions` is a no-op on Windows (`src/ipc.rs:342-345`); the SDDL DACL at `ipc.rs:141-167` serves only the remote-attach bridge | AY.8 boundary revision records the API pipe as default-DACL |
 
@@ -851,7 +851,8 @@ User-experience contract (AY.3 through AY.6 acceptance, verified by req-qa):
 
 ## Sprint map, parallel tracks and stacking
 
-Nine sprints, numbered sequentially. Each row maps to exactly one
+Twelve sprints, numbered sequentially (AY.10–AY.12 added 2026-09-06 for the
+subscription socket; see rework item 7). Each row maps to exactly one
 authoritative sprint file. Relations follow
 `.claude/skills/plan-hardening/sprint-planning-guidelines.md`:
 `must_follow` names a development/merge dependency, while
@@ -868,7 +869,10 @@ contracts, artifacts, and ownership.
 | AY.6 | Coordinated Herdr restart/live-handoff and ATM-restart preflight | M | Control-plane stack | AY.5 | AY.4, AY.8 | macOS/Linux + platform fakes |
 | AY.7 | Windows process correctness and installer Windows branch | S | Control-plane/Windows stack | AY.6 | AY.4, AY.8 | Windows CI lane |
 | AY.8 | Direct socket/pipe transport, fake server, compatibility/equivalence | L | Transport | AY.1, AY.2, P-E(b) | AY.3, AY.4, AY.5, AY.6, AY.7 | macOS/Linux + Windows CI |
-| AY.9 | Socket-default cutover, CLI fallback, doctor projection, lifecycle/CI | M | Join | AY.7, AY.8 | none | all CI lanes |
+| AY.9 | Socket-default cutover, CLI fallback, doctor projection, lifecycle/CI | M | Join | AY.7, AY.8 | AY.10 | all CI lanes |
+| AY.10 | Held `events.subscribe` stream in atm-herdr behind `HerdrStatusStream` | M | Transport (stacked on AY.8) | AY.8 | AY.4, AY.5, AY.6, AY.7, AY.9 | macOS/Linux + Windows CI |
+| AY.11 | Daemon shadow consumption of the stream; poll stays authoritative; parity counters | M | Join | AY.9, AY.10 | none | all CI lanes |
+| AY.12 | Stream becomes the state source; poll removed on the socket path | S | Join (gated on Rand's decision on AY.11 evidence) | AY.11 | none | all CI lanes |
 
 Execution waves are explicit:
 
@@ -878,13 +882,16 @@ Execution waves are explicit:
 | 2 | AY.1 completion, AY.2 review, AY.3 development | AY.3 starts after AY.2 development/contracts are pushed and P-E(a) is approved; AY.2 merges before AY.3. |
 | 3 | AY.3 review, AY.4 development, AY.8 development | AY.4 is stacked after AY.3 development is pushed; AY.3 merges before AY.4. AY.8 starts from `integrate/phase-ay` the moment AY.1 and AY.2 have merged and P-E(b) is approved (both true 2026-09-06); it never waits on AY.3. |
 | 4 | AY.4, AY.5, AY.8 | AY.5 starts from `integrate/phase-ay` when AY.3 merges and develops in parallel with AY.4 (disjoint files); AY.4 merges before AY.5. |
-| 5 | AY.6, AY.7, AY.8 | Contracts first: AY.6 is stacked on AY.5 as soon as AY.5's contracts are pushed, AY.7 on AY.6 likewise; AY.8 completes independently. Neither stack merges the unmerged sibling; AY.7's gate is the Windows CI lane (ruling 5). |
-| 6 | AY.9 | Starts from `integrate/phase-ay` only after AY.7 and AY.8 merge; the last sprint. |
+| 5 | AY.6, AY.7, AY.8, AY.10 | Contracts first: AY.6 is stacked on AY.5 as soon as AY.5's contracts are pushed, AY.7 on AY.6 likewise; AY.10 on AY.8 as soon as AY.8's `SocketIo` and fake server are pushed. Neither stack merges the unmerged sibling; AY.7's gate is the Windows CI lane (ruling 5). |
+| 6 | AY.9, AY.10 | AY.9 starts from `integrate/phase-ay` only after AY.7 and AY.8 merge; AY.10 completes on its stack and merges after AY.8. |
+| 7 | AY.11 | Starts from `integrate/phase-ay` after AY.9 and AY.10 merge. |
+| 8 | AY.12 | Dispatched only after a dated "Decision (Rand, ...): drop poll" is recorded under rework item 7; the last sprint. |
 
 There are two linear stacks (rework 2026-09-06): the core stack AY.2 ->
 AY.3 -> AY.4 and the control-plane stack AY.5 -> AY.6 -> AY.7, each
-based on `integrate/phase-ay`. AY.8 is a standalone transport branch and
-AY.9 the final join. Use the `/gh-stack` skill for every operation on
+based on `integrate/phase-ay`. AY.8 is a standalone transport branch with
+AY.10 stacked on it (AY.8 -> AY.10); AY.9 and AY.11 are joins and AY.12
+the gated last sprint. Use the `/gh-stack` skill for every operation on
 either stack.
 Branches are created with `sc-git-worktree` from the immediate parent so
 each child carries the parent's unmerged work. Because this is an external
@@ -1104,6 +1111,7 @@ transport derives the endpoint from that same configured session.
 | HR-CORE-005 | list | `herdr agent list` |
 | HR-CORE-010 (AX.6) | notify | `herdr notification show <title> --body <body> --sound request`; mail body forbidden (HR-SAFE-003); sound fixed |
 | doctor (AY.3) | server_status | `herdr status server --json` (JSON `version`, `protocol`; verified present at v0.8.0 346411fa, v0.8.2 9eb52145 and master `src/cli/status.rs`); socket: `ping`. Doctor only, never on the nudge path |
+| AY.10 (added 2026-09-06) | status stream | No CLI equivalent. Socket only: `events.subscribe` held connection, one per session, subscriptions `pane.created`, `pane.closed`, `pane.agent_detected`, `pane.exited`, and `PaneAgentStatusChanged` per baseline pane; one `agent.list` per (re)subscribe as the baseline (no replay, 20a500a7). Exposed by `HerdrStatusStream`, separate from `HerdrProcessAdapter` |
 
 Responses: HR-CORE-007 AgentSnapshot from `result.agent`; HR-CORE-008
 closed HerdrError enum keyed by Herdr error codes (unchanged by AY);
@@ -1653,28 +1661,44 @@ exemption note), sprint-AY.3 (AY.8 edge and dispatch prose),
 sprint-AY.4/AY.5/AY.6/AY.7 (edges, rationales, stack topology,
 preconditions, V5), sprint-AY.8 (D2 removed, D4/D9/D10/C1/C3, required
 work 1, acceptance 1 and 7, dispatch section, size/split, recommended
-agent), sprint-AY.9 (permanent CLI fallback, D10 pin name).
+agent), sprint-AY.9 (permanent CLI fallback, D10 pin name). Subscription
+socket (2026-09-06): sprint-AY.10, AY.11, AY.12 added; this plan (sprint
+map, waves, stack description, request-set table, drift row, scaling
+note, item 7); sprint-AY.8 (AY.10 edge, out of scope); sprint-AY.9 (out
+of scope).
 
 Scaling note (Rand, 2026-09-06, 30–50 agents): today's queue-wake tick
 (5 s) spawns one `herdr list` per session every tick whether or not any
 member is pending, plus one `herdr get` per member with an open task and
 one `herdr prompt` per eligible member. The socket removes the per-call
-process cost; it does not remove the per-member call count. AY.4 (breaker
-lifecycle) and AY.6 (restart coordination) must not add per-member calls,
-and the tick should skip `list` when nothing is pending and no task is
-open, and reuse the `list` snapshot instead of a per-member `get` where the
-snapshot already carries the state. The negative constraint (no new
-per-member calls in AY.4/AY.6) is in force now. The tick optimization itself
-is not owned by any AY sprint: Rand (2026-09-06) has since asked for a push
-model (the daemon must know every agent state change, sourced from either
-Herdr or schook HTTP POSTs from hook triggers), which supersedes optimizing
-the poll. It is tracked as rework item 7 below, open pending Rand's ruling.
+process cost; it does not remove the per-member call count. Rand: "we
+shouldn't be creating 50 sockets every 5 seconds"; "I would expect all
+agent queries would be done on a single socket." AY.4 (breaker lifecycle)
+and AY.6 (restart coordination) must not add per-member calls; that
+negative constraint is in force now. The tick itself is replaced through
+item 7 below, not optimized.
 
-7. (open) Agent state changes. Rand, 2026-09-06: "I really want herdr to
-   simply tell us when an agent state changes"; "we need to 'know' every time
-   an agent state changes"; "it's either herdr or schooks and track it as http
-   posts from hook triggers." Not designed in this plan and not a Phase AY
-   sprint; keep whatever eventually does this simple.
+7. Agent state changes. Rand, 2026-09-06: "I really want herdr to simply
+   tell us when an agent state changes"; "we need to 'know' every time an
+   agent state changes". Finding (fenix, from Herdr v0.8.2 `src/api`):
+   Herdr already ships this as `events.subscribe`, one held NDJSON
+   connection per session streaming every subscribed pane's agent-status
+   changes plus pane create/close; it is socket-only, has no CLI form, and
+   has no replay, so each (re)subscribe takes one `agent.list` baseline.
+   The earlier planning statement that notification needed one
+   subscription per agent was wrong; one connection carries them all.
+   Rand: "yes, I think we need to add the subscription socket."; "are you
+   proposing we do both and verify they match. once they match we can drop
+   the polling?"; "this is a prudent solution."; "and probably lowest
+   risk". Done as three sprints, each one context window: AY.10 (stream in
+   atm-herdr behind `HerdrStatusStream`, stacked on AY.8), AY.11 (daemon
+   holds the stream in shadow mode, poll stays the authority, parity
+   counters logged and projected by doctor), AY.12 (stream becomes the
+   state source, poll removed on the socket path; CLI path keeps the
+   poll). AY.12 dispatches only after this line is filled in from AY.11's
+   dogfood evidence:
+
+   Decision (Rand, YYYY-MM-DD): drop poll | keep both | stop
 
 ### Hardening rounds
 

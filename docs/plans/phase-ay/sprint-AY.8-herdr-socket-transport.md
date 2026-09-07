@@ -48,6 +48,10 @@ dependency_relations:
     dependent: AY.9
     relation: must_follow
     rationale: AY.9 alone selects and defaults to the production socket transport after this implementation merges.
+  - prerequisite: AY.8
+    dependent: AY.10
+    relation: must_follow
+    rationale: AY.10 stacks on this branch and reuses SocketIo, endpoint resolution, framing, and the fake socket server for the held events.subscribe stream.
 ---
 
 # AY.8 — Direct Herdr socket and named-pipe transport without cutover
@@ -329,5 +333,7 @@ without a plan amendment.
 - Doctor projection changes (AY.9) or live platform evidence (release
   readiness, ruling 5).
 - Removing the CLI transport or its ownership keys.
+- Streaming methods (`events.subscribe`): AY.10, stacked on this branch.
+  AY.8's fake server needs no streaming mode; AY.10 adds it.
 - Any patch, hardening, or remodeling of the legacy synchronous daemon. The
   eventual selection point remains the Tokio/Axum `atm-http-runtime` path.

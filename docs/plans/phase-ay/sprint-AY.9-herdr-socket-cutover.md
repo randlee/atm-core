@@ -272,6 +272,8 @@ serialized JSON, human output, snapshots, or transport logs.
 ## Out of scope
 
 - New Herdr capabilities or a change to Herdr's protocol.
+- Consuming the AY.10 status stream or changing the queue-wake poll
+  (AY.11, AY.12). AY.9 selects the transport; it does not hold a stream.
 - Removing or deprecating the CLI transport (no removal release exists).
 - Live macOS/Windows proof (release readiness) and the phase disposition
   (Rand, on AY.9's automated gates and the phase-ending review).
