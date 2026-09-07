@@ -123,7 +123,8 @@ error unchanged).
   continue to use team-lead.  alias would be aceptable at all user/agent
   facing interfaces and would be immediately replaced" ... "and would
   immediately be replaced at the ingress interface."
-- "additional requirements:  alias MUST be unitque for atm database"
+- "additional requirements:  alias MUST be unique for atm database (meets
+  herdr requirements)"
 
 Uniqueness is enforced where the alias is written (`add-member --alias`,
 `set-member --alias`): the roster store rejects an alias already held by
