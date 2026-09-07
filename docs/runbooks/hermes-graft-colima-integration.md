@@ -98,7 +98,7 @@ P0 exit gate:
 - The first P2 infrastructure run is preserved with no reruns. Tier C passed
   6/6; Tier A passed 7/8 with A1 failed, Tier B passed 3/6 with B2a/B2b/B2c
   failed, and Tier D passed 5/6 with D7 failed. The prompt suite remains
-  unstarted while the A1 contract conflict awaits architecture disposition.
+  unstarted until the authorized `suite/v2` full-matrix confirmation passes.
 
 ## P1 — full review of the frozen Hermes fork
 
@@ -309,21 +309,20 @@ rows; do not rerun until their dispositions are durable:
   and post-send reachability checks. Its remaining failure is a testbed-only
   assertion that the message ID appears in a particular daemon log shape; that
   assertion is outside D7's documented routing contract.
-- A1 combines stale immediate-consistency assertions with an unresolved ATM
-  contract conflict. `R-STATE-HANDOFF-1` makes read-state persistence a
-  non-blocking handoff and `R-STATE-RACE-1` forbids requiring read-your-writes,
-  so the immediate `message.read == true` and immediately following
-  `unread == 0` assertions are not valid after Phase AV. However, the older
-  read-output invariant still says `mutation_applied == true` implies
-  post-mutation bucket counts, while the Tokio path uses that field for handoff
-  acceptance and returns the reader snapshot. Architecture must reconcile the
-  meaning before A1 changes.
+- A1 is testbed expectation drift under the architecture ruling for ADR-059 and
+  requirements 7.13. `mutation_applied == true` means the read/seen transition
+  was accepted by the supervised non-blocking handoff, not that it is already
+  durable or visible. `R-STATE-RACE-1` forbids requiring read-your-writes.
+  Therefore A1 asserts acceptance, actionable selection, and the selected
+  message ID, then polls `atm list --json` with a bounded deadline until
+  `unread == 0` and `history == 1`; it does not require the returned message to
+  say `read == true`. The conflicting requirements 7.12 sentence is corrected
+  by an `arch-ctm` docs/tests PR with no product behavior change.
 
-Fenix authorized the B2/D7 expectation repair as a `suite/v2` change with a
-CATALOG entry naming the ATM source commit. The full matrix then runs once on
-the same pinned image; A1 is recorded as HELD, not FAIL. Fenix separately
-dispatches the A1 contract question to `arch-ctm`. This runbook author makes no
-ATM product change and no synchronous-daemon change.
+Fenix authorized the A1/B2/D7 expectation repair as a `suite/v2` change with a
+CATALOG entry naming the ATM source commit and ADR/requirement authority. The
+full matrix then runs once on the same pinned image. This runbook author makes
+no ATM product change and no synchronous-daemon change.
 
 ### Result handling
 
@@ -420,7 +419,7 @@ Every issue becomes a row before work continues.
 | HGC-019 | P2 | First image reported ATM 1.4.6 despite a 1.5.3 override | Testbed `build.sh` selected the alphabetically first stale `atm_*` archive instead of the explicit override | Discard image `670edd12`; testbed commit `b468321` pins override artifacts exactly and purges stale archives. Accept only the rebuilt image whose in-container version triple and baked digests match P0 | resolved before test evidence |
 | HGC-020 | P2 | B2a/B2b/B2c byte-exact envelope checks failed on the first run | Testbed `expected_envelope` still uses `read atm --team` and gives Task a `<when>` element; ATM commit `b84a9d2ef0cb7a3911ffe84642cb3e6f05b033e9` changed the accepted contract to `atm read --message-id <MID>` and intentionally omits `<when>` for Task | Preserve the failed first-run JSON; Fenix authorized Loki to update only the testbed expectations, bump `suite/v2`, add the commit-attributed CATALOG entry, and run the full matrix once on the pinned image | confirmed testbed drift; repair authorized |
 | HGC-021 | P2 | D7 routing completed but its message-ID log grep failed | The test couples routing success to an obsolete observability serialization even though its own contract is roster metadata, successful dispatch, sent outcome, and Herdr reachability | Preserve the failed row; Fenix authorized Loki to assert the supported routing contract without requiring the ULID in that log record, then include D7 in the one full-matrix confirmation | confirmed testbed drift; repair authorized |
-| HGC-022 | P2 | A1 reports an accepted mutation handoff but the returned message and immediate list still show unread state | Phase AV deliberately removed read-your-writes via a non-blocking writer handoff, but the older `mutation_applied` post-mutation-count invariant was not reconciled with handoff-acceptance semantics | Keep the prompt suite held and make no product edit. Fenix dispatches `arch-ctm` to define and reconcile the contract; Loki changes A1 only after that ruling | blocked on architecture disposition |
+| HGC-022 | P2 | A1 reports an accepted mutation handoff but the returned message and immediate list still show unread state | Phase AV deliberately removed read-your-writes: `mutation_applied` means the supervised handoff accepted the transition, while durability is asynchronous. The requirements 7.12 post-mutation-count sentence conflicts with requirements 7.13 and ADR-059 | Fenix/`arch-ctm` ruled no behavior change: correct the conflicting docs/tests separately; Loki may assert acceptance and then poll `atm list --json` to durable state with a bounded deadline, applying accepted-vs-durable to every read-state assertion | resolved contract; suite/v2 repair authorized |
 
 ## Stop/escalate decision table
 
