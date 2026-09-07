@@ -15,12 +15,15 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope ".github/workflows/ci.yml, crates/atm-herdr/Cargo.toml, crates/atm-herdr/tests/transport_fixture.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T23:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY2 ;
   triage:foundAt "2026-09-06T23:16:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-008/AY2-1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY2-QA-008/1> ;
+  triage:closedAt "2026-09-07T00:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY2-QA-008/AY2-1>
@@ -28,11 +31,11 @@
   triage:file ".github/workflows/ci.yml" ;
   triage:line 342 ;
   triage:snippet "cargo test --workspace --exclude atm-daemon --verbose" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay2-herdr-transport-seam" ;
-  triage:headSha "6021aa630" ;
-  triage:occursIn <urn:atm:triage:worktree/AY2/6021aa630> .
+  triage:headSha "5e7dd50e13ea62ab27673a68c886b9c44af22593" ;
+  triage:occursIn <urn:atm:triage:worktree/AY2/5e7dd50e1> .
 
 <urn:atm:triage:worktree/AY2/6021aa630>
   a triage:WorktreeSnapshot ;
@@ -40,3 +43,19 @@
   triage:branch "feature/ay2-herdr-transport-seam" ;
   triage:headSha "6021aa630" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AY2/5e7dd50e1>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1269-r4" ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "5e7dd50e13ea62ab27673a68c886b9c44af22593" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AY2-QA-008/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T00:10:00Z"^^xsd:dateTime ;
+  triage:fixCommit "5e7dd50e13ea62ab27673a68c886b9c44af22593" ;
+  triage:fixBranch "feature/ay2-herdr-transport-seam" ;
+  triage:verifiedInRound "qa-pr1269-r4" ;
+  triage:resolutionNote "arch-ctm (AY2-FIX-R4) added a 'Run Herdr transport fixtures' step (cargo test -p atm-herdr --all-features --verbose) inside the existing required Test (matrix.os) job in .github/workflows/ci.yml -- not a new job, so the required-checks contract is unchanged (confirmed by arch-qa). Closed on direct empirical evidence, not static inspection alone: quality-mgr pulled the live CI job logs for PR #1269 run 34067586131 (commit 5e7dd50e1) across all three matrix legs and confirmed all four named fixture tests (production_transport_tolerates_unknown_fields_and_crlf, replay_runs_twice_through_one_production_invoker, every_manifest_drives_its_declared_mode_and_delta, production_transport_round_trips_argv_and_two_sessions) executed and passed under the 'Run Herdr transport fixtures' step on ubuntu-latest (job 101579527293), macos-latest (job 101579527299), and windows-latest (job 101579527357). req-qa and arch-qa both independently confirmed the static fix (PASS, 0 blocking) in qa-pr1269-r4. This closes the AC1/AC2/AC3 CI-verification gap; the sprint's Windows CI-execution claim is now genuinely CI-proven, not just locally run." .
