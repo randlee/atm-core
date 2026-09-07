@@ -967,6 +967,15 @@ Operator examples and safe repair guidance live in
 
 ### 3.3.2 Member Naming, Alias, And Herdr Agent Name
 
+Rand (2026-09-07), the whole section in one line: "This really is a simple
+UX abstraction. Both names work user facing, everything under the hood
+used member-name except herdr which uses unique-name." Every requirement
+below is that sentence spelled out: the alias is a user-facing token,
+substituted for the member name at the CLI edge; storage, wire, mailbox,
+audit and routing see only the member name; Herdr alone sees
+`unique_name = alias ?? member name`, which must be unique across the
+database.
+
 Product requirement IDs: `REQ-ROSTER-NAME-001` through `REQ-ROSTER-NAME-010`.
 
 Source rulings (Rand, 2026-09-07, verbatim): "the requirement comes from

@@ -25,6 +25,9 @@ dependency_relations:
 
 ## Requirement (Rand, 2026-09-07, verbatim)
 
+- "This really is a simple UX abstraction.  Both names work user facing,
+  everything under the hood used member-name except herdr which uses
+  unique-name"
 - "the requirement comes from herdr agent name MUST be unique which means
   herdr agent name must be unique on atm database."
 - "herdr agent name = alias.  if alias is null/empty, alias would be equal
