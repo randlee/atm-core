@@ -1024,14 +1024,17 @@ Common preconditions:
   Composed-file rule: AY.3 (P-E(a)), AY.8 (P-E(b)) and AY.10 (D7, added
   2026-09-06) all edit `boundaries/atm-herdr/herdr-process-adapter.toml`
   and `crates/atm-herdr/src/lib.rs`; AY.9 and AY.10 both edit
-  `crates/atm-herdr/src/transport.rs` and `lib.rs`. Whichever of any such
-  pair merges into `integrate/phase-ay` later merges the integration head
-  forward, resolves the TOML by keeping every earlier inventory line and
-  adding only its own key (P-E(b) `io_owns`; AY.10 the `status_stream.rs`
-  path under that same key), resolves `lib.rs`/`transport.rs` by keeping
-  both sides' items, then reruns `just lint boundaries` and `cargo test -p
-  atm-architecture -p atm-herdr`, and fenix (boundary-guard) confirms the
-  composed files before that PR merges. AY.10 is stacked on AY.8, so its
+  `crates/atm-herdr/src/transport.rs`, `lib.rs`, and
+  `crates/atm-architecture/tests/boundary_enforcement.rs` (AY.9: forbidden-
+  edge grep and factory pin; AY.10: the C1 public items in the pin list).
+  Whichever of any such pair merges into `integrate/phase-ay` later merges
+  the integration head forward, resolves the TOML by keeping every earlier
+  inventory line and adding only its own key (P-E(b) `io_owns`; AY.10 the
+  `status_stream.rs` path under that same key), resolves `lib.rs`,
+  `transport.rs`, and `boundary_enforcement.rs` by keeping both sides'
+  items and pinned entries, then reruns `just lint boundaries` and `cargo
+  test -p atm-architecture -p atm-herdr`, and fenix (boundary-guard)
+  confirms the composed files before that PR merges. AY.10 is stacked on AY.8, so its
   TOML diff is reviewed by boundary-guard against AY.8's head before AY.10
   dispatch (P-E(c)); the approved diff is AY.10's first commit.
   Proposed diff to `boundaries/atm-herdr/herdr-process-adapter.toml`:
@@ -1138,7 +1141,7 @@ transport derives the endpoint from that same configured session.
 | HR-CORE-005 | list | `herdr agent list` |
 | HR-CORE-010 (AX.6) | notify | `herdr notification show <title> --body <body> --sound request`; mail body forbidden (HR-SAFE-003); sound fixed |
 | doctor (AY.3) | server_status | `herdr status server --json` (JSON `version`, `protocol`; verified present at v0.8.0 346411fa, v0.8.2 9eb52145 and master `src/cli/status.rs`); socket: `ping`. Doctor only, never on the nudge path |
-| HR-CORE-011 (AY.10, added 2026-09-06) | status stream | No CLI equivalent. Socket only: `events.subscribe` held connection, one per session, subscriptions `pane.created`, `pane.closed`, `pane.agent_detected`, `pane.exited`, and five status-filtered `PaneAgentStatusChanged` per discovered pane; Herdr's probe-on-subscribe delivers each pane's current status as the first event on the same connection, which is the baseline (no replay, 20a500a7; `agent.list` used only to discover pane ids). Exposed by `HerdrStatusStream`, separate from `HerdrProcessAdapter`; CLI composition provides `None` |
+| HR-CORE-011 (AY.10, added 2026-09-06) | status stream | No CLI equivalent. Socket only: `events.subscribe` held connection, one per session, subscriptions `pane.created`, `pane.closed`, `pane.agent_detected`, `pane.exited` (re-list triggers only; they replay retained hub history), and one unfiltered `pane.agent_status_changed { pane_id }` per discovered pane; baseline from `agent.list` taken after `SubscriptionStarted`, stream value wins when newer, changes deduped by held value. Herdr-side cost: one in-process `pane_get` per subscribed pane per 100 ms while the hub is quiet (AY.10 "Herdr facts"), accepted by Rand under rework item 7 before dispatch. Exposed by `HerdrStatusStream`, separate from `HerdrProcessAdapter`; CLI composition provides `None` |
 
 Responses: HR-CORE-007 AgentSnapshot from `result.agent`; HR-CORE-008
 closed HerdrError enum keyed by Herdr error codes (unchanged by AY,
@@ -1713,10 +1716,21 @@ item 7 below, not optimized.
    agent state changes". Finding (fenix, from Herdr v0.8.2 `src/api`):
    Herdr already ships this as `events.subscribe`, one held NDJSON
    connection per session streaming every subscribed pane's agent-status
-   changes plus pane create/close; it is socket-only, has no CLI form, and
-   has no replay. Herdr probes each pane at subscribe time and delivers
-   its current status on the stream, so the baseline arrives on the same
-   connection with no snapshot-to-stream window (AY.10 C2).
+   changes plus pane create/close; it is socket-only and has no CLI form.
+   Correction (fenix, 2026-09-07, critical review r4 CRIT-401/402, verified
+   in v0.8.2 `src/api/subscriptions.rs` and `server.rs`): Herdr's stream
+   is not push-based. Each per-pane agent-status subscription is polled by
+   Herdr every 100 ms and, when the event hub is quiet, runs one
+   in-process `pane_get`; hub-only pane subscriptions replay retained
+   history on every subscribe. AY.10 C2 therefore uses one unfiltered
+   subscription per pane (N `pane_get` per 100 ms inside Herdr, 500/s at
+   50 panes, no new sockets) with the baseline from `agent.list` after
+   `SubscriptionStarted`. The only zero-poll form is a Herdr change (a
+   hub-only agent-status subscription without a pane id), which is out of
+   AY.10's scope and would need a HERDR_MINIMUM_VERSION bump. AY.10 is
+   dispatched only after this line is filled in:
+
+   Decision (Rand, YYYY-MM-DD): accept N-per-100ms | herdr change first | stop AY.10
    The earlier planning statement that notification needed one
    subscription per agent was wrong; one connection carries them all.
    Rand: "yes, I think we need to add the subscription socket."; "are you
@@ -1788,11 +1802,12 @@ round below is PASS or every finding has an accepted disposition.
   against "No new variant" and HR-CORE-008 (fixed: composition returns
   `Option<Arc<dyn HerdrStatusStream>>`, `None` on CLI, enum unchanged);
   CRIT-303 C2 took the `agent.list` baseline on a separate connection
-  before subscribing, losing transitions in the window (fixed: five
-  status-filtered per-pane subscriptions use Herdr's probe-on-subscribe as
-  the baseline on the stream itself; replacement connection started
-  before the old one closes; acceptance 2 injects a transition in the
-  window); CRIT-304 stream reconnects coupled to the host-wide nudge
+  before subscribing, losing transitions in the window (fixed in r3 as
+  scoped by five status-filtered per-pane subscriptions; that design was
+  itself withdrawn in r4, CRIT-401/402, and replaced by one unfiltered
+  subscription per pane with the snapshot taken after
+  `SubscriptionStarted`; replacement connection started before the old
+  one closes; acceptance 2 injects transitions in every window); CRIT-304 stream reconnects coupled to the host-wide nudge
   breaker (fixed: own bounded budget, no breaker access; acceptance 4);
   CRIT-305 no requirement id or ADR-058 amendment for the stream (fixed:
   D8 HR-CORE-011 plus ADR-058 paragraph); CRIT-306 exit gate was AY.9-only
@@ -1801,4 +1816,29 @@ round below is PASS or every finding has an accepted disposition.
   composed-file rule covered two editors only (fixed: three-editor rule,
   transport.rs/lib.rs pairs, P-E(c) for AY.10).
   M1 (minor): text not retained across the context compaction that
-  followed r3; r4 re-checks it rather than recording a guess.
+  followed r3; r4 found no candidate defect to attribute to it. Retired
+  as unrecoverable (CRIT-4M1); not carried forward.
+- plan-scope-reviewer r4 (FAIL, 0 blocking / 1 important; reviewed
+  7d8a03d75): SCOPE-301..305 and M1 confirmed fixed; SCOPE-401 AY.9 C1a
+  and AY.10 C3 both edit
+  `crates/atm-architecture/tests/boundary_enforcement.rs` with no
+  composition procedure (fixed: P-E composed-file rule and both sprints'
+  rationales name it as a composed file, keep-both-sides resolution).
+- critical-plan-reviewer r4 (FAIL, 2 blocking / 2 important / 1 minor;
+  reviewed 7d8a03d75; CRIT-301..307 confirmed fixed): CRIT-401 Herdr's
+  stream is server-polled and the five-filter design drove 5N `pane_get`
+  per 100 ms inside Herdr (fixed: verified in v0.8.2 source, design
+  replaced by one unfiltered subscription per pane, bound stated in AY.10
+  "Herdr facts" and HR-CORE-011, accepted-cost decision line under rework
+  item 7 gates dispatch, AY.11 evidence records Herdr CPU with and
+  without the stream); CRIT-402 per-filter sequential probes made the
+  baseline undecidable on the wire (fixed: baseline from `agent.list`
+  after `SubscriptionStarted`, stream value wins when newer, dedupe by
+  held value, D4 fake server models sequential probes, replay, and
+  duplicates, acceptance 2 covers each window); CRIT-403 no handshake
+  latency budget (fixed: C2 budget `min(deadline, 2 s + 20 ms x N)`,
+  acceptance 3a with scripted probe latency at 50 panes); CRIT-404
+  CRIT-303 recorded as unqualified fixed and AY.11 exit condition did not
+  name transient windows (fixed: ledger entry qualified above; AY.11 D2
+  logs a rebuilt-since-last-tick flag and the exit condition excludes
+  those ticks); CRIT-4M1 lost r3 M1 (retired above).

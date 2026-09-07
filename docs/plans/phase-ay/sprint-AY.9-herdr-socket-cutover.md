@@ -18,7 +18,7 @@ dependency_relations:
   - prerequisite: AY.9
     dependent: AY.10
     relation: parallel_safe
-    rationale: AY.10 changes only atm-herdr, its fixtures, the architecture pin, and Herdr docs; AY.9 owns the composition, config reader, and doctor files. Neither reads the other's diff; the shared `crates/atm-herdr/src/lib.rs` and `transport.rs` edits are composed under the P-E rule in phase-ay-plan.md.
+    rationale: AY.10 changes only atm-herdr, its fixtures, the architecture pin, and Herdr docs; AY.9 owns the composition, config reader, and doctor files. Neither reads the other's diff; the shared `crates/atm-herdr/src/lib.rs`, `transport.rs`, and `crates/atm-architecture/tests/boundary_enforcement.rs` edits are composed under the P-E rule in phase-ay-plan.md.
   - prerequisite: AY.9
     dependent: AY.11
     relation: must_follow

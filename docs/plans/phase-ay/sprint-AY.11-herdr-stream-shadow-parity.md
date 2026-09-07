@@ -63,9 +63,11 @@ Ordinary PR, target `integrate/phase-ay`, no `gh stack link`.
   `list`, compare each agent's polled status with the shadow map. Count
   `match`, `stream_stale` (stream older than one interval), `mismatch`,
   `stream_missing` (agent absent from stream map), `stream_extra`. Emit one
-  structured log line per tick with the five counters and, for each
-  mismatch, agent name plus both statuses. Never a message body, never a
-  pane title.
+  structured log line per tick with the five counters, a
+  `rebuilt_since_last_tick` flag (true when the shadow map received a
+  `Baseline` or `Disconnected` since the previous tick: reconnect or
+  replacement handover), and, for each mismatch, agent name plus both
+  statuses. Never a message body, never a pane title.
 - [ ] D3 — `HerdrQueueWakeStats` gains the five counters; the existing
   stats sink and the doctor's Herdr section (AY.3/AY.9) project them as
   `herdr.stream_parity.*`.
@@ -122,8 +124,15 @@ One new module, one parity block, one test file: one context window.
 Parity evidence is the daemon's own log over a dogfood run on rand-m4
 with the normal team active: consecutive ticks with `mismatch == 0` and
 `stream_missing == 0` (`stream_stale` is expected around a change and is
-not a failure). The number of ticks and the run length are Rand's call
-when he reads the evidence; this sprint does not fix a threshold.
+not a failure). Ticks with `rebuilt_since_last_tick == true` (reconnect or
+replacement handover, AY.10 C2) are expected transient noise: they are
+excluded from the consecutive count, do not reset it, and are reported
+separately with their count; a mismatch on any other tick is a genuine
+parity failure. The evidence also records Herdr's process CPU over the
+run with the stream open and, for the same length, with the daemon on
+the CLI transport (stream absent), so the AY.10 Herdr-side cost is
+measured. The number of ticks and the run length are Rand's call when he
+reads the evidence; this sprint does not fix a threshold.
 
 ## Required validation
 
