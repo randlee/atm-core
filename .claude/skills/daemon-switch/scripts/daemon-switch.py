@@ -80,6 +80,13 @@ from temporary_launch_windows import (  # noqa: E402
     quote_windows_command_line,  # noqa: F401 - tested compatibility codec re-export.
 )
 from temporary_launch_linux import LinuxSystemdUserAdapter  # noqa: E402
+from herdr_entry import (  # noqa: E402
+    HerdrEndpoint,
+    HerdrEntryError,
+    HerdrEntryManager,
+    NativeEntryPlatform,
+    identifier,
+)
 
 
 LIVE_PAIR_READINESS_ATTEMPTS = 200
@@ -882,6 +889,100 @@ def status(args: argparse.Namespace) -> None:
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
+def herdr_entry_root() -> Path:
+    """Return the private ADR-053-adjacent state root for entry transactions."""
+    return state_path().with_name("herdr-entry")
+
+
+def herdr_entry_endpoints(cli: Path, *, install: bool) -> list[HerdrEndpoint]:
+    """Use only AY3's native doctor JSON; never reconstruct roster selection."""
+    payload = doctor(cli)
+    if not isinstance(payload, dict) or "error" in payload:
+        raise HerdrEntryError(
+            "HERDR_DOCTOR_UNREADABLE",
+            "native atm doctor --json could not be read",
+            "Fix native doctor and rerun; daemon-switch will not guess Herdr configuration",
+            4,
+        )
+    herdr = payload.get("herdr")
+    if not isinstance(herdr, dict) or herdr.get("configured") is None:
+        raise HerdrEntryError(
+            "HERDR_DOCTOR_UNREADABLE",
+            "native doctor did not provide herdr.configured",
+            "Fix native doctor and rerun; daemon-switch will not guess Herdr configuration",
+            4,
+        )
+    if herdr.get("configured") is not True:
+        if install:
+            raise HerdrEntryError(
+                "HERDR_NOT_CONFIGURED",
+                "native doctor reports Herdr is not configured",
+                "Configure Herdr or omit the entry operation",
+                3,
+            )
+        return []
+    values = herdr.get("endpoints")
+    if not isinstance(values, list):
+        raise HerdrEntryError(
+            "HERDR_DOCTOR_UNREADABLE",
+            "native doctor did not provide ordered herdr.endpoints",
+            "Fix native doctor and rerun; daemon-switch will not guess Herdr configuration",
+            4,
+        )
+    endpoints: list[HerdrEndpoint] = []
+    for value in values:
+        if not isinstance(value, dict):
+            raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor endpoint was malformed", "Fix native doctor and rerun", 4)
+        name = value.get("endpoint", value.get("session", "default"))
+        if name is None:
+            name = "default"
+        if not isinstance(name, str) or not name or not re.fullmatch(r"[A-Za-z0-9_.-]+", name):
+            raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor endpoint identifier was invalid", "Fix native doctor and rerun", 4)
+        socket_path = value.get("socket_path")
+        if socket_path is not None and not isinstance(socket_path, str):
+            raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor socket provenance was malformed", "Fix native doctor and rerun", 4)
+        endpoints.append(HerdrEndpoint(name, socket_path))
+    return endpoints
+
+
+def herdr_entry_manager() -> HerdrEntryManager:
+    adapter = NativeEntryPlatform(herdr_entry_root() / "objects", run)
+    # Keep platform selection patchable at the composition boundary for the
+    # platform-fake suite; the entry module itself owns no global platform state.
+    adapter.name = platform.system()
+    return HerdrEntryManager(herdr_entry_root(), adapter)
+
+
+def herdr_entry_result(ok: bool, code: str, message: str, remedy: str, entries: list[dict[str, object]]) -> None:
+    print(json.dumps({"ok": ok, "code": code, "message": message, "remedy": remedy, "entries": entries}, sort_keys=True))
+
+
+def run_herdr_entry(args: argparse.Namespace) -> None:
+    cli, _daemon = selected_links(args)
+    endpoints = herdr_entry_endpoints(cli, install=args.herdr_entry_command == "install")
+    if args.endpoint is not None:
+        endpoints = [endpoint for endpoint in endpoints if endpoint.name == args.endpoint]
+        if not endpoints:
+            raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "requested endpoint is absent from native doctor", "Fix the endpoint selection and rerun", 4)
+    manager = herdr_entry_manager()
+    if args.herdr_entry_command == "status" and args.repair:
+        repair = manager.repair()
+        if repair is not None:
+            status = [manager.entry_status(endpoint) for endpoint in endpoints]
+            herdr_entry_result(True, "HERDR_ENTRY_REPAIRED", "Herdr entry transaction repaired", "none", status)
+            return
+    entries: list[dict[str, object]] = []
+    for endpoint in endpoints:
+        if args.herdr_entry_command == "install":
+            entries.append(manager.install(endpoint))
+        elif args.herdr_entry_command == "remove":
+            entries.append(manager.remove(endpoint))
+        else:
+            entries.append(manager.entry_status(endpoint))
+    success = {"install": "HERDR_ENTRY_INSTALLED", "remove": "HERDR_ENTRY_REMOVED", "status": "HERDR_ENTRY_STATUS_OK"}[args.herdr_entry_command]
+    herdr_entry_result(True, success, "Herdr entries processed", "none", entries)
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     selectors = argparse.ArgumentParser(add_help=False)
@@ -938,6 +1039,13 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--yes", action="store_true")
     windows_provision = sub.add_parser("windows-provision", parents=[selectors])
     windows_provision.add_argument("--yes", action="store_true")
+    herdr_entry = sub.add_parser("herdr-entry", parents=[selectors])
+    herdr_entry_sub = herdr_entry.add_subparsers(dest="herdr_entry_command", required=True)
+    for name in ("install", "remove", "status"):
+        command = herdr_entry_sub.add_parser(name)
+        command.add_argument("--endpoint")
+        if name == "status":
+            command.add_argument("--repair", action="store_true")
     return result
 
 
@@ -982,8 +1090,13 @@ def main() -> int:
                 restore_temporary_launch(args, recovery=args.temporary_command == "recover")
         elif args.command == "windows-provision":
             provision_windows_task(args)
+        elif args.command == "herdr-entry":
+            run_herdr_entry(args)
         else:
             quiesce(args)
+    except HerdrEntryError as error:
+        herdr_entry_result(False, error.code, error.message, error.remedy, [])
+        return error.exit_code
     except SwitchError as error:
         print(f"daemon-switch: {error}", file=sys.stderr)
         return 2
