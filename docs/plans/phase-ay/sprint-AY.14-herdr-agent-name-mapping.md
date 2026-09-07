@@ -188,60 +188,22 @@ atm-quality"). Members with unique names (`arch-ctm`, `cipher`, `fenix`)
 get none. The `<identity>_<team>` convention above is a suggestion for
 other repos, not a rule.
 
-Rand, 2026-09-07, verbatim, on processing: ".atm.toml does not need to get
-processed by daemon for alias"; "how are you planning to handle/process
-.atm.toml?  just when 'add member' occurs?  if there is an alias in
-.atm.toml AND no alias specified on command line use alias from
-.atm.toml?"; "any time?"; "this sounds like vague requirements."
+Rand, 2026-09-07, verbatim: ".atm.toml does not need to get processed by
+daemon for alias"; "this sounds like vague requirements."; "It sounds like
+you took an idea 'let's add alias to .atm.toml so hmux can use it' and
+turned in into rust code".
 
-D8, precise (fenix, 2026-09-07, answering the above):
-
-1. Key: optional `alias = "<name>"` on a `[[rmux.windows.panes]]` entry,
-   matched to the member by that pane's `name`. Value must pass the
-   roster alias validation in D7 (same charset as a canonical name).
-2. Reader: only the `atm` CLI, only inside `atm teams add-member`, only at
-   the moment that command runs. The daemon never reads `.atm.toml` for
-   this key. No other command (`send`, `read`, `members`, `roster`,
-   `doctor`) consults it. There is no background or periodic processing.
-3. Resolution at `add-member`, in order, first hit wins:
-   a. `--alias <name>` on the command line.
-   b. Otherwise, if the `.atm.toml` found by the existing config discovery
-      (cwd upward, same file the CLI already loads for `default_team`)
-      has a pane whose `name` equals the member being added and that pane
-      declares `alias`, that value.
-   c. Otherwise no alias.
-4. The chosen alias is written to the member's roster attribute once, at
-   add time, through the same write lane and uniqueness check as an
-   explicit `--alias` (AC7). After that the roster is the only source of
-   truth: editing or removing the key in `.atm.toml` changes nothing for
-   an existing member; a new alias requires a roster update command, not
-   a config edit.
-5. If step 3b yields an alias that fails validation or uniqueness, the
-   command fails with the same error as an explicit `--alias` would,
-   naming `.atm.toml` as the source. No silent fallback to "no alias".
-6. Spawners that pass `--alias` themselves (hmux) are unaffected by 3b.
-
-Rand, 2026-09-07, verbatim: "what if .atm.toml alias is different from
-database?  what if .atm.toml is different from what is specified on
-command line?" Answers, precise:
-
-7. `.atm.toml` differs from the command line: the command line wins
-   (3a). The `.atm.toml` value is not read at all when `--alias` is
-   given, so no conflict is reported.
-8. `.atm.toml` differs from the database (the member already exists in
-   the team with a roster alias): the database wins. `add-member` on an
-   existing member never rewrites its alias. If the effective requested
-   alias (3a or 3b) differs from the stored one, the command fails and the
-   error prints both values and the source of the requested one
-   (`--alias` or `.atm.toml`); changing a stored alias is a separate
-   explicit roster update command, never a side effect of add-member. If
-   the requested alias equals the stored one, add-member is a no-op for
-   the alias. Precedence is therefore: database > command line >
-   `.atm.toml` > none.
-
-Document the key in docs/requirements.md next to the existing
-`[atm].aliases` rules, stating that the roster alias is the addressing
-alias and `[atm].aliases` remains CLI-only shorthand.
+D8, corrected (2026-09-07): `alias = "<name>"` is added to the
+`team-lead`, `quality-mgr` and `publisher` entries under
+`[[rmux.windows.panes]]` in atm-core's `.atm.toml`, as data for hmux (the
+external spawner), which passes it to `atm teams add-member --alias`. No
+atm crate reads this key: not the CLI, not the daemon, not
+atm-http-runtime. There is no default-alias lookup, no precedence logic
+and no Rust for this in AY.14. The only alias input to atm is the
+`--alias` argument (and its daemon-path equivalent) from D7/AC8. The
+earlier D8 draft that had `add-member` reading the pane alias is
+withdrawn. Document the key in docs/requirements.md next to the existing
+`[atm].aliases` rules as a spawner-consumed key that atm ignores.
 
 ## Acceptance criteria
 
@@ -273,15 +235,9 @@ alias and `[atm].aliases` remains CLI-only shorthand.
   member-add path so the CLI cannot be bypassed.
 - AC9 atm-core `.atm.toml` declares `alias` on the team-lead, quality-mgr
   and publisher panes only (`atm-lead`, `atm-quality`, `atm-publisher`).
-  `add-member` applies D8 steps 3a-3c, 5, 7 and 8; tests cover: explicit
-  `--alias` overriding a declared pane alias, pane alias used when no
-  `--alias`, no pane entry (no alias), pane alias failing uniqueness
-  (rejected, error names `.atm.toml`), a later `.atm.toml` edit not
-  changing an existing member's roster alias, and add-member on an
-  existing member with a differing `--alias` or pane alias rejected with
-  both values in the error. `rg` shows no reader of the
-  pane `alias` key outside the add-member code path and none under
-  crates/atm-daemon or crates/atm-http-runtime.
+  `rg alias` over `crates/` shows no reader of the pane `alias` key; the
+  existing `.atm.toml` parsing tests still pass with the key present
+  (unknown-key tolerance, no new struct field).
 - AC5 Boundary TOMLs untouched unless the boundary guard requires a
   record update for the new newtype; if so, say which in the PR.
 
