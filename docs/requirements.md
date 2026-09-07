@@ -1824,6 +1824,25 @@ The handoff behavior is a product decision recorded in ADR-059. The ADR
 records permanent drop and synchronous write-through as rejected alternatives
 and their operator consequences.
 
+### 7.14 Write-Source Preflight Concurrency
+
+Caller-owned `--file` and template source paths are a write-admission concern
+but MUST NOT consume Tokio worker capacity or reader-lane capacity while their
+filesystem policy is evaluated.
+
+- `R-WRITE-PREFLIGHT-1` File and template source preparation MUST run through
+  a bounded blocking admission of capacity two. Inline bodies do not require
+  blocking admission.
+- `R-WRITE-PREFLIGHT-2` Source preparation MUST observe the request deadline.
+  A request unable to start or finish preflight in time MUST fail closed before
+  durable admission; it MUST NOT persist a partial message.
+- `R-WRITE-PREFLIGHT-3` A timed-out source-preflight job retains its permit
+  until its blocking work exits. This bounds permanently stalled filesystem
+  operations to two, leaves read-family work schedulable, and forbids treating
+  an abandoned response as a successful write.
+- `R-WRITE-PREFLIGHT-4` Every source-preflight job that outlives its deadline
+  MUST be counted and surfaced through `atm doctor` for the daemon lifetime.
+
 ## 8. `atm ack`
 
 Product requirement ID:

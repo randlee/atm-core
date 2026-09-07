@@ -54,7 +54,10 @@ mod tests {
 
     #[test]
     fn version_string_matches_the_binary_contract() {
-        assert_eq!(version_string(), "atm-daemon 1.5.5");
+        assert_eq!(
+            version_string(),
+            format!("atm-daemon {}", env!("CARGO_PKG_VERSION"))
+        );
         assert!(version_requested(Some("--version")));
         assert!(version_requested(Some("-V")));
         assert!(!version_requested(Some("--help")));

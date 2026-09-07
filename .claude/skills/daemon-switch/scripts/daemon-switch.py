@@ -714,7 +714,43 @@ def restart(args: argparse.Namespace) -> None:
     daemon = require_executable(daemon, "selected atm daemon")
     require_macos_development_signatures(cli, daemon)
     run_service(args, "stop", allow_absent=True)
-    require_stopped_daemon(args, cli)
+    try:
+        require_stopped_daemon(args, cli)
+    except SwitchError as stopped_error:
+        # A successful bootout can still leave exactly one old daemon holding
+        # the singleton lock.  Restart owns the controlled recovery: prove
+        # the owner, SIGTERM it, then continue with the selected LaunchAgent.
+        # If any part of that recovery fails, re-bootstrap before reporting so
+        # this command never strands the managed agent unloaded.
+        if platform.system() == "Darwin":
+            pids = macos_daemon_owner_pids()
+            if pids:
+                try:
+                    repair_macos_orphan(pids)
+                    require_stopped_daemon(args, cli)
+                except SwitchError as recovery_error:
+                    try:
+                        run_service(args, "start")
+                    except SwitchError as rebootstrap_error:
+                        raise SwitchError(
+                            "controlled restart recovery failed and the selected LaunchAgent "
+                            "could not be re-bootstrapped"
+                        ) from rebootstrap_error
+                    raise SwitchError(
+                        "controlled restart recovery failed after re-bootstrapping the selected LaunchAgent"
+                    ) from recovery_error
+            else:
+                try:
+                    run_service(args, "start")
+                except SwitchError as rebootstrap_error:
+                    raise SwitchError(
+                        "controlled restart stop failed and the selected LaunchAgent could not be re-bootstrapped"
+                    ) from rebootstrap_error
+                raise SwitchError(
+                    "controlled restart stop failed after re-bootstrapping the selected LaunchAgent"
+                ) from stopped_error
+        else:
+            raise
     run_service(args, "start")
     matched, detail = wait_for_live_pair(cli, daemon)
     if not matched:

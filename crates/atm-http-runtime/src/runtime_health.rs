@@ -69,6 +69,7 @@ struct RuntimeHealthState {
     queue_messages_drained_total: u64,
     queue_drain_failures_total: u64,
     blocking_core_bridge_stalls_total: u64,
+    write_source_preflight_stalls_total: u64,
     detached_received_hook_warnings_total: u64,
 }
 
@@ -224,6 +225,14 @@ impl RuntimeHealth {
         let mut state = self.lock();
         state.blocking_core_bridge_stalls_total =
             state.blocking_core_bridge_stalls_total.saturating_add(1);
+    }
+
+    /// Records a caller-owned file or template preflight that outlived its
+    /// request budget while retaining one bounded blocking permit.
+    pub fn record_write_source_preflight_stall(&self) {
+        let mut state = self.lock();
+        state.write_source_preflight_stalls_total =
+            state.write_source_preflight_stalls_total.saturating_add(1);
     }
 
     /// Record an already-authorized local heartbeat.
@@ -409,6 +418,7 @@ impl RuntimeHealth {
             queue_messages_drained_total: state.queue_messages_drained_total,
             queue_drain_failures_total: state.queue_drain_failures_total,
             blocking_core_bridge_stalls_total: state.blocking_core_bridge_stalls_total,
+            write_source_preflight_stalls_total: state.write_source_preflight_stalls_total,
         }
     }
 
