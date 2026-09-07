@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::address::AgentAddress;
 use crate::boundary;
 use crate::error::AtmError;
-use crate::mailbox::source::resolve_target;
+use crate::mailbox::source::{ResolvedTarget, resolve_target};
 use crate::observability::ObservabilityPort;
 use crate::read::{
     BucketCounts, ClassifiedMessage, filters,
@@ -418,15 +418,7 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         runtime.resolve_roster_member_at_ingress(team, member, allow_database_wide_alias)
     });
     let contains_needle = query.contains_filter.as_deref();
-    let config = runtime.load_config(&query.current_dir)?;
-    let actor = query.caller_identity.clone();
-    let target = resolve_target(
-        query.target_address.as_ref(),
-        &actor,
-        &query.caller_team,
-        config.as_ref(),
-    )?;
-    validate_target_member_in_roster(runtime, &target)?;
+    let target = resolve_list_target(&query, runtime)?;
 
     let seen_watermark = if query.seen_state_filter && query.selection_mode != ReadSelection::All {
         runtime.load_seen_watermark(&query.home_dir, &target.team, &target.agent)?
@@ -489,6 +481,21 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         task_rows: Vec::new(),
         task_event_rows: Vec::new(),
     })
+}
+
+fn resolve_list_target<R: RetainedServiceRuntime>(
+    query: &ListQuery,
+    runtime: &R,
+) -> Result<ResolvedTarget, AtmError> {
+    let config = runtime.load_config(&query.current_dir)?;
+    let target = resolve_target(
+        query.target_address.as_ref(),
+        &query.caller_identity,
+        &query.caller_team,
+        config.as_ref(),
+    )?;
+    validate_target_member_in_roster(runtime, &target)?;
+    Ok(target)
 }
 
 fn render_selected_messages<R: RetainedMailboxRuntime>(
