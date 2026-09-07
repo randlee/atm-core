@@ -205,6 +205,12 @@ earlier D8 draft that had `add-member` reading the pane alias is
 withdrawn. Document the key in docs/requirements.md next to the existing
 `[atm].aliases` rules as a spawner-consumed key that atm ignores.
 
+Noted, not in scope (Rand, 2026-09-07, verbatim): "the only place it might
+make sense would be for doctor to read it and report if it did not match."
+That is: `atm doctor` reads the pane alias from `.atm.toml` and reports a
+mismatch against the roster alias. Not an AY.14 deliverable; no dispatch
+until Rand asks for it.
+
 ## Acceptance criteria
 
 - AC1 Members without `herdrAgent` behave exactly as before (existing
