@@ -26,19 +26,28 @@ impl FakeHerdrSocket {
         Ok(Self { path, listener })
     }
 
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
     /// Accept exactly one request line and return the supplied response line.
-    pub async fn serve_once(self, response: &[u8]) -> io::Result<Vec<u8>> {
+    pub async fn serve_once(self, response: Vec<u8>) -> io::Result<Vec<u8>> {
         let (stream, _) = self.listener.accept().await?;
         let (read_half, mut write_half) = stream.into_split();
         let mut reader = BufReader::new(read_half);
         let mut request = Vec::new();
         reader.read_until(b'\n', &mut request).await?;
-        write_half.write_all(response).await?;
+        write_half.write_all(&response).await?;
         Ok(request)
+    }
+
+    /// Accept one request and keep the connection open until the caller
+    /// cancels the fixture. This is used to prove the client's read deadline
+    /// and cancellation path without spawning a fixture-owned task.
+    pub async fn serve_and_stall(self) -> io::Result<()> {
+        let (stream, _) = self.listener.accept().await?;
+        let (read_half, _write_half) = stream.into_split();
+        let mut reader = BufReader::new(read_half);
+        let mut request = Vec::new();
+        reader.read_until(b'\n', &mut request).await?;
+        std::future::pending::<()>().await;
+        Ok(())
     }
 }
 
@@ -64,7 +73,7 @@ impl FakeHerdrSocket {
         Ok(Self { server })
     }
 
-    pub async fn serve_once(mut self, response: &[u8]) -> io::Result<Vec<u8>> {
+    pub async fn serve_once(mut self, response: Vec<u8>) -> io::Result<Vec<u8>> {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         self.server.connect().await?;
@@ -80,7 +89,25 @@ impl FakeHerdrSocket {
                 break;
             }
         }
-        self.server.write_all(response).await?;
+        self.server.write_all(&response).await?;
         Ok(request)
+    }
+
+    pub async fn serve_and_stall(mut self) -> io::Result<()> {
+        self.server.connect().await?;
+        let mut request = Vec::new();
+        loop {
+            let mut byte = [0_u8; 1];
+            let read = self.server.read(&mut byte).await?;
+            if read == 0 {
+                return Ok(());
+            }
+            request.push(byte[0]);
+            if byte[0] == b'\n' {
+                break;
+            }
+        }
+        std::future::pending::<()>().await;
+        Ok(())
     }
 }

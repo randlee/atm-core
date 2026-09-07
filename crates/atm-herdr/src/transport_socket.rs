@@ -442,10 +442,7 @@ mod tests {
 
     #[test]
     fn endpoint_explicit_socket_path_wins_over_session() {
-        let cfg = HerdrClientConfig {
-            socket_path: Some(PathBuf::from("/explicit/herdr.sock")),
-            ..HerdrClientConfig::default()
-        };
+        let cfg = HerdrClientConfig::with_socket_path(PathBuf::from("/explicit/herdr.sock"));
         let session = HerdrSession::new("agent-session").expect("session");
         assert_eq!(
             herdr_api_endpoint(&cfg, Some(&session), &env(Platform::Unix)),
@@ -479,10 +476,7 @@ mod tests {
 
     #[test]
     fn endpoint_windows_explicit_pipe_path_is_not_prefixed_twice() {
-        let cfg = HerdrClientConfig {
-            socket_path: Some(PathBuf::from(r"\\.\pipe\custom-herdr")),
-            ..HerdrClientConfig::default()
-        };
+        let cfg = HerdrClientConfig::with_socket_path(PathBuf::from(r"\\.\pipe\custom-herdr"));
         assert_eq!(
             herdr_api_endpoint(&cfg, None, &env(Platform::Windows)),
             HerdrEndpoint::NamedPipe(r"\\.\pipe\custom-herdr".to_owned())
@@ -491,10 +485,7 @@ mod tests {
 
     #[test]
     fn endpoint_windows_explicit_path_gets_the_pipe_prefix() {
-        let cfg = HerdrClientConfig {
-            socket_path: Some(PathBuf::from(r"C:\Temp\herdr.sock")),
-            ..HerdrClientConfig::default()
-        };
+        let cfg = HerdrClientConfig::with_socket_path(PathBuf::from(r"C:\Temp\herdr.sock"));
         assert_eq!(
             herdr_api_endpoint(&cfg, None, &env(Platform::Windows)),
             HerdrEndpoint::NamedPipe(r"\\.\pipe\C:\Temp\herdr.sock".to_owned())
@@ -566,10 +557,7 @@ mod tests {
         });
 
         let io = SocketIo {
-            cfg: HerdrClientConfig {
-                socket_path: Some(path.clone()),
-                ..HerdrClientConfig::default()
-            },
+            cfg: HerdrClientConfig::with_socket_path(path.clone()),
             env: env(Platform::Unix),
             max_line_bytes: HERDR_MAX_SOCKET_LINE_BYTES,
             in_flight: Arc::new(Semaphore::new(SOCKET_PERMITS)),
@@ -616,6 +604,57 @@ mod tests {
         let _ = acquire_permit(permits, RequestDeadline::after(Duration::from_secs(1)))
             .await
             .expect("released permit");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn seventeen_callers_are_bounded_by_sixteen_permits() {
+        let permits = Arc::new(Semaphore::new(SOCKET_PERMITS));
+        let mut held = Vec::new();
+        for _ in 0..SOCKET_PERMITS {
+            held.push(
+                acquire_permit(
+                    Arc::clone(&permits),
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("permit"),
+            );
+        }
+
+        let waiter = tokio::spawn(acquire_permit(
+            Arc::clone(&permits),
+            RequestDeadline::after(Duration::from_secs(1)),
+        ));
+        tokio::task::yield_now().await;
+        assert!(!waiter.is_finished());
+        tokio::time::advance(Duration::from_secs(1)).await;
+        assert!(matches!(
+            waiter.await.expect("waiter"),
+            Err(HerdrError::Timeout)
+        ));
+        drop(held);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cancelling_a_permit_wait_releases_all_state() {
+        let permits = Arc::new(Semaphore::new(1));
+        let held = acquire_permit(
+            Arc::clone(&permits),
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .await
+        .expect("held permit");
+        let waiter = tokio::spawn(acquire_permit(
+            Arc::clone(&permits),
+            RequestDeadline::after(Duration::from_secs(1)),
+        ));
+        tokio::task::yield_now().await;
+        waiter.abort();
+        let _ = waiter.await;
+        drop(held);
+        let _ = acquire_permit(permits, RequestDeadline::after(Duration::from_secs(1)))
+            .await
+            .expect("permit after cancellation");
     }
 
     #[tokio::test]

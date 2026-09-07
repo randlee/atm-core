@@ -2336,9 +2336,18 @@ fn writer_batch_window_smoke_sources(root: &Path) -> Vec<PathBuf> {
 fn ai11_guarded_workspace_sources(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     collect_rust_files(&root.join("crates"), &mut files);
-    files.retain(|path| path != &ai11_deletion_gate_fixture_path(root));
+    files.retain(|path| {
+        path != &ai11_deletion_gate_fixture_path(root)
+            && !ai11_approved_herdr_socket_source(root, path)
+    });
     files.sort();
     files
+}
+
+fn ai11_approved_herdr_socket_source(root: &Path, path: &Path) -> bool {
+    let socket_src = root.join("crates/atm-herdr/src/transport_socket.rs");
+    let socket_fixtures = root.join("crates/atm-herdr/tests/support/fake_herdr_socket");
+    path == socket_src || path.starts_with(socket_fixtures)
 }
 
 fn ai11_deletion_gate_fixture_path(root: &Path) -> PathBuf {

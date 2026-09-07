@@ -9,6 +9,10 @@ use atm_core::{HerdrSession, RequestDeadline};
 use atm_herdr::testing::production_invoker_with_test_binary_and_environment;
 use atm_herdr::{HerdrError, HerdrProcessAdapter};
 
+#[cfg(unix)]
+#[path = "support/fake_herdr_socket/mod.rs"]
+mod fake_herdr_socket;
+
 #[derive(Debug)]
 struct FixtureManifest {
     mode: String,
@@ -150,4 +154,150 @@ async fn replay_runs_twice_through_one_production_invoker() {
         let second = get(&invoker, None).await.expect("second replay");
         assert_eq!(first, second);
     }
+}
+
+#[cfg(unix)]
+fn socket_path(suffix: &str) -> PathBuf {
+    static NEXT_SOCKET: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nonce = NEXT_SOCKET.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    std::env::temp_dir().join(format!(
+        "atm-herdr-ay8-fixture-{}-{suffix}-{nonce}.sock",
+        std::process::id(),
+    ))
+}
+
+#[cfg(unix)]
+async fn socket_get(
+    response: Vec<u8>,
+    session: Option<&HerdrSession>,
+) -> Result<atm_herdr::HerdrGetOutcome, HerdrError> {
+    let path = socket_path("get");
+    let server = fake_herdr_socket::FakeHerdrSocket::bind(&path).expect("fake socket bind");
+    let server_task = tokio::spawn(server.serve_once(response));
+    let invoker = atm_herdr::testing::production_invoker_with_test_socket(path.clone());
+    let result = get(&invoker, session).await;
+    let request = server_task
+        .await
+        .expect("fake socket task")
+        .expect("request");
+    let request: serde_json::Value = serde_json::from_slice(&request).expect("request JSON");
+    assert_eq!(request["method"], "agent.get");
+    let _ = std::fs::remove_file(path);
+    result
+}
+
+#[cfg(unix)]
+fn socket_response(directory: &Path, manifest: &FixtureManifest) -> Vec<u8> {
+    if manifest.delta.is_some() {
+        {
+            let mut response =
+                br#"{"error":{"code":"agent_prompt_stalled","message":"fixture"}}"#.to_vec();
+            response.push(b'\n');
+            response
+        }
+    } else {
+        let mut response = fs::read(directory.join("response.json")).expect("fixture response");
+        response.push(b'\n');
+        response
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn every_manifest_is_equivalent_over_cli_and_socket_transports() {
+    for (directory, manifest) in fixture_manifests() {
+        let mode = manifest_mode(&directory, &manifest);
+        let cli = get(&invoker(mode, manifest.delta.as_deref()), None).await;
+        let socket = socket_get(socket_response(&directory, &manifest), None).await;
+        assert_eq!(
+            socket,
+            cli,
+            "transport mismatch for {}",
+            directory.display()
+        );
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn socket_fixture_matrix_covers_late_start_and_one_request_connections() {
+    let path = socket_path("late-start");
+    let server = fake_herdr_socket::FakeHerdrSocket::bind(&path).expect("fake socket bind");
+    let invoker = atm_herdr::testing::production_invoker_with_test_socket(path.clone());
+    let call = tokio::spawn(async move { get(&invoker, None).await });
+    tokio::task::yield_now().await;
+    let mut response = br#"{"result":{"agent":{"name":"late","agent_status":"idle"}}}"#.to_vec();
+    response.push(b'\n');
+    let request = server
+        .serve_once(response)
+        .await
+        .expect("late-start request");
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&request).unwrap()["method"],
+        "agent.get"
+    );
+    assert_eq!(
+        call.await
+            .expect("call task")
+            .expect("late response")
+            .snapshot
+            .name
+            .as_deref(),
+        Some("late")
+    );
+
+    let second = get(
+        &atm_herdr::testing::production_invoker_with_test_socket(path.clone()),
+        None,
+    )
+    .await;
+    assert!(matches!(second, Err(HerdrError::ServerUnavailable { .. })));
+    let _ = std::fs::remove_file(path);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn socket_fixture_matrix_covers_no_newline_oversized_and_stalled_read() {
+    let absent = socket_path("absent");
+    let result = get(
+        &atm_herdr::testing::production_invoker_with_test_socket(absent.clone()),
+        None,
+    )
+    .await;
+    assert!(matches!(result, Err(HerdrError::ServerUnavailable { .. })));
+
+    let no_newline = socket_path("no-newline");
+    let server = fake_herdr_socket::FakeHerdrSocket::bind(&no_newline).expect("bind");
+    let task = tokio::spawn(server.serve_once(br#"{}"#.to_vec()));
+    let result = get(
+        &atm_herdr::testing::production_invoker_with_test_socket(no_newline.clone()),
+        None,
+    )
+    .await;
+    task.await.expect("server").expect("request");
+    assert!(matches!(result, Err(HerdrError::InternalError { .. })));
+
+    let oversized = socket_path("oversized");
+    let server = fake_herdr_socket::FakeHerdrSocket::bind(&oversized).expect("bind");
+    let mut response = vec![b'x'; 1024 * 1024 + 1];
+    response.push(b'\n');
+    let task = tokio::spawn(server.serve_once(response));
+    let result = get(
+        &atm_herdr::testing::production_invoker_with_test_socket(oversized.clone()),
+        None,
+    )
+    .await;
+    task.await.expect("server").expect("request");
+    assert!(matches!(result, Err(HerdrError::InternalError { .. })));
+
+    let stalled = socket_path("stalled-read");
+    let server = fake_herdr_socket::FakeHerdrSocket::bind(&stalled).expect("bind");
+    let task = tokio::spawn(server.serve_and_stall());
+    let result = get(
+        &atm_herdr::testing::production_invoker_with_test_socket(stalled.clone()),
+        None,
+    )
+    .await;
+    task.abort();
+    assert!(matches!(result, Err(HerdrError::Timeout)));
 }

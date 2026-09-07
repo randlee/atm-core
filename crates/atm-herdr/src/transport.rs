@@ -18,11 +18,19 @@ use crate::{
 /// public composition of explicit client settings.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct HerdrClientConfig {
-    pub(crate) binary_path: Option<PathBuf>,
-    pub(crate) socket_path: Option<PathBuf>,
+    binary_path: Option<PathBuf>,
+    socket_path: Option<PathBuf>,
 }
 
 impl HerdrClientConfig {
+    #[cfg(any(test, feature = "test-utils"))]
+    pub(crate) fn with_socket_path(socket_path: PathBuf) -> Self {
+        Self {
+            socket_path: Some(socket_path),
+            ..Self::default()
+        }
+    }
+
     pub(crate) fn binary_path(&self) -> Option<&PathBuf> {
         self.binary_path.as_ref()
     }

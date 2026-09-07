@@ -669,6 +669,18 @@ pub mod testing {
         }
     }
 
+    /// Builds the same public adapter facade over the direct socket transport
+    /// for the cross-transport fixture suite. Production composition remains
+    /// CLI-only until AY.9 owns transport selection.
+    #[must_use]
+    pub fn production_invoker_with_test_socket(socket_path: PathBuf) -> HerdrProcessInvoker {
+        let config = transport::HerdrClientConfig::with_socket_path(socket_path);
+        HerdrProcessInvoker {
+            breaker: Arc::new(HerdrSpawnBreaker::default()),
+            io: HerdrIo::Socket(crate::transport_socket::SocketIo::new(&config)),
+        }
+    }
+
     impl FakeHerdrProcessAdapter {
         #[must_use]
         pub fn calls(&self) -> Vec<FakeHerdrCall> {
