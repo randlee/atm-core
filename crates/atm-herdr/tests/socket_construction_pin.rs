@@ -1,4 +1,4 @@
-//! Keep AY.8's socket transport out of the production composition root.
+//! Pin AY.9's sole production socket construction factory.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -149,7 +149,7 @@ fn construction_findings(source: &str, allowed_ranges: &[(usize, usize)]) -> Vec
 }
 
 #[test]
-fn socket_variant_constructed_only_in_tests() {
+fn socket_variant_is_constructed_only_by_the_ay9_factory_or_tests() {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut sources = Vec::new();
     rust_sources(&manifest.join("src"), &mut sources);
@@ -161,8 +161,13 @@ fn socket_variant_constructed_only_in_tests() {
         let is_transport_source = source
             .file_name()
             .is_some_and(|name| name == "transport_socket.rs");
+        let is_factory_source = source
+            .file_name()
+            .is_some_and(|name| name == "transport.rs");
         let markers = if is_transport_source {
             vec!["#[cfg(test)]"]
+        } else if is_factory_source {
+            vec!["pub(crate) fn from_config", "#[cfg(test)]"]
         } else if source.file_name().is_some_and(|name| name == "lib.rs") {
             vec!["#[cfg(feature = \"test-utils\")]"]
         } else {
@@ -177,7 +182,7 @@ fn socket_variant_constructed_only_in_tests() {
         let findings = construction_findings(&contents, &ranges);
         assert!(
             findings.is_empty(),
-            "socket construction escaped its AY.8 test scope in {} at offsets {findings:?}",
+            "socket construction escaped the AY.9 production factory or test scope in {} at offsets {findings:?}",
             source.display()
         );
     }

@@ -1676,6 +1676,14 @@ AY.3 merge; it is parallel-safe with AY.4–AY.7. AY.9 is the standalone
 AY.7+AY.8 code join and the phase's last sprint; the live macOS/Windows
 matrix runs under release readiness once the phase is on develop.
 
+AY.9's production contract is closed and explicit: native socket transport is
+the default, while `herdr.transport = "cli"` remains a permanent explicit
+alternative. The transport is selected once at Tokio bootstrap; a socket
+failure is a typed availability/breaker outcome, never a hidden CLI fallback.
+Doctor displays the active transport and a sanitized endpoint. No CLI removal
+release or ownership-key cleanup is planned, and AY.9 contains no live
+evidence; release readiness owns the live gate.
+
 The authoritative umbrella is
 [Phase AY plan](./plans/phase-ay/phase-ay-plan.md), with one
 authoritative sprint file per sprint under `docs/plans/phase-ay/`.
@@ -1692,7 +1700,7 @@ Phase AY sprint status:
 | `AY.6` | Core stack | after AY.5 development; parallel with AY.8 | `draft` | `feature/ay6-herdr-restart-coordination` | `docs/plans/phase-ay/sprint-AY.6-herdr-restart-coordination.md` |
 | `AY.7` | Core/Windows stack | after AY.6 development; Windows CI lane is the gate; parallel with AY.8 | `draft` | `feature/ay7-windows-herdr-process-installer` | `docs/plans/phase-ay/sprint-AY.7-windows-herdr-process-installer.md` |
 | `AY.8` | Socket | after AY.1/AY.2/AY.3 merge and P-E(b); parallel with AY.4–AY.7; standalone | `draft` | `feature/ay8-herdr-socket-transport` | `docs/plans/phase-ay/sprint-AY.8-herdr-socket-transport.md` |
-| `AY.9` | Join | after AY.7/AY.8 merge; standalone code cutover | `draft` | `feature/ay9-herdr-socket-cutover` | `docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md` |
+| `AY.9` | Join | after AY.7/AY.8 merge; standalone code cutover | `merged` (#1295, 7ad3ad7e5, disposition Ship) | `feature/ay9-herdr-socket-cutover` | `docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md` |
 | `AY.13` | Doctor | standalone; Rand 2026-09-07 doctor team-scope requirement; parallel with AY.14 | `dispatched` | `feature/ay13-doctor-team-scope` | `docs/plans/phase-ay/sprint-AY.13-doctor-team-scope.md` |
 | `AY.14` | Herdr/roster | standalone; Rand 2026-09-07 name-collision ruling (roster alias); parallel with AY.13 | `dispatched` | `feature/ay14-herdr-agent-name-mapping` | `docs/plans/phase-ay/sprint-AY.14-herdr-agent-name-mapping.md` |
 

@@ -98,6 +98,25 @@ seconds, defaults to `1800` (30 minutes), and accepts `1` through `86400`
 inclusive. Invalid values fail daemon bootstrap with `ConfigParseFailed`; the
 setting does not start, supervise, or make ATM readiness depend on Herdr.
 
+**Herdr transport configuration:**
+
+The optional `[herdr].transport` setting in `.atm.toml` selects the client at
+daemon bootstrap:
+
+```toml
+[herdr]
+transport = "socket" # optional default; Unix socket on macOS/Linux, named pipe on Windows
+# transport = "cli"  # permanent explicit alternative
+socket_path = "/absolute/herdr-api-endpoint" # optional endpoint override
+binary_path = "/absolute/path-or-directory" # used only by the CLI alternative
+```
+
+Only `socket` and `cli` are valid. Socket is selected when the key is omitted;
+CLI is never selected automatically after a socket failure. Such a failure is
+reported as a typed Herdr availability event, while `atm doctor` shows the
+active transport and a privacy-safe symbolic endpoint display. The CLI
+alternative remains supported; no removal release is scheduled.
+
 ### `atm escalation`
 
 Manage daemon-wide and per-team escalation recipients

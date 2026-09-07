@@ -120,8 +120,8 @@ error unchanged).
 - "adding a roster persisted alias makes a lot of sense.  For requirements,
   the alias should never be used in database."
 - "i.e. if team-lead = atm-dev-lead (alias), all entries in database should
-  continue to use team-lead.  alias would be aceptable at all user/agent
-  facing interfaces and would be immediately replaced" ... "and would
+  continue to use team-lead.  alias would be acceptable at all user/agent
+  facing interfaces and would be immediately replaced" [spelling normalized] ... "and would
   immediately be replaced at the ingress interface."
 - "additional requirements:  alias MUST be unique for atm database (meets
   herdr requirements)"
@@ -181,22 +181,52 @@ that leaks the alias past the edge is a blocking finding.
 
 Decision as recorded: AC8 stays a reject (no automatic alias derivation).
 The alias for a shared role name is declared in the repo's `.atm.toml`, and
-atm-core's own `.atm.toml` is the model other repos copy. D8: add an
-optional `alias` key to each `[[rmux.windows.panes]]` entry and set it only
-on the roles that appear on many teams (`team-lead`, `quality-mgr`,
-`publisher`). Rand's chosen values for atm-core (2026-09-07, verbatim: "I
-would like alias's to be:  team-lead -> atm-lead, publisher ->
-atm-publisher, quality-mgr -> atm-quality"): `team-lead` ->
-`alias = "atm-lead"`, `quality-mgr` -> `alias = "atm-quality"`,
-`publisher` -> `alias = "atm-publisher"`. The `<identity>_<team>` convention
-above is a suggestion for other repos, not a rule. Members with unique names
-(`arch-ctm`, `cipher`, `fenix`) get none. `atm teams add-member` run from a
-repo whose `.atm.toml` declares an alias for that pane name uses it as the
-default `--alias` (explicit `--alias` overrides); spawners that pass
-`--alias` themselves (hmux) are unaffected. Document the key in
-docs/requirements.md next to the existing `[atm].aliases` rules, stating
-that the roster alias is the addressing alias and `[atm].aliases` remains
-CLI-only shorthand.
+atm-core's own `.atm.toml` is the model other repos copy. Rand's chosen
+values for atm-core (2026-09-07, verbatim: "I would like alias's to be:
+team-lead -> atm-lead, publisher -> atm-publisher, quality-mgr ->
+atm-quality"). Members with unique names (`arch-ctm`, `cipher`, `fenix`)
+get none. The `<identity>_<team>` convention above is a suggestion for
+other repos, not a rule.
+
+Rand, 2026-09-07, verbatim: ".atm.toml does not need to get processed by
+daemon for alias"; "this sounds like vague requirements."; "It sounds like
+you took an idea 'let's add alias to .atm.toml so hmux can use it' and
+turned in into rust code".
+
+D8, corrected (2026-09-07): `alias = "<name>"` is added to the
+`team-lead`, `quality-mgr` and `publisher` entries under
+`[[rmux.windows.panes]]` in atm-core's `.atm.toml`, as data for hmux (the
+external spawner), which passes it to `atm teams add-member --alias`. No
+atm crate reads this key: not the CLI, not the daemon, not
+atm-http-runtime. There is no default-alias lookup, no precedence logic
+and no Rust for this in AY.14. The only alias input to atm is the
+`--alias` argument (and its daemon-path equivalent) from D7/AC8. The
+earlier D8 draft that had `add-member` reading the pane alias is
+withdrawn. Document the key in docs/requirements.md next to the existing
+`[atm].aliases` rules as a spawner-consumed key that atm ignores.
+
+Rand, 2026-09-07, verbatim: "the only place it might make sense would be
+for doctor to read it and report if it did not match."; "I think that would
+be an acceptable level of rust integration.  That makes it an 'official'
+setting and in rust code it is used for comparison/validation only."
+
+D9 (in scope, from the above): the pane `alias` key becomes an official
+`.atm.toml` setting, read by Rust in exactly one place: `atm doctor`. For
+each `[[rmux.windows.panes]]` entry that declares `alias`, doctor looks up
+the member (pane `name`, pane `ATM_TEAM` env) in the roster and reports a
+mismatch when the roster alias differs or is absent; a pane alias that
+matches, or a pane without the key, produces no line. The value is never
+used as input to any write, resolution or send path; comparison and
+validation only. Text and `--json` output both carry it (field name
+`alias_mismatches`, entries `{team, member, config_alias, roster_alias}`).
+Missing or unparsable `.atm.toml` is not a doctor failure for this check.
+Rand, 2026-09-07, verbatim: "I think adding doctor mismatch reporting is
+useful (at team scope)"; ".atm.toml would not be available at --all-teams
+scope (which .atm.toml to use...)". So the check is team-scoped only: it
+reads the one `.atm.toml` discovered from the caller's cwd and compares
+only panes whose `ATM_TEAM` is the caller's workspace team. `--all-teams`
+does not widen it; there is no `.atm.toml` for other teams, so no
+mismatch lines are produced for them.
 
 ## Acceptance criteria
 
@@ -227,9 +257,16 @@ CLI-only shorthand.
   the database is accepted without an alias. Same check on the daemon
   member-add path so the CLI cannot be bypassed.
 - AC9 atm-core `.atm.toml` declares `alias` on the team-lead, quality-mgr
-  and publisher panes only (`atm-lead`, `atm-quality`, `atm-publisher`); `add-member` picks the pane alias up as the
-  default when run from that repo root, and a test covers default,
-  explicit override, and no-alias-declared paths.
+  and publisher panes only (`atm-lead`, `atm-quality`, `atm-publisher`).
+  `rg alias` over `crates/` shows no reader of the pane `alias` key other
+  than the doctor check in D9/AC10; the
+  existing `.atm.toml` parsing tests still pass with the key present
+  (unknown-key tolerance, no new struct field).
+- AC10 `atm doctor` reports D9 mismatches: tests cover pane alias equal to
+  roster (no line), differing (one line, both values), roster alias absent
+  (one line), pane without key (no line), and no `.atm.toml` (check
+  skipped, doctor otherwise unchanged). `rg` shows the doctor path as the
+  only reader of the pane `alias` key under `crates/`.
 - AC5 Boundary TOMLs untouched unless the boundary guard requires a
   record update for the new newtype; if so, say which in the PR.
 

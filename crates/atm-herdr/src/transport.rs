@@ -3,7 +3,9 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use atm_core::doctor::HerdrVersion;
+use atm_core::doctor::{
+    HerdrEndpointDisplay, HerdrEndpointDisplayRoot, HerdrTransportKind, HerdrVersion,
+};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::types::AgentName;
 use atm_core::{HerdrSession, RequestDeadline};
@@ -18,14 +20,26 @@ use crate::{
 
 /// Validated Herdr client configuration. Construction is pure and performs no
 /// endpoint or filesystem I/O.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HerdrClientConfig {
+    transport: HerdrTransportKind,
     binary_path: Option<PathBuf>,
     socket_path: Option<PathBuf>,
 }
 
+impl Default for HerdrClientConfig {
+    fn default() -> Self {
+        Self {
+            transport: HerdrTransportKind::Socket,
+            binary_path: None,
+            socket_path: None,
+        }
+    }
+}
+
 impl HerdrClientConfig {
     pub fn try_new(
+        transport: HerdrTransportKind,
         binary_path: Option<PathBuf>,
         socket_path: Option<PathBuf>,
     ) -> Result<Self, AtmError> {
@@ -41,6 +55,7 @@ impl HerdrClientConfig {
             }
         }
         Ok(Self {
+            transport,
             binary_path,
             socket_path,
         })
@@ -56,6 +71,10 @@ impl HerdrClientConfig {
 
     pub fn binary_path(&self) -> Option<&Path> {
         self.binary_path.as_deref()
+    }
+
+    pub fn transport(&self) -> &HerdrTransportKind {
+        &self.transport
     }
 
     pub fn socket_path(&self) -> Option<&Path> {
@@ -104,25 +123,38 @@ pub(crate) struct HerdrErrorEnvelope {
     pub retry_after_ms: Option<u64>,
 }
 
-/// Private transport selection. AY.9 owns production selection; AY.8 keeps
-/// the socket variant available for the direct transport and equivalence
-/// tests without changing the composition root.
+/// Private transport selection. AY.9 owns the sole production factory; this
+/// enum never crosses the atm-herdr crate boundary.
 #[derive(Clone, Debug)]
 pub(crate) enum HerdrIo {
     Cli(CliIo),
-    #[allow(dead_code)]
     Socket(SocketIo),
 }
 
 impl Default for HerdrIo {
     fn default() -> Self {
-        Self::Cli(CliIo::new(&HerdrClientConfig::default()))
+        Self::from_config(&HerdrClientConfig::default())
     }
 }
 
 impl HerdrIo {
     pub(crate) fn from_config(config: &HerdrClientConfig) -> Self {
-        Self::Cli(CliIo::new(config))
+        match config.transport() {
+            HerdrTransportKind::Cli => Self::Cli(CliIo::new(config)),
+            HerdrTransportKind::Socket => Self::Socket(SocketIo::new(config)),
+        }
+    }
+
+    /// Returns only core's sanitized endpoint DTO; the raw endpoint stays in
+    /// the private socket transport.
+    pub(crate) fn endpoint_display(
+        &self,
+        session: Option<&HerdrSession>,
+    ) -> Option<HerdrEndpointDisplay> {
+        match self {
+            Self::Cli(_) => None,
+            Self::Socket(socket) => socket_endpoint_display(&socket.cfg, session, &socket.env),
+        }
     }
 
     pub(crate) async fn call(
@@ -136,6 +168,83 @@ impl HerdrIo {
             Self::Socket(socket) => socket.call(op, session, deadline).await,
         }
     }
+}
+
+fn socket_endpoint_display(
+    config: &HerdrClientConfig,
+    session: Option<&HerdrSession>,
+    env: &crate::transport_socket::HerdrHostEnv,
+) -> Option<HerdrEndpointDisplay> {
+    use crate::transport_socket::{HerdrEndpoint, herdr_api_endpoint};
+
+    match herdr_api_endpoint(config, session, env) {
+        HerdrEndpoint::UnixSocket(path) => {
+            if config.socket_path().is_some() {
+                configured_endpoint_display(&path, false)
+            } else if let Some(relative) = env
+                .xdg_config_home
+                .as_deref()
+                .and_then(|root| path.strip_prefix(root).ok())
+            {
+                HerdrEndpointDisplay::from_relative(
+                    HerdrEndpointDisplayRoot::XdgConfigHome,
+                    relative,
+                    false,
+                )
+                .ok()
+            } else if let Some(relative) = env
+                .home
+                .as_deref()
+                .and_then(|root| path.strip_prefix(root).ok())
+            {
+                HerdrEndpointDisplay::from_relative(HerdrEndpointDisplayRoot::Home, relative, false)
+                    .ok()
+            } else {
+                configured_endpoint_display(&path, false)
+            }
+        }
+        HerdrEndpoint::NamedPipe(path) => {
+            let raw = path.strip_prefix(r"\\.\pipe\").unwrap_or(&path);
+            if config.socket_path().is_some() {
+                configured_named_pipe_display(raw)
+            } else if let Some(relative) = env
+                .appdata
+                .as_deref()
+                .and_then(|root| raw.strip_prefix(&format!(r"{}\", root.display())))
+            {
+                named_pipe_display(HerdrEndpointDisplayRoot::AppData, relative)
+            } else if let Some(relative) = env
+                .home
+                .as_deref()
+                .and_then(|root| raw.strip_prefix(&format!(r"{}\", root.display())))
+            {
+                named_pipe_display(HerdrEndpointDisplayRoot::Home, relative)
+            } else {
+                configured_named_pipe_display(raw)
+            }
+        }
+    }
+}
+
+fn configured_endpoint_display(path: &Path, named_pipe: bool) -> Option<HerdrEndpointDisplay> {
+    let filename = path.file_name()?;
+    HerdrEndpointDisplay::from_relative(
+        HerdrEndpointDisplayRoot::Configured,
+        Path::new(filename),
+        named_pipe,
+    )
+    .ok()
+}
+
+fn configured_named_pipe_display(path: &str) -> Option<HerdrEndpointDisplay> {
+    configured_endpoint_display(Path::new(path), true)
+}
+
+fn named_pipe_display(
+    root: HerdrEndpointDisplayRoot,
+    relative: &str,
+) -> Option<HerdrEndpointDisplay> {
+    HerdrEndpointDisplay::from_relative(root, Path::new(&relative.replace('\\', "/")), true).ok()
 }
 
 pub(crate) fn prompt_from_envelope(
@@ -285,5 +394,60 @@ fn error_from_envelope(envelope: &HerdrEnvelope) -> HerdrError {
 fn protocol_mismatch(message: impl Into<String>) -> HerdrError {
     HerdrError::ProtocolMismatch {
         message: message.into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HerdrClientConfig, HerdrIo, socket_endpoint_display};
+    use atm_core::doctor::HerdrTransportKind;
+    use std::path::PathBuf;
+
+    use crate::transport_socket::{HerdrHostEnv, Platform};
+
+    #[test]
+    fn production_factory_selects_each_closed_transport_once() {
+        let socket = HerdrClientConfig::default();
+        let cli = HerdrClientConfig::try_new(HerdrTransportKind::Cli, None, None)
+            .expect("CLI is a supported explicit selection");
+
+        assert!(matches!(HerdrIo::from_config(&socket), HerdrIo::Socket(_)));
+        assert!(matches!(HerdrIo::from_config(&cli), HerdrIo::Cli(_)));
+    }
+
+    #[test]
+    fn socket_endpoint_display_redacts_xdg_root_before_doctor_projection() {
+        let endpoint = socket_endpoint_display(
+            &HerdrClientConfig::default(),
+            None,
+            &HerdrHostEnv {
+                xdg_config_home: Some(PathBuf::from("/private/atlas/.config")),
+                appdata: None,
+                home: Some(PathBuf::from("/private/atlas")),
+                platform: Platform::Unix,
+            },
+        )
+        .expect("default socket endpoint has a symbolic display");
+
+        assert_eq!(endpoint.as_str(), "$XDG_CONFIG_HOME/herdr/herdr.sock");
+        assert!(!endpoint.as_str().contains("atlas"));
+    }
+
+    #[test]
+    fn named_pipe_display_redacts_appdata_before_doctor_projection() {
+        let endpoint = socket_endpoint_display(
+            &HerdrClientConfig::default(),
+            None,
+            &HerdrHostEnv {
+                xdg_config_home: None,
+                appdata: Some(PathBuf::from(r"C:\Users\atlas\AppData\Roaming")),
+                home: Some(PathBuf::from(r"C:\Users\atlas")),
+                platform: Platform::Windows,
+            },
+        )
+        .expect("default named-pipe endpoint has a symbolic display");
+
+        assert_eq!(endpoint.as_str(), r"\\.\pipe\%APPDATA%/herdr/herdr.sock");
+        assert!(!endpoint.as_str().contains("atlas"));
     }
 }

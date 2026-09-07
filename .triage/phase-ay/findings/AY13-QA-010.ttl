@@ -15,21 +15,24 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/doctor/mod.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T17:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY13 ;
   triage:foundAt "2026-09-07T17:20:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY13-QA-010/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasResolution <urn:atm:triage:resolution/AY13-QA-010/1> ;
+  triage:closedAt "2026-09-07T18:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AY13-QA-010/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/doctor/mod.rs" ;
   triage:line 867 ;
   triage:snippet "team_override.or_else(caller_team).or_else(config::resolve_team) -- no isolated precedence regression test" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay13-doctor-team-scope" ;
   triage:headSha "98ac5c7d2" ;
   triage:occursIn <urn:atm:triage:worktree/AY13-QA-010/98ac5c7d2> .
@@ -40,3 +43,12 @@
   triage:branch "feature/ay13-doctor-team-scope" ;
   triage:headSha "98ac5c7d2" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/AY13-QA-010/1>
+  a triage:Resolution ;
+  triage:resolvedBy "cipher" ;
+  triage:resolvedAt "2026-09-07T17:26:47Z"^^xsd:dateTime ;
+  triage:fixCommit "c0afd678d" ;
+  triage:fixBranch "feature/ay13-doctor-team-scope" ;
+  triage:verifiedInRound "qa-pr1300-r3" ;
+  triage:resolutionNote "quality-mgr independently confirmed via git show c0afd678d: new #[test] caller_team_precedes_ambient_team_for_doctor_scope sets ATM_TEAM to a conflicting config-resolved team via EnvGuard, passes caller_team explicitly on the query with no team_override, and asserts report.team_scope == \"single\" with member_roster.team == the caller team (not the ambient-config team) -- directly isolating the new precedence branch that the prior tests only exercised incidentally. Personally-run cargo test -p agent-team-mail-core green (597 tests) at branch head cb13ca7e38 / current PR head 8ae936a37. Closing on this evidence." .
