@@ -1675,8 +1675,11 @@ the poll. It is tracked as rework item 7 below, open pending Rand's ruling.
    as http posts from hook triggers." Herdr 0.8.2 offers `herdr agent wait`
    (one held wait per agent, no session-wide subscription); hooks give
    agent-originated transitions over HTTP for any harness, including
-   non-tmux hermes agents. Ruling and owning sprint to be recorded here; no
-   AY sprint may add poll-side machinery in the meantime.
+   non-tmux hermes agents. Ruling (Rand, 2026-09-06): the push model is an
+   entirely separate repo/project, not a Phase AY sprint and not something
+   that lands in hours; Phase AY neither designs nor owns it. Constraint in
+   force for AY: no sprint adds poll-side machinery (tick tuning, per-agent
+   pollers, session-wide subscriptions) that the push model would replace.
 
 ### Hardening rounds
 
