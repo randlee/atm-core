@@ -1571,5 +1571,106 @@ class LegacyDaemonSwitchRegressionTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["cwd"], Path.home())
 
 
+class HerdrEntryPlatformFake:
+    def __init__(self, root: Path, name: str = "Linux") -> None:
+        self.root = root
+        self.name = name
+        self.registered: set[str] = set()
+        self.account_is_current = True
+
+    def path_for(self, identifier: str) -> Path:
+        return self.root / identifier
+
+    def register(self, identifier: str, _object_path: Path) -> None:
+        self.registered.add(identifier)
+
+    def unregister(self, identifier: str) -> None:
+        self.registered.discard(identifier)
+
+    def is_registered(self, identifier: str) -> bool:
+        return identifier in self.registered
+
+    def account_matches(self, _identifier: str) -> bool:
+        return self.account_is_current
+
+
+class HerdrEntryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.platform = HerdrEntryPlatformFake(self.root / "objects")
+        self.manager = DAEMON_SWITCH.HerdrEntryManager(self.root / "journal", self.platform)
+        self.default = DAEMON_SWITCH.HerdrEndpoint("default")
+        self.session = DAEMON_SWITCH.HerdrEndpoint("blue")
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_identifiers_are_deterministic_for_each_platform(self) -> None:
+        self.assertEqual(DAEMON_SWITCH.identifier("Darwin", "default"), "com.randlee.atm.herdr-server")
+        self.assertEqual(DAEMON_SWITCH.identifier("Darwin", "blue"), "com.randlee.atm.herdr-server.blue")
+        self.assertEqual(DAEMON_SWITCH.identifier("Linux", "default"), "atm-herdr-server.service")
+        self.assertEqual(DAEMON_SWITCH.identifier("Windows", "blue"), "ATM Herdr Server (blue)")
+
+    def test_default_and_sessions_are_independently_owned_and_registered(self) -> None:
+        entries = [self.manager.install(endpoint) for endpoint in (self.default, self.session)]
+        self.assertEqual([entry["endpoint"] for entry in entries], ["default", "blue"])
+        self.assertTrue(all(entry["owned"] and entry["registered"] and entry["digest_matches"] for entry in entries))
+        self.assertFalse(self.manager.journal_path.exists())
+
+    def test_foreign_digest_and_socket_path_refuse_without_mutation(self) -> None:
+        path = self.platform.path_for(DAEMON_SWITCH.identifier("Linux", "default"))
+        path.parent.mkdir(parents=True)
+        path.write_text("foreign", encoding="utf-8")
+        with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "unowned"):
+            self.manager.install(self.default)
+        self.assertEqual(path.read_text(encoding="utf-8"), "foreign")
+        with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "externally owned"):
+            self.manager.install(DAEMON_SWITCH.HerdrEndpoint("socket", "/tmp/herdr.sock"))
+
+    def test_interrupted_install_blocks_then_repair_rolls_back_or_completes(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "after write"):
+            self.manager.install(self.default, lambda phase: (_ for _ in ()).throw(RuntimeError("after write")) if phase == "after_write" else None)
+        self.assertTrue(self.manager.journal_path.exists())
+        with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "incomplete"):
+            self.manager.install(self.default)
+        self.assertEqual(self.manager.repair(), {"repaired": "rolled_back"})
+        self.assertFalse(self.platform.path_for("atm-herdr-server.service").exists())
+
+        with self.assertRaisesRegex(RuntimeError, "after register"):
+            self.manager.install(self.default, lambda phase: (_ for _ in ()).throw(RuntimeError("after register")) if phase == "after_register" else None)
+        self.assertEqual(self.manager.repair(), {"repaired": "completed"})
+        self.assertTrue(self.platform.is_registered("atm-herdr-server.service"))
+
+    def test_remove_touches_only_matching_owned_object(self) -> None:
+        self.manager.install(self.default)
+        self.manager.remove(self.default)
+        self.assertFalse(self.platform.path_for("atm-herdr-server.service").exists())
+        self.assertFalse(self.platform.is_registered("atm-herdr-server.service"))
+
+    def test_windows_account_mismatch_refuses_before_write(self) -> None:
+        platform_fake = HerdrEntryPlatformFake(self.root / "windows", "Windows")
+        platform_fake.account_is_current = False
+        manager = DAEMON_SWITCH.HerdrEntryManager(self.root / "windows-journal", platform_fake)
+        with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "another account"):
+            manager.install(self.default)
+        self.assertFalse(platform_fake.path_for("ATM Herdr Server").exists())
+
+    def test_doctor_ingestion_uses_only_native_projection(self) -> None:
+        payload = {"herdr": {"configured": True, "endpoints": [{"endpoint": "default"}, {"session": "blue"}]}}
+        with mock.patch.object(DAEMON_SWITCH, "doctor", return_value=payload):
+            endpoints = DAEMON_SWITCH.herdr_entry_endpoints(Path("/selected/atm"), install=True)
+        self.assertEqual([endpoint.name for endpoint in endpoints], ["default", "blue"])
+        with mock.patch.object(DAEMON_SWITCH, "doctor", return_value={"herdr": {"configured": False, "endpoints": []}}):
+            with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "not configured"):
+                DAEMON_SWITCH.herdr_entry_endpoints(Path("/selected/atm"), install=True)
+
+    def test_entry_result_is_exactly_one_json_object(self) -> None:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            DAEMON_SWITCH.herdr_entry_result(True, "HERDR_ENTRY_STATUS_OK", "ok", "none", [])
+        self.assertEqual(json.loads(output.getvalue()), {"ok": True, "code": "HERDR_ENTRY_STATUS_OK", "message": "ok", "remedy": "none", "entries": []})
+
+
 if __name__ == "__main__":
     unittest.main()
