@@ -79,10 +79,9 @@ AY.5. Neither branch merges an unmerged sibling.
 ## Preconditions
 
 - P-A and P-B from the Phase AY plan are satisfied.
-- AY.4 development is pushed, and AY.5 is created from
-  `feature/ay4-herdr-breaker-lifecycle`.
-- AY.3's `atm doctor --json` schema and AY.4's optional/failure lifecycle are
-  green on the parent stack.
+- AY.3 has merged into `integrate/phase-ay`, and AY.5 is created from that
+  integration head (never from AY.4; the two develop in parallel).
+- AY.3's `atm doctor --json` schema is green on `integrate/phase-ay`.
 - The implementer has read the current `.claude/skills/daemon-switch/SKILL.md`,
   `scripts/daemon-switch.py`, its tests, REQ-P-DAEMON-SWITCH-001, and ADR-053.
 
@@ -273,8 +272,8 @@ This is the authoritative validation list.
 - [ ] V3 — `just lint spell` and `just lint adr-index` exit zero.
 - [ ] V4 — `just validate` exits zero.
 - [ ] V5 — `gh pr view feature/ay5-herdr-entry-control-plane --json
-  headRefName,baseRefName,state` reports base
-  `feature/ay4-herdr-breaker-lifecycle`; AY.8 is not in this stack.
+  headRefName,baseRefName,state` reports base `integrate/phase-ay`; neither
+  AY.4 nor AY.8 is in this stack.
 
 ## Non-closure and out of scope
 

@@ -43,7 +43,8 @@ is still protocol-mismatched.
 AY.6 is stacked directly above AY.5 and below Windows completion AY.7:
 
 ```text
-integrate/phase-ay <- AY.2 <- AY.3 <- AY.4 <- AY.5 <- AY.6 <- AY.7
+integrate/phase-ay <- AY.5 <- AY.6 <- AY.7          (control-plane stack)
+integrate/phase-ay <- AY.2 <- AY.3 <- AY.4          (core stack, separate)
 ```
 
 Use the `/gh-stack` skill noninteractively:
@@ -52,9 +53,6 @@ Use the `/gh-stack` skill noninteractively:
 git config rerere.enabled true
 git config remote.pushDefault origin
 gh stack link --base integrate/phase-ay \
-  feature/ay2-herdr-transport-seam \
-  feature/ay3-herdr-endpoint-doctor-config \
-  feature/ay4-herdr-breaker-lifecycle \
   feature/ay5-herdr-entry-control-plane \
   feature/ay6-herdr-restart-coordination
 gh pr view feature/ay6-herdr-restart-coordination \

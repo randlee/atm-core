@@ -137,10 +137,13 @@ completion fails the sprint.
   only public item of `atm-herdr` remains `HerdrProcessAdapter` and its
   existing contract types.
 - [ ] D10 — preserve the no-cutover guard: no change under
-  `crates/atm-daemon-bootstrap`, and an architecture allowlist permits
-  `HerdrIo::Socket(` construction only in `transport_socket.rs` test modules
-  and `crates/atm-herdr/tests/`. AY.9 removes that temporary allowlist when it
-  owns transport selection.
+  `crates/atm-daemon-bootstrap`, and the construction-site pin
+  `socket_variant_constructed_only_in_tests` in
+  `crates/atm-herdr/tests/socket_construction_pin.rs` scans
+  `crates/atm-herdr/src/**/*.rs` and permits `HerdrIo::Socket(` only inside
+  `#[cfg(test)]` modules of `transport_socket.rs` and under
+  `crates/atm-herdr/tests/`. AY.9 rewrites that same test to permit the one
+  production factory when it owns transport selection.
 
 ### Paths to delete
 
@@ -243,6 +246,7 @@ AY.8 may add or edit only:
 
 - `crates/atm-herdr/src/transport_socket.rs`
 - `crates/atm-herdr/tests/support/fake_herdr_socket/**`
+- `crates/atm-herdr/tests/socket_construction_pin.rs` (D10 pin)
 - `crates/atm-herdr/src/transport.rs`
 - `crates/atm-herdr/src/lib.rs` (one module declaration; no new public exports)
 - `crates/atm-herdr/Cargo.toml` (Tokio `net` feature only if needed)
@@ -251,6 +255,16 @@ AY.8 may add or edit only:
 
 Any additional production path is a scope change requiring the sprint plan to
 be amended and re-reviewed before implementation continues.
+
+### Size and pre-declared split
+
+AY.8 is one crate, one new module, one fixture server and one test file, so
+it is expected to fit one context window despite ten deliverables. If it does
+not, the split point is fixed in advance: sprint AY.8a lands D1–D6 and C1–C2
+(TOML, `SocketIo`, endpoint resolver, NDJSON framing, cancellation and
+permits, macOS/Linux UDS lane) and AY.8b lands D7–D8 (fake socket server,
+Windows named-pipe lane, equivalence suite) stacked on AY.8a. D9 and D10
+ride AY.8a. No other split is permitted without a plan amendment.
 
 ## Required work
 

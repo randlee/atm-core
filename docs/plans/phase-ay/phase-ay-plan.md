@@ -1005,6 +1005,13 @@ Common preconditions:
   diff is AY.8's first commit. Ruled 2026-09-06 by boundary-guard: approved
   as written; the endpoint resolver and its types stay crate-private, no
   architecture-test exemption exists, and AY.8 does not wait on AY.3.
+  Composed-file rule: AY.3 (P-E(a)) and AY.8 (P-E(b)) both edit
+  `boundaries/atm-herdr/herdr-process-adapter.toml` and
+  `crates/atm-herdr/src/lib.rs`. Whichever merges into `integrate/phase-ay`
+  second merges the integration head forward, resolves the TOML by keeping
+  every P-E(a) inventory line and adding only the P-E(b) `io_owns` key, then
+  reruns `just lint boundaries` and `cargo test -p atm-architecture`, and
+  fenix (boundary-guard) confirms the composed file before that PR merges.
   Proposed diff to `boundaries/atm-herdr/herdr-process-adapter.toml`:
 
   ```toml
@@ -1636,12 +1643,49 @@ AY.9 joins. Orchestration state in `.sprints/AY/structure.ttl` on
 `integrate/phase-ay` is updated to this order after this PR merges.
 
 Files changed by the rework: this plan (sprint map, waves, stack
-description, P-E(b), Cancel gate, this record), sprint-AY.1 (superseded
-exemption note), sprint-AY.4/AY.5/AY.6 (edges and rationales), sprint-AY.8
-(D2 removed, D4/D9/C1/C3, required work 1, acceptance 1 and 7, dispatch
-section, recommended agent).
+description, P-E(b) and its composed-file rule, the Cancel disposition
+under "Phase AY exit gate", this record), sprint-AY.1 (superseded
+exemption note), sprint-AY.3 (AY.8 edge and dispatch prose),
+sprint-AY.4/AY.5/AY.6/AY.7 (edges, rationales, stack topology,
+preconditions, V5), sprint-AY.8 (D2 removed, D4/D9/D10/C1/C3, required
+work 1, acceptance 1 and 7, dispatch section, size/split, recommended
+agent), sprint-AY.9 (permanent CLI fallback, D10 pin name).
+
+Scaling note (Rand, 2026-09-06, 30–50 agents): today's queue-wake tick
+(5 s) spawns one `herdr list` per session every tick whether or not any
+member is pending, plus one `herdr get` per member with an open task and
+one `herdr prompt` per eligible member. The socket removes the per-call
+process cost; it does not remove the per-member call count. AY.4 (breaker
+lifecycle) and AY.6 (restart coordination) must not add per-member calls,
+and the tick should skip `list` when nothing is pending and no task is
+open, and reuse the `list` snapshot instead of a per-member `get` where the
+snapshot already carries the state. Recorded as a design constraint, not a
+new sprint.
 
 ### Hardening rounds
 
 Recorded inline as each reviewer returns; the PR does not merge before every
 round below is PASS or every finding has an accepted disposition.
+
+- boundary-guard r1 on f72b8be1b (document-level; no shell in that session,
+  so `cargo test -p atm-architecture` and the AY.3-head TOML diff were run
+  by fenix instead: architecture suite green on 45701a81e, TOML on the AY.3
+  head differs from develop only by AY.3's own contract inventory). P-E(b)
+  landed verbatim; no relaxation of any boundary field. Findings: AY.5
+  Preconditions still branched from AY.4 (fixed: branch from integrate
+  after AY.3 merges); AY.6 topology diagram and gh stack link chained all
+  six branches as one stack (fixed: control-plane stack only); AY.7 D3
+  cited boundary_enforcement.rs as being in AY.8's allowlist (fixed).
+- plan-scope-reviewer r1 (FAIL, 2 blocking / 2 important / 1 minor):
+  PLAN-SCOPE-001 AY.5 Preconditions and V5 still on AY.4 (fixed);
+  PLAN-SCOPE-002 AY.6/AY.7 narrate the old six-branch stack (fixed);
+  PLAN-SCOPE-003 D10 allowlist had no named file (fixed: named pin test
+  added to C3, AY.9 cites it); PLAN-SCOPE-004 AY.8 split risk (fixed:
+  pre-declared AY.8a/AY.8b split); M1 "Cancel gate" wording (fixed).
+- critical-plan-reviewer r1 (FAIL, 2 blocking / 2 important):
+  PLAN-CRIT-001 sprint-AY.3 still declared AY.8 must_follow (fixed);
+  PLAN-CRIT-002 AY.5 preconditions/V5 (same as above, fixed);
+  PLAN-CRIT-003 no composed-TOML rule for AY.3+AY.8 (fixed in P-E(b));
+  PLAN-CRIT-004 D10 pin unnamed (fixed). Both reviewers noted the
+  handoff-JSON input contract was not supplied; these rounds were run as
+  direct plan reviews, and the r2 dispatch names the reviewed commit.

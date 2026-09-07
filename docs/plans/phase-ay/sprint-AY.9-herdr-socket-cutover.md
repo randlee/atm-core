@@ -61,7 +61,8 @@ completion fails the sprint.
   `atm-herdr`, the invoker factory builds `HerdrIo::Socket` or `HerdrIo::Cli`;
   the crate-private enum never crosses the crate boundary. Default to `socket`;
   reject every other string with `AtmErrorCode::ConfigParseFailed`. Replace
-  AY.8's test-only construction-site allowlist with a pin that permits the one
+  AY.8's `socket_variant_constructed_only_in_tests` pin
+  (`crates/atm-herdr/tests/socket_construction_pin.rs`) with a pin that permits the one
   production factory inside `atm-herdr`. No second composition site is
   introduced.
 - [ ] D2 — retain CLI as a permanent, explicit, documented fallback (rework
