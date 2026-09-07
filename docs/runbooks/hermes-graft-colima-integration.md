@@ -89,7 +89,7 @@ P0 exit gate:
 - aarch64 `atm-graft` wheel SHA-256:
   `880eef4e90e04a16bf5bfa0e8b8a2d047b59f76183076a4b7336a99cfd0f1203`.
 - Tagged source and built wheel METADATA both admit `atm-graft` 1.5.3.
-- Testbed main is `fb9d63c`; the peer authority, 4 CPU / 4 GiB Colima
+- Testbed main is `e8e500a`; the peer authority, 4 CPU / 4 GiB Colima
   allocation, `suite/v2`, no-`sudo` marker protocol, and primary matrix are
   frozen.
 
@@ -131,10 +131,12 @@ signal.
 Run exactly the fork validation commands Loki provides. Do not silently replace
 or omit a failing command.
 
-Current-cycle review is recorded on Hermes PR #21, comment
-`issuecomment-5563939096`. The initial verdict is blocked on HGF-001 and
-HGF-002 below. After Loki supplies a new frozen SHA, review the delta from
-`3ffa69d907` and rerun all corrected validation commands before releasing P2.
+Current-cycle review is recorded on Hermes PR #21: initial findings comment
+`issuecomment-5563939096` and passing delta-review comment
+`issuecomment-5564128952`. HGF-001 through HGF-004 are fixed and independently
+verified at `5f2793add0f949bbc9b231e0e18a17bfb39b2f93`: 38 tests, Ruff, diff check,
+and the production-shaped steer probe pass. P2 remains held until the fix PR
+merges and Loki supplies the newly frozen full stack tip.
 
 ### Review report shape
 
@@ -226,7 +228,8 @@ TESTBED_PLATFORM=<platform> ./run.sh
 docker exec <container> atm doctor
 ```
 
-If the harness attempts `sudo`, stop. Testbed main `fb9d63c` (building on
+If the harness attempts `sudo`, stop. Testbed main `e8e500a` (the no-`sudo`
+implementation landed by `fb9d63c`, building on
 `41fc546`) implements the
 approved replacement: daemon lifecycle control stays outside the unprivileged
 agent, and the outer coordinator invokes root-only, non-self-elevating helpers
@@ -330,7 +333,7 @@ Every issue becomes a row before work continues.
 | HGC-001 | setup | `sc-git-worktree` was not on PATH | The repository exposes it as a command/skill backed by a Python helper, not a shell binary | Use the repository worktree-create delegate/helper; preserve tracking and protected-branch checks | resolved |
 | HGC-002 | setup | New docs branch initially pointed at `98661ea18`, while fetched `origin/develop` was `89bd7d256` | The create helper fetched remotes but based the worktree on stale local `develop` | Before editing, compare `HEAD` to `origin/develop` and fast-forward the new feature branch | resolved |
 | HGC-003 | P0 | Existing testbed docs describe older ATM/testbed cycles | README/runbook history predates the current fork update | Treat the frozen P0 record above as the cycle authority; never reuse old version/run IDs | resolved |
-| HGC-004 | P0/P2 | Existing prompt harness documents privileged restart helpers, while this task forbids `sudo` | Safety contract changed for this run | Use testbed main `fb9d63c` (initial implementation `41fc546`): root-only, non-self-elevating helpers run through outer `docker exec`; the fixture agent uses cleared UTC markers and never invokes sudo. Fenix approved the corresponding AT4/AT8 prompt design | resolved; suite/v2 rerun pending |
+| HGC-004 | P0/P2 | Existing prompt harness documents privileged restart helpers, while this task forbids `sudo` | Safety contract changed for this run | Use testbed main `e8e500a` (no-`sudo` changes complete by `fb9d63c`, initial implementation `41fc546`): root-only, non-self-elevating helpers run through outer `docker exec`; the fixture agent uses cleared UTC markers and never invokes sudo. Fenix approved the corresponding AT4/AT8 prompt design | resolved; suite/v2 rerun pending |
 | HGC-005 | P0/P2 | Tier E catalog names E1 but only an E0 prompt file exists | E1 is described as E0's acceptance shape, not an independent artifact | Use E0 as the required Tier E live graft-Hermes transcript for this matrix | resolved; execution pending |
 | HGC-006 | P0 | Tagged `hermes-atm` and `atm_graft` 1.5.x wheels cannot co-install | `crates/hermes-atm/pyproject.toml` requires `atm-graft>=1.4,<1.5` at v1.5.0, `prerelease/v1.5.1`, and `origin/develop@89bd7d256` | PR #1274 fixes the range to `>=1.5,<1.6` and adds `.just/check_version_sync.py` as the permanent guard. Tag `prerelease/v1.5.3` is pinned to `9654b75f1710d7155fb3a6584ee709314c1642d5`; source and built wheel METADATA both admit `atm-graft` 1.5.3 | resolved |
 | HGC-007 | P0 | An ATM coordination send returned `ATM_DAEMON_MAY_HAVE_EXECUTED` | The client could not prove whether the daemon committed the send | Check durable message/log state before retrying; resend only when the write is confirmed absent, preventing duplicate coordination messages | resolved by Loki |
@@ -338,10 +341,10 @@ Every issue becomes a row before work continues.
 | HGC-009 | P0/P2 | A fixed AT8 Phase-B delay can freeze before persistence or become timing-dependent | Host and VM scheduling make the send boundary variable | Calibrate from measured send RTT, clamp `--after` to 300--1500 ms, record it in `at8-armed`, and require log proof that persistence preceded SIGSTOP; otherwise fail without tuning/retry | approved; suite/v2 rerun pending |
 | HGC-010 | P0/P2 | Loopback or an ambiguous peer name would invalidate cross-host trust evidence | The transport must distinguish the container peer from host-local routing | Use `atm-hermes-testbed.local` for CN/SAN and advertised host, map host trust to the container fingerprint and port 43102, and resolve the authority to the Colima VM IP | resolved by Rand ruling; execution pending |
 | HGC-011 | P0 | Native sends against a host 1.4.13 daemon intermittently returned `ATM_DAEMON_MAY_HAVE_EXECUTED` while durable truth showed no write | Client could not confirm whether an older daemon committed the request | Treat as non-blocking diagnostic evidence only; verify durable truth before one retry and do not remodel or patch the frozen legacy daemon | observed; no product action |
-| HGC-012 / HGF-001 | P1 | Real `mode="steer"` falls back to queue | Fork defect in `randlee/hermes-agent`: production stores the direct agent in `SessionState.turn.agent`, but the fork seam unwraps only a tuple; fork tests manufacture the obsolete tuple shape | Loki accepts the direct-agent representation, replaces fork steer fixtures with production-shaped state, reruns the full suite, and supplies a newly frozen SHA for delta review. No atm-core product change | blocking; fork owner Loki |
-| HGC-013 / HGF-002 | P1 | A hung visible notice prevents the main internal event from routing | Fork defect in `randlee/hermes-agent`: the soft-fail notice send has no deadline | Loki adds a bounded fork-side deadline and proves timeout warns while the event routes exactly once. No atm-core product change | blocking; fork owner Loki |
-| HGC-014 / HGF-003 | P1 | The documented frozen test procedure fails with `No module named pytest` | Fork documentation defect in `randlee/hermes-agent`: it installs with `--no-dev`, while pytest is in the `dev` extra | Correct the fork maintenance commands and execute them exactly. No atm-core product change | fork owner Loki |
-| HGC-015 / HGF-004 | P1 | Startup-hook test cannot detect loss of `gateway_runner` at the real emit site | Fork test gap in `randlee/hermes-agent`: it manually calls an `AsyncMock` with the expected payload | Exercise the fork production startup emit path or an extracted production payload builder. No atm-core product change | fork owner Loki |
+| HGC-012 / HGF-001 | P1 | Real `mode="steer"` falls back to queue | Fork defect in `randlee/hermes-agent`: production stores the direct agent in `SessionState.turn.agent`, but the fork seam unwraps only a tuple; fork tests manufacture the obsolete tuple shape | Fork commit `5f2793add0` accepts direct-agent state, preserves sentinel/legacy behavior, and uses production-shaped tests. No atm-core product change | fixed and delta-verified; merge/full re-freeze pending |
+| HGC-013 / HGF-002 | P1 | A hung visible notice prevents the main internal event from routing | Fork defect in `randlee/hermes-agent`: the soft-fail notice send has no deadline | Fork commit `5f2793add0` adds a 10-second bound and proves a hung notice warns while the event routes exactly once. No atm-core product change | fixed and delta-verified; merge/full re-freeze pending |
+| HGC-014 / HGF-003 | P1 | The documented frozen test procedure fails with `No module named pytest` | Fork documentation defect in `randlee/hermes-agent`: it installs with `--no-dev`, while pytest is in the `dev` extra | Fork commit `5f2793add0` installs locked `messaging` and `dev` extras; the corrected 38-test command passes. No atm-core product change | resolved |
+| HGC-015 / HGF-004 | P1 | Startup-hook test cannot detect loss of `gateway_runner` at the real emit site | Fork test gap in `randlee/hermes-agent`: it manually calls an `AsyncMock` with the expected payload | Fork commit `5f2793add0` drives the production startup mixin and asserts the emitted runner. No atm-core product change | resolved |
 
 ## Stop/escalate decision table
 
