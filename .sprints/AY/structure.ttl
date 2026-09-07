@@ -22,3 +22,5 @@ triage:AY5 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 6 ; tr
 triage:AY6 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 7 ; triage:branch "feature/ay6-herdr-restart-coordination" ; triage:criteria "docs/plans/phase-ay/sprint-AY.6-herdr-restart-coordination.md" .
 triage:AY7 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 8 ; triage:branch "feature/ay7-windows-herdr-process-installer" ; triage:criteria "docs/plans/phase-ay/sprint-AY.7-windows-herdr-process-installer.md" .
 triage:AY9 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 9 ; triage:branch "feature/ay9-herdr-socket-cutover" ; triage:criteria "docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md" .
+triage:AY13 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 10 ; triage:branch "feature/ay13-doctor-team-scope" ; triage:criteria "docs/plans/phase-ay/sprint-AY.13-doctor-team-scope.md" .
+triage:AY14 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 11 ; triage:branch "feature/ay14-herdr-agent-name-mapping" ; triage:criteria "docs/plans/phase-ay/sprint-AY.14-herdr-agent-name-mapping.md" .

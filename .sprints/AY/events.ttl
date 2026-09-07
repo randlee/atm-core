@@ -73,3 +73,26 @@ triage:a8 a triage:Assignment ;
 triage:c8 a triage:Completion ;
     triage:ofSprint triage:AY7 ;
     triage:at "2026-09-07T06:31:12Z"^^xsd:dateTime .
+
+triage:a9 a triage:Assignment ;
+    triage:ofSprint triage:AY9 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-07T15:50:00Z"^^xsd:dateTime .
+
+triage:c9 a triage:Completion ;
+    triage:ofSprint triage:AY9 ;
+    triage:at "2026-09-07T16:12:27Z"^^xsd:dateTime .
+
+triage:a10 a triage:Assignment ;
+    triage:ofSprint triage:AY13 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-07T16:39:00Z"^^xsd:dateTime .
+
+triage:a11 a triage:Assignment ;
+    triage:ofSprint triage:AY14 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-07T16:43:00Z"^^xsd:dateTime .
+
+triage:c10 a triage:Completion ;
+    triage:ofSprint triage:AY13 ;
+    triage:at "2026-09-07T17:03:41Z"^^xsd:dateTime .
