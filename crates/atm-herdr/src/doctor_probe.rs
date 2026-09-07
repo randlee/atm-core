@@ -120,10 +120,10 @@ impl HerdrDoctorProbe {
                 io_error_kind: Some(ErrorKind::NotFound),
                 ..
             } => HerdrDoctorState::BinaryNotFound {
-                searched: self
-                    .config
-                    .binary_path()
-                    .map_or_else(|| vec![PathBuf::from("herdr")], |path| vec![path.to_path_buf()]),
+                searched: self.config.binary_path().map_or_else(
+                    || vec![PathBuf::from("herdr")],
+                    |path| vec![path.to_path_buf()],
+                ),
             },
             HerdrError::ServerUnavailable {
                 io_error_kind: Some(ErrorKind::PermissionDenied),
