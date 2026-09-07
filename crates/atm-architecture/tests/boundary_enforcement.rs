@@ -3330,7 +3330,7 @@ fn al3_replacement_runtime_cannot_restore_legacy_or_blocking_runtime_constructs(
     let storage_router = read_source(&runtime_root.join("storage_and_nudge_router.rs"));
     assert!(
         storage_router.contains("async fn commit_write")
-            && storage_router.contains("prepare_write_with_async_runtime("),
+            && storage_router.contains("prepare_write_with_preflight_async_runtime("),
         "the replacement write path must await the core async storage admission boundary"
     );
     assert!(

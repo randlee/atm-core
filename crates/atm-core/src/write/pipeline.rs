@@ -2,7 +2,7 @@
 //! entry family, and persisted-write preparation.
 
 use super::*;
-use crate::send::{NudgeMode, send_mode_for_task_request};
+use crate::send::{NudgeMode, WriteSourcePreflight, send_mode_for_task_request};
 
 /// Result of the one canonical write operation.
 ///
@@ -373,10 +373,11 @@ pub fn prepare_write_with_runtime(
 /// path. The immutable storage transition is the only await: it enqueues work
 /// to the backend's bounded writer lane and receives that lane's durable
 /// result without a blocking task in the HTTP runtime.
-pub async fn prepare_write_with_async_runtime(
+pub async fn prepare_write_with_preflight_async_runtime(
     request: WriteRequest,
     observability: &(dyn ObservabilityPort + Send + Sync),
     runtime: &LocalServiceRuntime,
+    source_preflight: WriteSourcePreflight,
 ) -> Result<PreparedWrite, AtmError> {
     validate_write_provenance(
         WriteIngress::Canonical,
@@ -393,10 +394,24 @@ pub async fn prepare_write_with_async_runtime(
                 "message write is missing a destination",
             ));
         }
-        return prepare_persisted_write_async(request, observability, runtime, None).await;
+        return prepare_persisted_write_async(
+            request,
+            observability,
+            runtime,
+            None,
+            source_preflight,
+        )
+        .await;
     }
     if has_authenticated_peer_provenance(&request) {
-        return prepare_persisted_write_async(request, observability, runtime, None).await;
+        return prepare_persisted_write_async(
+            request,
+            observability,
+            runtime,
+            None,
+            source_preflight,
+        )
+        .await;
     }
     let acknowledgement = admit_acknowledgement_write_async(request, runtime).await?;
     prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
@@ -597,19 +612,15 @@ async fn prepare_persisted_write_async(
     observability: &(dyn ObservabilityPort + Send + Sync),
     runtime: &LocalServiceRuntime,
     acknowledgement: Option<ResolvedAcknowledgement>,
+    source_preflight: WriteSourcePreflight,
 ) -> Result<PreparedWrite, AtmError> {
     let mut context = prepare_send_context(runtime, &request)?;
     crate::send::validate_task_request(&request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
     let requires_ack = request_requires_ack(&request, &task_id);
-    let verified_template =
-        crate::send::async_persistence::verify_template_request(runtime, &request)?;
-    let body = crate::send::async_persistence::resolve_async_body(
-        &request,
-        &context,
-        verified_template.as_ref(),
-    )?;
+    let (body, verified_template) =
+        crate::send::async_persistence::resolve_async_body(&request, source_preflight)?;
     annotate_path_only_body(&mut request, &mut context, &body);
     let summary = crate::send::summary::build_summary(&body, request.summary_override.clone());
     let message_id = request.origin_message_id.unwrap_or_default();
