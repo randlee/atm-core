@@ -3,9 +3,9 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-06T22:24:39Z",
-    "end": "2026-09-07T05:16:14.689273Z"
+    "end": "2026-09-07T05:32:08.404743Z"
   },
-  "scope": "phase-ay sprints AY.1-AY.8 orchestrated via graph-orchestration (.sprints/AY) as gh stacks on integrate/phase-ay. Only sprints with a dev Completion event have QA runs: AY.1 (PR #1270; r1 FAIL, r2 FAIL/0 blocking, r3 PASS; merged at 7e40db597), AY.2 (PR #1269; r1-r3 FAIL, r4 PASS at 5e7dd50e1; merged at 1195614ba), AY.3 (PR #1273 stacked on AY.2 then retargeted to integrate/phase-ay; r1 FAIL at 45701a81e, r2 not-closed at ec16200b6, r3 pending at b8afa814f; AY3-QA-002 held for Rand's ruling), AY.4 (PR #1279 stacked on AY.3; r1 FAIL at 296376da0, r2 focused re-verify not-closed at 0e7778a8d, r3 pending at edb2ed877), AY.8 (PR #1280 from integrate/phase-ay; r1 PASS D1-only at f3731606b, r2 FAIL at 696bc1061, r3 pending at 26ea2806a). AY.5 (arch-ctm, a6) is in dev with no QA run. This master is extended with each authoritative verdict message as quality-mgr reports it; pending rounds are recorded only once their verdict message exists.",
+  "scope": "phase-ay sprints AY.1-AY.8 orchestrated via graph-orchestration (.sprints/AY) as gh stacks on integrate/phase-ay. Only sprints with a dev Completion event have QA runs: AY.1 (PR #1270; r1 FAIL, r2 FAIL/0 blocking, r3 PASS; merged at 7e40db597), AY.2 (PR #1269; r1-r3 FAIL, r4 PASS at 5e7dd50e1; merged at 1195614ba), AY.3 (PR #1273 stacked on AY.2 then retargeted to integrate/phase-ay; r1 FAIL at 45701a81e, r2 not-closed at ec16200b6, r3 pending at b8afa814f; AY3-QA-002 held for Rand's ruling), AY.4 (PR #1279 stacked on AY.3; r1 FAIL at 296376da0, r2 focused re-verify not-closed at 0e7778a8d, r3 pending at edb2ed877), AY.8 (PR #1280 from integrate/phase-ay; r1 PASS D1-only at f3731606b, r2 FAIL at 696bc1061, r3 FAIL at 26ea2806a with 4/6 closed, r4 pending). AY.5 (arch-ctm, a6) is in dev with no QA run. This master is extended with each authoritative verdict message as quality-mgr reports it; pending rounds are recorded only once their verdict message exists.",
   "count_basis": "headline/reviewer",
   "path_notes": "Built directly from ATM messages read this session (fenix mailbox, team atm-dev). Every assignment_message_id is a real ATM message_id located via `atm list quality-mgr --all --json`; every result_message_id via `atm list --from quality-mgr --all --json`. Pinned commits are the HEADs of the detached qa-pr<PR>-r<N> worktrees recorded in worktree-tracking.md. No verdict, run, or message id was fabricated; null means the value is not carried by the source message.",
   "runs": [
@@ -333,6 +333,31 @@
       "minor": 1,
       "count_basis": "headline/reviewer",
       "evidence": "qa-pr1280-r2 verdict FAIL at 696bc1061, 3 blocking, 2 important, 1 minor (msg 01M1X3FWBJQXVS13JHQM3WRSJC; ack 01M1X2WNBHPXQG8MPHG0YCTPK8). Blocking: D2 AI.11-gate architecture exemption missing (test fails locally, matches live CI Just lint failure); D7 fake-socket scenario matrix unbuilt (dead-code fixture); D8 cross-transport equivalence suite never wired. Important: D9/D10 pin work. D1 still PASS; D3/D6 runtime safety clean; no C3/daemon violations. Report https://github.com/randlee/atm-core/pull/1280#issuecomment-5565225828. Triaged as AY8-QA-001..006 on integrate/phase-ay 11a22771f; fix round FIX-AY8-R2 (cipher) completed at 26ea2806a; qa-pr1280-r3 pinned at 26ea2806a (assignment 01M1X4SEWTGK0066JW0DXFNZGX, pin correction 01M1X4SZ8SYHYM6JHTNEGMDTHY, ack 01M1X4SQA6GE2WGE7NJD2HHRRZ, verdict pending)."
+    },
+    {
+      "run_id": "QA-AY8-R3",
+      "aich_sprint": "AY8",
+      "phase_sprint": "AY.8",
+      "pass": false,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-07T05:17:24.250948Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M1X4SEWTGK0066JW0DXFNZGX",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "Round-3 QA for AY.8 after FIX-AY8-R2 (cipher), PR #1280 pinned at 26ea2806a (worktree qa-pr1280-r3; pin correction 01M1X4SZ8SYHYM6JHTNEGMDTHY from fb697d14d); carry-forward AY8-QA-001..006",
+      "result_time_utc": "2026-09-07T05:32:08.404743Z",
+      "result_time_pst": null,
+      "result_message_id": "01M1X5MEAME0BFFBEQBXYGA33M",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 2,
+      "important": 1,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "qa-pr1280-r3 verdict FAIL at 26ea2806a (msg 01M1X5MEAME0BFFBEQBXYGA33M; ack 01M1X4SQA6GE2WGE7NJD2HHRRZ). Closed AY8-QA-001/003/004/006 at fix commit fb697d14d. Still open: AY8-QA-002 (blocking, D7 fake-socket scenario matrix partial/unwired) and AY8-QA-005 (important, D10 construction-site pin gameable). New blocking AY8-QA-007: syn dev-dependency in crates/atm-herdr/Cargo.toml not allowlisted in boundaries/atm-herdr/herdr-process-adapter.toml, required 'Just lint (boundaries)' check fails live (run 34086204073, job 101630670160). Deliverable completion 4/6 closed findings. Report https://github.com/randlee/atm-core/pull/1280#issuecomment-5565540829. Triage commit 0ad866576 on integrate/phase-ay. Fix round FIX-AY8-R3-20260907 dispatched to cipher (blocking AY8-QA-002/007)."
     }
   ]
 }
