@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY4-QA-001>
+  a triage:Finding ;
+  triage:findingId "AY4-QA-001" ;
+  triage:title "No stall-injection gate for FakeHerdrProcessAdapter::notify() blocks A2/L12 coverage" ;
+  triage:description "Sprint doc L12 requires: 'Desktop notification stalls beyond HERDR_NOTIFY_DEADLINE -> the attempt returns within the five-second absolute bound with notify_ok == false; durable lead and recipient writes remain successful.' FakeHerdrProcessAdapter::notify() (crates/atm-herdr/src/lib.rs:867-887) takes a _deadline parameter but never reads it, and unlike prompt()/list() (which use prompt_gate/list_gate plus block_next_prompt()/block_next_list() to inject a stall) it has no notify_gate/block_next_notify() equivalent -- it always returns synchronously from queued results with no way to simulate a stalling notification. As written, the A2/L12 notify-stall-bounded-by-deadline behavior cannot be exercised by any test against this fake; independently re-verified by quality-mgr by reading lib.rs:690-889 line-by-line against the diff b8afa814f..296376da0, confirming req-qa's finding." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T23:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY4 ;
+  triage:foundAt "2026-09-06T23:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY4-QA-001/AY4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY4-QA-001/AY4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 867 ;
+  triage:snippet "fn notify<'a>(&'a self, title: &'a str, body: &'a str, _deadline: RequestDeadline) -> ... { ... state.notify_results.pop_front() ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay4-herdr-breaker-lifecycle" ;
+  triage:headSha "296376da0" ;
+  triage:occursIn <urn:atm:triage:worktree/AY4/296376da0> .
+
+<urn:atm:triage:worktree/AY4/296376da0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ay4-herdr-breaker-lifecycle" ;
+  triage:branch "feature/ay4-herdr-breaker-lifecycle" ;
+  triage:headSha "296376da0" ;
+  triage:orderIndex 1 .
