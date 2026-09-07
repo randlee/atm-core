@@ -28,10 +28,7 @@ where
 {
     let kind = nudge_kind_for_mode(nudge_mode);
     if delivery_snapshot.local_tmux_post_send {
-        let pane_id = event
-            .recipient_pane_id
-            .clone()
-            .or_else(|| delivery_snapshot.recipient_pane_id.as_ref().cloned());
+        let pane_id = tmux_pane_id(event, delivery_snapshot);
         let Some(pane_id) = pane_id else {
             return Ok(None);
         };
@@ -97,6 +94,16 @@ where
         }));
     }
     Ok(None)
+}
+
+fn tmux_pane_id(
+    event: &PostSendHookEvent,
+    delivery_snapshot: &DeliveryRecipientSnapshot,
+) -> Option<crate::types::PaneId> {
+    event
+        .recipient_pane_id
+        .clone()
+        .or_else(|| delivery_snapshot.recipient_pane_id.as_ref().cloned())
 }
 
 /// Maps the write-time delivery mode to the dispatch's `NudgeKind`.

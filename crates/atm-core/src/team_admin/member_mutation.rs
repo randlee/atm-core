@@ -696,6 +696,10 @@ fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMember
             }
         }
     }
+    update_member_local_backend(member, request);
+}
+
+fn update_member_local_backend(member: &mut RosterEntry, request: &UpdateMemberRequest) {
     match request.local_backend.as_ref() {
         Some(LocalMessageReceivedBackend::Tmux { pane_id }) => {
             member.recipient_pane_id = Some(pane_id.clone());

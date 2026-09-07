@@ -198,13 +198,7 @@ fn validate_database_wide_aliases(
     let aliases = roster
         .members
         .iter()
-        .filter_map(|member| {
-            member
-                .metadata_json
-                .get("alias")
-                .and_then(Value::as_str)
-                .map(|alias| alias)
-        })
+        .filter_map(|member| member.metadata_json.get("alias").and_then(Value::as_str))
         .collect::<Vec<_>>();
 
     for (index, alias) in aliases.iter().enumerate() {
@@ -215,10 +209,7 @@ fn validate_database_wide_aliases(
         {
             return Err(alias_conflict_error(alias, team));
         }
-        if aliases[..index]
-            .iter()
-            .any(|existing_alias| *existing_alias == *alias)
-        {
+        if aliases[..index].contains(alias) {
             return Err(alias_conflict_error(alias, team));
         }
     }
