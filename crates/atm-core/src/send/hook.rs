@@ -46,25 +46,7 @@ where
         }));
     }
     if delivery_snapshot.local_herdr_post_send {
-        let Some(agent) = crate::delivery_channel::resolve_herdr_agent_target(
-            &event.recipient,
-            delivery_snapshot.herdr_agent.clone(),
-            "post_send_herdr_dispatch",
-        ) else {
-            return Ok(None);
-        };
-        let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
-            return Ok(None);
-        };
-        return Ok(Some(BuiltInPostSendDispatch {
-            event: event.clone(),
-            target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
-                agent,
-                session: delivery_snapshot.herdr_session.clone(),
-                rendered_nudge,
-            })),
-            kind,
-        }));
+        return build_herdr_dispatch(runtime, delivery_snapshot, event, kind);
     }
     if delivery_snapshot.graft_post_send {
         let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
@@ -97,6 +79,36 @@ where
         }));
     }
     Ok(None)
+}
+
+fn build_herdr_dispatch<R>(
+    runtime: &R,
+    delivery_snapshot: &DeliveryRecipientSnapshot,
+    event: &PostSendHookEvent,
+    kind: NudgeKind,
+) -> Result<Option<BuiltInPostSendDispatch>, AtmError>
+where
+    R: RetainedServiceRuntime + ?Sized,
+{
+    let Some(agent) = crate::delivery_channel::resolve_herdr_agent_target(
+        &event.recipient,
+        delivery_snapshot.herdr_agent.clone(),
+        "post_send_herdr_dispatch",
+    ) else {
+        return Ok(None);
+    };
+    let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
+        return Ok(None);
+    };
+    Ok(Some(BuiltInPostSendDispatch {
+        event: event.clone(),
+        target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
+            agent,
+            session: delivery_snapshot.herdr_session.clone(),
+            rendered_nudge,
+        })),
+        kind,
+    }))
 }
 
 fn tmux_pane_id(
