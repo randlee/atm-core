@@ -88,6 +88,18 @@ The fixture (local host or colima container) is observable and addressable:
   from a product defect; the report's cause line makes the difference visible instead of
   "FAIL, stop everything" on the first hiccup.
 
+## Budget and no code churn
+
+- A full run-book (skills 1–4, both agents, both roles) is a 30-minute job. Hours mean something is
+  wrong with the fixture or the product, and the run stops at the budget with a post-mortem; it
+  does not stretch.
+- Skills are markdown checklists run by hand-tools (`atm` CLI, native ATM tools, `sqlite3`,
+  `atm log`). There is no Python or shell harness in this sprint, so there is nothing for an agent to
+  edit between runs. A skill wording fix is a one-line PR after the run, never during it.
+- The oversight agent fixes environment state (roster, gateway, receiver, path, permission) and
+  re-runs a step. It does not write scripts, patch tooling, or change ATM. If a step cannot be made
+  to pass by fixing environment state, the cause goes into the post-mortem and the run moves on.
+
 ## No babysitting
 
 - A run is fully specified by the skill text plus two inputs: the partner agent and the fixture
