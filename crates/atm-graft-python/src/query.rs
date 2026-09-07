@@ -63,9 +63,8 @@ impl PyGraftSession {
                 )))
             })?;
         let selection = Self::read_selection(selection)?;
-        // `list_tool` and the CLI resolve an exact message ID within the
-        // caller's mailbox scope, irrespective of the host session's chat
-        // identifier. Preserve that parity for native exact-ID reads: the
+        // Exact-ID reads resolve within the caller's mailbox scope,
+        // irrespective of the host session's chat identifier. The
         // session-chat filter is appropriate for bucket scans, but would hide
         // a bare-agent-addressed message that list just returned.
         let exact_message_id = message_id.is_some();

@@ -370,20 +370,6 @@ pub fn preferred_local_client(
 ) -> Result<Arc<dyn DaemonApiClient>, AtmError> {
     #[cfg(unix)]
     {
-        match std::env::var("ATM_LOCAL_TRANSPORT").as_deref() {
-            Ok("tcp") => return loopback_tcp_client(endpoint_record_path, request_timeout),
-            Ok("") | Ok("uds") | Err(std::env::VarError::NotPresent) => {}
-            Ok(value) => {
-                return Err(AtmError::validation(format!(
-                    "ATM_LOCAL_TRANSPORT must be `uds` or `tcp`; received `{value}`"
-                )));
-            }
-            Err(std::env::VarError::NotUnicode(_)) => {
-                return Err(AtmError::validation(
-                    "ATM_LOCAL_TRANSPORT must be valid Unicode when set",
-                ));
-            }
-        }
         let runtime_directory = endpoint_record_path.as_ref().parent().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "local HTTP endpoint record has no runtime directory for Unix socket selection",
@@ -393,14 +379,7 @@ pub fn preferred_local_client(
         // root-owned runtime because `UnixSocketOwnerUid` rejects uid 0. This
         // is a configuration-selected loopback path, not a fallback after a
         // UDS failure.
-        if std::fs::metadata(runtime_directory)
-            .map_err(|source| {
-                AtmError::daemon_unavailable("failed to inspect local runtime directory")
-                    .with_cause(source)
-            })?
-            .uid()
-            == 0
-        {
+        if runtime_directory_is_root_owned(runtime_directory)? {
             return loopback_tcp_client(endpoint_record_path, request_timeout);
         }
         let socket_path = endpoint_record_path
@@ -414,6 +393,20 @@ pub fn preferred_local_client(
     {
         loopback_tcp_client(endpoint_record_path, request_timeout)
     }
+}
+
+/// Performs the one bounded local ownership check used while constructing a
+/// preferred Unix client. This synchronous metadata read happens before any
+/// async request exchange and never performs daemon I/O.
+#[cfg(unix)]
+fn runtime_directory_is_root_owned(runtime_directory: &Path) -> Result<bool, AtmError> {
+    Ok(std::fs::metadata(runtime_directory)
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to inspect local runtime directory")
+                .with_cause(source)
+        })?
+        .uid()
+        == 0)
 }
 
 /// Reqwest-backed physical loopback connector. It adds exactly the local
@@ -469,29 +462,35 @@ enum TransportGeneration {
 /// request budget for the server itself.
 const LOOPBACK_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
 
+/// Maximum age of an idle same-host HTTP connection.
+///
+/// The daemon's HTTP/1 header timer is its three-second request budget. No
+/// local client may retain an idle connection longer than that timer: after
+/// this bounded interval reqwest opens a fresh connection rather than writing
+/// to one the daemon may already have closed. This policy intentionally keeps
+/// short-lived keep-alive reuse and is restricted to same-host connectors;
+/// peer clients preserve their distinct pooling and delivery contract.
+const LOCAL_CLIENT_IDLE_POOL_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Builds a reqwest client builder with the shared same-host connection policy.
+///
+/// Both loopback TCP and Unix-domain clients use this helper so neither can
+/// retain an idle connection beyond the daemon header timer.
+pub(crate) fn local_reqwest_client_builder() -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(LOOPBACK_CONNECT_TIMEOUT)
+        .pool_idle_timeout(LOCAL_CLIENT_IDLE_POOL_TIMEOUT)
+}
+
 /// Builds one loopback `reqwest::Client` bound to no particular daemon
 /// generation yet. Callers must pair the result with the
 /// [`Ulid`] read from the same [`LocalHttpEndpointRecord`] exchange that
 /// motivated the build.
 fn build_loopback_reqwest_client() -> Result<reqwest::Client, HttpRuntimeClientFailure> {
-    reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(LOOPBACK_CONNECT_TIMEOUT)
-        // The HTTP/1 server bounds the time it waits for the next request
-        // header on a keep-alive connection by its request budget. Retaining
-        // an idle loopback socket longer than that would let reqwest attempt
-        // the next write on a connection the daemon has already closed. A
-        // loopback exchange instead opens a fresh connection, so a failure
-        // before dispatch remains a reconnect-safe connection failure. This
-        // is deliberately local-only: peer clients retain their pool and
-        // post-write uncertainty contract.
-        .pool_max_idle_per_host(0)
-        .build()
-        .map_err(|source| {
-            HttpRuntimeClientFailure::Connect(format!(
-                "failed to build loopback HTTP client: {source}"
-            ))
-        })
+    local_reqwest_client_builder().build().map_err(|source| {
+        HttpRuntimeClientFailure::Connect(format!("failed to build loopback HTTP client: {source}"))
+    })
 }
 
 /// Reqwest owns DNS, connection and HTTP. This adapter owns only the

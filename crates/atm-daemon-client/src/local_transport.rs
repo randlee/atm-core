@@ -54,8 +54,14 @@ impl LocalDaemonTransport {
 pub fn local_daemon_transport() -> Result<LocalDaemonTransport, AtmError> {
     let value = std::env::var("ATM_LOCAL_TRANSPORT").ok();
     let transport = LocalDaemonTransport::resolve(value.as_deref())?;
+    let override_state = match value.as_deref() {
+        None => "unset",
+        Some("") => "explicitly_empty",
+        Some(_) => "explicit",
+    };
     tracing::debug!(
         transport = transport.label(),
+        local_transport_override = override_state,
         "selected daemon local transport"
     );
     Ok(transport)

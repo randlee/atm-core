@@ -104,10 +104,6 @@ class _GeneratedParityFixture:
             "ATM_TEST_RUNTIME_HOME": str(home),
             "ATM_TEAM": self.team,
             "ATM_CHAT_ID": self.chat_id,
-            # Exercise the capability-authenticated loopback client even on
-            # Unix, where UDS is normally preferred. The regressions below
-            # require a real daemon and specifically cover TCP keep-alive.
-            "ATM_LOCAL_TRANSPORT": "tcp",
             "ATM_LOG_DIR": str(log_dir),
             "TMPDIR": str(temp_dir),
             "TMP": str(temp_dir),
@@ -466,10 +462,13 @@ class CliParityTests(unittest.TestCase):
             self.assertNotIn(native_send["message_id"], pending_ids)
             self.assertNotIn(cli_send["message_id"], pending_ids)
 
-    def test_native_loopback_write_survives_idle_server_header_timeout(self) -> None:
+    def test_native_default_uds_write_survives_idle_server_header_timeout(self) -> None:
         # Warm this session's reqwest client, then exceed the daemon's default
-        # three-second HTTP/1 header timer. The next native request must open
-        # a fresh loopback connection rather than write to the stale pool.
+        # three-second HTTP/1 header timer. This generated fixture deliberately
+        # leaves ATM_LOCAL_TRANSPORT unset, so Unix exercises the production
+        # UDS connector. The next native request must open a fresh connection
+        # rather than write to the stale pool.
+        self.assertNotIn("ATM_LOCAL_TRANSPORT", self.environment)
         self._native(self.native_tools, "atm_list", {"selection": "all"})
         time.sleep(4)
         result = self._native(
@@ -514,6 +513,23 @@ class CliParityTests(unittest.TestCase):
             time.sleep(0.05)
         else:
             self.fail("native exact-ID read was not visible after the bounded handoff")
+
+    def test_cli_read_by_listed_id_reaches_bare_agent_message_from_chat(self) -> None:
+        sent = self._native(
+            self.second_native_tools,
+            "atm_send",
+            {
+                "to": f"{self.identity}@{self.team}",
+                "body": "cli-exact-read-regression",
+            },
+        )
+        message_id = sent["message_id"]
+        listed = self._native(self.native_tools, "atm_list", {"selection": "all"})
+        self.assertIn(message_id, {row["message_id"] for row in listed["rows"]})
+
+        read = self._cli("read", "--message-id", message_id, identity=self.identity)
+        self.assertEqual(read["count"], 1)
+        self.assertTrue(read["mutation_applied"])
 
 
 if __name__ == "__main__":
