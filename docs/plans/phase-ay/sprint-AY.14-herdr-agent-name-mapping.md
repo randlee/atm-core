@@ -150,6 +150,9 @@ conflicting team and the `--alias` remedy. Applies to every backend, as
 written. Consequence for operators: a second team gaining `team-lead` or
 `quality-mgr` must supply an alias at add time; the hmux spawn path that
 creates teams outside ATM must pass one.
+- Raised, not ruled (Rand, 2026-09-07): "we could even reject 'team-lead',
+  'quality-mgr', 'publisher'" as canonical names without an alias. Not in
+  AY.14 scope unless Rand says so.
 
 Uniqueness is enforced where the alias is written (`add-member --alias`,
 `set-member --alias`): the roster store rejects an alias already held by
