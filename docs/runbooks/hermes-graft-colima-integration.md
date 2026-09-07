@@ -76,8 +76,9 @@ P0 exit gate:
 
 ### P0 record for the current cycle
 
-- Hermes review range:
-  `693641aa8b4359c602283bdbbc14041e03bc47bc..3ffa69d9070400fb0528f8dc75afa8edfa2691ff`.
+- Initial Hermes review head was `3ffa69d9070400fb0528f8dc75afa8edfa2691ff`;
+  the accepted post-fix range is
+  `693641aa8b4359c602283bdbbc14041e03bc47bc..d45230aac599d3db6a24404eba4fa2f04e030004`.
 - atm-core tag: `prerelease/v1.5.3` at
   `9654b75f1710d7155fb3a6584ee709314c1642d5`.
 - Archive run `34074022098` passed; wheel run `34074006538` is bound to
@@ -135,8 +136,9 @@ Current-cycle review is recorded on Hermes PR #21: initial findings comment
 `issuecomment-5563939096` and passing delta-review comment
 `issuecomment-5564128952`. HGF-001 through HGF-004 are fixed and independently
 verified at `5f2793add0f949bbc9b231e0e18a17bfb39b2f93`: 38 tests, Ruff, diff check,
-and the production-shaped steer probe pass. P2 remains held until the fix PR
-merges and Loki supplies the newly frozen full stack tip.
+and the production-shaped steer probe pass. HGF-005 is fixed at `650bc7f2d5`.
+The final `origin/main` and `origin/atm/stack` both point to `d45230aac5`; the
+full five-file range is clean, P1 is PASS, and P2 is released.
 
 ### Review report shape
 
@@ -324,6 +326,23 @@ Run this leg only if P0 explicitly includes it.
 - Record sanitized IDs and verdicts only, never message bodies, fingerprints,
   certificates, addresses, or capability values.
 
+### Fixture roster teardown
+
+Roster removal is caller-team scoped. A cross-team caller must be rejected;
+that rejection is the expected authorization boundary, not a reason to weaken
+the command. Run teardown as the fixture member itself or as another member of
+the fixture team:
+
+```sh
+ATM_IDENTITY=<fixture-member> ATM_TEAM=<fixture-team> \
+  atm teams remove-member <fixture-team> <fixture-member>
+```
+
+Expected result: the command succeeds once, and a sanitized roster/list check
+shows the fixture member absent. With a caller from another team, expect an
+error stating that the caller team does not match the target team; change the
+caller identity, not the authorization policy.
+
 ## P3 — issue log
 
 Every issue becomes a row before work continues.
@@ -341,10 +360,13 @@ Every issue becomes a row before work continues.
 | HGC-009 | P0/P2 | A fixed AT8 Phase-B delay can freeze before persistence or become timing-dependent | Host and VM scheduling make the send boundary variable | Calibrate from measured send RTT, clamp `--after` to 300--1500 ms, record it in `at8-armed`, and require log proof that persistence preceded SIGSTOP; otherwise fail without tuning/retry | approved; suite/v2 rerun pending |
 | HGC-010 | P0/P2 | Loopback or an ambiguous peer name would invalidate cross-host trust evidence | The transport must distinguish the container peer from host-local routing | Use `atm-hermes-testbed.local` for CN/SAN and advertised host, map host trust to the container fingerprint and port 43102, and resolve the authority to the Colima VM IP | resolved by Rand ruling; execution pending |
 | HGC-011 | P0 | Native sends against a host 1.4.13 daemon intermittently returned `ATM_DAEMON_MAY_HAVE_EXECUTED` while durable truth showed no write | Client could not confirm whether an older daemon committed the request | Treat as non-blocking diagnostic evidence only; verify durable truth before one retry and do not remodel or patch the frozen legacy daemon | observed; no product action |
-| HGC-012 / HGF-001 | P1 | Real `mode="steer"` falls back to queue | Fork defect in `randlee/hermes-agent`: production stores the direct agent in `SessionState.turn.agent`, but the fork seam unwraps only a tuple; fork tests manufacture the obsolete tuple shape | Fork commit `5f2793add0` accepts direct-agent state, preserves sentinel/legacy behavior, and uses production-shaped tests. No atm-core product change | fixed and delta-verified; merge/full re-freeze pending |
-| HGC-013 / HGF-002 | P1 | A hung visible notice prevents the main internal event from routing | Fork defect in `randlee/hermes-agent`: the soft-fail notice send has no deadline | Fork commit `5f2793add0` adds a 10-second bound and proves a hung notice warns while the event routes exactly once. No atm-core product change | fixed and delta-verified; merge/full re-freeze pending |
+| HGC-012 / HGF-001 | P1 | Real `mode="steer"` falls back to queue | Fork defect in `randlee/hermes-agent`: production stores the direct agent in `SessionState.turn.agent`, but the fork seam unwraps only a tuple; fork tests manufacture the obsolete tuple shape | Fork commit `5f2793add0` accepts direct-agent state, preserves sentinel/legacy behavior, and uses production-shaped tests. No atm-core product change | resolved in final fork tip `d45230aac5` |
+| HGC-013 / HGF-002 | P1 | A hung visible notice prevents the main internal event from routing | Fork defect in `randlee/hermes-agent`: the soft-fail notice send has no deadline | Fork commit `5f2793add0` adds a 10-second bound and proves a hung notice warns while the event routes exactly once. No atm-core product change | resolved in final fork tip `d45230aac5` |
 | HGC-014 / HGF-003 | P1 | The documented frozen test procedure fails with `No module named pytest` | Fork documentation defect in `randlee/hermes-agent`: it installs with `--no-dev`, while pytest is in the `dev` extra | Fork commit `5f2793add0` installs locked `messaging` and `dev` extras; the corrected 38-test command passes. No atm-core product change | resolved |
 | HGC-015 / HGF-004 | P1 | Startup-hook test cannot detect loss of `gateway_runner` at the real emit site | Fork test gap in `randlee/hermes-agent`: it manually calls an `AsyncMock` with the expected payload | Fork commit `5f2793add0` drives the production startup mixin and asserts the emitted runner. No atm-core product change | resolved |
+| HGC-016 / HGF-005 | P1 | Final full-range `git diff --check` reported five whitespace errors | Fork test formatting predated the delta-only review, so the first fix round did not touch it | Fork commit `650bc7f2d5` removes only the five trailing spaces; PR #23 merged, both fork pointers advanced to `d45230aac5`, 38 tests/Ruff/full-range diff-check pass. No atm-core product change | resolved |
+| HGC-017 | P0/P2 | A stale host-side fixture roster row remained from the prior AT3 cycle | Cross-host fixture cleanup had awaited an ownership ruling | Rand authorized removal; Loki removed it and verified the host held-state list is empty before the new run | resolved |
+| HGC-018 | P2 | Cross-team fixture-member removal is rejected | ATM roster mutation is caller-team scoped | Run `atm teams remove-member` under the fixture member identity or another member of the fixture team, then verify absence with a sanitized roster/list check. This is an ATM authorization rule, not a Hermes fork defect | resolved rule; apply at teardown |
 
 ## Stop/escalate decision table
 
