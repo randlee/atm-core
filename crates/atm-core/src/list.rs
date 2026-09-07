@@ -106,6 +106,56 @@ impl ListQuery {
     }
 }
 
+/// Canonicalizes every roster alias carried by a list request before the
+/// request reaches either the mailbox reader or task-ledger reader. This keeps
+/// mailbox filters and durable task/audit actor filters on the canonical
+/// roster identity.
+pub fn canonicalize_roster_aliases<F>(query: &mut ListQuery, mut resolve_member: F)
+where
+    F: FnMut(&TeamName, &AgentName, bool) -> Option<(TeamName, AgentName)>,
+{
+    if let Some((team, member)) = resolve_member(&query.caller_team, &query.caller_identity, true) {
+        query.caller_team = team;
+        query.caller_identity = member;
+    }
+
+    let target_team = query
+        .target_address
+        .as_ref()
+        .and_then(|address| address.team().cloned())
+        .unwrap_or_else(|| query.caller_team.clone());
+    let explicit_team = query
+        .target_address
+        .as_ref()
+        .is_some_and(|address| address.team().is_some());
+    if let Some(target) = query.target_address.as_ref()
+        && let Some((team, member)) = resolve_member(&target_team, target.agent(), !explicit_team)
+        && let Ok(canonical_address) = AgentAddress::new(
+            member,
+            target.chat_id().cloned(),
+            Some(team),
+            target.host().cloned(),
+        )
+    {
+        query.target_address = Some(canonical_address);
+    }
+    if let Some(sender) = query.sender_filter.as_mut()
+        && let Some((_, member)) = resolve_member(&target_team, sender, !explicit_team)
+    {
+        *sender = member;
+    }
+    if let Some(task_ledger) = query.task_ledger.as_mut() {
+        let member = match task_ledger {
+            TaskLedgerQuery::Tasks { member } | TaskLedgerQuery::Events { member, .. } => member,
+        };
+        if let Some(candidate) = member
+            && let Some((_, canonical)) = resolve_member(&query.caller_team, candidate, true)
+        {
+            *candidate = canonical;
+        }
+    }
+}
+
 fn normalize_limit(limit: Option<usize>) -> Result<Option<usize>, AtmError> {
     match limit {
         Some(0) => Err(AtmError::validation(
@@ -360,10 +410,13 @@ pub fn list_mail_with_runtime(
 }
 
 fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
-    query: ListQuery,
+    mut query: ListQuery,
     _observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<ListOutcome, AtmError> {
+    canonicalize_roster_aliases(&mut query, |team, member, allow_database_wide_alias| {
+        runtime.resolve_roster_member_at_ingress(team, member, allow_database_wide_alias)
+    });
     let contains_needle = query.contains_filter.as_deref();
     let config = runtime.load_config(&query.current_dir)?;
     let actor = query.caller_identity.clone();
@@ -530,7 +583,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        ListQuery, apply_list_filters, list_mail_with_runtime_impl, logical_current_messages,
+        ListQuery, TaskLedgerQuery, apply_list_filters, canonicalize_roster_aliases,
+        list_mail_with_runtime_impl, logical_current_messages,
     };
     use crate::boundary::{self, MessageKey, RosterHarness, RosterMemberKind};
     use crate::error::AtmError;
@@ -579,6 +633,48 @@ mod tests {
                 extra: Map::new(),
             },
         }
+    }
+
+    #[test]
+    fn unique_name_d16_list_aliases_are_canonicalized_before_reader_and_task_ledger() {
+        let root = tempdir().expect("root");
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        let canonical: AgentName = "team-lead".parse().expect("canonical");
+        let mut query = ListQuery::new(
+            root.path().to_path_buf(),
+            root.path().to_path_buf(),
+            "atm-lead".parse().expect("caller alias"),
+            Some("atm-lead"),
+            team.clone(),
+            ReadSelection::All,
+            false,
+            None,
+            Some("atm-lead"),
+            None,
+            None,
+            None,
+        )
+        .expect("query")
+        .with_task_ledger(TaskLedgerQuery::Tasks {
+            member: Some("atm-lead".parse().expect("member alias")),
+        });
+
+        canonicalize_roster_aliases(&mut query, |addressed, candidate, _| {
+            (candidate.as_str() == "atm-lead").then(|| (addressed.clone(), canonical.clone()))
+        });
+
+        assert_eq!(query.caller_identity, canonical);
+        assert_eq!(
+            query.target_address.as_ref().map(|address| address.agent()),
+            Some(&canonical)
+        );
+        assert_eq!(query.sender_filter.as_ref(), Some(&canonical));
+        assert_eq!(
+            query.task_ledger,
+            Some(TaskLedgerQuery::Tasks {
+                member: Some(canonical),
+            })
+        );
     }
 
     #[test]

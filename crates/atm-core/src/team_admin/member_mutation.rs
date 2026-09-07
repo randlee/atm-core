@@ -1419,6 +1419,54 @@ mod tests {
     }
 
     #[test]
+    fn unique_name_g02_preflight_collision_names_alias_owner_and_team() {
+        let store = TestRosterStore::default();
+        let owner_team: TeamName = "team-a".parse().expect("team");
+        store.seed(
+            &owner_team,
+            vec![roster_member_with_alias("team-a", "robert", "bob")],
+        );
+        let root = tempfile::tempdir().expect("tempdir");
+        let request = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            "team-b",
+            "bob",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("bob-home"),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: None,
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+
+        let error = add_member_with_roster_store(&store, request)
+            .expect_err("canonical name must not collide with another team's alias");
+        let expected = atm_storage::roster_unique_name_collision_error(&[
+            atm_storage::RosterUniqueName {
+                team_name: "team-a".parse().expect("team"),
+                agent_name: "robert".parse().expect("agent"),
+                unique_name: "bob".to_owned(),
+            },
+            atm_storage::RosterUniqueName {
+                team_name: "team-b".parse().expect("team"),
+                agent_name: "bob".parse().expect("agent"),
+                unique_name: "bob".to_owned(),
+            },
+        ]);
+
+        assert_eq!(error.code(), expected.code());
+        assert_eq!(error.message(), expected.message());
+        assert!(error.message().contains("(team-a, robert)"));
+        assert!(error.message().contains("(team-b, bob)"));
+        assert!(error.message().contains("--alias"));
+    }
+
+    #[test]
     fn unique_name_a14_update_alias_rejects_other_team_alias() {
         let store = TestRosterStore::default();
         let team_a: TeamName = "team-a".parse().expect("team");

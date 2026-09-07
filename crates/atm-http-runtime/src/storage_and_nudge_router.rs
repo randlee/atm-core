@@ -511,9 +511,19 @@ impl StorageAndNudgeRouter {
 
     async fn list_messages(
         &self,
-        query: ListQuery,
+        mut query: ListQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
+        atm_core::list::canonicalize_roster_aliases(
+            &mut query,
+            |team, member, allow_database_wide_alias| {
+                self.service_runtime.resolve_roster_member_at_ingress(
+                    team,
+                    member,
+                    allow_database_wide_alias,
+                )
+            },
+        );
         if query.task_ledger.is_some() {
             if deadline.expired() {
                 return Err(AtmError::daemon_unavailable(

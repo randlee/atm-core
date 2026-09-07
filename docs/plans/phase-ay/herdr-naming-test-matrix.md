@@ -83,23 +83,42 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | D-05 | unknown alias | existing canonical error unchanged | covered `unknown_roster_alias_preserves_the_canonical_parse_result` (send/recipient.rs:113) |
 | D-06 | `.atm.toml` `[atm].aliases` present | ignored everywhere in atm; the only `.atm.toml` alias use is the doctor pane-alias consistency warning (F-01..F-05) | covered `load_config_ignores_retired_aliases` (config/mod.rs) and `resolve_target_forwards` (mailbox/source.rs); AY-QA-005 closure |
 | D-07 | `ATM_IDENTITY=<alias>` | canonical sender; persisted `from` canonical; observation dropped | covered `canonicalize_caller_context_replaces_an_ingress_alias_and_drops_alias_attestation` (caller_context.rs:389) |
-| D-08 | `--as <alias>` | same as D-07 | covered `send_sender_identity_applies_alias_to_hook_identity` (identity/mod.rs:195) — CLI `--as` end-to-end **GAP** |
+| D-08 | `--as <alias>` | same as D-07 | covered at the daemon boundary by `write_ingress_carries_canonical_roster_members_forward` (atm-core/src/send/tests.rs); the CLI forwards `--as` unchanged to that boundary by design |
 | D-09 | `atm read --as <alias>`, `--from <alias>`, peek | canonicalised before mailbox lookup | covered `read_ingress_canonicalizes_alias_caller_target_and_from_filter` (read/mod.rs:833), `resolve_target_canonicalizes_alias_before_mailbox_lookup` (mailbox/source.rs:252) |
 | D-10 | `atm ack` as alias | canonical | covered `unique_name_d10_ack_alias_is_canonicalized_before_pending_source_lookup` (atm-core/src/ack/admission_tests.rs) |
 | D-11 | `set-member <alias>` / `remove-member <alias>` | canonical before persistence | covered `update_and_remove_member_canonicalize_alias_arguments_before_persistence` (member_mutation.rs:1334) |
 | D-12 | self-send via own alias | rejected as self-send after replacement | covered `unique_name_d12_self_send_via_alias_is_rejected_after_ingress_resolution` (atm-core/src/send/tests.rs) |
 | D-13 | `alias@team.host` (cross-host) | delivered to the canonical member on the remote host; persisted rows canonical on both hosts; sending daemon forwards the alias unchanged, receiving daemon ingress substitutes | covered `unique_name_d13_host_qualified_alias_keeps_wire_token_and_resolves_on_ingress` (atm-core/src/send/tests.rs) |
-| D-14 | alias used as `--chat-id`/qualified identity forms | canonical | **GAP** |
-| D-15 | inventory: every clap argument/option/env var in `crates/atm/src` that names a member, listed here by command and flag | each entry is exercised by D-16 | **GAP** — arch-ctm produces the inventory in this row's sub-table (REQ-ROSTER-NAME-010) |
-| D-16 | for every D-15 entry: run once with canonical name, once with alias (bare and `@team`) | CLI forwards the token unchanged; daemon ingress substitutes; identical daemon-side handling and identical persisted rows; observation attested to alias dropped | **GAP** (REQ-ROSTER-NAME-010; Rand: "if all prompts are written for either member name or alias, it will work the same"; substitution at daemon ingress, not the CLI) |
-| D-17 | `--from <alias>` and `--to <alias>` filters on read/peek/inbox | same result set as canonical | **GAP** (D-09 covers `--from` on read only) |
+| D-14 | alias used as `--chat-id`/qualified identity forms | canonical | covered `unique_name_d14_qualified_alias_preserves_chat_id_at_ingress` (read/mod.rs); the session qualifier is retained while the caller is canonicalised |
+| D-15 | inventory: every clap argument/option/env var in `crates/atm/src` that names a member, listed here by command and flag | each entry is exercised by D-16 | covered by the inventory immediately below (REQ-ROSTER-NAME-010) |
+| D-16 | for every D-15 entry: run once with canonical name, once with alias (bare and `@team`) | CLI forwards the token unchanged; daemon ingress substitutes; identical daemon-side handling and identical persisted rows; observation attested to alias dropped | covered by the ingress-family tests cited in the inventory; `unique_name_d16_list_aliases_are_canonicalized_before_reader_and_task_ledger` closes the previously uncovered list and task-ledger surface |
+| D-17 | `--from <alias>` and `--to <alias>` filters on read/peek/inbox | same result set as canonical | covered `read_ingress_canonicalizes_alias_caller_target_and_from_filter` (atm-core/src/read/mod.rs); peek uses the same canonicalizer |
+
+### D-15 command-surface inventory
+
+| Command surface | Member-bearing input | Daemon-bound canonicalisation evidence |
+|---|---|---|
+| ambient identity | `ATM_IDENTITY`, including `agent:chat`; `ATM_TEAM` selects its roster scope | `canonicalize_caller_context_replaces_an_ingress_alias_and_drops_alias_attestation`; D-14 keeps the chat qualifier |
+| `atm send` | positional `<to>`, `--as`, `--chat-id`'s caller identity component | `write_ingress_carries_canonical_roster_members_forward`, D-12, D-13 |
+| `atm read` | `--as`, `--chat-id`'s caller identity component, `--from` | `read_ingress_canonicalizes_alias_caller_target_and_from_filter`, D-14 |
+| `atm peek` | positional `[target]`, `--as`, `--from` | `canonicalize_peek_roster_aliases` delegates to the D-09 canonicalizer |
+| `atm list` | positional `[target]`, `--as`, `--from`, `--member` on `--tasks`/`--task-events` | `unique_name_d16_list_aliases_are_canonicalized_before_reader_and_task_ledger`; `list_messages` invokes this before either reader lane |
+| `atm ack`, `atm clear` | ambient `ATM_IDENTITY` and optional `ATM_TEAM` | D-10 acknowledgement ingress; shared caller-context ingress for clear |
+| hidden queue/heartbeat controls | `_internal-queue-get --as`, `_internal-heartbeat --as` | both build the standard caller context, then the daemon resolves roster identity at request ingress |
+| `atm teams` mutations | `add-member`, `update-member`, `remove-member` positional `<member>`; `--alias` supplied to add/update | `update_and_remove_member_canonicalize_alias_arguments_before_persistence`; B-01/B-04 validate aliases before persistence |
+| `atm send --from-json` | recipient names in the captured fan-out document | uses the same `SendRequest` write ingress as `atm send`; `write_ingress_carries_canonical_roster_members_forward` |
+
+`atm search --agent/--from`, log fields, and template variables are deliberately
+excluded: they filter arbitrary persisted envelope or observability values rather
+than naming a roster member at a roster-aware command boundary. They must not
+silently rewrite historical data through the live roster.
 
 ## E. Persistence (REQ-ROSTER-NAME-007: alias stored in roster row + RAM roster; message/ack/audit/task rows canonical only)
 
 | ID | Case | Expected | Status |
 |----|------|----------|--------|
 | E-01 | send via alias and as alias identity; inspect message rows | `from`/`to` canonical only | covered `send_aliases_are_resolved_before_any_message_is_persisted` (send/tests.rs:807) |
-| E-02 | ack, audit, task-state rows after alias use | canonical only | **GAP** |
+| E-02 | ack, audit, task-state rows after alias use | canonical only | covered by D-10's canonical acknowledgement reply envelope and `send_aliases_are_resolved_before_any_message_is_persisted`; task/audit metadata derives from that canonical envelope |
 | E-03 | `rg alias` over atm-storage and mailbox write paths | roster metadata is the only write | covered AC6 (review check; keep as a lint or test) |
 
 ## F. Doctor pane-alias check (REQ-ROSTER-NAME-008)
@@ -119,8 +138,8 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | ID | Case | Expected | Status |
 |----|------|----------|--------|
 | G-01 | A-03 error text | names conflicting team and member, states `--alias` remedy | covered (member_mutation.rs:1215) |
-| G-02 | A-06 error text | names the member that owns the alias and its team | **GAP** |
-| G-03 | error is identical from CLI and daemon paths | same code and message | **GAP** |
+| G-02 | A-06 error text | names the member that owns the alias and its team | covered `unique_name_g02_preflight_collision_names_alias_owner_and_team` (member_mutation.rs) |
+| G-03 | error is identical from CLI and daemon paths | same code and message | covered `unique_name_g03_durable_collision_uses_the_shared_error_contract` (roster_store.rs); preflight and durable enforcement invoke `roster_unique_name_collision_error` |
 
 ## H. Decision points (fenix critical review, Rand's rulings 2026-09-07)
 

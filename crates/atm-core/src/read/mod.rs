@@ -893,6 +893,65 @@ mod tests {
     }
 
     #[test]
+    fn unique_name_d14_qualified_alias_preserves_chat_id_at_ingress() {
+        let root = tempdir().expect("root");
+        let team = TeamName::from_validated(TEST_TEAM);
+        let mut metadata_json = Map::new();
+        metadata_json.insert("alias".to_owned(), Value::String("atm-lead".to_owned()));
+        let roster = [RosterEntry {
+            team_name: team.clone(),
+            agent_name: AgentName::from_validated(ROLE_TEAM_LEAD),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: crate::schema::AgentType::Lead,
+            model: crate::types::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json,
+        }];
+        let chat_id: ChatId = "session-a".parse().expect("chat id");
+        let mut query = ReadQuery::new(
+            root.path().to_path_buf(),
+            root.path().to_path_buf(),
+            AgentName::from_validated("atm-lead"),
+            None,
+            team,
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("query")
+        .with_caller_chat_id(Some(chat_id.clone()));
+
+        canonicalize_roster_aliases(&mut query, |_, candidate, _| {
+            roster
+                .iter()
+                .find(|member| {
+                    member.agent_name == *candidate
+                        || member.metadata_json.get("alias").and_then(Value::as_str)
+                            == Some(candidate.as_str())
+                })
+                .map(|member| (member.team_name.clone(), member.agent_name.clone()))
+        });
+
+        assert_eq!(query.caller_identity.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(query.caller_chat_id(), Some(&chat_id));
+        assert_eq!(
+            query
+                .mailbox
+                .participant_filter
+                .as_ref()
+                .map(|filter| &filter.agent),
+            Some(&AgentName::from_validated(ROLE_TEAM_LEAD))
+        );
+    }
+
+    #[test]
     fn unique_name_d03_bare_alias_resolves_globally_but_explicit_team_stays_local() {
         let root = tempdir().expect("root");
         let local_team = TeamName::from_validated(TEST_TEAM);

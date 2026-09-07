@@ -32,7 +32,7 @@ use crate::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendReques
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
-use crate::types::{AgentName, CommandAction, IsoTimestamp, PaneId, TeamName};
+use crate::types::{AgentName, CommandAction, IsoTimestamp, PaneId, TaskId, TeamName};
 
 pub(crate) fn message(
     from: &str,
@@ -1039,6 +1039,10 @@ fn send_aliases_are_resolved_before_any_message_is_persisted() {
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].agent.as_str(), "canonical-recipient");
     assert_eq!(records[0].envelope.from.as_str(), "canonical-sender");
+    assert_eq!(
+        records[0].envelope.task_id.as_ref().map(TaskId::as_str),
+        Some("task-123")
+    );
     let serialized = serde_json::to_string(&records[0]).expect("serialize message");
     assert!(!serialized.contains("sender_atm-dev"));
     assert!(!serialized.contains("recipient_atm-dev"));

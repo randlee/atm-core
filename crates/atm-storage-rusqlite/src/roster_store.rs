@@ -619,6 +619,41 @@ mod tests {
     }
 
     #[test]
+    fn unique_name_g03_durable_collision_uses_the_shared_error_contract() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        store
+            .save_roster(&roster(
+                "team-a",
+                vec![roster_member("team-a", "robert", Some("bob"))],
+            ))
+            .expect("seed owner");
+
+        let error = store
+            .save_roster(&roster(
+                "team-b",
+                vec![roster_member("team-b", "bob", None)],
+            ))
+            .expect_err("durable write must reject the collision");
+        let expected = roster_unique_name_collision_error(&[
+            RosterUniqueName {
+                team_name: "team-a".parse().expect("team"),
+                agent_name: "robert".parse().expect("agent"),
+                unique_name: "bob".to_owned(),
+            },
+            RosterUniqueName {
+                team_name: "team-b".parse().expect("team"),
+                agent_name: "bob".parse().expect("agent"),
+                unique_name: "bob".to_owned(),
+            },
+        ]);
+
+        assert_eq!(error.code(), expected.code());
+        assert_eq!(error.message(), expected.message());
+    }
+
+    #[test]
     fn unique_name_a27_legacy_collision_blocks_an_unrelated_next_write() {
         let store = SqliteStorageBackend::in_memory_for_test()
             .expect("backend")

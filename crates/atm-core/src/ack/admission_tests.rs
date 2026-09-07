@@ -148,6 +148,17 @@ fn unique_name_d10_ack_alias_is_canonicalized_before_pending_source_lookup() {
 
     assert_eq!(write.canonical_request.caller_identity.as_str(), CALLER);
     assert_eq!(write.reply.envelope.from.as_str(), CALLER);
+    let records = runtime.persisted_records.lock().expect("records lock");
+    let reply = records
+        .iter()
+        .find(|record| record.envelope.acknowledges_message_id == Some(message_id))
+        .expect("canonical acknowledgement reply");
+    assert_eq!(reply.envelope.from.as_str(), CALLER);
+    assert!(
+        !serde_json::to_string(reply)
+            .expect("serialize canonical acknowledgement reply")
+            .contains("recipient-alias")
+    );
 }
 
 #[test]
