@@ -15,13 +15,16 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY8 ;
   triage:foundAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-006/ay8-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-006/ay8-2> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY8-QA-006/1> ;
+  triage:closedAt "2026-09-07T06:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY8-QA-006/ay8-1>
@@ -29,22 +32,22 @@
   triage:file "crates/atm-herdr/src/transport.rs" ;
   triage:line 21 ;
   triage:snippet "pub(crate) binary_path: Option<PathBuf>," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay8-herdr-socket-transport" ;
-  triage:headSha "696bc1061" ;
-  triage:occursIn <urn:atm:triage:worktree/ay8-696bc1061> .
+  triage:headSha "26ea2806a" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-26ea2806a> .
 
 <urn:atm:triage:occurrence/AY8-QA-006/ay8-2>
   a triage:Occurrence ;
   triage:file "crates/atm-herdr/src/transport.rs" ;
   triage:line 22 ;
   triage:snippet "pub(crate) socket_path: Option<PathBuf>," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay8-herdr-socket-transport" ;
-  triage:headSha "696bc1061" ;
-  triage:occursIn <urn:atm:triage:worktree/ay8-696bc1061> .
+  triage:headSha "26ea2806a" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-26ea2806a> .
 
 <urn:atm:triage:worktree/ay8-696bc1061>
   a triage:WorktreeSnapshot ;
@@ -52,3 +55,19 @@
   triage:branch "feature/ay8-herdr-socket-transport" ;
   triage:headSha "696bc1061" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ay8-26ea2806a>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1280-r3" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "26ea2806a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/AY8-QA-006/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T06:00:00Z"^^xsd:dateTime ;
+  triage:fixCommit "fb697d14d" ;
+  triage:fixBranch "feature/ay8-herdr-socket-transport" ;
+  triage:verifiedInRound "qa-pr1280-r3" ;
+  triage:resolutionNote "transport.rs:20-23 now declares binary_path and socket_path as private struct fields (no pub(crate)); accessor methods binary_path()/socket_path() remain the only access pattern. Verified by direct read at pin 26ea2806a." .
