@@ -731,7 +731,7 @@ impl PyGraftSession {
         self.send_tool(py, None, reply, false, Some(message_id))
     }
 
-    #[pyo3(signature = (selection="actionable", message_id=None, task=None, contains=None, since=None, from_agent=None))]
+    #[pyo3(signature = (selection="actionable", message_id=None, task=None, contains=None, since=None, from_agent=None, peek=false))]
     #[allow(clippy::too_many_arguments)]
     fn read_tool(
         &self,
@@ -742,6 +742,7 @@ impl PyGraftSession {
         contains: Option<String>,
         since: Option<String>,
         from_agent: Option<String>,
+        peek: bool,
     ) -> PyResult<Py<PyAny>> {
         let query = self.build_tool_read_query(
             selection,
@@ -750,12 +751,13 @@ impl PyGraftSession {
             contains.as_deref(),
             since.as_deref(),
             from_agent.as_deref(),
+            peek,
         )?;
         match Self::tool_error_from_recovery(
             py,
             DaemonRecoveryPolicy::RetryOnce,
             self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, "read", || {
-                self.peek_outcome(query.clone())
+                self.tool_read_outcome(query.clone())
             }),
         ) {
             Ok((outcome, status)) => {
@@ -911,6 +913,7 @@ mod tests {
     use atm_core::list::ListOutcome;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
     use atm_core::read::{BucketCounts, ReadOutcome};
+    use atm_core::schema::AtmMessageId;
     use atm_core::send::{SendCommandOutcome, SendOutcome};
     use atm_core::test_support::EnvGuard;
     use atm_core::transport::testing::FakeClientTransport;
@@ -965,10 +968,28 @@ mod tests {
         }
     }
 
-    fn peek_outcome() -> ReadOutcome {
+    fn native_read_outcome(
+        mutation_applied: bool,
+        unread: usize,
+        pending_ack: usize,
+        history: usize,
+    ) -> ReadOutcome {
         ReadOutcome {
-            action: CommandAction::Peek,
-            ..read_outcome()
+            action: CommandAction::Read,
+            team: TeamName::from_validated(TEST_TEAM),
+            agent: AgentName::from_validated(TEST_SENDER),
+            selection_mode: ReadSelection::Actionable,
+            mutation_applied,
+            count: 1,
+            message: None,
+            selected_message_id: Some(AtmMessageId::new()),
+            match_count: 1,
+            additional_match_count: 0,
+            bucket_counts: BucketCounts {
+                unread,
+                pending_ack,
+                history,
+            },
         }
     }
 
@@ -1837,7 +1858,7 @@ mod tests {
     fn native_read_and_list_retry_once_on_the_refreshed_fake_transport() {
         Python::initialize();
         for (operation, replacement_response) in [
-            ("read", ResponseEnvelope::Peek(Box::new(peek_outcome()))),
+            ("read", ResponseEnvelope::Receive(Box::new(read_outcome()))),
             ("list", ResponseEnvelope::List(list_outcome())),
         ] {
             let initial_calls = Arc::new(AtomicUsize::new(0));
@@ -1846,7 +1867,12 @@ mod tests {
             let replacement_calls_for_transport = Arc::clone(&replacement_calls);
             let initial = Arc::new(FakeClientTransport::new(Box::new(move |request| {
                 match operation {
-                    "read" => assert!(matches!(request, RequestEnvelope::Peek(_))),
+                    "read" => {
+                        let RequestEnvelope::Receive(query) = request else {
+                            panic!("native read must use the mutating receive route")
+                        };
+                        assert!(query.seen_state_update());
+                    }
                     "list" => assert!(matches!(request, RequestEnvelope::List(_))),
                     _ => unreachable!(),
                 }
@@ -1855,7 +1881,12 @@ mod tests {
             })));
             let replacement = Arc::new(FakeClientTransport::new(Box::new(move |request| {
                 match operation {
-                    "read" => assert!(matches!(request, RequestEnvelope::Peek(_))),
+                    "read" => {
+                        let RequestEnvelope::Receive(query) = request else {
+                            panic!("native read must use the mutating receive route")
+                        };
+                        assert!(query.seen_state_update());
+                    }
                     "list" => assert!(matches!(request, RequestEnvelope::List(_))),
                     _ => unreachable!(),
                 }
@@ -1866,11 +1897,13 @@ mod tests {
 
             Python::attach(|py| {
                 let result = match operation {
-                    "read" => session.read_tool(py, "actionable", None, None, None, None, None),
+                    "read" => {
+                        session.read_tool(py, "actionable", None, None, None, None, None, false)
+                    }
                     "list" => session.list_tool(py, "actionable", None, None, None, None, None),
                     _ => unreachable!(),
                 }
-                .expect("read-only operation recovers");
+                .expect("read operation recovers");
                 assert!(
                     !result.bind(py).is_instance_of::<AtmToolError>(),
                     "{operation} returns its success projection after one retry"
@@ -1899,7 +1932,7 @@ mod tests {
     }
 
     #[test]
-    fn native_read_scopes_peek_to_the_callers_chat_qualified_session() {
+    fn native_read_scopes_to_the_callers_chat_qualified_session() {
         let caller = PyAgentAddress::new(
             TEST_RECIPIENT.to_string(),
             TEST_TEAM.to_string(),
@@ -1918,14 +1951,132 @@ mod tests {
             reconnect_fallback_attempts: AtomicUsize::new(0),
         };
 
-        let query = session
-            .build_tool_read_query("all", None, None, None, None, None)
+        let operation = session
+            .build_tool_read_query("all", None, None, None, None, None, false)
             .expect("native read query");
+        let crate::query::ReadOperation::Read(query) = operation else {
+            panic!("default native read must build a mutating read query")
+        };
 
         assert_eq!(
             query.caller_chat_id().map(ToString::to_string).as_deref(),
             Some("recipient-session")
         );
+        assert!(query.seen_state_update());
+    }
+
+    #[test]
+    fn native_read_marks_messages_read_without_changing_ack_state() {
+        Python::initialize();
+        let outcomes = Arc::new(Mutex::new(vec![
+            native_read_outcome(true, 0, 1, 4),
+            native_read_outcome(true, 0, 0, 5),
+        ]));
+        let outcomes_for_transport = Arc::clone(&outcomes);
+        let transport = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+            let RequestEnvelope::Receive(query) = request else {
+                panic!("native read must use the mutating receive route")
+            };
+            assert!(query.seen_state_update());
+            let outcome = outcomes_for_transport
+                .lock()
+                .expect("native read outcome lock")
+                .remove(0);
+            Ok(ResponseEnvelope::Receive(Box::new(outcome)))
+        })));
+        let replacement = Arc::new(FakeClientTransport::new(Box::new(|_| {
+            panic!("native read should not reconnect")
+        })));
+        let session = test_session(transport, replacement);
+
+        for expected_pending_ack in [1, 0] {
+            Python::attach(|py| {
+                let result = session
+                    .read_tool(py, "actionable", None, None, None, None, None, false)
+                    .expect("native read succeeds");
+                let value: serde_json::Value = result
+                    .bind(py)
+                    .call_method0("to_json")
+                    .expect("native read exposes canonical JSON")
+                    .extract::<String>()
+                    .expect("native read JSON is a string")
+                    .parse()
+                    .expect("native read JSON is valid");
+                assert_eq!(value["mutation_applied"], true);
+                assert_eq!(value["bucket_counts"]["unread"], 0);
+                assert_eq!(value["bucket_counts"]["pending_ack"], expected_pending_ack);
+            });
+        }
+    }
+
+    #[test]
+    fn native_read_peek_option_leaves_the_message_unread() {
+        Python::initialize();
+        let transport = Arc::new(FakeClientTransport::new(Box::new(|request| {
+            let RequestEnvelope::Peek(_query) = request else {
+                panic!("native read peek must use the non-mutating peek route")
+            };
+            Ok(ResponseEnvelope::Peek(Box::new(native_read_outcome(
+                false, 1, 0, 4,
+            ))))
+        })));
+        let replacement = Arc::new(FakeClientTransport::new(Box::new(|_| {
+            panic!("native read peek should not reconnect")
+        })));
+        let session = test_session(transport, replacement);
+
+        Python::attach(|py| {
+            let result = session
+                .read_tool(py, "actionable", None, None, None, None, None, true)
+                .expect("native read peek succeeds");
+            let value: serde_json::Value = result
+                .bind(py)
+                .call_method0("to_json")
+                .expect("native read exposes canonical JSON")
+                .extract::<String>()
+                .expect("native read JSON is a string")
+                .parse()
+                .expect("native read JSON is valid");
+            assert_eq!(value["action"], "read");
+            assert_eq!(value["mutation_applied"], false);
+            assert_eq!(value["bucket_counts"]["unread"], 1);
+            assert_eq!(value["bucket_counts"]["pending_ack"], 0);
+        });
+    }
+
+    #[test]
+    fn native_read_does_not_reapply_an_already_read_transition() {
+        Python::initialize();
+        let transport = Arc::new(FakeClientTransport::new(Box::new(|request| {
+            let RequestEnvelope::Receive(query) = request else {
+                panic!("native read must use the mutating receive route")
+            };
+            assert!(query.seen_state_update());
+            Ok(ResponseEnvelope::Receive(Box::new(native_read_outcome(
+                false, 0, 0, 1,
+            ))))
+        })));
+        let replacement = Arc::new(FakeClientTransport::new(Box::new(|_| {
+            panic!("native read should not reconnect")
+        })));
+        let session = test_session(transport, replacement);
+
+        Python::attach(|py| {
+            let result = session
+                .read_tool(py, "actionable", None, None, None, None, None, false)
+                .expect("native read succeeds");
+            let value: serde_json::Value = result
+                .bind(py)
+                .call_method0("to_json")
+                .expect("native read exposes canonical JSON")
+                .extract::<String>()
+                .expect("native read JSON is a string")
+                .parse()
+                .expect("native read JSON is valid");
+            assert_eq!(value["mutation_applied"], false);
+            assert_eq!(value["bucket_counts"]["unread"], 0);
+            assert_eq!(value["bucket_counts"]["pending_ack"], 0);
+        });
     }
 
     #[test]

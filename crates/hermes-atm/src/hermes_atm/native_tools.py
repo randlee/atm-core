@@ -148,6 +148,7 @@ class AtmNativeTools:
                     request.contains,
                     request.since,
                     request.from_agent,
+                    request.peek,
                 ),
                 _read_result,
             )
@@ -207,7 +208,7 @@ def register_tools(context: Any, *, identity: str, team: str, chat_id: str) -> N
         (
             "atm_read",
             tools.atm_read,
-            "Read one ATM mailbox message without mutating it; use the ATM CLI for administrative or advanced operations.",
+            "Read one ATM mailbox message and mark it read so it leaves future unread counts; acknowledgement state is unchanged. Pass peek=true to inspect without marking read. Use the ATM CLI for administrative or advanced operations.",
         ),
         (
             "atm_list",

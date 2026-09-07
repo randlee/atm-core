@@ -1,12 +1,13 @@
-//! Query construction and read-only execution for the Python graft session.
+//! Query construction and read execution for the Python graft session.
 
 use super::*;
 use atm_core::read::PeekQuery;
 
-/// Read-family operations share one outer Python-to-async bridge.  Native
-/// tools select `Peek` so they cannot mutate mailbox state, while the legacy
-/// Python read API retains its explicit mutating operation.
-enum ReadOperation {
+/// Read-family operations share one outer Python-to-async bridge. Native
+/// `atm_read` defaults to the canonical mutating read, while `peek=true`
+/// selects the existing non-mutating path.
+#[derive(Clone)]
+pub(super) enum ReadOperation {
     Read(ReadQuery),
     Peek(PeekQuery),
 }
@@ -49,7 +50,8 @@ impl PyGraftSession {
         contains: Option<&str>,
         since: Option<&str>,
         from_agent: Option<&str>,
-    ) -> PyResult<PeekQuery> {
+        peek: bool,
+    ) -> PyResult<ReadOperation> {
         let (home_dir, current_dir) = Self::command_paths()?;
         let team = self.caller_team()?;
         let timestamp = since
@@ -60,23 +62,56 @@ impl PyGraftSession {
                     "invalid since timestamp: {error}"
                 )))
             })?;
-        PeekQuery::new(
-            home_dir,
-            current_dir,
-            self.caller.agent().clone(),
-            None,
-            team,
-            Self::read_selection(selection)?,
-            false,
-            message_id,
-            from_agent,
-            timestamp,
-            task,
-            contains,
-            None,
-        )
-        .map_err(atm_error)
-        .map(|query| query.with_caller_chat_id(self.caller.chat_id().cloned()))
+        let selection = Self::read_selection(selection)?;
+        if peek {
+            PeekQuery::new(
+                home_dir,
+                current_dir,
+                self.caller.agent().clone(),
+                None,
+                team,
+                selection,
+                false,
+                message_id,
+                from_agent,
+                timestamp,
+                task,
+                contains,
+                None,
+            )
+            .map_err(atm_error)
+            .map(|query| {
+                ReadOperation::Peek(query.with_caller_chat_id(self.caller.chat_id().cloned()))
+            })
+        } else {
+            ReadQuery::new(
+                home_dir,
+                current_dir,
+                self.caller.agent().clone(),
+                None,
+                team.clone(),
+                selection,
+                false,
+                true,
+                message_id,
+                from_agent,
+                timestamp,
+                task,
+                contains,
+                None,
+            )
+            .map_err(atm_error)
+            .map(|query| {
+                ReadOperation::Read(
+                    query
+                        .with_caller_chat_id(self.caller.chat_id().cloned())
+                        .with_activity_observation(activity_observation_for_resolved_caller(
+                            self.caller.agent(),
+                            &team,
+                        )),
+                )
+            })
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -120,10 +155,6 @@ impl PyGraftSession {
         self.read_operation_raw(ReadOperation::Read(query))
     }
 
-    pub(super) fn peek_raw(&self, query: PeekQuery) -> PyResult<ReadOutcome> {
-        self.read_operation_raw(ReadOperation::Peek(query))
-    }
-
     fn read_operation_raw(&self, operation: ReadOperation) -> PyResult<ReadOutcome> {
         let client = self.client()?;
         python_extension_runtime()?
@@ -142,9 +173,14 @@ impl PyGraftSession {
         self.read_raw(query).and_then(AtmReadResult::from_outcome)
     }
 
-    pub(super) fn peek_outcome(&self, query: PeekQuery) -> PyResult<AtmReadResult> {
-        self.peek_raw(query)
-            .and_then(AtmReadResult::from_peek_outcome)
+    pub(super) fn tool_read_outcome(&self, operation: ReadOperation) -> PyResult<AtmReadResult> {
+        self.read_operation_raw(operation).and_then(|outcome| {
+            if outcome.action == atm_core::types::CommandAction::Peek {
+                AtmReadResult::from_peek_outcome(outcome)
+            } else {
+                AtmReadResult::from_outcome(outcome)
+            }
+        })
     }
 
     pub(super) fn list_outcome(&self, query: ListQuery) -> PyResult<AtmListResult> {
