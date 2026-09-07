@@ -181,22 +181,67 @@ that leaks the alias past the edge is a blocking finding.
 
 Decision as recorded: AC8 stays a reject (no automatic alias derivation).
 The alias for a shared role name is declared in the repo's `.atm.toml`, and
-atm-core's own `.atm.toml` is the model other repos copy. D8: add an
-optional `alias` key to each `[[rmux.windows.panes]]` entry and set it only
-on the roles that appear on many teams (`team-lead`, `quality-mgr`,
-`publisher`). Rand's chosen values for atm-core (2026-09-07, verbatim: "I
-would like alias's to be:  team-lead -> atm-lead, publisher ->
-atm-publisher, quality-mgr -> atm-quality"): `team-lead` ->
-`alias = "atm-lead"`, `quality-mgr` -> `alias = "atm-quality"`,
-`publisher` -> `alias = "atm-publisher"`. The `<identity>_<team>` convention
-above is a suggestion for other repos, not a rule. Members with unique names
-(`arch-ctm`, `cipher`, `fenix`) get none. `atm teams add-member` run from a
-repo whose `.atm.toml` declares an alias for that pane name uses it as the
-default `--alias` (explicit `--alias` overrides); spawners that pass
-`--alias` themselves (hmux) are unaffected. Document the key in
-docs/requirements.md next to the existing `[atm].aliases` rules, stating
-that the roster alias is the addressing alias and `[atm].aliases` remains
-CLI-only shorthand.
+atm-core's own `.atm.toml` is the model other repos copy. Rand's chosen
+values for atm-core (2026-09-07, verbatim: "I would like alias's to be:
+team-lead -> atm-lead, publisher -> atm-publisher, quality-mgr ->
+atm-quality"). Members with unique names (`arch-ctm`, `cipher`, `fenix`)
+get none. The `<identity>_<team>` convention above is a suggestion for
+other repos, not a rule.
+
+Rand, 2026-09-07, verbatim, on processing: ".atm.toml does not need to get
+processed by daemon for alias"; "how are you planning to handle/process
+.atm.toml?  just when 'add member' occurs?  if there is an alias in
+.atm.toml AND no alias specified on command line use alias from
+.atm.toml?"; "any time?"; "this sounds like vague requirements."
+
+D8, precise (fenix, 2026-09-07, answering the above):
+
+1. Key: optional `alias = "<name>"` on a `[[rmux.windows.panes]]` entry,
+   matched to the member by that pane's `name`. Value must pass the
+   roster alias validation in D7 (same charset as a canonical name).
+2. Reader: only the `atm` CLI, only inside `atm teams add-member`, only at
+   the moment that command runs. The daemon never reads `.atm.toml` for
+   this key. No other command (`send`, `read`, `members`, `roster`,
+   `doctor`) consults it. There is no background or periodic processing.
+3. Resolution at `add-member`, in order, first hit wins:
+   a. `--alias <name>` on the command line.
+   b. Otherwise, if the `.atm.toml` found by the existing config discovery
+      (cwd upward, same file the CLI already loads for `default_team`)
+      has a pane whose `name` equals the member being added and that pane
+      declares `alias`, that value.
+   c. Otherwise no alias.
+4. The chosen alias is written to the member's roster attribute once, at
+   add time, through the same write lane and uniqueness check as an
+   explicit `--alias` (AC7). After that the roster is the only source of
+   truth: editing or removing the key in `.atm.toml` changes nothing for
+   an existing member; a new alias requires a roster update command, not
+   a config edit.
+5. If step 3b yields an alias that fails validation or uniqueness, the
+   command fails with the same error as an explicit `--alias` would,
+   naming `.atm.toml` as the source. No silent fallback to "no alias".
+6. Spawners that pass `--alias` themselves (hmux) are unaffected by 3b.
+
+Rand, 2026-09-07, verbatim: "what if .atm.toml alias is different from
+database?  what if .atm.toml is different from what is specified on
+command line?" Answers, precise:
+
+7. `.atm.toml` differs from the command line: the command line wins
+   (3a). The `.atm.toml` value is not read at all when `--alias` is
+   given, so no conflict is reported.
+8. `.atm.toml` differs from the database (the member already exists in
+   the team with a roster alias): the database wins. `add-member` on an
+   existing member never rewrites its alias. If the effective requested
+   alias (3a or 3b) differs from the stored one, the command fails and the
+   error prints both values and the source of the requested one
+   (`--alias` or `.atm.toml`); changing a stored alias is a separate
+   explicit roster update command, never a side effect of add-member. If
+   the requested alias equals the stored one, add-member is a no-op for
+   the alias. Precedence is therefore: database > command line >
+   `.atm.toml` > none.
+
+Document the key in docs/requirements.md next to the existing
+`[atm].aliases` rules, stating that the roster alias is the addressing
+alias and `[atm].aliases` remains CLI-only shorthand.
 
 ## Acceptance criteria
 
@@ -227,9 +272,16 @@ CLI-only shorthand.
   the database is accepted without an alias. Same check on the daemon
   member-add path so the CLI cannot be bypassed.
 - AC9 atm-core `.atm.toml` declares `alias` on the team-lead, quality-mgr
-  and publisher panes only (`atm-lead`, `atm-quality`, `atm-publisher`); `add-member` picks the pane alias up as the
-  default when run from that repo root, and a test covers default,
-  explicit override, and no-alias-declared paths.
+  and publisher panes only (`atm-lead`, `atm-quality`, `atm-publisher`).
+  `add-member` applies D8 steps 3a-3c, 5, 7 and 8; tests cover: explicit
+  `--alias` overriding a declared pane alias, pane alias used when no
+  `--alias`, no pane entry (no alias), pane alias failing uniqueness
+  (rejected, error names `.atm.toml`), a later `.atm.toml` edit not
+  changing an existing member's roster alias, and add-member on an
+  existing member with a differing `--alias` or pane alias rejected with
+  both values in the error. `rg` shows no reader of the
+  pane `alias` key outside the add-member code path and none under
+  crates/atm-daemon or crates/atm-http-runtime.
 - AC5 Boundary TOMLs untouched unless the boundary guard requires a
   record update for the new newtype; if so, say which in the PR.
 
