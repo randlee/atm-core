@@ -28,7 +28,8 @@ dependency_relations:
 # AY.9 — Herdr socket cutover, doctor projection, and lifecycle validation
 
 Select the AY.8 socket transport in the Tokio/Axum production composition,
-make it the default with an explicit one-minor CLI fallback, and close its
+make it the default with the CLI transport as the permanent explicit
+fallback, and close its
 configuration, doctor, and automated lifecycle contracts on all three CI
 lanes. AY.9 is the phase's last sprint; live macOS/Windows operator proof
 is release readiness after the phase lands on develop (ruling 5), and the
@@ -63,11 +64,12 @@ completion fails the sprint.
   AY.8's test-only construction-site allowlist with a pin that permits the one
   production factory inside `atm-herdr`. No second composition site is
   introduced.
-- [ ] D2 — retain CLI as an explicit, documented fallback through atm 1.5.x
-  and remove it in atm 1.6.0. It is selected only by
-  `herdr.transport = "cli"`; runtime failure never silently falls back from
-  socket to CLI. Add the 1.6.0 removal and ownership-key cleanup to
-  `docs/project-plan.md`.
+- [ ] D2 — retain CLI as a permanent, explicit, documented fallback (rework
+  2026-09-06). It is selected only by `herdr.transport = "cli"`; doctor
+  reports the active transport; runtime failure never silently falls back
+  from socket to CLI (a socket connect failure is a Herdr-unavailable breaker
+  event with the same mapping as a CLI spawn failure). No removal release is
+  scheduled and no ownership-key cleanup is recorded.
 - [ ] D3 — rerun AY.4's authoritative lifecycle matrix L1–L12 against the
   socket default on all three CI lanes. Adapt only: no binary becomes endpoint
   not configured or
@@ -99,8 +101,8 @@ completion fails the sprint.
   `HerdrIo::Socket(` construction. Replace it with the production-factory pin
   in D1; do not delete the underlying architecture assertion.
 
-No other path is deleted in the Ship case. CLI transport removal is the
-atm 1.6.0 follow-up recorded by D2, not part of AY.9.
+No other path is deleted in the Ship case. The CLI transport is never
+removed (D2).
 
 ## Code and configuration contracts
 
@@ -221,7 +223,7 @@ serialized JSON, human output, snapshots, or transport logs.
    production-factory pin, then run socket-default and explicit-CLI lifecycle
    suites on every CI platform.
 3. Align doctor snapshots and operator docs with the canonical tagged schema,
-   record the atm 1.6.0 fallback-removal obligation, and keep all live evidence
+   document the permanent explicit CLI fallback, and keep all live evidence
    out of this sprint (ruling 5).
 
 ## Acceptance criteria
@@ -246,8 +248,8 @@ serialized JSON, human output, snapshots, or transport logs.
    crate boundary.
 7. The AY.3 config-reader matrix includes omitted, `socket`, `cli`, unknown
    string, and unknown key; only the two supported values parse through
-   `HerdrClientConfig::try_new`, its fields remain private, and 1.6.0 is the
-   pinned CLI-removal release.
+   `HerdrClientConfig::try_new`, its fields remain private, and no removal
+   release for the CLI transport is recorded anywhere in the plan.
 8. `gh pr view feature/ay9-herdr-socket-cutover --json
    headRefName,baseRefName,state` reports base `integrate/phase-ay` after both
    parent PRs merged; AY.9 is not linked into the implementation stack.

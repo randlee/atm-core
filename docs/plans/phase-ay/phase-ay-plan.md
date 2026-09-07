@@ -62,8 +62,10 @@ owning or supervising Herdr, excluded by ruling 1. Compatibility
 ownership: AY.8's equivalence suite proves the socket client emits the
 same request set and error mapping as the CLI transport for every Herdr
 release at or above `HERDR_MINIMUM_VERSION`; AY.9 keeps the CLI transport
-as an explicit fallback for one minor release so a Herdr drift can be
-absorbed without a hotfix. AY.8 and AY.9 are therefore the design answer to
+as a permanent, explicitly selected fallback (Rand, 2026-09-06: the CLI
+implementation has worked from the start; if UDS or named pipes misbehave
+we fall back to CLI calls) so a socket defect or Herdr drift is absorbed by
+configuration, never by a hotfix. AY.8 and AY.9 are therefore the design answer to
 the phase's transport and failure-model drivers, not a separate modernization.
 
 Post-mortem entry: filed as AW-READY-W1 (blocking) with a
@@ -608,7 +610,8 @@ installed, doctor prints one line "herdr: not configured".
   nothing is configured the child inherits the daemon's ambient
   environment unmodified. HR-CORE-006 is **retained unchanged**; the
   previous revision's deletion of it is withdrawn. The CLI fallback is
-  retained through atm 1.5.x and removed in atm 1.6.0. atm never reads
+  retained permanently as an explicit operator selection (no removal
+  release; superseded 2026-09-06). atm never reads
   `HERDR_SESSION` or `HERDR_SOCKET_PATH` from its own environment to
   synthesize a choice (requirements.md:153-160). Tests: AY.2 (env
   mapping and exclusivity, relative-path rejection), AY.3 (doctor
@@ -1007,7 +1010,7 @@ Common preconditions:
   ```toml
   [ownership]
   io_owns = [
-    "tokio_process_spawn",          # CLI transport (retained until the AY.9 fallback window closes)
+    "tokio_process_spawn",          # CLI transport (permanent explicit fallback)
     "herdr_argv_construction",      # CLI transport (same)
     "herdr_local_socket_client",    # new: UDS / named-pipe NDJSON client, transport_socket.rs only
     "herdr_json_error_parsing",
@@ -1015,8 +1018,8 @@ Common preconditions:
   ]
   ```
 
-  `io_forbidden` is unchanged. The two CLI keys are dropped in the sprint
-  that removes the CLI fallback (atm 1.6.0, after AY.9), not in AY.8.
+  `io_forbidden` is unchanged. The two CLI keys are permanent: the CLI
+  transport is the retained explicit fallback (ruled 2026-09-06).
 
 AYP-R2-011 (approval blocker on P-C/P-D placeholders) is closed by
 ruling 5 (r23): no sprint depends on P-C or P-D, so plan approval (P-B)
@@ -1106,7 +1109,8 @@ Boundary: `boundaries/atm-herdr/herdr-process-adapter.toml` io_owns
 `tokio_process_spawn` and `herdr_argv_construction`. AY.2 changes neither
 (pure motion inside the crate). AY.8 adds `herdr_local_socket_client`
 under the P-E revision and keeps both CLI keys while the CLI path exists
-(additive, AYP-R2-002); the CLI keys go when the CLI code goes. forbidden_edges stay (no
+(additive, AYP-R2-002); the CLI keys are permanent because the CLI
+transport is the retained explicit fallback (2026-09-06). forbidden_edges stay (no
 atm-core/atm-storage/rusqlite into atm-herdr; no atm-herdr into
 daemon/runtime crates).
 
@@ -1618,6 +1622,13 @@ six sprints were serialized behind it. Rand's rulings, applied verbatim:
    AY.5 now depends on AY.3 only, branches from `integrate/phase-ay`, and
    heads the control-plane stack AY.5 -> AY.6 -> AY.7. AY.6 and AY.7 start
    contracts-first on their parent's pushed contracts, as AY.3 did on AY.2.
+6. The CLI transport is not deprecated or scheduled for removal. It has
+   worked from the start and stays as the permanent fallback: selected only
+   by `herdr.transport = "cli"`, reported by doctor, never chosen at runtime
+   when a socket connect fails (a connect failure is a Herdr-unavailable
+   breaker event, exactly like a spawn failure today). Both transports run
+   the AY.8 equivalence suite on every CI lane for as long as both exist.
+   The atm 1.6.0 removal clauses are withdrawn from the plan, AY.8 and AY.9.
 
 Resulting concurrency after AY.3 merges: AY.4 (arch-ctm), AY.5 (arch-ctm
 or cipher), AY.8 (cipher) run at once; AY.6/AY.7 follow AY.5's contracts;
