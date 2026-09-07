@@ -15,21 +15,24 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm/src/output.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T17:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY13 ;
   triage:foundAt "2026-09-07T17:20:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY13-QA-011/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasResolution <urn:atm:triage:resolution/AY13-QA-011/1> ;
+  triage:closedAt "2026-09-07T18:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AY13-QA-011/1>
   a triage:Occurrence ;
   triage:file "crates/atm/src/output.rs" ;
   triage:line 622 ;
   triage:snippet "print_doctor_roster iterates report.team_rosters -- no multi-team-block render test" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay13-doctor-team-scope" ;
   triage:headSha "98ac5c7d2" ;
   triage:occursIn <urn:atm:triage:worktree/AY13-QA-011/98ac5c7d2> .
@@ -40,3 +43,12 @@
   triage:branch "feature/ay13-doctor-team-scope" ;
   triage:headSha "98ac5c7d2" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/AY13-QA-011/1>
+  a triage:Resolution ;
+  triage:resolvedBy "cipher" ;
+  triage:resolvedAt "2026-09-07T17:26:47Z"^^xsd:dateTime ;
+  triage:fixCommit "c0afd678d" ;
+  triage:fixBranch "feature/ay13-doctor-team-scope" ;
+  triage:verifiedInRound "qa-pr1300-r3" ;
+  triage:resolutionNote "quality-mgr independently confirmed via git show c0afd678d: print_doctor_roster/print_doctor_roster_block were refactored into pure render_doctor_rosters/render_doctor_roster_block functions returning String instead of println!-ing directly, and a new #[test] doctor_roster_rendering_prints_one_heading_per_team builds a two-team MembersList slice and asserts the rendered string contains exactly two 'Members: ' occurrences, one per team name -- directly covering the previously-untested multi-team-block branch. Personally-run cargo test -p agent-team-mail green at branch head cb13ca7e38 / current PR head 8ae936a37. Closing on this evidence." .
