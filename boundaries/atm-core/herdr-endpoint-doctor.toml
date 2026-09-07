@@ -12,7 +12,7 @@ visibility = "trait_only"
 constructor = "none"
 
 [composition]
-roots = ["atm_herdr::doctor_probe"]
+roots = ["atm_herdr::transport"]
 
 [ownership]
 io_owns = [
@@ -84,7 +84,7 @@ state = "active"
 notes = [
   "Phase AY P-E(a) boundary ruling drafted 2026-09-06 for sprint AY.3; the approved bundle is AY.3's first commit and the developer neither authors nor weakens it.",
   "AY.3 D2 flips this record to active when the sealed trait lands: declare `pub trait HerdrEndpointDoctor: sealed::Sealed + Send + Sync` in crates/atm-core/src/boundary/herdr_endpoint.rs (the atm-architecture guard resolves trait-only core contracts from crates/atm-core/src/boundary only; store.rs and mail.rs are the precedent), re-exported from crates/atm-core/src/doctor/mod.rs alongside the DTOs, keep ClosedHerdrEndpointDoctor in atm-core, and keep HerdrEndpointDoctorAdapter in crates/atm-daemon-bootstrap/src/replacement_handler.rs as the single production implementation; boundary_enforcement.rs pins exactly those two implementations.",
-  "atm_herdr::doctor_probe is recorded as a composition root because HerdrDoctorProbe is the only site permitted to call HerdrEndpointDisplay::from_relative (AY.3 C6 sanitizer); no production reference outside atm-core is permitted by this record.",
+  "atm_herdr::transport is recorded as the composition root because its private endpoint-display helper is the only site permitted to call HerdrEndpointDisplay::from_relative (AY.3 C6 sanitizer); HerdrDoctorProbe consumes the already-sanitized display and no other production reference outside atm-core is permitted by this record.",
   "atm-core stays Tokio-free and gains no atm-core -> atm-herdr edge (AY.3 A6): the atm-herdr edge is a declared forbidden edge here, and the Tokio ban is enforced by the atm-core manifest dependency allowlist in .just/lint-config.toml, which lists no tokio entry. A `tokio` forbidden_edges entry is deliberately omitted because boundary_toml_forbidden_edges_match_rust_guard_catalog admits workspace-crate edges only.",
   "HerdrPresenceDoctor and ClosedHerdrPresenceDoctor are deleted by AY.3 D5; no compatibility shim is retained.",
 ]
