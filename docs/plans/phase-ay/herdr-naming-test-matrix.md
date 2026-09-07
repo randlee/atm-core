@@ -81,7 +81,7 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | D-03 | `atm send <alias>` from a different team, no `@team` | resolves database-wide to the alias owner's team | **GAP** — `resolve_roster_alias` (caller_context.rs:59) is team-scoped; derived from Rand "using the alias for cross-team messaging has value independent of herdr" |
 | D-04 | `atm send <name>` where name is a canonical member of the addressed team AND an alias elsewhere | canonical in the addressed team wins | covered `canonical_name_wins_over_historical_alias_collision` (send/recipient.rs:127) |
 | D-05 | unknown alias | existing canonical error unchanged | covered `unknown_roster_alias_preserves_the_canonical_parse_result` (send/recipient.rs:113) |
-| D-06 | `.atm.toml` `[atm].aliases` present | ignored by send/read/mailbox/identity; doctor flags it for removal | **GAP** (Rand 2026-09-07: `.atm.toml` is only used by hmux and `atm doctor`) |
+| D-06 | `.atm.toml` `[atm].aliases` present | ignored everywhere in atm; the only `.atm.toml` alias use is the doctor pane-alias consistency warning (F-01..F-05) | **GAP** (Rand 2026-09-07: "NOTHING else in atm uses .atm.toml alias") |
 | D-07 | `ATM_IDENTITY=<alias>` | canonical sender; persisted `from` canonical; observation dropped | covered `canonicalize_caller_context_replaces_an_ingress_alias_and_drops_alias_attestation` (caller_context.rs:389) |
 | D-08 | `--as <alias>` | same as D-07 | covered `send_sender_identity_applies_alias_to_hook_identity` (identity/mod.rs:195) — CLI `--as` end-to-end **GAP** |
 | D-09 | `atm read --as <alias>`, `--from <alias>`, peek | canonicalised before mailbox lookup | covered `read_ingress_canonicalizes_alias_caller_target_and_from_filter` (read/mod.rs:833), `resolve_target_canonicalizes_alias_before_mailbox_lookup` (mailbox/source.rs:252) |
@@ -130,5 +130,5 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | H-02 | bare canonical name of an aliased member from a third team | Rand: "`atm send bob` would send bob based on ATM_TEAM just like today" |
 | H-03 | pre-upgrade duplicate unique_names in teams already live in Herdr | Rand: "we need to change members from tmux->herder before launch today. herder rejection already exists, we simply haven't run more than 1 team per computer yet." No new mechanism |
 | H-04 | alias change on a member live in Herdr | Rand: "alias change won't get picked up by herdr until team restarted (no mid-session concern)" |
-| H-05 | `.atm.toml [atm].aliases` | Rand: ".atm.toml is ONLY used by hmux and 'atm doctor'"; `[atm].aliases` retired from atm-core (D-06) |
+| H-05 | `.atm.toml [atm].aliases` | Rand: ".atm.toml is ONLY used by hmux and 'atm doctor' to display a warning if alias is not consistent. NOTHING else in atm uses .atm.toml alias."; `[atm].aliases` removed from atm (D-06) |
 | H-06 | "alias never in the database" scope | roster row holds it; message/ack/audit/task rows never do (§3.3.2 wording) |

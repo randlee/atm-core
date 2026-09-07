@@ -901,11 +901,13 @@ Runtime caller-context rules:
   for runtime identity resolution and `atm doctor` must flag them for removal
 - `.atm.toml` may define `[atm].team_members` as the baseline team roster that
   should always be present in `config.json`
-- `.atm.toml` `[atm].aliases` is retired (Rand, 2026-09-07: ".atm.toml is
-  ONLY used by hmux and 'atm doctor'"); member aliases live only in the
-  roster (`REQ-ROSTER-NAME-002`), and atm-core reads no alias table from
-  `.atm.toml`. `atm doctor` flags a lingering `[atm].aliases` table for
-  removal.
+- `.atm.toml` `[atm].aliases` is retired. Rand (2026-09-07): ".atm.toml
+  is ONLY used by hmux and 'atm doctor' to display a warning if alias is
+  not consistent. NOTHING else in atm uses .atm.toml alias." Member
+  aliases live only in the roster (`REQ-ROSTER-NAME-002`); atm-core reads
+  no alias table from `.atm.toml`; the only `.atm.toml` alias use in
+  `atm` is the doctor pane-alias consistency warning
+  (`REQ-ROSTER-NAME-008`).
 - `.atm.toml` may define one or more `[[atm.post_send_hooks]]` rules for
   best-effort recipient-scoped post-send automation
 - retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,
