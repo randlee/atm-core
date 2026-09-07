@@ -531,6 +531,44 @@ class CliParityTests(unittest.TestCase):
         self.assertEqual(read["count"], 1)
         self.assertTrue(read["mutation_applied"])
 
+    def test_native_peek_by_listed_id_reaches_bare_agent_message_from_chat(self) -> None:
+        sent = self._native(
+            self.second_native_tools,
+            "atm_send",
+            {
+                "to": f"{self.identity}@{self.team}",
+                "body": "native-exact-peek-regression",
+            },
+        )
+        message_id = sent["message_id"]
+        listed = self._native(self.native_tools, "atm_list", {"selection": "all"})
+        self.assertIn(message_id, {row["message_id"] for row in listed["rows"]})
+
+        peek = self._native(
+            self.native_tools,
+            "atm_read",
+            {"selection": "all", "message_id": message_id, "peek": True},
+        )
+        self.assertEqual(peek["count"], 1)
+        self.assertFalse(peek["mutation_applied"])
+
+    def test_cli_peek_by_listed_id_reaches_bare_agent_message_from_chat(self) -> None:
+        sent = self._native(
+            self.second_native_tools,
+            "atm_send",
+            {
+                "to": f"{self.identity}@{self.team}",
+                "body": "cli-exact-peek-regression",
+            },
+        )
+        message_id = sent["message_id"]
+        listed = self._native(self.native_tools, "atm_list", {"selection": "all"})
+        self.assertIn(message_id, {row["message_id"] for row in listed["rows"]})
+
+        peek = self._cli("peek", "--message-id", message_id, identity=self.identity)
+        self.assertEqual(peek["count"], 1)
+        self.assertFalse(peek["mutation_applied"])
+
 
 if __name__ == "__main__":
     unittest.main()
