@@ -68,7 +68,7 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 | C-02 | member without alias | Herdr call uses canonical, byte-identical to pre-AY.14 | covered AC1 (existing tests unchanged) |
 | C-03 | two teams, same canonical, one aliased, one Herdr server | each receives own prompts and presence | covered (herdr_queue_wake.rs:1318) |
 | C-04 | stored alias invalid for Herdr (legacy row) | skipped with log, no panic, other members unaffected | covered `local_message_received_backend_treats_invalid_herdr_alias_as_absent` (delivery_channel.rs:465) + AY14-QA-002 closure |
-| C-05 | doctor presence probe for aliased member | probes alias, reports both names | **GAP** — assert log/doctor line shows `member` and `herdr_agent` |
+| C-05 | doctor presence probe for aliased member | probes alias, reports both names | covered `unique_name_c05_presence_serializes_the_effective_herdr_agent` (doctor/mod.rs) |
 
 ## D. Ingress replacement and resolution (REQ-ROSTER-NAME-007, -010)
 
@@ -81,7 +81,7 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | D-03 | `atm send <alias>` from a different team, no `@team` | resolves database-wide to the alias owner's team | **GAP** — `resolve_roster_alias` (caller_context.rs:59) is team-scoped; derived from Rand "using the alias for cross-team messaging has value independent of herdr" |
 | D-04 | `atm send <name>` where name is a canonical member of the addressed team AND an alias elsewhere | canonical in the addressed team wins | covered `canonical_name_wins_over_historical_alias_collision` (send/recipient.rs:127) |
 | D-05 | unknown alias | existing canonical error unchanged | covered `unknown_roster_alias_preserves_the_canonical_parse_result` (send/recipient.rs:113) |
-| D-06 | `.atm.toml` `[atm].aliases` present | ignored everywhere in atm; the only `.atm.toml` alias use is the doctor pane-alias consistency warning (F-01..F-05) | **GAP** (Rand 2026-09-07: "NOTHING else in atm uses .atm.toml alias"; AY-QA-005: legacy resolver still consulted in `send/recipient.rs`, `send/write_context.rs`, `identity/mod.rs`, `mailbox/source.rs`; AY.15 D4d) |
+| D-06 | `.atm.toml` `[atm].aliases` present | ignored everywhere in atm; the only `.atm.toml` alias use is the doctor pane-alias consistency warning (F-01..F-05) | covered `load_config_ignores_retired_aliases` (config/mod.rs) and `resolve_target_forwards` (mailbox/source.rs); AY-QA-005 closure |
 | D-07 | `ATM_IDENTITY=<alias>` | canonical sender; persisted `from` canonical; observation dropped | covered `canonicalize_caller_context_replaces_an_ingress_alias_and_drops_alias_attestation` (caller_context.rs:389) |
 | D-08 | `--as <alias>` | same as D-07 | covered `send_sender_identity_applies_alias_to_hook_identity` (identity/mod.rs:195) — CLI `--as` end-to-end **GAP** |
 | D-09 | `atm read --as <alias>`, `--from <alias>`, peek | canonicalised before mailbox lookup | covered `read_ingress_canonicalizes_alias_caller_target_and_from_filter` (read/mod.rs:833), `resolve_target_canonicalizes_alias_before_mailbox_lookup` (mailbox/source.rs:252) |

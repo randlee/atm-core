@@ -213,6 +213,9 @@ pub struct HerdrMemberPresence {
     #[serde(skip)]
     pub ordinal: usize,
     pub name: AgentName,
+    /// Effective Herdr identity used for this probe. This differs from the
+    /// canonical roster name when the member has a durable roster alias.
+    pub herdr_agent: crate::HerdrAgentName,
     pub outcome: HerdrPresenceOutcome,
 }
 

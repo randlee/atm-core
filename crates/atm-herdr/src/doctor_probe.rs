@@ -108,6 +108,7 @@ impl HerdrDoctorProbe {
             observations.push(HerdrMemberPresence {
                 ordinal: member.ordinal,
                 name: member.name.clone(),
+                herdr_agent: member.herdr_agent.clone(),
                 outcome,
             });
         }

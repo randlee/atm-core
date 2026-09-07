@@ -1131,6 +1131,7 @@ mod tests {
         let member = |ordinal: usize, name: &str, outcome| HerdrMemberPresence {
             ordinal,
             name: AgentName::from_validated(name.to_owned()),
+            herdr_agent: crate::HerdrAgentName::new(name).expect("valid Herdr test name"),
             outcome,
         };
         let observation = |members| HerdrEndpointObservation {
@@ -1211,8 +1212,23 @@ mod tests {
                 .keys()
                 .map(String::as_str)
                 .collect::<Vec<_>>(),
-            vec!["name", "outcome"]
+            vec!["name", "herdr_agent", "outcome"]
         );
+    }
+
+    #[test]
+    fn unique_name_c05_presence_serializes_the_effective_herdr_agent() {
+        let presence = HerdrMemberPresence {
+            ordinal: 0,
+            name: AgentName::from_validated("canonical-member"),
+            herdr_agent: crate::HerdrAgentName::new("herdr-alias").expect("valid alias"),
+            outcome: HerdrPresenceOutcome::Visible,
+        };
+
+        let serialized = serde_json::to_value(presence).expect("presence serializes");
+
+        assert_eq!(serialized["name"], "canonical-member");
+        assert_eq!(serialized["herdr_agent"], "herdr-alias");
     }
 
     struct UnusedMailStore;
