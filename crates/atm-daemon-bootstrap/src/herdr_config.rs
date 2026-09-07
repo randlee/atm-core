@@ -26,20 +26,25 @@ pub(crate) fn daemon_herdr_client_config(
         )
     })?;
     let path = home.join(".atm.toml");
-    if !path.exists() {
-        return Ok(HerdrClientConfig::default());
-    }
-    let text = std::fs::read_to_string(&path).map_err(|error| {
-        AtmError::new(
-            AtmErrorCode::ConfigParseFailed,
-            format!("failed to read {}: {error}", path.display()),
-        )
-    })?;
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(HerdrClientConfig::default());
+        }
+        Err(source) => {
+            return Err(AtmError::new(
+                AtmErrorCode::ConfigParseFailed,
+                format!("failed to read {}", path.display()),
+            )
+            .with_cause(source));
+        }
+    };
     let raw: RawConfig = toml::from_str(&text).map_err(|error| {
         AtmError::new(
             AtmErrorCode::ConfigParseFailed,
             format!("failed to parse {}: {error}", path.display()),
         )
+        .with_cause(error)
     })?;
     let herdr = raw.herdr.unwrap_or_default();
     HerdrClientConfig::try_new(herdr.binary_path, herdr.socket_path).map_err(|error| {
@@ -47,6 +52,7 @@ pub(crate) fn daemon_herdr_client_config(
             AtmErrorCode::ConfigParseFailed,
             format!("failed to validate {} [herdr]: {error}", path.display()),
         )
+        .with_cause(error)
     })
 }
 
@@ -110,6 +116,21 @@ mod tests {
         assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
         assert!(error.detail().contains(path.to_str().expect("utf8 path")));
         assert!(error.detail().contains("unknown"));
+        assert!(error.cause().is_some());
+    }
+
+    #[test]
+    fn rejects_malformed_toml_with_file_context_and_parser_cause() {
+        let home = tempfile::tempdir().expect("tempdir");
+        let path = home.path().join(".atm.toml");
+        std::fs::write(&path, "[herdr\nbinary_path = \"/opt/herdr\"\n")
+            .expect("write malformed config");
+
+        let error = daemon_herdr_client_config(&env_for(&home)).expect_err("must fail");
+
+        assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
+        assert!(error.detail().contains(path.to_str().expect("utf8 path")));
+        assert!(error.cause().is_some());
     }
 
     #[test]
@@ -123,5 +144,6 @@ mod tests {
         assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
         assert!(error.detail().contains(path.to_str().expect("utf8 path")));
         assert!(error.detail().contains("binary_path"));
+        assert!(error.cause().is_some());
     }
 }
