@@ -112,7 +112,7 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | F-04 | pane without alias key / other team's pane | ignored | covered (commands/doctor.rs:346) |
 | F-05 | no `.atm.toml` | check skipped | covered (commands/doctor.rs:369) |
 | F-06 | `--all-teams` | check not widened | **GAP** |
-| F-07 | db holds duplicate effective names involving the caller's team | doctor lists each conflicting `(team, member)` pair and the `--alias` remedy | **GAP** (REQ-ROSTER-NAME-009) |
+| F-07 | db holds duplicate effective names involving the caller's team | doctor lists each conflicting `(team, member)` pair and the `--alias` remedy | covered `unique_name_f07_reports_legacy_effective_name_conflicts_for_the_scoped_team` (doctor/mod.rs) |
 
 ## G. Operator-facing errors (REQ-ROSTER-NAME-003)
 
