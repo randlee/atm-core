@@ -132,6 +132,14 @@ the Herdr agent name the adapter targets (prompt/wait/get, `agent.list`
 snapshot matching, wake loop keys); when it has none, the canonical name is.
 No separate Herdr-name key exists or is accepted.
 
+- "what this really means is that 'alias' is always used by herdr IF it is
+  present.  And all agents can use it in place of agent name."
+
+So the alias is not Herdr-collision-only: any agent may address or identify
+a member by alias wherever an agent name is accepted (send recipient,
+`--as`/`ATM_IDENTITY`, `--team`-scoped member arguments, ack/read filters,
+roster commands), and Herdr always uses it when present.
+
 Uniqueness is enforced where the alias is written (`add-member --alias`,
 `set-member --alias`): the roster store rejects an alias already held by
 any member of any team, and an alias equal to any canonical member name in
