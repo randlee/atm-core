@@ -464,19 +464,7 @@ fn preflight_roster_unique_names(
             .iter()
             .map(atm_storage::RosterUniqueName::from_member),
     );
-    names.sort_by(|left, right| left.unique_name.cmp(&right.unique_name));
-    let mut collisions = Vec::new();
-    let mut start = 0;
-    while start < names.len() {
-        let end = names[start + 1..]
-            .iter()
-            .position(|entry| entry.unique_name != names[start].unique_name)
-            .map_or(names.len(), |offset| start + offset + 1);
-        if end - start > 1 {
-            collisions.extend_from_slice(&names[start..end]);
-        }
-        start = end;
-    }
+    let collisions = atm_storage::roster_unique_name_collisions(&names);
     if collisions.is_empty() {
         Ok(())
     } else {

@@ -61,24 +61,7 @@ pub fn resolve_roster_alias(
     team: &TeamName,
     roster: &[RosterEntry],
 ) -> AgentName {
-    if roster
-        .iter()
-        .any(|member| member.team_name == *team && member.agent_name == *candidate)
-    {
-        return candidate.clone();
-    }
-
-    roster
-        .iter()
-        .find(|member| {
-            member.team_name == *team
-                && member
-                    .metadata_json
-                    .get("alias")
-                    .and_then(serde_json::Value::as_str)
-                    == Some(candidate.as_str())
-        })
-        .map_or_else(|| candidate.clone(), |member| member.agent_name.clone())
+    resolve_roster_alias_with_owner(candidate, team, roster, roster, false).1
 }
 
 /// Resolves a roster identity at daemon ingress from the runtime-owned roster

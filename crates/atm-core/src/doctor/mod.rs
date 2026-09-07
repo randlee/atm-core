@@ -2,6 +2,7 @@ mod ax6;
 pub mod health;
 mod herdr_state;
 pub mod report;
+mod roster_names;
 mod team_scope;
 
 #[cfg(test)]
@@ -923,63 +924,19 @@ fn load_member_roster(
     }
     let roster = runtime.load_team_roster(team);
     push_mixed_local_backend_warning(team, &roster, findings);
-    push_duplicate_effective_name_warnings(runtime, team, &roster, team_context, findings);
+    roster_names::push_duplicate_effective_name_warnings(
+        runtime,
+        team,
+        &roster,
+        team_context,
+        findings,
+    );
     let members = ordered_roster_member_summaries(&roster, caller_identity, live_cwd);
 
     Some(MembersList {
         team: team.clone(),
         members,
     })
-}
-
-fn push_duplicate_effective_name_warnings(
-    runtime: &LocalServiceRuntime,
-    team: &TeamName,
-    roster: &[crate::boundary::RosterEntry],
-    team_context: bool,
-    findings: &mut Vec<DoctorFinding>,
-) {
-    let all_members = runtime
-        .list_roster_teams()
-        .into_iter()
-        .flat_map(|other_team| runtime.load_team_roster(&other_team))
-        .collect::<Vec<_>>();
-    for member in roster {
-        let effective_name = effective_roster_name(member);
-        for conflict in all_members.iter().filter(|candidate| {
-            (candidate.team_name != member.team_name || candidate.agent_name != member.agent_name)
-                && effective_roster_name(candidate) == effective_name
-        }) {
-            let detail = format!(
-                "effective roster name '{effective_name}' for member '{}' conflicts with member '{}@{}'; assign a unique --alias before the next roster write",
-                member.agent_name, conflict.agent_name, conflict.team_name
-            );
-            findings.push(DoctorFinding {
-                severity: DoctorSeverity::Warning,
-                code: AtmErrorCode::WarningRosterDrift,
-                message: if team_context {
-                    team_scope::team_message(team, detail)
-                } else {
-                    detail
-                },
-                remediation: Some(
-                    "Run `atm teams set-member <member> --alias <unique-herdr-name>` to make the effective roster name unique."
-                        .to_owned(),
-                ),
-            });
-        }
-    }
-}
-
-fn effective_roster_name(member: &crate::boundary::RosterEntry) -> String {
-    member
-        .metadata_json
-        .get("alias")
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim)
-        .filter(|alias| !alias.is_empty())
-        .unwrap_or(member.agent_name.as_str())
-        .to_owned()
 }
 
 fn push_mixed_local_backend_warning(

@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -223,26 +224,18 @@ impl RetainedServiceRuntime for TestRuntime {
         )]
     }
 
-    fn resolve_roster_member_at_ingress(
-        &self,
-        addressed_team: &TeamName,
-        candidate: &AgentName,
-        allow_database_wide_alias: bool,
-    ) -> Option<(TeamName, AgentName)> {
-        let addressed = self.load_team_roster(addressed_team);
-        let all = self
-            .team_roster_override
-            .clone()
-            .unwrap_or_else(|| addressed.clone());
-        let (team, member) = crate::caller_context::resolve_roster_alias_with_owner(
-            candidate,
-            addressed_team,
-            &addressed,
-            &all,
-            allow_database_wide_alias,
-        );
-        self.load_roster_member(&team, &member)
-            .map(|_| (team, member))
+    fn list_roster_teams(&self) -> Vec<TeamName> {
+        self.team_roster_override
+            .as_ref()
+            .map(|roster| {
+                roster
+                    .iter()
+                    .map(|entry| entry.team_name.clone())
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect()
+            })
+            .unwrap_or_else(|| vec![TeamName::from_validated(TEST_TEAM)])
     }
 }
 
@@ -407,7 +400,7 @@ fn write_ingress_carries_canonical_roster_members_forward() {
 }
 
 #[test]
-fn write_ingress_resolves_a_bare_alias_to_its_remote_owner() {
+fn unique_name_d03_default_retained_runtime_resolves_bare_alias_to_remote_owner() {
     let root = tempdir().expect("root");
     let local_team = TeamName::from_validated(TEST_TEAM);
     let remote_team = TeamName::from_validated("remote-team");

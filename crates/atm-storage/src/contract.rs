@@ -582,6 +582,36 @@ impl RosterUniqueName {
     }
 }
 
+/// Returns every member in a collision group, ordered by effective name.
+///
+/// Keeping this scan in the shared storage contract makes preflight,
+/// transactional enforcement, and doctor diagnostics agree on the exact
+/// `alias ?? canonical` rule while remaining usable by non-SQLite stores.
+#[must_use]
+pub fn roster_unique_name_collisions(names: &[RosterUniqueName]) -> Vec<RosterUniqueName> {
+    let mut sorted = names.to_vec();
+    sorted.sort_by(|left, right| {
+        left.unique_name
+            .cmp(&right.unique_name)
+            .then_with(|| left.team_name.cmp(&right.team_name))
+            .then_with(|| left.agent_name.cmp(&right.agent_name))
+    });
+
+    let mut collisions = Vec::new();
+    let mut start = 0;
+    while start < sorted.len() {
+        let end = sorted[start + 1..]
+            .iter()
+            .position(|entry| entry.unique_name != sorted[start].unique_name)
+            .map_or(sorted.len(), |offset| start + offset + 1);
+        if end - start > 1 {
+            collisions.extend_from_slice(&sorted[start..end]);
+        }
+        start = end;
+    }
+    collisions
+}
+
 /// Builds the single operator-facing diagnostic for durable roster identity
 /// collisions.  Both preflight and transaction enforcement use this wording
 /// so a race cannot change the error contract seen by CLI or HTTP callers.

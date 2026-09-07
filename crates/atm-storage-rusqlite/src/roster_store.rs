@@ -5,7 +5,7 @@ use atm_storage::contract::{
     RosterUniqueName,
 };
 use atm_storage::types::{AgentName, ModelName, PaneId, TeamName};
-use atm_storage::{AtmError, roster_unique_name_collision_error};
+use atm_storage::{AtmError, roster_unique_name_collision_error, roster_unique_name_collisions};
 use rusqlite::{Connection, params};
 use serde_json::{Map, Value};
 
@@ -294,19 +294,7 @@ fn enforce_roster_unique_names(
         .collect::<Result<Vec<_>, AtmError>>()?;
     names.extend(roster.members.iter().map(RosterUniqueName::from_member));
 
-    let mut collisions = Vec::new();
-    names.sort_by(|left, right| left.unique_name.cmp(&right.unique_name));
-    let mut start = 0;
-    while start < names.len() {
-        let end = names[start + 1..]
-            .iter()
-            .position(|entry| entry.unique_name != names[start].unique_name)
-            .map_or(names.len(), |offset| start + offset + 1);
-        if end - start > 1 {
-            collisions.extend_from_slice(&names[start..end]);
-        }
-        start = end;
-    }
+    let collisions = roster_unique_name_collisions(&names);
     if collisions.is_empty() {
         Ok(())
     } else {
@@ -459,88 +447,370 @@ mod tests {
 
     #[test]
     fn unique_name_permutations() {
+        #[derive(Clone, Copy)]
+        struct MemberSpec {
+            team: &'static str,
+            name: &'static str,
+            alias: Option<&'static str>,
+        }
         struct Case {
             id: &'static str,
-            existing_name: &'static str,
-            existing_alias: Option<&'static str>,
-            proposed_team: &'static str,
-            proposed_name: &'static str,
-            proposed_alias: Option<&'static str>,
+            initial: &'static [MemberSpec],
+            write_team: &'static str,
+            write: &'static [MemberSpec],
+            remove_team_before_write: Option<&'static str>,
             expected_accept: bool,
         }
 
         let cases = [
             Case {
                 id: "unique_name_a01_same_team_canonical_duplicate",
-                existing_name: "bob",
-                existing_alias: None,
-                proposed_team: "team-a",
-                proposed_name: "bob",
-                proposed_alias: None,
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "bob",
+                    alias: None,
+                }],
+                write_team: "team-a",
+                write: &[
+                    MemberSpec {
+                        team: "team-a",
+                        name: "bob",
+                        alias: None,
+                    },
+                    MemberSpec {
+                        team: "team-a",
+                        name: "bob",
+                        alias: None,
+                    },
+                ],
+                remove_team_before_write: None,
                 expected_accept: false,
+            },
+            Case {
+                id: "unique_name_a02_first_canonical_name",
+                initial: &[],
+                write_team: "team-a",
+                write: &[MemberSpec {
+                    team: "team-a",
+                    name: "bob",
+                    alias: None,
+                }],
+                remove_team_before_write: None,
+                expected_accept: true,
+            },
+            Case {
+                id: "unique_name_a03_cross_team_canonical_duplicate",
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "bob",
+                    alias: None,
+                }],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "bob",
+                    alias: None,
+                }],
+                remove_team_before_write: None,
+                expected_accept: false,
+            },
+            Case {
+                id: "unique_name_a04_cross_team_canonical_with_alias",
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "bob",
+                    alias: None,
+                }],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "bob",
+                    alias: Some("bobby"),
+                }],
+                remove_team_before_write: None,
+                expected_accept: true,
             },
             Case {
                 id: "unique_name_a05_alias_collides_other_team_canonical",
-                existing_name: "bob",
-                existing_alias: None,
-                proposed_team: "team-b",
-                proposed_name: "robert",
-                proposed_alias: Some("bob"),
-                expected_accept: false,
-            },
-            Case {
-                id: "unique_name_a08_alias_collides_other_team_alias",
-                existing_name: "robert",
-                existing_alias: Some("bob"),
-                proposed_team: "team-b",
-                proposed_name: "sam",
-                proposed_alias: Some("bob"),
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "bob",
+                    alias: None,
+                }],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "robert",
+                    alias: Some("bob"),
+                }],
+                remove_team_before_write: None,
                 expected_accept: false,
             },
             Case {
                 id: "unique_name_a06_canonical_collides_other_team_alias",
-                existing_name: "robert",
-                existing_alias: Some("bob"),
-                proposed_team: "team-b",
-                proposed_name: "bob",
-                proposed_alias: None,
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "robert",
+                    alias: Some("bob"),
+                }],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "bob",
+                    alias: None,
+                }],
+                remove_team_before_write: None,
                 expected_accept: false,
             },
             Case {
                 id: "unique_name_a07_canonical_collides_same_team_alias",
-                existing_name: "robert",
-                existing_alias: Some("bob"),
-                proposed_team: "team-a",
-                proposed_name: "bob",
-                proposed_alias: None,
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "robert",
+                    alias: Some("bob"),
+                }],
+                write_team: "team-a",
+                write: &[
+                    MemberSpec {
+                        team: "team-a",
+                        name: "robert",
+                        alias: Some("bob"),
+                    },
+                    MemberSpec {
+                        team: "team-a",
+                        name: "bob",
+                        alias: None,
+                    },
+                ],
+                remove_team_before_write: None,
+                expected_accept: false,
+            },
+            Case {
+                id: "unique_name_a08_alias_collides_other_team_alias",
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "robert",
+                    alias: Some("bob"),
+                }],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "sam",
+                    alias: Some("bob"),
+                }],
+                remove_team_before_write: None,
                 expected_accept: false,
             },
             Case {
                 id: "unique_name_a09_canonical_may_match_aliased_member",
-                existing_name: "bob",
-                existing_alias: Some("bobby"),
-                proposed_team: "team-b",
-                proposed_name: "bob",
-                proposed_alias: None,
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "bob",
+                    alias: Some("bobby"),
+                }],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "bob",
+                    alias: None,
+                }],
+                remove_team_before_write: None,
                 expected_accept: true,
             },
             Case {
                 id: "unique_name_a10_alias_may_match_aliased_member_canonical",
-                existing_name: "bob",
-                existing_alias: Some("bobby"),
-                proposed_team: "team-b",
-                proposed_name: "sam",
-                proposed_alias: Some("bob"),
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "bob",
+                    alias: Some("bobby"),
+                }],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "sam",
+                    alias: Some("bob"),
+                }],
+                remove_team_before_write: None,
                 expected_accept: true,
             },
             Case {
-                id: "unique_name_a18_whitespace_alias_is_absent",
-                existing_name: "alex",
-                existing_alias: None,
-                proposed_team: "team-b",
-                proposed_name: "alex",
-                proposed_alias: Some("  "),
+                id: "unique_name_a11_alias_collides_other_team_alias",
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "bob",
+                    alias: Some("bobby"),
+                }],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "bob",
+                    alias: Some("bobby"),
+                }],
+                remove_team_before_write: None,
                 expected_accept: false,
+            },
+            Case {
+                id: "unique_name_a12_clearing_cross_team_duplicate_alias",
+                initial: &[
+                    MemberSpec {
+                        team: "team-a",
+                        name: "bob",
+                        alias: None,
+                    },
+                    MemberSpec {
+                        team: "team-b",
+                        name: "bob",
+                        alias: Some("bobby"),
+                    },
+                ],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "bob",
+                    alias: None,
+                }],
+                remove_team_before_write: None,
+                expected_accept: false,
+            },
+            Case {
+                id: "unique_name_a13_clearing_alias_frees_name",
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "bob",
+                    alias: Some("bobby"),
+                }],
+                write_team: "team-a",
+                write: &[MemberSpec {
+                    team: "team-a",
+                    name: "bob",
+                    alias: None,
+                }],
+                remove_team_before_write: None,
+                expected_accept: true,
+            },
+            Case {
+                id: "unique_name_a14_update_alias_rejects_other_team_alias",
+                initial: &[
+                    MemberSpec {
+                        team: "team-a",
+                        name: "bob",
+                        alias: Some("bobby"),
+                    },
+                    MemberSpec {
+                        team: "team-b",
+                        name: "sam",
+                        alias: None,
+                    },
+                ],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "sam",
+                    alias: Some("bobby"),
+                }],
+                remove_team_before_write: None,
+                expected_accept: false,
+            },
+            Case {
+                id: "unique_name_a15_update_alias_may_match_aliased_member_canonical",
+                initial: &[
+                    MemberSpec {
+                        team: "team-a",
+                        name: "bob",
+                        alias: Some("bobby"),
+                    },
+                    MemberSpec {
+                        team: "team-b",
+                        name: "sam",
+                        alias: None,
+                    },
+                ],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "sam",
+                    alias: Some("bob"),
+                }],
+                remove_team_before_write: None,
+                expected_accept: true,
+            },
+            Case {
+                id: "unique_name_a16_update_alias_rejects_other_team_canonical",
+                initial: &[
+                    MemberSpec {
+                        team: "team-a",
+                        name: "bob",
+                        alias: None,
+                    },
+                    MemberSpec {
+                        team: "team-b",
+                        name: "sam",
+                        alias: None,
+                    },
+                ],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "sam",
+                    alias: Some("bob"),
+                }],
+                remove_team_before_write: None,
+                expected_accept: false,
+            },
+            Case {
+                id: "unique_name_a17_same_team_alias_duplicate",
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "bob",
+                    alias: Some("bobby"),
+                }],
+                write_team: "team-a",
+                write: &[
+                    MemberSpec {
+                        team: "team-a",
+                        name: "bob",
+                        alias: Some("bobby"),
+                    },
+                    MemberSpec {
+                        team: "team-a",
+                        name: "sam",
+                        alias: Some("bobby"),
+                    },
+                ],
+                remove_team_before_write: None,
+                expected_accept: false,
+            },
+            Case {
+                id: "unique_name_a18_whitespace_alias_is_absent",
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "alex",
+                    alias: None,
+                }],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "alex",
+                    alias: Some("  "),
+                }],
+                remove_team_before_write: None,
+                expected_accept: false,
+            },
+            Case {
+                id: "unique_name_a19_removing_a_member_frees_its_effective_name",
+                initial: &[MemberSpec {
+                    team: "team-a",
+                    name: "bob",
+                    alias: Some("bobby"),
+                }],
+                write_team: "team-b",
+                write: &[MemberSpec {
+                    team: "team-b",
+                    name: "sam",
+                    alias: Some("bobby"),
+                }],
+                remove_team_before_write: Some("team-a"),
+                expected_accept: true,
             },
         ];
 
@@ -548,43 +818,32 @@ mod tests {
             let store = SqliteStorageBackend::in_memory_for_test()
                 .expect(case.id)
                 .roster_store;
-            store
-                .save_roster(&roster(
-                    "team-a",
-                    vec![roster_member(
-                        "team-a",
-                        case.existing_name,
-                        case.existing_alias,
-                    )],
-                ))
-                .expect(case.id);
-            let proposed_members = if case.proposed_team == "team-a" {
-                vec![
-                    roster_member("team-a", case.existing_name, case.existing_alias),
-                    roster_member("team-a", case.proposed_name, case.proposed_alias),
-                ]
-            } else {
-                vec![roster_member(
-                    case.proposed_team,
-                    case.proposed_name,
-                    case.proposed_alias,
-                )]
-            };
-            let result = store.save_roster(&roster(case.proposed_team, proposed_members));
+            for team in ["team-a", "team-b"] {
+                let members = case
+                    .initial
+                    .iter()
+                    .filter(|member| member.team == team)
+                    .map(|member| roster_member(member.team, member.name, member.alias))
+                    .collect::<Vec<_>>();
+                if !members.is_empty() {
+                    store.save_roster(&roster(team, members)).expect(case.id);
+                }
+            }
+            if let Some(team) = case.remove_team_before_write {
+                store.save_roster(&roster(team, Vec::new())).expect(case.id);
+            }
+            let result = store.save_roster(&roster(
+                case.write_team,
+                case.write
+                    .iter()
+                    .map(|member| roster_member(member.team, member.name, member.alias))
+                    .collect(),
+            ));
             assert_eq!(result.is_ok(), case.expected_accept, "{}", case.id);
             if !case.expected_accept {
                 let error = result.expect_err(case.id);
                 assert!(
-                    error
-                        .message()
-                        .contains(&format!("(team-a, {})", case.existing_name)),
-                    "{}: {error}",
-                    case.id
-                );
-                assert!(
-                    error
-                        .message()
-                        .contains(&format!("({}, {})", case.proposed_team, case.proposed_name)),
+                    error.message().contains("roster unique-name collision"),
                     "{}: {error}",
                     case.id
                 );

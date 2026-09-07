@@ -115,6 +115,11 @@ not a separately registered route.
 - Mutation preconditions and authorization failures use ordinary HTTP status
   codes but retain the same ATM error code in the body.
 
+The `/v1/atm/doctor` response includes Herdr endpoint presence entries under
+`herdr.endpoints[].members[]`. Each entry exposes the canonical roster
+`name` and the effective `herdr_agent` name; `herdr_agent` is nullable for
+backward-compatible v1.1 payloads and was added in HTTP API 1.2.0.
+
 ## Publication and compatibility
 
 `docs/atm-http-runtime/openapi.yaml` is the source artifact. CI validates the

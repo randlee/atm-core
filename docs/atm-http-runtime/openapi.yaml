@@ -64,7 +64,7 @@ paths:
     get:
       operationId: doctor
       responses:
-        '200': { description: Daemon health, content: { application/json: { schema: { type: object } } } }
+        '200': { description: Daemon health, content: { application/json: { schema: { $ref: '#/components/schemas/DoctorResponse' } } } }
         default: { $ref: '#/components/responses/AtmError' }
   /compatibility:
     post:
@@ -170,6 +170,32 @@ components:
     ListQuery:
       type: object
       description: Canonical list query; fields are validated by the daemon.
+    DoctorResponse:
+      type: object
+      description: Doctor report. Herdr endpoint presence entries identify both the canonical roster name and the effective Herdr agent name.
+      properties:
+        herdr:
+          $ref: '#/components/schemas/HerdrDoctorReport'
+    HerdrDoctorReport:
+      type: object
+      properties:
+        endpoints:
+          type: array
+          items: { $ref: '#/components/schemas/HerdrEndpointDoctorReport' }
+    HerdrEndpointDoctorReport:
+      type: object
+      properties:
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/HerdrMemberPresence' }
+    HerdrMemberPresence:
+      type: object
+      required: [name, outcome]
+      description: Herdr presence result. herdr_agent is the effective Herdr identity and was added in HTTP API 1.2.0.
+      properties:
+        name: { type: string, description: Canonical roster member name. }
+        herdr_agent: { type: string, nullable: true, description: Effective Herdr agent name; null for legacy v1.1 payloads. }
+        outcome: { type: object, description: Presence probe outcome. }
     SearchRequest:
       type: object
       required: [query]

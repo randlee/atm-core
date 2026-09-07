@@ -11,30 +11,28 @@ use std::time::{Duration, Instant};
 
 use atm_storage::{
     AsyncGraftReceiverEndpointStore, AsyncMessageSearchStore,
-    AsyncMessageStore as SharedAsyncMessageStore, AsyncTaskLedgerReader, GraftEndpointStoreError,
-    GraftReceiverLease, MessageStore as SharedMessageStore, OwnerGeneration, PendingNudgeStore,
+    AsyncMessageStore as SharedAsyncMessageStore, AsyncTaskLedgerReader, GraftReceiverLease,
+    MessageStore as SharedMessageStore, OwnerGeneration, PendingNudgeStore,
     RosterMemberEphemeralState, RosterRuntimeMirror, RosterStore as SharedRosterStore, TaskStore,
     TemplateCatalogStore,
 };
 
 use crate::boundary::TemplateComposer;
-use crate::config::{self, AtmConfig};
+use crate::config::AtmConfig;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
-use crate::error_codes::AtmErrorCode;
 #[cfg(test)]
 use crate::protocol::NotificationEvent;
 use crate::read::seen_state;
 use crate::schema::InboxMessage;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
-const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum WorkspaceConfigAccess {
-    #[default]
-    Client,
-    Disabled,
-}
+mod roster_resolution;
+mod runtime_helpers;
+mod workspace_config;
+pub use runtime_helpers::{graft_store_error, with_default_local_service_runtime};
+use workspace_config::{WorkspaceConfigAccess, load_workspace_config};
+const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
 
 /// Lease snapshots avoid a control-path SQLite lookup for every admitted
 /// local message. A graft receiver refreshes every second, so retaining a
@@ -226,15 +224,6 @@ impl GraftReceiverLeaseCache {
     }
 }
 
-/// Invoke a closure with the installed retained local runtime.
-#[doc(hidden)]
-pub fn with_default_local_service_runtime<T>(
-    f: impl FnOnce(&LocalServiceRuntime) -> Result<T, AtmError>,
-) -> Result<T, AtmError> {
-    let runtime = crate::service_runtime_store::default_runtime()?;
-    f(&runtime)
-}
-
 pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError>;
     fn load_nudge_template_override(
@@ -293,6 +282,9 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         agent: &AgentName,
     ) -> Option<crate::boundary::RosterEntry>;
     fn load_team_roster(&self, team: &TeamName) -> Vec<crate::boundary::RosterEntry>;
+    fn list_roster_teams(&self) -> Vec<TeamName> {
+        Vec::new()
+    }
 
     /// Validates a member token against the immutable roster and returns the
     /// canonical member that downstream code must use. Implementations that
@@ -302,13 +294,14 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         &self,
         addressed_team: &TeamName,
         candidate: &AgentName,
-        _allow_database_wide_alias: bool,
+        allow_database_wide_alias: bool,
     ) -> Option<(TeamName, AgentName)> {
-        let roster = self.load_team_roster(addressed_team);
-        let canonical =
-            crate::caller_context::resolve_roster_alias(candidate, addressed_team, &roster);
-        self.load_roster_member(addressed_team, &canonical)
-            .map(|_| (addressed_team.clone(), canonical))
+        roster_resolution::resolve_retained_roster_member_at_ingress(
+            self,
+            addressed_team,
+            candidate,
+            allow_database_wide_alias,
+        )
     }
 }
 
@@ -672,59 +665,6 @@ impl LocalServiceRuntime {
         self
     }
 
-    /// Reads one roster member from the RAM roster mirror. Never issues a
-    /// durable roster read. Infallible: the RAM mirror is always populated
-    /// (construction fails closed on a hydration error), so there is no
-    /// error case left to report.
-    pub fn load_roster_member(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Option<crate::boundary::RosterEntry> {
-        self.roster_runtime.load_roster_member(team, agent)
-    }
-
-    /// Reads one team's roster from the RAM roster mirror. Never issues a
-    /// durable roster read. Infallible for the same reason as
-    /// [`Self::load_roster_member`].
-    pub fn load_team_roster(&self, team: &TeamName) -> Vec<crate::boundary::RosterEntry> {
-        self.roster_runtime.load_team_roster(team)
-    }
-
-    /// Enumerates every team the RAM roster mirror currently holds. Never
-    /// issues a durable roster read.
-    pub fn list_roster_teams(&self) -> Vec<TeamName> {
-        self.roster_runtime.list_teams()
-    }
-
-    /// Validates one ingress member token against the daemon's immutable RAM
-    /// roster and returns its owning team plus canonical name. A bare alias
-    /// may select its owner globally; an explicit team remains local.
-    #[must_use]
-    pub fn resolve_roster_member_at_ingress(
-        &self,
-        addressed_team: &TeamName,
-        candidate: &AgentName,
-        allow_database_wide_alias: bool,
-    ) -> Option<(TeamName, AgentName)> {
-        let addressed_roster = self.load_team_roster(addressed_team);
-        let all_rosters = allow_database_wide_alias.then(|| {
-            self.list_roster_teams()
-                .into_iter()
-                .flat_map(|team| self.load_team_roster(&team))
-                .collect::<Vec<_>>()
-        });
-        let (team, canonical) = crate::caller_context::resolve_roster_alias_with_owner(
-            candidate,
-            addressed_team,
-            &addressed_roster,
-            all_rosters.as_deref().unwrap_or(&[]),
-            allow_database_wide_alias,
-        );
-        self.load_roster_member(&team, &canonical)
-            .map(|_| (team, canonical))
-    }
-
     /// Reads one member's ephemeral (non-durable) roster state from RAM.
     /// Returns `None` when the member is not present in the current roster
     /// snapshot.
@@ -994,6 +934,10 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         Self::load_team_roster(self, team)
     }
 
+    fn list_roster_teams(&self) -> Vec<TeamName> {
+        Self::list_roster_teams(self)
+    }
+
     fn resolve_roster_member_at_ingress(
         &self,
         addressed_team: &TeamName,
@@ -1040,43 +984,6 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
 /// collapsing every failure into one generic `daemon_unavailable` shape —
 /// a caller-input constraint violation surfaced by the backend therefore no
 /// longer looks identical to a true outage.
-pub fn graft_store_error(error: GraftEndpointStoreError) -> AtmError {
-    match error {
-        GraftEndpointStoreError::NotOwner => AtmError::new(
-            AtmErrorCode::GraftReceiverNotOwner,
-            "graft receiver lease is owned by another generation",
-        ),
-        GraftEndpointStoreError::Absent => AtmError::new(
-            AtmErrorCode::GraftReceiverNotRegistered,
-            "graft receiver lease is absent; re-announcement required",
-        ),
-        GraftEndpointStoreError::AlreadyActive => {
-            AtmError::validation("graft receiver lease is already active")
-        }
-        GraftEndpointStoreError::Storage {
-            code,
-            message,
-            cause,
-        } => {
-            let error = AtmError::new(code, message);
-            match cause {
-                Some(cause) => error.with_cause(cause),
-                None => error,
-            }
-        }
-    }
-}
-
-fn load_workspace_config(
-    access: WorkspaceConfigAccess,
-    current_dir: &Path,
-) -> Result<Option<AtmConfig>, AtmError> {
-    match access {
-        WorkspaceConfigAccess::Client => config::load_config(current_dir),
-        WorkspaceConfigAccess::Disabled => Ok(None),
-    }
-}
-
 #[cfg(test)]
 mod workspace_config_tests {
     use super::{WorkspaceConfigAccess, load_workspace_config};
