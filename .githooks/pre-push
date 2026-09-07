@@ -5,17 +5,25 @@
 # `git config core.hooksPath .githooks`; the setting is repo-wide, so one
 # install covers every worktree.
 #
-# Explicit opt-out only: ATM_SKIP_PUSH_GATE=1 skips the gate and says so.
+# Also gates pushes that touch triage TTL data (.triage/ or .sprints/):
+# validate-findings.py must pass before a broken finding/structure record
+# leaves this machine, so /sprint-report and /triage-report never see a
+# structural data gap that was pushable but unvalidated.
+#
+# Explicit opt-out only: ATM_SKIP_PUSH_GATE=1 skips both gates and says so.
 # There is no implicit bypass.
 set -u
 
 if [ "${ATM_SKIP_PUSH_GATE:-}" = "1" ]; then
-    echo "pre-push: ATM_SKIP_PUSH_GATE=1 set; skipping fmt/clippy gate" >&2
+    echo "pre-push: ATM_SKIP_PUSH_GATE=1 set; skipping fmt/clippy/ttl gates" >&2
     exit 0
 fi
 
+repo_root=$(git rev-parse --show-toplevel)
+
 zero=0000000000000000000000000000000000000000
-needs_gate=0
+needs_rust_gate=0
+ttl_phases=""
 while read -r _local_ref local_sha _remote_ref remote_sha; do
     [ "$local_sha" = "$zero" ] && continue   # branch delete: nothing to check
     if [ "$remote_sha" = "$zero" ]; then
@@ -24,30 +32,91 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         range="$remote_sha..$local_sha"
     fi
     if git rev-list "$range" 2>/dev/null | head -n 1 | grep -q .; then
-        if git diff --name-only "$range" 2>/dev/null | grep -Eq '\.rs$|^Cargo\.(toml|lock)$|/Cargo\.toml$'; then
-            needs_gate=1
+        changed=$(git diff --name-only "$range" 2>/dev/null)
+        if printf '%s\n' "$changed" | grep -Eq '\.rs$|^Cargo\.(toml|lock)$|/Cargo\.toml$'; then
+            needs_rust_gate=1
+        fi
+        # Only validate phases whose own .triage/.sprints files are actually
+        # touched by this push. Other phases (including already-broken
+        # historical ones) must never block an unrelated push.
+        touched_phases=$(printf '%s\n' "$changed" \
+            | grep -E '(^|/)\.triage/phase-[^/]+/.*\.ttl$|(^|/)\.sprints/[^/]+/.*\.ttl$' \
+            | sed -E \
+                -e 's#^(.*/)?\.triage/phase-([^/]+)/.*#\2#' \
+                -e 's#^(.*/)?\.sprints/([^/]+)/.*#\2#' \
+            | tr '[:lower:]' '[:upper:]' | sort -u)
+        if [ -n "$touched_phases" ]; then
+            ttl_phases="$ttl_phases
+$touched_phases"
         fi
     fi
 done
+ttl_phases=$(printf '%s\n' "$ttl_phases" | grep -v '^$' | sort -u)
 
-if [ "$needs_gate" -eq 0 ]; then
-    exit 0
+if [ "$needs_rust_gate" -eq 1 ]; then
+    echo "pre-push: running cargo fmt --all --check" >&2
+    if ! cargo fmt --all --check; then
+        echo "pre-push: REFUSED. Formatting differs from rustfmt; run 'just fmt write' and amend." >&2
+        exit 1
+    fi
+
+    echo "pre-push: running cargo clippy --workspace --all-targets -- -D warnings" >&2
+    # This is byte-for-byte the gating clippy job in .github/workflows/ci.yml
+    # (job "clippy"): bare cargo, no PYO3_PYTHON, no venv, no `just`. Keeping it
+    # identical to CI is the whole point; do not route it through the Justfile.
+    cargo clippy --workspace --all-targets -- -D warnings
+    status=$?
+    if [ "$status" -ne 0 ]; then
+        echo "pre-push: REFUSED. Clippy reported warnings; fix them before pushing." >&2
+        exit "$status"
+    fi
 fi
 
-echo "pre-push: running cargo fmt --all --check" >&2
-if ! cargo fmt --all --check; then
-    echo "pre-push: REFUSED. Formatting differs from rustfmt; run 'just fmt write' and amend." >&2
-    exit 1
+if [ -n "$ttl_phases" ]; then
+    validator="$repo_root/.claude/skills/graph-orchestration/scripts/validate-findings.py"
+    if [ ! -f "$validator" ]; then
+        echo "pre-push: REFUSED. TTL files changed but validate-findings.py is missing at $validator." >&2
+        exit 1
+    fi
+    fail=0
+    for phase_short in $ttl_phases; do
+        structure_dir=""
+        for candidate in "$repo_root"/.sprints/*/; do
+            [ -d "$candidate" ] || continue
+            candidate_name=$(basename "$candidate")
+            if [ "$(printf '%s' "$candidate_name" | tr '[:lower:]' '[:upper:]')" = "$phase_short" ]; then
+                structure_dir="$candidate"
+                break
+            fi
+        done
+        if [ -z "$structure_dir" ]; then
+            echo "pre-push: REFUSED. Pushed .triage/.sprints changes reference phase $phase_short but no matching .sprints/*/structure.ttl exists." >&2
+            fail=1
+            continue
+        fi
+        structure="${structure_dir}structure.ttl"
+        events="${structure_dir}events.ttl"
+        findings_dir="$repo_root/.triage/phase-$(printf '%s' "$phase_short" | tr '[:upper:]' '[:lower:]')/findings"
+        if [ ! -f "$structure" ] || [ ! -d "$findings_dir" ]; then
+            echo "pre-push: REFUSED. Phase $phase_short is missing structure.ttl or findings dir under $findings_dir." >&2
+            fail=1
+            continue
+        fi
+        echo "pre-push: running validate-findings.py for phase $phase_short (touched by this push)" >&2
+        result=$(python3 "$validator" \
+            --findings-dir "$findings_dir" \
+            --structure "$structure" \
+            --events "$events" --json 2>&1)
+        py_status=$?
+        if [ "$py_status" -ne 0 ]; then
+            echo "$result" >&2
+            echo "pre-push: REFUSED. validate-findings.py failed for phase $phase_short; repair per docs/triage/ttl-repair.md." >&2
+            fail=1
+        fi
+    done
+    if [ "$fail" -ne 0 ]; then
+        exit 1
+    fi
 fi
 
-echo "pre-push: running cargo clippy --workspace --all-targets -- -D warnings" >&2
-# This is byte-for-byte the gating clippy job in .github/workflows/ci.yml
-# (job "clippy"): bare cargo, no PYO3_PYTHON, no venv, no `just`. Keeping it
-# identical to CI is the whole point; do not route it through the Justfile.
-cargo clippy --workspace --all-targets -- -D warnings
-status=$?
-if [ "$status" -ne 0 ]; then
-    echo "pre-push: REFUSED. Clippy reported warnings; fix them before pushing." >&2
-    exit "$status"
-fi
 exit 0
