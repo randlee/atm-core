@@ -1155,7 +1155,7 @@ mod tests {
         assert_eq!(queue_pull.agent, recipient);
         assert_eq!(queue_pull.team, team);
         assert!(queue_pull.body.starts_with("<atm"));
-        assert!(!queue_pull.body.contains("immediate bare CLI body"));
+        assert!(!queue_pull.body.contains("full immutable body"));
 
         let fifo: atm_http_runtime::BareCliFifo = Default::default();
         let selector = ReplacementReceivedHookSelector::with_herdr_process_and_fifo(
