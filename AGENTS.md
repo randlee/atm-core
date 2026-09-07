@@ -33,6 +33,7 @@ the shape of `.claude/skills/atm-smoke/REPORT.md`. The tests are identical on ev
 - `.claude/skills/atm-smoke/SKILL.md` — send/list/read/peek/ack smoke (CLI or native tools)
 - `.claude/skills/atm-hermes-ready/SKILL.md` — Hermes agents registered and answering
 - `.claude/skills/atm-nudge-roundtrip/SKILL.md` — tester ↔ Hermes native read/ack round trip
+- `.claude/skills/atm-troubleshoot/SKILL.md` — root-cause one FAIL line from DB rows, `atm log`, doctor, probe, gateway log
 The same directories are linked from `.codex/skills/`.
 
 ## Rust Guidance

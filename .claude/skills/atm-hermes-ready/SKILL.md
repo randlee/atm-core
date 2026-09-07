@@ -26,5 +26,5 @@ Never restart gateways or the daemon from this skill; report and stop.
 
 ## Report
 
-Exactly one message to the requester, template in `.claude/skills/atm-smoke/REPORT.md`, skill name
+Exactly one message to the requester, template `../atm-smoke/REPORT.md` (sibling skill directory), skill name
 `atm-hermes-ready`, one step line per agent for steps 2–4.

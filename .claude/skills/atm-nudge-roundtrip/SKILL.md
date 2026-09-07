@@ -33,5 +33,5 @@ Two roles, one skill. The request says which role you are.
 
 ## Report
 
-Exactly one message to the requester, template in `.claude/skills/atm-smoke/REPORT.md`, skill name
+Exactly one message to the requester, template `../atm-smoke/REPORT.md` (sibling skill directory), skill name
 `atm-nudge-roundtrip`, first step line states the role.
