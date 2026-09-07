@@ -335,12 +335,17 @@ edits: expected to fit one context window. If it does not, the split point
 is fixed in advance, the same way as AY.8's: sprint AY.10a lands D1, D3,
 D7 and D8 with C1 (trait and event types, factory return that is `None`
 for both transports until AY.10b flips the socket branch to `Some`, pin,
-boundary key, HR-CORE-011, ADR-058 paragraph) and acceptance 1, 5 and 6,
-and AY.10b lands D2, D4, D5 and D6 with C2 (`status_stream.rs`, fake
-server streaming mode, the protocol test file, herdr-versions column) and
-acceptance 2, 3, 3a and 4, stacked on AY.10a. If the split is exercised:
-AY.10a keeps this sprint's branch (`feature/ay10-herdr-status-stream`,
-`pr_target` AY.8's branch, `stack_parent` AY.8) and AY.10b is
+boundary key, HR-CORE-011, ADR-058 paragraph) with acceptance 5, 6 and
+7 plus an AY.10a-scoped form of 1 (the factory returns `None` for both
+transports and spawns nothing; `subscribe` is not yet reachable), and
+AY.10b lands D2, D4, D5 and D6 with C2 (`status_stream.rs`, fake server
+streaming mode, the protocol test file, herdr-versions column) with the
+full acceptance 1, 2, 3, 3a and 4, stacked on AY.10a. Acceptance 8 (the
+common merge gate) applies to each half independently. If the split is
+exercised: AY.10a keeps this sprint's branch
+(`feature/ay10-herdr-status-stream`, `pr_target` AY.8's branch,
+`stack_parent` AY.8, or AY.8b if that split is also exercised, per
+"Dispatch and PR topology") and AY.10b is
 `feature/ay10b-herdr-status-stream-protocol` (`stack_parent` AY.10a,
 `pr_target` AY.10a's branch, linked with `gh stack link --base
 integrate/phase-ay feature/ay8-herdr-socket-transport
@@ -430,7 +435,8 @@ other split is permitted without a plan amendment.
 
 - Consuming the stream anywhere (AY.11).
 - Changing the queue-wake tick or poll interval (AY.11, AY.12).
-- Coupling stream failures to the nudge breaker (decided in AY.12).
+- Coupling stream failures to the nudge breaker: closed as no coupling in
+  this sprint's C2, for the whole phase including AY.12.
 - Any Herdr change, including a hub-only agent-status subscription that
   would remove the per-pane `pane_get` cost; if Rand chooses that route
   under rework item 7, this sprint is re-planned, not stretched. Any CLI

@@ -1125,7 +1125,7 @@ Decision (Rand, YYYY-MM-DD): Ship|Defer <phase>|Cancel
 quality-mgr's phase-ending gate must refuse the integrate/phase-ay to
 develop PR while `grep -E '^Decision \(Rand, [0-9]{4}-[0-9]{2}-[0-9]{2}\): (Ship|Defer [A-Z]+|Cancel)$'`
 finds no line in this file, or while
-`grep -E '^   Decision \(Rand, [0-9]{4}-[0-9]{2}-[0-9]{2}\): (drop poll|keep both|stop)$'`
+`grep -E '^   Decision \(Rand, [0-9]{4}-[0-9]{2}-[0-9]{2}\): (drop poll|keep both|stop subscription work)$'`
 finds no line under rework item 7. This is the forcing function that
 AQ2.6 and ADR-058 lacked (see AW-READY-W1).
 
@@ -1757,7 +1757,7 @@ item 7 below, not optimized.
    poll). AY.12 dispatches only after this line is filled in from AY.11's
    dogfood evidence:
 
-   Decision (Rand, YYYY-MM-DD): drop poll | keep both | stop
+   Decision (Rand, YYYY-MM-DD): drop poll | keep both | stop subscription work
 
 ### Hardening rounds
 
@@ -1879,3 +1879,14 @@ round below is PASS or every finding has an accepted disposition.
   651f6c5b0; PLAN-SCOPE-501/502/M2 confirmed fixed): PLAN-SCOPE-601 the
   authoritative sprint-file list stopped at AY.9 (fixed: AY.10, AY.11,
   AY.12 links added).
+- critical-plan-reviewer r6 (FAIL, 1 blocking / 2 important / 2 minor;
+  reviewed 651f6c5b0; PLAN-CRIT-501/502/M1 confirmed fixed, three
+  decision-line greps verified disjoint): PLAN-CRIT-601 the AY.10a/b
+  split gave acceptance 1 to AY.10a, which cannot satisfy it (fixed:
+  AY.10a-scoped form of 1, full 1 moved to AY.10b); PLAN-CRIT-602
+  acceptance 7 and 8 unassigned in the split (fixed: 7 with D8 on AY.10a,
+  8 on each half); PLAN-CRIT-603 AY.10 out-of-scope still said the breaker
+  question is decided in AY.12 (fixed); PLAN-CRIT-M2 split section did not
+  restate the AY.8b parent override (fixed); PLAN-CRIT-M3 AY.12 option
+  `stop` easy to confuse with `stop AY.10` (fixed: renamed `stop
+  subscription work`, grep updated).
