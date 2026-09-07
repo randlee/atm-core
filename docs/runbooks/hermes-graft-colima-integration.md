@@ -91,7 +91,7 @@ P0 exit gate:
   `880eef4e90e04a16bf5bfa0e8b8a2d047b59f76183076a4b7336a99cfd0f1203`.
 - Tagged source and built wheel METADATA both admit `atm-graft` 1.5.3.
 - P2 executes from testbed main
-  `8661a3e77e320dd6712b2c44b3bb50d67b6b87bc`; the peer authority, 4 CPU / 4 GiB Colima
+  `b468321`; the peer authority, 4 CPU / 4 GiB Colima
   allocation, `suite/v2`, no-`sudo` marker protocol, and primary matrix are
   frozen.
 
@@ -231,16 +231,25 @@ TESTBED_PLATFORM=<platform> ./run.sh
 docker exec <container> atm doctor
 ```
 
-If the harness attempts `sudo`, stop. P2 uses testbed main `8661a3e77`; only
-documentation changed after `e8e500a`, and the no-`sudo` implementation landed
-by `fb9d63c`, building on
-`41fc546`) implements the
-approved replacement: daemon lifecycle control stays outside the unprivileged
-agent, and the outer coordinator invokes root-only, non-self-elevating helpers
-through root-default `docker exec <container> <helper>`. The image contains no
-`sudo` package or sudoers entries. Clear all coordination markers before every
-run. The fixture agent performs and observes only ATM operations while UTC
-ready, trigger, and done markers coordinate the out-of-band helper.
+Current-cycle build record:
+
+- Discarded image digest prefix `670edd12` is invalid evidence. A first-match
+  glob selected a stale 1.4.6 archive despite the explicit 1.5.3 override.
+- Testbed commit `b468321` makes override selection exact and purges stale
+  tarballs. The rebuilt container reports ATM, `hermes-atm`, and `atm-graft`
+  1.5.3 and passes `atm doctor`.
+- The only valid image is `loki/hermes-testbed:testbed` at
+  `sha256:5d46dfbc0f90460306673bf624013f11c4402ce7b48f91fd23f87eb1fbe8b9ee`.
+  Its baked artifact digests match the P0 record.
+
+If the harness attempts `sudo`, stop. The no-`sudo` implementation landed by
+`fb9d63c`, building on `41fc546`. Daemon lifecycle control stays outside the
+unprivileged agent, and the outer coordinator invokes root-only,
+non-self-elevating helpers through root-default
+`docker exec <container> <helper>`. The image contains no `sudo` package or
+sudoers entries. Clear all coordination markers before every run. The fixture
+agent performs and observes only ATM operations while UTC ready, trigger, and
+done markers coordinate the out-of-band helper.
 
 For AT4, the coordinator arms the restart helper, the fixture agent writes the
 ready marker, and the helper restarts the daemon while the agent session remains
@@ -369,6 +378,7 @@ Every issue becomes a row before work continues.
 | HGC-016 / HGF-005 | P1 | Final full-range `git diff --check` reported five whitespace errors | Fork test formatting predated the delta-only review, so the first fix round did not touch it | Fork commit `650bc7f2d5` removes only the five trailing spaces; PR #23 merged, both fork pointers advanced to `d45230aac5`, 38 tests/Ruff/full-range diff-check pass. No atm-core product change | resolved |
 | HGC-017 | P0/P2 | A stale host-side fixture roster row remained from the prior AT3 cycle | Cross-host fixture cleanup had awaited an ownership ruling | Rand authorized removal; Loki removed it and verified the host held-state list is empty before the new run | resolved |
 | HGC-018 | P2 | Cross-team fixture-member removal is rejected | ATM roster mutation is caller-team scoped | Run `atm teams remove-member` under the fixture member identity or another member of the fixture team, then verify absence with a sanitized roster/list check. This is an ATM authorization rule, not a Hermes fork defect | resolved rule; apply at teardown |
+| HGC-019 | P2 | First image reported ATM 1.4.6 despite a 1.5.3 override | Testbed `build.sh` selected the alphabetically first stale `atm_*` archive instead of the explicit override | Discard image `670edd12`; testbed commit `b468321` pins override artifacts exactly and purges stale archives. Accept only the rebuilt image whose in-container version triple and baked digests match P0 | resolved before test evidence |
 
 ## Stop/escalate decision table
 
