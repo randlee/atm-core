@@ -79,22 +79,22 @@ mod tests {
     #[test]
     fn reads_valid_absolute_paths_once_from_home_config() {
         let home = tempfile::tempdir().expect("tempdir");
+        let binary_path = home.path().join("bin").join("herdr");
+        let socket_path = home.path().join("run").join("herdr.sock");
         std::fs::write(
             home.path().join(".atm.toml"),
-            "[herdr]\nbinary_path = \"/opt/homebrew/bin/herdr\"\nsocket_path = \"/tmp/herdr.sock\"\n",
+            format!(
+                "[herdr]\nbinary_path = {}\nsocket_path = {}\n",
+                toml::Value::String(binary_path.to_string_lossy().into_owned()),
+                toml::Value::String(socket_path.to_string_lossy().into_owned()),
+            ),
         )
         .expect("write config");
 
         let config = daemon_herdr_client_config(&env_for(&home)).expect("config parses");
 
-        assert_eq!(
-            config.binary_path().unwrap().to_str(),
-            Some("/opt/homebrew/bin/herdr")
-        );
-        assert_eq!(
-            config.socket_path().unwrap().to_str(),
-            Some("/tmp/herdr.sock")
-        );
+        assert_eq!(config.binary_path(), Some(binary_path.as_path()));
+        assert_eq!(config.socket_path(), Some(socket_path.as_path()));
     }
 
     #[test]
