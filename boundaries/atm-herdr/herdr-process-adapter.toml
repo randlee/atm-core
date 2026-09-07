@@ -31,7 +31,7 @@ io_forbidden = [
 
 [dependencies]
 allowed_dependents = ["atm-http-runtime", "atm-daemon-bootstrap"]
-allowed_dependencies = ["atm-core", "tokio", "serde_json"]
+allowed_dependencies = ["atm-core", "semver", "tokio", "serde_json"]
 forbidden_edges = [
   "atm-core -> atm-herdr",
   "atm-storage -> atm-herdr",

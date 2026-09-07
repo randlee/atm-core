@@ -45,26 +45,17 @@ pub use report::{
     RecipientDeliveryPathReport, TeamEscalationRecipientsDoctorReport,
 };
 
-/// Async application port for the live Herdr visibility checks performed by
-/// the replacement daemon's doctor route. The core report owns finding shape;
-/// the composition root owns the concrete Herdr adapter.
-pub trait HerdrPresenceDoctor: Send + Sync {
-    fn probe<'a>(
-        &'a self,
-        roster: &'a MembersList,
-        caller_deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>>;
-}
-
 #[derive(Debug, Default)]
-pub struct ClosedHerdrPresenceDoctor;
+pub struct ClosedHerdrEndpointDoctor;
 
-impl HerdrPresenceDoctor for ClosedHerdrPresenceDoctor {
-    fn probe<'a>(
+impl crate::boundary::sealed::Sealed for ClosedHerdrEndpointDoctor {}
+
+impl HerdrEndpointDoctor for ClosedHerdrEndpointDoctor {
+    fn observe<'a>(
         &'a self,
         _roster: &'a MembersList,
         _caller_deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Vec<HerdrEndpointObservation>> + Send + 'a>> {
         Box::pin(async { Vec::new() })
     }
 }
@@ -108,7 +99,7 @@ pub struct RuntimeDoctorPorts {
     pub mail_store_doctor: Arc<dyn MailStoreDoctor + Send + Sync>,
     pub roster_store_doctor: Arc<dyn RosterStoreDoctor + Send + Sync>,
     pub herdr_breaker: Arc<dyn HerdrBreakerDoctor>,
-    pub herdr_presence: Arc<dyn HerdrPresenceDoctor>,
+    pub herdr_endpoint: Arc<dyn HerdrEndpointDoctor>,
 }
 
 impl std::fmt::Debug for RuntimeDoctorPorts {
@@ -118,9 +109,41 @@ impl std::fmt::Debug for RuntimeDoctorPorts {
             .field("mail_store_doctor", &"dyn MailStoreDoctor")
             .field("roster_store_doctor", &"dyn RosterStoreDoctor")
             .field("herdr_breaker", &"dyn HerdrBreakerDoctor")
-            .field("herdr_presence", &"dyn HerdrPresenceDoctor")
+            .field("herdr_endpoint", &"dyn HerdrEndpointDoctor")
             .finish()
     }
+}
+
+/// Flattens endpoint observations into the retained doctor-finding surface.
+/// Member order follows the nonserialized roster ordinal, and infrastructure
+/// trouble remains one global informational finding after member findings.
+#[must_use]
+pub fn presence_findings(observations: &[HerdrEndpointObservation]) -> Vec<DoctorFinding> {
+    let mut members = observations
+        .iter()
+        .flat_map(|observation| observation.members.iter())
+        .collect::<Vec<_>>();
+    members.sort_by_key(|member| member.ordinal);
+    let mut findings = Vec::new();
+    let mut infrastructure = None;
+    for member in members {
+        match &member.outcome {
+            HerdrPresenceOutcome::Visible => {}
+            HerdrPresenceOutcome::Finding { finding } => findings.push(finding.clone()),
+            HerdrPresenceOutcome::Infrastructure { code, detail } => {
+                infrastructure.get_or_insert((*code, detail.clone()));
+            }
+        }
+    }
+    if let Some((_code, detail)) = infrastructure {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Info,
+            code: AtmErrorCode::HerdrUnavailable,
+            message: format!("Herdr presence probe skipped: {detail}"),
+            remediation: None,
+        });
+    }
+    findings
 }
 
 /// Run the ATM doctor checks for config, roster, and observability health.
@@ -922,8 +945,11 @@ fn member_summary(
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
     use std::sync::Arc;
+    use std::{
+        net::SocketAddr,
+        path::{Path, PathBuf},
+    };
 
     use super::{
         legacy_literal_ip_peer_reports, ordered_member_summaries, peer_config_doctor_report,
@@ -1048,7 +1074,7 @@ mod tests {
             unreachable!("doctor test never mutates peer configuration")
         }
 
-        fn remove_interface(&self, _bind_addr: std::net::SocketAddr) -> Result<bool, AtmError> {
+        fn remove_interface(&self, _bind_addr: SocketAddr) -> Result<bool, AtmError> {
             unreachable!("doctor test never mutates peer configuration")
         }
 

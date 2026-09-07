@@ -80,7 +80,7 @@ sqlite = ["atm_daemon_bootstrap::replacement_handler"]
 tmux_send_keys = ["atm_daemon_bootstrap::replacement_handler"]
 
 [status]
-state = "planned"
+state = "active"
 notes = [
   "Phase AY P-E(a) boundary ruling drafted 2026-09-06 for sprint AY.3; the approved bundle is AY.3's first commit and the developer neither authors nor weakens it.",
   "AY.3 D2 flips this record to active when the sealed trait lands: declare `pub trait HerdrEndpointDoctor: sealed::Sealed + Send + Sync` in crates/atm-core/src/boundary/herdr_endpoint.rs (the atm-architecture guard resolves trait-only core contracts from crates/atm-core/src/boundary only; store.rs and mail.rs are the precedent), re-exported from crates/atm-core/src/doctor/mod.rs alongside the DTOs, keep ClosedHerdrEndpointDoctor in atm-core, and keep HerdrEndpointDoctorAdapter in crates/atm-daemon-bootstrap/src/replacement_handler.rs as the single production implementation; boundary_enforcement.rs pins exactly those two implementations.",

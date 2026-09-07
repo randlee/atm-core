@@ -890,12 +890,10 @@ mod replacement_runtime_tests {
     use std::time::Duration;
 
     use atm_core::api::ApiRequest;
-    use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
         BuiltInPostSendDispatch, MemberKey, MessageReceivedHookSelector, RosterEntry,
         TemplateSource,
     };
-    use atm_core::doctor::{DoctorSeverity, HerdrPresenceDoctor};
     use atm_core::observability::NullObservability;
     use atm_core::peer_wire::PeerWireMode;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
@@ -911,7 +909,6 @@ mod replacement_runtime_tests {
     use serde_json::Map;
 
     use super::peer_launch_config::parse_peer_pool_config_with_environment;
-    use super::replacement_handler::{HerdrPresenceDoctorAdapter, herdr_presence_finding};
     use super::{
         DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ReplacementHandlerConfig,
         SelectedPeerAdapterSelection, ShutdownSignal, active_received_hook_selector_with_health,
@@ -1500,112 +1497,6 @@ mod replacement_runtime_tests {
                 .text,
             "bootstrap adapter"
         );
-    }
-
-    #[tokio::test]
-    async fn doctor_presence_probe_uses_bypass_and_degrades_outages() {
-        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
-        fake.queue_get_result(Err(atm_herdr::HerdrError::AgentNotFound));
-        let roster = atm_core::team_admin::MembersList {
-            team: "team".parse().expect("team"),
-            members: vec![atm_core::team_admin::MemberSummary {
-                name: "receiver".parse().expect("agent"),
-                agent_id: "receiver".to_owned(),
-                agent_type: "worker".to_owned(),
-                harness: atm_core::boundary::RosterHarness::CodexCli,
-                model: ModelName::new("gpt-5").expect("model"),
-                joined_at: None,
-                tmux_pane_id: None,
-                backend: Some("herdr".to_owned()),
-                herdr_session: Some("team-a".to_owned()),
-                local_backend: Some(atm_core::LocalMessageReceivedBackend::Herdr {
-                    session: Some(atm_core::HerdrSession::new("team-a").expect("session")),
-                }),
-                home_dir: std::path::PathBuf::from("/tmp").into(),
-                live_cwd: None,
-                host: None,
-                extra: serde_json::Map::new(),
-            }],
-        };
-        let findings = HerdrPresenceDoctorAdapter {
-            process: fake.clone(),
-        }
-        .probe(&roster, RequestDeadline::after(Duration::from_secs(2)))
-        .await;
-        assert_eq!(findings.len(), 1);
-        assert_eq!(
-            findings[0].code,
-            atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible
-        );
-        assert!(matches!(
-            fake.calls().as_slice(),
-            [atm_herdr::testing::FakeHerdrCall::Get {
-                breaker_policy: atm_herdr::BreakerPolicy::Bypass,
-                ..
-            }]
-        ));
-
-        let outage_fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
-        outage_fake.queue_get_result(Err(atm_herdr::HerdrError::ServerUnavailable {
-            message: String::new(),
-            retry_after: None,
-        }));
-        let outage_findings = HerdrPresenceDoctorAdapter {
-            process: outage_fake,
-        }
-        .probe(&roster, RequestDeadline::after(Duration::from_secs(2)))
-        .await;
-        assert_eq!(outage_findings.len(), 1);
-        assert_eq!(outage_findings[0].severity, DoctorSeverity::Info);
-        assert!(
-            outage_findings[0]
-                .message
-                .starts_with("Herdr presence probe skipped:")
-        );
-    }
-
-    #[test]
-    fn doctor_and_emitter_share_herdr_outcome_classification() {
-        let errors = [
-            atm_herdr::HerdrError::AgentBlocked,
-            atm_herdr::HerdrError::AgentNotFound,
-            atm_herdr::HerdrError::AgentNotReady,
-            atm_herdr::HerdrError::AgentTargetAmbiguous,
-            atm_herdr::HerdrError::AgentNotRunning,
-            atm_herdr::HerdrError::AgentPromptStalled,
-            atm_herdr::HerdrError::ServerNotRunning,
-            atm_herdr::HerdrError::ProtocolMismatch,
-            atm_herdr::HerdrError::Timeout,
-            atm_herdr::HerdrError::InvalidAgentName,
-            atm_herdr::HerdrError::EmptyAgentPrompt,
-            atm_herdr::HerdrError::ServerUnavailable {
-                message: String::new(),
-                retry_after: None,
-            },
-            atm_herdr::HerdrError::InternalError {
-                message: String::new(),
-            },
-            atm_herdr::HerdrError::TimedOut,
-            atm_herdr::HerdrError::Unavailable {
-                retry_after: Duration::from_secs(1),
-            },
-            atm_herdr::HerdrError::Advisory {
-                code: "future_code".to_owned(),
-                message: String::new(),
-            },
-        ];
-        for error in errors {
-            let outcome = error.emission_outcome();
-            let finding = herdr_presence_finding(error.clone());
-            if matches!(error, atm_herdr::HerdrError::AgentNotFound) {
-                assert_eq!(
-                    finding.code,
-                    atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible
-                );
-            } else {
-                assert!(finding.message.contains(outcome), "{outcome}");
-            }
-        }
     }
 
     #[cfg(unix)]

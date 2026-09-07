@@ -10,16 +10,15 @@
 //! router the runtime serves.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use atm_core::api::RequestDeadline;
-use atm_core::doctor::{DoctorFinding, DoctorSeverity, HerdrPresenceDoctor};
+use atm_core::doctor::{HerdrEndpointDoctor, HerdrEndpointObservation, HerdrRosterMember};
 use atm_core::error::AtmError;
 use atm_core::observability::ObservabilityPort;
 use atm_core::peer_wire::PeerWireMode;
 use atm_core::team_admin::MembersList;
 use atm_herdr::{
-    BreakerPolicy, HerdrBreakerState, HerdrClientConfig, HerdrError, HerdrProcessAdapter,
+    HerdrBreakerState, HerdrClientConfig, HerdrDoctorProbe, HerdrProcessAdapter,
     HerdrProcessInvoker, HerdrSpawnBreaker,
 };
 use atm_http_runtime::{
@@ -107,104 +106,68 @@ impl atm_core::doctor::HerdrBreakerDoctor for HerdrBreakerDoctorAdapter {
     }
 }
 
-pub(crate) struct HerdrPresenceDoctorAdapter {
-    pub(crate) process: Arc<dyn HerdrProcessAdapter>,
+/// The sole production endpoint-doctor adapter. It groups one immutable
+/// roster snapshot by its configured Herdr session before calling the concrete
+/// probe, so no member is queried twice and the configuration decision cannot
+/// drift between grouping and observation.
+pub(crate) struct HerdrEndpointDoctorAdapter {
+    pub(crate) probe: HerdrDoctorProbe,
 }
 
-impl HerdrPresenceDoctor for HerdrPresenceDoctorAdapter {
-    fn probe<'a>(
+impl atm_core::boundary::sealed::Sealed for HerdrEndpointDoctorAdapter {}
+
+impl HerdrEndpointDoctor for HerdrEndpointDoctorAdapter {
+    fn observe<'a>(
         &'a self,
         roster: &'a MembersList,
         caller_deadline: RequestDeadline,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<DoctorFinding>> + Send + 'a>> {
-        Box::pin(probe_herdr_presence(
-            Arc::clone(&self.process),
-            roster,
-            caller_deadline,
-        ))
-    }
-}
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Vec<HerdrEndpointObservation>> + Send + 'a>,
+    > {
+        Box::pin(async move {
+            let mut sessions = roster
+                .members
+                .iter()
+                .filter_map(|member| match member.local_message_received_backend() {
+                    Some(atm_core::LocalMessageReceivedBackend::Herdr { session }) => {
+                        Some(session.clone())
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            sessions.sort_by(|left, right| {
+                left.as_ref()
+                    .map_or("", atm_core::HerdrSession::as_str)
+                    .cmp(right.as_ref().map_or("", atm_core::HerdrSession::as_str))
+            });
+            sessions.dedup();
 
-async fn probe_herdr_presence(
-    process: Arc<dyn HerdrProcessAdapter>,
-    roster: &MembersList,
-    caller_deadline: RequestDeadline,
-) -> Vec<DoctorFinding> {
-    let mut findings = Vec::new();
-    let mut outage_reason = None;
-    for member in roster.members.iter().filter(|member| {
-        matches!(
-            member.local_message_received_backend(),
-            Some(atm_core::LocalMessageReceivedBackend::Herdr { .. })
-        )
-    }) {
-        match probe_herdr_member(process.as_ref(), member, caller_deadline).await {
-            Ok(()) => {}
-            Err(error) if error.is_infrastructure() => {
-                outage_reason.get_or_insert_with(|| format!("{error:?}"));
+            let mut observations = Vec::with_capacity(sessions.len());
+            for session in sessions {
+                let members = roster
+                    .members
+                    .iter()
+                    .enumerate()
+                    .filter_map(
+                        |(ordinal, member)| match member.local_message_received_backend() {
+                            Some(atm_core::LocalMessageReceivedBackend::Herdr {
+                                session: member_session,
+                            }) if *member_session == session => Some(HerdrRosterMember {
+                                ordinal,
+                                name: member.name.clone(),
+                            }),
+                            _ => None,
+                        },
+                    )
+                    .collect::<Vec<_>>();
+                observations.push(
+                    self.probe
+                        .observe(session.as_ref(), &members, caller_deadline)
+                        .await,
+                );
             }
-            Err(error) => findings.push(herdr_presence_finding(error)),
-        }
-    }
-    if let Some(reason) = outage_reason {
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Info,
-            code: atm_core::error_codes::AtmErrorCode::HerdrUnavailable,
-            message: format!("Herdr presence probe skipped: {reason}"),
-            remediation: None,
-        });
-    }
-    findings
-}
-
-async fn probe_herdr_member(
-    process: &dyn HerdrProcessAdapter,
-    member: &atm_core::team_admin::MemberSummary,
-    caller_deadline: RequestDeadline,
-) -> Result<(), HerdrError> {
-    let Some(atm_core::LocalMessageReceivedBackend::Herdr { session }) =
-        member.local_message_received_backend()
-    else {
-        return Ok(());
-    };
-    let deadline = caller_deadline
-        .remaining()
-        .map(|remaining| RequestDeadline::after(remaining.min(Duration::from_secs(2))))
-        .unwrap_or_else(|| RequestDeadline::after(Duration::ZERO));
-    process
-        .get(
-            &member.name,
-            session.as_ref(),
-            deadline,
-            BreakerPolicy::Bypass,
-        )
-        .await
-        .map(|_| ())
-}
-
-pub(crate) fn herdr_presence_finding(error: HerdrError) -> DoctorFinding {
-    let outcome = error.emission_outcome();
-    if matches!(error, HerdrError::AgentNotFound) {
-        let error = AtmError::new(
-            atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible,
-            "agent not visible in the member's configured Herdr session",
-        );
-        return DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            code: error.code(),
-            message: error.detail().to_owned(),
-            remediation: Some(error.remediation().to_owned()),
-        };
-    }
-    let error: AtmError = error.into();
-    DoctorFinding {
-        severity: DoctorSeverity::Warning,
-        code: error.code(),
-        message: format!(
-            "Herdr presence probe outcome `{outcome}`: {}",
-            error.detail()
-        ),
-        remediation: Some(error.remediation().to_owned()),
+            observations
+        })
     }
 }
 
@@ -368,13 +331,13 @@ fn resolve_herdr_process(
             let herdr_breaker = Arc::new(HerdrSpawnBreaker::new());
             let process: Arc<dyn HerdrProcessAdapter> = Arc::new(HerdrProcessInvoker::new(
                 Arc::clone(&herdr_breaker),
-                herdr_config,
+                herdr_config.clone(),
             ));
             assembly.doctor_ports.herdr_breaker = Arc::new(HerdrBreakerDoctorAdapter {
                 breaker: Arc::clone(&herdr_breaker),
             });
-            assembly.doctor_ports.herdr_presence = Arc::new(HerdrPresenceDoctorAdapter {
-                process: Arc::clone(&process),
+            assembly.doctor_ports.herdr_endpoint = Arc::new(HerdrEndpointDoctorAdapter {
+                probe: HerdrDoctorProbe::new(herdr_config.clone()),
             });
             process
         }

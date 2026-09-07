@@ -11,8 +11,8 @@ use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::doctor::{
     DoctorExecutionContext, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity,
-    HerdrPresenceDoctor, ReaderPoolDoctorReport, RuntimeDoctorPorts, append_doctor_findings,
-    run_doctor_with_runtime_ports,
+    HerdrEndpointDoctor, ReaderPoolDoctorReport, RuntimeDoctorPorts, append_doctor_findings,
+    presence_findings, run_doctor_with_runtime_ports,
 };
 use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::RuntimeStatusSnapshot;
@@ -64,7 +64,7 @@ pub trait DoctorProjection: Send + Sync {
 #[derive(Clone)]
 pub struct StorageDoctorProjection {
     sender: tokio::sync::mpsc::Sender<DoctorJob>,
-    presence: Arc<dyn HerdrPresenceDoctor>,
+    endpoint_doctor: Arc<dyn HerdrEndpointDoctor>,
     reader_lanes: Option<ReaderPoolDoctorReport>,
     workers: Arc<DoctorWorkers>,
 }
@@ -102,7 +102,7 @@ impl StorageDoctorProjection {
             AtmError::daemon_unavailable("doctor projection must start inside the Tokio runtime")
         })?;
         let (sender, receiver) = tokio::sync::mpsc::channel(config.queue_depth);
-        let presence = Arc::clone(&doctor_ports.herdr_presence);
+        let endpoint_doctor = Arc::clone(&doctor_ports.herdr_endpoint);
         let reader_lanes = config.reader_lanes;
         let receiver = Arc::new(tokio::sync::Mutex::new(receiver));
         let mut handles = Vec::with_capacity(config.worker_count);
@@ -117,7 +117,7 @@ impl StorageDoctorProjection {
         }
         Ok(Self {
             sender,
-            presence,
+            endpoint_doctor,
             reader_lanes,
             workers: Arc::new(DoctorWorkers { handles }),
         })
@@ -172,8 +172,9 @@ impl StorageDoctorProjection {
         let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::daemon_unavailable("doctor request deadline expired before Herdr projection")
         })?;
-        match tokio::time::timeout(remaining, self.presence.probe(roster, deadline)).await {
-            Ok(findings) => append_doctor_findings(report, findings),
+        match tokio::time::timeout(remaining, self.endpoint_doctor.observe(roster, deadline)).await
+        {
+            Ok(observations) => append_doctor_findings(report, presence_findings(&observations)),
             Err(_) => append_doctor_findings(
                 report,
                 vec![DoctorFinding {
