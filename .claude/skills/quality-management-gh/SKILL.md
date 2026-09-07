@@ -29,11 +29,14 @@ Before composing or sending a QA report, install daemon-readable copies with:
 mkdir -p ~/.atm/templates/quality-management-gh && cp .claude/skills/quality-management-gh/*.j2 ~/.atm/templates/quality-management-gh/
 ```
 
-Start each report vars file from
-`.claude/skills/quality-management-gh/example-vars.json`. It includes every
-required variable for both report templates; retain numeric values as JSON
-numbers and keep `blocking_ids_json` as a JSON string because the templates
-embed it as JSON.
+Build the `--vars` JSON for this run from the selected template's frontmatter
+`required_variables`; both templates list them. Every value comes from the
+run: `task_id` from the QA assignment, `commit` from `git rev-parse`, and
+counts from the reviewer outputs. Keep numeric fields as JSON numbers and
+`blocking_ids_json` as a JSON string because the templates embed it as JSON.
+A vars file must never be copied from a previous report or a sample; a report
+whose `sprint_id`, `task_id`, or `commit` do not match the assignment is a
+false report.
 
 ## Required QA Status Contract
 

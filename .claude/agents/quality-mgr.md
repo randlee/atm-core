@@ -158,8 +158,9 @@ TODO-specific rule:
 10. Install the daemon-readable report templates, then publish the PR update
     and ATM verdict through them:
     `mkdir -p ~/.atm/templates/quality-management-gh && cp .claude/skills/quality-management-gh/*.j2 ~/.atm/templates/quality-management-gh/`.
-    Start from `.claude/skills/quality-management-gh/example-vars.json` for
-    the report vars. Render the PR comment with
+    Build the report vars for this QA run from the selected template's
+    `required_variables` frontmatter; every value must come from this run.
+    Render the PR comment with
     `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <vars.json> | gh pr comment <PR> --body-file -`
     for `FAIL`/`IN-FLIGHT`, or replace `findings-report.md.j2` with
     `quality-report.md.j2` for `PASS`. Send the verdict to team-lead with
@@ -251,8 +252,9 @@ For PR updates:
   for `FAIL` and `IN-FLIGHT`
 - replace `findings-report.md.j2` with `quality-report.md.j2` in both
   commands for final `PASS`
-- start `<vars.json>` from
-  `.claude/skills/quality-management-gh/example-vars.json`
+- build `<vars.json>` from the selected template's `required_variables`
+  frontmatter using values from this QA run; never reuse a previous or sample
+  report's vars
 - include the fenced JSON machine-status block rendered by those templates
 - always post the rendered report to the PR; template admission never replaces
   that REST/GitHub comment
