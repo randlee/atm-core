@@ -202,6 +202,12 @@ file and offending key/value named according to AY.3's error contract.
   2026-09-07 as a C1a plan defect found during AY.9 D4, arch-ctm msg
   01M1Y9F78Z4Q1W4K5NHHA294AQ; conversion stays in transport.rs so
   `HerdrEndpoint` never crosses the crate)
+- `boundaries/atm-core/herdr-endpoint-doctor.toml` (composition root and
+  status notes updated so `atm_herdr::transport` is the recorded caller of
+  `HerdrEndpointDisplay::from_relative` in place of `doctor_probe`; added
+  by fenix 2026-09-07 for AY9-QA-001, the doctor_probe.rs amendment above
+  relocated the sanitizer call but left the boundary record stale;
+  boundary-guard review required as for any boundary-policy change)
 - `crates/atm-architecture/tests/boundary_enforcement.rs` (forbidden-edge
   grep for `HerdrEndpoint`, factory pin)
 - `docs/atm-herdr/architecture.md`, `docs/atm-herdr/requirements.md`,
