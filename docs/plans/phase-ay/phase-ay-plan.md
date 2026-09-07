@@ -1074,7 +1074,7 @@ decision below is recorded, (2) AY.11 has merged and its parity evidence
 from the rand-m4 dogfood run is recorded under rework item 7, and (3)
 item 7's own decision line is filled in. If that decision is "drop poll",
 AY.12 merges into integrate/phase-ay before the develop PR opens; "keep
-both" and "stop" close the phase without AY.12. There is no interim
+both" and "stop subscription work" close the phase without AY.12. There is no interim
 develop merge between AY.9 and AY.11. quality-mgr's phase-ending gate
 refuses the develop PR while either decision line below is missing.
 
@@ -1890,3 +1890,10 @@ round below is PASS or every finding has an accepted disposition.
   restate the AY.8b parent override (fixed); PLAN-CRIT-M3 AY.12 option
   `stop` easy to confuse with `stop AY.10` (fixed: renamed `stop
   subscription work`, grep updated).
+- plan-scope-reviewer r7 (PASS, 0 findings; reviewed 17244c653;
+  PLAN-SCOPE-601 confirmed fixed; AY.10 split acceptance mapping, AY.10
+  out-of-scope wording, and the AY.12 option rename verified consistent).
+- critical-plan-reviewer r7 (FAIL, 0 blocking / 1 important; reviewed
+  17244c653; PLAN-CRIT-601/602/603/M2 and PLAN-SCOPE-601 confirmed fixed):
+  PLAN-CRIT-701 (M3 reopened) exit-gate prose still said bare "stop"
+  (fixed: "stop subscription work"; no bare "stop" reference remains).
