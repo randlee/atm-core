@@ -4,8 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use atm_core::types::AgentName;
-use atm_core::{HerdrSession, RequestDeadline};
+use atm_core::{HerdrAgentName, HerdrSession, RequestDeadline};
 use atm_herdr::testing::production_invoker_with_test_binary_and_environment;
 use atm_herdr::{HerdrError, HerdrProcessAdapter};
 
@@ -94,7 +93,7 @@ async fn get_with_deadline(
     session: Option<&HerdrSession>,
     deadline: RequestDeadline,
 ) -> Result<atm_herdr::HerdrGetOutcome, HerdrError> {
-    let agent: AgentName = "fixture-agent".parse().expect("agent name");
+    let agent = HerdrAgentName::new("fixture-agent").expect("agent name");
     invoker
         .get(&agent, session, deadline, atm_herdr::BreakerPolicy::Shared)
         .await
@@ -344,7 +343,7 @@ async fn socket_fixture_matrix_covers_stalled_write_and_cancellation() {
     let server = fake_herdr_socket::FakeHerdrSocket::bind(&stalled_write).expect("bind");
     let task = tokio::spawn(server.stall_before_read());
     let invoker = atm_herdr::testing::production_invoker_with_test_socket(stalled_write);
-    let agent: AgentName = "fixture-agent".parse().expect("agent name");
+    let agent = HerdrAgentName::new("fixture-agent").expect("agent name");
     let prompt = "synthetic stalled-write fixture\n".repeat(512 * 1024);
     let result = atm_herdr::testing::socket_prompt(
         &invoker,

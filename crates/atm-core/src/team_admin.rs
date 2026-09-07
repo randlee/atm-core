@@ -65,12 +65,8 @@ pub struct MemberSummary {
         skip_serializing_if = "Option::is_none"
     )]
     pub herdr_session: Option<String>,
-    #[serde(
-        rename = "herdrAgent",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub herdr_agent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alias: Option<String>,
     /// Canonical typed backend projection used by runtime doctor consumers.
     /// This is an internal transport detail and never changes the JSON shape.
     #[serde(skip)]
@@ -826,6 +822,7 @@ mod tests {
                 model: None,
                 tmux_pane_id: None,
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -860,6 +857,8 @@ mod tests {
                 backend: Some("herdr"),
                 target: None,
                 session: Some("team-a"),
+                alias: None,
+                clear_alias: false,
             },
         )
         .expect("Herdr request");
@@ -880,6 +879,8 @@ mod tests {
                 backend: Some("herdr"),
                 target: None,
                 session: None,
+                alias: None,
+                clear_alias: false,
             },
         )
         .expect_err("Herdr grammar must be strict");
@@ -901,6 +902,8 @@ mod tests {
                 backend: Some("herdr"),
                 target: None,
                 session: Some("team-a"),
+                alias: None,
+                clear_alias: false,
             },
         )
         .expect("Herdr request");
@@ -959,6 +962,7 @@ mod tests {
                 member_home_dir: tempdir.path().to_path_buf().into(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("7").expect("pane")),
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -999,6 +1003,7 @@ mod tests {
                 member_home_dir: tempdir.path().to_path_buf().into(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("session:1.2").expect("pane")),
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1127,6 +1132,7 @@ mod tests {
                 member_home_dir: tempdir.path().to_path_buf().into(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%12").expect("pane")),
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1326,6 +1332,7 @@ mod tests {
                 model: Some(crate::types::ModelName::new("gpt-5").expect("model")),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("22").expect("pane")),
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1389,6 +1396,7 @@ mod tests {
                 model: None,
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%0").expect("pane")),
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1409,6 +1417,7 @@ mod tests {
                 model: None,
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%1").expect("pane")),
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1458,6 +1467,7 @@ mod tests {
                 model: None,
                 tmux_pane_id: None,
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1489,6 +1499,7 @@ mod tests {
                 model: None,
                 tmux_pane_id: None,
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1520,6 +1531,7 @@ mod tests {
                 model: None,
                 tmux_pane_id: None,
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },

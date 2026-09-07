@@ -79,6 +79,12 @@ struct AddMemberCommand {
     session: Option<String>,
 
     #[arg(
+        long,
+        help = "durable roster alias; Herdr members use it as their live-agent target"
+    )]
+    alias: Option<String>,
+
+    #[arg(
         long = "pane-id",
         help = "deprecated compatibility spelling for --backend tmux --target"
     )]
@@ -123,6 +129,15 @@ struct UpdateMemberCommand {
 
     #[arg(long, help = "Herdr session name; only valid with --backend herdr")]
     session: Option<String>,
+
+    #[arg(
+        long,
+        help = "durable roster alias; Herdr members use it as their live-agent target"
+    )]
+    alias: Option<String>,
+
+    #[arg(long, help = "remove the member's durable roster alias")]
+    clear_alias: bool,
 
     #[arg(
         long = "pane-id",
@@ -360,10 +375,14 @@ impl AddMemberCommand {
         member_home_dir: PathBuf,
     ) -> Result<AddMemberRequest> {
         let host = self.host.clone();
-        let request = if self.backend.is_some() || self.target.is_some() || self.session.is_some() {
+        let request = if self.backend.is_some()
+            || self.target.is_some()
+            || self.session.is_some()
+            || self.alias.is_some()
+        {
             if self.pane_id.is_some() {
                 return Err(anyhow::anyhow!(
-                    "--pane-id cannot be combined with --backend, --target, or --session"
+                    "--pane-id cannot be combined with --backend, --target, --session, or --alias"
                 ));
             }
             AddMemberRequest::new_with_backend(
@@ -377,6 +396,8 @@ impl AddMemberCommand {
                     backend: self.backend.as_deref(),
                     target: self.target.as_deref(),
                     session: self.session.as_deref(),
+                    alias: self.alias.as_deref(),
+                    clear_alias: false,
                 },
             )
         } else {
@@ -487,10 +508,15 @@ impl UpdateMemberCommand {
 
     fn build_request(self, caller_context: CallerContext) -> Result<UpdateMemberRequest> {
         let host = self.host.clone();
-        let request = if self.backend.is_some() || self.target.is_some() || self.session.is_some() {
+        let request = if self.backend.is_some()
+            || self.target.is_some()
+            || self.session.is_some()
+            || self.alias.is_some()
+            || self.clear_alias
+        {
             if self.pane_id.is_some() {
                 return Err(anyhow::anyhow!(
-                    "--pane-id cannot be combined with --backend, --target, or --session"
+                    "--pane-id cannot be combined with --backend, --target, --session, or --alias"
                 ));
             }
             UpdateMemberRequest::new_with_backend(
@@ -507,6 +533,8 @@ impl UpdateMemberCommand {
                     backend: self.backend.as_deref(),
                     target: self.target.as_deref(),
                     session: self.session.as_deref(),
+                    alias: self.alias.as_deref(),
+                    clear_alias: self.clear_alias,
                 },
             )
         } else {
@@ -639,6 +667,8 @@ mod tests {
                 backend: None,
                 target: None,
                 session: None,
+                alias: None,
+                clear_alias: false,
                 pane_id: Some("%19".to_string()),
                 host: None,
                 json,
@@ -804,6 +834,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             pane_id: None,
             host: None,
             json: false,
@@ -828,6 +859,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             pane_id: None,
             host: None,
             json: false,
@@ -920,6 +952,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             pane_id: Some("17".to_string()),
             host: None,
             json: false,
@@ -947,6 +980,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             pane_id: None,
             host: Some("rand-m5.local".to_string()),
             json: false,
@@ -975,6 +1009,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             pane_id: None,
             host: Some("has a space".to_string()),
             json: false,
@@ -1000,6 +1035,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             pane_id: None,
             host: None,
             json: false,
@@ -1041,6 +1077,8 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
+            clear_alias: false,
             pane_id: Some("17".to_string()),
             host: None,
             json: true,
@@ -1079,6 +1117,8 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
+            clear_alias: false,
             pane_id: None,
             host: Some("fastpc4.local".to_string()),
             json: false,
@@ -1112,6 +1152,8 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
+            clear_alias: false,
             pane_id: None,
             host: Some("has a space".to_string()),
             json: false,
@@ -1290,6 +1332,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             json: true,
         };
 
@@ -1325,6 +1368,8 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
+            clear_alias: false,
             json: true,
         };
 

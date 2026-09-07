@@ -1,4 +1,3 @@
-use crate::HerdrSession;
 use crate::boundary::{RosterEntry, RosterHarness};
 use crate::delivery_channel::{
     DeliveryChannel, GraftLeaseState, classify_delivery_channel, graft_lease_state,
@@ -9,6 +8,7 @@ use crate::provenance::ValidatedWriteProvenance;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::{GRAFT_RECEIVER_LEASE_LOOKUP_DEADLINE, RetainedServiceRuntime};
 use crate::types::{AgentName, PaneId, TeamName};
+use crate::{HerdrAgentName, HerdrSession};
 
 #[expect(
     dead_code,
@@ -62,6 +62,7 @@ pub(crate) struct DeliveryRecipientSnapshot {
     pub(crate) recipient_pane_id: Option<PaneId>,
     pub(crate) local_tmux_post_send: bool,
     pub(crate) local_herdr_post_send: bool,
+    pub(crate) herdr_agent: Option<HerdrAgentName>,
     pub(crate) herdr_session: Option<HerdrSession>,
     pub(crate) graft_post_send: bool,
     pub(crate) bare_cli_post_send: bool,
@@ -77,6 +78,7 @@ impl DeliveryRecipientSnapshot {
             recipient_pane_id: None,
             local_tmux_post_send: false,
             local_herdr_post_send: false,
+            herdr_agent: None,
             herdr_session: None,
             graft_post_send: false,
             bare_cli_post_send: false,
@@ -92,11 +94,12 @@ impl DeliveryRecipientSnapshot {
         let delivery_channel = classify_delivery_channel(local_backend.as_ref(), graft_lease);
         let local_tmux_post_send = delivery_channel == DeliveryChannel::TmuxSteer;
         let local_herdr_post_send = delivery_channel == DeliveryChannel::HerdrSteer;
-        let herdr_session = match local_backend.as_ref() {
+        let (herdr_agent, herdr_session) = match local_backend.as_ref() {
             Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr {
-                session, ..
-            }) => session.clone(),
-            _ => None,
+                agent,
+                session,
+            }) => (agent.clone(), session.clone()),
+            _ => (None, None),
         };
         let graft_post_send = delivery_channel == DeliveryChannel::Graft;
         let bare_cli_post_send = delivery_channel == DeliveryChannel::BareCli;
@@ -107,6 +110,7 @@ impl DeliveryRecipientSnapshot {
             recipient_pane_id: member.recipient_pane_id,
             local_tmux_post_send,
             local_herdr_post_send,
+            herdr_agent,
             herdr_session,
             graft_post_send,
             bare_cli_post_send,

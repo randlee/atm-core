@@ -16,7 +16,7 @@ use crate::types::{AgentName, CommandAction, TaskId};
 
 use super::{
     DeliveryPersistenceResult, ResolvedRecipient, SendCommandOutcome, SendOutcome, SendRequest,
-    WarningEntry, resolve_recipient, validate_non_self_recipient,
+    WarningEntry, resolve_recipient, resolve_roster_alias, validate_non_self_recipient,
 };
 
 #[expect(
@@ -93,7 +93,12 @@ pub(crate) fn prepare_send_context<
     // This is the durable-admission half of the pipeline. A daemon must not
     // inspect caller workspace or hook configuration before a durable reply.
     let warnings = Vec::new();
-    let canonical_sender = request.caller_identity.clone();
+    let sender_roster = runtime.load_team_roster(&request.caller_team);
+    let canonical_sender = resolve_roster_alias(
+        &request.caller_identity,
+        &request.caller_team,
+        &sender_roster,
+    );
     let target = request.to.as_ref().ok_or_else(|| {
         AtmError::validation("write request destination must be resolved before persistence")
     })?;
@@ -106,7 +111,14 @@ pub(crate) fn prepare_send_context<
             origin_timestamp: request.origin_timestamp.is_some(),
         },
     )?;
-    let recipient = resolve_recipient(target, &request.caller_team, None)?;
+    let config = runtime.load_config(&request.current_dir)?;
+    let mut recipient = resolve_recipient(target, &request.caller_team, config.as_ref())?;
+    let recipient_roster = if recipient.team == request.caller_team {
+        sender_roster
+    } else {
+        runtime.load_team_roster(&recipient.team)
+    };
+    recipient.agent = resolve_roster_alias(&recipient.agent, &recipient.team, &recipient_roster);
     validate_non_self_recipient(
         &canonical_sender,
         &request.caller_team,

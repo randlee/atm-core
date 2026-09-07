@@ -94,6 +94,7 @@ pub(crate) struct TestRuntime {
     commit_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
     claude_roster_members: Vec<AgentName>,
+    team_roster_override: Option<Vec<RosterEntry>>,
     pub(crate) roster_member_missing: bool,
     pub(super) appended_messages: Mutex<Vec<InboxMessage>>,
     pub(super) non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
@@ -112,6 +113,7 @@ impl TestRuntime {
             commit_error_message,
             recipient_harness,
             claude_roster_members: vec![AgentName::from_validated("recipient")],
+            team_roster_override: None,
             roster_member_missing: false,
             appended_messages: Mutex::new(Vec::new()),
             non_claude_deliveries: Mutex::new(Vec::new()),
@@ -178,6 +180,12 @@ impl RetainedServiceRuntime for TestRuntime {
         if self.roster_member_missing {
             return None;
         }
+        if let Some(roster) = &self.team_roster_override {
+            return roster
+                .iter()
+                .find(|entry| entry.team_name == *team && entry.agent_name == *agent)
+                .cloned();
+        }
         Some(RosterEntry {
             team_name: team.clone(),
             agent_name: agent.clone(),
@@ -197,19 +205,33 @@ impl RetainedServiceRuntime for TestRuntime {
         if self.roster_member_missing {
             return Vec::new();
         }
-        vec![RosterEntry {
-            team_name: team.clone(),
-            agent_name: AgentName::from_validated("recipient"),
-            member_kind: RosterMemberKind::Permanent,
-            harness: match self.recipient_harness {
-                DeliveryHarnessPath::ClaudeCode => RosterHarness::ClaudeCode,
-                DeliveryHarnessPath::NonClaude => RosterHarness::CodexCli,
-            },
-            agent_type: crate::schema::AgentType::default(),
-            model: crate::types::ModelName::default(),
-            recipient_pane_id: None,
-            metadata_json: Map::new(),
-        }]
+        if let Some(roster) = &self.team_roster_override {
+            return roster
+                .iter()
+                .filter(|entry| entry.team_name == *team)
+                .cloned()
+                .collect();
+        }
+        vec![roster_entry(
+            AgentName::from_validated("recipient"),
+            self.recipient_harness,
+        )]
+    }
+}
+
+fn roster_entry(agent_name: AgentName, harness: DeliveryHarnessPath) -> RosterEntry {
+    RosterEntry {
+        team_name: TeamName::from_validated(TEST_TEAM),
+        agent_name,
+        member_kind: RosterMemberKind::Permanent,
+        harness: match harness {
+            DeliveryHarnessPath::ClaudeCode => RosterHarness::ClaudeCode,
+            DeliveryHarnessPath::NonClaude => RosterHarness::CodexCli,
+        },
+        agent_type: crate::schema::AgentType::default(),
+        model: crate::types::ModelName::default(),
+        recipient_pane_id: None,
+        metadata_json: Map::new(),
     }
 }
 
@@ -326,6 +348,7 @@ pub(super) fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipie
         recipient_pane_id: None,
         local_tmux_post_send: false,
         local_herdr_post_send: false,
+        herdr_agent: None,
         herdr_session: None,
         graft_post_send: false,
         bare_cli_post_send: false,
@@ -747,6 +770,47 @@ fn send_sqlite_failure_is_an_error_without_outbound_delivery_or_hook() {
             .is_empty(),
         "a failed SQLite admission must not leave a persisted record"
     );
+}
+
+#[test]
+fn send_aliases_are_resolved_before_any_message_is_persisted() {
+    let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    let mut sender = roster_entry(
+        AgentName::from_validated("canonical-sender"),
+        DeliveryHarnessPath::ClaudeCode,
+    );
+    sender
+        .metadata_json
+        .insert("alias".to_string(), serde_json::json!("sender_atm-dev"));
+    let mut recipient = roster_entry(
+        AgentName::from_validated("canonical-recipient"),
+        DeliveryHarnessPath::ClaudeCode,
+    );
+    recipient
+        .metadata_json
+        .insert("alias".to_string(), serde_json::json!("recipient_atm-dev"));
+    runtime.team_roster_override = Some(vec![sender, recipient]);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let mut request = send_request(tempdir.path());
+    request.caller_identity = AgentName::from_validated("sender_atm-dev");
+    request.to = Some(
+        format!("recipient_atm-dev@{TEST_TEAM}")
+            .parse()
+            .expect("alias recipient"),
+    );
+
+    let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect("alias send succeeds");
+    assert_eq!(outcome.sender.as_str(), "canonical-sender");
+    assert_eq!(outcome.agent.as_str(), "canonical-recipient");
+    let records = runtime.persisted_records.lock().expect("records lock");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].agent.as_str(), "canonical-recipient");
+    assert_eq!(records[0].envelope.from.as_str(), "canonical-sender");
+    let serialized = serde_json::to_string(&records[0]).expect("serialize message");
+    assert!(!serialized.contains("sender_atm-dev"));
+    assert!(!serialized.contains("recipient_atm-dev"));
 }
 
 #[test]

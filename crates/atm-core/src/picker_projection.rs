@@ -122,7 +122,7 @@ mod tests {
             tmux_pane_id: None,
             backend: None,
             herdr_session: None,
-            herdr_agent: None,
+            alias: None,
             local_backend: None,
             home_dir: HomeDirPath::from(std::path::PathBuf::from("/home/worker")),
             live_cwd: cwd.map(str::to_string),

@@ -5,7 +5,7 @@ use serde::Serialize;
 use serde_json::json;
 
 use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind, RosterStore};
-use crate::delivery_channel::{HerdrSession, LocalMessageReceivedBackend};
+use crate::delivery_channel::{HerdrAgentName, HerdrSession, LocalMessageReceivedBackend};
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::home;
@@ -24,6 +24,8 @@ pub struct BackendOptions<'a> {
     pub backend: Option<&'a str>,
     pub target: Option<&'a str>,
     pub session: Option<&'a str>,
+    pub alias: Option<&'a str>,
+    pub clear_alias: bool,
 }
 
 /// Parameters for adding one member to a team roster.
@@ -37,6 +39,7 @@ pub struct AddMemberRequest {
     pub member_home_dir: HomeDirPath,
     pub tmux_pane_id: Option<PaneId>,
     pub local_backend: Option<LocalMessageReceivedBackend>,
+    pub alias: Option<String>,
     pub backend_warning: Option<String>,
     /// This member's registered host (ADR-055 decision (e)), or `None` when
     /// unset. Set via [`AddMemberRequest::with_host`].
@@ -64,6 +67,7 @@ impl AddMemberRequest {
             tmux_pane_id: tmux_pane_id.clone(),
             local_backend: tmux_pane_id
                 .map(|pane_id| LocalMessageReceivedBackend::Tmux { pane_id }),
+            alias: None,
             backend_warning: None,
             host: None,
         })
@@ -80,11 +84,13 @@ impl AddMemberRequest {
         options: BackendOptions<'_>,
     ) -> Result<Self, AtmError> {
         let member_name: AgentName = member.parse()?;
+        let alias = parse_alias(options.alias, options.clear_alias, false)?.flatten();
         let local_backend = parse_backend(
             &member_name,
             options.backend,
             options.target,
             options.session,
+            alias.as_deref(),
         )?;
         let backend_warning =
             nonstandard_tmux_warning(&member_name, options.backend, options.target)?;
@@ -101,6 +107,7 @@ impl AddMemberRequest {
             member_home_dir: member_home_dir.into(),
             tmux_pane_id,
             local_backend,
+            alias,
             backend_warning,
             host: None,
         })
@@ -142,6 +149,8 @@ pub struct UpdateMemberRequest {
     pub model: Option<ModelName>,
     pub tmux_pane_id: Option<PaneId>,
     pub local_backend: Option<LocalMessageReceivedBackend>,
+    /// `None` leaves the roster alias unchanged; `Some(None)` clears it.
+    pub alias: Option<Option<String>>,
     pub backend_warning: Option<String>,
     /// This member's registered host (ADR-055 decision (e)); `None` means
     /// "leave unchanged" (the same convention as `harness`/`agent_type`/
@@ -181,6 +190,7 @@ impl UpdateMemberRequest {
                 .clone()
                 .map(|pane_id| LocalMessageReceivedBackend::Tmux { pane_id }),
             tmux_pane_id,
+            alias: None,
             backend_warning: None,
             host: None,
         })
@@ -204,11 +214,13 @@ impl UpdateMemberRequest {
         options: BackendOptions<'_>,
     ) -> Result<Self, AtmError> {
         let member_name: AgentName = member.parse()?;
+        let alias = parse_alias(options.alias, options.clear_alias, true)?;
         let local_backend = parse_backend(
             &member_name,
             options.backend,
             options.target,
             options.session,
+            alias.as_ref().and_then(|value| value.as_deref()),
         )?;
         let backend_warning =
             nonstandard_tmux_warning(&member_name, options.backend, options.target)?;
@@ -228,6 +240,7 @@ impl UpdateMemberRequest {
             model: model.map(ModelName::new).transpose()?,
             tmux_pane_id,
             local_backend,
+            alias,
             backend_warning,
             host: None,
         })
@@ -346,6 +359,13 @@ pub fn update_member_with_roster_store(
         .find(|existing_member| existing_member.agent_name == member_name)
         .ok_or_else(|| AtmError::member_not_found(member_name.as_str(), request.team.as_str()))?;
 
+    if request.alias == Some(None) {
+        ensure_canonical_member_name_available(roster_store, &request.team, &member_name)?;
+    }
+    validate_effective_herdr_agent_name(member, &request)?;
+    if let Some(alias) = request.alias.as_ref().and_then(|value| value.as_deref()) {
+        ensure_alias_available(roster_store, alias)?;
+    }
     apply_member_metadata_update(member, &request);
     roster_store.replace_roster(&request.team, &existing_roster)?;
 
@@ -389,6 +409,12 @@ fn load_member_add_context(
 ) -> Result<MemberAddContext, AtmError> {
     let existing_roster = projection::load_team_roster(roster_store, &request.team)?;
     ensure_member_absent(&existing_roster, &request.team, &request.member)?;
+    if request.alias.is_none() {
+        ensure_canonical_member_name_available(roster_store, &request.team, &request.member)?;
+    }
+    if let Some(alias) = request.alias.as_deref() {
+        ensure_alias_available(roster_store, alias)?;
+    }
     Ok(MemberAddContext { existing_roster })
 }
 
@@ -408,6 +434,78 @@ fn ensure_member_absent(
         ));
     }
     Ok(())
+}
+
+fn ensure_alias_available(roster_store: &dyn RosterStore, alias: &str) -> Result<(), AtmError> {
+    for conflicting_team in roster_store.list_teams()? {
+        for entry in roster_store.load_roster(&conflicting_team)? {
+            if entry.agent_name.as_str() == alias
+                || entry
+                    .metadata_json
+                    .get("alias")
+                    .and_then(serde_json::Value::as_str)
+                    == Some(alias)
+            {
+                return Err(AtmError::validation(format!(
+                    "alias '{alias}' is already assigned in team '{conflicting_team}'"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn ensure_canonical_member_name_available(
+    roster_store: &dyn RosterStore,
+    team: &TeamName,
+    member: &AgentName,
+) -> Result<(), AtmError> {
+    for conflicting_team in roster_store.list_teams()? {
+        if conflicting_team == *team {
+            continue;
+        }
+        if roster_store
+            .load_roster(&conflicting_team)?
+            .iter()
+            .any(|entry| entry.agent_name == *member)
+        {
+            return Err(AtmError::validation(format!(
+                "member '{}' already exists in team '{conflicting_team}'; add it with a unique --alias",
+                member
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_effective_herdr_agent_name(
+    member: &RosterEntry,
+    request: &UpdateMemberRequest,
+) -> Result<(), AtmError> {
+    let requested_herdr = matches!(
+        request.local_backend,
+        Some(LocalMessageReceivedBackend::Herdr { .. })
+    );
+    let retained_herdr = request.local_backend.is_none()
+        && member
+            .metadata_json
+            .get("backendType")
+            .and_then(serde_json::Value::as_str)
+            == Some("herdr");
+    if !(requested_herdr || retained_herdr) {
+        return Ok(());
+    }
+    let alias = request
+        .alias
+        .as_ref()
+        .and_then(|value| value.as_deref())
+        .or_else(|| {
+            member
+                .metadata_json
+                .get("alias")
+                .and_then(serde_json::Value::as_str)
+        });
+    HerdrAgentName::new(alias.unwrap_or(member.agent_name.as_str())).map(|_| ())
 }
 
 fn ensure_member_name_available(member: &AgentName) -> Result<(), AtmError> {
@@ -497,13 +595,10 @@ fn build_member_add_roster_record(request: &AddMemberRequest) -> RosterEntry {
             extra.insert("backendType".to_string(), json!("tmux"));
             extra.insert("isActive".to_string(), json!(true));
         }
-        Some(LocalMessageReceivedBackend::Herdr { session, agent }) => {
+        Some(LocalMessageReceivedBackend::Herdr { session, .. }) => {
             extra.insert("backendType".to_string(), json!("herdr"));
             if let Some(session) = session {
                 extra.insert("herdrSession".to_string(), json!(session.as_str()));
-            }
-            if let Some(agent) = agent {
-                extra.insert("herdrAgent".to_string(), json!(agent.as_str()));
             }
         }
         None if normalized_tmux_pane_id.is_some() => {
@@ -523,6 +618,9 @@ fn build_member_add_roster_record(request: &AddMemberRequest) -> RosterEntry {
         "agentId".to_string(),
         json!(format!("{}@{}", request.member, request.team)),
     );
+    if let Some(alias) = &request.alias {
+        extra.insert("alias".to_string(), json!(alias));
+    }
     extra.insert(
         "joinedAt".to_string(),
         json!(Utc::now().timestamp_millis() as u64),
@@ -586,6 +684,18 @@ fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMember
             json!(host.as_str()),
         );
     }
+    if let Some(alias) = &request.alias {
+        match alias {
+            Some(alias) => {
+                member
+                    .metadata_json
+                    .insert("alias".to_string(), json!(alias));
+            }
+            None => {
+                member.metadata_json.remove("alias");
+            }
+        }
+    }
     match request.local_backend.as_ref() {
         Some(LocalMessageReceivedBackend::Tmux { pane_id }) => {
             member.recipient_pane_id = Some(pane_id.clone());
@@ -597,7 +707,7 @@ fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMember
                 .insert("isActive".to_string(), json!(true));
             member.metadata_json.remove("herdrSession");
         }
-        Some(LocalMessageReceivedBackend::Herdr { session, agent }) => {
+        Some(LocalMessageReceivedBackend::Herdr { session, .. }) => {
             member.recipient_pane_id = None;
             member
                 .metadata_json
@@ -611,16 +721,6 @@ fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMember
                 }
                 None => {
                     member.metadata_json.remove("herdrSession");
-                }
-            }
-            match agent {
-                Some(agent) => {
-                    member
-                        .metadata_json
-                        .insert("herdrAgent".to_string(), json!(agent.as_str()));
-                }
-                None => {
-                    member.metadata_json.remove("herdrAgent");
                 }
             }
         }
@@ -700,6 +800,7 @@ fn parse_backend(
     backend: Option<&str>,
     target: Option<&str>,
     session: Option<&str>,
+    alias: Option<&str>,
 ) -> Result<Option<LocalMessageReceivedBackend>, AtmError> {
     match backend {
         None => {
@@ -733,10 +834,9 @@ fn parse_backend(
                     "--backend herdr does not accept --target",
                 ));
             }
-            if !is_herdr_agent_name(member.as_str()) {
-                return Err(AtmError::validation(format!(
-                    "Herdr agent name must match ^[a-z][a-z0-9_-]{{0,31}}$: {member}"
-                )));
+            if alias.is_none() {
+                // A member without an alias retains its canonical Herdr name.
+                HerdrAgentName::new(member.as_str())?;
             }
             let session = session
                 .map(|value| {
@@ -746,7 +846,7 @@ fn parse_backend(
                 .transpose()?;
             Ok(Some(LocalMessageReceivedBackend::Herdr {
                 session,
-                agent: None,
+                agent: alias.map(HerdrAgentName::new).transpose()?,
             }))
         }
         Some(other) => Err(AtmError::validation(format!(
@@ -755,14 +855,28 @@ fn parse_backend(
     }
 }
 
-fn is_herdr_agent_name(value: &str) -> bool {
-    let mut chars = value.chars();
-    let Some(first) = chars.next() else {
-        return false;
+fn parse_alias(
+    alias: Option<&str>,
+    clear_alias: bool,
+    allow_clear: bool,
+) -> Result<Option<Option<String>>, AtmError> {
+    if clear_alias && alias.is_some_and(|value| !value.trim().is_empty()) {
+        return Err(AtmError::validation(
+            "--alias and --clear-alias cannot be combined",
+        ));
+    }
+    if clear_alias || alias.is_some_and(|value| value.trim().is_empty()) {
+        return if allow_clear {
+            Ok(Some(None))
+        } else {
+            Err(AtmError::validation("add-member --alias must not be blank"))
+        };
+    }
+    let Some(alias) = alias else {
+        return Ok(None);
     };
-    value.len() <= 32
-        && first.is_ascii_lowercase()
-        && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_' || ch == '-')
+    crate::address::validate_path_segment(alias, "alias")?;
+    Ok(Some(Some(alias.to_owned())))
 }
 
 fn nonstandard_tmux_warning(
@@ -979,5 +1093,217 @@ mod tests {
                 .get(crate::send_to::ROSTER_HOST_METADATA_KEY),
             Some(&json!("m5.local"))
         );
+    }
+
+    #[test]
+    fn add_member_persists_alias_without_a_herdr_backend() {
+        let store = TestRosterStore::default();
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        store.seed(&team, vec![lead_member(TEST_TEAM, ROLE_TEAM_LEAD)]);
+        let root = tempfile::tempdir().expect("tempdir");
+        let request = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "worker",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("worker-home"),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("team-lead_atm-dev"),
+                clear_alias: false,
+            },
+        )
+        .expect("alias-only request");
+
+        add_member_with_roster_store(&store, request).expect("add member");
+
+        let worker = store
+            .members(&team)
+            .into_iter()
+            .find(|member| member.agent_name.as_str() == "worker")
+            .expect("worker record");
+        assert_eq!(
+            worker.metadata_json.get("alias"),
+            Some(&json!("team-lead_atm-dev"))
+        );
+    }
+
+    #[test]
+    fn herdr_alias_uses_herdr_agent_name_validation() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let error = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "worker",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("worker-home"),
+            BackendOptions {
+                backend: Some("herdr"),
+                target: None,
+                session: None,
+                alias: Some("TeamLead"),
+                clear_alias: false,
+            },
+        )
+        .expect_err("uppercase Herdr aliases are rejected");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+    }
+
+    #[test]
+    fn alias_must_not_collide_with_member_name_or_team_alias() {
+        let store = TestRosterStore::default();
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        let mut worker = roster_member(TEST_TEAM, "worker");
+        worker
+            .metadata_json
+            .insert("alias".to_string(), json!("worker_atm-dev"));
+        store.seed(&team, vec![lead_member(TEST_TEAM, ROLE_TEAM_LEAD), worker]);
+        let root = tempfile::tempdir().expect("tempdir");
+
+        for alias in ["worker", "worker_atm-dev"] {
+            let request = AddMemberRequest::new_with_backend(
+                root.path().to_path_buf(),
+                TEST_TEAM,
+                "other",
+                "worker".to_owned(),
+                "gpt-5".to_owned(),
+                root.path().join("other-home"),
+                BackendOptions {
+                    backend: None,
+                    target: None,
+                    session: None,
+                    alias: Some(alias),
+                    clear_alias: false,
+                },
+            )
+            .expect("request");
+
+            let error = add_member_with_roster_store(&store, request).expect_err("alias collision");
+            assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        }
+    }
+
+    #[test]
+    fn cross_team_member_names_require_alias_but_first_occurrence_does_not() {
+        let store = TestRosterStore::default();
+        let first_team: TeamName = "other-team".parse().expect("team");
+        store.seed(&first_team, vec![lead_member("other-team", "team-lead")]);
+        let root = tempfile::tempdir().expect("tempdir");
+        let no_alias = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "team-lead",
+            "lead".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("duplicate-home"),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: None,
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+        let error = add_member_with_roster_store(&store, no_alias).expect_err("duplicate name");
+        assert!(error.message().contains("other-team"));
+        assert!(error.message().contains("--alias"));
+
+        let with_alias = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "team-lead",
+            "lead".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("aliased-home"),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("team-lead_atm-dev"),
+                clear_alias: false,
+            },
+        )
+        .expect("aliased request");
+        add_member_with_roster_store(&store, with_alias).expect("alias resolves duplicate name");
+    }
+
+    #[test]
+    fn clearing_alias_is_rejected_when_the_canonical_name_is_cross_team_duplicate() {
+        let store = TestRosterStore::default();
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        let other: TeamName = "other-team".parse().expect("team");
+        let mut local = lead_member(TEST_TEAM, "team-lead");
+        local
+            .metadata_json
+            .insert("alias".to_string(), json!("team-lead_atm-dev"));
+        store.seed(&team, vec![local]);
+        store.seed(&other, vec![lead_member("other-team", "team-lead")]);
+        let request = UpdateMemberRequest::new_with_backend(
+            "team-lead".parse().expect("caller"),
+            team.clone(),
+            TEST_TEAM,
+            "team-lead",
+            None,
+            None,
+            None,
+            None,
+            None,
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: None,
+                clear_alias: true,
+            },
+        )
+        .expect("clear request");
+        let error = update_member_with_roster_store(&store, request).expect_err("duplicate name");
+        assert!(error.message().contains("other-team"));
+        assert!(error.message().contains("--alias"));
+    }
+
+    #[test]
+    fn update_member_can_clear_an_existing_alias() {
+        let store = TestRosterStore::default();
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        let mut worker = roster_member(TEST_TEAM, "worker");
+        worker
+            .metadata_json
+            .insert("alias".to_string(), json!("worker_atm-dev"));
+        store.seed(&team, vec![lead_member(TEST_TEAM, ROLE_TEAM_LEAD), worker]);
+        let request = UpdateMemberRequest::new_with_backend(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            team.clone(),
+            TEST_TEAM,
+            "worker",
+            None,
+            None,
+            None,
+            None,
+            None,
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: None,
+                clear_alias: true,
+            },
+        )
+        .expect("clear-alias request");
+
+        update_member_with_roster_store(&store, request).expect("update member");
+
+        let worker = store
+            .members(&team)
+            .into_iter()
+            .find(|member| member.agent_name.as_str() == "worker")
+            .expect("worker record");
+        assert!(!worker.metadata_json.contains_key("alias"));
     }
 }

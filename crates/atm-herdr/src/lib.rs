@@ -5,8 +5,8 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+pub use atm_core::HerdrAgentName;
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::types::AgentName;
 use atm_core::{HerdrSession, RequestDeadline};
 
 mod doctor_probe;
@@ -247,7 +247,7 @@ impl HerdrError {
 pub trait HerdrProcessAdapter: Send + Sync {
     fn prompt<'a>(
         &'a self,
-        agent: &'a AgentName,
+        agent: &'a HerdrAgentName,
         session: Option<&'a HerdrSession>,
         text: &'a str,
         deadline: RequestDeadline,
@@ -255,7 +255,7 @@ pub trait HerdrProcessAdapter: Send + Sync {
 
     fn wait<'a>(
         &'a self,
-        agent: &'a AgentName,
+        agent: &'a HerdrAgentName,
         session: Option<&'a HerdrSession>,
         until: &'a [HerdrAgentStatus],
         timeout: Duration,
@@ -264,7 +264,7 @@ pub trait HerdrProcessAdapter: Send + Sync {
 
     fn get<'a>(
         &'a self,
-        agent: &'a AgentName,
+        agent: &'a HerdrAgentName,
         session: Option<&'a HerdrSession>,
         deadline: RequestDeadline,
         breaker_policy: BreakerPolicy,
@@ -494,7 +494,7 @@ fn validate_prompt_text(text: &str) -> Result<(), HerdrError> {
 impl HerdrProcessAdapter for HerdrProcessInvoker {
     fn prompt<'a>(
         &'a self,
-        agent: &'a AgentName,
+        agent: &'a HerdrAgentName,
         session: Option<&'a HerdrSession>,
         text: &'a str,
         deadline: RequestDeadline,
@@ -519,7 +519,7 @@ impl HerdrProcessAdapter for HerdrProcessInvoker {
 
     fn wait<'a>(
         &'a self,
-        agent: &'a AgentName,
+        agent: &'a HerdrAgentName,
         session: Option<&'a HerdrSession>,
         until: &'a [HerdrAgentStatus],
         timeout: Duration,
@@ -546,7 +546,7 @@ impl HerdrProcessAdapter for HerdrProcessInvoker {
 
     fn get<'a>(
         &'a self,
-        agent: &'a AgentName,
+        agent: &'a HerdrAgentName,
         session: Option<&'a HerdrSession>,
         deadline: RequestDeadline,
         breaker_policy: BreakerPolicy,
@@ -698,7 +698,7 @@ pub mod testing {
     /// a direct prompt call site to an integration fixture.
     pub async fn socket_prompt(
         invoker: &HerdrProcessInvoker,
-        agent: &AgentName,
+        agent: &HerdrAgentName,
         text: &str,
         deadline: RequestDeadline,
     ) -> Result<HerdrPromptOutcome, HerdrError> {
@@ -781,7 +781,7 @@ pub mod testing {
         }
     }
 
-    fn default_snapshot(agent: &AgentName) -> AgentSnapshot {
+    fn default_snapshot(agent: &HerdrAgentName) -> AgentSnapshot {
         AgentSnapshot {
             name: Some(agent.to_string()),
             status: HerdrAgentStatus::Idle,
@@ -792,7 +792,7 @@ pub mod testing {
     impl HerdrProcessAdapter for FakeHerdrProcessAdapter {
         fn prompt<'a>(
             &'a self,
-            agent: &'a AgentName,
+            agent: &'a HerdrAgentName,
             session: Option<&'a HerdrSession>,
             text: &'a str,
             _deadline: RequestDeadline,
@@ -823,7 +823,7 @@ pub mod testing {
 
         fn wait<'a>(
             &'a self,
-            agent: &'a AgentName,
+            agent: &'a HerdrAgentName,
             session: Option<&'a HerdrSession>,
             until: &'a [HerdrAgentStatus],
             timeout: Duration,
@@ -854,7 +854,7 @@ pub mod testing {
 
         fn get<'a>(
             &'a self,
-            agent: &'a AgentName,
+            agent: &'a HerdrAgentName,
             session: Option<&'a HerdrSession>,
             _deadline: RequestDeadline,
             breaker_policy: BreakerPolicy,
@@ -1084,7 +1084,7 @@ mod tests {
 
     #[test]
     fn every_adapter_argv_matches_the_herdr_contract() {
-        let agent: AgentName = "alice".parse().expect("agent");
+        let agent = HerdrAgentName::new("alice").expect("agent");
         let text = "line one\nline two\nline three\nline four\nline five\nline six";
         let args = transport_cli::command_args(HerdrOp::Prompt {
             agent: &agent,
@@ -1149,7 +1149,7 @@ mod tests {
 
     #[tokio::test]
     async fn empty_prompt_is_rejected_before_process_spawn() {
-        let agent: AgentName = "alice".parse().expect("agent");
+        let agent = HerdrAgentName::new("alice").expect("agent");
         let invoker = HerdrProcessInvoker {
             breaker: Arc::new(HerdrSpawnBreaker::default()),
             io: HerdrIo::default(),

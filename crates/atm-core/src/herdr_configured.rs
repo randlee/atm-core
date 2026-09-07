@@ -40,7 +40,7 @@ mod tests {
             tmux_pane_id: None,
             backend: None,
             herdr_session: None,
-            herdr_agent: None,
+            alias: None,
             local_backend,
             home_dir: HomeDirPath::default(),
             live_cwd: None,

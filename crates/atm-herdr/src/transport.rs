@@ -6,8 +6,8 @@ use std::time::Duration;
 use atm_core::doctor::{
     HerdrEndpointDisplay, HerdrEndpointDisplayRoot, HerdrTransportKind, HerdrVersion,
 };
+use atm_core::HerdrAgentName;
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::types::AgentName;
 use atm_core::{HerdrSession, RequestDeadline};
 use serde_json::Value;
 
@@ -85,16 +85,16 @@ impl HerdrClientConfig {
 /// One request the private Herdr transport can carry.
 pub(crate) enum HerdrOp<'a> {
     Prompt {
-        agent: &'a AgentName,
+        agent: &'a HerdrAgentName,
         text: &'a str,
     },
     Wait {
-        agent: &'a AgentName,
+        agent: &'a HerdrAgentName,
         until: &'a [HerdrAgentStatus],
         timeout: Duration,
     },
     Get {
-        agent: &'a AgentName,
+        agent: &'a HerdrAgentName,
     },
     List,
     StatusServer,

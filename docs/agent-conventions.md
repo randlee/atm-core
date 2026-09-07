@@ -1,5 +1,25 @@
 # ATM agent conventions
 
+## Durable roster aliases for shared Herdr servers
+
+An ATM member's canonical name remains its routing, audit, and persisted
+message identity. A member may additionally have a durable roster `alias` in
+the SQLite-backed `metadata_json`. For a Herdr member, that alias is the
+unique live-agent target on a shared Herdr server; without one, ATM uses the
+canonical member name as before.
+
+Set an alias with `atm teams add-member ... --alias <name>` or `atm teams
+update-member ... --alias <name>`; remove it with `--clear-alias`. Aliases are
+team-scoped, must not collide with a canonical member name or another alias,
+and use normal ATM path-segment validation. A Herdr member's alias must also
+match `[a-z][a-z0-9_-]{0,31}`. Use `<identity>_<team>` when teams share one
+Herdr server, for example `team-lead_atm-dev`.
+
+`atm send <alias>` and `atm send <alias>@<team>` resolve to the canonical
+roster member before self-send validation and mailbox lookup. Workspace
+`.atm.toml` aliases take precedence. `ATM_IDENTITY=<alias>` and `--as <alias>`
+likewise resolve to the canonical sender identity.
+
 ## AQ2 dual-channel delivery
 
 For an `atm-graft` message-received delivery, the agent loop receives the

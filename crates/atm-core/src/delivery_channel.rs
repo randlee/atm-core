@@ -66,7 +66,7 @@ impl fmt::Display for HerdrSession {
 /// One validated live-agent name on a shared Herdr server.
 ///
 /// This is deliberately distinct from an ATM [`AgentName`]: a roster member
-/// keeps its ATM identity while `herdrAgent` selects its unique server-side
+/// keeps its ATM identity while its roster `alias` selects its unique server-side
 /// target.  It lives in atm-core because durable roster metadata and runtime
 /// target selection must not introduce an atm-core -> atm-herdr dependency.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -203,7 +203,7 @@ pub fn test_backend_type_metadata(backend: &str) -> serde_json::Map<String, Valu
 /// Derives the local backend from durable roster data. No schema migration:
 /// `recipient_pane_id` selects `Tmux`;
 /// `metadata_json["backendType"] == "herdr"` selects `Herdr`, reading an
-/// optional `metadata_json["herdrSession"]` and `metadata_json["herdrAgent"]`
+/// optional `metadata_json["herdrSession"]` and `metadata_json["alias"]`
 /// string. An unparsable value is treated as absent and logged, not rejected.
 #[must_use]
 pub fn local_message_received_backend(
@@ -241,19 +241,19 @@ pub fn local_message_received_backend(
         });
     let agent = member
         .metadata_json
-        .get("herdrAgent")
+        .get("alias")
         .and_then(Value::as_str)
         .and_then(|raw| match HerdrAgentName::new(raw) {
             Ok(agent) => Some(agent),
             Err(error) => {
                 tracing::warn!(
                     subsystem = "atm_core.delivery_channel",
-                    action = "herdr_agent_parse",
+                    action = "herdr_alias_parse",
                     outcome = "failed",
                     agent = %member.agent_name,
                     team = %member.team_name,
                     %error,
-                    "ignoring invalid herdrAgent roster metadata"
+                    "ignoring invalid Herdr roster alias metadata"
                 );
                 None
             }
@@ -399,14 +399,14 @@ mod tests {
     }
 
     #[test]
-    fn local_message_received_backend_reads_optional_herdr_agent() {
+    fn local_message_received_backend_reads_optional_herdr_alias() {
         let mut member = roster_entry();
         member.metadata_json.insert(
             BACKEND_TYPE_METADATA_KEY.to_owned(),
             Value::String("herdr".to_owned()),
         );
         member.metadata_json.insert(
-            "herdrAgent".to_owned(),
+            "alias".to_owned(),
             Value::String("shared_team_lead".to_owned()),
         );
 
@@ -420,14 +420,14 @@ mod tests {
     }
 
     #[test]
-    fn local_message_received_backend_treats_invalid_herdr_agent_as_absent() {
+    fn local_message_received_backend_treats_invalid_herdr_alias_as_absent() {
         let mut member = roster_entry();
         member.metadata_json.insert(
             BACKEND_TYPE_METADATA_KEY.to_owned(),
             Value::String("herdr".to_owned()),
         );
         member.metadata_json.insert(
-            "herdrAgent".to_owned(),
+            "alias".to_owned(),
             Value::String("Not-A-Herdr-Agent".to_owned()),
         );
 

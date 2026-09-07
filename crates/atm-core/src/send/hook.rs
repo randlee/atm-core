@@ -1,6 +1,7 @@
 use tracing::warn;
 
 use super::{ResolvedRecipient, nudge_template};
+use crate::HerdrAgentName;
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, HerdrNudgeTarget, LocalSteerTarget,
     LocalTmuxNudgeTarget, NudgeKind, PostSendBuiltInTarget, PostSendHookEvent, QueuePullTarget,
@@ -55,6 +56,10 @@ where
         return Ok(Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
+                agent: delivery_snapshot
+                    .herdr_agent
+                    .clone()
+                    .unwrap_or_else(|| HerdrAgentName::from(&event.recipient)),
                 session: delivery_snapshot.herdr_session.clone(),
                 rendered_nudge,
             })),

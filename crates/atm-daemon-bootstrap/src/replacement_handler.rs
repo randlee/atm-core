@@ -127,7 +127,9 @@ fn herdr_roster_groups(
         .members
         .iter()
         .filter_map(|member| match member.local_message_received_backend() {
-            Some(atm_core::LocalMessageReceivedBackend::Herdr { session }) => Some(session.clone()),
+            Some(atm_core::LocalMessageReceivedBackend::Herdr { session, .. }) => {
+                Some(session.clone())
+            }
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -149,9 +151,13 @@ fn herdr_roster_groups(
                     |(ordinal, member)| match member.local_message_received_backend() {
                         Some(atm_core::LocalMessageReceivedBackend::Herdr {
                             session: member_session,
+                            agent,
                         }) if *member_session == session => Some(HerdrRosterMember {
                             ordinal,
                             name: member.name.clone(),
+                            herdr_agent: agent
+                                .clone()
+                                .unwrap_or_else(|| atm_core::HerdrAgentName::from(&member.name)),
                         }),
                         _ => None,
                     },
@@ -382,8 +388,10 @@ mod tests {
             tmux_pane_id: None,
             backend: None,
             herdr_session: None,
+            alias: None,
             local_backend: Some(LocalMessageReceivedBackend::Herdr {
                 session: session.map(|value| HerdrSession::new(value).expect("valid test session")),
+                agent: None,
             }),
             home_dir: HomeDirPath::default(),
             live_cwd: None,

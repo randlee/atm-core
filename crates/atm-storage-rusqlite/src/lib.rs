@@ -1036,7 +1036,7 @@ mod tests {
     use chrono::Utc;
     use rusqlite::{Connection, OptionalExtension, params};
     use serde_json::Map;
-    use std::sync::Arc;
+    use std::sync::{Arc, Barrier};
 
     type OrdinaryMessageColumns = (
         Option<String>,
@@ -3881,6 +3881,65 @@ mod tests {
         let loaded = store.load_roster(&team).expect("load roster");
         assert_eq!(loaded.members.len(), 1);
         assert_eq!(store.list_teams().expect("list teams"), vec![team]);
+    }
+
+    #[test]
+    fn roster_aliases_are_globally_unique_under_the_single_writer_lane() {
+        fn roster(team: &str, agent: &str, alias: Option<&str>) -> RosterSnapshot {
+            let team_name: TeamName = team.parse().expect("team");
+            let mut metadata_json = Map::new();
+            if let Some(alias) = alias {
+                metadata_json.insert("alias".to_string(), serde_json::json!(alias));
+            }
+            RosterSnapshot {
+                team_name: team_name.clone(),
+                members: vec![RosterMember {
+                    team_name,
+                    agent_name: agent.parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Worker,
+                    model: ModelName::default(),
+                    recipient_pane_id: None,
+                    metadata_json,
+                }],
+                refreshed_at: None,
+            }
+        }
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.roster_store();
+        store
+            .save_roster(&roster("team-a", "alpha", Some("shared-alias")))
+            .expect("first alias");
+        let duplicate = store
+            .save_roster(&roster("team-b", "beta", Some("shared-alias")))
+            .expect_err("cross-team duplicate alias");
+        assert!(duplicate.message().contains("team-a"));
+        let canonical = store
+            .save_roster(&roster("team-b", "beta", Some("alpha")))
+            .expect_err("canonical-name collision");
+        assert!(canonical.message().contains("team-a"));
+
+        let concurrent_backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let concurrent_store = concurrent_backend.roster_store();
+        let barrier = Arc::new(Barrier::new(2));
+        let left_store = Arc::clone(&concurrent_store);
+        let left_barrier = Arc::clone(&barrier);
+        let left = std::thread::spawn(move || {
+            left_barrier.wait();
+            left_store.save_roster(&roster("race-a", "alpha", Some("race-alias")))
+        });
+        let right_store = Arc::clone(&concurrent_store);
+        let right = std::thread::spawn(move || {
+            barrier.wait();
+            right_store.save_roster(&roster("race-b", "beta", Some("race-alias")))
+        });
+        let results = [
+            left.join().expect("left writer"),
+            right.join().expect("right writer"),
+        ];
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
     }
 
     #[test]

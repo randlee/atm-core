@@ -169,7 +169,7 @@ pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
 pub use config::types::GraftConfig;
 pub use delivery_channel::{
-    DeliveryChannel, GraftLeaseState, HerdrSession, LocalMessageReceivedBackend,
+    DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, LocalMessageReceivedBackend,
     classify_delivery_channel, local_message_received_backend,
 };
 /// Canonical stable import path for the retained thin graft-facing client

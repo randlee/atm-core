@@ -205,6 +205,7 @@ impl fmt::Display for HerdrVersion {
 pub struct HerdrRosterMember {
     pub ordinal: usize,
     pub name: AgentName,
+    pub herdr_agent: crate::HerdrAgentName,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

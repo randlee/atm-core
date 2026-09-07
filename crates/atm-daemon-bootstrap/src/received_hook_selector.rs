@@ -430,7 +430,7 @@ impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
             };
             let result = process
                 .prompt(
-                    &dispatch.event.recipient,
+                    &target.agent,
                     target.session.as_ref(),
                     &target.rendered_nudge,
                     deadline,
@@ -793,6 +793,7 @@ mod tests {
         dispatch.kind = kind;
         dispatch.target =
             PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
+                agent: atm_core::HerdrAgentName::new("team-lead").expect("agent"),
                 session: Some(atm_core::HerdrSession::new("team-a").expect("session")),
                 rendered_nudge: "test".to_owned(),
             }));
