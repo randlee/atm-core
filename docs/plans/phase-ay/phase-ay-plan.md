@@ -1897,3 +1897,7 @@ round below is PASS or every finding has an accepted disposition.
   17244c653; PLAN-CRIT-601/602/603/M2 and PLAN-SCOPE-601 confirmed fixed):
   PLAN-CRIT-701 (M3 reopened) exit-gate prose still said bare "stop"
   (fixed: "stop subscription work"; no bare "stop" reference remains).
+- critical-plan-reviewer r8 (PASS, 0 findings; reviewed f555ca75f;
+  PLAN-CRIT-701 confirmed fixed). Both reviewers PASS: plan-scope r7 on
+  17244c653, critical r8 on f555ca75f. Amendment hardening closed pending
+  Rand's approval of PR #1277 and the item-7 AY.10 decision line.
