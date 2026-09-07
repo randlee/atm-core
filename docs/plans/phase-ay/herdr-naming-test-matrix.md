@@ -42,10 +42,10 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 | A-23 | T1:bob | daemon/HTTP member-add T2:bob, no alias | reject in the store, CLI not bypassable | **GAP** — check lives in `team_admin` only; must move into `save_roster` transaction (roster_store.rs:91) |
 | A-24 | T1:bob | restore/import a roster containing T2:bob | reject | **GAP** |
 | A-25 | T1:Bob | add T2:bob | accept, exact comparison, no case folding | **GAP** — document; Herdr grammar excludes uppercase anyway (B-03) |
-| A-26 | pre-upgrade db already holds T1:bob and T2:bob (no aliases) | open db, `atm members`/read paths | no error, no migration, rows unchanged | **GAP** (REQ-ROSTER-NAME-009) |
-| A-27 | same seed | add T2:carol (the hmux launch add-member) | reject naming (T1,bob)/(T2,bob) and `--alias` remedy; roster unchanged | **GAP** (REQ-ROSTER-NAME-009) |
-| A-28 | same seed | set T2:bob alias=bobby, then add T2:carol | both accept | **GAP** (REQ-ROSTER-NAME-009) |
-| A-29 | same seed | remove T2:bob, then add T2:carol | both accept | **GAP** (REQ-ROSTER-NAME-009) |
+| A-26 | pre-upgrade db already holds T1:bob and T2:bob (no aliases) | open db, `atm members`/read paths | no error, no migration, rows unchanged | covered `unique_name_a26_legacy_collision_is_readable_but_next_write_fails` (roster_store.rs) |
+| A-27 | same seed | add T2:carol (the hmux launch add-member) | reject naming (T1,bob)/(T2,bob) and `--alias` remedy; roster unchanged | covered `unique_name_a27_legacy_collision_blocks_an_unrelated_next_write` (roster_store.rs) |
+| A-28 | same seed | set T2:bob alias=bobby, then add T2:carol | both accept | covered `unique_name_a28_aliasing_the_legacy_conflict_allows_the_next_write` (roster_store.rs) |
+| A-29 | same seed | remove T2:bob, then add T2:carol | both accept | covered `unique_name_a29_removing_the_legacy_conflict_allows_the_next_write` (roster_store.rs) |
 
 ## B. Grammar (REQ-ROSTER-NAME-005)
 

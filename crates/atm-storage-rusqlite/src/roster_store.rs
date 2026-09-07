@@ -433,6 +433,30 @@ mod tests {
         }
     }
 
+    fn seed_legacy_cross_team_duplicate(store: &SqliteRosterStore) {
+        store
+            .save_roster(&roster(
+                "team-a",
+                vec![roster_member("team-a", "alex", None)],
+            ))
+            .expect("first roster");
+        store
+            .db
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "INSERT INTO team_roster(team_name, agent_name, member_kind, harness, agent_type, model, metadata_json, updated_at)
+                         VALUES ('team-b', 'alex', 'permanent', 'codex-cli', 'worker', '', '{}', 'now');",
+                        [],
+                    )
+                    .map_err(|error| {
+                        AtmError::validation(format!("seed legacy collision: {error}"))
+                    })?;
+                Ok(())
+            })
+            .expect("seed legacy collision");
+    }
+
     #[test]
     fn unique_name_permutations() {
         struct Case {
@@ -565,23 +589,7 @@ mod tests {
         let store = SqliteStorageBackend::in_memory_for_test()
             .expect("backend")
             .roster_store;
-        store
-            .save_roster(&roster(
-                "team-a",
-                vec![roster_member("team-a", "alex", None)],
-            ))
-            .expect("first roster");
-        store.db.with_connection(|connection| {
-            connection
-                .execute(
-                    "INSERT INTO team_roster(team_name, agent_name, member_kind, harness, agent_type, model, metadata_json, updated_at)
-                     VALUES ('team-b', 'alex', 'permanent', 'codex-cli', 'worker', '', '{}', 'now');",
-                    [],
-                )
-                .map_err(|error| AtmError::validation(format!("seed legacy collision: {error}")))?;
-            Ok(())
-        })
-        .expect("seed legacy collision");
+        seed_legacy_cross_team_duplicate(&store);
 
         assert_eq!(
             store
@@ -599,6 +607,73 @@ mod tests {
             .expect_err("next write must enforce legacy collision");
         assert!(error.message().contains("(team-a, alex)"));
         assert!(error.message().contains("(team-b, alex)"));
+    }
+
+    #[test]
+    fn unique_name_a27_legacy_collision_blocks_an_unrelated_next_write() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        seed_legacy_cross_team_duplicate(&store);
+
+        let error = store
+            .save_roster(&roster(
+                "team-b",
+                vec![
+                    roster_member("team-b", "alex", None),
+                    roster_member("team-b", "carol", None),
+                ],
+            ))
+            .expect_err("legacy conflict blocks unrelated write");
+
+        assert!(error.message().contains("(team-a, alex)"));
+        assert_eq!(
+            store
+                .load_roster(&"team-b".parse().expect("team"))
+                .expect("roster remains readable")
+                .members
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn unique_name_a28_aliasing_the_legacy_conflict_allows_the_next_write() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        seed_legacy_cross_team_duplicate(&store);
+
+        store
+            .save_roster(&roster(
+                "team-b",
+                vec![roster_member("team-b", "alex", Some("bobby"))],
+            ))
+            .expect("alias removes conflict");
+        store
+            .save_roster(&roster(
+                "team-b",
+                vec![
+                    roster_member("team-b", "alex", Some("bobby")),
+                    roster_member("team-b", "carol", None),
+                ],
+            ))
+            .expect("unrelated write succeeds after aliasing");
+    }
+
+    #[test]
+    fn unique_name_a29_removing_the_legacy_conflict_allows_the_next_write() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        seed_legacy_cross_team_duplicate(&store);
+
+        store
+            .save_roster(&roster(
+                "team-b",
+                vec![roster_member("team-b", "carol", None)],
+            ))
+            .expect("removal removes conflict before next write");
     }
 
     #[test]
