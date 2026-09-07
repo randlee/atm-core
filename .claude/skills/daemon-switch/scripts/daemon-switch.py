@@ -1143,7 +1143,15 @@ def run_herdr_restart(args: argparse.Namespace) -> None:
             raise HerdrEntryError(code, "stopping Herdr terminates the selected endpoint panes", "Accept impact and pass --stop-herdr-panes", 3)
         print("warning: stopping Herdr exits panes for the selected endpoint", file=sys.stderr)
         _restart_command(scoped_herdr_command(selected, "stop"), deadline)
-        manager.start_owned(selected.entry)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise HerdrEntryError("HERDR_RESTART_TIMEOUT", "restart deadline expired before entry start", "Retry the explicit restart", 4)
+        try:
+            manager.start_owned(selected.entry, min(HERDR_RESTART_COMMAND_TIMEOUT, remaining))
+        except HerdrEntryError as error:
+            if isinstance(error.__cause__, subprocess.TimeoutExpired):
+                raise HerdrEntryError("HERDR_RESTART_TIMEOUT", "timed out running entry start", "Retry the explicit restart", 4) from error
+            raise HerdrEntryError("HERDR_RESTART_HERDR_FAILED", f"entry start failed: {error.message}", "Correct the owned entry and retry", 4) from error
     _verify_herdr_restart(cli, selected, deadline)
     herdr_entry_result(True, "HERDR_RESTARTED", "selected Herdr endpoint restarted and verified", "none", _restart_entries([selected]))
 

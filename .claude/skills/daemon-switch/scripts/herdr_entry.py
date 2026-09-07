@@ -55,7 +55,7 @@ class EntryPlatform(Protocol):
     def register(self, identifier: str, object_path: Path) -> None: ...
     def unregister(self, identifier: str) -> None: ...
     def is_registered(self, identifier: str) -> bool: ...
-    def start(self, identifier: str) -> None: ...
+    def start(self, identifier: str, timeout: float) -> None: ...
     def account_matches(self, identifier: str) -> bool: ...
 
 
@@ -221,7 +221,7 @@ class HerdrEntryManager:
         owned, matching = self._owned(path, digest)
         return {"endpoint": endpoint.name, "identifier": entry_id, "owned": owned, "registered": self.platform.is_registered(entry_id), "digest_matches": matching if owned else False, "journal_phase": (self._load_journal().phase if self._load_journal() else None)}
 
-    def start_owned(self, endpoint: HerdrEndpoint) -> dict[str, object]:
+    def start_owned(self, endpoint: HerdrEndpoint, timeout: float = 30.0) -> dict[str, object]:
         """Explicitly relaunch one verified AY.5 entry; never create or repair it."""
         self._assert_no_active_journal()
         status = self.entry_status(endpoint)
@@ -232,7 +232,7 @@ class HerdrEntryManager:
         if not status["registered"]:
             raise HerdrEntryError("HERDR_ENTRY_REGISTER_FAILED", "owned entry is not registered", "Repair the entry before restarting Herdr", 4)
         try:
-            self.platform.start(str(status["identifier"]))
+            self.platform.start(str(status["identifier"]), timeout)
         except Exception as error:
             raise HerdrEntryError("HERDR_ENTRY_REGISTER_FAILED", "owned entry could not be relaunched", "Correct the native entry and retry", 4) from error
         return status
@@ -277,14 +277,14 @@ class NativeEntryPlatform:
         command = (["launchctl", "print", f"gui/{os.getuid()}/{entry_id}"] if self.name == "Darwin" else (["schtasks.exe", "/Query", "/TN", entry_id] if self.name == "Windows" else ["systemctl", "--user", "is-enabled", entry_id]))
         return getattr(self.runner(command, timeout=5.0), "returncode", 1) == 0
 
-    def start(self, entry_id: str) -> None:
+    def start(self, entry_id: str, timeout: float) -> None:
         if self.name == "Darwin":
             command = ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{entry_id}"]
         elif self.name == "Windows":
             command = ["schtasks.exe", "/Run", "/TN", entry_id]
         else:
             command = ["systemctl", "--user", "restart", entry_id]
-        result = self.runner(command, timeout=30.0)
+        result = self.runner(command, timeout=timeout)
         if getattr(result, "returncode", 1) != 0:
             raise RuntimeError(getattr(result, "stderr", "platform entry start failed"))
 
