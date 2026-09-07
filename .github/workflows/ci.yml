@@ -351,7 +351,7 @@ jobs:
           ATM_WINDOWS_PROCESS_AUDIT_DIR: ${{ runner.temp }}/atm-herdr-process-audit
 
       - name: Upload Windows Herdr process-audit doctor fixture
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}
+        if: ${{ always() && needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}
         uses: actions/upload-artifact@v4
         with:
           name: windows-herdr-process-audit-${{ github.run_id }}

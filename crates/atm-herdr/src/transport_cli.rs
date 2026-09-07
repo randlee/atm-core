@@ -471,13 +471,9 @@ mod tests {
     #[test]
     fn windows_spawn_site_sets_create_no_window_once() {
         let source = include_str!("transport_cli.rs");
+        let spawn_site = ["command.creation_flags(", "CREATE_NO_WINDOW)"].concat();
         assert_eq!(super::CREATE_NO_WINDOW, 0x0800_0000);
-        assert_eq!(
-            source
-                .matches("command.creation_flags(CREATE_NO_WINDOW)")
-                .count(),
-            1
-        );
+        assert_eq!(source.matches(&spawn_site).count(), 1);
     }
 
     #[cfg(windows)]
