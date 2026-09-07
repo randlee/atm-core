@@ -41,9 +41,9 @@ pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
-    DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientsDoctorReport,
-    GraftReceiverLeaseDoctorReport, GraftReceiversDoctorReport, HerdrBreakerDoctor,
-    HerdrBreakerDoctorReport, HerdrBreakerDoctorState, HerdrDoctorReport,
+    DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientSource,
+    EscalationRecipientsDoctorReport, GraftReceiverLeaseDoctorReport, GraftReceiversDoctorReport,
+    HerdrBreakerDoctor, HerdrBreakerDoctorReport, HerdrBreakerDoctorState, HerdrDoctorReport,
     HerdrEndpointCapabilitiesDoctorReport, HerdrEndpointDoctorReport, HerdrQueuePumpDoctorReport,
     LegacyLiteralIpPeerDoctorReport, PeerAuthorityDoctorReport, PeerConfigDoctorReport,
     PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
@@ -181,7 +181,7 @@ fn presence_findings_with_team(
 
 fn scope_finding(mut finding: DoctorFinding, team: Option<&TeamName>) -> DoctorFinding {
     if let Some(team) = team {
-        finding.message = format!("team {team}: {}", finding.message);
+        finding.message = team_scope::team_message(team, finding.message);
     }
     finding
 }
@@ -523,6 +523,7 @@ fn build_doctor_report(
         daemon_context: None,
         reader_lanes: None,
         team_scope: team_scope.report_name().to_owned(),
+        resolved_team_scope: team_scope,
         member_roster,
         team_rosters,
         graft_receivers,
@@ -568,8 +569,9 @@ fn graft_receivers_doctor_report(
                     severity: DoctorSeverity::Warning,
                     code: atm_storage::AtmErrorCode::DaemonUnavailable,
                     message: if team_context {
-                        format!(
-                            "team {team}: skipped graft-receiver lease lookups: doctor budget exhausted"
+                        team_scope::team_message(
+                            team,
+                            "skipped graft-receiver lease lookups: doctor budget exhausted",
                         )
                     } else {
                         "skipped graft-receiver lease lookups: doctor budget exhausted".to_owned()
@@ -2323,6 +2325,35 @@ mod tests {
         assert_eq!(
             report.environment.atm_team.as_ref().map(TeamName::as_str),
             Some(TEST_TEAM)
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn caller_team_precedes_ambient_team_for_doctor_scope() {
+        let paths = TestPaths::new();
+        paths.write_team_layout(&[TEST_SENDER]);
+        let _env = crate::test_support::EnvGuard::set_many([
+            ("ATM_TEAM", Some("config-resolved-team")),
+            ("ATM_IDENTITY", None),
+        ]);
+        let caller_team: TeamName = TEST_TEAM.parse().expect("caller team");
+        let report = run_doctor(
+            &paths,
+            DoctorQuery {
+                home_dir: paths.home_dir.clone(),
+                current_dir: paths.current_dir.clone(),
+                caller_team: Some(caller_team.clone()),
+                ..DoctorQuery::default()
+            },
+            &healthy_observability(&paths),
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.team_scope, "single");
+        assert_eq!(
+            report.member_roster.expect("caller roster").team,
+            caller_team
         );
     }
 

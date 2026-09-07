@@ -23,6 +23,18 @@ impl AtmError {
         }
     }
 
+    fn with_recovery(
+        code: AtmErrorCode,
+        detail: impl Into<String>,
+        recovery: impl Into<String>,
+    ) -> Self {
+        Self {
+            code,
+            message: format!("{}\n  Recovery: {}", detail.into(), recovery.into()),
+            cause: None,
+        }
+    }
+
     /// Constructs the canonical error using the catalog's code-owned text.
     pub fn for_code(code: AtmErrorCode) -> Self {
         Self {
@@ -170,6 +182,13 @@ impl AtmError {
         Self::new(AtmErrorCode::DaemonUnavailable, message)
     }
 
+    pub fn daemon_unavailable_with_recovery(
+        message: impl Into<String>,
+        recovery: impl Into<String>,
+    ) -> Self {
+        Self::with_recovery(AtmErrorCode::DaemonUnavailable, message, recovery)
+    }
+
     /// Local persistence completed, but the peer did not accept the immutable
     /// write before the caller's shared deadline. Retrying uses the same ULID.
     pub fn remote_delivery_unconfirmed(message: impl Into<String>) -> Self {
@@ -287,6 +306,13 @@ impl AtmError {
         Self::new(AtmErrorCode::DaemonConnectionSaturated, message)
     }
 
+    pub fn daemon_connection_saturated_with_recovery(
+        message: impl Into<String>,
+        recovery: impl Into<String>,
+    ) -> Self {
+        Self::with_recovery(AtmErrorCode::DaemonConnectionSaturated, message, recovery)
+    }
+
     pub fn help_topic_not_found(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::HelpTopicNotFound, message)
     }
@@ -352,11 +378,7 @@ impl AtmError {
         message: impl Into<String>,
         recovery: impl Into<String>,
     ) -> Self {
-        Self {
-            code: AtmErrorCode::MessageValidationFailed,
-            message: format!("{}\n  Recovery: {}", message.into(), recovery.into()),
-            cause: None,
-        }
+        Self::with_recovery(AtmErrorCode::MessageValidationFailed, message, recovery)
     }
 
     pub fn local_http_capability_invalid(message: impl Into<String>) -> Self {

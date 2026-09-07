@@ -224,13 +224,29 @@ pub struct PostSendDoctorReport {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TeamEscalationRecipientsDoctorReport {
     pub team: TeamName,
-    pub recipients: Vec<String>,
-    pub source: String,
+    pub recipients: Vec<AgentName>,
+    pub source: EscalationRecipientSource,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EscalationRecipientSource {
+    DaemonDefault,
+    Team,
+}
+
+impl std::fmt::Display for EscalationRecipientSource {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::DaemonDefault => "daemon default",
+            Self::Team => "team",
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct EscalationRecipientsDoctorReport {
-    pub daemon: Vec<String>,
+    pub daemon: Vec<AgentName>,
     pub teams: Vec<TeamEscalationRecipientsDoctorReport>,
 }
 
@@ -403,6 +419,10 @@ pub struct DoctorReport {
     /// Effective doctor scope: `single` or `all_teams`.
     #[serde(default)]
     pub team_scope: String,
+    /// The authoritative scope decision consumed by runtime projections.
+    /// This is not serialized; `team_scope` remains the stable wire field.
+    #[serde(skip, default)]
+    pub resolved_team_scope: super::DoctorTeamScope,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_roster: Option<MembersList>,
     /// One roster block for every team when the effective scope is all teams.

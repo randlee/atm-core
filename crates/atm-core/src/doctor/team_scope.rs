@@ -12,6 +12,14 @@ pub enum DoctorTeamScope {
     AllTeams { resolved_none: bool },
 }
 
+impl Default for DoctorTeamScope {
+    fn default() -> Self {
+        Self::AllTeams {
+            resolved_none: false,
+        }
+    }
+}
+
 impl DoctorTeamScope {
     pub(super) fn report_name(&self) -> &'static str {
         match self {
@@ -20,9 +28,13 @@ impl DoctorTeamScope {
         }
     }
 
-    pub(super) fn is_all_teams(&self) -> bool {
+    pub fn is_all_teams(&self) -> bool {
         matches!(self, Self::AllTeams { .. })
     }
+}
+
+pub(super) fn team_message(team: &TeamName, message: impl AsRef<str>) -> String {
+    format!("team {team}: {}", message.as_ref())
 }
 
 pub(super) fn teams_for_scope(
@@ -105,7 +117,7 @@ pub(super) fn push_doctor_error_for_team(
         findings.push(DoctorFinding {
             severity,
             code: error.code(),
-            message: format!("team {team}: {}", error.detail()),
+            message: team_message(team, error.detail()),
             remediation,
         });
     } else {
