@@ -36,7 +36,10 @@ depending on chat history.
 Use `loki@hermes` exactly for the local Hermes-team contact. For cross-host ATM
 routing, use the host-qualified form `<agent>@<team>.<host>` supplied for the
 isolated fixture. Do not substitute an unqualified name or `localhost` for a
-cross-host trust identity.
+cross-host trust identity. An `AgentNotFound` response for a bare name means
+the sender first verifies the intended team with
+`atm members --team <team>` and retries once with `<agent>@<team>`; it is not
+evidence that the agent was removed and never authorizes a roster mutation.
 
 ## P0 — freeze contract and matrix handshake
 
@@ -93,15 +96,19 @@ P0 exit gate:
 - P2 began from testbed main `b468321`; first-run evidence is committed at
   `a13c3a1`. The first expectation repair is `be94d7b`, with its single
   full-matrix checkpoint at `c0aa6cb`. That checkpoint reports B/C/D PASS and
-  A1 HELD but is not yet accepted as P2 closure because HGC-025 through
-  HGC-027 remain under disposition. The peer authority, 4 CPU / 4 GiB Colima
-  allocation, `suite/v2`, no-`sudo` marker protocol, and primary matrix are
-  frozen.
+  A1 HELD, but it is not valid P2 closure: HGC-025 through HGC-027 expose an
+  uncorrelated D7 event, missing in-record provenance, and unexplained doctor
+  warnings. Fenix disposition `01M1WYKDT478BT9SA5YP9R1VJN` requires all five
+  harness/contract repairs (A1, D7, provenance, doctor capture, and HGC-023)
+  at one named testbed SHA before execution is authorized. The peer authority,
+  4 CPU / 4 GiB Colima allocation, `suite/v2`, no-`sudo` marker protocol, and
+  primary matrix are frozen.
 - The first P2 infrastructure run is preserved with no reruns. Tier C passed
   6/6; Tier A passed 7/8 with A1 failed, Tier B passed 3/6 with B2a/B2b/B2c
   failed, and Tier D passed 5/6 with D7 failed. The prompt suite remains
-  unstarted until the authorized `suite/v2` full-matrix confirmation passes
-  and HGC-023 supplies the missing AT8 calibration handoff.
+  unstarted. It runs as part of the same final, authorized full-matrix run at
+  the named five-fix SHA; targeted runs are development smoke only and never
+  accepted evidence.
 
 ## P1 — full review of the frozen Hermes fork
 
@@ -429,10 +436,10 @@ rows; do not rerun until their dispositions are durable:
   `b84a9d2ef0cb7a3911ffe84642cb3e6f05b033e9` changed the accepted templates to
   `atm read --message-id <MID>` for every built-in nudge; the Task template
   intentionally omits `<when>`, while Delivery and DeliveryAck retain it.
-- D7 routing passed its roster, send, no-`ATM_HERDR_UNAVAILABLE`, sent-outcome,
-  and post-send reachability checks. Its remaining failure is a testbed-only
-  assertion that the message ID appears in a particular daemon log shape; that
-  assertion is outside D7's documented routing contract.
+- D7 routing must snapshot the supported `outcome=sent` log count or byte
+  offset immediately before its send, then prove at least one new event exists
+  and that the new line carries that send's message ID or unique marker. A
+  whole-log `grep -c` with no before/after delta is rejected as a false-pass.
 - A1 is testbed expectation drift under the architecture ruling for ADR-059 and
   requirements 7.13. `mutation_applied == true` means the read/seen transition
   was accepted by the supervised non-blocking handoff, not that it is already
@@ -443,10 +450,13 @@ rows; do not rerun until their dispositions are durable:
   say `read == true`. The conflicting requirements 7.12 sentence is corrected
   by an `arch-ctm` docs/tests PR with no product behavior change.
 
-Fenix authorized the A1/B2/D7 expectation repair as a `suite/v2` change with a
-CATALOG entry naming the ATM source commit and ADR/requirement authority. The
-full matrix then runs once on the same pinned image. This runbook author makes
-no ATM product change and no synchronous-daemon change.
+Fenix authorized the A1/B2/D7 expectation repairs, HGC-023 calibration handoff,
+mandatory in-record provenance, and sanitized doctor capture as testbed-only
+changes. Each change has a CATALOG entry naming its finding or decision message.
+Loki first names the single testbed SHA carrying all five; only after Fenix
+authorizes that SHA does one full matrix, including the prompt suite, run on the
+same pinned image. This is a contract-fix confirmation, not rerun-until-green.
+This runbook author makes no ATM product change and no synchronous-daemon change.
 
 ### Result handling
 
@@ -467,6 +477,21 @@ Add the restart, Tier E, and optional cross-host JSON checks using their
 P0-agreed filenames. Commit per-tier JSON and artifact provenance in the
 testbed repository. Do not commit the environment allowlist or raw transcripts
 containing prohibited data.
+
+Each tier record is invalid and the harness must refuse to write it unless all
+of these fields are populated: `image.digest`, `provenance.atm_core_sha`,
+`provenance.ci_run_id`, and `versions.hermes_fork`. Values such as `unknown` or
+an empty string are not a tier failure; they invalidate the evidence record.
+Keep `asset-provenance.txt` as an independent cross-check, not as a substitute
+for the fields in each tier JSON.
+
+The final run must begin with `atm doctor --json` reporting `status=ok` and
+`error_count=0`. When a tier creates fixture teams, its JSON records sanitized
+`daemon.doctor_findings[]` entries containing only `{code, severity, count}`.
+`ATM_ROSTER_NO_LEAD` is expected only for those fixtures. Any other warning code
+or any error is unexplained and invalidates the record until Fenix dispositions
+it. Commit a sanitized doctor summary containing codes and counts only beside
+the tier JSONs; never include team names, agent names, addresses, or tokens.
 
 Every FAIL record must include:
 
@@ -518,6 +543,12 @@ shows the fixture member absent. With a caller from another team, expect an
 error stating that the caller team does not match the target team; change the
 caller identity, not the authorization policy.
 
+After copying the final evidence, remove every fixture team created by the run
+under an identity authorized for that fixture team. A final sanitized doctor
+summary must return `status=ok`, `warning_count=0`, and `error_count=0`. This
+post-evidence teardown is part of the named-SHA harness contract, not a manual
+cleanup used to alter tier outcomes.
+
 ## P3 — issue log
 
 Every issue becomes a row before work continues.
@@ -548,9 +579,9 @@ Every issue becomes a row before work continues.
 | HGC-022 | P2 | A1 reports an accepted mutation handoff but the returned message and immediate list still show unread state | Phase AV deliberately removed read-your-writes: `mutation_applied` means the supervised handoff accepted the transition, while durability is asynchronous. The requirements 7.12 post-mutation-count sentence conflicts with requirements 7.13 and ADR-059 | Fenix/`arch-ctm` ruled no behavior change: correct the conflicting docs/tests separately; Loki may assert acceptance and then poll `atm list --json` to durable state with a bounded deadline, applying accepted-vs-durable to every read-state assertion | resolved contract; suite/v2 repair authorized |
 | HGC-023 | P2/P3 | AT8 requires the outer coordinator to derive Phase-B `--after` from the fixture agent's warm-up RTT, but exposes no value before Phase B | The prompt records `warmup_rtt_ms` only in its final report; `freeze-daemon.sh` exposes only armed/done markers, so the blocking coordinator has no executable calibration input | Fenix authorized an `at8-rtt` agent-to-coordinator marker, a 120-second fail-closed wait, validation over 1..60000 ms, `clamp(round(rtt/2), 300, 1500)`, and `at8-armed` provenance. Loki applies the prompt/harness/CATALOG changes; no product code changes | confirmed; repair authorized in `01M1WXW9R9Z7KH69CDVR4F6122` |
 | HGC-024 | P2/P3 | A Hermes-owned worker stops acknowledging several delivered coordination messages | Busy-agent silence and a cross-host delivery incident are distinguishable only after bounded coordination and host-side receiver diagnostics | Do not repeatedly resend or use tmux. A second sender emits one consolidated re-ping, all senders wait to the named deadline, then one owner captures sanitized host-side doctor `graft_receivers` and runtime status. Escalate the durable send IDs plus diagnostics to Fenix | resolved before 03:40Z; Loki acknowledged and returned checkpoint `c0aa6cb` |
-| HGC-025 | P2 | D7 reports PASS after dropping the obsolete ULID log grep | The replacement `grep -c '"outcome":"sent"'` scans the entire existing log and requires only a nonzero historical count; it does not prove the D7 send emitted a fresh event | Preserve `c0aa6cb`; do not rerun yet. After Fenix disposition, capture a pre-send count/cursor and require one new supported `action=send`, `outcome=sent` event, or use another bounded fresh-event assertion | evidence weakness; disposition requested in `01M1WYHGDWTXMH1Z2JBCVCF1S3` |
-| HGC-026 | P2 | Every `*-v2rerun.json` has blank `atm_core_sha`/`ci_run_id`, `hermes_fork = unknown`, and `image.digest = unknown` | `result.py` reads execution environment fields that were not passed through `docker exec`; the separate `asset-provenance.txt` remains complete | Keep the external provenance binding, but obtain Fenix's ruling on an additive attestation versus a targeted confirmation with populated fields; future executions must pass the pinned values explicitly | evidence gap; disposition requested |
-| HGC-027 | P2 | Every `*-v2rerun.json` records `daemon.doctor_status = warning` although the build gate was healthy | The result captures only the summary state, not the warning finding, so the discrepancy cannot be classified from committed evidence | Before accepting P2, capture a sanitized `atm doctor --json` finding and explain or correct the warning without product changes in this task | unexplained warning; disposition requested |
+| HGC-025 | P2 | D7 reports PASS after dropping the obsolete ULID log grep | The replacement `grep -c '"outcome":"sent"'` scans the entire existing log and requires only a nonzero historical count; it does not prove the D7 send emitted a fresh event | Preserve `c0aa6cb`; at the named five-fix SHA, capture a pre-send count/cursor, require an increase of at least one, and correlate the new line to the D7 message ID or marker | resolved contract; named-SHA repair required by `01M1WYKDT478BT9SA5YP9R1VJN` |
+| HGC-026 | P2 | Every `*-v2rerun.json` has blank `atm_core_sha`/`ci_run_id`, `hermes_fork = unknown`, and `image.digest = unknown` | `result.py` reads execution environment fields that were not passed through `docker exec`; the separate `asset-provenance.txt` remains complete | Pass all pinned values into every tier execution and refuse to write a record containing empty or `unknown` provenance; retain the sidecar only as a cross-check | resolved contract; named-SHA repair required by `01M1WYKDT478BT9SA5YP9R1VJN` |
+| HGC-027 | P2 | Every `*-v2rerun.json` records `daemon.doctor_status = warning` although the build gate was healthy | Read-only diagnosis found only `ATM_ROSTER_NO_LEAD` on 36 retained fixture teams from prior runs; runtime, stores, readers, observability, breaker, and pump were healthy | Start the final run doctor-clean; record sanitized per-tier code/severity/count findings, allow `ATM_ROSTER_NO_LEAD` only for fixtures, reject every other warning/error pending disposition, and tear down fixture teams after evidence | environmental residue explained; named-SHA repair required by `01M1WYMSHBKRD7VAM4ZYT25H8J` |
 
 ### Silent Hermes coordination rule
 
