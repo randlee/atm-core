@@ -322,7 +322,7 @@ mod tests {
                 Duration::ZERO,
             ),
             HerdrDoctorState::BinaryNotExecutable { path, cause }
-                if path == std::path::PathBuf::from("herdr")
+                if path == std::path::Path::new("herdr")
                     && cause == "permission denied"
         ));
     }

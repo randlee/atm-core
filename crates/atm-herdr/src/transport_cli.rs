@@ -195,6 +195,30 @@ pub(crate) async fn read_capped(reader: impl tokio::io::AsyncRead + Unpin) -> (V
     (output, truncated)
 }
 
+fn decode_envelope(output: &CommandOutput) -> Result<HerdrEnvelope, HerdrError> {
+    let value = serde_json::from_str::<Value>(if output.success {
+        &output.stdout
+    } else {
+        &output.stderr
+    })
+    .map_err(|_| HerdrError::ProtocolMismatch)?;
+    let error = value.get("error").and_then(|error| {
+        Some(HerdrErrorEnvelope {
+            code: error.get("code")?.as_str()?.to_owned(),
+            message: error
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+            retry_after_ms: error.get("retry_after_ms").and_then(Value::as_u64),
+        })
+    });
+    Ok(HerdrEnvelope {
+        result: value.get("result").cloned(),
+        error,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::ErrorKind;
@@ -223,28 +247,4 @@ mod tests {
             }
         ));
     }
-}
-
-fn decode_envelope(output: &CommandOutput) -> Result<HerdrEnvelope, HerdrError> {
-    let value = serde_json::from_str::<Value>(if output.success {
-        &output.stdout
-    } else {
-        &output.stderr
-    })
-    .map_err(|_| HerdrError::ProtocolMismatch)?;
-    let error = value.get("error").and_then(|error| {
-        Some(HerdrErrorEnvelope {
-            code: error.get("code")?.as_str()?.to_owned(),
-            message: error
-                .get("message")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned(),
-            retry_after_ms: error.get("retry_after_ms").and_then(Value::as_u64),
-        })
-    });
-    Ok(HerdrEnvelope {
-        result: value.get("result").cloned(),
-        error,
-    })
 }
