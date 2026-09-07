@@ -78,7 +78,7 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 |----|-------|----------|--------|
 | D-01 | `atm send <alias>` same team | canonical recipient | covered `roster_alias_resolves_to_canonical_member` (send/recipient.rs:81) |
 | D-02 | `atm send <alias>@<team>` | canonical recipient in that team | covered `roster_alias_resolves_for_implicit_and_explicit_team_targets` (send/recipient.rs:96) |
-| D-03 | `atm send <alias>` from a different team, no `@team` | resolves database-wide to the alias owner's team | **GAP** — `resolve_roster_alias` (caller_context.rs:59) is team-scoped; derived from Rand "using the alias for cross-team messaging has value independent of herdr" |
+| D-03 | `atm send <alias>` from a different team, no `@team` | resolves database-wide to the alias owner's team | covered `write_ingress_resolves_a_bare_alias_to_its_remote_owner` (send/tests.rs) |
 | D-04 | `atm send <name>` where name is a canonical member of the addressed team AND an alias elsewhere | canonical in the addressed team wins | covered `canonical_name_wins_over_historical_alias_collision` (send/recipient.rs:127) |
 | D-05 | unknown alias | existing canonical error unchanged | covered `unknown_roster_alias_preserves_the_canonical_parse_result` (send/recipient.rs:113) |
 | D-06 | `.atm.toml` `[atm].aliases` present | ignored everywhere in atm; the only `.atm.toml` alias use is the doctor pane-alias consistency warning (F-01..F-05) | covered `load_config_ignores_retired_aliases` (config/mod.rs) and `resolve_target_forwards` (mailbox/source.rs); AY-QA-005 closure |
