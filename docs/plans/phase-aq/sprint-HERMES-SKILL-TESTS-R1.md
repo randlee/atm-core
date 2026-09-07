@@ -92,6 +92,34 @@ The fixture (local host or colima container) is observable and addressable:
   from a product defect; the report's cause line makes the difference visible instead of
   "FAIL, stop everything" on the first hiccup.
 
+## The whole operation, start to finish
+
+Same shape on the host and in the container; each line is one command or one sentence, nothing
+in between. The image build is the only step that takes more than a minute.
+
+1. **Clean fixture.** Testbed checkout reset to the remote (`git fetch && git reset --hard origin/main`,
+   `git clean -fdx` except `env/`); no leftover containers (`./teardown.sh`).
+2. **Install.** One image build with the pinned inputs: Hermes (named release + canonical patch),
+   herdr, ATM (tarball + both wheels of the version under test). `./build.sh all` with
+   `ATM_TARBALL`, `HERMES_FORK_SHA` set; cache hit when inputs are unchanged.
+3. **Start as a peer.** `./run.sh` (peer mode default). Host and container daemons trust each other;
+   `atm doctor` clean on both.
+4. **Launch the ATM team.** The container's herdr starts one session per ATM agent (the test agent
+   and, when a Codex/Claude tester is in the fixture, its pane), each with `ATM_IDENTITY`/`ATM_TEAM`
+   set, registered in the roster with `--backend herdr --session <name>`.
+5. **Launch the Hermes team.** The container's Hermes gateways start with the graft receivers; each
+   agent registers its receiver with the daemon (visible in `atm doctor --team hermes`).
+6. **Smoke in parallel.** The oversight agent on the host sends the two `atm-setup-environment`
+   sentences, then the two `atm-smoke` sentences, to `<agent>@<team> --host <fixture-host>`; the
+   Hermes side is triggered by the nudge the send produces, the ATM side by the herdr nudge. Both
+   run at once; two reports each come back over ATM.
+7. **Ladder up.** `atm-hermes-ready`, then `atm-nudge-roundtrip` (tester + responder), then any
+   later, harder skill added to the table above. Each rung is one or two sentences and its reports.
+8. **Post-mortem.** One file, written by the oversight agent from the reports.
+
+Steps 1–5 are the fixture; they are scripted once in the testbed repo and never edited per run.
+Steps 6–8 are the run-book below.
+
 ## The run-book, verbatim
 
 Three agents take part: the oversight agent, the ATM test agent (CLI only), one Hermes agent. The
