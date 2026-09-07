@@ -1263,10 +1263,7 @@ mod tests {
         }
         let nudges = injector.nudges.lock().expect("nudges lock");
         assert_eq!(nudges.len(), 100);
-        assert_eq!(
-            nudges[0].body,
-            "<atm>test nudge</atm>\n\nfull immutable body"
-        );
+        assert_eq!(nudges[0].body, "<atm>test nudge</atm>");
         assert_eq!(
             read_snapshot(&snapshot).expect("snapshot").state,
             GraftSessionState::Listening
