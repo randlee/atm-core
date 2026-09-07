@@ -958,11 +958,14 @@ mod tests {
 
     use super::{
         legacy_literal_ip_peer_reports, ordered_member_summaries, peer_config_doctor_report,
+        presence_findings,
     };
     use crate::config::AtmConfig;
     use crate::config::types::{HookRecipient, PostSendHookRule};
     use crate::doctor::{
-        DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, run_doctor_with_runtime,
+        DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, HerdrDoctorState,
+        HerdrEndpointObservation, HerdrEndpointProvenance, HerdrMemberPresence,
+        HerdrPresenceOutcome, HerdrTransportKind, run_doctor_with_runtime,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -1012,6 +1015,94 @@ mod tests {
                 StubHealth::Err(error) => Err(error.clone()),
             }
         }
+    }
+
+    #[test]
+    fn presence_findings_preserve_roster_order_and_emit_one_infrastructure_notice() {
+        let finding = |message: &str| DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::HerdrAgentNotVisible,
+            message: message.to_owned(),
+            remediation: Some("inspect Herdr".to_owned()),
+        };
+        let member = |ordinal: usize, name: &str, outcome| HerdrMemberPresence {
+            ordinal,
+            name: AgentName::from_validated(name.to_owned()),
+            outcome,
+        };
+        let observation = |members| HerdrEndpointObservation {
+            session: None,
+            provenance: HerdrEndpointProvenance::HerdrDefault,
+            transport: HerdrTransportKind::Cli,
+            endpoint: None,
+            binary: None,
+            state: HerdrDoctorState::NotConfigured,
+            live_handoff: None,
+            members,
+        };
+        let observations = vec![
+            observation(vec![
+                member(
+                    2,
+                    "third",
+                    HerdrPresenceOutcome::Finding {
+                        finding: finding("third finding"),
+                    },
+                ),
+                member(
+                    0,
+                    "first",
+                    HerdrPresenceOutcome::Infrastructure {
+                        code: AtmErrorCode::HerdrUnavailable,
+                        detail: "first endpoint unavailable".to_owned(),
+                    },
+                ),
+            ]),
+            observation(vec![
+                member(
+                    1,
+                    "second",
+                    HerdrPresenceOutcome::Finding {
+                        finding: finding("second finding"),
+                    },
+                ),
+                member(
+                    3,
+                    "fourth",
+                    HerdrPresenceOutcome::Infrastructure {
+                        code: AtmErrorCode::HerdrUnavailable,
+                        detail: "later endpoint unavailable".to_owned(),
+                    },
+                ),
+            ]),
+        ];
+
+        let findings = presence_findings(&observations);
+
+        assert_eq!(
+            findings
+                .iter()
+                .map(|finding| finding.message.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "second finding",
+                "third finding",
+                "Herdr presence probe skipped: first endpoint unavailable",
+            ]
+        );
+        assert_eq!(findings[2].severity, DoctorSeverity::Info);
+        assert_eq!(findings[2].code, AtmErrorCode::HerdrUnavailable);
+        let member_json =
+            serde_json::to_value(&observations[0].members[0]).expect("member presence serializes");
+        assert_eq!(
+            member_json
+                .as_object()
+                .expect("member presence is an object")
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["name", "outcome"]
+        );
     }
 
     struct UnusedMailStore;

@@ -303,7 +303,7 @@ pub struct HerdrQueuePumpDoctorReport {
 /// and its remedy.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct HerdrEndpointCapabilitiesDoctorReport {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub live_handoff: Option<bool>,
 }
 
@@ -436,7 +436,7 @@ impl DoctorReport {
 
 #[cfg(test)]
 mod tests {
-    use super::PeerWireSecurityStatus;
+    use super::{HerdrEndpointCapabilitiesDoctorReport, PeerWireSecurityStatus};
     use crate::peer_wire::PeerWireSecurity;
 
     #[test]
@@ -450,5 +450,14 @@ mod tests {
                 .expect("diagnostic status serializes"),
             "\"plaintext-test\""
         );
+    }
+
+    #[test]
+    fn herdr_capability_serializes_unknown_as_explicit_null() {
+        let value = serde_json::to_value(HerdrEndpointCapabilitiesDoctorReport::default())
+            .expect("capability report serializes");
+
+        assert!(value.get("live_handoff").is_some());
+        assert!(value["live_handoff"].is_null());
     }
 }
