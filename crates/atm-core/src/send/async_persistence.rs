@@ -13,35 +13,139 @@ type TemplateAdmissionParts = (
     Option<atm_storage::WorkflowSnapshot>,
 );
 
-pub(crate) fn verify_template_request(
+/// Opaque proof that a template request was verified before durable admission.
+///
+/// The HTTP runtime may obtain this proof on its bounded blocking pool, while
+/// the core writer remains runtime-agnostic.  The verified source stays
+/// private so every caller must use the same admission path.
+#[derive(Debug)]
+pub struct TemplateVerification(Option<template::VerifiedTemplateSend>);
+
+/// Verifies the caller-captured template source before durable admission.
+///
+/// Template verification re-opens the canonical source path to prove its
+/// bytes have not changed since capture. Callers running on an async executor
+/// must invoke this through their bounded blocking-admission seam; use
+/// [`preflight_write_source_request`] when both file and template sources need
+/// the same proof-bearing result.
+pub fn verify_template_request(
     runtime: &LocalServiceRuntime,
     request: &SendRequest,
-) -> Result<Option<template::VerifiedTemplateSend>, AtmError> {
+) -> Result<TemplateVerification, AtmError> {
     let SendMessageSource::Template(source) = &request.message_source else {
-        return Ok(None);
+        return Ok(TemplateVerification(None));
     };
     let composer = runtime.template_composer().ok_or_else(|| {
         AtmError::daemon_unavailable("Tokio template admission was not installed in this runtime")
     })?;
-    verify_template_send(composer.as_ref(), source, request.max_message_bytes).map(Some)
+    verify_template_send(composer.as_ref(), source, request.max_message_bytes)
+        .map(Some)
+        .map(TemplateVerification)
+}
+
+impl TemplateVerification {
+    pub(crate) fn into_inner(self) -> Option<template::VerifiedTemplateSend> {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PreflightSourceKind {
+    Inline,
+    File,
+    Template,
+}
+
+/// Opaque, source-matched result of synchronous write-source preparation.
+///
+/// The replacement HTTP runtime obtains this value only through its bounded
+/// blocking bridge. The async write pipeline consumes it instead of resolving
+/// a caller-owned file or template path while a Tokio worker is polling it.
+#[derive(Debug)]
+pub struct WriteSourcePreflight {
+    kind: PreflightSourceKind,
+    body: String,
+    template_verification: Option<TemplateVerification>,
+}
+
+/// Prepares a write source before the asynchronous durable-admission path.
+///
+/// This is synchronous because file-policy evaluation and template byte
+/// verification may access the host filesystem. Async callers must run it in
+/// bounded blocking admission under their request deadline.
+pub fn preflight_write_source_request(
+    runtime: &LocalServiceRuntime,
+    request: &SendRequest,
+) -> Result<WriteSourcePreflight, AtmError> {
+    match &request.message_source {
+        SendMessageSource::Inline(message) => Ok(WriteSourcePreflight {
+            kind: PreflightSourceKind::Inline,
+            body: input::validate_message_text_with_limit(
+                message.clone(),
+                request.max_message_bytes,
+            )?,
+            template_verification: None,
+        }),
+        SendMessageSource::File { .. } => {
+            let context = prepare_send_context(runtime, request)?;
+            Ok(WriteSourcePreflight {
+                kind: PreflightSourceKind::File,
+                body: resolve_message_body(
+                    &request.message_source,
+                    &request.current_dir,
+                    &request.home_dir,
+                    &context.recipient.team,
+                    request.max_message_bytes,
+                )?,
+                template_verification: None,
+            })
+        }
+        SendMessageSource::Template(_) => {
+            let template_verification = verify_template_request(runtime, request)?;
+            let body = template_verification
+                .0
+                .as_ref()
+                .expect("template source produces a template verification")
+                .rendered
+                .text
+                .clone();
+            Ok(WriteSourcePreflight {
+                kind: PreflightSourceKind::Template,
+                body,
+                template_verification: Some(template_verification),
+            })
+        }
+    }
+}
+
+impl WriteSourcePreflight {
+    pub(crate) fn into_parts(
+        self,
+        source: &SendMessageSource,
+    ) -> Result<(String, Option<template::VerifiedTemplateSend>), AtmError> {
+        let expected_kind = match source {
+            SendMessageSource::Inline(_) => PreflightSourceKind::Inline,
+            SendMessageSource::File { .. } => PreflightSourceKind::File,
+            SendMessageSource::Template(_) => PreflightSourceKind::Template,
+        };
+        if self.kind != expected_kind {
+            return Err(AtmError::validation(
+                "write source preflight does not match the request source",
+            ));
+        }
+        Ok((
+            self.body,
+            self.template_verification
+                .and_then(TemplateVerification::into_inner),
+        ))
+    }
 }
 
 pub(crate) fn resolve_async_body(
     request: &SendRequest,
-    context: &SendExecutionContext,
-    verified_template: Option<&template::VerifiedTemplateSend>,
-) -> Result<String, AtmError> {
-    match (&request.message_source, verified_template) {
-        (SendMessageSource::Template(_), Some(verified)) => Ok(verified.rendered.text.clone()),
-        (source, None) => resolve_message_body(
-            source,
-            &request.current_dir,
-            &request.home_dir,
-            &context.recipient.team,
-            request.max_message_bytes,
-        ),
-        (_, Some(_)) => unreachable!("only template sends produce template verification"),
-    }
+    source_preflight: WriteSourcePreflight,
+) -> Result<(String, Option<template::VerifiedTemplateSend>), AtmError> {
+    source_preflight.into_parts(&request.message_source)
 }
 
 #[expect(

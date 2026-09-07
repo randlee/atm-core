@@ -640,10 +640,13 @@ fn task_tagged_async_prepare_forces_deferred_mode() {
         IsoTimestamp::now(),
     );
 
-    let prepared = block_on(atm_core::send::prepare_write_with_async_runtime(
+    let source_preflight = atm_core::send::preflight_write_source_request(&runtime, &request)
+        .expect("preflight async write source");
+    let prepared = block_on(atm_core::send::prepare_write_with_preflight_async_runtime(
         request,
         &NullObservability,
         &runtime,
+        source_preflight,
     ))
     .expect("prepare async write");
     assert_eq!(
@@ -913,10 +916,13 @@ fn assert_graft_task_dispatch(async_path: bool) {
         IsoTimestamp::now(),
     );
     let mut prepared = if async_path {
-        block_on(atm_core::send::prepare_write_with_async_runtime(
+        let source_preflight = atm_core::send::preflight_write_source_request(&runtime, &request)
+            .expect("preflight async graft task write source");
+        block_on(atm_core::send::prepare_write_with_preflight_async_runtime(
             request,
             &NullObservability,
             &runtime,
+            source_preflight,
         ))
         .expect("prepare async graft task write")
     } else {
