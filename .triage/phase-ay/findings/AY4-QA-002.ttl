@@ -15,12 +15,13 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "none" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T23:55:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY4 ;
   triage:foundAt "2026-09-06T23:10:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY4-QA-002/AY4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY4-QA-002/AY4-2> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY4-QA-002/AY4-1>
@@ -28,11 +29,23 @@
   triage:file "crates/atm-daemon-bootstrap/src/herdr_lifecycle_tests.rs" ;
   triage:line 1 ;
   triage:snippet "ay4_l1_l2_*, ay4_l3_l9_*, ay4_l5_*, ay4_l7_*, ay4_l10_l11_* present; no ay4_l4_* test function exists" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ay4-herdr-breaker-lifecycle" ;
   triage:headSha "296376da0" ;
   triage:occursIn <urn:atm:triage:worktree/AY4/296376da0> .
+
+<urn:atm:triage:occurrence/AY4-QA-002/AY4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/herdr_lifecycle_tests.rs" ;
+  triage:line 202 ;
+  triage:snippet "async fn ay4_l4_connection_reset_keeps_unknown_prompt_pending_without_duplicate_submission()" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/ay4-herdr-breaker-lifecycle" ;
+  triage:headSha "edb2ed877" ;
+  triage:occursIn <urn:atm:triage:worktree/AY4/edb2ed877> ;
+  triage:note "quality-mgr qa-pr1279-r3 close-out (final task's original dispatched fork was lost to a host disk-full outage 2026-09-07 through 2026-09-11; closed directly by quality-mgr on resumption). Confirmed at PR #1279 head edb2ed877: ay4_l4_connection_reset_keeps_unknown_prompt_pending_without_duplicate_submission now exists in herdr_lifecycle_tests.rs, exercising the L4/A4 scenario. Live CI confirmed green at this exact head: gh run 34086314808, all three Test-matrix legs (ubuntu/macos/windows) pass, headSha matches PR #1279 exactly." .
 
 <urn:atm:triage:worktree/AY4/296376da0>
   a triage:WorktreeSnapshot ;
@@ -40,3 +53,10 @@
   triage:branch "feature/ay4-herdr-breaker-lifecycle" ;
   triage:headSha "296376da0" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AY4/edb2ed877>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1279-r3" ;
+  triage:branch "feature/ay4-herdr-breaker-lifecycle" ;
+  triage:headSha "edb2ed877" ;
+  triage:orderIndex 2 .

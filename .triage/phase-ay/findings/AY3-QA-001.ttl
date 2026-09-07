@@ -15,12 +15,13 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY3 ;
   triage:foundAt "2026-09-07T03:42:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-001/AY3-QA-001-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-001/AY3-QA-001-2> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY3-QA-001/AY3-QA-001-1>
@@ -28,11 +29,30 @@
   triage:file "crates/atm-daemon-bootstrap/src/herdr_config.rs" ;
   triage:line 84 ;
   triage:snippet "[herdr]\nbinary_path = \"/opt/homebrew/bin/herdr\"\nsocket_path = \"/tmp/herdr.sock\"" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
   triage:headSha "45701a81e" ;
   triage:occursIn <urn:atm:triage:worktree/AY3/45701a81e> .
+
+<urn:atm:triage:occurrence/AY3-QA-001/AY3-QA-001-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/herdr_config.rs" ;
+  triage:line 84 ;
+  triage:snippet "reads_valid_absolute_paths_once_from_home_config now builds binary_path/socket_path via tempfile::tempdir().join(...) instead of hardcoded /opt/homebrew/bin/herdr and /tmp/herdr.sock literals" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "b8afa814f" ;
+  triage:occursIn <urn:atm:triage:worktree/AY3/b8afa814f> ;
+  triage:note "quality-mgr qa-pr1273-r3 close-out (final task's original dispatched fork was lost to a host disk-full outage 2026-09-07 through 2026-09-11; closed directly by quality-mgr on resumption). Confirmed at PR #1273 head b8afa814f: reads_valid_absolute_paths_once_from_home_config now builds portable paths via tempfile::tempdir() rather than hardcoded Unix literals, resolving the Windows Path::is_absolute() rejection. Live CI confirmed green at this exact head: gh run 34081680078, all three Test-matrix legs (ubuntu/macos/windows) pass, headSha matches PR #1273 exactly." .
+
+<urn:atm:triage:worktree/AY3/b8afa814f>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1273-r3" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "b8afa814f" ;
+  triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/AY3/45701a81e>
   a triage:WorktreeSnapshot ;
