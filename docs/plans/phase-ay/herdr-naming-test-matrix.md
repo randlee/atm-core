@@ -17,14 +17,14 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 
 | ID | Existing rows | Write | Expected | Status |
 |----|---------------|-------|----------|--------|
-| A-01 | T1:bob | add T1:bob | reject, same-team duplicate | covered `ensure_member_absent` (member_mutation.rs:441) |
+| A-01 | T1:bob | add T1:bob | reject, same-team duplicate | **GAP** (AY-QA-003: `ensure_member_absent` is production code, no test asserts the rejection; AY.15 D4a) |
 | A-02 | none | add T1:bob (no alias) | accept, first of its name | covered `cross_team_member_names_require_alias_but_first_occurrence_does_not` (member_mutation.rs:1215) |
 | A-03 | T1:bob | add T2:bob (no alias) | reject, names T1 and `--alias` remedy | covered (same test) |
 | A-04 | T1:bob | add T2:bob (bobby) | accept | covered (same test) |
-| A-05 | T1:bob | add T2:robert (bob) | reject, alias equals a unique_name | covered `alias_must_not_collide_with_member_name_or_team_alias` (member_mutation.rs:1181) |
+| A-05 | T1:bob | add T2:robert (bob) | reject, alias equals a unique_name | **GAP** (AY-QA-003: cited test is same-team only; AY.15 D4a) |
 | A-06 | T1:robert (bob) | add T2:bob (no alias) | reject, canonical equals an existing alias | **GAP** — AY14-QA-003 (quality-mgr, 2026-09-07); `ensure_canonical_member_name_available` (member_mutation.rs:480) ignores alias fields |
 | A-07 | T1:robert (bob) | add T1:bob (no alias) | reject, same team, canonical equals alias | **GAP** — same defect, own team is skipped |
-| A-08 | T1:robert (bob) | add T2:sam (bob) | reject, alias vs alias | covered (member_mutation.rs:1181) |
+| A-08 | T1:robert (bob) | add T2:sam (bob) | reject, alias vs alias | **GAP** (AY-QA-003: cited test is same-team only; AY.15 D4a) |
 | A-09 | T1:bob (bobby) | add T2:bob (no alias) | accept: unique_names are bobby and bob | **GAP** — currently rejected; over-strict, `ensure_canonical_member_name_available` compares canonical names only |
 | A-10 | T1:bob (bobby) | add T2:sam (bob) | accept: unique_names bobby, bob | **GAP** — currently rejected by `ensure_alias_available` (alias vs canonical of an aliased member) |
 | A-11 | T1:bob (bobby) | add T2:bob (bobby) | reject, alias vs alias | covered (member_mutation.rs:1181) |
@@ -51,10 +51,10 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 
 | ID | Input | Expected | Status |
 |----|-------|----------|--------|
-| B-01 | alias with `/`, space, `@`, `.` | reject (ATM segment rule) | covered `resolve_agent_name_rejects_invalid_alias_target`, `resolve_recipient_rejects_invalid_alias_target` (send/tests.rs:1127) — add-member path **GAP** |
+| B-01 | alias with `/`, space, `@`, `.` | reject (ATM segment rule) | **GAP** (AY-QA-004: cited tests exercise the legacy `.atm.toml` resolver, not roster-alias validation at add/set-member; AY.15 D2, D4a) |
 | B-02 | Herdr member, alias `Team_Lead` (uppercase) | reject | covered `herdr_alias_uses_herdr_agent_name_validation` (member_mutation.rs:1158) |
 | B-03 | Herdr member, no alias, canonical `Team-Lead` | reject at add (effective name fails Herdr grammar) | **GAP** |
-| B-04 | Herdr member, alias 33 chars / leading digit / leading `-` | reject | covered partially (`herdr_agent_name_uses_the_live_agent_grammar`, delivery_channel.rs:323, grammar only) — add-member **GAP** |
+| B-04 | Herdr member, alias 33 chars / leading digit / leading `-` | reject | **GAP** (AY-QA-004: `herdr_agent_name_uses_the_live_agent_grammar` covers the grammar only, not add/set-member rejection; AY.15 D2, D4a) |
 | B-05 | non-Herdr member, alias `Team_Lead` | accept (ATM rule only) | covered `add_member_persists_alias_without_a_herdr_backend` (member_mutation.rs:1122) — uppercase variant **GAP** |
 | B-06 | set-member backend → Herdr on a member whose effective name fails Herdr grammar | reject | covered `validate_effective_herdr_agent_name` (member_mutation.rs:500) — test **GAP** |
 | B-07 | alias equal to reserved `atm-daemon` | reject | **GAP** |
@@ -81,7 +81,7 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | D-03 | `atm send <alias>` from a different team, no `@team` | resolves database-wide to the alias owner's team | **GAP** — `resolve_roster_alias` (caller_context.rs:59) is team-scoped; derived from Rand "using the alias for cross-team messaging has value independent of herdr" |
 | D-04 | `atm send <name>` where name is a canonical member of the addressed team AND an alias elsewhere | canonical in the addressed team wins | covered `canonical_name_wins_over_historical_alias_collision` (send/recipient.rs:127) |
 | D-05 | unknown alias | existing canonical error unchanged | covered `unknown_roster_alias_preserves_the_canonical_parse_result` (send/recipient.rs:113) |
-| D-06 | `.atm.toml` `[atm].aliases` present | ignored everywhere in atm; the only `.atm.toml` alias use is the doctor pane-alias consistency warning (F-01..F-05) | **GAP** (Rand 2026-09-07: "NOTHING else in atm uses .atm.toml alias") |
+| D-06 | `.atm.toml` `[atm].aliases` present | ignored everywhere in atm; the only `.atm.toml` alias use is the doctor pane-alias consistency warning (F-01..F-05) | **GAP** (Rand 2026-09-07: "NOTHING else in atm uses .atm.toml alias"; AY-QA-005: legacy resolver still consulted in `send/recipient.rs`, `send/write_context.rs`, `identity/mod.rs`, `mailbox/source.rs`; AY.15 D4d) |
 | D-07 | `ATM_IDENTITY=<alias>` | canonical sender; persisted `from` canonical; observation dropped | covered `canonicalize_caller_context_replaces_an_ingress_alias_and_drops_alias_attestation` (caller_context.rs:389) |
 | D-08 | `--as <alias>` | same as D-07 | covered `send_sender_identity_applies_alias_to_hook_identity` (identity/mod.rs:195) — CLI `--as` end-to-end **GAP** |
 | D-09 | `atm read --as <alias>`, `--from <alias>`, peek | canonicalised before mailbox lookup | covered `read_ingress_canonicalizes_alias_caller_target_and_from_filter` (read/mod.rs:833), `resolve_target_canonicalizes_alias_before_mailbox_lookup` (mailbox/source.rs:252) |

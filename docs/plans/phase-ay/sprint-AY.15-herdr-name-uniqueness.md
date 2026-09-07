@@ -57,7 +57,7 @@ dependency_relations:
   roster, so replacement on ingress to the daemon is the logical single
   point to translate"
 
-Requirements text: `docs/requirements.md` §3.3.2 `REQ-ROSTER-NAME-001..008`.
+Requirements text: `docs/requirements.md` §3.3.2 `REQ-ROSTER-NAME-001..010`.
 Permutation matrix: `docs/plans/phase-ay/herdr-naming-test-matrix.md`.
 Every row marked **GAP** there is owed by this sprint (D-13 included
 since Rand's 2026-09-07 ruling).
@@ -78,6 +78,18 @@ since Rand's 2026-09-07 ruling).
 - Bare alias resolution is team-scoped (`resolve_roster_alias`,
   `crates/atm-core/src/caller_context.rs:59`); a database-wide unique alias
   must resolve without `@team` from any team (D-03).
+- AY-QA-003 (important, quality-mgr, integrate/phase-ay 2df365bf1):
+  matrix rows A-01/A-05/A-08 were marked covered by a production function
+  or a same-team-only test; no test exercises them. Owed by D4a.
+- AY-QA-004 (important, quality-mgr, 2df365bf1): matrix rows B-01/B-04
+  were marked covered by tests of the legacy `.atm.toml [atm].aliases`
+  resolver; no test rejects an invalid roster alias at add/set-member.
+  Owed by D2 and D4a.
+- AY-QA-005 (blocking, quality-mgr, 2df365bf1): the legacy
+  `config::aliases::resolve_agent_name` is still consulted in production at
+  `crates/atm-core/src/send/recipient.rs`, `send/write_context.rs`,
+  `identity/mod.rs` and `mailbox/source.rs`. Owed by D4d: all four call
+  sites go, not only the send path.
 
 ## Deliverables
 
@@ -154,7 +166,8 @@ since Rand's 2026-09-07 ruling).
   ONLY used by hmux and 'atm doctor' to display a warning if alias is not
   consistent. NOTHING else in atm uses .atm.toml alias."): delete the
   alias-table resolution and its config type (`config/aliases.rs` and
-  callers in send/read/mailbox/identity); the existing doctor pane-alias
+  every caller: `send/recipient.rs`, `send/write_context.rs`,
+  `identity/mod.rs`, `mailbox/source.rs`; AY-QA-005); the existing doctor pane-alias
   mismatch warning (REQ-ROSTER-NAME-008) is the only `.atm.toml` alias
   reader left; matrix D-06.
 - D5 `docs/requirements.md` §3.3.2 wording corrections only if the
