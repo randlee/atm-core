@@ -400,7 +400,7 @@ fn tmux_and_herdr_dispatches_share_the_rendered_template() {
         panic!("expected bare-CLI queue-pull target");
     };
     assert_eq!(target.body, tmux_text);
-    assert!(!target.body.contains("rendered description"));
+    assert!(!target.body.contains("full immutable body"));
     assert_eq!(tmux_text, herdr_text);
 }
 
