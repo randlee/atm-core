@@ -74,7 +74,9 @@ The fixture (local host or colima container) is observable and addressable:
 - The ATM database is queried directly (read-only) for message and state rows:
   `~/.atm/db/mail.db`, tables `mail_messages` and `mail_message_states`. The exact query is in
   `atm-troubleshoot`.
-- `atm send` reaches every agent in the fixture; `atm list`/`atm read` show what came back.
+- `atm send` reaches every agent in the fixture; with the container run as a cross-host peer the
+  oversight agent on the host addresses them as `<agent>@<team> --host <fixture-host>` and receives
+  their reports in its own inbox.
 - `atm log` and `atm doctor --json` are read inside the fixture the same way as outside.
 - A Hermes agent's gateway log is read for its tool calls (ids redacted).
 
@@ -170,11 +172,15 @@ on this list was part of that four hours.
    Product findings go to the open issues, not to this sprint.
 4. **Repeat step 2 on 1.5.7** after PR #1299 merges and Rand authorizes the local rollout. Expected:
    all PASS. Tag per the patch-bump-per-test rule.
-5. **Deploy to the testbed.** loki bakes the same files into the image (`/root/.hermes/skills`),
-   README states the four sentences. The run inside colima is the same run-book from step 2 with
-   `ATM_TEST_FIXTURE=colima-<image digest>`; fenix (or any coordinator) sends the sentences to the
-   container's agents with `atm send`, reads the reports, and can query the container's `mail.db`
-   and gateway logs when a line says FAIL.
+5. **Run in the testbed, as a cross-host peer.** The container starts in the testbed's peer mode
+   (`run.sh --peer <host-name>`): the container daemon and the host daemon trust each other as
+   peers, so the oversight agent on the host sends the seven sentences with
+   `atm send <agent>@<team> --host <fixture-host>` and the seven reports arrive in its own inbox over
+   ATM. No docker exec, no log scraping, no second channel: the fixture is one more host. The
+   container's agents run the byte-identical skills synced from `/opt/hermes/skills`; the fixture
+   name is the container's peer host name. When a report line says FAIL, the oversight agent may
+   still query the container's `mail.db` and gateway logs as the plan's non-black-box channels;
+   normal runs never need them.
 6. **Verdict.** All reports PASS on both fixtures for the same ATM version = the integration test
    passes for that version. Publication remains Rand's decision.
 7. **Post-mortem report.** After every complete run (each fixture, each version) the oversight
