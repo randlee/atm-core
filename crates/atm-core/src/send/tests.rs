@@ -123,6 +123,11 @@ impl TestRuntime {
             persisted_states: Mutex::new(Vec::new()),
         }
     }
+
+    pub(crate) fn with_team_roster(mut self, roster: Vec<RosterEntry>) -> Self {
+        self.team_roster_override = Some(roster);
+        self
+    }
 }
 
 impl crate::boundary::sealed::Sealed for TestRuntime {}
@@ -445,6 +450,40 @@ fn write_ingress_resolves_a_bare_alias_to_its_remote_owner() {
 
     assert_eq!(context.recipient.team, remote_team);
     assert_eq!(context.recipient.agent.as_str(), "recipient");
+}
+
+#[test]
+fn unique_name_d12_self_send_via_alias_is_rejected_after_ingress_resolution() {
+    let root = tempdir().expect("root");
+    let team = TeamName::from_validated(TEST_TEAM);
+    let mut metadata_json = Map::new();
+    metadata_json.insert(
+        "alias".to_owned(),
+        serde_json::Value::String("sender-alias".to_owned()),
+    );
+    let runtime = TestRuntime {
+        team_roster_override: Some(vec![RosterEntry {
+            team_name: team.clone(),
+            agent_name: AgentName::from_validated("sender"),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: crate::schema::AgentType::Worker,
+            model: crate::types::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json,
+        }]),
+        ..TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode)
+    };
+    let mut request = send_request(root.path());
+    request.caller_identity = AgentName::from_validated("sender");
+    request.to = Some("sender-alias".parse().expect("alias target"));
+
+    let error = match prepare_send_context(&runtime, &mut request) {
+        Ok(_) => panic!("canonicalized self-address must be rejected"),
+        Err(error) => error,
+    };
+
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
 }
 
 pub(super) fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot {

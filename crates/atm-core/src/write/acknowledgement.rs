@@ -134,9 +134,10 @@ impl AcknowledgementReplyBuilder for AtomicAcknowledgementBuilder {
 pub(crate) fn admit_acknowledgement_write<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
-    request: SendRequest,
+    mut request: SendRequest,
     runtime: &R,
 ) -> Result<AtomicAcknowledgementWrite, AtmError> {
+    canonicalize_local_acknowledgement_caller(runtime, &mut request);
     let provenance = validate_write_provenance(
         if request.to.is_some() {
             WriteIngress::Peer
@@ -201,9 +202,10 @@ pub(crate) fn admit_acknowledgement_write<
 /// source lookup, reply creation, and atomic source transition are one await
 /// on the storage-owned durable-admission lane.
 pub(crate) async fn admit_acknowledgement_write_async(
-    request: SendRequest,
+    mut request: SendRequest,
     runtime: &LocalServiceRuntime,
 ) -> Result<AtomicAcknowledgementWrite, AtmError> {
+    canonicalize_local_acknowledgement_caller(runtime, &mut request);
     let provenance = validate_write_provenance(
         if request.to.is_some() {
             WriteIngress::Peer
@@ -263,6 +265,33 @@ pub(crate) async fn admit_acknowledgement_write_async(
         .acknowledge_message_atomically_async(source, builder.clone())
         .await?;
     builder.take()
+}
+
+/// A local acknowledgement does not travel through ordinary send-context
+/// preparation, but it still enters the Tokio daemon with a caller identity.
+/// Resolve that identity against the same immutable RAM roster before locating
+/// the pending source; durable acknowledgement rows must never contain the
+/// caller's roster alias.
+fn canonicalize_local_acknowledgement_caller<
+    R: RetainedServiceRuntime + crate::boundary::sealed::Sealed,
+>(
+    runtime: &R,
+    request: &mut SendRequest,
+) {
+    if request.to.is_some() {
+        return;
+    }
+    if let Some((team, member)) = runtime.resolve_roster_member_at_ingress(
+        &request.caller_team,
+        &request.caller_identity,
+        true,
+    ) {
+        if member != request.caller_identity {
+            request.activity_observation = None;
+        }
+        request.caller_team = team;
+        request.caller_identity = member;
+    }
 }
 
 pub(crate) fn build_atomic_acknowledgement(

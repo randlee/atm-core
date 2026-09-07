@@ -85,9 +85,9 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | D-07 | `ATM_IDENTITY=<alias>` | canonical sender; persisted `from` canonical; observation dropped | covered `canonicalize_caller_context_replaces_an_ingress_alias_and_drops_alias_attestation` (caller_context.rs:389) |
 | D-08 | `--as <alias>` | same as D-07 | covered `send_sender_identity_applies_alias_to_hook_identity` (identity/mod.rs:195) — CLI `--as` end-to-end **GAP** |
 | D-09 | `atm read --as <alias>`, `--from <alias>`, peek | canonicalised before mailbox lookup | covered `read_ingress_canonicalizes_alias_caller_target_and_from_filter` (read/mod.rs:833), `resolve_target_canonicalizes_alias_before_mailbox_lookup` (mailbox/source.rs:252) |
-| D-10 | `atm ack` as alias | canonical | **GAP** |
+| D-10 | `atm ack` as alias | canonical | covered `unique_name_d10_ack_alias_is_canonicalized_before_pending_source_lookup` (atm-core/src/ack/admission_tests.rs) |
 | D-11 | `set-member <alias>` / `remove-member <alias>` | canonical before persistence | covered `update_and_remove_member_canonicalize_alias_arguments_before_persistence` (member_mutation.rs:1334) |
-| D-12 | self-send via own alias | rejected as self-send after replacement | **GAP** |
+| D-12 | self-send via own alias | rejected as self-send after replacement | covered `unique_name_d12_self_send_via_alias_is_rejected_after_ingress_resolution` (atm-core/src/send/tests.rs) |
 | D-13 | `alias@team.host` (cross-host) | delivered to the canonical member on the remote host; persisted rows canonical on both hosts; sending daemon forwards the alias unchanged, receiving daemon ingress substitutes | **GAP** — Rand (2026-09-07): "alias@team.host works" |
 | D-14 | alias used as `--chat-id`/qualified identity forms | canonical | **GAP** |
 | D-15 | inventory: every clap argument/option/env var in `crates/atm/src` that names a member, listed here by command and flag | each entry is exercised by D-16 | **GAP** — arch-ctm produces the inventory in this row's sub-table (REQ-ROSTER-NAME-010) |
