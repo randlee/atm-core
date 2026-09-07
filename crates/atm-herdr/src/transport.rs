@@ -128,7 +128,6 @@ pub(crate) struct HerdrErrorEnvelope {
 #[derive(Clone, Debug)]
 pub(crate) enum HerdrIo {
     Cli(CliIo),
-    #[allow(dead_code)]
     Socket(SocketIo),
 }
 
