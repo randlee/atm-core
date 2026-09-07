@@ -1035,6 +1035,7 @@ fn render_bootstrap_trace_section(trace: &BootstrapTraceReport) -> String {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::HerdrSession;
     use atm_core::ack::AckOutcome;
     use atm_core::doctor::{
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
@@ -1169,6 +1170,85 @@ mod tests {
             assert_eq!(json["endpoints"][index]["remedy"], endpoint.remedy);
             assert!(rendered.contains(&format!("Remedy: {}", endpoint.remedy)));
         }
+    }
+
+    #[test]
+    fn herdr_endpoint_report_keeps_order_provenance_and_mismatch_capability() {
+        let configured_endpoint = HerdrEndpointDisplay::from_relative(
+            HerdrEndpointDisplayRoot::Configured,
+            Path::new("private/socket"),
+            false,
+        )
+        .expect("safe endpoint");
+        let version = HerdrVersion::parse("0.8.2").expect("valid version");
+        let report = HerdrDoctorReport {
+            configured: Some(true),
+            endpoints: vec![
+                HerdrEndpointDoctorReport {
+                    session: None,
+                    provenance: HerdrEndpointProvenance::HerdrDefault,
+                    transport: HerdrTransportKind::Cli,
+                    endpoint: None,
+                    binary: None,
+                    state: HerdrDoctorState::ClientServerMismatch {
+                        client: Some(version.clone()),
+                        server: Some(version.clone()),
+                    },
+                    remedy: "Use Herdr handoff coordination".to_owned(),
+                    capabilities: HerdrEndpointCapabilitiesDoctorReport {
+                        live_handoff: Some(true),
+                    },
+                    members: Vec::new(),
+                },
+                HerdrEndpointDoctorReport {
+                    session: Some(HerdrSession::new("alpha").expect("valid session")),
+                    provenance: HerdrEndpointProvenance::Session,
+                    transport: HerdrTransportKind::Cli,
+                    endpoint: None,
+                    binary: None,
+                    state: HerdrDoctorState::Ok {
+                        version: version.clone(),
+                        protocol: 20,
+                    },
+                    remedy: "none".to_owned(),
+                    capabilities: HerdrEndpointCapabilitiesDoctorReport::default(),
+                    members: Vec::new(),
+                },
+                HerdrEndpointDoctorReport {
+                    session: Some(HerdrSession::new("beta").expect("valid session")),
+                    provenance: HerdrEndpointProvenance::SocketPath,
+                    transport: HerdrTransportKind::Socket,
+                    endpoint: Some(configured_endpoint),
+                    binary: None,
+                    state: HerdrDoctorState::PermissionDenied {
+                        endpoint: HerdrEndpointDisplay::from_relative(
+                            HerdrEndpointDisplayRoot::Configured,
+                            Path::new("private/socket"),
+                            false,
+                        )
+                        .expect("safe endpoint"),
+                    },
+                    remedy: "Align per-user ownership or permissions".to_owned(),
+                    capabilities: HerdrEndpointCapabilitiesDoctorReport::default(),
+                    members: Vec::new(),
+                },
+            ],
+            ..HerdrDoctorReport::default()
+        };
+
+        let rendered = render_doctor_herdr(&report);
+        let json = serde_json::to_value(&report).expect("Herdr report serializes");
+
+        assert_eq!(json["endpoints"][0]["provenance"], "herdr_default");
+        assert_eq!(json["endpoints"][1]["provenance"], "session");
+        assert_eq!(json["endpoints"][2]["provenance"], "socket_path");
+        assert!(json["endpoints"][0]["endpoint"].is_null());
+        assert_eq!(json["endpoints"][0]["capabilities"]["live_handoff"], true);
+        assert_eq!(json["endpoints"][2]["endpoint"], "<configured>/socket");
+        let default_index = rendered.find("Endpoint default").expect("default renders");
+        let alpha_index = rendered.find("Endpoint alpha").expect("alpha renders");
+        let beta_index = rendered.find("Endpoint beta").expect("beta renders");
+        assert!(default_index < alpha_index && alpha_index < beta_index);
     }
 
     #[test]

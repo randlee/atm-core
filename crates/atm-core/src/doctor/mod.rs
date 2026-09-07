@@ -1074,6 +1074,7 @@ mod tests {
                         detail: "later endpoint unavailable".to_owned(),
                     },
                 ),
+                member(4, "visible", HerdrPresenceOutcome::Visible),
             ]),
         ];
 
