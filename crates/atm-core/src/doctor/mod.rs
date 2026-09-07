@@ -29,8 +29,8 @@ use std::sync::Arc;
 pub use crate::boundary::HerdrEndpointDoctor;
 pub use herdr_state::{
     HerdrBinaryProvenance, HerdrBinaryResolution, HerdrDoctorState, HerdrEndpointDisplay,
-    HerdrEndpointObservation, HerdrEndpointProvenance, HerdrMemberPresence, HerdrPresenceOutcome,
-    HerdrRosterMember, HerdrTransportKind, HerdrVersion,
+    HerdrEndpointDisplayRoot, HerdrEndpointObservation, HerdrEndpointProvenance,
+    HerdrMemberPresence, HerdrPresenceOutcome, HerdrRosterMember, HerdrTransportKind, HerdrVersion,
 };
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,

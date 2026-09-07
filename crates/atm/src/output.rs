@@ -1039,11 +1039,15 @@ mod tests {
     use atm_core::doctor::{
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
         BootstrapTraceReport, HerdrDoctorReport, HerdrDoctorState,
-        HerdrEndpointCapabilitiesDoctorReport, HerdrEndpointDoctorReport, HerdrEndpointProvenance,
-        HerdrTransportKind, PeerConfigDoctorReport,
+        HerdrEndpointCapabilitiesDoctorReport, HerdrEndpointDisplay, HerdrEndpointDisplayRoot,
+        HerdrEndpointDoctorReport, HerdrEndpointProvenance, HerdrTransportKind, HerdrVersion,
+        PeerConfigDoctorReport,
     };
+    use atm_core::error_codes::AtmErrorCode;
     use atm_core::types::HostName;
     use serde_json::json;
+    use std::path::{Path, PathBuf};
+    use std::time::Duration;
 
     use super::{
         render_bootstrap_trace_section, render_doctor_herdr, render_doctor_peer_config,
@@ -1079,6 +1083,92 @@ mod tests {
         assert!(rendered.contains("Remedy: Configure Herdr only if desired"));
         assert_eq!(json["endpoints"][0]["capabilities"]["live_handoff"], true);
         assert!(json["endpoints"][0].get("live_handoff").is_none());
+    }
+
+    #[test]
+    fn herdr_doctor_rendering_covers_every_state_with_json_kind_and_remedy() {
+        let endpoint = || {
+            HerdrEndpointDisplay::from_relative(
+                HerdrEndpointDisplayRoot::Configured,
+                Path::new("herdr/socket"),
+                false,
+            )
+            .expect("safe endpoint")
+        };
+        let version = || HerdrVersion::parse("0.8.2").expect("valid version");
+        let states = vec![
+            HerdrDoctorState::Ok {
+                version: version(),
+                protocol: 20,
+            },
+            HerdrDoctorState::NotConfigured,
+            HerdrDoctorState::BinaryNotFound {
+                searched: vec![PathBuf::from("/usr/bin/herdr")],
+            },
+            HerdrDoctorState::BinaryNotExecutable {
+                path: PathBuf::from("/opt/herdr"),
+                cause: "permission denied".to_owned(),
+            },
+            HerdrDoctorState::BelowMinimum {
+                version: HerdrVersion::parse("0.7.9").expect("valid version"),
+                minimum: version(),
+            },
+            HerdrDoctorState::ServerNotRunning {
+                endpoint_named_by_herdr: Some(endpoint()),
+            },
+            HerdrDoctorState::ClientServerMismatch {
+                client: Some(version()),
+                server: Some(version()),
+            },
+            HerdrDoctorState::EndpointUnreachable {
+                endpoint: endpoint(),
+            },
+            HerdrDoctorState::PermissionDenied {
+                endpoint: endpoint(),
+            },
+            HerdrDoctorState::ProbeTimedOut {
+                after: Duration::from_secs(1),
+            },
+            HerdrDoctorState::UnexpectedResponse {
+                code: Some("malformed_reply".to_owned()),
+                detail: "invalid JSON".to_owned(),
+            },
+            HerdrDoctorState::Other {
+                code: AtmErrorCode::HerdrUnavailable,
+                detail: "future compatibility code".to_owned(),
+            },
+        ];
+        let report = HerdrDoctorReport {
+            configured: Some(true),
+            endpoints: states
+                .into_iter()
+                .map(|state| HerdrEndpointDoctorReport {
+                    session: None,
+                    provenance: HerdrEndpointProvenance::HerdrDefault,
+                    transport: HerdrTransportKind::Cli,
+                    endpoint: None,
+                    binary: None,
+                    remedy: state.remedy().to_owned(),
+                    state,
+                    capabilities: HerdrEndpointCapabilitiesDoctorReport::default(),
+                    members: Vec::new(),
+                })
+                .collect(),
+            ..HerdrDoctorReport::default()
+        };
+
+        let rendered = render_doctor_herdr(&report);
+        let json = serde_json::to_value(&report).expect("Herdr report serializes");
+
+        assert_eq!(json["endpoints"].as_array().map(Vec::len), Some(12));
+        for (index, endpoint) in report.endpoints.iter().enumerate() {
+            assert!(
+                json["endpoints"][index]["state"]["kind"].is_string(),
+                "state {index} has a tagged JSON snapshot"
+            );
+            assert_eq!(json["endpoints"][index]["remedy"], endpoint.remedy);
+            assert!(rendered.contains(&format!("Remedy: {}", endpoint.remedy)));
+        }
     }
 
     #[test]

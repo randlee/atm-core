@@ -116,6 +116,51 @@ pub(crate) struct HerdrEndpointDoctorAdapter {
 
 impl atm_core::boundary::sealed::Sealed for HerdrEndpointDoctorAdapter {}
 
+/// Partitions the single doctor roster snapshot into deterministic Herdr
+/// endpoint probe inputs. The default server is ordered before named sessions;
+/// members retain their original roster ordinal inside each partition.
+fn herdr_roster_groups(
+    roster: &MembersList,
+) -> Vec<(Option<atm_core::HerdrSession>, Vec<HerdrRosterMember>)> {
+    let mut sessions = roster
+        .members
+        .iter()
+        .filter_map(|member| match member.local_message_received_backend() {
+            Some(atm_core::LocalMessageReceivedBackend::Herdr { session }) => Some(session.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    sessions.sort_by(|left, right| {
+        left.as_ref()
+            .map_or("", atm_core::HerdrSession::as_str)
+            .cmp(right.as_ref().map_or("", atm_core::HerdrSession::as_str))
+    });
+    sessions.dedup();
+
+    sessions
+        .into_iter()
+        .map(|session| {
+            let members = roster
+                .members
+                .iter()
+                .enumerate()
+                .filter_map(
+                    |(ordinal, member)| match member.local_message_received_backend() {
+                        Some(atm_core::LocalMessageReceivedBackend::Herdr {
+                            session: member_session,
+                        }) if *member_session == session => Some(HerdrRosterMember {
+                            ordinal,
+                            name: member.name.clone(),
+                        }),
+                        _ => None,
+                    },
+                )
+                .collect();
+            (session, members)
+        })
+        .collect()
+}
+
 impl HerdrEndpointDoctor for HerdrEndpointDoctorAdapter {
     fn observe<'a>(
         &'a self,
@@ -125,41 +170,9 @@ impl HerdrEndpointDoctor for HerdrEndpointDoctorAdapter {
         Box<dyn std::future::Future<Output = Vec<HerdrEndpointObservation>> + Send + 'a>,
     > {
         Box::pin(async move {
-            let mut sessions = roster
-                .members
-                .iter()
-                .filter_map(|member| match member.local_message_received_backend() {
-                    Some(atm_core::LocalMessageReceivedBackend::Herdr { session }) => {
-                        Some(session.clone())
-                    }
-                    _ => None,
-                })
-                .collect::<Vec<_>>();
-            sessions.sort_by(|left, right| {
-                left.as_ref()
-                    .map_or("", atm_core::HerdrSession::as_str)
-                    .cmp(right.as_ref().map_or("", atm_core::HerdrSession::as_str))
-            });
-            sessions.dedup();
-
-            let mut observations = Vec::with_capacity(sessions.len());
-            for session in sessions {
-                let members = roster
-                    .members
-                    .iter()
-                    .enumerate()
-                    .filter_map(
-                        |(ordinal, member)| match member.local_message_received_backend() {
-                            Some(atm_core::LocalMessageReceivedBackend::Herdr {
-                                session: member_session,
-                            }) if *member_session == session => Some(HerdrRosterMember {
-                                ordinal,
-                                name: member.name.clone(),
-                            }),
-                            _ => None,
-                        },
-                    )
-                    .collect::<Vec<_>>();
+            let groups = herdr_roster_groups(roster);
+            let mut observations = Vec::with_capacity(groups.len());
+            for (session, members) in groups {
                 observations.push(
                     self.probe
                         .observe(session.as_ref(), &members, caller_deadline)
@@ -341,5 +354,77 @@ fn resolve_herdr_process(
             });
             process
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use atm_core::schema::HomeDirPath;
+    use atm_core::team_admin::MemberSummary;
+    use atm_core::types::{AgentName, ModelName};
+    use atm_core::{HerdrSession, LocalMessageReceivedBackend, RosterHarness};
+
+    use super::herdr_roster_groups;
+
+    fn herdr_member(name: &str, session: Option<&str>) -> MemberSummary {
+        MemberSummary {
+            name: AgentName::from_validated(name.to_owned()),
+            agent_id: String::new(),
+            agent_type: String::new(),
+            harness: RosterHarness::ClaudeCode,
+            model: ModelName::default(),
+            joined_at: None,
+            tmux_pane_id: None,
+            backend: None,
+            herdr_session: None,
+            local_backend: Some(LocalMessageReceivedBackend::Herdr {
+                session: session.map(|value| HerdrSession::new(value).expect("valid test session")),
+            }),
+            home_dir: HomeDirPath::default(),
+            live_cwd: None,
+            host: None,
+            extra: serde_json::Map::new(),
+        }
+    }
+
+    #[test]
+    fn herdr_roster_groups_deduplicate_sessions_and_preserve_member_ordinals() {
+        let roster = atm_core::team_admin::MembersList {
+            team: "atm-dev".parse().expect("valid test team"),
+            members: vec![
+                herdr_member("default-first", None),
+                herdr_member("beta", Some("beta")),
+                herdr_member("default-second", None),
+                herdr_member("alpha", Some("alpha")),
+                herdr_member("beta-second", Some("beta")),
+            ],
+        };
+
+        let groups = herdr_roster_groups(&roster);
+
+        assert_eq!(groups.len(), 3, "one probe input per unique endpoint");
+        assert_eq!(groups[0].0, None);
+        assert_eq!(
+            groups[0]
+                .1
+                .iter()
+                .map(|member| member.ordinal)
+                .collect::<Vec<_>>(),
+            vec![0, 2]
+        );
+        assert_eq!(
+            groups[1].0.as_ref().map(HerdrSession::as_str),
+            Some("alpha")
+        );
+        assert_eq!(groups[1].1[0].ordinal, 3);
+        assert_eq!(groups[2].0.as_ref().map(HerdrSession::as_str), Some("beta"));
+        assert_eq!(
+            groups[2]
+                .1
+                .iter()
+                .map(|member| member.ordinal)
+                .collect::<Vec<_>>(),
+            vec![1, 4]
+        );
     }
 }
