@@ -1,5 +1,4 @@
 use crate::address::AgentAddress;
-use crate::boundary::RosterEntry;
 use crate::config;
 use crate::error::AtmError;
 use crate::provenance::ValidatedWriteProvenance;
@@ -50,41 +49,12 @@ pub(crate) fn resolve_recipient(
     })
 }
 
-/// Resolves a roster-scoped alias after workspace aliases have already been
-/// considered. Canonical roster names always win, which keeps malformed
-/// historical metadata from shadowing a real member.
-pub(crate) fn resolve_roster_alias(
-    candidate: &AgentName,
-    team: &TeamName,
-    roster: &[RosterEntry],
-) -> AgentName {
-    if roster
-        .iter()
-        .any(|member| member.team_name == *team && member.agent_name == *candidate)
-    {
-        return candidate.clone();
-    }
-
-    roster
-        .iter()
-        .find(|member| {
-            member.team_name == *team
-                && member
-                    .metadata_json
-                    .get("alias")
-                    .and_then(serde_json::Value::as_str)
-                    == Some(candidate.as_str())
-        })
-        .map_or_else(|| candidate.clone(), |member| member.agent_name.clone())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        ResolvedRecipient, resolve_recipient, resolve_roster_alias, validate_non_self_recipient,
-    };
+    use super::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
     use crate::address::AgentAddress;
     use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind};
+    use crate::caller_context::resolve_roster_alias;
     use crate::error_codes::AtmErrorCode;
     use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
     use crate::roles::ROLE_TEAM_LEAD;

@@ -152,13 +152,18 @@ fn herdr_roster_groups(
                         Some(atm_core::LocalMessageReceivedBackend::Herdr {
                             session: member_session,
                             agent,
-                        }) if *member_session == session => Some(HerdrRosterMember {
-                            ordinal,
-                            name: member.name.clone(),
-                            herdr_agent: agent
-                                .clone()
-                                .unwrap_or_else(|| atm_core::HerdrAgentName::from(&member.name)),
-                        }),
+                        }) if *member_session == session => {
+                            atm_core::delivery_channel::resolve_herdr_agent_target(
+                                &member.name,
+                                agent.clone(),
+                                "herdr_endpoint_doctor",
+                            )
+                            .map(|herdr_agent| HerdrRosterMember {
+                                ordinal,
+                                name: member.name.clone(),
+                                herdr_agent,
+                            })
+                        }
                         _ => None,
                     },
                 )
@@ -438,6 +443,21 @@ mod tests {
                 .map(|member| member.ordinal)
                 .collect::<Vec<_>>(),
             vec![1, 4]
+        );
+    }
+
+    #[test]
+    fn herdr_endpoint_doctor_skips_a_nonconforming_canonical_name_without_panicking() {
+        let roster = atm_core::team_admin::MembersList {
+            team: TeamName::from_validated("test-team"),
+            members: vec![herdr_member("TeamLead", None)],
+        };
+
+        let groups = herdr_roster_groups(&roster);
+        assert_eq!(groups.len(), 1, "the endpoint partition is retained");
+        assert!(
+            groups[0].1.is_empty(),
+            "an invalid fallback target must not reach the Herdr doctor probe"
         );
     }
 }

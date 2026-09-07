@@ -4,8 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use atm_core::RequestDeadline;
-use atm_core::types::AgentName;
+use atm_core::{HerdrAgentName, RequestDeadline};
 use atm_herdr::testing::production_invoker_with_test_binary_and_environment;
 use atm_herdr::{HerdrAgentStatus, HerdrError, HerdrProcessAdapter};
 use serde_json::json;
@@ -21,7 +20,7 @@ async fn get(
     invoker: &atm_herdr::HerdrProcessInvoker,
     deadline: RequestDeadline,
 ) -> Result<atm_herdr::HerdrGetOutcome, HerdrError> {
-    let agent: AgentName = "windows-fixture".parse().expect("agent name");
+    let agent = HerdrAgentName::new("windows-fixture").expect("agent name");
     invoker
         .get(&agent, None, deadline, atm_herdr::BreakerPolicy::Shared)
         .await

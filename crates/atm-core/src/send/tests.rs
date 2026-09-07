@@ -427,6 +427,37 @@ fn tmux_and_herdr_dispatches_share_the_rendered_template() {
     assert_eq!(tmux_text, herdr_text);
 }
 
+#[test]
+fn post_send_herdr_skips_a_nonconforming_canonical_recipient_without_panicking() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let event = PostSendHookEvent {
+        sender: AgentName::from_validated(TEST_SENDER),
+        sender_chat_id: None,
+        sender_team: TeamName::from_validated(TEST_TEAM),
+        sender_host: None,
+        recipient: AgentName::from_validated("TeamLead"),
+        recipient_team: TeamName::from_validated(TEST_TEAM),
+        message_id: "01KZ0000000000000000000000".parse().expect("message"),
+        description: "invalid herdr canonical name".to_owned(),
+        requires_ack: false,
+        is_ack: false,
+        task_id: None,
+        recipient_pane_id: None,
+    };
+    let mut snapshot = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    snapshot.local_herdr_post_send = true;
+
+    let dispatch = super::hook::build_built_in_dispatch(
+        &runtime,
+        &snapshot,
+        &event,
+        crate::send::NudgeMode::Immediate,
+    )
+    .expect("invalid fallback is advisory, not an error");
+
+    assert!(dispatch.is_none(), "invalid Herdr fallback must be skipped");
+}
+
 pub(super) fn outbound_message() -> InboxMessage {
     let ack_intent = AckIntentFields::not_required();
     InboxMessage {

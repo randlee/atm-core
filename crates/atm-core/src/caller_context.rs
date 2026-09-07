@@ -2,6 +2,7 @@ use std::env;
 
 use serde::{Deserialize, Serialize};
 
+use crate::boundary::RosterEntry;
 use crate::error::AtmError;
 use crate::types::{
     AgentIdentity, AgentName, ChatId, SessionId, TeamName, deserialize_optional_session_id,
@@ -47,6 +48,55 @@ pub struct CallerContextOverrides<'a> {
     pub identity_override: Option<CallerIdentityOverride<'a>>,
     pub chat_id_override: Option<CallerChatIdOverride<'a>>,
     pub team_override: Option<CallerTeamOverride<'a>>,
+}
+
+/// Resolves a team-scoped durable roster alias at an ATM ingress boundary.
+///
+/// Canonical member names take precedence, so corrupt historical metadata
+/// cannot shadow a real identity. The returned value is always suitable for
+/// mailbox, storage, and audit paths.
+#[must_use]
+pub fn resolve_roster_alias(
+    candidate: &AgentName,
+    team: &TeamName,
+    roster: &[RosterEntry],
+) -> AgentName {
+    if roster
+        .iter()
+        .any(|member| member.team_name == *team && member.agent_name == *candidate)
+    {
+        return candidate.clone();
+    }
+
+    roster
+        .iter()
+        .find(|member| {
+            member.team_name == *team
+                && member
+                    .metadata_json
+                    .get("alias")
+                    .and_then(serde_json::Value::as_str)
+                    == Some(candidate.as_str())
+        })
+        .map_or_else(|| candidate.clone(), |member| member.agent_name.clone())
+}
+
+/// Replaces a caller alias with its canonical durable roster identity before
+/// the caller crosses an ATM storage or mailbox boundary.
+#[must_use]
+pub fn canonicalize_caller_context(
+    mut caller: CallerContext,
+    roster: &[RosterEntry],
+) -> CallerContext {
+    let canonical = resolve_roster_alias(&caller.caller_identity, &caller.caller_team, roster);
+    if canonical != caller.caller_identity {
+        // The ambient observation attested to the alias, not the canonical
+        // principal. Never carry that unverified attribution into a durable
+        // operation after resolving the ingress identity.
+        caller.activity_observation = None;
+    }
+    caller.caller_identity = canonical;
+    caller
 }
 
 pub fn resolve_cli_inspection_caller_context(
@@ -301,18 +351,59 @@ fn parse_team(raw: String) -> Result<TeamName, AtmError> {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
+    use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind};
     use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
-    use crate::types::{AgentIdentity, ChatId, SESSION_ID_MAX_BYTES};
+    use crate::types::{
+        AgentIdentity, AgentName, ChatId, ModelName, SESSION_ID_MAX_BYTES, TeamName,
+    };
 
     use super::{
         CallerChatIdOverride, CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
-        read_cli_agent_name_from_env, read_cli_identity_from_env_or_warn, read_cli_pid_from_env,
-        read_cli_session_id_from_env, read_cli_team_from_env, read_cli_team_from_env_or_warn,
-        resolve_caller_chat_id, resolve_cli_inspection_caller_context,
-        resolve_cli_mutation_caller_context,
+        canonicalize_caller_context, read_cli_agent_name_from_env,
+        read_cli_identity_from_env_or_warn, read_cli_pid_from_env, read_cli_session_id_from_env,
+        read_cli_team_from_env, read_cli_team_from_env_or_warn, resolve_caller_chat_id,
+        resolve_cli_inspection_caller_context, resolve_cli_mutation_caller_context,
     };
+
+    fn aliased_member() -> RosterEntry {
+        let team = TeamName::from_validated(TEST_TEAM);
+        let mut metadata_json = serde_json::Map::new();
+        metadata_json.insert("alias".to_owned(), json!("atm-lead"));
+        RosterEntry {
+            team_name: team,
+            agent_name: AgentName::from_validated(ROLE_TEAM_LEAD),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: crate::schema::AgentType::Lead,
+            model: ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json,
+        }
+    }
+
+    #[test]
+    fn canonicalize_caller_context_replaces_an_ingress_alias_and_drops_alias_attestation() {
+        let caller = super::CallerContext {
+            caller_identity: AgentName::from_validated("atm-lead"),
+            caller_chat_id: None,
+            caller_team: TeamName::from_validated(TEST_TEAM),
+            activity_observation: Some(super::ActivityObservation {
+                team: TeamName::from_validated(TEST_TEAM),
+                member: AgentName::from_validated("atm-lead"),
+                session_id: None,
+                pid: None,
+            }),
+        };
+
+        let canonical = canonicalize_caller_context(caller, &[aliased_member()]);
+
+        assert_eq!(canonical.caller_identity.as_str(), ROLE_TEAM_LEAD);
+        assert!(canonical.activity_observation.is_none());
+    }
 
     #[test]
     #[serial_test::serial(env)]

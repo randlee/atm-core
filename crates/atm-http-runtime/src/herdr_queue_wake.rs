@@ -767,15 +767,19 @@ fn herdr_candidates(
             {
                 continue;
             }
-            let (herdr_agent, session) = match backend {
+            let (configured_agent, session) = match backend {
                 atm_core::delivery_channel::LocalMessageReceivedBackend::Herdr {
                     session,
                     agent,
-                } => (
-                    agent.unwrap_or_else(|| HerdrAgentName::from(key.agent())),
-                    session,
-                ),
+                } => (agent, session),
                 atm_core::delivery_channel::LocalMessageReceivedBackend::Tmux { .. } => continue,
+            };
+            let Some(herdr_agent) = atm_core::delivery_channel::resolve_herdr_agent_target(
+                key.agent(),
+                configured_agent,
+                "herdr_queue_wake",
+            ) else {
+                continue;
             };
             candidates.push(HerdrCandidate {
                 pending: pending.contains(&key),
@@ -3587,5 +3591,37 @@ mod tests {
             1,
             "herdr_candidates must not call load_roster on the durable store"
         );
+    }
+
+    #[test]
+    fn herdr_queue_wake_skips_a_nonconforming_canonical_name_without_panicking() {
+        let team: TeamName = "aq27-invalid-herdr-name".parse().expect("team");
+        let member = herdr_member(&team, "TeamLead");
+        let durable = std::sync::Arc::new(CountingRosterStore {
+            roster: RosterSnapshot {
+                team_name: team,
+                members: vec![member],
+                refreshed_at: None,
+            },
+            load_roster_calls: std::sync::atomic::AtomicUsize::new(0),
+            list_teams_calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let (roster_store, roster_runtime_mirror) =
+            atm_runtime_test_support::build_write_through_roster_for_test(durable)
+                .expect("write-through roster fixture hydrates");
+        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+            std::sync::Arc::new(UnusedMailStore),
+            roster_store,
+            roster_runtime_mirror,
+            std::sync::Arc::new(NoopNudgeTemplateOverrideStore),
+            std::sync::Arc::new(UnusedNonClaudeOutbound),
+        );
+
+        let pending = std::collections::HashSet::new();
+        let candidates =
+            super::herdr_candidates(runtime.shared_roster_store_arc().as_ref(), &pending)
+                .expect("invalid Herdr fallback is skipped, not surfaced as a failure");
+
+        assert!(candidates.is_empty());
     }
 }

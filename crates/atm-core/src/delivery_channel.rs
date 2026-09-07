@@ -101,16 +101,38 @@ impl HerdrAgentName {
     }
 }
 
-impl From<&AgentName> for HerdrAgentName {
-    fn from(value: &AgentName) -> Self {
-        Self::new(value.as_str()).expect("AgentName uses Herdr's agent-name grammar")
-    }
-}
-
 impl fmt::Display for HerdrAgentName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
+}
+
+/// Resolves the server-side target for a roster member without allowing a
+/// historical ATM canonical name to panic a Herdr delivery path.
+///
+/// A configured roster alias has already passed Herdr validation. When it is
+/// absent, the canonical ATM name retains the established fallback behavior
+/// only when it also satisfies the Herdr grammar. Otherwise the caller must
+/// skip that best-effort Herdr operation; persisted mailbox state remains
+/// canonical and untouched.
+#[must_use]
+pub fn resolve_herdr_agent_target(
+    member: &AgentName,
+    configured_alias: Option<HerdrAgentName>,
+    warning_site: &'static str,
+) -> Option<HerdrAgentName> {
+    configured_alias.or_else(|| match HerdrAgentName::new(member.as_str()) {
+        Ok(agent) => Some(agent),
+        Err(error) => {
+            tracing::warn!(
+                warning_site,
+                member = %member,
+                %error,
+                "skipping Herdr operation because the canonical member name is not a valid Herdr target"
+            );
+            None
+        }
+    })
 }
 
 /// The first-party local delivery backend a recipient's roster entry
@@ -316,6 +338,26 @@ mod tests {
                 "{invalid} must be rejected"
             );
         }
+    }
+
+    #[test]
+    fn herdr_target_skips_a_nonconforming_canonical_name_without_panicking() {
+        let member = AgentName::from_validated("TeamLead");
+
+        assert_eq!(
+            resolve_herdr_agent_target(&member, None, "delivery_channel test"),
+            None
+        );
+        assert_eq!(
+            resolve_herdr_agent_target(
+                &member,
+                Some(HerdrAgentName::new("team-lead_atm-dev").expect("alias")),
+                "delivery_channel test",
+            )
+            .as_ref()
+            .map(HerdrAgentName::as_str),
+            Some("team-lead_atm-dev")
+        );
     }
 
     #[test]

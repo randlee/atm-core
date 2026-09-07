@@ -5,6 +5,7 @@ use serde::Serialize;
 use serde_json::json;
 
 use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind, RosterStore};
+use crate::caller_context::resolve_roster_alias;
 use crate::delivery_channel::{HerdrAgentName, HerdrSession, LocalMessageReceivedBackend};
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
@@ -350,8 +351,10 @@ pub fn update_member_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     request: UpdateMemberRequest,
 ) -> Result<UpdateMemberOutcome, AtmError> {
-    validate_update_member_caller(roster_store, &request)?;
+    let mut request = request;
     let mut existing_roster = projection::load_team_roster(roster_store, &request.team)?;
+    canonicalize_member_mutation_aliases(&mut request, &existing_roster);
+    validate_update_member_caller(roster_store, &request)?;
     let member_name = request.member.0.clone();
     ensure_member_name_available(&member_name)?;
     let member = existing_roster
@@ -388,8 +391,10 @@ pub fn remove_member_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     request: RemoveMemberRequest,
 ) -> Result<RemoveMemberOutcome, AtmError> {
-    validate_remove_member_caller(roster_store, &request)?;
+    let mut request = request;
     let mut existing_roster = projection::load_team_roster(roster_store, &request.team)?;
+    canonicalize_remove_member_aliases(&mut request, &existing_roster);
+    validate_remove_member_caller(roster_store, &request)?;
     ensure_member_present(&existing_roster, &request.team, &request.member)?;
     existing_roster.retain(|entry| entry.agent_name != request.member);
     roster_store.replace_roster(&request.team, &existing_roster)?;
@@ -399,6 +404,20 @@ pub fn remove_member_with_roster_store(
         team: request.team,
         member: request.member,
     })
+}
+
+/// Canonicalize every agent-name input before membership validation or roster
+/// persistence so an alias cannot become a durable target or audit identity.
+fn canonicalize_member_mutation_aliases(request: &mut UpdateMemberRequest, roster: &[RosterEntry]) {
+    request.caller_identity =
+        resolve_roster_alias(&request.caller_identity, &request.caller_team, roster);
+    request.member.0 = resolve_roster_alias(&request.member.0, &request.team, roster);
+}
+
+fn canonicalize_remove_member_aliases(request: &mut RemoveMemberRequest, roster: &[RosterEntry]) {
+    request.caller_identity =
+        resolve_roster_alias(&request.caller_identity, &request.caller_team, roster);
+    request.member = resolve_roster_alias(&request.member, &request.team, roster);
 }
 
 pub(crate) const MAX_MEMBER_METADATA_FIELD_LEN: usize = 256;
@@ -1309,5 +1328,53 @@ mod tests {
             .find(|member| member.agent_name.as_str() == "worker")
             .expect("worker record");
         assert!(!worker.metadata_json.contains_key("alias"));
+    }
+
+    #[test]
+    fn update_and_remove_member_canonicalize_alias_arguments_before_persistence() {
+        let store = TestRosterStore::default();
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        let mut lead = lead_member(TEST_TEAM, ROLE_TEAM_LEAD);
+        lead.metadata_json
+            .insert("alias".to_owned(), json!("atm-lead"));
+        let mut worker = roster_member(TEST_TEAM, "worker");
+        worker
+            .metadata_json
+            .insert("alias".to_owned(), json!("atm-worker"));
+        store.seed(&team, vec![lead, worker]);
+
+        let update = UpdateMemberRequest::new(
+            "atm-lead".parse().expect("alias caller"),
+            team.clone(),
+            TEST_TEAM,
+            "atm-worker",
+            None,
+            None,
+            None,
+            Some("lead".to_owned()),
+            None,
+            None,
+        )
+        .expect("update request");
+        let outcome =
+            update_member_with_roster_store(&store, update).expect("update through alias");
+        assert_eq!(outcome.member.as_str(), "worker");
+
+        let remove = RemoveMemberRequest::new(
+            "atm-lead".parse().expect("alias caller"),
+            team.clone(),
+            TEST_TEAM,
+            "atm-worker",
+        )
+        .expect("remove request");
+        let outcome =
+            remove_member_with_roster_store(&store, remove).expect("remove through alias");
+        assert_eq!(outcome.member.as_str(), "worker");
+        assert!(
+            store
+                .members(&team)
+                .iter()
+                .all(|member| member.agent_name.as_str() != "worker")
+        );
     }
 }

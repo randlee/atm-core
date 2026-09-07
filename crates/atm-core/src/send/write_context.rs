@@ -16,8 +16,9 @@ use crate::types::{AgentName, CommandAction, TaskId};
 
 use super::{
     DeliveryPersistenceResult, ResolvedRecipient, SendCommandOutcome, SendOutcome, SendRequest,
-    WarningEntry, resolve_recipient, resolve_roster_alias, validate_non_self_recipient,
+    WarningEntry, resolve_recipient, validate_non_self_recipient,
 };
+use crate::caller_context::resolve_roster_alias;
 
 #[expect(
     clippy::too_many_arguments,
