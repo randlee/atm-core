@@ -15,13 +15,17 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-herdr/tests/windows_process_confinement.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T16:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY7 ;
   triage:foundAt "2026-09-07T15:57:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY7-QA-003/integrate-94556328c> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY7-QA-003/pr1294-d4c88a4c6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY7-QA-003/integrate-67d082dbe> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY7-QA-003/1> ;
+  triage:closedAt "2026-09-07T16:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY7-QA-003/integrate-94556328c>
@@ -29,8 +33,8 @@
   triage:file "crates/atm-herdr/tests/windows_process_confinement.rs" ;
   triage:line 10 ;
   triage:snippet "\"cfg(windows)\", // over-broad: matches transport_socket.rs's legitimate named-pipe cfg(windows) blocks" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "94556328c" ;
   triage:occursIn <urn:atm:triage:worktree/AY7-QA-003/94556328c> .
@@ -40,11 +44,22 @@
   triage:file "crates/atm-herdr/tests/windows_process_confinement.rs" ;
   triage:line 10 ;
   triage:snippet "\"cfg(windows)\", // same over-broad marker, unchanged by the develop-1.5.6 merge" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "merge/develop-1.5.6-into-phase-ay" ;
   triage:headSha "d4c88a4c6" ;
   triage:occursIn <urn:atm:triage:worktree/AY7-QA-003/d4c88a4c6> .
+
+<urn:atm:triage:occurrence/AY7-QA-003/integrate-67d082dbe>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/windows_process_confinement.rs" ;
+  triage:line 6 ;
+  triage:snippet "const WINDOWS_PROCESS_MARKERS: &[&str] = &[\"creation_flags\", \"CREATE_NO_WINDOW\", \"herdr.exe\"];" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "67d082dbe" ;
+  triage:occursIn <urn:atm:triage:worktree/AY7-QA-003/67d082dbe> .
 
 <urn:atm:triage:worktree/AY7-QA-003/94556328c>
   a triage:WorktreeSnapshot ;
@@ -59,3 +74,19 @@
   triage:branch "merge/develop-1.5.6-into-phase-ay" ;
   triage:headSha "d4c88a4c6" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AY7-QA-003/67d082dbe>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "67d082dbe" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/AY7-QA-003/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T16:10:00Z"^^xsd:dateTime ;
+  triage:fixCommit "dec2a280f" ;
+  triage:fixBranch "merge/develop-1.5.6-into-phase-ay" ;
+  triage:verifiedInRound "qa-pr1294-r1" ;
+  triage:resolutionNote "PR #1294 admin-merged into integrate/phase-ay at 67d082dbe (Rand's merge decision). Confirmed git merge-base --is-ancestor dec2a280f 67d082dbe (YES). Content-verified at the merged head: crates/atm-herdr/tests/windows_process_confinement.rs's WINDOWS_PROCESS_MARKERS now reads &[\"creation_flags\", \"CREATE_NO_WINDOW\", \"herdr.exe\"] -- the bare cfg(windows) entry is gone, transport_socket.rs untouched. Ran cargo test -p atm-herdr --test windows_process_confinement directly in the integrate/phase-ay worktree at 67d082dbe: 1 passed, 0 failed. Closing all three occurrences on this evidence." .
