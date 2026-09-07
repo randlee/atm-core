@@ -2,6 +2,7 @@ mod ax6;
 pub mod health;
 mod herdr_state;
 pub mod report;
+mod team_scope;
 
 #[cfg(test)]
 use std::collections::BTreeSet;
@@ -26,6 +27,10 @@ use crate::types::{AgentName, TeamName};
 use atm_storage::PeerConfigStore;
 use std::sync::Arc;
 
+use team_scope::{
+    graft_receivers_for_teams, load_scoped_rosters, push_doctor_error_for_team, teams_for_scope,
+};
+
 pub use crate::boundary::HerdrEndpointDoctor;
 pub use herdr_state::{
     HerdrBinaryProvenance, HerdrBinaryResolution, HerdrDoctorState, HerdrEndpointDisplay,
@@ -45,6 +50,7 @@ pub use report::{
     ReaderPoolDoctorReport, ReaderPoolMetricsDoctorReport, RecipientDeliveryPath,
     RecipientDeliveryPathReport, TeamEscalationRecipientsDoctorReport,
 };
+pub use team_scope::DoctorTeamScope;
 
 #[derive(Debug, Default)]
 pub struct ClosedHerdrEndpointDoctor;
@@ -84,26 +90,6 @@ pub struct DoctorQuery {
     /// Caller's `ATM_IDENTITY`, captured in the invoking CLI process.
     #[serde(default)]
     pub caller_identity: Option<AgentName>,
-}
-
-/// The effective team scope for one doctor run.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DoctorTeamScope {
-    Single(TeamName),
-    AllTeams { resolved_none: bool },
-}
-
-impl DoctorTeamScope {
-    fn report_name(&self) -> &'static str {
-        match self {
-            Self::Single(_) => "single",
-            Self::AllTeams { .. } => "all_teams",
-        }
-    }
-
-    fn is_all_teams(&self) -> bool {
-        matches!(self, Self::AllTeams { .. })
-    }
 }
 
 impl DoctorQuery {
@@ -942,75 +928,6 @@ fn load_member_roster(
     })
 }
 
-fn teams_for_scope(
-    runtime: &LocalServiceRuntime,
-    scope: &DoctorTeamScope,
-    findings: &mut Vec<DoctorFinding>,
-) -> Vec<TeamName> {
-    let mut teams = match scope {
-        DoctorTeamScope::Single(team) => vec![team.clone()],
-        DoctorTeamScope::AllTeams { resolved_none } => {
-            if *resolved_none {
-                findings.push(DoctorFinding {
-                    severity: DoctorSeverity::Info,
-                    code: AtmErrorCode::ObservabilityHealthOk,
-                    message: "no team resolved from --team or ATM_TEAM; inspecting all canonical roster teams"
-                        .to_owned(),
-                    remediation: None,
-                });
-            }
-            runtime.list_roster_teams()
-        }
-    };
-    teams.sort_by(|left, right| left.as_str().cmp(right.as_str()));
-    teams.dedup();
-    teams
-}
-
-fn load_scoped_rosters(
-    runtime: &LocalServiceRuntime,
-    teams: &[TeamName],
-    scope: &DoctorTeamScope,
-    caller_identity: Option<&AgentName>,
-    live_cwd: Option<&Path>,
-    findings: &mut Vec<DoctorFinding>,
-) -> (Option<MembersList>, Vec<MembersList>) {
-    let team_context = scope.is_all_teams();
-    let rosters = teams
-        .iter()
-        .filter_map(|team| {
-            load_member_roster(
-                runtime,
-                team,
-                caller_identity,
-                live_cwd,
-                team_context,
-                findings,
-            )
-        })
-        .collect::<Vec<_>>();
-    if team_context {
-        (None, rosters)
-    } else {
-        (rosters.into_iter().next(), Vec::new())
-    }
-}
-
-fn graft_receivers_for_teams(
-    runtime: &LocalServiceRuntime,
-    teams: &[TeamName],
-    team_context: bool,
-    findings: &mut Vec<DoctorFinding>,
-) -> GraftReceiversDoctorReport {
-    let receivers = teams
-        .iter()
-        .flat_map(|team| {
-            graft_receivers_doctor_report(runtime, team, team_context, findings).receivers
-        })
-        .collect();
-    GraftReceiversDoctorReport { receivers }
-}
-
 fn push_mixed_local_backend_warning(
     team: &TeamName,
     roster: &[crate::boundary::RosterEntry],
@@ -1058,25 +975,6 @@ fn push_doctor_error(
         message,
         remediation,
     });
-}
-
-fn push_doctor_error_for_team(
-    findings: &mut Vec<DoctorFinding>,
-    severity: DoctorSeverity,
-    error: crate::error::AtmError,
-    team: Option<&TeamName>,
-) {
-    if let Some(team) = team {
-        let remediation = Some(error.remediation().to_owned());
-        findings.push(DoctorFinding {
-            severity,
-            code: error.code(),
-            message: format!("team {team}: {}", error.detail()),
-            remediation,
-        });
-    } else {
-        push_doctor_error(findings, severity, error);
-    }
 }
 
 #[cfg(test)]
