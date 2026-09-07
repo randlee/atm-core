@@ -104,19 +104,28 @@ P0 exit gate:
 
 ### Prepare without mutating the target
 
-Use a dedicated read-only review checkout. Replace placeholders only with the
-values Loki acknowledged in P0.
+Use the dedicated review checkout and the frozen current-cycle range.
 
 ```sh
 cd /Users/randlee/Documents/github/hermes-agent-randlee
 git fetch --all --prune
-git cat-file -e <base-sha>^{commit}
-git cat-file -e <frozen-head-sha>^{commit}
-test "$(git rev-parse origin/<fork-branch>)" = "<frozen-head-sha>"
-git merge-base --is-ancestor <base-sha> <frozen-head-sha>
-git diff --name-status <base-sha>..<frozen-head-sha>
-git log --reverse --oneline <base-sha>..<frozen-head-sha>
+git cat-file -e 693641aa8b4359c602283bdbbc14041e03bc47bc^{commit}
+git cat-file -e d45230aac599d3db6a24404eba4fa2f04e030004^{commit}
+test "$(git rev-parse origin/main)" = d45230aac599d3db6a24404eba4fa2f04e030004
+test "$(git rev-parse origin/atm/stack)" = d45230aac599d3db6a24404eba4fa2f04e030004
+git merge-base --is-ancestor \
+  693641aa8b4359c602283bdbbc14041e03bc47bc \
+  d45230aac599d3db6a24404eba4fa2f04e030004
+git diff --name-status \
+  693641aa8b4359c602283bdbbc14041e03bc47bc..d45230aac599d3db6a24404eba4fa2f04e030004
+git diff --check \
+  693641aa8b4359c602283bdbbc14041e03bc47bc..d45230aac599d3db6a24404eba4fa2f04e030004
 ```
+
+The `cat-file`, pointer, ancestry, and diff-check commands exit zero without
+output. The inventory prints exactly five paths: two added ATM documents, two
+modified gateway modules, and the added injection-seam test module. Any other
+path or output from `git diff --check` stops the review.
 
 Record the changed-file inventory before reviewing. Review every changed file
 and every commit in the range. Re-run the head-equality check immediately
@@ -145,6 +154,20 @@ verified at `5f2793add0f949bbc9b231e0e18a17bfb39b2f93`: 38 tests, Ruff, diff che
 and the production-shaped steer probe pass. HGF-005 is fixed at `650bc7f2d5`.
 The final `origin/main` and `origin/atm/stack` both point to `d45230aac5`; the
 full five-file range is clean, P1 is PASS, and P2 is released.
+
+The frozen-head validation commands and markers are:
+
+```sh
+uv sync --frozen --extra messaging --extra dev
+uv run --frozen python -m pytest \
+  tests/gateway/test_inject_internal_message.py tests/gateway/test_hooks.py
+uv run --frozen ruff check gateway/run.py gateway/run_startup.py \
+  tests/gateway/test_inject_internal_message.py
+```
+
+Pytest must report `38 passed`; Ruff must report `All checks passed!`. The
+production-shaped direct-agent steer case is part of the 38-test suite and must
+leave its queue spy empty. A missing marker or any additional failure holds P2.
 
 ### Review report shape
 
@@ -188,11 +211,12 @@ colima status
 docker info
 test -f env/allowlist.env
 test -z "$(git ls-files env/allowlist.env)"
-shasum -a 256 <atm-tarball>
-find <wheels-dir> -maxdepth 1 -type f -name '*.whl' -print
+shasum -a 256 assets/atm_1.5.3_aarch64-unknown-linux-gnu.tar.gz
+find assets -maxdepth 1 -type f -name '*1.5.3*.whl' -print
 python3 /Users/randlee/Documents/github/atm-core/.just/check_version_sync.py
 rg -n 'atm-graft' /Users/randlee/Documents/github/atm-core/crates/hermes-atm/pyproject.toml
-unzip -p <hermes-atm-wheel> '*.dist-info/METADATA' | rg '^Requires-Dist: atm-graft'
+unzip -p assets/hermes_atm-1.5.3-py3-none-any.whl \
+  '*.dist-info/METADATA' | rg '^Requires-Dist: atm-graft'
 ```
 
 Do not print the allowlist contents. Record only artifact filenames, source
@@ -222,19 +246,39 @@ the tagged source and built wheel METADATA before image construction.
 
 ### Build and boot
 
-Use the platform, image/tag, and artifact locations agreed in P0. The approved
-Colima allocation is 4 CPU and 4 GiB. Do not reuse an unproven wheelhouse or a
-mutable image tag.
+The approved Colima allocation is 4 CPU and 4 GiB. Reconstruct the current
+cycle inputs directly from the two pinned CI runs in a fresh staging directory;
+do not point `build.sh` back at its own `assets/` destination.
 
 ```sh
-TESTBED_PLATFORM=<platform> \
-ATM_TARBALL=<atm-tarball> \
-WHEELS_DIR=<wheels-dir> \
-./build.sh all
+cd /Users/randlee/Documents/github/atm-hermes-testbed
+CYCLE_ARTIFACT_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/atm-hermes-v153.XXXXXX")"
+gh run download 34074022098 --repo randlee/atm-core \
+  --name aarch64-unknown-linux-gnu --dir "$CYCLE_ARTIFACT_ROOT/archive"
+gh run download 34074006538 --repo randlee/atm-core \
+  --name hermes-atm-wheels-linux-aarch64 --dir "$CYCLE_ARTIFACT_ROOT/wheels"
+test "$(shasum -a 256 "$CYCLE_ARTIFACT_ROOT/archive/atm_1.5.3_aarch64-unknown-linux-gnu.tar.gz" | awk '{print $1}')" = \
+  ee00a73aee785f47c125d4b31ac50056c39f7012ae76e76da3b9d7dd81ed7905
+test "$(shasum -a 256 "$CYCLE_ARTIFACT_ROOT/wheels/hermes_atm-1.5.3-py3-none-any.whl" | awk '{print $1}')" = \
+  2892e8490053b7158e9c87bb72838955390200e5247d940d971bc79c267a7318
+test "$(shasum -a 256 "$CYCLE_ARTIFACT_ROOT/wheels/atm_graft-1.5.3-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" | awk '{print $1}')" = \
+  880eef4e90e04a16bf5bfa0e8b8a2d047b59f76183076a4b7336a99cfd0f1203
+TESTBED_PLATFORM=arm64 \
+ATM_TARBALL="$CYCLE_ARTIFACT_ROOT/archive/atm_1.5.3_aarch64-unknown-linux-gnu.tar.gz" \
+WHEELS_DIR="$CYCLE_ARTIFACT_ROOT/wheels" \
+  ./build.sh all
 
-TESTBED_PLATFORM=<platform> ./run.sh
-docker exec <container> atm doctor
+TESTBED_PLATFORM=arm64 ./run.sh
+docker exec hermes-testbed atm doctor
+docker image inspect loki/hermes-testbed:testbed \
+  --format '{{index .RepoDigests 0}}'
 ```
+
+The three digest checks exit zero without output. `build.sh` ends with
+`== build done:`; `run.sh` reports `started: hermes-testbed (platform:
+linux/arm64)` and the three 1.5.3 component versions; doctor reports a healthy
+summary. The image inspection must resolve to the immutable digest recorded
+below before any tier runs.
 
 Current-cycle build record:
 
@@ -253,8 +297,9 @@ Current-cycle build record:
 If the harness attempts `sudo`, stop. The no-`sudo` implementation landed by
 `fb9d63c`, building on `41fc546`. Daemon lifecycle control stays outside the
 unprivileged agent, and the outer coordinator invokes root-only,
-non-self-elevating helpers through root-default
-`docker exec <container> <helper>`. The image contains no `sudo` package or
+non-self-elevating helpers through root-default `docker exec hermes-testbed
+/opt/testbed/harness/restart-daemon.sh` and `docker exec hermes-testbed
+/opt/testbed/harness/freeze-daemon.sh`. The image contains no `sudo` package or
 sudoers entries. Clear all coordination markers before every run. The fixture
 agent performs and observes only ATM operations while UTC ready, trigger, and
 done markers coordinate the out-of-band helper.
@@ -277,13 +322,13 @@ changelog ship as `suite/v2` for the `prerelease/v1.5.3` rerun.
 
 | Tier | Required flow | Command | Expected durable result |
 | --- | --- | --- | --- |
-| A | mailbox semantics | `docker exec <container> /opt/testbed/test-graph.sh` | `tier-a.json`, all named rows PASS |
+| A | mailbox semantics | `docker exec hermes-testbed /opt/testbed/test-graph.sh` | `tier-a.json`, all named rows PASS |
 | B | daemon → graft receiver → Hermes injection seam and envelope fidelity | same matrix command | `tier-b.json`, all named rows PASS |
 | C | retained tmux fixture surface only; never manipulate a Hermes agent through tmux | same matrix command | `tier-c.json`, all named rows PASS |
 | D | Herdr fixture surface | same matrix command | `tier-d.json`, all named rows PASS |
 | D7 | ATM → Herdr nudge routing contract | same matrix command | D7 row PASS; no `ATM_HERDR_UNAVAILABLE` |
 | Restart | daemon/receiver both orders plus crash-within-window recovery | use the P0-agreed restart command | separate restart JSON; zero manual profile repair |
-| E | live graft-Hermes transcript | `docker exec <container> /opt/testbed/harness/run-prompts.sh E0` or the P0-agreed successor | prompt JSON with every step PASS |
+| E | live graft-Hermes transcript | `docker exec hermes-testbed /opt/testbed/harness/run-prompts.sh E0` | prompt JSON with every step PASS |
 | Cross-host | container ↔ Mac both directions | only when P0 says in scope | dedicated JSON with host-qualified routing and both directions PASS |
 
 The matrix command runs A–D together; treat each emitted JSON file as its own
@@ -383,8 +428,10 @@ the command. Run teardown as the fixture member itself or as another member of
 the fixture team:
 
 ```sh
-ATM_IDENTITY=<fixture-member> ATM_TEAM=<fixture-team> \
-  atm teams remove-member <fixture-team> <fixture-member>
+ATM_IDENTITY=fx-at3-beta ATM_TEAM=fx-at3 \
+  atm teams remove-member fx-at3 fx-at3-beta
+docker exec --env ATM_IDENTITY=fx-at3-alpha --env ATM_TEAM=fx-at3 \
+  hermes-testbed atm teams remove-member fx-at3 fx-at3-alpha
 ```
 
 Expected result: the command succeeds once, and a sanitized roster/list check
