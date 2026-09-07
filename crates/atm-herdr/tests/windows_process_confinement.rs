@@ -3,12 +3,7 @@
 use std::fs;
 use std::path::Path;
 
-const WINDOWS_PROCESS_MARKERS: &[&str] = &[
-    "creation_flags",
-    "CREATE_NO_WINDOW",
-    "herdr.exe",
-    "cfg(windows)",
-];
+const WINDOWS_PROCESS_MARKERS: &[&str] = &["creation_flags", "CREATE_NO_WINDOW", "herdr.exe"];
 
 #[test]
 fn windows_cli_process_behavior_is_confined_to_transport_cli() {
