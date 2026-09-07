@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CIPHER-NAME-006>
+  a triage:Finding ;
+  triage:findingId "CIPHER-NAME-006" ;
+  triage:title "retired .atm.toml atm.aliases remains parsed and used for runtime identity, mailbox, and list resolution" ;
+  triage:description "Independent review of integrate/phase-ay at 10b044c0c. Rand's ruling in requirements section 3.3 and matrix D-06 says .atm.toml [atm].aliases is retired from atm-core; only the doctor pane-alias consistency diagnostic may read a pane alias. The code still exposes config::aliases, loads parsed.atm.aliases into AtmConfig, resolves mailbox targets through config::aliases::resolve_agent_name, and retains identity alias projection helpers. A stale config alias can therefore affect runtime behavior and violates the single durable roster-alias source of truth." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-compliance" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/config; crates/atm-core/src/mailbox/source.rs; crates/atm-core/src/list.rs; crates/atm-core/src/identity" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:L.7 ;
+  triage:foundAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CIPHER-NAME-006/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CIPHER-NAME-006/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CIPHER-NAME-006/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 65 ;
+  triage:snippet "load_config still stores parsed.atm.aliases in AtmConfig" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:occursIn <urn:atm:triage:worktree/CIPHER-NAME-006-10b> .
+
+<urn:atm:triage:occurrence/CIPHER-NAME-006/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/source.rs" ;
+  triage:line 59 ;
+  triage:snippet "resolve_target still maps recipient names through config::aliases instead of the durable roster at ingress" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:occursIn <urn:atm:triage:worktree/CIPHER-NAME-006-10b> .
+
+<urn:atm:triage:worktree/CIPHER-NAME-006-10b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:orderIndex 0 .

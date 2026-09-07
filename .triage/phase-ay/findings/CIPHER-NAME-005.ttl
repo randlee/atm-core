@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CIPHER-NAME-005>
+  a triage:Finding ;
+  triage:findingId "CIPHER-NAME-005" ;
+  triage:title "bare roster aliases resolve only within the caller or addressed team instead of database-wide" ;
+  triage:description "Independent review of integrate/phase-ay at 10b044c0c. REQ-ROSTER-NAME-007 and matrix D-03 require a bare alias to resolve database-wide to its owning team when sent from another team. resolve_roster_alias receives one team roster and filters both canonical and alias matches by that team; write preparation then loads the recipient roster using the unresolved implicit caller team. A unique alias owned by another team therefore remains an AgentName in the caller team and fails or routes incorrectly instead of replacing the recipient team and canonical member at daemon ingress." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-compliance" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/caller_context.rs; crates/atm-core/src/send/write_context.rs; mailbox and read ingress callers" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY14 ;
+  triage:foundAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CIPHER-NAME-005/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CIPHER-NAME-005/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CIPHER-NAME-005/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 59 ;
+  triage:snippet "resolve_roster_alias searches only members whose team_name equals the supplied team" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:occursIn <urn:atm:triage:worktree/CIPHER-NAME-005-10b> .
+
+<urn:atm:triage:occurrence/CIPHER-NAME-005/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/write_context.rs" ;
+  triage:line 116 ;
+  triage:snippet "resolve_recipient uses the implicit caller team before team-scoped alias resolution, so a bare cross-team alias cannot select its owner team" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:occursIn <urn:atm:triage:worktree/CIPHER-NAME-005-10b> .
+
+<urn:atm:triage:worktree/CIPHER-NAME-005-10b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:orderIndex 0 .

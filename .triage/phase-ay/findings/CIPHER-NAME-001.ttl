@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CIPHER-NAME-001>
+  a triage:Finding ;
+  triage:findingId "CIPHER-NAME-001" ;
+  triage:title "roster-store transaction does not enforce effective-name uniqueness for canonical-only writes or existing duplicates" ;
+  triage:description "Independent review of integrate/phase-ay at 10b044c0c. save_roster calls validate_database_wide_aliases, but that validator collects only explicit alias values and compares those values with raw canonical and alias fields. It never computes alias-or-canonical for every row, so a direct RosterStore write can create duplicate canonical effective names, a write can leave pre-existing duplicates in place, and concurrent or restore/import paths are not protected by the transaction. This covers matrix A-21, A-22, A-23, A-24, and A-27. The separate canonical-name-versus-existing-alias defect in A-06/A-07 is already recorded as AY14-QA-003 and is not duplicated here. The write transaction must validate the complete resulting roster against every other team before replacement." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-compliance" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/roster_store.rs; crates/atm-core/src/team_admin/member_mutation.rs; restore and daemon member-write callers" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY14 ;
+  triage:foundAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CIPHER-NAME-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CIPHER-NAME-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/roster_store.rs" ;
+  triage:line 104 ;
+  triage:snippet "save_roster validates only explicit aliases; canonical-only effective names and pre-existing duplicates are not checked in the transaction (A-21..A-24,A-27)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:occursIn <urn:atm:triage:worktree/CIPHER-NAME-001-10b> .
+
+<urn:atm:triage:worktree/CIPHER-NAME-001-10b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:orderIndex 0 .
