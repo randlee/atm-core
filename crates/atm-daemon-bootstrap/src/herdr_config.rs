@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use atm_core::atm_temp::EnvSource;
+use atm_core::doctor::HerdrTransportKind;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_herdr::HerdrClientConfig;
 use serde::Deserialize;
@@ -9,6 +10,7 @@ use serde::Deserialize;
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct RawHerdrConfig {
+    transport: Option<HerdrTransportKind>,
     binary_path: Option<PathBuf>,
     socket_path: Option<PathBuf>,
     escalation_min_interval_secs: Option<i64>,
@@ -68,14 +70,18 @@ pub(crate) fn daemon_herdr_config(env: &dyn EnvSource) -> Result<DaemonHerdrConf
         .with_cause(error)
     })?;
     let herdr = raw.herdr.unwrap_or_default();
-    let client =
-        HerdrClientConfig::try_new(herdr.binary_path, herdr.socket_path).map_err(|error| {
-            AtmError::new(
-                AtmErrorCode::ConfigParseFailed,
-                format!("failed to validate {} [herdr]: {error}", path.display()),
-            )
-            .with_cause(error)
-        })?;
+    let client = HerdrClientConfig::try_new(
+        herdr.transport.unwrap_or(HerdrTransportKind::Socket),
+        herdr.binary_path,
+        herdr.socket_path,
+    )
+    .map_err(|error| {
+        AtmError::new(
+            AtmErrorCode::ConfigParseFailed,
+            format!("failed to validate {} [herdr]: {error}", path.display()),
+        )
+        .with_cause(error)
+    })?;
     let escalation_min_interval =
         validate_escalation_min_interval(herdr.escalation_min_interval_secs, &path)?;
     Ok(DaemonHerdrConfig {
@@ -106,6 +112,7 @@ fn validate_escalation_min_interval(
 #[cfg(test)]
 mod tests {
     use super::{DEFAULT_HERDR_ESCALATION_MIN_INTERVAL, daemon_herdr_config};
+    use atm_core::doctor::HerdrTransportKind;
     use atm_core::error_codes::AtmErrorCode;
     use atm_core::test_support::FakeEnvSource;
 
@@ -129,6 +136,13 @@ mod tests {
                 .escalation_min_interval,
             DEFAULT_HERDR_ESCALATION_MIN_INTERVAL
         );
+        assert_eq!(
+            daemon_herdr_config(&env_for(&home))
+                .expect("default config")
+                .client
+                .transport(),
+            &HerdrTransportKind::Socket
+        );
     }
 
     #[test]
@@ -150,6 +164,45 @@ mod tests {
 
         assert_eq!(config.client.binary_path(), Some(binary_path.as_path()));
         assert_eq!(config.client.socket_path(), Some(socket_path.as_path()));
+        assert_eq!(config.client.transport(), &HerdrTransportKind::Socket);
+    }
+
+    #[test]
+    fn accepts_only_socket_and_explicit_cli_transport_values() {
+        for (value, expected) in [
+            ("socket", HerdrTransportKind::Socket),
+            ("cli", HerdrTransportKind::Cli),
+        ] {
+            let home = tempfile::tempdir().expect("tempdir");
+            std::fs::write(
+                home.path().join(".atm.toml"),
+                format!("[herdr]\ntransport = \"{value}\"\n"),
+            )
+            .expect("write config");
+
+            assert_eq!(
+                daemon_herdr_config(&env_for(&home))
+                    .expect("supported transport parses")
+                    .client
+                    .transport(),
+                &expected
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_unknown_transport_with_file_and_value_context() {
+        let home = tempfile::tempdir().expect("tempdir");
+        let path = home.path().join(".atm.toml");
+        std::fs::write(&path, "[herdr]\ntransport = \"other\"\n").expect("write config");
+
+        let error = daemon_herdr_config(&env_for(&home)).expect_err("must reject transport");
+
+        assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
+        assert!(error.detail().contains(path.to_str().expect("utf8 path")));
+        assert!(error.detail().contains("transport"));
+        assert!(error.detail().contains("other"));
+        assert!(error.cause().is_some());
     }
 
     #[test]

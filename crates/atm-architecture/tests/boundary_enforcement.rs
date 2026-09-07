@@ -3762,9 +3762,11 @@ fn ay3_herdr_endpoint_doctor_contract_has_only_closed_and_bootstrap_implementati
     );
     assert!(
         client_config.contains("pub struct HerdrClientConfig {")
+            && !client_config.contains("pub transport:")
             && !client_config.contains("pub binary_path:")
             && !client_config.contains("pub socket_path:")
             && client_config.contains("pub fn try_new(")
+            && client_config.contains("pub fn transport(&self) -> &HerdrTransportKind")
             && client_config.contains("pub fn binary_path(&self) -> Option<&Path>")
             && client_config.contains("pub fn socket_path(&self) -> Option<&Path>"),
         "HerdrClientConfig must retain private fields and its validated read-only API"

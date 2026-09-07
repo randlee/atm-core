@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use atm_core::doctor::HerdrVersion;
+use atm_core::doctor::{HerdrTransportKind, HerdrVersion};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::types::AgentName;
 use atm_core::{HerdrSession, RequestDeadline};
@@ -18,14 +18,26 @@ use crate::{
 
 /// Validated Herdr client configuration. Construction is pure and performs no
 /// endpoint or filesystem I/O.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HerdrClientConfig {
+    transport: HerdrTransportKind,
     binary_path: Option<PathBuf>,
     socket_path: Option<PathBuf>,
 }
 
+impl Default for HerdrClientConfig {
+    fn default() -> Self {
+        Self {
+            transport: HerdrTransportKind::Socket,
+            binary_path: None,
+            socket_path: None,
+        }
+    }
+}
+
 impl HerdrClientConfig {
     pub fn try_new(
+        transport: HerdrTransportKind,
         binary_path: Option<PathBuf>,
         socket_path: Option<PathBuf>,
     ) -> Result<Self, AtmError> {
@@ -41,6 +53,7 @@ impl HerdrClientConfig {
             }
         }
         Ok(Self {
+            transport,
             binary_path,
             socket_path,
         })
@@ -56,6 +69,10 @@ impl HerdrClientConfig {
 
     pub fn binary_path(&self) -> Option<&Path> {
         self.binary_path.as_deref()
+    }
+
+    pub fn transport(&self) -> &HerdrTransportKind {
+        &self.transport
     }
 
     pub fn socket_path(&self) -> Option<&Path> {
@@ -104,9 +121,8 @@ pub(crate) struct HerdrErrorEnvelope {
     pub retry_after_ms: Option<u64>,
 }
 
-/// Private transport selection. AY.9 owns production selection; AY.8 keeps
-/// the socket variant available for the direct transport and equivalence
-/// tests without changing the composition root.
+/// Private transport selection. AY.9 owns the sole production factory; this
+/// enum never crosses the atm-herdr crate boundary.
 #[derive(Clone, Debug)]
 pub(crate) enum HerdrIo {
     Cli(CliIo),
@@ -116,13 +132,16 @@ pub(crate) enum HerdrIo {
 
 impl Default for HerdrIo {
     fn default() -> Self {
-        Self::Cli(CliIo::new(&HerdrClientConfig::default()))
+        Self::from_config(&HerdrClientConfig::default())
     }
 }
 
 impl HerdrIo {
     pub(crate) fn from_config(config: &HerdrClientConfig) -> Self {
-        Self::Cli(CliIo::new(config))
+        match config.transport() {
+            HerdrTransportKind::Cli => Self::Cli(CliIo::new(config)),
+            HerdrTransportKind::Socket => Self::Socket(SocketIo::new(config)),
+        }
     }
 
     pub(crate) async fn call(
@@ -285,5 +304,21 @@ fn error_from_envelope(envelope: &HerdrEnvelope) -> HerdrError {
 fn protocol_mismatch(message: impl Into<String>) -> HerdrError {
     HerdrError::ProtocolMismatch {
         message: message.into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HerdrClientConfig, HerdrIo};
+    use atm_core::doctor::HerdrTransportKind;
+
+    #[test]
+    fn production_factory_selects_each_closed_transport_once() {
+        let socket = HerdrClientConfig::default();
+        let cli = HerdrClientConfig::try_new(HerdrTransportKind::Cli, None, None)
+            .expect("CLI is a supported explicit selection");
+
+        assert!(matches!(HerdrIo::from_config(&socket), HerdrIo::Socket(_)));
+        assert!(matches!(HerdrIo::from_config(&cli), HerdrIo::Cli(_)));
     }
 }
