@@ -365,6 +365,31 @@ Satisfied by:
   ADR-047, ADR-052, `REQ-P-BENCHMARK-001`, and
   `REQ-CORE-TRANSPORT-002B1`.
 
+  Herdr entry-management addendum (AY.5): the same operator control plane
+  additionally exposes exactly `herdr-entry install`, `remove`, and `status
+  [--repair]`. This is an explicit, independent transaction; ordinary
+  `switch`, `restart`, `restore`, and daemon startup never invoke it. The
+  command reads Herdr configuration and its ordered endpoint list only from
+  native `atm doctor --json`: `configured: true` is required for install,
+  `false` is a safe refusal, and null, missing, malformed, or nonzero doctor
+  output is `HERDR_DOCTOR_UNREADABLE` (exit 4), never a Python fallback.
+  Default and named sessions receive deterministic per-user native entry
+  identifiers; an endpoint configured with explicit socket-path provenance is
+  externally owned and is refused. Every owned object carries
+  `managed-by=atm daemon-switch` and a canonical-render digest.
+
+  Install journals `planned -> written -> registered -> verified` durably
+  before each mutation, atomically writes the owned object, registers it with
+  the native per-user manager, verifies marker/digest/registration, then
+  completes the journal. Remove verifies ownership first and unregisters then
+  deletes only a marker-bearing, digest-matching object. An incomplete journal
+  blocks install/remove; `status --repair` either completes verified
+  registration or unregisters and removes the marker-bearing partial object.
+  Foreign collisions, digest mismatch, Windows account/session mismatch, and
+  ambiguity fail closed without overwrite or deletion. Every result is exactly
+  one stdout JSON object with `ok`, `code`, `message`, `remedy`, and `entries`;
+  success exits 0, safe refusals exit 3, and operational failures exit 4.
+
 - `REQ-P-DAEMON-DISPATCHER-001` Request work accepted by the daemon must remain
   tracked by runtime-owned drain accounting until it finishes or is cancelled.
   Detached untracked request execution is forbidden even when the transport

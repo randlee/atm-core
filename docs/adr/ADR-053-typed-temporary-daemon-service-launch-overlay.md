@@ -160,3 +160,29 @@ Effect:
 - `REQ-P-DAEMON-SWITCH-001` is narrowed to match.  The Windows argv codec
   remains in the codebase only as a tested utility; it carries no service
   contract.
+
+## Addendum 2026-09-07 — explicit Herdr entry control plane
+
+`daemon-switch herdr-entry {install,remove,status [--repair]}` is a separate,
+operator-invoked transaction for per-user Herdr start-at-login definitions. It
+does not alter the selected ATM pair, the temporary-launch overlay journal, or
+the daemon lifecycle. No switch, restart, restore, or daemon startup path
+calls it implicitly.
+
+The command consumes only native `atm doctor --json` endpoint data. It creates
+at most one marker-bearing object per configured non-socket endpoint: a macOS
+LaunchAgent (`RunAtLoad`, no `KeepAlive`), Linux systemd user unit plus enabled
+state, or Windows interactive-user logon scheduled task. The default command
+is `herdr server`; a named session is `herdr --session <name> server`.
+Explicit socket-path endpoints remain externally owned. Windows refuses an
+entry belonging to another account, service, or session 0.
+
+Each entry has its own durable journal in the ADR-053 journal directory,
+separate from temporary-launch recovery state. Install is `plan -> journal ->
+atomic write -> native register -> verify -> complete`; remove verifies the
+marker and digest before `journal -> unregister -> delete -> verify ->
+complete`. Foreign definitions, digest mismatches, and incomplete work fail
+closed. Repair is explicit: it completes a verified registration or rolls back
+only the marker-bearing partial object. The public machine contract is exactly
+one JSON envelope on stdout and exit 0 (success), 3 (safe refusal), or 4
+(operational failure).
