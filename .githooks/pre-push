@@ -40,10 +40,12 @@ zero=0000000000000000000000000000000000000000
 # pre-existing, unrelated validation failures; see docs/triage/ttl-repair.md).
 tooling_pattern='(^|/)\.claude/skills/graph-orchestration/scripts/validate-findings\.py$|(^|/)\.claude/skills/graph-orchestration/scripts/validate-findings\.sparql$|(^|/)\.triage/\.graph-orchestration-ignore$|(^|/)\.claude/skills/triaging-findings/triage-record\.ttl\.j2$'
 
+remote_name="${1:-origin}"
+
 needs_rust_gate=0
 ttl_fail=0
-tmp_root=""
-cleanup() { [ -n "$tmp_root" ] && rm -rf "$tmp_root"; }
+tmp_root=$(mktemp -d)
+cleanup() { rm -rf "$tmp_root"; }
 trap cleanup EXIT
 
 while read -r _local_ref local_sha _remote_ref remote_sha; do
@@ -66,11 +68,21 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         if [ "$remote_sha" != "$zero" ]; then
             echo "pre-push: remote head $remote_sha not fetched locally; gating every commit not already on an origin ref" >&2
         fi
-        commits=$(git rev-list "$local_sha" --not --remotes=origin 2>/dev/null)
+        commits=$(git rev-list "$local_sha" --not --remotes="$remote_name" 2>/dev/null)
     fi
     [ -n "$commits" ] || continue
 
-    changed=$(git diff-tree --no-commit-id -r --name-only -m $commits 2>/dev/null | sort -u)
+    # -c (combined diff), not -m: -m against a merge lists the diff against
+    # EVERY parent separately, so a develop->integrate merge push lists that
+    # phase's entire TTL history as "changed" and false-refuses unrelated
+    # pushes on other (pre-existing-broken) phases. -c lists only paths
+    # whose merge result differs from every parent (real conflict
+    # resolutions); each side's own commits are already covered by
+    # `git rev-list` above. Commits are fed on stdin, not as trailing argv,
+    # because `git diff-tree` only accepts up to two tree-ish positional
+    # args -- with 3+ commits the extras are silently treated as pathspecs
+    # that match nothing, un-gating multi-commit pushes.
+    changed=$(printf '%s\n' "$commits" | git diff-tree --stdin --no-commit-id -r --name-only -c 2>/dev/null | sort -u)
     [ -n "$changed" ] || continue
 
     if printf '%s\n' "$changed" | grep -Eq '\.rs$|^Cargo\.(toml|lock)$|/Cargo\.toml$'; then
@@ -91,8 +103,6 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
             -e 's#^(.*/)?\.sprints/([^/]+)/.*#\2#' \
         | tr '[:lower:]' '[:upper:]' | sort -u)
     [ -n "$touched_phases" ] || continue
-
-    tmp_root=$(mktemp -d)
 
     # Extract the validator from the pushed commit itself, not from disk --
     # it may be the very thing changing in this push.
