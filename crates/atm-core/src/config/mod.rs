@@ -63,7 +63,6 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         default_team: parse_default_team(parsed.atm.default_team.or(parsed.default_team), &path)?,
         team_members: normalize_team_members(parsed.atm.team_members, &path)?,
         aliases: normalize_aliases(parsed.atm.aliases),
-        rmux_pane_aliases: normalize_rmux_pane_aliases(parsed.rmux),
         post_send_hooks: normalize_post_send_hooks(parsed.atm.post_send_hooks, &config_root)?,
         max_message_bytes: normalize_max_message_bytes(parsed.atm.max_message_bytes, &path)?,
         claude_jsonl_body_export_max_bytes: normalize_claude_jsonl_body_export_max_bytes(
@@ -215,28 +214,6 @@ struct RawConfigFile {
     identity: Option<String>,
     #[serde(default)]
     default_team: Option<String>,
-    #[serde(default)]
-    rmux: RawRmuxSection,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct RawRmuxSection {
-    #[serde(default)]
-    windows: Vec<RawRmuxWindow>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct RawRmuxWindow {
-    #[serde(default)]
-    panes: Vec<RawRmuxPane>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct RawRmuxPane {
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    alias: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -394,18 +371,6 @@ fn normalize_aliases(
         .collect()
 }
 
-fn normalize_rmux_pane_aliases(raw: RawRmuxSection) -> std::collections::BTreeMap<String, String> {
-    raw.windows
-        .into_iter()
-        .flat_map(|window| window.panes)
-        .filter_map(|pane| {
-            let alias = pane.alias?.trim().to_string();
-            let name = pane.name.trim().to_string();
-            (!name.is_empty() && !alias.is_empty()).then_some((name, alias))
-        })
-        .collect()
-}
-
 #[cfg(test)]
 fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmError> {
     let root: Value = serde_json::from_str(raw).map_err(|error| {
@@ -560,17 +525,6 @@ command = ["bash", "-lc", "echo hi"]
 tl = "{ROLE_TEAM_LEAD}"
 qa = "{TEST_QA}"
 blank = ""
-
-[rmux]
-
-[[rmux.windows]]
-
-[[rmux.windows.panes]]
-name = "team-lead"
-alias = "atm-lead"
-
-[[rmux.windows.panes]]
-name = "arch-ctm"
 "#,
             ),
         )
@@ -616,14 +570,6 @@ name = "arch-ctm"
         );
         assert_eq!(config.aliases.get("qa").map(String::as_str), Some(TEST_QA));
         assert!(!config.aliases.contains_key("blank"));
-        assert_eq!(
-            config
-                .rmux_pane_aliases
-                .get("team-lead")
-                .map(String::as_str),
-            Some("atm-lead")
-        );
-        assert!(!config.rmux_pane_aliases.contains_key("arch-ctm"));
     }
 
     #[test]

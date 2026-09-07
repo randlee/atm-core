@@ -374,25 +374,11 @@ impl AddMemberCommand {
         atm_home_dir: PathBuf,
         member_home_dir: PathBuf,
     ) -> Result<AddMemberRequest> {
-        let invocation_dir = home::command_invocation_dir()?;
-        let config = atm_core::load_atm_config(&invocation_dir)?;
-        self.build_request_with_config(atm_home_dir, member_home_dir, config.as_ref())
-    }
-
-    fn build_request_with_config(
-        self,
-        atm_home_dir: PathBuf,
-        member_home_dir: PathBuf,
-        config: Option<&atm_core::AtmConfig>,
-    ) -> Result<AddMemberRequest> {
         let host = self.host.clone();
-        let alias = self.alias.clone().or_else(|| {
-            config.and_then(|config| config.rmux_pane_aliases.get(&self.member).cloned())
-        });
         let request = if self.backend.is_some()
             || self.target.is_some()
             || self.session.is_some()
-            || alias.is_some()
+            || self.alias.is_some()
         {
             if self.pane_id.is_some() {
                 return Err(anyhow::anyhow!(
@@ -410,7 +396,7 @@ impl AddMemberCommand {
                     backend: self.backend.as_deref(),
                     target: self.target.as_deref(),
                     session: self.session.as_deref(),
-                    alias: alias.as_deref(),
+                    alias: self.alias.as_deref(),
                     clear_alias: false,
                 },
             )
@@ -666,23 +652,6 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join(label);
         (tempdir, path)
-    }
-
-    fn add_member_command(member: &str, alias: Option<&str>) -> AddMemberCommand {
-        AddMemberCommand {
-            team: TEST_TEAM.to_string(),
-            member: member.to_string(),
-            agent_type: "worker".to_string(),
-            model: "gpt-5".to_string(),
-            home_dir: None,
-            backend: None,
-            target: None,
-            session: None,
-            alias: alias.map(str::to_string),
-            pane_id: None,
-            host: None,
-            json: false,
-        }
     }
 
     fn update_member_command(json: bool, home_dir: PathBuf) -> TeamsCommand {
@@ -1027,44 +996,6 @@ mod tests {
             request.host.as_ref().map(|host| host.as_str()),
             Some("rand-m5.local")
         );
-    }
-
-    #[test]
-    #[serial(env)]
-    fn add_member_alias_defaults_from_rmux_config_and_allows_override() {
-        let config_root = TempDir::new().expect("config root");
-        fs::write(
-            config_root.path().join(".atm.toml"),
-            r#"[rmux]
-
-[[rmux.windows]]
-
-[[rmux.windows.panes]]
-name = "team-lead"
-alias = "atm-lead"
-
-[[rmux.windows.panes]]
-name = "arch-ctm"
-"#,
-        )
-        .expect("config");
-        let _cwd = CwdGuard::change_to(config_root.path());
-        let (_atm_home_guard, atm_home_dir) = temp_test_path("atm-home");
-        let (_member_home_guard, member_home_dir) = temp_test_path("member-home");
-
-        let defaulted = add_member_command(ROLE_TEAM_LEAD, None)
-            .build_request(atm_home_dir.clone(), member_home_dir.clone())
-            .expect("default alias request");
-        let explicit = add_member_command(ROLE_TEAM_LEAD, Some("lead-override"))
-            .build_request(atm_home_dir.clone(), member_home_dir.clone())
-            .expect("explicit alias request");
-        let undeclared = add_member_command("arch-ctm", None)
-            .build_request(atm_home_dir, member_home_dir)
-            .expect("no alias request");
-
-        assert_eq!(defaulted.alias.as_deref(), Some("atm-lead"));
-        assert_eq!(explicit.alias.as_deref(), Some("lead-override"));
-        assert_eq!(undeclared.alias, None);
     }
 
     #[test]
