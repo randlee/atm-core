@@ -15,13 +15,14 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T20:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY3 ;
   triage:foundAt "2026-09-07T03:42:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-006/AY3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-006/AY3-2> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY3-QA-006/1> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY3-QA-006/AY3-1>
@@ -29,8 +30,8 @@
   triage:file "crates/atm-herdr/src/transport_cli.rs" ;
   triage:line 134 ;
   triage:snippet "Ok(Err(_)) => {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
   triage:headSha "45701a81e" ;
   triage:occursIn <urn:atm:triage:worktree/AY3-1/45701a81e> .
@@ -44,7 +45,17 @@
   triage:closed false ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "1770ac80e" ;
-  triage:occursIn <urn:atm:triage:worktree/AY3-2/1770ac80e> .
+  triage:occursIn <urn:atm:triage:worktree/AY3-2/1770ac80e> ;
+  triage:note "quality-mgr ttl-reconcile-ay-r1: still genuinely open on integrate/phase-ay. Re-verified at current integrate HEAD b6f087f92: transport_cli.rs's child.wait() Ok(Err(_)) arm still discards the io::Error. Awaits merge-forward of PR #1273 (still OPEN as of this reconciliation)." .
+
+<urn:atm:triage:resolution/AY3-QA-006/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T16:00:00Z"^^xsd:dateTime ;
+  triage:fixCommit "d02d57c21" ;
+  triage:fixBranch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:verifiedInRound "ttl-reconcile-ay-r1 (content-verified against QA-AY3-R3/R4 evidence)" ;
+  triage:resolutionNote "Content-verified fixed on feature/ay3-herdr-endpoint-doctor-config: git show c8bfb76e3:crates/atm-herdr/src/transport_cli.rs shows child.wait()'s Ok(Err(error)) arm now returns Err(server_unavailable(error)), preserving the io::Error via the same helper as AY3-QA-003. Matches commit d02d57c21 ('fix(herdr): preserve binary spawn error kinds'), verified by QA-AY3-R3 (PASS 0/0/0 at b8afa814f) and QA-AY3-R4 (FAIL only on AY3-QA-002 at c8bfb76e3). Finding-level status set to fixed_partial, not fixed: PR #1273 has not merged to integrate/phase-ay, and the integrate occurrence (AY3-2) remains open." .
 
 <urn:atm:triage:worktree/AY3-1/45701a81e>
   a triage:WorktreeSnapshot ;

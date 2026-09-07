@@ -15,13 +15,14 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-herdr/src" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T17:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY3 ;
   triage:foundAt "2026-09-07T03:42:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-003/AY3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-003/AY3-2> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY3-QA-003/1> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY3-QA-003/AY3-1>
@@ -29,8 +30,8 @@
   triage:file "crates/atm-herdr/src/transport_cli.rs" ;
   triage:line 127 ;
   triage:snippet "let mut child = command.spawn().map_err(|_| HerdrError::ServerUnavailable {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
   triage:headSha "45701a81e" ;
   triage:occursIn <urn:atm:triage:worktree/AY3-feature-1> .
@@ -44,7 +45,17 @@
   triage:closed false ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "1770ac80e" ;
-  triage:occursIn <urn:atm:triage:worktree/AY3-integrate-2> .
+  triage:occursIn <urn:atm:triage:worktree/AY3-integrate-2> ;
+  triage:note "quality-mgr ttl-reconcile-ay-r1: still genuinely open on integrate/phase-ay. Re-verified by content at current integrate HEAD b6f087f925e381c24850a5d5dc00aef0a0b7666f: crates/atm-herdr/src/transport_cli.rs:122 still reads `command.spawn().map_err(|_| HerdrError::ServerUnavailable { ... })`, discarding the io::Error. PR #1273 (feature/ay3-herdr-endpoint-doctor-config -> integrate/phase-ay) is still OPEN/unmerged as of this reconciliation; git merge-base --is-ancestor confirms neither b8afa814f nor c8bfb76e3 (the fix commits) is an ancestor of integrate/phase-ay HEAD. This occurrence closes only on merge-forward of PR #1273." .
+
+<urn:atm:triage:resolution/AY3-QA-003/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T16:00:00Z"^^xsd:dateTime ;
+  triage:fixCommit "b8afa814f" ;
+  triage:fixBranch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:verifiedInRound "ttl-reconcile-ay-r1 (content-verified against QA-AY3-R3/R4 evidence)" ;
+  triage:resolutionNote "Content-verified fixed on feature/ay3-herdr-endpoint-doctor-config: git show c8bfb76e3:crates/atm-herdr/src/transport_cli.rs shows spawn() now routed through a `server_unavailable(error: std::io::Error)` helper that sets `io_error_kind: Some(error.kind())` on HerdrError::ServerUnavailable, preserving the io::Error kind for doctor_probe.rs's BinaryNotFound/BinaryNotExecutable mapping; same content confirmed present at b8afa814f. This matches QA-AY3-R3 (PASS, 0/0/0, pin b8afa814f, result 01M1X94GT0NFEPJG6CGTRV2TGY) and QA-AY3-R4 (FAIL only on AY3-QA-002, pin c8bfb76e3, result 01M1XC8WH4Z9E6H1EZM4H6ZR0D) in docs/plans/phase-ay/.audit/qa-evidence-master.json. Finding-level status set to fixed_partial (not fixed), matching the AY2-QA-001 precedent: the fix has not merged to integrate/phase-ay (PR #1273 open, mergeable=MERGEABLE/mergeStateStatus=CLEAN as of this reconciliation) and the integrate/phase-ay occurrence (AY3-2, headSha 1770ac80e) remains genuinely open on the current codebase." .
 
 <urn:atm:triage:worktree/AY3-feature-1>
   a triage:WorktreeSnapshot ;

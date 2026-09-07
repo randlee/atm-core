@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-06T23:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY2 ;
@@ -23,6 +23,9 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-001/AY3-0b0bfa304-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-001/AY2-e12c87da2-1> ;
   triage:hasResolution <urn:atm:triage:resolution/AY2-QA-001/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY2-QA-001/2> ;
+  triage:closedAt "2026-09-07T16:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY2-QA-001/AY3-0b0bfa304-1>
@@ -30,12 +33,12 @@
   triage:file "crates/atm-herdr/tests/fake_herdr_modes.rs" ;
   triage:line 2 ;
   triage:snippet "use std::process::Command;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
   triage:headSha "0b0bfa304" ;
   triage:occursIn <urn:atm:triage:worktree/AY3/0b0bfa304> ;
-  triage:note "Still open on this branch; fix commit 9839b90c5 (and its e12c87da2 descendant) not yet merged forward into feature/ay3-herdr-endpoint-doctor-config as of AY2-QA-001's AY2-branch closure in qa-pr1269-r2." .
+  triage:note "quality-mgr ttl-reconcile-ay-r1: closed. The original commit hash 9839b90c5 no longer resolves on any surviving ref (feature/ay2-herdr-transport-seam was deleted after PR #1269 merged); verified by content instead. crates/atm-herdr/tests/fake_herdr_modes.rs is confirmed absent from origin/feature/ay3-herdr-endpoint-doctor-config at c8bfb76e3 (git show c8bfb76e3 --stat -- crates/atm-herdr/tests/fake_herdr_modes.rs returns nothing) and absent from integrate/phase-ay's current tree (find . -name fake_herdr_modes.rs returns nothing at HEAD b6f087f92)." .
 
 <urn:atm:triage:occurrence/AY2-QA-001/AY2-e12c87da2-1>
   a triage:Occurrence ;
@@ -77,6 +80,15 @@
   triage:fixBranch "feature/ay2-herdr-transport-seam" ;
   triage:verifiedInRound "qa-pr1269-r2" ;
   triage:resolutionNote "On feature/ay2-herdr-transport-seam only: fake_herdr_modes.rs deleted at 9839b90c5 (present at PR #1269's pinned e12c87da2); fake-herdr is now a proper [[bin]] target invoked through the crate's own tokio::process::Command transport. Confirmed by unanimous zero-hit grep sweep across req-qa, ruthless-boundary-qa, arch-qa, and rust-qa-agent in qa-pr1269-r2, plus a clean python3 .just/run_lint.py boundaries pass. The feature/ay3-herdr-endpoint-doctor-config occurrence remains open pending merge-forward -- Finding-level status stays fixed_partial, not fixed, until that branch picks up the fix." .
+
+<urn:atm:triage:resolution/AY2-QA-001/2>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T16:00:00Z"^^xsd:dateTime ;
+  triage:fixCommit "c8bfb76e3 (verified by content absence; original fix commit 9839b90c5 no longer resolves on any surviving ref)" ;
+  triage:fixBranch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:verifiedInRound "ttl-reconcile-ay-r1" ;
+  triage:resolutionNote "The AY3-branch occurrence's originally-cited fix commit 9839b90c5 no longer resolves on any surviving ref (feature/ay2-herdr-transport-seam was deleted after PR #1269 merged). Verified by content instead: (1) git show c8bfb76e3 --stat -- crates/atm-herdr/tests/fake_herdr_modes.rs returns nothing -- the file is absent from origin/feature/ay3-herdr-endpoint-doctor-config at its current pin; (2) the file is likewise absent from integrate/phase-ay's current tree at HEAD b6f087f92; (3) python3 .just/run_lint.py boundaries run directly on integrate/phase-ay HEAD: 'boundaries passed [19.7s]'; QA-AY3-R4 evidence (docs/plans/phase-ay/.audit/qa-evidence-master.json, result 01M1XC8WH4Z9E6H1EZM4H6ZR0D) independently records fmt/clippy/boundary-lint/atm-herdr all-features/atm-architecture all green at c8bfb76e3. Both occurrences now closed -- finding-level status flips fixed_partial -> fixed." .
 
 <urn:atm:triage:worktree/AY3/0b0bfa304>
   a triage:WorktreeSnapshot ;

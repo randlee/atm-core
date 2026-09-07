@@ -31,11 +31,12 @@
   a triage:Occurrence ;
   triage:file "crates/atm-herdr/Cargo.toml" ;
   triage:snippet "[dev-dependencies]\nsyn.workspace = true" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay8-herdr-socket-transport" ;
   triage:headSha "26ea2806a" ;
-  triage:occursIn <urn:atm:triage:worktree/ay8-26ea2806a> .
+  triage:occursIn <urn:atm:triage:worktree/ay8-26ea2806a> ;
+  triage:note "quality-mgr ttl-reconcile-ay-r1: stale occurrence reconciled to match finding-level fixed status already recorded in resolution/1 (cipher removed syn entirely at 690f86ea5, confirmed green on live CI). feature/ay8-herdr-socket-transport merged to integrate/phase-ay at 4407b006e (confirmed ancestor of current integrate HEAD via git merge-base --is-ancestor). Record-consistency repair only, no new verification performed beyond resolution/1." .
 
 <urn:atm:triage:occurrence/AY8-QA-007/ay8-2>
   a triage:Occurrence ;

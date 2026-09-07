@@ -35,8 +35,8 @@
   triage:file "crates/atm-herdr/tests/support/fake_herdr_socket/mod.rs" ;
   triage:line 23 ;
   triage:snippet "pub fn bind(path: impl AsRef<Path>) -> io::Result<Self> { ... }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay8-herdr-socket-transport" ;
   triage:headSha "696bc1061" ;
   triage:occursIn <urn:atm:triage:worktree/ay8-696bc1061> .
@@ -46,8 +46,8 @@
   triage:file "crates/atm-herdr/tests/transport_fixture.rs" ;
   triage:line 170 ;
   triage:snippet "socket_fixture_matrix_covers_late_start_and_one_request_connections / socket_fixture_matrix_covers_no_newline_oversized_and_stalled_read (partial matrix)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay8-herdr-socket-transport" ;
   triage:headSha "26ea2806a" ;
   triage:occursIn <urn:atm:triage:worktree/ay8-26ea2806a> ;
@@ -58,8 +58,8 @@
   triage:file "crates/atm-herdr/tests/transport_fixture.rs" ;
   triage:line 12 ;
   triage:snippet "#[cfg(unix)]\n#[path = \"support/fake_herdr_socket/mod.rs\"]\nmod fake_herdr_socket;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay8-herdr-socket-transport" ;
   triage:headSha "690f86ea5" ;
   triage:occursIn <urn:atm:triage:worktree/ay8-690f86ea5> ;
@@ -70,8 +70,8 @@
   triage:file "crates/atm-herdr/tests/support/fake_herdr_socket/mod.rs" ;
   triage:line 158 ;
   triage:snippet "let read = self.server.read(&mut byte).await?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay8-herdr-socket-transport" ;
   triage:headSha "6ac58fe44" ;
   triage:occursIn <urn:atm:triage:worktree/ay8-6ac58fe44> ;
@@ -97,6 +97,15 @@
   triage:fixBranch "feature/ay8-herdr-socket-transport" ;
   triage:verifiedInRound "qa-pr1280-r6" ;
   triage:resolutionNote "Missing `use tokio::io::AsyncReadExt;` import added to fake_herdr_socket/mod.rs, fixing the E0599 compile failure on the Windows cfg(windows) NamedPipeServer read path identified in r5 at run 34089817741/job 101641633365. Confirmed on live CI at 6102354a5, run 34091661579: Test (windows-latest) job 101647017086 is green, with the job log showing windows_named_pipe_fixture_round_trips_in_the_platform_lane and named_pipe_busy_retry_is_covered_with_a_bounded_deadline both actually executing and passing, not merely compiling. All four D7 sub-requirements this finding tracked (stalled connect/write, cancellation, pipe-busy-retry, Windows compile+execute) are now closed across r5/r6." .
+
+<urn:atm:triage:resolution/AY8-QA-002/2>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T16:00:00Z"^^xsd:dateTime ;
+  triage:fixCommit "6102354a5bfadcc6be8f40226671fece03191217" ;
+  triage:fixBranch "feature/ay8-herdr-socket-transport" ;
+  triage:verifiedInRound "ttl-reconcile-ay-r1" ;
+  triage:resolutionNote "TTL reconciliation: occurrences ay8-1, ay8-2, ay8-3, ay8-4 (recorded at intermediate pins 696bc1061, 26ea2806a, 690f86ea5, 6ac58fe44 respectively) were left triage:status open/closed false even though the finding itself was already closed to fixed in qa-pr1280-r6's resolution/1 above. feature/ay8-herdr-socket-transport merged to integrate/phase-ay at 4407b006e (confirmed ancestor of current integrate HEAD b6f087f92 via git merge-base --is-ancestor). Reconciled all four stale occurrences to fixed/closed to match the finding's already-terminal state; no new code verification performed here beyond what resolution/1 already recorded -- this is a record-consistency repair, not a re-review." .
 
 <urn:atm:triage:worktree/ay8-6102354a5>
   a triage:WorktreeSnapshot ;
