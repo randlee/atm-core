@@ -18,7 +18,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T21:05:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AY ;
+  triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-07T21:00:00Z"^^xsd:dateTime ;
   triage:note "Owed by AY.15 (feature/ay15-herdr-name-uniqueness): fold the missing roster-alias-grammar test into D4's permutation coverage; correct the matrix row labels." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY-QA-004/1> ;

@@ -18,7 +18,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T21:05:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AY ;
+  triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-07T21:00:00Z"^^xsd:dateTime ;
   triage:note "Owed by AY.15 (feature/ay15-herdr-name-uniqueness): AY.15's AC1 requires every A-section row to have a genuinely passing named test; correct these three citations or add the missing tests as part of D4." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY-QA-003/1> ;

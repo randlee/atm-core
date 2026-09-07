@@ -24,3 +24,4 @@ triage:AY7 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 8 ; tr
 triage:AY9 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 9 ; triage:branch "feature/ay9-herdr-socket-cutover" ; triage:criteria "docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md" .
 triage:AY13 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 10 ; triage:branch "feature/ay13-doctor-team-scope" ; triage:criteria "docs/plans/phase-ay/sprint-AY.13-doctor-team-scope.md" .
 triage:AY14 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 11 ; triage:branch "feature/ay14-herdr-agent-name-mapping" ; triage:criteria "docs/plans/phase-ay/sprint-AY.14-herdr-agent-name-mapping.md" .
+triage:AY15 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 12 ; triage:branch "feature/ay15-herdr-name-uniqueness" ; triage:criteria "docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md" .

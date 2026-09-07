@@ -18,7 +18,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:L.7 ;
+  triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CIPHER-NAME-006/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CIPHER-NAME-006/2> ;
