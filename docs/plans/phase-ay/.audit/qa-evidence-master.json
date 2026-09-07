@@ -3,11 +3,11 @@
  "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
  "audit_window": {
   "start": "2026-09-06T22:24:39Z",
-  "end": "2026-09-06T23:47:25Z"
+  "end": "2026-09-07T00:17:12Z"
  },
- "scope": "phase-ay sprints AY.1-AY.3 orchestrated via graph-orchestration (.sprints/AY) as a gh stack on integrate/phase-ay. Only sprints with a dev Completion event have QA runs: AY.1 (Herdr audit docs, PR #1270; r1 FAIL, r2 FAIL/0 blocking, r3 PASS; merged into integrate/phase-ay at 7e40db597) and AY.2 (Herdr transport seam, PR #1269 stacked on AY.1; r1-r3 FAIL, r4 dispatched against 5e7dd50e1 and pending). AY.3 (feature/ay3-herdr-endpoint-doctor-config, PR #1273, stacked on AY.2) is in dev and has no QA run yet. This master is extended with each authoritative verdict message as quality-mgr reports it.",
+ "scope": "phase-ay sprints AY.1-AY.3 orchestrated via graph-orchestration (.sprints/AY) as a gh stack on integrate/phase-ay. Only sprints with a dev Completion event have QA runs: AY.1 (Herdr audit docs, PR #1270; r1 FAIL, r2 FAIL/0 blocking, r3 PASS; merged into integrate/phase-ay at 7e40db597) and AY.2 (Herdr transport seam, PR #1269 stacked on AY.1; r1-r3 FAIL, r4 PASS at 5e7dd50e1; merged into integrate/phase-ay at 1195614ba). AY.3 (feature/ay3-herdr-endpoint-doctor-config, PR #1273, stacked on AY.2) is in dev and has no QA run yet. This master is extended with each authoritative verdict message as quality-mgr reports it.",
  "count_basis": "headline/reviewer",
- "path_notes": "Built directly from ATM messages read this session (fenix mailbox, team atm-dev). Every assignment_message_id is a real ATM message_id located via `atm list quality-mgr --all --json`; every result_message_id via `atm list --from quality-mgr --all --json`. Pinned commits are the HEADs of the detached qa-pr<PR>-r<N> worktrees recorded in worktree-tracking.md. No verdict, run, or message id was fabricated; null means the value is not carried by the source message (or, for QA-AY2-R4, that the verdict has not been reported yet).",
+ "path_notes": "Built directly from ATM messages read this session (fenix mailbox, team atm-dev). Every assignment_message_id is a real ATM message_id located via `atm list quality-mgr --all --json`; every result_message_id via `atm list --from quality-mgr --all --json`. Pinned commits are the HEADs of the detached qa-pr<PR>-r<N> worktrees recorded in worktree-tracking.md. No verdict, run, or message id was fabricated; null means the value is not carried by the source message.",
  "runs": [
   {
    "run_id": "QA-AY1-R1",
@@ -163,7 +163,7 @@
    "run_id": "QA-AY2-R4",
    "aich_sprint": "AY2",
    "phase_sprint": "AY.2",
-   "pass": false,
+   "pass": true,
    "run_type": "qa",
    "assignment_time_utc": "2026-09-06T23:43:35.627951Z",
    "assignment_time_pst": null,
@@ -171,18 +171,18 @@
    "assignment_from": "fenix",
    "assignment_shared_path": null,
    "assignment_summary": "Round-4 QA for AY.2 after AY2-FIX-R4 (AY2-QA-008 CI coverage step), PR #1269, feature/ay2-herdr-transport-seam pinned at 5e7dd50e1 (worktree qa-pr1269-r4); changed files include .github/workflows/ci.yml; carry-forward AY2-QA-008 plus regression spot-check of AY2-QA-001..007",
-   "result_time_utc": null,
+   "result_time_utc": "2026-09-07T00:17:12.130586Z",
    "result_time_pst": null,
-   "result_message_id": null,
-   "result_from": null,
+   "result_message_id": "01M1WKKRY2E2428TYJ6R29XWKA",
+   "result_from": "quality-mgr",
    "result_shared_path": null,
    "result_temp_path": null,
-   "verdict": null,
-   "blockers": null,
-   "important": null,
-   "minor": null,
+   "verdict": "PASS",
+   "blockers": 0,
+   "important": 0,
+   "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "qa-pr1269-r4 dispatched 2026-09-06T23:43:35Z (msg 01M1WHP7PBJ3C8VH4JQDHHXN8D); quality-mgr ack 01M1WHX8C9CWJX8BWMGJV7PXZR at 23:47:25Z (req-qa + arch-qa dispatched against 5e7dd50e1). Verdict pending; result fields are null until quality-mgr reports. AY3-branch occurrence closures for AY2-QA-002..006 committed at 0cc913af4 (01M1WHWPQT6QZ1FTJDZAPV1PW3); AY2-QA-002 integrate occurrence stays open until the stack merges."
+   "evidence": "qa-pr1269-r4 verdict PASS, 0 blocking, 0 important (req-qa + arch-qa) at 5e7dd50e1 (msg 01M1WKKRY2E2428TYJ6R29XWKA; ack 01M1WHX8C9CWJX8BWMGJV7PXZR; interim reviewer-PASS note 01M1WJ4MK6BRDW0EHTM476Y7XE). AY2-QA-008 closed at 890d0a597 on integrate/phase-ay with direct CI job-log proof: PR #1269 run 34067586131 executed all 4 new atm-herdr fixture tests on ubuntu-latest, macos-latest and windows-latest under the new 'Run Herdr transport fixtures' step; no new required job, Test(matrix.os) contract unchanged. AY2-QA-001..007 spot-checked, no regression; req-qa deliverable completion 8/8. Report https://github.com/randlee/atm-core/pull/1269#issuecomment-5563297953. PR #1269 merged into integrate/phase-ay at 1195614ba via gh stack merge; cascade rebased feature/ay3 to c9413de20 and retargeted #1273 to integrate/phase-ay. AY3-branch occurrence closures for AY2-QA-002..006 were committed earlier at 0cc913af4 (01M1WHWPQT6QZ1FTJDZAPV1PW3)."
   }
  ]
 }
