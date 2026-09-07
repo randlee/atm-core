@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY3-QA-005>
+  a triage:Finding ;
+  triage:findingId "AY3-QA-005" ;
+  triage:title "herdr-endpoint-doctor.toml note overclaims sanitizer denial scope" ;
+  triage:description "boundaries/atm-core/herdr-endpoint-doctor.toml:87 claims 'every other crate outside atm-core is denied' HerdrEndpointDisplay::from_relative reference, but the boundary lint excludes #[cfg(test)] scope. Test references in crates/atm/src/output.rs (lines 1092, 1177, 1224) are benign. Note should qualify: 'no production reference' (RBQA-F002, ruthless-boundary-qa)." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T18:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY3 ;
+  triage:foundAt "2026-09-07T03:42:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-005/AY3-QA-005/feature-ay3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY3-QA-005/AY3-QA-005/feature-ay3-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/herdr-endpoint-doctor.toml" ;
+  triage:line 87 ;
+  triage:snippet "every other crate outside atm-core is denied that reference by this record" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "45701a81e" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-ay3-1> .
+
+<urn:atm:triage:worktree/feature-ay3-1>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "45701a81e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-ay-2>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "1770ac80e" ;
+  triage:orderIndex 2 .

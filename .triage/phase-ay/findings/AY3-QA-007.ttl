@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY3-QA-007>
+  a triage:Finding ;
+  triage:findingId "AY3-QA-007" ;
+  triage:title "transport_cli.rs serde_json parse error discarded before ProtocolMismatch" ;
+  triage:description "crates/atm-herdr/src/transport_cli.rs:204 discards the serde_json::from_str error before mapping to HerdrError::ProtocolMismatch, losing the parse diagnostic (RBP-F003, rust-best-practices-agent). Same pattern family as AY3-QA-003 and AY3-QA-006." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-herdr/src" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY3 ;
+  triage:foundAt "2026-09-07T03:42:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-007/AY3-QA-007-WK1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-007/AY3-QA-007-WK2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY3-QA-007/AY3-QA-007-WK1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_cli.rs" ;
+  triage:line 204 ;
+  triage:snippet ".map_err(|_| HerdrError::ProtocolMismatch)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "45701a81e" ;
+  triage:occursIn <urn:atm:triage:worktree/WK1/45701a81e> .
+
+<urn:atm:triage:occurrence/AY3-QA-007/AY3-QA-007-WK2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_cli.rs" ;
+  triage:line 199 ;
+  triage:snippet ".map_err(|_| HerdrError::ProtocolMismatch)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "1770ac80e" ;
+  triage:occursIn <urn:atm:triage:worktree/WK2/1770ac80e> .
+
+<urn:atm:triage:worktree/WK1/45701a81e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "45701a81e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/WK2/1770ac80e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "1770ac80e" ;
+  triage:orderIndex 2 .

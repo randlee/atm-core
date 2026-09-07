@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY3-QA-004>
+  a triage:Finding ;
+  triage:findingId "AY3-QA-004" ;
+  triage:title "herdr-endpoint-doctor.toml composition.roots exemption wider than intended" ;
+  triage:description "boundaries/atm-core/herdr-endpoint-doctor.toml:15 derives the references.forbidden exemption for HerdrEndpointDisplay::from_relative from composition.roots, which also exempts atm_daemon_bootstrap::replacement_handler for an unrelated reason (trait impl). No live leak today (replacement_handler.rs does not call from_relative). Recommend a narrower purpose-specific exemption list (RBQA-F001, ruthless-boundary-qa)." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "boundaries/**/*.toml" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T03:45:06Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY3 ;
+  triage:foundAt "2026-09-07T03:42:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-004/ay3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY3-QA-004/ay3-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/herdr-endpoint-doctor.toml" ;
+  triage:line 15 ;
+  triage:snippet "roots = [\"atm_daemon_bootstrap::replacement_handler\", \"atm_herdr::doctor_probe\"]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "45701a81e" ;
+  triage:occursIn <urn:atm:triage:worktree/ay3-45701a81e> .
+
+<urn:atm:triage:worktree/ay3-45701a81e>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "45701a81e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-ay-1770ac80e>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "1770ac80e" ;
+  triage:orderIndex 2 .
