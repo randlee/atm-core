@@ -221,9 +221,12 @@ validation only. Text and `--json` output both carry it (field name
 `alias_mismatches`, entries `{team, member, config_alias, roster_alias}`).
 Missing or unparsable `.atm.toml` is not a doctor failure for this check.
 Rand, 2026-09-07, verbatim: "I think adding doctor mismatch reporting is
-useful (at team scope)". The check follows AY.13 scoping: by default only
-panes whose `ATM_TEAM` is the caller's workspace team are compared; the
-AY.13 `--all-teams`/`--verbose` option widens it to every declared pane.
+useful (at team scope)"; ".atm.toml would not be available at --all-teams
+scope (which .atm.toml to use...)". So the check is team-scoped only: it
+reads the one `.atm.toml` discovered from the caller's cwd and compares
+only panes whose `ATM_TEAM` is the caller's workspace team. `--all-teams`
+does not widen it; there is no `.atm.toml` for other teams, so no
+mismatch lines are produced for them.
 
 ## Acceptance criteria
 
