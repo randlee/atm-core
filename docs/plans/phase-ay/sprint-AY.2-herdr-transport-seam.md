@@ -62,8 +62,7 @@ Append AY.4 through AY.7 with `gh stack link <stack-number> <branch>` when their
 PRs exist. Parent-development push, not QA completion, triggers a merge-forward
 from the parent branch into every active child before a development or fix
 round. Parent PRs merge first, in stack order. Repository policy permits only
-merge commits and forbids force-pushes, `gh stack rebase`, `gh stack sync`, and
-`gh stack merge`; merge each PR with `gh pr merge --merge`.
+merge commits and Rand (2026-09-07): every operation on a stacked branch goes through `gh stack` subcommands (`gh stack push`, `gh stack view --json`, `gh stack merge` bottom-up); merge commits only, never squash, never force-push outside `gh stack`.
 
 AY.1 remains an independent parallel branch. AY.8 is a multi-parent join and is
 created from `integrate/phase-ay` only after AY.1, AY.2, and AY.3 have merged;

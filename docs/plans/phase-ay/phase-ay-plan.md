@@ -926,10 +926,7 @@ gh pr view feature/ay10-herdr-status-stream --json headRefName,baseRefName,state
 
 All commands are noninteractive. The parent-development-pushed event,
 not QA, triggers a merge commit from the parent into each active child
-before a development or fix round. Parent PRs merge first. Repository
-policy narrows the general `/gh-stack` workflow: never run `gh stack
-rebase`, `gh stack sync`, or `gh stack merge`; do not force-push; merge
-each PR in dependency order with `gh pr merge --merge`.
+before a development or fix round. Parent PRs merge first. Rand (2026-09-07): every operation on a stacked branch goes through `gh stack` subcommands (`gh stack push`, `gh stack view --json`, `gh stack merge` bottom-up); merge commits only, never squash, never force-push outside `gh stack`.
 
 AY.1 is standalone. AY.8 is a standalone transport branch (with AY.10
 stacked on it); AY.9 is a standalone two-parent join; AY.11 is a

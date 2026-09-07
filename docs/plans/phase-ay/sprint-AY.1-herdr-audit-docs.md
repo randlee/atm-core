@@ -49,9 +49,7 @@ gh pr view --json headRefName,baseRefName,state
 ```
 
 All commands are noninteractive. The phase policy uses `gh stack link` for
-the external linear stack and `gh pr view --json` to verify bases, but forbids `gh stack rebase`,
-`gh stack sync`, and `gh stack merge`; Phase AY uses merge commits and no
-force-pushes.
+the external linear stack and `gh pr view --json` to verify bases, and Rand (2026-09-07): every operation on a stacked branch goes through `gh stack` subcommands (`gh stack push`, `gh stack view --json`, `gh stack merge` bottom-up); merge commits only, never squash, never force-push outside `gh stack`.
 
 ## Preconditions
 
