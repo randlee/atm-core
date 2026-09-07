@@ -216,10 +216,12 @@ dependencies = [
  "chrono",
  "fs4",
  "peer-tls",
+ "serde",
  "serde_json",
  "serial_test",
  "tempfile",
  "tokio",
+ "toml",
  "tracing",
  "ulid",
 ]
