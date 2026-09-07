@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AY15-F003>
+  a triage:Finding ;
+  triage:findingId "RBQA-AY15-F003" ;
+  triage:title "RetainedServiceRuntime::resolve_roster_member_at_ingress default trait method ignores allow_database_wide_alias and only resolves team-scoped aliases" ;
+  triage:description "quality-mgr qa-pr1310-r8 (PR #1310, AY.15 herdr-name-uniqueness, head 715ab21ea; report: PR #1310 issuecomment 5576239134). ruthless-boundary-qa RBQA-AY15-F003. crates/atm-core/src/service_runtime.rs:301-312 default method resolve_roster_member_at_ingress takes _allow_database_wide_alias but calls only the team-scoped caller_context::resolve_roster_alias, never resolve_roster_alias_with_owner, so a database-wide alias (matrix D-03) would not be substituted by the default. Both current implementors (LocalServiceRuntime at service_runtime.rs:704-726 and the test double) override it, so the default is dead code at this head; it is a silent regression trap for any future implementor with no compiler warning. Correction: make the default honor the flag via resolve_roster_alias_with_owner, or drop the default body so implementors must provide it." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/service_runtime.rs RetainedServiceRuntime default methods" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T22:37:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-07T22:31:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AY15-F003/RBQA-AY15-F003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AY15-F003/RBQA-AY15-F003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 301 ;
+  triage:snippet "fn resolve_roster_member_at_ingress(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "715ab21ea" ;
+  triage:occursIn <urn:atm:triage:worktree/ay15-r8> .
+
+<urn:atm:triage:worktree/ay15-r8>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1310-r8" ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "715ab21ea" ;
+  triage:orderIndex 0 .
