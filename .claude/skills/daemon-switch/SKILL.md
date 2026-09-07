@@ -117,6 +117,40 @@ JSON result on stdout (exit 0 success, 3 refusal, 4 operational failure).
 On systems without Homebrew, provide `--default-cli` and `--default-daemon` to
 `restore`. Use `--dry-run` before the first switch on an unfamiliar host.
 
+## Explicit Herdr endpoint restart
+
+Herdr upgrades remain operator-owned. After the operator has installed a newer
+Herdr client, use this explicit, one-endpoint coordinator to resolve a
+client/server mismatch. It never runs `herdr update`, never restarts ATM, and
+never runs as part of pair switching or ordinary ATM restart.
+
+```sh
+# Read the privacy-safe native doctor projection first. The selected endpoint
+# must have an AY.5 owned, complete start-at-login entry.
+atm doctor --json
+
+# When exactly one endpoint is configured, omit ENDPOINT. A session must be
+# selected explicitly when several are configured.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restart \
+  --restart-herdr [ENDPOINT]
+
+# Use this only after accepting that a stop exits the selected session's panes.
+# The coordinator relaunches exactly its already-owned native entry and proves
+# that a fresh doctor read reports `ok`.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restart \
+  --restart-herdr work --stop-herdr-panes
+```
+
+If `capabilities.live_handoff` is exactly true and doctor identifies a newer
+client than running server, the first command uses scoped live handoff and
+preserves panes. Otherwise it refuses with a pane-loss acknowledgement code.
+Socket-path endpoints are externally owned and must be restarted by their
+external owner. The 120-second overall and 30-second per-command limits are
+intentional; failures return one JSON object on stdout and leave ATM untouched.
+Ordinary `restart --yes` refuses while any doctor endpoint remains
+`client_server_mismatch`; restart those endpoints individually before
+restarting ATM.
+
 ## Self-signed development identity
 
 The signing resolver accepts the synced `atm-daemon-dev` self-signed identity
