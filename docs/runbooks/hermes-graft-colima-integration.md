@@ -545,6 +545,34 @@ Every issue becomes a row before work continues.
 | HGC-021 | P2 | D7 routing completed but its message-ID log grep failed | The test couples routing success to an obsolete observability serialization even though its own contract is roster metadata, successful dispatch, sent outcome, and Herdr reachability | Preserve the failed row; Fenix authorized Loki to assert the supported routing contract without requiring the ULID in that log record, then include D7 in the one full-matrix confirmation | confirmed testbed drift; repair authorized |
 | HGC-022 | P2 | A1 reports an accepted mutation handoff but the returned message and immediate list still show unread state | Phase AV deliberately removed read-your-writes: `mutation_applied` means the supervised handoff accepted the transition, while durability is asynchronous. The requirements 7.12 post-mutation-count sentence conflicts with requirements 7.13 and ADR-059 | Fenix/`arch-ctm` ruled no behavior change: correct the conflicting docs/tests separately; Loki may assert acceptance and then poll `atm list --json` to durable state with a bounded deadline, applying accepted-vs-durable to every read-state assertion | resolved contract; suite/v2 repair authorized |
 | HGC-023 | P2/P3 | AT8 requires the outer coordinator to derive Phase-B `--after` from the fixture agent's warm-up RTT, but exposes no value before Phase B | The prompt records `warmup_rtt_ms` only in its final report; `freeze-daemon.sh` exposes only armed/done markers, so the blocking coordinator has no executable calibration input | Fenix authorized an `at8-rtt` agent-to-coordinator marker, a 120-second fail-closed wait, validation over 1..60000 ms, `clamp(round(rtt/2), 300, 1500)`, and `at8-armed` provenance. Loki applies the prompt/harness/CATALOG changes; no product code changes | confirmed; repair authorized in `01M1WXW9R9Z7KH69CDVR4F6122` |
+| HGC-024 | P2/P3 | A Hermes-owned worker stops acknowledging several delivered coordination messages | Busy-agent silence and a cross-host delivery incident are distinguishable only after bounded coordination and host-side receiver diagnostics | Do not repeatedly resend or use tmux. A second sender emits one consolidated re-ping, all senders wait to the named deadline, then one owner captures sanitized host-side doctor `graft_receivers` and runtime status. Escalate the durable send IDs plus diagnostics to Fenix | active bounded wait to 03:40Z; Fenix sent the consolidated re-ping |
+
+### Silent Hermes coordination rule
+
+After one sender has confirmed its messages in durable ATM state, do not keep
+nudging the same silent Hermes agent. Ask one second sender to send one
+consolidated status request and name a UTC deadline. During that interval,
+send no further work messages. If neither sender receives an acknowledgement
+by the deadline, the host owner captures only sanitized delivery diagnostics:
+
+```sh
+atm doctor --json | jq '{
+  summary,
+  graft_receivers,
+  runtime_status: {
+    liveness: .runtime_status.liveness,
+    readiness: .runtime_status.readiness,
+    members: [.runtime_status.members[] |
+      select(.member == "loki")]
+  }
+}'
+```
+
+Expected healthy markers are `summary.status = "healthy"`, runtime liveness
+`running`, and readiness `ready`. An empty or stale `graft_receivers`/member
+projection is diagnostic evidence, not permission to manipulate an agent.
+Report it with the original durable message IDs to Fenix. Never inspect or
+control the Hermes agent through tmux.
 
 ## Stop/escalate decision table
 
@@ -557,6 +585,7 @@ Every issue becomes a row before work continues.
 | Required tier fails or flakes | Record FAIL and root cause; never rerun-until-green | Loki + Fenix |
 | Artifact provenance is incomplete or versions differ | Stop before image build | Loki + Fenix |
 | Any command requires sudo | Stop; obtain a no-sudo procedure or revised ruling | Loki + Fenix |
+| Hermes agent does not acknowledge delivered coordination | One consolidated re-ping from a second sender, bounded wait, then sanitized host-side `atm doctor --json` diagnostics; never tmux | Fenix |
 | Cross-host scope or authorized host operator is missing | Mark the leg blocked/out of scope exactly as P0 decides; do not improvise | Fenix |
 | All required tiers pass with no unresolved blocking review findings | Report integration PASS; do not publish | Fenix; Rand decides publish |
 
