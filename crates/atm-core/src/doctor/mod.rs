@@ -38,7 +38,8 @@ pub use report::{
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
     DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientsDoctorReport,
     GraftReceiverLeaseDoctorReport, GraftReceiversDoctorReport, HerdrBreakerDoctor,
-    HerdrBreakerDoctorReport, HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport,
+    HerdrBreakerDoctorReport, HerdrBreakerDoctorState, HerdrDoctorReport,
+    HerdrEndpointCapabilitiesDoctorReport, HerdrEndpointDoctorReport, HerdrQueuePumpDoctorReport,
     LegacyLiteralIpPeerDoctorReport, PeerAuthorityDoctorReport, PeerConfigDoctorReport,
     PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
     ReaderPoolDoctorReport, ReaderPoolMetricsDoctorReport, RecipientDeliveryPath,
@@ -463,6 +464,10 @@ fn build_doctor_report(
         herdr_queue_pump: HerdrQueuePumpDoctorReport {
             breaker: herdr_breaker.clone(),
             ..HerdrQueuePumpDoctorReport::default()
+        },
+        herdr: HerdrDoctorReport {
+            breaker: herdr_breaker.clone(),
+            ..HerdrDoctorReport::default()
         },
         herdr_breaker,
         post_send,

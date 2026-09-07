@@ -19,6 +19,7 @@ use atm_core::team_admin::{
     SetNudgeTemplateOverrideOutcome, TeamsList, UpdateMemberOutcome,
 };
 use atm_core::types::HostName;
+use std::fmt::Write as _;
 
 /// Print one send result in human-readable or JSON form.
 pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
@@ -309,6 +310,7 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     if let Some(bootstrap_trace) = &report.bootstrap_trace {
         print_bootstrap_trace(bootstrap_trace);
     }
+    print_doctor_herdr(report);
     print_doctor_peer_config(report);
     print_doctor_escalation_recipients(report);
     print_doctor_environment(report);
@@ -317,6 +319,66 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     print_doctor_recommendations(report);
 
     Ok(())
+}
+
+fn print_doctor_herdr(report: &DoctorReport) {
+    print!("{}", render_doctor_herdr(&report.herdr));
+}
+
+fn render_doctor_herdr(report: &atm_core::doctor::HerdrDoctorReport) -> String {
+    let configured = match report.configured {
+        Some(true) => "yes",
+        Some(false) => "no",
+        None => "unknown",
+    };
+    let mut output = format!("Herdr: configured={configured}\n");
+    if let Some(error) = &report.error {
+        writeln!(output, "  Error: {} ({})", error.message, error.code)
+            .expect("writing to String cannot fail");
+    }
+    for endpoint in &report.endpoints {
+        let session = endpoint
+            .session
+            .as_ref()
+            .map_or("default", atm_core::HerdrSession::as_str);
+        let provenance = match endpoint.provenance {
+            atm_core::doctor::HerdrEndpointProvenance::Session => "session",
+            atm_core::doctor::HerdrEndpointProvenance::SocketPath => "socket_path",
+            atm_core::doctor::HerdrEndpointProvenance::HerdrDefault => "herdr_default",
+        };
+        let transport = match endpoint.transport {
+            atm_core::doctor::HerdrTransportKind::Cli => "cli",
+            atm_core::doctor::HerdrTransportKind::Socket => "socket",
+        };
+        let endpoint_path = endpoint
+            .endpoint
+            .as_ref()
+            .map_or("<none>", atm_core::doctor::HerdrEndpointDisplay::as_str);
+        let binary = endpoint.binary.as_ref().map_or_else(
+            || "PATH".to_owned(),
+            |binary| binary.path.display().to_string(),
+        );
+        let capability = endpoint
+            .capabilities
+            .live_handoff
+            .map_or("unknown", |value| if value { "yes" } else { "no" });
+        let state = serde_json::to_string(&endpoint.state)
+            .expect("Herdr doctor state is always serializable");
+        writeln!(
+            output,
+            "  Endpoint {session}: provenance={provenance} transport={transport} endpoint={endpoint_path} binary={binary} live_handoff={capability}"
+        )
+        .expect("writing to String cannot fail");
+        writeln!(output, "    State: {state}").expect("writing to String cannot fail");
+        writeln!(output, "    Remedy: {}", endpoint.remedy).expect("writing to String cannot fail");
+        for member in &endpoint.members {
+            let outcome = serde_json::to_string(&member.outcome)
+                .expect("Herdr member outcome is always serializable");
+            writeln!(output, "    Member {}: {outcome}", member.name)
+                .expect("writing to String cannot fail");
+        }
+    }
+    output
 }
 
 fn print_doctor_peer_config(report: &DoctorReport) {
@@ -976,15 +1038,48 @@ mod tests {
     use atm_core::ack::AckOutcome;
     use atm_core::doctor::{
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-        BootstrapTraceReport, PeerConfigDoctorReport,
+        BootstrapTraceReport, HerdrDoctorReport, HerdrDoctorState,
+        HerdrEndpointCapabilitiesDoctorReport, HerdrEndpointDoctorReport, HerdrEndpointProvenance,
+        HerdrTransportKind, PeerConfigDoctorReport,
     };
     use atm_core::types::HostName;
     use serde_json::json;
 
     use super::{
-        render_bootstrap_trace_section, render_doctor_peer_config, render_send_stdout,
-        render_warnings_to_stderr,
+        render_bootstrap_trace_section, render_doctor_herdr, render_doctor_peer_config,
+        render_send_stdout, render_warnings_to_stderr,
     };
+
+    #[test]
+    fn herdr_doctor_rendering_exposes_typed_state_and_remedy_without_raw_endpoint() {
+        let report = HerdrDoctorReport {
+            configured: Some(true),
+            endpoints: vec![HerdrEndpointDoctorReport {
+                session: None,
+                provenance: HerdrEndpointProvenance::HerdrDefault,
+                transport: HerdrTransportKind::Cli,
+                endpoint: None,
+                binary: None,
+                state: HerdrDoctorState::NotConfigured,
+                remedy: "Configure Herdr only if desired".to_owned(),
+                capabilities: HerdrEndpointCapabilitiesDoctorReport {
+                    live_handoff: Some(true),
+                },
+                members: Vec::new(),
+            }],
+            ..HerdrDoctorReport::default()
+        };
+
+        let rendered = render_doctor_herdr(&report);
+        let json = serde_json::to_value(&report).expect("Herdr report serializes");
+
+        assert!(rendered.contains("Herdr: configured=yes"));
+        assert!(rendered.contains("provenance=herdr_default transport=cli endpoint=<none>"));
+        assert!(rendered.contains("State: {\"kind\":\"not_configured\"}"));
+        assert!(rendered.contains("Remedy: Configure Herdr only if desired"));
+        assert_eq!(json["endpoints"][0]["capabilities"]["live_handoff"], true);
+        assert!(json["endpoints"][0].get("live_handoff").is_none());
+    }
 
     #[test]
     fn send_outcome_json_preserves_unrostered_sender_advisory() {
