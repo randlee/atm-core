@@ -881,6 +881,9 @@ pub fn with_default_peer_address_stores<T>(
 }
 
 #[cfg(test)]
+mod herdr_lifecycle_tests;
+
+#[cfg(test)]
 mod replacement_runtime_tests {
     use std::collections::HashMap;
     use std::ffi::OsString;

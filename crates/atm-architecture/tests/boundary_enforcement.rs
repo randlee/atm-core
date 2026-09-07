@@ -4022,6 +4022,8 @@ fn ax6_herdr_notification_does_not_reuse_mail_body() {
     let source = read_source(&root.join("crates/atm-http-runtime/src/herdr_escalation.rs"));
     let construction =
         read_source(&root.join("crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs"));
+    let breaker_construction =
+        read_source(&root.join("crates/atm-http-runtime/src/herdr_breaker_escalation.rs"));
     let notify = extract_fn_body(&source, "notify");
     let escalate = extract_fn_body(&source, "escalate");
     assert!(
@@ -4046,6 +4048,17 @@ fn ax6_herdr_notification_does_not_reuse_mail_body() {
             && !construction.contains("body: task_escalation_body")
             && !construction.contains("SendMessageSource::Inline"),
         "HR-SAFE-003 forbids routing a task mail body or inline mail source into Herdr notification construction"
+    );
+    assert!(
+        breaker_construction.contains("let mail_body")
+            && breaker_construction.contains("let notification")
+            && breaker_construction.contains("body: \"state=breaker_open"),
+        "AY4 breaker escalation must construct distinct durable-mail and privacy-safe notification payloads"
+    );
+    assert!(
+        !breaker_construction.contains("body: mail_body")
+            && !breaker_construction.contains("body: format!(\"Herdr breaker opened"),
+        "HR-SAFE-003 forbids forwarding breaker mail text to Herdr notification"
     );
     let boundary = read_source(&root.join("boundaries/atm-herdr/herdr-process-adapter.toml"));
     assert!(boundary.contains("HR-SAFE-003"));

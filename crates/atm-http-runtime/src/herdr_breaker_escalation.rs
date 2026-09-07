@@ -46,15 +46,19 @@ impl HerdrBreakerEscalationGate {
             );
             return false;
         }
-        if self
-            .last_escalated_at
-            .is_some_and(|last| elapsed(now, last) < self.min_interval)
-        {
+        if let Some(last) = self.last_escalated_at {
+            let elapsed = elapsed(now, last);
+            if elapsed >= self.min_interval {
+                self.last_escalated_opened_at = Some(opened_at);
+                self.last_escalated_at = Some(now);
+                return true;
+            }
             tracing::info!(
                 event = "herdr_breaker_escalation",
                 outcome = "suppressed_min_interval",
                 breaker_cycle = %opened_at,
                 min_interval_secs = self.min_interval.as_secs(),
+                next_eligible_in_secs = self.min_interval.saturating_sub(elapsed).as_secs(),
                 "Herdr breaker escalation is not yet eligible"
             );
             return false;
