@@ -1430,13 +1430,16 @@ The accepted read pipeline stages are:
 4. apply sender, timestamp, selection-mode, and seen-state filters
 5. sort newest-first and apply limit
 6. apply legal read/seen mutations for displayed messages
-7. persist any read/seen state changes atomically
-8. return outcome
+7. offer any legal read/seen state changes to the supervised non-blocking
+   handoff without awaiting durable application
+8. return the reader-lane outcome and handoff-acceptance result
 
 Architectural rules:
 - no accepted read path depends on watcher events, reconcile completion, or
   mailbox-file ingest
 - durable ATM state, not merged mailbox-file truth, is authoritative for read
+- accepted handoff does not promise durable visibility in the returned read
+  outcome; a consumer that requires it uses a bounded later `atm list` poll
 - any retained mailbox-file compatibility readers are historical or
   repair-only surfaces and do not redefine the accepted read contract
 

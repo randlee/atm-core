@@ -1558,7 +1558,8 @@ Additional supported flags:
 
 Required behavior:
 - return exactly one full message
-- mutate owner-visible seen/read state when a message is selected
+- offer the selected message's legal owner-visible seen/read transition to the
+  supervised non-blocking handoff when a message is selected
 - when `--message-id <id>` is present, resolve that exact message when present
 - collapse successor/update chains to their terminal node before selector-based
   matching so superseded predecessors do not appear as separate current
@@ -1584,14 +1585,15 @@ Required behavior:
 - when no selector is provided, prioritize pending-ack messages ahead of
   unread messages that do not require acknowledgement
 - support optional wait mode with timeout
-- write the selected message back through the read-axis mutation rules
-- persist read-triggered state changes back to the physical inbox file that
-  owns the selected displayed message when origin inbox files are present in
-  the merged surface
-- when a read-side mutation is applied, the returned `message` payload and
-  `selected_message_id` must still refer to that same mutated durable message;
-  `atm read` must not mark one message read and then silently swap the output
-  payload to a different unread message
+- offer the selected message's legal read-axis transition to the supervised
+  non-blocking state handoff without awaiting durable application
+- route the accepted transition to the authoritative ATM store; retained
+  origin inbox files are compatibility inputs rather than the read mutation
+  destination
+- when a read-side transition is accepted, the returned `message` payload and
+  `selected_message_id` must still refer to that same selected message; `atm
+  read` must not accept a transition for one message and then silently swap the
+  output payload to a different unread message
 - `bucket_counts` in the read outcome describe the reader-lane snapshot. A
   read-side transition accepted by the non-blocking handoff MAY become visible
   later; consumers requiring durable visibility use a bounded `atm list`
@@ -3159,7 +3161,9 @@ The rewrite is ready when:
 
 Cross-document invariants that must remain true:
 - `taskId` implies ack-required behavior at send time
-- displayed messages always persist `read = true`
+- a displayed message with `mutation_applied = true` has had its legal
+  read/seen transition accepted into the supervised non-blocking handoff;
+  durable `read = true` visibility may follow later
 - pending-ack messages remain actionable until acknowledged
 - `atm clear` never removes unread messages
 - `atm clear` never removes pending-ack messages

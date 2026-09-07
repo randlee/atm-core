@@ -386,7 +386,8 @@ Shared query phases:
     allowed.
 13. Offer state changes to the supervised non-blocking handoff; the response
     does not await durable application.
-14. Update seen-state from the selected message when enabled.
+14. Offer any selected-message seen-state update when enabled, without
+    awaiting durable application.
 15. Return `ReadOutcome` with match metadata.
 
 This order matters.
@@ -400,9 +401,9 @@ In particular:
   list poll
 - seen-state updates must use the selected/displayed message, not the full
   inbox
-- when the merged inbox surface includes origin inbox files, each
-  selected-message mutation must be written back to the physical source file
-  for that record
+- accepted read/seen transitions target the authoritative ATM store through
+  the supervised handoff; origin inbox files are compatibility inputs, not the
+  mutation destination
 
 ## 11. Output Contract
 
@@ -439,6 +440,7 @@ Each list row:
 - `selected_message_id`
 - `match_count`
 - `additional_match_count`
+- `mutation_applied`
 - `bucket_counts`
 
 `match_count` is the total number of logical current-message matches after all
@@ -446,7 +448,10 @@ filters and successor-chain collapse are applied. `additional_match_count` is
 `match_count - 1` for a successful read.
 
 Cross-document invariants:
-- displayed/read messages always persist `read = true`
+- `mutation_applied = true` means the selected message's legal read/seen
+  transition was accepted into the supervised non-blocking handoff, not that
+  `read = true` is already durable; consumers use a bounded later `atm list`
+  poll when durable visibility matters
 - task-linked messages are ack-required from send time
 - pending-ack messages remain actionable until acknowledged
 - `atm clear` never removes unread messages
