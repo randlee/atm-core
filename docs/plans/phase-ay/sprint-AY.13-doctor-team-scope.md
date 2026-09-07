@@ -9,7 +9,7 @@ integration_branch: integrate/phase-ay
 stack_parent: none
 pr_target: integrate/phase-ay
 target: integrate/phase-ay
-status: draft
+status: dispatched
 recommended_agent: cipher
 recommended_model: implementation
 execution_track: parallel
