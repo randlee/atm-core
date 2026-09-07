@@ -1048,6 +1048,9 @@ Definitions:
   and the `--alias` remedy, so the operator reconstructs the team with
   aliases before it goes live in Herdr. `atm doctor` reports pre-existing
   duplicates for the caller's team as a finding.
+- Rand (2026-09-07) on why persistence is canonical-only: "by always using
+  the non-alias name when writing to database, we avoid missing things on
+  query. i.e. team-lead-alias becomes team-lead when written to database".
 - `REQ-ROSTER-NAME-010` Alias parity at every CLI argument. Rand
   (2026-09-07): "From any cli command accepting team-member name, alias must
   be allowed AND substituted before sending over wire. i.e. atm send

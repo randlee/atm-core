@@ -1067,17 +1067,18 @@ Common acceptance for every sprint: merge gate 0 blocking / 0 important /
 time (never a dispatch gate), no flaky-test tolerance, frozen files
 untouched without a written ruling, no tokio in atm-core.
 
-## Phase AY exit gate (AY.9 disposition, then AY.11 and item 7)
+## Phase AY exit gate (AY.9 disposition; AY.10–AY.12 retired)
 
-Phase completion (2026-09-06, with AY.10–AY.12 added): the
-integrate/phase-ay to develop PR opens only after (1) the AY.9 cutover
-decision below is recorded, (2) AY.11 has merged and its parity evidence
-from the rand-m4 dogfood run is recorded under rework item 7, and (3)
-item 7's own decision line is filled in. If that decision is "drop poll",
-AY.12 merges into integrate/phase-ay before the develop PR opens; "keep
-both" and "stop subscription work" close the phase without AY.12. There is no interim
-develop merge between AY.9 and AY.11. quality-mgr's phase-ending gate
-refuses the develop PR while either decision line below is missing.
+Phase completion (2026-09-06, amended 2026-09-07): the integrate/phase-ay
+to develop PR opens only after the AY.9 cutover decision below is
+recorded. The earlier preconditions on AY.11 merging and on rework item 7's
+decision line were retired on 2026-09-07 when Rand stopped AY.10 (see item
+7: "Decision (Rand, 2026-09-07): stop AY.10"); AY.10, AY.11 and AY.12 are
+not dispatched and AY.12 never merges. AY.13 (doctor team scope), AY.14
+(Herdr agent-name mapping) and AY.15 (unique_name invariant) run in their
+place and merge to integrate/phase-ay before the develop PR is presented.
+quality-mgr's phase-ending gate refuses the develop PR while the AY.9
+decision line below is missing or any blocking finding is open.
 
 The AY.9 cutover decision is a dated decision, after the AY.9 cutover
 has merged with all three CI lanes green, the socket-default and
@@ -1770,7 +1771,9 @@ item 7 below, not optimized.
    poll). AY.12 dispatches only after this line is filled in from AY.11's
    dogfood evidence:
 
-   Decision (Rand, YYYY-MM-DD): drop poll | keep both | stop subscription work
+   Decision (Rand, 2026-09-07): stop subscription work — derived from
+   "stop AY.10" above; AY.11 and AY.12 never dispatched, poll stays the
+   authority on both paths.
 
 ### Hardening rounds
 
