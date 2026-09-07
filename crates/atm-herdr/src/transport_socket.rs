@@ -81,9 +81,29 @@ impl SocketIo {
         session: Option<&HerdrSession>,
         deadline: RequestDeadline,
     ) -> Result<HerdrEnvelope, HerdrError> {
+        self.round_trip(encode_request(op)?, session, deadline)
+            .await
+    }
+
+    /// Doctor-only server information probe. It deliberately uses a fresh
+    /// one-request connection rather than adding a ping to a nudge call.
+    pub(crate) async fn server_info(
+        &self,
+        session: Option<&HerdrSession>,
+        deadline: RequestDeadline,
+    ) -> Result<HerdrEnvelope, HerdrError> {
+        self.round_trip(encode_ping_request(), session, deadline)
+            .await
+    }
+
+    async fn round_trip(
+        &self,
+        request: Vec<u8>,
+        session: Option<&HerdrSession>,
+        deadline: RequestDeadline,
+    ) -> Result<HerdrEnvelope, HerdrError> {
         let permit = acquire_permit(Arc::clone(&self.in_flight), deadline).await?;
         let endpoint = herdr_api_endpoint(&self.cfg, session, &self.env);
-        let request = encode_request(op)?;
 
         #[cfg(unix)]
         let mut stream = connect_unix(&endpoint, deadline).await?;
@@ -221,6 +241,12 @@ fn encode_request(op: HerdrOp<'_>) -> Result<Vec<u8>, HerdrError> {
     })?;
     bytes.push(b'\n');
     Ok(bytes)
+}
+
+fn encode_ping_request() -> Vec<u8> {
+    let mut bytes = br#"{"id":"atm:agent:ping","method":"ping","params":{}}"#.to_vec();
+    bytes.push(b'\n');
+    bytes
 }
 
 async fn write_request<S>(
@@ -486,6 +512,15 @@ mod tests {
     }
 
     #[test]
+    fn doctor_ping_is_a_separate_ndjson_request() {
+        let request = encode_ping_request();
+        assert_eq!(request.last(), Some(&b'\n'));
+        let value: Value = serde_json::from_slice(&request).expect("ping JSON");
+        assert_eq!(value["id"], "atm:agent:ping");
+        assert_eq!(value["method"], "ping");
+    }
+
+    #[test]
     fn malformed_response_remains_a_protocol_mismatch() {
         assert!(matches!(
             decode_envelope(b"{"),
@@ -563,6 +598,24 @@ mod tests {
         )
         .await;
         assert!(matches!(result, Err(HerdrError::Timeout)));
+    }
+
+    #[tokio::test]
+    async fn permit_wait_uses_the_call_deadline_and_releases_cleanly() {
+        let permits = Arc::new(Semaphore::new(1));
+        let held = acquire_permit(
+            Arc::clone(&permits),
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .await
+        .expect("first permit");
+        let result =
+            acquire_permit(Arc::clone(&permits), RequestDeadline::after(Duration::ZERO)).await;
+        assert!(matches!(result, Err(HerdrError::Timeout)));
+        drop(held);
+        let _ = acquire_permit(permits, RequestDeadline::after(Duration::from_secs(1)))
+            .await
+            .expect("released permit");
     }
 
     #[tokio::test]

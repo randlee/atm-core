@@ -51,11 +51,36 @@ impl Drop for FakeHerdrSocket {
 
 /// Windows uses Tokio's native named-pipe server in the platform lane.
 #[cfg(windows)]
-pub struct FakeHerdrSocket;
+pub struct FakeHerdrSocket {
+    server: tokio::net::windows::named_pipe::NamedPipeServer,
+}
 
 #[cfg(windows)]
 impl FakeHerdrSocket {
-    pub fn bind(_path: impl AsRef<std::ffi::OsStr>) -> io::Result<Self> {
-        Ok(Self)
+    pub fn bind(path: impl AsRef<std::ffi::OsStr>) -> io::Result<Self> {
+        let server = tokio::net::windows::named_pipe::ServerOptions::new()
+            .max_instances(1)
+            .create(path)?;
+        Ok(Self { server })
+    }
+
+    pub async fn serve_once(mut self, response: &[u8]) -> io::Result<Vec<u8>> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        self.server.connect().await?;
+        let mut request = Vec::new();
+        loop {
+            let mut byte = [0_u8; 1];
+            let read = self.server.read(&mut byte).await?;
+            if read == 0 {
+                break;
+            }
+            request.push(byte[0]);
+            if byte[0] == b'\n' {
+                break;
+            }
+        }
+        self.server.write_all(response).await?;
+        Ok(request)
     }
 }
