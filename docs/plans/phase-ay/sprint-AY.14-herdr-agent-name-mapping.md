@@ -120,8 +120,8 @@ error unchanged).
 - "adding a roster persisted alias makes a lot of sense.  For requirements,
   the alias should never be used in database."
 - "i.e. if team-lead = atm-dev-lead (alias), all entries in database should
-  continue to use team-lead.  alias would be aceptable at all user/agent
-  facing interfaces and would be immediately replaced" ... "and would
+  continue to use team-lead.  alias would be acceptable at all user/agent
+  facing interfaces and would be immediately replaced" [spelling normalized] ... "and would
   immediately be replaced at the ingress interface."
 - "additional requirements:  alias MUST be unique for atm database (meets
   herdr requirements)"
