@@ -4,7 +4,11 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use syn::visit::{self, Visit};
+#[derive(Debug)]
+struct Token {
+    offset: usize,
+    text: String,
+}
 
 fn rust_sources(root: &Path, output: &mut Vec<PathBuf>) {
     let entries = fs::read_dir(root).expect("source directory");
@@ -18,100 +22,130 @@ fn rust_sources(root: &Path, output: &mut Vec<PathBuf>) {
     }
 }
 
-fn cfg_test_attribute(attribute: &syn::Attribute) -> bool {
-    attribute.path().is_ident("cfg")
-        && attribute
-            .meta
-            .require_list()
-            .is_ok_and(|list| list.tokens.to_string().contains("test"))
-}
-
-fn collect_use_aliases(tree: &syn::UseTree, aliases: &mut BTreeSet<String>, herdr_path: bool) {
-    match tree {
-        syn::UseTree::Name(name) => {
-            if herdr_path || name.ident == "HerdrIo" {
-                aliases.insert(name.ident.to_string());
+fn lex_rust(source: &str) -> Vec<Token> {
+    let bytes = source.as_bytes();
+    let mut tokens = Vec::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index].is_ascii_whitespace() {
+            index += 1;
+        } else if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'/') {
+            index += 2;
+            while index < bytes.len() && bytes[index] != b'\n' {
+                index += 1;
             }
-        }
-        syn::UseTree::Rename(rename) => {
-            if herdr_path || rename.ident == "HerdrIo" {
-                aliases.insert(rename.rename.to_string());
+        } else if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'*') {
+            index += 2;
+            while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/') {
+                index += 1;
             }
-        }
-        syn::UseTree::Path(path) => {
-            collect_use_aliases(&path.tree, aliases, herdr_path || path.ident == "HerdrIo");
-        }
-        syn::UseTree::Group(group) => {
-            for tree in &group.items {
-                collect_use_aliases(tree, aliases, herdr_path);
+            index = (index + 2).min(bytes.len());
+        } else if bytes[index] == b'"' || bytes[index] == b'\'' {
+            let quote = bytes[index];
+            index += 1;
+            while index < bytes.len() {
+                if bytes[index] == b'\\' {
+                    index = (index + 2).min(bytes.len());
+                } else if bytes[index] == quote {
+                    index += 1;
+                    break;
+                } else {
+                    index += 1;
+                }
             }
-        }
-        syn::UseTree::Glob(_) => {}
-    }
-}
-
-fn collect_aliases(file: &syn::File) -> BTreeSet<String> {
-    let mut aliases = BTreeSet::from(["HerdrIo".to_owned()]);
-    for item in &file.items {
-        match item {
-            syn::Item::Use(item) => collect_use_aliases(&item.tree, &mut aliases, false),
-            syn::Item::Type(item) if matches!(&*item.ty, syn::Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "HerdrIo")) =>
+        } else if bytes[index].is_ascii_alphabetic() || bytes[index] == b'_' {
+            let start = index;
+            index += 1;
+            while index < bytes.len()
+                && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_')
             {
-                aliases.insert(item.ident.to_string());
+                index += 1;
             }
-            _ => {}
+            tokens.push(Token {
+                offset: start,
+                text: source[start..index].to_owned(),
+            });
+        } else {
+            tokens.push(Token {
+                offset: index,
+                text: source[index..index + 1].to_owned(),
+            });
+            index += 1;
+        }
+    }
+    tokens
+}
+
+fn aliases(tokens: &[Token]) -> BTreeSet<String> {
+    let mut aliases = BTreeSet::from(["HerdrIo".to_owned()]);
+    for window in tokens.windows(3) {
+        if window[0].text == "HerdrIo" && window[1].text == "as" {
+            aliases.insert(window[2].text.clone());
+        }
+    }
+    for index in 0..tokens.len().saturating_sub(3) {
+        if tokens[index].text == "type"
+            && tokens[index + 2].text == "="
+            && tokens[index + 3].text == "HerdrIo"
+        {
+            aliases.insert(tokens[index + 1].text.clone());
         }
     }
     aliases
 }
 
-struct SocketConstructorVisitor<'a> {
-    aliases: &'a BTreeSet<String>,
-    allow_construction: bool,
-    permit_test_modules: bool,
-    findings: Vec<String>,
-}
-
-impl<'ast> Visit<'ast> for SocketConstructorVisitor<'_> {
-    fn visit_expr_path(&mut self, expression: &'ast syn::ExprPath) {
-        let mut segments = expression.path.segments.iter().rev();
-        let is_socket = segments
-            .next()
-            .is_some_and(|segment| segment.ident == "Socket");
-        let owner = segments.next().map(|segment| segment.ident.to_string());
-        if is_socket
-            && owner.is_some_and(|owner| self.aliases.contains(&owner))
-            && !self.allow_construction
-        {
-            self.findings.push("socket variant path".to_owned());
-        }
-        visit::visit_expr_path(self, expression);
-    }
-
-    fn visit_item_mod(&mut self, module: &'ast syn::ItemMod) {
-        let previous = self.allow_construction;
-        self.allow_construction =
-            previous || self.permit_test_modules && module.attrs.iter().any(cfg_test_attribute);
-        if let Some((_, items)) = &module.content {
-            for item in items {
-                self.visit_item(item);
+fn brace_ranges(tokens: &[Token], source: &str, markers: &[&str]) -> Vec<(usize, usize)> {
+    let mut ranges = Vec::new();
+    for marker in markers {
+        let Some(marker_offset) = source.find(marker) else {
+            continue;
+        };
+        let Some(open_index) = tokens
+            .iter()
+            .position(|token| token.offset > marker_offset && token.text == "{")
+        else {
+            continue;
+        };
+        let mut depth = 0usize;
+        for token in &tokens[open_index..] {
+            if token.text == "{" {
+                depth += 1;
+            } else if token.text == "}" {
+                depth -= 1;
+                if depth == 0 {
+                    ranges.push((tokens[open_index].offset, token.offset));
+                    break;
+                }
             }
         }
-        self.allow_construction = previous;
     }
+    ranges
 }
 
-fn construction_findings(source: &str, permit_test_modules: bool) -> Vec<String> {
-    let file = syn::parse_file(source).expect("Rust source must parse");
-    let aliases = collect_aliases(&file);
-    let mut visitor = SocketConstructorVisitor {
-        aliases: &aliases,
-        allow_construction: false,
-        permit_test_modules,
-        findings: Vec::new(),
-    };
-    visitor.visit_file(&file);
-    visitor.findings
+fn socket_construction_offsets(tokens: &[Token], aliases: &BTreeSet<String>) -> Vec<usize> {
+    tokens
+        .windows(4)
+        .filter(|window| {
+            aliases.contains(&window[0].text)
+                && window[1].text == ":"
+                && window[2].text == ":"
+                && window[3].text == "Socket"
+        })
+        .map(|window| window[0].offset)
+        .collect()
+}
+
+fn construction_findings(source: &str, allowed_ranges: &[(usize, usize)]) -> Vec<usize> {
+    let tokens = lex_rust(source);
+    let aliases = aliases(&tokens);
+    socket_construction_offsets(&tokens, &aliases)
+        .into_iter()
+        .filter(|offset| {
+            !allowed_ranges
+                .iter()
+                .any(|(start, end)| *start <= *offset && *offset < *end)
+        })
+        .collect()
 }
 
 #[test]
@@ -123,20 +157,51 @@ fn socket_variant_constructed_only_in_tests() {
 
     for source in sources {
         let contents = fs::read_to_string(&source).expect("Rust source");
-        let permits_test_only_module = source
-            .file_name()
-            .is_some_and(|name| name == "transport_socket.rs" || name == "lib.rs");
         let is_integration_test = source.starts_with(manifest.join("tests"));
-        if is_integration_test {
-            continue;
-        }
-        let findings = construction_findings(&contents, permits_test_only_module);
+        let is_transport_source = source
+            .file_name()
+            .is_some_and(|name| name == "transport_socket.rs");
+        let markers = if is_transport_source {
+            vec!["#[cfg(test)]"]
+        } else if source.file_name().is_some_and(|name| name == "lib.rs") {
+            vec!["#[cfg(feature = \"test-utils\")]"]
+        } else {
+            Vec::new()
+        };
+        let tokens = lex_rust(&contents);
+        let ranges = if is_integration_test {
+            vec![(0, contents.len())]
+        } else {
+            brace_ranges(&tokens, &contents, &markers)
+        };
+        let findings = construction_findings(&contents, &ranges);
         assert!(
             findings.is_empty(),
-            "socket construction escaped its AY.8 test scope in {}: {findings:?}",
+            "socket construction escaped its AY.8 test scope in {} at offsets {findings:?}",
             source.display()
         );
     }
+}
+
+#[test]
+fn construction_pin_detects_aliases_and_variant_function_pointers() {
+    let source = r#"
+        use crate::transport::HerdrIo as Io;
+        type Alias = HerdrIo;
+        fn leaked(socket: SocketIo) {
+            let _ = Io::Socket(socket);
+            let constructor = Alias::Socket;
+            let _ = constructor;
+        }
+    "#;
+    assert_eq!(construction_findings(source, &[]).len(), 2);
+    assert!(
+        construction_findings(
+            "// HerdrIo::Socket(fake)\nconst NOTE: &str = \"HerdrIo::Socket(fake)\";",
+            &[]
+        )
+        .is_empty()
+    );
 }
 
 #[test]

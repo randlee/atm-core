@@ -17,9 +17,6 @@ atm-core.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 
-[dev-dependencies]
-syn.workspace = true
-
 [[bin]]
 name = "fake-herdr"
 path = "tests/support/fake_herdr/main.rs"
