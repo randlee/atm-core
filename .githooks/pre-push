@@ -10,6 +10,17 @@
 # leaves this machine, so /sprint-report and /triage-report never see a
 # structural data gap that was pushable but unvalidated.
 #
+# Both the changed-file detection and the TTL validation itself operate on
+# the actual commits/tree being pushed (via `git rev-list`/`git diff-tree`
+# and `git archive <local_sha>`), never on the working tree on disk. A push
+# can legitimately differ from what's currently checked out (cross-worktree
+# push, `gh stack sync`, pushing an older local branch), so reading paths off
+# disk would validate the wrong content. The Rust fmt/clippy gate below is a
+# known, pre-existing exception: it still runs against the working tree,
+# because running cargo against an arbitrary pushed commit would require
+# building in a throwaway worktree; that gap predates this file's TTL gate
+# and is not addressed here.
+#
 # Explicit opt-out only: ATM_SKIP_PUSH_GATE=1 skips both gates and says so.
 # There is no implicit bypass.
 set -u
@@ -20,38 +31,154 @@ if [ "${ATM_SKIP_PUSH_GATE:-}" = "1" ]; then
 fi
 
 repo_root=$(git rev-parse --show-toplevel)
-
 zero=0000000000000000000000000000000000000000
+
+# Paths to the validator and its supporting tooling. A change to any of
+# these is a change to the gate's own correctness, so it can silently
+# invalidate what every other TTL push relies on -- warn loudly even though
+# we deliberately do not hard-fail every phase over it (most phases have
+# pre-existing, unrelated validation failures; see docs/triage/ttl-repair.md).
+tooling_pattern='(^|/)\.claude/skills/graph-orchestration/scripts/validate-findings\.py$|(^|/)\.claude/skills/graph-orchestration/scripts/validate-findings\.sparql$|(^|/)\.triage/\.graph-orchestration-ignore$|(^|/)\.claude/skills/triaging-findings/triage-record\.ttl\.j2$'
+
 needs_rust_gate=0
-ttl_phases=""
+ttl_fail=0
+tmp_root=""
+cleanup() { [ -n "$tmp_root" ] && rm -rf "$tmp_root"; }
+trap cleanup EXIT
+
 while read -r _local_ref local_sha _remote_ref remote_sha; do
     [ "$local_sha" = "$zero" ] && continue   # branch delete: nothing to check
-    if [ "$remote_sha" = "$zero" ]; then
-        range="$local_sha"
+
+    # Derive the pushed commit range from actual commit history, never from
+    # a raw working-tree diff. If the remote tip isn't locally known (the
+    # `gh stack sync` / force-push case where $remote_sha was never fetched),
+    # `rev-list remote..local` would silently resolve as if remote_sha were
+    # an ancestor and often emit nothing -- gate everything not already on
+    # any origin ref instead, and say so, rather than let it collapse to
+    # "nothing to check".
+    remote_known=0
+    if [ "$remote_sha" != "$zero" ] && git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
+        remote_known=1
+    fi
+    if [ "$remote_known" -eq 1 ]; then
+        commits=$(git rev-list "${remote_sha}..${local_sha}" 2>/dev/null)
     else
-        range="$remote_sha..$local_sha"
-    fi
-    if git rev-list "$range" 2>/dev/null | head -n 1 | grep -q .; then
-        changed=$(git diff --name-only "$range" 2>/dev/null)
-        if printf '%s\n' "$changed" | grep -Eq '\.rs$|^Cargo\.(toml|lock)$|/Cargo\.toml$'; then
-            needs_rust_gate=1
+        if [ "$remote_sha" != "$zero" ]; then
+            echo "pre-push: remote head $remote_sha not fetched locally; gating every commit not already on an origin ref" >&2
         fi
-        # Only validate phases whose own .triage/.sprints files are actually
-        # touched by this push. Other phases (including already-broken
-        # historical ones) must never block an unrelated push.
-        touched_phases=$(printf '%s\n' "$changed" \
-            | grep -E '(^|/)\.triage/phase-[^/]+/.*\.ttl$|(^|/)\.sprints/[^/]+/.*\.ttl$' \
-            | sed -E \
-                -e 's#^(.*/)?\.triage/phase-([^/]+)/.*#\2#' \
-                -e 's#^(.*/)?\.sprints/([^/]+)/.*#\2#' \
-            | tr '[:lower:]' '[:upper:]' | sort -u)
-        if [ -n "$touched_phases" ]; then
-            ttl_phases="$ttl_phases
-$touched_phases"
-        fi
+        commits=$(git rev-list "$local_sha" --not --remotes=origin 2>/dev/null)
     fi
+    [ -n "$commits" ] || continue
+
+    changed=$(git diff-tree --no-commit-id -r --name-only -m $commits 2>/dev/null | sort -u)
+    [ -n "$changed" ] || continue
+
+    if printf '%s\n' "$changed" | grep -Eq '\.rs$|^Cargo\.(toml|lock)$|/Cargo\.toml$'; then
+        needs_rust_gate=1
+    fi
+
+    if printf '%s\n' "$changed" | grep -Eq "$tooling_pattern"; then
+        echo "pre-push: WARNING: validate-findings.py/.sparql, .graph-orchestration-ignore, or triage-record.ttl.j2 changed in this push. Only phases whose own TTL files are touched are gated below -- a tooling regression affecting other phases will NOT be caught by this hook. Run validate-findings.py manually against every phase before relying on this change." >&2
+    fi
+
+    # Only validate phases whose own .triage/.sprints files are actually
+    # touched by this push. Other phases (including already-broken
+    # historical ones) must never block an unrelated push.
+    touched_phases=$(printf '%s\n' "$changed" \
+        | grep -E '(^|/)\.triage/phase-[^/]+/.*\.ttl$|(^|/)\.sprints/[^/]+/.*\.ttl$' \
+        | sed -E \
+            -e 's#^(.*/)?\.triage/phase-([^/]+)/.*#\2#' \
+            -e 's#^(.*/)?\.sprints/([^/]+)/.*#\2#' \
+        | tr '[:lower:]' '[:upper:]' | sort -u)
+    [ -n "$touched_phases" ] || continue
+
+    tmp_root=$(mktemp -d)
+
+    # Extract the validator from the pushed commit itself, not from disk --
+    # it may be the very thing changing in this push.
+    script_rel=".claude/skills/graph-orchestration/scripts"
+    if ! git archive "$local_sha" -- "$script_rel" 2>/dev/null | tar -x -C "$tmp_root" 2>/dev/null; then
+        echo "pre-push: REFUSED. Could not extract $script_rel from pushed commit $local_sha." >&2
+        ttl_fail=1
+        continue
+    fi
+    validator="$tmp_root/$script_rel/validate-findings.py"
+    if [ ! -f "$validator" ]; then
+        echo "pre-push: REFUSED. TTL files changed but validate-findings.py is not present at pushed commit $local_sha ($script_rel)." >&2
+        ttl_fail=1
+        continue
+    fi
+
+    for phase_short in $touched_phases; do
+        # Case-insensitively resolve the declared phase dir name from the
+        # pushed tree, not from whatever happens to be checked out.
+        sprints_listing=$(git ls-tree --name-only "$local_sha" -- .sprints/ 2>/dev/null)
+        real_phase_name=""
+        for candidate in $sprints_listing; do
+            cname=$(basename "$candidate")
+            if [ "$(printf '%s' "$cname" | tr '[:lower:]' '[:upper:]')" = "$phase_short" ]; then
+                real_phase_name="$cname"
+                break
+            fi
+        done
+        if [ -z "$real_phase_name" ]; then
+            echo "pre-push: REFUSED. Pushed .triage/.sprints changes reference phase $phase_short but no matching .sprints/* directory exists at pushed commit $local_sha." >&2
+            ttl_fail=1
+            continue
+        fi
+
+        triage_listing=$(git ls-tree --name-only "$local_sha" -- .triage/ 2>/dev/null)
+        real_triage_dir=""
+        for candidate in $triage_listing; do
+            cname=$(basename "$candidate")   # phase-xx
+            cshort=${cname#phase-}
+            if [ "$(printf '%s' "$cshort" | tr '[:lower:]' '[:upper:]')" = "$phase_short" ]; then
+                real_triage_dir="$cname"
+                break
+            fi
+        done
+        if [ -z "$real_triage_dir" ]; then
+            echo "pre-push: REFUSED. Phase $real_phase_name has no matching .triage/phase-* directory at pushed commit $local_sha." >&2
+            ttl_fail=1
+            continue
+        fi
+
+        sprints_rel=".sprints/$real_phase_name"
+        triage_rel=".triage/$real_triage_dir"
+
+        if ! git archive "$local_sha" -- "$sprints_rel" "$triage_rel" 2>/dev/null | tar -x -C "$tmp_root" 2>/dev/null; then
+            echo "pre-push: REFUSED. Could not extract $sprints_rel / $triage_rel from pushed commit $local_sha." >&2
+            ttl_fail=1
+            continue
+        fi
+
+        structure="$tmp_root/$sprints_rel/structure.ttl"
+        events="$tmp_root/$sprints_rel/events.ttl"
+        findings_dir="$tmp_root/$triage_rel/findings"
+        if [ ! -f "$structure" ]; then
+            echo "pre-push: REFUSED. $sprints_rel/structure.ttl missing at pushed commit $local_sha." >&2
+            ttl_fail=1
+            continue
+        fi
+        if [ ! -d "$findings_dir" ]; then
+            echo "pre-push: REFUSED. $triage_rel/findings missing at pushed commit $local_sha." >&2
+            ttl_fail=1
+            continue
+        fi
+
+        set -- --findings-dir "$findings_dir" --structure "$structure"
+        [ -f "$events" ] && set -- "$@" --events "$events"
+
+        echo "pre-push: running validate-findings.py for phase $real_phase_name against pushed commit $local_sha" >&2
+        result=$(python3 "$validator" "$@" --json 2>&1)
+        py_status=$?
+        if [ "$py_status" -ne 0 ]; then
+            echo "$result" >&2
+            echo "pre-push: REFUSED. validate-findings.py failed for phase $real_phase_name at pushed commit $local_sha; repair per docs/triage/ttl-repair.md." >&2
+            ttl_fail=1
+        fi
+    done
 done
-ttl_phases=$(printf '%s\n' "$ttl_phases" | grep -v '^$' | sort -u)
 
 if [ "$needs_rust_gate" -eq 1 ]; then
     echo "pre-push: running cargo fmt --all --check" >&2
@@ -72,51 +199,8 @@ if [ "$needs_rust_gate" -eq 1 ]; then
     fi
 fi
 
-if [ -n "$ttl_phases" ]; then
-    validator="$repo_root/.claude/skills/graph-orchestration/scripts/validate-findings.py"
-    if [ ! -f "$validator" ]; then
-        echo "pre-push: REFUSED. TTL files changed but validate-findings.py is missing at $validator." >&2
-        exit 1
-    fi
-    fail=0
-    for phase_short in $ttl_phases; do
-        structure_dir=""
-        for candidate in "$repo_root"/.sprints/*/; do
-            [ -d "$candidate" ] || continue
-            candidate_name=$(basename "$candidate")
-            if [ "$(printf '%s' "$candidate_name" | tr '[:lower:]' '[:upper:]')" = "$phase_short" ]; then
-                structure_dir="$candidate"
-                break
-            fi
-        done
-        if [ -z "$structure_dir" ]; then
-            echo "pre-push: REFUSED. Pushed .triage/.sprints changes reference phase $phase_short but no matching .sprints/*/structure.ttl exists." >&2
-            fail=1
-            continue
-        fi
-        structure="${structure_dir}structure.ttl"
-        events="${structure_dir}events.ttl"
-        findings_dir="$repo_root/.triage/phase-$(printf '%s' "$phase_short" | tr '[:upper:]' '[:lower:]')/findings"
-        if [ ! -f "$structure" ] || [ ! -d "$findings_dir" ]; then
-            echo "pre-push: REFUSED. Phase $phase_short is missing structure.ttl or findings dir under $findings_dir." >&2
-            fail=1
-            continue
-        fi
-        echo "pre-push: running validate-findings.py for phase $phase_short (touched by this push)" >&2
-        result=$(python3 "$validator" \
-            --findings-dir "$findings_dir" \
-            --structure "$structure" \
-            --events "$events" --json 2>&1)
-        py_status=$?
-        if [ "$py_status" -ne 0 ]; then
-            echo "$result" >&2
-            echo "pre-push: REFUSED. validate-findings.py failed for phase $phase_short; repair per docs/triage/ttl-repair.md." >&2
-            fail=1
-        fi
-    done
-    if [ "$fail" -ne 0 ]; then
-        exit 1
-    fi
+if [ "$ttl_fail" -ne 0 ]; then
+    exit 1
 fi
 
 exit 0
