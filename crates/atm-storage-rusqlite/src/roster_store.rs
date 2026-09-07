@@ -6,7 +6,7 @@ use atm_storage::contract::{
 };
 use atm_storage::types::{AgentName, ModelName, PaneId, TeamName};
 use atm_storage::{AtmError, roster_unique_name_collision_error};
-use rusqlite::params;
+use rusqlite::{Connection, params};
 use serde_json::{Map, Value};
 
 const MAX_CANONICAL_ROSTER_MEMBERS: usize = 4096;
@@ -190,7 +190,7 @@ impl RosterStore for SqliteRosterStore {
     }
 }
 
-fn load_unique_names(connection: &rusqlite::Connection) -> Result<Vec<RosterUniqueName>, AtmError> {
+fn load_unique_names(connection: &Connection) -> Result<Vec<RosterUniqueName>, AtmError> {
     let mut statement = connection
         .prepare(
             "SELECT team_name, agent_name,

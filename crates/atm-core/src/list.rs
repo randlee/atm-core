@@ -594,7 +594,7 @@ mod tests {
     use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
     use crate::service_runtime::RetainedServiceRuntime;
     use crate::service_runtime_store::RetainedMailboxRuntime;
-    use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::test_support::{ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
     use crate::types::{
         AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection, TaskId, TeamName,
     };
@@ -639,7 +639,7 @@ mod tests {
     fn unique_name_d16_list_aliases_are_canonicalized_before_reader_and_task_ledger() {
         let root = tempdir().expect("root");
         let team: TeamName = TEST_TEAM.parse().expect("team");
-        let canonical: AgentName = "team-lead".parse().expect("canonical");
+        let canonical: AgentName = ROLE_TEAM_LEAD.parse().expect("canonical");
         let mut query = ListQuery::new(
             root.path().to_path_buf(),
             root.path().to_path_buf(),
