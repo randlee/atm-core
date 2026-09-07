@@ -1431,6 +1431,12 @@ authoritative sprint-by-sprint detail and
 `docs/plans/phase-aq/.audit/qa-evidence-master.json` for QA/merge
 provenance.
 
+Hermes graft/Colima integration follow-up (Rand, 2026-09-07):
+
+| Sprint | Status | Branch | Worktree | Artifacts |
+| --- | --- | --- | --- | --- |
+| `HERMES-GRAFT-COLIMA-R1` | `in progress` | `docs/hermes-graft-colima-runbook` | `../atm-core-worktrees/docs/hermes-graft-colima-runbook` | `docs/plans/phase-aq/sprint-HERMES-GRAFT-COLIMA-R1.md`, `docs/runbooks/hermes-graft-colima-integration.md`; full frozen-fork review and isolated atm-core `prerelease/v1.5.3` Colima matrix coordinated with `loki@hermes` |
+
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 
 Phase AO2 made physical admission benchmarks safe and repeatable, restored
