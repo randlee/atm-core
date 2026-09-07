@@ -37,6 +37,19 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 
 ---
 
+## ⚠️ Code Addition Rule (Rand, 2026-09-07)
+
+**No code is added unless it is necessary and used consistently.**
+
+- Every line in a PR must be exercised by the production path or by a test of production behaviour.
+- No options, switches, environment parsers, helpers or abstractions for hypothetical use or for test reach. A test reaches a component by constructing it directly, never by adding a selector to production code.
+- Every configuration switch doubles the test matrix (a "TCP always on mac" switch would double every local-client test). Same-host transport selection lives once, in `atm-daemon-client`.
+- Before pushing, the developer walks the diff against the base branch and deletes anything that fails this test. Reviewers file a Blocking finding for any line that fails it.
+
+Origin: PR #1299 R1 added `ATM_LOCAL_TRANSPORT` parsing to `atm-http-runtime` so a test could reach the TCP loopback connector; a proposed CLI `--tcp` flag (#1301) was dropped the same hour because the existing variable already covers it.
+
+---
+
 ## Project Overview
 
 **atm-core** (`atm`) is a Rust CLI and daemon for mail-like messaging with Claude agent teams:
