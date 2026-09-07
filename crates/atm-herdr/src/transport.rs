@@ -3,10 +3,10 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use atm_core::HerdrAgentName;
 use atm_core::doctor::{
     HerdrEndpointDisplay, HerdrEndpointDisplayRoot, HerdrTransportKind, HerdrVersion,
 };
-use atm_core::HerdrAgentName;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::{HerdrSession, RequestDeadline};
 use serde_json::Value;
