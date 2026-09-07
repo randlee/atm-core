@@ -48,6 +48,7 @@ impl HerdrEndpointDisplay {
     pub fn from_relative(
         root: HerdrEndpointDisplayRoot,
         relative: &Path,
+        named_pipe: bool,
     ) -> Result<Self, AtmError> {
         let components = relative
             .components()
@@ -85,6 +86,11 @@ impl HerdrEndpointDisplay {
                 )
             }
         };
+        let value = if named_pipe {
+            format!(r"\\.\pipe\{value}")
+        } else {
+            value
+        };
         Ok(Self(value))
     }
 
@@ -98,7 +104,8 @@ impl TryFrom<String> for HerdrEndpointDisplay {
     type Error = AtmError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let (prefix, relative) = value
+        let display = value.strip_prefix(r"\\.\pipe\").unwrap_or(&value);
+        let (prefix, relative) = display
             .split_once('/')
             .ok_or_else(|| invalid_endpoint_display(&value))?;
         if !matches!(
@@ -309,11 +316,13 @@ mod tests {
         let home = HerdrEndpointDisplay::from_relative(
             HerdrEndpointDisplayRoot::Home,
             Path::new(".config/herdr/socket"),
+            false,
         )
         .expect("relative path");
         let configured = HerdrEndpointDisplay::from_relative(
             HerdrEndpointDisplayRoot::Configured,
             Path::new("private/nested/socket"),
+            false,
         )
         .expect("relative path");
 
@@ -325,12 +334,24 @@ mod tests {
             Path::new("."),
         ] {
             assert_eq!(
-                HerdrEndpointDisplay::from_relative(HerdrEndpointDisplayRoot::Home, invalid)
+                HerdrEndpointDisplay::from_relative(HerdrEndpointDisplayRoot::Home, invalid, false)
                     .expect_err("non-normal path must fail")
                     .code(),
                 AtmErrorCode::ConfigParseFailed
             );
         }
+    }
+
+    #[test]
+    fn endpoint_display_preserves_only_the_named_pipe_marker() {
+        let endpoint = HerdrEndpointDisplay::from_relative(
+            HerdrEndpointDisplayRoot::AppData,
+            Path::new("herdr/socket"),
+            true,
+        )
+        .expect("relative path");
+
+        assert_eq!(endpoint.as_str(), r"\\.\pipe\%APPDATA%/herdr/socket");
     }
 
     #[test]

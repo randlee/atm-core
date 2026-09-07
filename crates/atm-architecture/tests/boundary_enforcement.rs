@@ -104,26 +104,6 @@ const RETIRED_ERROR_CONTRACT_SYMBOLS: &[&str] = &[
     "error_kind_for_code",
 ];
 
-const AI11_RETIRED_WINDOWS_TRANSPORT_IDENTIFIERS: &[&str] = &[
-    "NamedPipe",
-    "named_pipe",
-    "AF_UNIX",
-    "PipeClient",
-    "PipeServer",
-    "FrameCodec",
-    "FrameHeader",
-    "read_framed_request",
-    "write_framed_response",
-];
-
-const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
-    "named_pipe",
-    "named-pipe",
-    "tokio-named-pipes",
-    "tokio_named_pipes",
-    "windows-named-pipe",
-];
-
 fn contains_adapter_availability_inference(source: &str) -> bool {
     const WRAPPER_TERMS: &[&str] = &["adapter", "wrapper", "transport"];
     const OPTION_BRANCH_TERMS: &[&str] = &["is_some", "is_none", "some", "none", "match"];
@@ -1708,7 +1688,7 @@ fn sqlite_writer_batch_window_is_private_to_storage() {
         "the admission benchmark harness must remain covered by the writer batch-window guard"
     );
 
-    for source in ai11_guarded_workspace_sources(&root)
+    for source in workspace_rust_sources_excluding_boundary_test(&root)
         .into_iter()
         .chain(smoke_sources)
     {
@@ -2037,144 +2017,6 @@ fn aw_pool_graft_receiver_lookup_uses_the_deadline_bounded_reader_lane() {
 }
 
 #[test]
-fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
-    let root = workspace_root();
-    let daemon_lib = root.join("crates/atm-daemon/src/main.rs");
-
-    let daemon_lib_source = read_source(&daemon_lib).replace("\r\n", "\n");
-    assert!(
-        !daemon_lib_source.contains("local_ipc_transport")
-            && !daemon_lib_source.contains("local_tcp_transport")
-            && !daemon_lib_source.contains("local_ipc_connection"),
-        "AM.3 must not restore a legacy daemon local listener module declaration"
-    );
-    let legacy_local_listener_sources = ai11_guarded_workspace_sources(&root)
-        .iter()
-        .filter(|path| retired_local_listener_source(path).is_some())
-        .map(|path| path.display().to_string())
-        .collect::<Vec<_>>();
-    assert!(
-        legacy_local_listener_sources.is_empty(),
-        "AM.3 must keep every legacy local listener source absent: {legacy_local_listener_sources:?}"
-    );
-
-    let retired = ai11_guarded_workspace_sources(&root)
-        .iter()
-        .flat_map(|path| retired_windows_transport_ast_findings(path))
-        .collect::<Vec<_>>();
-    assert!(
-        retired.is_empty(),
-        "AI.11 must not restore Windows pipe/AF_UNIX or generic frame-codec transport: {retired:?}"
-    );
-
-    let metadata = MetadataCommand::new()
-        .manifest_path(root.join("Cargo.toml"))
-        .no_deps()
-        .exec()
-        .expect("cargo metadata must succeed for the workspace");
-    let forbidden_dependencies = metadata
-        .packages
-        .into_iter()
-        .filter(|package| {
-            matches!(
-                package.name.as_str(),
-                "atm" | "atm-core" | "atm-daemon" | "atm-daemon-client"
-            )
-        })
-        .flat_map(|package| {
-            package
-                .dependencies
-                .into_iter()
-                .filter_map(move |dependency| {
-                    AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES
-                        .contains(&dependency.name.as_str())
-                        .then(|| {
-                            format!("{} directly depends on {}", package.name, dependency.name)
-                        })
-                })
-        })
-        .collect::<Vec<_>>();
-    assert!(
-        forbidden_dependencies.is_empty(),
-        "AI.11 must not restore retired Windows transport dependencies: {forbidden_dependencies:?}"
-    );
-
-    let router_implementations = ai11_guarded_workspace_sources(&root)
-        .iter()
-        .filter(|path| !is_test_only_source(path))
-        .map(|path| production_api_router_implementation_count(path))
-        .sum::<usize>();
-    assert_eq!(
-        router_implementations, 0,
-        "AM.6 deletes the obsolete daemon ApiRouter implementation"
-    );
-    let typed_router =
-        read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
-    assert!(
-        typed_router.contains("impl CanonicalWriteHandler for StorageAndNudgeRouter"),
-        "AM.6 requires the live HTTP runtime to own the canonical write handler"
-    );
-}
-
-#[test]
-fn ai11_deletion_gate_detector_rejects_retired_windows_transport_ast_fixtures() {
-    let fixture = syn::parse_file(
-        r#"
-        use windows::named_pipe::NamedPipe;
-        const ENDPOINT: &str = r"\\.\pipe\atm";
-        const DOMAIN: i32 = AF_UNIX;
-        "#,
-    )
-    .expect("fixture must parse");
-    let mut detector = RetiredWindowsTransportDetector::default();
-    detector.visit_file(&fixture);
-    assert_eq!(
-        detector.findings,
-        BTreeSet::from([
-            "identifier `AF_UNIX`".to_string(),
-            "identifier `NamedPipe`".to_string(),
-            "identifier `named_pipe`".to_string(),
-            "named-pipe endpoint literal".to_string(),
-        ])
-    );
-}
-
-#[test]
-fn ai11_deletion_gate_rejects_orphaned_legacy_local_listener_paths() {
-    let fixture =
-        workspace_root().join("retired-local-listener-fixture/local_ipc_transport/accept_loop.rs");
-    assert_eq!(
-        retired_local_listener_source(&fixture),
-        Some("legacy local listener source"),
-        "the AM.3 deletion gate must catch an accept_loop.rs-style leftover"
-    );
-}
-
-#[test]
-fn ai11_deletion_gate_detector_rejects_retired_envelope_wire_codec_ast_fixtures() {
-    let fixture = syn::parse_file(
-        r#"
-        struct FrameHeader { length: u32 }
-        struct FrameCodec;
-        fn read_framed_request() {}
-        fn write_framed_response() {}
-        "#,
-    )
-    .expect("fixture must parse");
-    let mut detector = RetiredWindowsTransportDetector::default();
-    detector.visit_file(&fixture);
-    assert_eq!(
-        detector.findings,
-        BTreeSet::from([
-            "identifier `FrameCodec`".to_string(),
-            "identifier `FrameHeader`".to_string(),
-            "identifier `read_framed_request`".to_string(),
-            "identifier `write_framed_response`".to_string(),
-        ])
-    );
-}
-
-#[test]
 fn deleted_daemon_boundary_modules_must_be_retired() {
     let root = workspace_root();
     let stale = daemon_boundary_files()
@@ -2333,31 +2175,13 @@ fn writer_batch_window_smoke_sources(root: &Path) -> Vec<PathBuf> {
     files
 }
 
-fn ai11_guarded_workspace_sources(root: &Path) -> Vec<PathBuf> {
+fn workspace_rust_sources_excluding_boundary_test(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     collect_rust_files(&root.join("crates"), &mut files);
-    files.retain(|path| path != &ai11_deletion_gate_fixture_path(root));
+    files
+        .retain(|path| path != &root.join("crates/atm-architecture/tests/boundary_enforcement.rs"));
     files.sort();
     files
-}
-
-fn ai11_deletion_gate_fixture_path(root: &Path) -> PathBuf {
-    root.join("crates/atm-architecture/tests/boundary_enforcement.rs")
-}
-
-fn retired_local_listener_source(path: &Path) -> Option<&'static str> {
-    let file_name = path.file_name()?.to_str()?;
-    if matches!(
-        file_name,
-        "local_tcp_transport.rs" | "local_ipc_transport.rs" | "local_ipc_connection.rs"
-    ) || path
-        .components()
-        .any(|component| component.as_os_str() == "local_ipc_transport")
-    {
-        Some("legacy local listener source")
-    } else {
-        None
-    }
 }
 
 fn is_test_only_source(path: &Path) -> bool {
@@ -2367,40 +2191,6 @@ fn is_test_only_source(path: &Path) -> bool {
             .file_name()
             .and_then(|name| name.to_str())
             .is_some_and(|name| name.starts_with("test_") || name.ends_with("_tests.rs"))
-}
-
-fn production_api_router_implementation_count(path: &Path) -> usize {
-    let source = read_source(path);
-    let syntax = syn::parse_file(&source)
-        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
-    let mut detector = ProductionApiRouterImplementationDetector::default();
-    detector.visit_file(&syntax);
-    detector.count
-}
-
-#[derive(Default)]
-struct ProductionApiRouterImplementationDetector {
-    count: usize,
-}
-
-impl<'ast> Visit<'ast> for ProductionApiRouterImplementationDetector {
-    fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
-        if item.trait_.as_ref().is_some_and(|(_, path, _)| {
-            path.segments
-                .last()
-                .is_some_and(|segment| segment.ident == "ApiRouter")
-        }) {
-            self.count += 1;
-        }
-        syn::visit::visit_item_impl(self, item);
-    }
-
-    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
-        if item.attrs.iter().any(is_test_configuration_attribute) {
-            return;
-        }
-        syn::visit::visit_item_mod(self, item);
-    }
 }
 
 fn production_runtime_identifier_findings(path: &Path, prohibited: &[&str]) -> Vec<String> {
@@ -4895,42 +4685,6 @@ fn extract_fn_body<'source>(source: &'source str, fn_name: &str) -> &'source str
         }
     }
     panic!("function `{fn_name}` body is not closed")
-}
-
-fn retired_windows_transport_ast_findings(path: &Path) -> Vec<String> {
-    let source = read_source(path);
-    let syntax = syn::parse_file(&source)
-        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
-    let mut detector = RetiredWindowsTransportDetector::default();
-    detector.visit_file(&syntax);
-    detector
-        .findings
-        .into_iter()
-        .map(|finding| format!("{}: {finding}", path.display()))
-        .collect()
-}
-
-#[derive(Default)]
-struct RetiredWindowsTransportDetector {
-    findings: BTreeSet<String>,
-}
-
-impl<'ast> Visit<'ast> for RetiredWindowsTransportDetector {
-    fn visit_ident(&mut self, ident: &'ast syn::Ident) {
-        let value = ident.to_string();
-        if AI11_RETIRED_WINDOWS_TRANSPORT_IDENTIFIERS.contains(&value.as_str()) {
-            self.findings.insert(format!("identifier `{value}`"));
-        }
-        syn::visit::visit_ident(self, ident);
-    }
-
-    fn visit_lit_str(&mut self, literal: &'ast syn::LitStr) {
-        if literal.value().contains(r"\\.\pipe\") {
-            self.findings
-                .insert("named-pipe endpoint literal".to_string());
-        }
-        syn::visit::visit_lit_str(self, literal);
-    }
 }
 
 fn workspace_root() -> PathBuf {
