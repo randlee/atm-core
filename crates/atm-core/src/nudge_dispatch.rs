@@ -16,7 +16,7 @@ use crate::delivery_policy::DeliveryPolicyCoordinator;
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, authenticated_source_host};
 use crate::send::NudgeMode;
-use crate::send::hook::{build_bare_cli_dispatch, build_built_in_dispatch};
+use crate::send::hook::build_built_in_dispatch;
 use crate::service_runtime::LocalServiceRuntime;
 use atm_storage::TaskRow;
 
@@ -147,13 +147,6 @@ pub fn rebuild_received_hook_dispatch(
         NudgeKind::Queue => NudgeMode::Deferred,
     };
 
-    if delivery_snapshot.bare_cli_post_send {
-        return Ok(Some(build_bare_cli_dispatch(
-            &event,
-            &message.envelope.text,
-            nudge_mode,
-        )));
-    }
     build_built_in_dispatch(runtime, &delivery_snapshot, &event, nudge_mode)
 }
 

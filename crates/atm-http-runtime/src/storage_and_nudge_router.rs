@@ -2175,7 +2175,7 @@ mod tests {
             QueuedNudgeMessage {
                 kind: NudgeKind::Queue,
                 msg_id: AtmMessageId::new(),
-                body: "queued through the real handler".to_owned(),
+                body: "<atm><action>queue</action></atm>".to_owned(),
             },
         )
         .expect("seed FIFO");
@@ -2196,7 +2196,10 @@ mod tests {
             panic!("expected a QueueGetNext response");
         };
         assert_eq!(response.messages.len(), 1);
-        assert_eq!(response.messages[0].body, "queued through the real handler");
+        assert_eq!(
+            response.messages[0].body,
+            "<atm><action>queue</action></atm>"
+        );
     }
 
     /// AC6 migration case: a stale FIFO entry from an earlier bare-CLI
@@ -2220,7 +2223,7 @@ mod tests {
             QueuedNudgeMessage {
                 kind: NudgeKind::Queue,
                 msg_id: AtmMessageId::new(),
-                body: "queued before the migration".to_owned(),
+                body: "<atm><action>queued-before-migration</action></atm>".to_owned(),
             },
         )
         .expect("seed stale FIFO entry");
@@ -2278,7 +2281,10 @@ mod tests {
             1,
             "the stale FIFO entry still drains after the member's classification inputs changed"
         );
-        assert_eq!(response.messages[0].body, "queued before the migration");
+        assert_eq!(
+            response.messages[0].body,
+            "<atm><action>queued-before-migration</action></atm>"
+        );
     }
 
     #[tokio::test]

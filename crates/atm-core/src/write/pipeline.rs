@@ -266,20 +266,12 @@ impl PreparedWrite {
                 message,
                 post_write.delivery_snapshot.recipient_pane_id.as_ref(),
             )?;
-            let dispatch = if post_write.delivery_snapshot.bare_cli_post_send {
-                Some(crate::send::hook::build_bare_cli_dispatch(
-                    &event,
-                    &message.envelope.text,
-                    self.outbound_request.nudge_mode,
-                ))
-            } else {
-                crate::send::hook::build_built_in_dispatch(
-                    runtime,
-                    &post_write.delivery_snapshot,
-                    &event,
-                    self.outbound_request.nudge_mode,
-                )?
-            };
+            let dispatch = crate::send::hook::build_built_in_dispatch(
+                runtime,
+                &post_write.delivery_snapshot,
+                &event,
+                self.outbound_request.nudge_mode,
+            )?;
             if let Some(dispatch) = dispatch {
                 dispatches.push(dispatch);
             }

@@ -75,29 +75,23 @@ where
             kind,
         }));
     }
-    Ok(None)
-}
-
-/// Builds the retained bare-CLI queue handoff. This path intentionally keeps
-/// the admitted message body because its governed queue-pull contract has not
-/// yet moved to rendered-template delivery.
-pub(crate) fn build_bare_cli_dispatch(
-    event: &PostSendHookEvent,
-    body: &str,
-    nudge_mode: NudgeMode,
-) -> BuiltInPostSendDispatch {
-    let kind = nudge_kind_for_mode(nudge_mode);
-    BuiltInPostSendDispatch {
-        event: event.clone(),
-        target: PostSendBuiltInTarget::QueuePull(QueuePullTarget {
-            team: event.recipient_team.clone(),
-            agent: event.recipient.clone(),
+    if delivery_snapshot.bare_cli_post_send {
+        let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
+            return Ok(None);
+        };
+        return Ok(Some(BuiltInPostSendDispatch {
+            event: event.clone(),
+            target: PostSendBuiltInTarget::QueuePull(QueuePullTarget {
+                team: event.recipient_team.clone(),
+                agent: event.recipient.clone(),
+                kind,
+                msg_id: event.message_id,
+                body: rendered_nudge,
+            }),
             kind,
-            msg_id: event.message_id,
-            body: body.to_owned(),
-        }),
-        kind,
+        }));
     }
+    Ok(None)
 }
 
 /// Maps the write-time delivery mode to the dispatch's `NudgeKind`.
