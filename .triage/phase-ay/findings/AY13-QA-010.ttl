@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY13-QA-010>
+  a triage:Finding ;
+  triage:findingId "AY13-QA-010" ;
+  triage:title "rust-qa-agent QA-002: resolved_doctor_team's new caller_team-over-config precedence step has no isolated regression test" ;
+  triage:description "quality-mgr qa-pr1300-r1 (PR #1300, AY.13 doctor team scope). resolved_doctor_team was changed to add a new precedence step (team_override.or_else(caller_team).or_else(config::resolve_team)), i.e. caller_team (ATM_TEAM) now wins over config-file team resolution when no --team/--all-teams flag is given. No unit test isolates this new branch (a query with caller_team set, no team_override, and a config that would otherwise resolve to a different team). Existing tests (client_context_reflects_caller_not_ambient_environment, team_override_is_reflected_in_client_context) verify client_context/environment fields but do not assert DoctorTeamScope selection against a conflicting config-resolved team." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/doctor/mod.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T17:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY13 ;
+  triage:foundAt "2026-09-07T17:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY13-QA-010/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY13-QA-010/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 867 ;
+  triage:snippet "team_override.or_else(caller_team).or_else(config::resolve_team) -- no isolated precedence regression test" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:occursIn <urn:atm:triage:worktree/AY13-QA-010/98ac5c7d2> .
+
+<urn:atm:triage:worktree/AY13-QA-010/98ac5c7d2>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ay13-doctor-team-scope" ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:orderIndex 0 .
