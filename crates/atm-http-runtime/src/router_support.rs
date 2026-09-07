@@ -9,7 +9,7 @@ use std::sync::Arc;
 use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::send::{
-    SendMessageSource, TemplateVerification, WriteRequest, verify_template_request,
+    SendMessageSource, WriteRequest, WriteSourcePreflight, preflight_write_source_request,
 };
 
 use atm_core::error::AtmError;
@@ -57,73 +57,198 @@ where
 /// before the request leaves the router.
 #[derive(Clone)]
 pub(crate) struct ControlPathSyncBridge {
-    permits: Arc<tokio::sync::Semaphore>,
-    pub(crate) runtime_health: RuntimeHealth,
+    bridge: BoundedBlockingBridge,
 }
 
-/// Bounded blocking admission for template verification.
-///
-/// The selected template adapter must re-open the canonical caller path to
-/// prove it did not change after the CLI captured its bytes.  That work can
-/// block on host filesystem policy, so it is isolated from Tokio workers and
-/// capped independently of reads.  A timed-out task retains its permit until
-/// it exits, preventing an unbounded blocked-task buildup.
+/// The completion behavior for a blocking operation admitted by
+/// [`BoundedBlockingBridge`].
+#[derive(Clone, Copy)]
+enum BlockingCompletionPolicy {
+    /// Durable control-path work must finish once it has started.
+    AwaitCompletion,
+    /// Source preflight may return at the request deadline; its blocking job
+    /// keeps its permit until it exits so permanent stalls cannot accumulate.
+    AbandonResponseAtDeadline,
+}
+
+#[derive(Clone, Copy)]
+enum BlockingStallCounter {
+    CoreBridge,
+    WriteSourcePreflight,
+}
+
 #[derive(Clone)]
-pub(crate) struct TemplateVerificationBridge {
+struct BoundedBlockingBridge {
     permits: Arc<tokio::sync::Semaphore>,
+    runtime_health: RuntimeHealth,
 }
 
-impl Default for TemplateVerificationBridge {
-    fn default() -> Self {
+enum BlockingBridgeError {
+    DeadlineBeforeStart,
+    DeadlineAfterStart,
+    Closed,
+    Join(tokio::task::JoinError),
+    Operation(AtmError),
+}
+
+impl BoundedBlockingBridge {
+    fn new(capacity: NonZeroUsize, runtime_health: RuntimeHealth) -> Self {
         Self {
-            permits: Arc::new(tokio::sync::Semaphore::new(2)),
+            permits: Arc::new(tokio::sync::Semaphore::new(capacity.get())),
+            runtime_health,
         }
+    }
+
+    async fn run<T, F>(
+        &self,
+        deadline: RequestDeadline,
+        policy: BlockingCompletionPolicy,
+        stall_counter: BlockingStallCounter,
+        job: F,
+    ) -> Result<T, BlockingBridgeError>
+    where
+        T: Send + 'static,
+        F: FnOnce() -> Result<T, AtmError> + Send + 'static,
+    {
+        let remaining = deadline
+            .remaining()
+            .ok_or(BlockingBridgeError::DeadlineBeforeStart)?;
+        let permit = tokio::time::timeout(remaining, Arc::clone(&self.permits).acquire_owned())
+            .await
+            .map_err(|_| BlockingBridgeError::DeadlineBeforeStart)?
+            .map_err(|_| BlockingBridgeError::Closed)?;
+        if deadline.expired() {
+            return Err(BlockingBridgeError::DeadlineBeforeStart);
+        }
+        let started_at = std::time::Instant::now();
+        match policy {
+            BlockingCompletionPolicy::AwaitCompletion => {
+                let outcome = tokio::task::spawn_blocking(job)
+                    .await
+                    .map_err(BlockingBridgeError::Join)?;
+                if started_at.elapsed() > remaining {
+                    self.record_stall(stall_counter, started_at.elapsed(), remaining);
+                }
+                drop(permit);
+                outcome.map_err(BlockingBridgeError::Operation)
+            }
+            BlockingCompletionPolicy::AbandonResponseAtDeadline => {
+                let outcome = tokio::task::spawn_blocking(move || {
+                    let _permit = permit;
+                    job()
+                });
+                match tokio::time::timeout(remaining, outcome).await {
+                    Ok(Ok(result)) => result.map_err(BlockingBridgeError::Operation),
+                    Ok(Err(source)) => Err(BlockingBridgeError::Join(source)),
+                    Err(_) => {
+                        self.record_stall(stall_counter, started_at.elapsed(), remaining);
+                        Err(BlockingBridgeError::DeadlineAfterStart)
+                    }
+                }
+            }
+        }
+    }
+
+    fn record_stall(
+        &self,
+        counter: BlockingStallCounter,
+        elapsed: std::time::Duration,
+        budget: std::time::Duration,
+    ) {
+        let subsystem = match counter {
+            BlockingStallCounter::CoreBridge => {
+                self.runtime_health.record_blocking_core_bridge_stall();
+                "atm_http_runtime.blocking_core_bridge"
+            }
+            BlockingStallCounter::WriteSourcePreflight => {
+                self.runtime_health.record_write_source_preflight_stall();
+                "atm_http_runtime.write_source_preflight"
+            }
+        };
+        tracing::warn!(
+            subsystem,
+            action = "blocking_job",
+            outcome = "budget_exceeded",
+            ?elapsed,
+            ?budget,
+            "bounded blocking job outlived its remaining request budget"
+        );
     }
 }
 
-impl TemplateVerificationBridge {
-    pub(crate) async fn verify(
+/// Bounded blocking admission for caller-owned write source preflight.
+///
+/// Template verification and file-policy evaluation can re-open caller-owned
+/// paths and block on host filesystem policy. They are isolated from Tokio
+/// workers and capped independently of reads. A timed-out task retains its
+/// permit until it exits, preventing an unbounded blocked-task buildup.
+#[derive(Clone)]
+pub(crate) struct WriteSourcePreflightBridge {
+    bridge: BoundedBlockingBridge,
+}
+
+impl WriteSourcePreflightBridge {
+    pub(crate) fn new(runtime_health: RuntimeHealth) -> Self {
+        Self {
+            // Two permanently stalled filesystem requests remain observable
+            // and fail closed without consuming Tokio workers or read-lane
+            // capacity; a larger pool would only widen that stranded work.
+            bridge: BoundedBlockingBridge::new(
+                NonZeroUsize::new(2).expect("source preflight capacity is non-zero"),
+                runtime_health,
+            ),
+        }
+    }
+
+    pub(crate) async fn preflight(
         &self,
         deadline: RequestDeadline,
         runtime: LocalServiceRuntime,
         request: WriteRequest,
-    ) -> Result<Option<TemplateVerification>, AtmError> {
-        let SendMessageSource::Template(source) = &request.message_source else {
-            return Ok(None);
+    ) -> Result<WriteSourcePreflight, AtmError> {
+        if matches!(request.message_source, SendMessageSource::Inline(_)) {
+            return preflight_write_source_request(&runtime, &request);
         };
-        let path = source.canonical_template_path.clone();
-        let remaining = deadline
-            .remaining()
-            .ok_or_else(|| template_verification_deadline_error(&path, "start"))?;
-        let permit = tokio::time::timeout(remaining, Arc::clone(&self.permits).acquire_owned())
-            .await
-            .map_err(|_| template_verification_deadline_error(&path, "start"))?
-            .map_err(|_| {
-                AtmError::daemon_unavailable("template verification bridge is shutting down")
-            })?;
-        let remaining = deadline
-            .remaining()
-            .ok_or_else(|| template_verification_deadline_error(&path, "start"))?;
-        let verification = tokio::task::spawn_blocking(move || {
-            let _permit = permit;
-            verify_template_request(&runtime, &request)
-        });
-        match tokio::time::timeout(remaining, verification).await {
-            Ok(Ok(result)) => result.map(Some),
-            Ok(Err(source)) => Err(AtmError::daemon_unavailable(
-                "template verification task ended unexpectedly",
+        let description = source_preflight_description(&request);
+        self.bridge
+            .run(
+                deadline,
+                BlockingCompletionPolicy::AbandonResponseAtDeadline,
+                BlockingStallCounter::WriteSourcePreflight,
+                move || preflight_write_source_request(&runtime, &request),
             )
-            .with_cause(source)),
-            Err(_) => Err(template_verification_deadline_error(&path, "finish")),
-        }
+            .await
+            .map_err(|error| source_preflight_error(&description, error))
     }
 }
 
-fn template_verification_deadline_error(path: &std::path::Path, phase: &str) -> AtmError {
-    AtmError::daemon_unavailable(format!(
-        "template verification for {} did not {phase} before the request deadline",
-        path.display()
-    ))
+fn source_preflight_description(request: &WriteRequest) -> String {
+    match &request.message_source {
+        SendMessageSource::Template(source) => {
+            format!("template {}", source.canonical_template_path.display())
+        }
+        SendMessageSource::File { path, .. } => format!("file {}", path.display()),
+        SendMessageSource::Inline(_) => "inline message".to_owned(),
+    }
+}
+
+fn source_preflight_error(description: &str, error: BlockingBridgeError) -> AtmError {
+    match error {
+        BlockingBridgeError::DeadlineBeforeStart => AtmError::daemon_unavailable(format!(
+            "write source preflight for {description} did not start before the request deadline"
+        )),
+        BlockingBridgeError::DeadlineAfterStart => AtmError::daemon_unavailable(format!(
+            "write source preflight for {description} did not finish before the request deadline"
+        )),
+        BlockingBridgeError::Closed => {
+            AtmError::daemon_unavailable("write source preflight bridge is shutting down")
+        }
+        BlockingBridgeError::Join(source) => {
+            AtmError::daemon_unavailable("write source preflight task ended unexpectedly")
+                .with_cause(source)
+        }
+        BlockingBridgeError::Operation(error) => error,
+    }
 }
 
 /// Reserves response encoding and loopback handoff time before a local
@@ -140,8 +265,7 @@ pub(super) fn receiver_hook_deadline(deadline: RequestDeadline) -> Option<Reques
 impl ControlPathSyncBridge {
     pub(crate) fn new(capacity: NonZeroUsize, runtime_health: RuntimeHealth) -> Self {
         Self {
-            permits: Arc::new(tokio::sync::Semaphore::new(capacity.get())),
-            runtime_health,
+            bridge: BoundedBlockingBridge::new(capacity, runtime_health),
         }
     }
 
@@ -150,54 +274,31 @@ impl ControlPathSyncBridge {
         T: Send + 'static,
         F: FnOnce() -> Result<T, AtmError> + Send + 'static,
     {
-        let remaining = deadline.remaining().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "request deadline expired before replacement blocking core operation",
+        self.bridge
+            .run(
+                deadline,
+                BlockingCompletionPolicy::AwaitCompletion,
+                BlockingStallCounter::CoreBridge,
+                job,
             )
-        })?;
-        let permit = tokio::time::timeout(remaining, Arc::clone(&self.permits).acquire_owned())
             .await
-            .map_err(|_| {
-                AtmError::daemon_unavailable(
+            .map_err(|error| match error {
+                BlockingBridgeError::DeadlineBeforeStart => AtmError::daemon_unavailable(
                     "request deadline expired before replacement blocking core operation",
+                ),
+                BlockingBridgeError::DeadlineAfterStart => {
+                    unreachable!("durable control work awaits completion")
+                }
+                BlockingBridgeError::Closed => AtmError::daemon_unavailable(
+                    "replacement blocking core bridge is shutting down",
+                ),
+                BlockingBridgeError::Join(source) => AtmError::new(
+                    atm_core::error::AtmErrorCode::InternalError,
+                    "replacement storage write task ended unexpectedly",
                 )
-            })?
-            .map_err(|_| {
-                AtmError::daemon_unavailable("replacement blocking core bridge is shutting down")
-            })?;
-        if deadline.expired() {
-            return Err(AtmError::daemon_unavailable(
-                "request deadline expired before replacement blocking core operation started",
-            ));
-        }
-        // The blocking job itself is intentionally not wrapped in a
-        // `tokio::time::timeout`: a durable storage write must run to
-        // completion rather than be abandoned mid-transaction. `elapsed` is
-        // therefore observability, not enforcement -- it records when a job
-        // outlived the budget it was dispatched with, without changing
-        // whether or how long the job runs.
-        let started_at = std::time::Instant::now();
-        let outcome = tokio::task::spawn_blocking(job).await.map_err(|source| {
-            AtmError::new(
-                atm_core::error::AtmErrorCode::InternalError,
-                "replacement storage write task ended unexpectedly",
-            )
-            .with_cause(source)
-        })?;
-        let elapsed = started_at.elapsed();
-        if elapsed > remaining {
-            self.runtime_health.record_blocking_core_bridge_stall();
-            tracing::warn!(
-                subsystem = "atm_http_runtime.blocking_core_bridge",
-                action = "blocking_job",
-                outcome = "budget_exceeded",
-                elapsed = ?elapsed,
-                budget = ?remaining,
-                "blocking core bridge job outlived its remaining request budget"
-            );
-        }
-        drop(permit);
-        outcome
+                .with_cause(source),
+                BlockingBridgeError::Operation(error) => error,
+            })
     }
 }
 

@@ -1547,6 +1547,48 @@ class LegacyDaemonSwitchRegressionTests(unittest.TestCase):
             [mock.call(args, "stop", allow_absent=True), mock.call(args, "start")],
         )
 
+    def test_restart_rebootstraps_when_orphan_repair_fails(self) -> None:
+        args = argparse.Namespace(yes=True, repair_orphan=False)
+        with (
+            mock.patch.object(self.module, "selected_links", return_value=(self.old_cli, self.old_daemon)),
+            mock.patch.object(self.module, "require_executable", side_effect=[self.old_cli, self.old_daemon]),
+            mock.patch.object(self.module, "require_macos_development_signatures"),
+            mock.patch.object(self.module, "platform") as platform,
+            mock.patch.object(self.module, "run_service") as service,
+            mock.patch.object(self.module, "require_stopped_daemon", side_effect=self.module.SwitchError("owner remains")),
+            mock.patch.object(self.module, "macos_daemon_owner_pids", return_value=[42]),
+            mock.patch.object(self.module, "repair_macos_orphan", side_effect=self.module.SwitchError("SIGTERM failed")),
+        ):
+            platform.system.return_value = "Darwin"
+            with self.assertRaisesRegex(self.module.SwitchError, "after re-bootstrapping"):
+                self.module.restart(args)
+        self.assertEqual(
+            service.call_args_list,
+            [mock.call(args, "stop", allow_absent=True), mock.call(args, "start")],
+            "recovery must attempt to re-bootstrap the selected LaunchAgent",
+        )
+
+    def test_restart_reports_rebootstrap_failure_after_orphan_repair_failure(self) -> None:
+        args = argparse.Namespace(yes=True, repair_orphan=False)
+        with (
+            mock.patch.object(self.module, "selected_links", return_value=(self.old_cli, self.old_daemon)),
+            mock.patch.object(self.module, "require_executable", side_effect=[self.old_cli, self.old_daemon]),
+            mock.patch.object(self.module, "require_macos_development_signatures"),
+            mock.patch.object(self.module, "platform") as platform,
+            mock.patch.object(self.module, "run_service", side_effect=[None, self.module.SwitchError("bootstrap failed")]) as service,
+            mock.patch.object(self.module, "require_stopped_daemon", side_effect=self.module.SwitchError("owner remains")),
+            mock.patch.object(self.module, "macos_daemon_owner_pids", return_value=[42]),
+            mock.patch.object(self.module, "repair_macos_orphan", side_effect=self.module.SwitchError("SIGTERM failed")),
+        ):
+            platform.system.return_value = "Darwin"
+            with self.assertRaisesRegex(self.module.SwitchError, "could not be re-bootstrapped"):
+                self.module.restart(args)
+        self.assertEqual(
+            service.call_args_list,
+            [mock.call(args, "stop", allow_absent=True), mock.call(args, "start")],
+            "even a failed re-bootstrap is attempted and reported explicitly",
+        )
+
     def test_restore_prefers_homebrew_then_explicit_then_saved_state(self) -> None:
         explicit = argparse.Namespace(default_cli="/explicit/atm", default_daemon="/explicit/atm-daemon")
         with mock.patch.object(self.module, "homebrew_pair", return_value=(self.old_cli, self.old_daemon)):

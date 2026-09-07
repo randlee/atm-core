@@ -2010,6 +2010,42 @@ mod tests {
     }
 
     #[test]
+    fn native_read_tool_preserves_fixture_daemon_handoff_acceptance() {
+        Python::initialize();
+        let transport = Arc::new(FakeClientTransport::new(Box::new(|request| {
+            let RequestEnvelope::Receive(query) = request else {
+                panic!("native read must use the mutating receive route")
+            };
+            assert!(query.seen_state_update());
+            // This fixture response models a daemon that accepted the
+            // read-state handoff while its reader snapshot remains pre-write.
+            Ok(ResponseEnvelope::Receive(Box::new(native_read_outcome(
+                true, 1, 1, 0,
+            ))))
+        })));
+        let replacement = Arc::new(FakeClientTransport::new(Box::new(|_| {
+            panic!("accepted fixture read should not reconnect")
+        })));
+        let session = test_session(transport, replacement);
+
+        Python::attach(|py| {
+            let result = session
+                .read_tool(py, "actionable", None, None, None, None, None, false)
+                .expect("fixture daemon read succeeds");
+            let value: serde_json::Value = result
+                .bind(py)
+                .call_method0("to_json")
+                .expect("native read exposes canonical JSON")
+                .extract::<String>()
+                .expect("native read JSON is a string")
+                .parse()
+                .expect("native read JSON is valid");
+            assert_eq!(value["mutation_applied"], true);
+            assert_eq!(value["bucket_counts"]["unread"], 1);
+        });
+    }
+
+    #[test]
     fn native_read_peek_option_leaves_the_message_unread() {
         Python::initialize();
         let transport = Arc::new(FakeClientTransport::new(Box::new(|request| {

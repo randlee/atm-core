@@ -38,8 +38,8 @@ pub(crate) mod summary;
 mod template;
 mod write_context;
 
-pub use async_persistence::TemplateVerification;
-pub use async_persistence::verify_template_request;
+pub use async_persistence::{TemplateVerification, WriteSourcePreflight};
+pub use async_persistence::{preflight_write_source_request, verify_template_request};
 pub(crate) use delivery_persistence::{
     DeliveryPersistenceDisposition, DeliveryPersistenceResult, DuplicateWriteDisposition,
 };
@@ -63,9 +63,9 @@ use write_context::{build_send_delivery_plan, build_send_outcome};
 // The canonical write pipeline lives in `crate::write`; `send` re-exports the
 // public entry points so external paths are unchanged.
 pub use crate::write::{
-    PreparedWrite, WriteOutcome, prepare_write_with_async_runtime,
-    prepare_write_with_preverified_template_async_runtime, prepare_write_with_runtime, send_mail,
-    send_mail_with_runtime, write_mail, write_mail_with_runtime,
+    PreparedWrite, WriteOutcome, prepare_write_with_preflight_async_runtime,
+    prepare_write_with_runtime, send_mail, send_mail_with_runtime, write_mail,
+    write_mail_with_runtime,
 };
 
 #[cfg(test)]

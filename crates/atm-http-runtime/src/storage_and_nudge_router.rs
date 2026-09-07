@@ -28,8 +28,7 @@ use atm_core::protocol::{
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
-    NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_async_runtime,
-    prepare_write_with_preverified_template_async_runtime,
+    NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_preflight_async_runtime,
 };
 use atm_runtime::{AsyncMailboxRuntime, DoctorProjection, DoctorProjectionContext};
 
@@ -39,7 +38,7 @@ use crate::RuntimeHealth;
 use crate::bare_cli_fifo::{BareCliFifo, BareCliQueueFullDrops, drain_bare_cli_messages};
 use crate::doctor_observability::{append_counter_finding, project_counter_health};
 use crate::router_support::{
-    ControlPathSyncBridge, DetachedReceivedHooks, TemplateVerificationBridge, append_warnings,
+    ControlPathSyncBridge, DetachedReceivedHooks, WriteSourcePreflightBridge, append_warnings,
     hook_warning, receiver_hook_deadline, retry_deferred_marker, validate_graft_receiver_member,
     write_response,
 };
@@ -55,7 +54,7 @@ pub struct StorageAndNudgeRouter {
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
     control_path_sync_bridge: ControlPathSyncBridge,
-    template_verification_bridge: TemplateVerificationBridge,
+    write_source_preflight_bridge: WriteSourcePreflightBridge,
     async_mailbox_runtime: Option<Arc<dyn AsyncMailboxRuntime>>,
     doctor_projection: Option<Arc<dyn DoctorProjection>>,
     daemon_home: PathBuf,
@@ -90,7 +89,7 @@ impl StorageAndNudgeRouter {
                 NonZeroUsize::new(1).expect("one non-storage core bridge operation"),
                 runtime_health.clone(),
             ),
-            template_verification_bridge: TemplateVerificationBridge::default(),
+            write_source_preflight_bridge: WriteSourcePreflightBridge::new(runtime_health.clone()),
             async_mailbox_runtime: None,
             doctor_projection: None,
             daemon_home,
@@ -143,7 +142,12 @@ impl StorageAndNudgeRouter {
         runtime_health: RuntimeHealth,
         doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     ) -> Self {
-        self.control_path_sync_bridge.runtime_health = runtime_health.clone();
+        self.control_path_sync_bridge = ControlPathSyncBridge::new(
+            NonZeroUsize::new(1).expect("one non-storage core bridge operation"),
+            runtime_health.clone(),
+        );
+        self.write_source_preflight_bridge =
+            WriteSourcePreflightBridge::new(runtime_health.clone());
         self.runtime_health = runtime_health;
         self.doctor_ports = Some(doctor_ports);
         self
@@ -245,29 +249,17 @@ impl StorageAndNudgeRouter {
         request: atm_core::send::WriteRequest,
         deadline: RequestDeadline,
     ) -> Result<CommittedWrite, AtmError> {
-        let template_verification = self
-            .template_verification_bridge
-            .verify(deadline, self.service_runtime.clone(), request.clone())
+        let source_preflight = self
+            .write_source_preflight_bridge
+            .preflight(deadline, self.service_runtime.clone(), request.clone())
             .await?;
-        let mut prepared = match template_verification {
-            Some(verification) => {
-                prepare_write_with_preverified_template_async_runtime(
-                    request,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    verification,
-                )
-                .await?
-            }
-            None => {
-                prepare_write_with_async_runtime(
-                    request,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                )
-                .await?
-            }
-        };
+        let mut prepared = prepare_write_with_preflight_async_runtime(
+            request,
+            self.observability.as_ref(),
+            &self.service_runtime,
+            source_preflight,
+        )
+        .await?;
         let newly_persisted = prepared.is_newly_persisted();
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
@@ -1719,6 +1711,17 @@ mod tests {
         request
     }
 
+    fn file_write_request(fixture: &Fixture) -> WriteRequest {
+        let file_path = fixture._temporary_root.path().join("caller-file.txt");
+        std::fs::write(&file_path, "file body").expect("write caller file fixture");
+        let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        request.message_source = SendMessageSource::File {
+            path: file_path,
+            message: Some("file message".to_owned()),
+        };
+        request
+    }
+
     fn template_composer_for(body: &str) -> Arc<dyn atm_core::TemplateComposer> {
         Arc::new(FixtureTemplateComposer::new(body))
     }
@@ -2387,6 +2390,7 @@ mod tests {
     #[tokio::test]
     async fn doctor_observability_fields_match_health_projection() {
         let fixture = fixture(true, None, None);
+        fixture.runtime_health.record_write_source_preflight_stall();
         let assembly =
             open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
         let doctor_projection = StorageDoctorProjection::start(
@@ -2461,6 +2465,18 @@ mod tests {
                 assert!(report.findings.iter().any(|finding| {
                     finding.code
                         == atm_core::error::AtmErrorCode::WarningRetainedDiagnosticsDegraded
+                }));
+                assert_eq!(
+                    report
+                        .runtime_status
+                        .expect("doctor projects replacement runtime health")
+                        .write_source_preflight_stalls_total,
+                    1
+                );
+                assert!(report.findings.iter().any(|finding| {
+                    finding
+                        .message
+                        .contains("write source preflight has 1 stalled")
                 }));
             }
             other => panic!("expected doctor report, got {other:?}"),
@@ -3231,10 +3247,107 @@ mod tests {
                 .is_empty(),
             "a template verification deadline cannot persist a partial message"
         );
+        let first_error = tokio::time::timeout(Duration::from_secs(1), first)
+            .await
+            .expect("first stalled source preflight reaches its deadline")
+            .expect("first stalled request joins")
+            .expect_err("first stalled source preflight fails closed");
+        let second_error = tokio::time::timeout(Duration::from_secs(1), second)
+            .await
+            .expect("second stalled source preflight reaches its deadline")
+            .expect("second stalled request joins")
+            .expect_err("second stalled source preflight fails closed");
+        assert_eq!(
+            first_error.code(),
+            atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+        );
+        assert_eq!(
+            second_error.code(),
+            atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+        );
+        assert_eq!(
+            fixture
+                .runtime_health
+                .snapshot()
+                .write_source_preflight_stalls_total,
+            2,
+            "each abandoned source preflight remains visible to doctor"
+        );
 
         composer.release();
-        let _first_result = first.await.expect("first stalled request joins");
-        let _second_result = second.await.expect("second stalled request joins");
+    }
+
+    #[tokio::test]
+    async fn file_source_preflight_shares_bounded_admission_and_fails_closed() {
+        let composer = Arc::new(BlockingTemplateComposer::new("template body"));
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(composer.clone()),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let mut stalled = tokio::task::JoinSet::new();
+        for _ in 0..2 {
+            let router = fixture.router.clone();
+            let request = template_write_request(&fixture, "template body");
+            stalled.spawn(async move {
+                router
+                    .dispatch(
+                        ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                        AuthenticatedIngress::Local,
+                        RequestDeadline::after(Duration::from_millis(250)),
+                    )
+                    .await
+            });
+        }
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while composer.started.load(Ordering::SeqCst) != 2 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("two stalled source preflights occupy the bounded bridge");
+
+        let error = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(file_write_request(
+                    &fixture,
+                )))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_millis(25)),
+            )
+            .await
+            .expect_err("file preflight cannot bypass saturated bounded admission");
+        assert_eq!(
+            error.code(),
+            atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+        );
+        assert!(error.message().contains("caller-file.txt"));
+        assert!(
+            fixture
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("recipient"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("inspect persisted file messages")
+                .is_empty(),
+            "a file source that cannot preflight must not persist"
+        );
+
+        composer.release();
+        while let Some(result) = stalled.join_next().await {
+            let _ = result.expect("stalled preflight task joins");
+        }
     }
 
     #[tokio::test]
