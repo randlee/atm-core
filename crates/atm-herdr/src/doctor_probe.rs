@@ -314,6 +314,20 @@ mod tests {
         ));
     }
 
+    /// Platform-invariant sanitization check: Unix sockets render as
+    /// `$HOME/`, `$XDG_CONFIG_HOME/` or `<configured>/`; Windows named pipes
+    /// render as `\\.\pipe\%APPDATA%/`, `\\.\pipe\$HOME/` or
+    /// `\\.\pipe\<configured>/`.
+    fn is_sanitized(endpoint: &atm_core::doctor::HerdrEndpointDisplay) -> bool {
+        let display = endpoint
+            .as_str()
+            .strip_prefix(r"\\.\pipe\")
+            .unwrap_or(endpoint.as_str());
+        ["$HOME/", "$XDG_CONFIG_HOME/", "%APPDATA%/", "<configured>/"]
+            .iter()
+            .any(|prefix| display.starts_with(prefix))
+    }
+
     #[test]
     fn socket_unavailable_maps_to_a_sanitized_endpoint() {
         let probe = HerdrDoctorProbe::new(Default::default());
@@ -327,10 +341,7 @@ mod tests {
                 Duration::ZERO,
                 None,
             ),
-            HerdrDoctorState::EndpointUnreachable { endpoint }
-                if endpoint.as_str().starts_with("$HOME/")
-                    || endpoint.as_str().starts_with("$XDG_CONFIG_HOME/")
-                    || endpoint.as_str().starts_with("<configured>/")
+            HerdrDoctorState::EndpointUnreachable { endpoint } if is_sanitized(&endpoint)
         ));
     }
 
@@ -347,10 +358,7 @@ mod tests {
                 Duration::ZERO,
                 None,
             ),
-            HerdrDoctorState::PermissionDenied { endpoint }
-                if endpoint.as_str().starts_with("$HOME/")
-                    || endpoint.as_str().starts_with("$XDG_CONFIG_HOME/")
-                    || endpoint.as_str().starts_with("<configured>/")
+            HerdrDoctorState::PermissionDenied { endpoint } if is_sanitized(&endpoint)
         ));
     }
 }
