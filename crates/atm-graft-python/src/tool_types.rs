@@ -164,7 +164,7 @@ impl AtmSendResult {
     }
 }
 
-/// Typed, read-only projection of the canonical mailbox read outcome.
+/// Typed projection of the canonical mailbox read outcome.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone, Debug)]
 pub struct AtmReadResult {
@@ -190,8 +190,6 @@ impl AtmReadResult {
         })
     }
 
-    /// Keep the public native-read envelope aligned with the CLI's `read`
-    /// outcome while retaining the native tool's non-mutating peek request.
     pub(crate) fn from_peek_outcome(mut outcome: ReadOutcome) -> PyResult<Self> {
         outcome.action = CommandAction::Read;
         Self::from_outcome(outcome)
