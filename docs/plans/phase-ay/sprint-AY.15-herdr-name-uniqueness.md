@@ -86,6 +86,16 @@ Every row marked **GAP** there is owed by this sprint, except D-13
   resolved team replaces the implicit caller team for the recipient. Explicit
   `@team` still restricts to that team. `.atm.toml` `[atm].aliases` is
   consulted before the roster alias (D-06).
+- D4a One table-driven permutation test (`unique_name_permutations`) that
+  seeds a fixture database with existing members `{team, name, alias|None}`
+  and drives every proposed `{team, name, alias|None}` case from matrix
+  section A through the roster store, asserting accept/reject and the
+  conflicting `(team, member)` named in the error. Rand: "with the
+  requirement added, it should be fairly easy to create all permutations of
+  name/alias that are valid/invalid for unit tests". The permutation set is
+  the product of: alias present/empty/whitespace/absent × collides with
+  other-team canonical / other-team alias / same-team canonical / same-team
+  alias / nothing × whether the colliding member itself carries an alias.
 - D4 Tests for every **GAP** row in the matrix (A-06, A-07, A-09, A-10,
   A-14..A-16, A-18..A-25, B-01, B-03..B-07, C-05, D-03, D-06, D-08, D-10,
   D-12, D-14, E-02, F-06, G-02, G-03). Name each test after its matrix id
