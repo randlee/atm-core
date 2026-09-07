@@ -363,8 +363,10 @@ fn resolve_herdr_process(
         Some(process) => process,
         None => {
             let herdr_breaker = Arc::new(HerdrSpawnBreaker::new());
-            let process: Arc<dyn HerdrProcessAdapter> =
-                Arc::new(HerdrProcessInvoker::new(Arc::clone(&herdr_breaker)));
+            let process: Arc<dyn HerdrProcessAdapter> = Arc::new(HerdrProcessInvoker::new(
+                Arc::clone(&herdr_breaker),
+                atm_herdr::HerdrClientConfig::default(),
+            ));
             assembly.doctor_ports.herdr_breaker = Arc::new(HerdrBreakerDoctorAdapter {
                 breaker: Arc::clone(&herdr_breaker),
             });

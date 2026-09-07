@@ -100,6 +100,10 @@ impl Default for HerdrIo {
 }
 
 impl HerdrIo {
+    pub(crate) fn from_config(config: &HerdrClientConfig) -> Self {
+        Self::Cli(CliIo::new(config))
+    }
+
     pub(crate) async fn call(
         &self,
         op: HerdrOp<'_>,

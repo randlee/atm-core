@@ -443,10 +443,10 @@ pub struct HerdrProcessInvoker {
 
 impl HerdrProcessInvoker {
     #[must_use]
-    pub fn new(breaker: Arc<HerdrSpawnBreaker>) -> Self {
+    pub fn new(breaker: Arc<HerdrSpawnBreaker>, config: HerdrClientConfig) -> Self {
         Self {
             breaker,
-            io: HerdrIo::default(),
+            io: HerdrIo::from_config(&config),
         }
     }
 
