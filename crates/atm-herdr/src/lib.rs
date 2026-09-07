@@ -658,6 +658,7 @@ pub mod testing {
         list_results: VecDeque<Result<HerdrListOutcome, HerdrError>>,
         list_gate: Option<Arc<tokio::sync::Notify>>,
         notify_results: VecDeque<Result<(), HerdrError>>,
+        notify_gate: Option<Arc<tokio::sync::Notify>>,
     }
 
     #[derive(Debug, Default, Clone)]
@@ -758,6 +759,16 @@ pub mod testing {
             if let Ok(mut state) = self.state.lock() {
                 state.notify_results.push_back(result);
             }
+        }
+
+        /// Blocks the next notification until it is released or its request
+        /// deadline expires.
+        pub fn block_next_notify(&self) -> Arc<tokio::sync::Notify> {
+            let gate = Arc::new(tokio::sync::Notify::new());
+            if let Ok(mut state) = self.state.lock() {
+                state.notify_gate = Some(Arc::clone(&gate));
+            }
+            gate
         }
 
         /// Blocks the next list call until the returned notifier is woken.
@@ -900,9 +911,9 @@ pub mod testing {
             &'a self,
             title: &'a str,
             body: &'a str,
-            _deadline: RequestDeadline,
+            deadline: RequestDeadline,
         ) -> Pin<Box<dyn Future<Output = Result<(), HerdrError>> + Send + 'a>> {
-            let result = self
+            let (gate, result) = self
                 .state
                 .lock()
                 .map(|mut state| {
@@ -910,12 +921,23 @@ pub mod testing {
                         title: title.to_owned(),
                         body: body.to_owned(),
                     });
-                    state.notify_results.pop_front()
+                    (state.notify_gate.take(), state.notify_results.pop_front())
                 })
                 .ok()
-                .flatten()
-                .unwrap_or(Ok(()));
-            Box::pin(async move { result })
+                .unwrap_or((None, None));
+            let result = result.unwrap_or(Ok(()));
+            Box::pin(async move {
+                let Some(gate) = gate else {
+                    return result;
+                };
+                let Some(remaining) = deadline.remaining() else {
+                    return Err(HerdrError::TimedOut);
+                };
+                match tokio::time::timeout(remaining, gate.notified()).await {
+                    Ok(()) => result,
+                    Err(_) => Err(HerdrError::TimedOut),
+                }
+            })
         }
     }
 }

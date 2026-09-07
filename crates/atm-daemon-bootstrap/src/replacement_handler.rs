@@ -30,6 +30,7 @@ use atm_runtime::{DoctorProjectionConfig, HandoffConfig, StorageDoctorProjection
 
 use crate::DaemonLaunchIdentity;
 use crate::bare_cli_runtime::BareCliRuntime;
+use crate::herdr_config::DaemonHerdrConfig;
 use crate::queue_drain;
 
 /// The bootstrap-owned peer transport selection passed as one coherent unit
@@ -50,7 +51,7 @@ pub(crate) struct ReplacementHandlerConfig<F> {
     pub(crate) diagnostic_counters:
         Option<Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>>,
     pub(crate) bare_cli: BareCliRuntime,
-    pub(crate) herdr_config: HerdrClientConfig,
+    pub(crate) herdr_config: DaemonHerdrConfig,
     pub(crate) herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 }
 
@@ -207,7 +208,8 @@ pub(crate) fn build_replacement_handler(
         herdr_config,
         herdr_process,
     } = config;
-    let herdr_process = resolve_herdr_process(&mut assembly, herdr_process, herdr_config);
+    let escalation_min_interval = herdr_config.escalation_min_interval;
+    let herdr_process = resolve_herdr_process(&mut assembly, herdr_process, herdr_config.client);
     let queue_wake_process = Arc::clone(&herdr_process);
     let (selector, recovery_sweep) = compose_queue_workers(
         assembly.service_runtime.clone(),
@@ -227,6 +229,7 @@ pub(crate) fn build_replacement_handler(
         selector.clone(),
         runtime_health.clone(),
         queue_wake_process,
+        escalation_min_interval,
     )?;
     let handler = compose_storage_router(
         assembly,
@@ -295,6 +298,7 @@ fn build_queue_wake_pump(
     selector: Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     runtime_health: RuntimeHealth,
     herdr_process: Arc<dyn HerdrProcessAdapter>,
+    escalation_min_interval: std::time::Duration,
 ) -> Result<Arc<HerdrQueueWakePump>, AtmError> {
     Ok(Arc::new(
         HerdrQueueWakePump::new(
@@ -303,7 +307,8 @@ fn build_queue_wake_pump(
             runtime_health,
             herdr_process,
         )
-        .with_daemon_home(atm_core::home::atm_home()?),
+        .with_daemon_home(atm_core::home::atm_home()?)
+        .with_breaker_escalation_min_interval(escalation_min_interval),
     ))
 }
 

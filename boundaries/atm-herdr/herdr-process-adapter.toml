@@ -59,6 +59,7 @@ notes = [
   "AY.3 adds exactly two new public atm-herdr items over AY.2's private transport seam: the validated HerdrClientConfig (crates/atm-herdr/src/transport.rs, private fields, non-default values only via try_new) and the concrete HerdrDoctorProbe (crates/atm-herdr/src/doctor_probe.rs), which observes one endpoint and returns the atm-core-owned HerdrEndpointObservation (AY.3 C1, C2)",
   "AtmError is now an atm-herdr contract error type with exactly two construction sites in this crate: `From<HerdrError> for AtmError` and `HerdrClientConfig::try_new` (AtmErrorCode::ConfigParseFailed); atm-herdr adds no other AtmError construction and no new error family (AY.3 C1, C2)",
   "atm-herdr owns the exhaustive HerdrError -> HerdrDoctorState mapping and HERDR_MINIMUM_VERSION; no listed HerdrError may fall into HerdrDoctorState::Other, and it is the only crate permitted to build HerdrEndpointDisplay via from_relative (AY.3 C4, C6)",
+  "AY.4 breaker-cycle escalation is owned by atm-http-runtime. It may call HerdrProcessAdapter::notify with endpoint state and remediation only, under the fixed five-second deadline; durable ATM mail remains outside atm-herdr and is never forwarded as notification text (HR-SAFE-003).",
 ]
 
 [testing]

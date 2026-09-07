@@ -90,6 +90,14 @@ the exact routed member outcomes. Endpoint displays never expose raw home,
 config-root, socket, or named-pipe paths. The pre-existing host-wide breaker
 report remains available as `herdr.breaker` (and under its legacy report field).
 
+**Herdr breaker escalation configuration:**
+
+The optional `[herdr].escalation_min_interval_secs` setting in `.atm.toml`
+limits durable breaker-open escalation attempts. It is an integer number of
+seconds, defaults to `1800` (30 minutes), and accepts `1` through `86400`
+inclusive. Invalid values fail daemon bootstrap with `ConfigParseFailed`; the
+setting does not start, supervise, or make ATM readiness depend on Herdr.
+
 ### `atm escalation`
 
 Manage daemon-wide and per-team escalation recipients
