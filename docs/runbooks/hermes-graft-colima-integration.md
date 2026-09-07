@@ -90,7 +90,8 @@ P0 exit gate:
 - aarch64 `atm-graft` wheel SHA-256:
   `880eef4e90e04a16bf5bfa0e8b8a2d047b59f76183076a4b7336a99cfd0f1203`.
 - Tagged source and built wheel METADATA both admit `atm-graft` 1.5.3.
-- Testbed main is `e8e500a`; the peer authority, 4 CPU / 4 GiB Colima
+- P2 executes from testbed main
+  `8661a3e77e320dd6712b2c44b3bb50d67b6b87bc`; the peer authority, 4 CPU / 4 GiB Colima
   allocation, `suite/v2`, no-`sudo` marker protocol, and primary matrix are
   frozen.
 
@@ -230,8 +231,9 @@ TESTBED_PLATFORM=<platform> ./run.sh
 docker exec <container> atm doctor
 ```
 
-If the harness attempts `sudo`, stop. Testbed main `e8e500a` (the no-`sudo`
-implementation landed by `fb9d63c`, building on
+If the harness attempts `sudo`, stop. P2 uses testbed main `8661a3e77`; only
+documentation changed after `e8e500a`, and the no-`sudo` implementation landed
+by `fb9d63c`, building on
 `41fc546`) implements the
 approved replacement: daemon lifecycle control stays outside the unprivileged
 agent, and the outer coordinator invokes root-only, non-self-elevating helpers
@@ -352,7 +354,7 @@ Every issue becomes a row before work continues.
 | HGC-001 | setup | `sc-git-worktree` was not on PATH | The repository exposes it as a command/skill backed by a Python helper, not a shell binary | Use the repository worktree-create delegate/helper; preserve tracking and protected-branch checks | resolved |
 | HGC-002 | setup | New docs branch initially pointed at `98661ea18`, while fetched `origin/develop` was `89bd7d256` | The create helper fetched remotes but based the worktree on stale local `develop` | Before editing, compare `HEAD` to `origin/develop` and fast-forward the new feature branch | resolved |
 | HGC-003 | P0 | Existing testbed docs describe older ATM/testbed cycles | README/runbook history predates the current fork update | Treat the frozen P0 record above as the cycle authority; never reuse old version/run IDs | resolved |
-| HGC-004 | P0/P2 | Existing prompt harness documents privileged restart helpers, while this task forbids `sudo` | Safety contract changed for this run | Use testbed main `e8e500a` (no-`sudo` changes complete by `fb9d63c`, initial implementation `41fc546`): root-only, non-self-elevating helpers run through outer `docker exec`; the fixture agent uses cleared UTC markers and never invokes sudo. Fenix approved the corresponding AT4/AT8 prompt design | resolved; suite/v2 rerun pending |
+| HGC-004 | P0/P2 | Existing prompt harness documents privileged restart helpers, while this task forbids `sudo` | Safety contract changed for this run | Use P2 testbed SHA `8661a3e77` (doc-only after `e8e500a`; no-`sudo` changes complete by `fb9d63c`, initial implementation `41fc546`): root-only, non-self-elevating helpers run through outer `docker exec`; the fixture agent uses cleared UTC markers and never invokes sudo. Fenix approved the corresponding AT4/AT8 prompt design | resolved; suite/v2 rerun active |
 | HGC-005 | P0/P2 | Tier E catalog names E1 but only an E0 prompt file exists | E1 is described as E0's acceptance shape, not an independent artifact | Use E0 as the required Tier E live graft-Hermes transcript for this matrix | resolved; execution pending |
 | HGC-006 | P0 | Tagged `hermes-atm` and `atm_graft` 1.5.x wheels cannot co-install | `crates/hermes-atm/pyproject.toml` requires `atm-graft>=1.4,<1.5` at v1.5.0, `prerelease/v1.5.1`, and `origin/develop@89bd7d256` | PR #1274 fixes the range to `>=1.5,<1.6` and adds `.just/check_version_sync.py` as the permanent guard. Tag `prerelease/v1.5.3` is pinned to `9654b75f1710d7155fb3a6584ee709314c1642d5`; source and built wheel METADATA both admit `atm-graft` 1.5.3 | resolved |
 | HGC-007 | P0 | An ATM coordination send returned `ATM_DAEMON_MAY_HAVE_EXECUTED` | The client could not prove whether the daemon committed the send | Check durable message/log state before retrying; resend only when the write is confirmed absent, preventing duplicate coordination messages | resolved by Loki |
