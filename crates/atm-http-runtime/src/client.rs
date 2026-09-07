@@ -370,6 +370,20 @@ pub fn preferred_local_client(
 ) -> Result<Arc<dyn DaemonApiClient>, AtmError> {
     #[cfg(unix)]
     {
+        match std::env::var("ATM_LOCAL_TRANSPORT").as_deref() {
+            Ok("tcp") => return loopback_tcp_client(endpoint_record_path, request_timeout),
+            Ok("") | Ok("uds") | Err(std::env::VarError::NotPresent) => {}
+            Ok(value) => {
+                return Err(AtmError::validation(format!(
+                    "ATM_LOCAL_TRANSPORT must be `uds` or `tcp`; received `{value}`"
+                )));
+            }
+            Err(std::env::VarError::NotUnicode(_)) => {
+                return Err(AtmError::validation(
+                    "ATM_LOCAL_TRANSPORT must be valid Unicode when set",
+                ));
+            }
+        }
         let runtime_directory = endpoint_record_path.as_ref().parent().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "local HTTP endpoint record has no runtime directory for Unix socket selection",
@@ -463,6 +477,15 @@ fn build_loopback_reqwest_client() -> Result<reqwest::Client, HttpRuntimeClientF
     reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(LOOPBACK_CONNECT_TIMEOUT)
+        // The HTTP/1 server bounds the time it waits for the next request
+        // header on a keep-alive connection by its request budget. Retaining
+        // an idle loopback socket longer than that would let reqwest attempt
+        // the next write on a connection the daemon has already closed. A
+        // loopback exchange instead opens a fresh connection, so a failure
+        // before dispatch remains a reconnect-safe connection failure. This
+        // is deliberately local-only: peer clients retain their pool and
+        // post-write uncertainty contract.
+        .pool_max_idle_per_host(0)
         .build()
         .map_err(|source| {
             HttpRuntimeClientFailure::Connect(format!(

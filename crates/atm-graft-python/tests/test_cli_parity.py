@@ -104,6 +104,10 @@ class _GeneratedParityFixture:
             "ATM_TEST_RUNTIME_HOME": str(home),
             "ATM_TEAM": self.team,
             "ATM_CHAT_ID": self.chat_id,
+            # Exercise the capability-authenticated loopback client even on
+            # Unix, where UDS is normally preferred. The regressions below
+            # require a real daemon and specifically cover TCP keep-alive.
+            "ATM_LOCAL_TRANSPORT": "tcp",
             "ATM_LOG_DIR": str(log_dir),
             "TMPDIR": str(temp_dir),
             "TMP": str(temp_dir),
@@ -461,6 +465,55 @@ class CliParityTests(unittest.TestCase):
             pending_ids = {row["message_id"] for row in pending["rows"]}
             self.assertNotIn(native_send["message_id"], pending_ids)
             self.assertNotIn(cli_send["message_id"], pending_ids)
+
+    def test_native_loopback_write_survives_idle_server_header_timeout(self) -> None:
+        # Warm this session's reqwest client, then exceed the daemon's default
+        # three-second HTTP/1 header timer. The next native request must open
+        # a fresh loopback connection rather than write to the stale pool.
+        self._native(self.native_tools, "atm_list", {"selection": "all"})
+        time.sleep(4)
+        result = self._native(
+            self.native_tools,
+            "atm_send",
+            {
+                "to": f"{self.second_identity}@{self.team}",
+                "body": "idle-loopback-regression",
+            },
+        )
+        self.assertIn("message_id", result)
+
+    def test_native_read_by_listed_id_marks_bare_agent_message_read(self) -> None:
+        sent = self._native(
+            self.second_native_tools,
+            "atm_send",
+            {
+                "to": f"{self.identity}@{self.team}",
+                "body": "native-exact-read-regression",
+            },
+        )
+        message_id = sent["message_id"]
+        listed = self._native(self.native_tools, "atm_list", {"selection": "all"})
+        self.assertIn(message_id, {row["message_id"] for row in listed["rows"]})
+
+        read = self._native(
+            self.native_tools,
+            "atm_read",
+            {"selection": "all", "message_id": message_id},
+        )
+        self.assertEqual(read["count"], 1)
+        self.assertTrue(read["mutation_applied"])
+
+        # Read acceptance is intentionally asynchronous; poll only the
+        # disposable daemon's list projection for the bounded handoff.
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            current = self._native(self.native_tools, "atm_list", {"selection": "all"})
+            matching = [row for row in current["rows"] if row["message_id"] == message_id]
+            if matching and matching[0]["read"]:
+                break
+            time.sleep(0.05)
+        else:
+            self.fail("native exact-ID read was not visible after the bounded handoff")
 
 
 if __name__ == "__main__":
