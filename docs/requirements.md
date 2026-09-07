@@ -901,8 +901,11 @@ Runtime caller-context rules:
   for runtime identity resolution and `atm doctor` must flag them for removal
 - `.atm.toml` may define `[atm].team_members` as the baseline team roster that
   should always be present in `config.json`
-- `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
-  canonical member identities
+- `.atm.toml` `[atm].aliases` is retired (Rand, 2026-09-07: ".atm.toml is
+  ONLY used by hmux and 'atm doctor'"); member aliases live only in the
+  roster (`REQ-ROSTER-NAME-002`), and atm-core reads no alias table from
+  `.atm.toml`. `atm doctor` flags a lingering `[atm].aliases` table for
+  removal.
 - `.atm.toml` may define one or more `[[atm.post_send_hooks]]` rules for
   best-effort recipient-scoped post-send automation
 - retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,
@@ -1035,8 +1038,9 @@ Definitions:
   peek filters, ack, `set-member`/`remove-member` arguments) and is replaced
   by the canonical name at daemon ingress (`REQ-ROSTER-NAME-010`), before validation, self-send
   checks, mailbox lookup, routing, audit and persistence. Resolution order:
-  a canonical name in the addressed team wins; then the `.atm.toml`
-  `[atm].aliases` table; then the roster alias. Because aliases are unique
+  a canonical name in the addressed team wins (Rand, 2026-09-07: "`atm send
+  bob` would send bob based on ATM_TEAM just like today"); then the roster
+  alias. `.atm.toml` is not an input (see §3.3). Because aliases are unique
   database-wide, a bare alias with no `@team` resolves to its member in any
   team (cross-team addressing by alias alone). An unknown name falls through
   to the existing canonical parse/lookup error unchanged. An ambient

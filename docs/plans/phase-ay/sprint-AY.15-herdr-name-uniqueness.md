@@ -103,7 +103,7 @@ since Rand's 2026-09-07 ruling).
   alias resolves database-wide to its owner's `(team, agent_name)`; the
   resolved team replaces the implicit caller team for the recipient. Explicit
   `@team` still restricts to that team. `.atm.toml` `[atm].aliases` is
-  consulted before the roster alias (D-06).
+  no longer consulted (D-06, D4d).
 - D4a One table-driven permutation test (`unique_name_permutations`) that
   seeds a fixture database with existing members `{team, name, alias|None}`
   and drives every proposed `{team, name, alias|None}` case from matrix
@@ -143,6 +143,11 @@ since Rand's 2026-09-07 ruling).
   with the canonical name and with the alias (bare and `@team`) and
   asserts identical daemon-side handling and persisted rows. D3's
   database-wide alias resolution lives at that same ingress point.
+- D4d Retire `.atm.toml [atm].aliases` from atm-core (Rand: ".atm.toml
+  is ONLY used by hmux and 'atm doctor'"): remove the alias-table
+  resolution from send/read/mailbox/identity paths (`config/aliases.rs`
+  and its callers), keep parsing only so `atm doctor` can flag a lingering
+  table for removal; matrix D-06.
 - D5 `docs/requirements.md` §3.3.2 wording corrections only if the
   implementation forces one; quote Rand, never author a rule.
 - D6a AY-QA-001 (blocking, phase gate): bump `HTTP_API_VERSION` once (minor) covering the additive wire changes of AY.3/AY.13/AY.14 and this sprint; state it in the PR body ADR-061 section. Also closes RBQA-AY-F001 and ATM-QA-AY-002 (matrix A-06/A-07 at the store layer, D-03).

@@ -81,7 +81,7 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | D-03 | `atm send <alias>` from a different team, no `@team` | resolves database-wide to the alias owner's team | **GAP** — `resolve_roster_alias` (caller_context.rs:59) is team-scoped; derived from Rand "using the alias for cross-team messaging has value independent of herdr" |
 | D-04 | `atm send <name>` where name is a canonical member of the addressed team AND an alias elsewhere | canonical in the addressed team wins | covered `canonical_name_wins_over_historical_alias_collision` (send/recipient.rs:127) |
 | D-05 | unknown alias | existing canonical error unchanged | covered `unknown_roster_alias_preserves_the_canonical_parse_result` (send/recipient.rs:113) |
-| D-06 | `.atm.toml` alias and roster alias both define the token | `.atm.toml` table first | **GAP** |
+| D-06 | `.atm.toml` `[atm].aliases` present | ignored by send/read/mailbox/identity; doctor flags it for removal | **GAP** (Rand 2026-09-07: `.atm.toml` is only used by hmux and `atm doctor`) |
 | D-07 | `ATM_IDENTITY=<alias>` | canonical sender; persisted `from` canonical; observation dropped | covered `canonicalize_caller_context_replaces_an_ingress_alias_and_drops_alias_attestation` (caller_context.rs:389) |
 | D-08 | `--as <alias>` | same as D-07 | covered `send_sender_identity_applies_alias_to_hook_identity` (identity/mod.rs:195) — CLI `--as` end-to-end **GAP** |
 | D-09 | `atm read --as <alias>`, `--from <alias>`, peek | canonicalised before mailbox lookup | covered `read_ingress_canonicalizes_alias_caller_target_and_from_filter` (read/mod.rs:833), `resolve_target_canonicalizes_alias_before_mailbox_lookup` (mailbox/source.rs:252) |
@@ -122,13 +122,13 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | G-02 | A-06 error text | names the member that owns the alias and its team | **GAP** |
 | G-03 | error is identical from CLI and daemon paths | same code and message | **GAP** |
 
-## H. Open decision points (fenix critical review, 2026-09-07; awaiting Rand)
+## H. Decision points (fenix critical review, Rand's rulings 2026-09-07)
 
-| ID | Question | Default until ruled |
-|----|----------|---------------------|
-| H-01 | `atm teams add-member`/`set-member` write the roster store from the CLI; with substitution at daemon ingress, do they route through the daemon or carve out roster mutation? | AY.15 keeps roster mutation CLI-direct with the store's own resolution |
-| H-02 | bare canonical name of an aliased member used from a third team (two candidates, no unique_name match) | error requiring `@team` |
-| H-03 | pre-upgrade duplicate unique_names in teams already live in Herdr, no write pending | Herdr targeting skips the duplicated member with a log; doctor reports (F-07) |
-| H-04 | `set-member --alias` on a member live in Herdr renames its Herdr agent | reject while live |
-| H-05 | `.atm.toml [atm].aliases` is a CLI-side table resolved before roster aliases; conflicts with "cli doesn't need to query" | keep as-is in AY.15; retire in a follow-up if Rand agrees |
+| ID | Question | Ruling |
+|----|----------|--------|
+| H-01 | `atm teams add-member`/`set-member` open the roster store in-process from the CLI (`crates/atm/src/commands/retained_roster.rs`) | no change: the store transaction is the enforcement point for roster writes; daemon-ingress substitution applies to message/identity paths |
+| H-02 | bare canonical name of an aliased member from a third team | Rand: "`atm send bob` would send bob based on ATM_TEAM just like today" |
+| H-03 | pre-upgrade duplicate unique_names in teams already live in Herdr | Rand: "we need to change members from tmux->herder before launch today. herder rejection already exists, we simply haven't run more than 1 team per computer yet." No new mechanism |
+| H-04 | alias change on a member live in Herdr | Rand: "alias change won't get picked up by herdr until team restarted (no mid-session concern)" |
+| H-05 | `.atm.toml [atm].aliases` | Rand: ".atm.toml is ONLY used by hmux and 'atm doctor'"; `[atm].aliases` retired from atm-core (D-06) |
 | H-06 | "alias never in the database" scope | roster row holds it; message/ack/audit/task rows never do (§3.3.2 wording) |
