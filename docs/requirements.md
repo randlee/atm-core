@@ -1592,9 +1592,10 @@ Required behavior:
   `selected_message_id` must still refer to that same mutated durable message;
   `atm read` must not mark one message read and then silently swap the output
   payload to a different unread message
-- `bucket_counts` in the read outcome must describe the post-mutation mailbox
-  state produced by that command execution rather than stale pre-mutation
-  counts
+- `bucket_counts` in the read outcome describe the reader-lane snapshot. A
+  read-side transition accepted by the non-blocking handoff MAY become visible
+  later; consumers requiring durable visibility use a bounded `atm list`
+  poll as specified in §7.12.
 
 ### 7.6 Shared Message Classification And Deduplication
 

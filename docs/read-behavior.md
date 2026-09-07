@@ -384,7 +384,8 @@ Shared query phases:
 11. Re-run selection and choose one selected message.
 12. Apply legal read-axis and ack-axis transitions for that one message if
     allowed.
-13. Persist state changes atomically.
+13. Offer state changes to the supervised non-blocking handoff; the response
+    does not await durable application.
 14. Update seen-state from the selected message when enabled.
 15. Return `ReadOutcome` with match metadata.
 
@@ -394,7 +395,9 @@ In particular:
 - selection must happen before mutation
 - `atm list` must not materialize or render multiple full message bodies
 - `atm read` must choose one message before mutation
-- mutation must happen before final `atm read` output is returned
+- mutation handoff acceptance happens before final `atm read` output is
+  returned; durable visibility may follow later and is observed with a bounded
+  list poll
 - seen-state updates must use the selected/displayed message, not the full
   inbox
 - when the merged inbox surface includes origin inbox files, each

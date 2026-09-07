@@ -1081,8 +1081,9 @@ Read-mutation output invariants:
 - read-side mutation may mark the selected message `read = true`, but it must
   still return that same message in the payload instead of re-running unread
   selection and swapping in a different unread message
-- `bucket_counts` must describe the post-mutation mailbox state produced by
-  that command execution
+- `bucket_counts` describe the reader-lane snapshot. Read-side state-handoff
+  acceptance does not promise durable visibility in that response; consumers
+  use a bounded later list poll when durability matters.
 - ack-side mutation remains separate; only `atm ack` clears
   `pending_ack_at` and sets `acknowledged_at`
 

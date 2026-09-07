@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-059 |
-| Status | Proposed (Phase AV.2) |
+| Status | Accepted |
 | Scope | Mailbox read-family scheduling, SQLite reader-lane ownership, and read-side state handoff |
 | Relates to | ADR-001, ADR-036, phase-av-plan §1.1–§1.2, AV.1a D1/D1a, AV.1b D2, AV.3 D1/D2/D2b/D3/D4, `av-closeout-record.md` |
 
