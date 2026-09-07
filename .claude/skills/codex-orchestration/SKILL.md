@@ -43,7 +43,13 @@ Before starting a sprint:
    - `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md`
 7. `quality-mgr` must also read:
    - `.claude/skills/quality-management-gh/SKILL.md`
-8. `sc-compose` is available for rendering the JSON and markdown templates.
+8. Every ATM assignment is sent with
+   `atm send <agent> --template <template> --vars <json>`; never render a
+   template yourself and send the output as message text or via `--stdin`.
+   To view or validate the exact body before sending, use
+   `atm compose --template <template> --vars <json>` (same renderer, same
+   vars). The template path goes through the daemon-owned admission path
+   and the dispatch is queryable from outside.
 9. `.claude/agents/ruthless-boundary-qa.md` and
    `.claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2`
    exist for first-pass boundary optimization review.
@@ -152,6 +158,12 @@ Use standard GitHub CLI:
 Do not assume ATM-specific PR monitoring commands exist.
 
 ## Assignment Templates
+
+Dispatch form (mandatory for every assignment below):
+
+```bash
+atm send <agent> --template <path/to/template.j2> --vars <vars.json>
+```
 
 Use the templates in this skill directory:
 - `dev-template.xml.j2`
