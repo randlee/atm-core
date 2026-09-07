@@ -1,6 +1,6 @@
 # Member naming, alias and Herdr agent-name — test permutation matrix
 
-Requirements: `docs/requirements.md` §3.3.2 (`REQ-ROSTER-NAME-001..008`).
+Requirements: `docs/requirements.md` §3.3.2 (`REQ-ROSTER-NAME-001..010`).
 Invariant under test: `unique_name(member) = alias ?? agent_name` is unique
 across every team roster in the ATM database (Rand, 2026-09-07: "herdr agent
 name = alias. if alias is null/empty, alias would be equal to member name";

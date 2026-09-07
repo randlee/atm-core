@@ -993,7 +993,10 @@ because using the alias for cross-team messaging has value independent of
 herdr."; "so basically, there should be a query across all team roster for
 'unique-name' which would return alias ?? name."; "if the list of unique-name collides with a
 proposed alias ?? name, add member must fail"; "the alias should never be
-used in database."; "alias would be
+used in database." (scoped later the same day by Rand: "alias MUST be in
+database AND in immutable roster in RAM"; the earlier sentence applies to
+message, ack, audit and task-state rows only, see REQ-ROSTER-NAME-009);
+"alias would be
 acceptable at all user/agent facing interfaces and would immediately be
 replaced at the ingress interface."
 
