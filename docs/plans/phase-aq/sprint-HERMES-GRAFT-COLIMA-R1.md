@@ -26,6 +26,11 @@ The Phase AQ graft contracts under `docs/plans/phase-aq/` and the
 tracking document conflicts with either source, stop and report the mismatch to
 `fenix@atm-dev` before continuing.
 
+This follow-up lives under Phase AQ because AQ1.9 established the
+`hermes-atm` wheel-verification and graft-boundary precedent. The work here
+closes that same boundary at prerelease readiness; it does not introduce a new
+product architecture phase or relocate Hermes ownership into atm-core.
+
 ## Goal
 
 - Prove the frozen Hermes injection seam and the tagged atm-core 1.5.3 artifact
