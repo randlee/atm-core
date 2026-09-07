@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY7-QA-003>
+  a triage:Finding ;
+  triage:findingId "AY7-QA-003" ;
+  triage:title "windows_process_confinement guard's cfg(windows) marker is over-broad, fails on integrate/phase-ay independent of PR #1294" ;
+  triage:description "fenix addendum to qa-pr1294-r1 (PR #1294, worktree merge/develop-1.5.6-into-phase-ay). cargo test -p atm-herdr --test windows_process_confinement fails on integrate/phase-ay head 94556328c itself (and unchanged on #1294's d4c88a4c6) -- pre-existing red, not introduced by the develop-1.5.6 merge. crates/atm-herdr/tests/windows_process_confinement.rs (AY.7, added d915a2447, PR #1285) asserts every atm-herdr src file other than transport_cli.rs is free of four markers: creation_flags, CREATE_NO_WINDOW, herdr.exe, cfg(windows). crates/atm-herdr/src/transport_socket.rs (AY.8, added e480a2756, PR #1280) legitimately uses #[cfg(windows)] at lines 110, 367, 384, 805 for named-pipe transport I/O (connect_named_pipe, retry_pipe_busy, a #[tokio::test] gated on windows) -- none of these are CLI-process-spawning code; they are the Windows named-pipe half of the herdr IPC transport, architecturally distinct from the CLI subprocess-launch confinement the guard exists to enforce. Confirmed by direct read of transport_socket.rs:105-115, 363-390, 800-810 -- no creation_flags/CREATE_NO_WINDOW/herdr.exe present there, only the generic platform-cfg attribute. AY.7 and AY.8 each landed green independently (different PRs, guard test only sees its own branch's src/ tree); the conflict only surfaces once both are present on the same tree, which first happened when AY.7+AY.8 merged into integrate/phase-ay. Post-merge-forward CI also red: gh run 34139080903/34139081008 on the merged integrate head fails the same way. Root cause: the guard's marker list conflates 'any Windows-specific code' with 'Windows CLI-process-spawning code' -- cfg(windows) alone is not a process marker, creation_flags/CREATE_NO_WINDOW/herdr.exe are. Fix is narrowing the guard test's marker list (drop the bare cfg(windows) entry, keep the three real process-spawning markers), not touching transport_socket.rs, which is correct as written." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-herdr/tests/windows_process_confinement.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T16:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY7 ;
+  triage:foundAt "2026-09-07T15:57:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY7-QA-003/integrate-94556328c> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY7-QA-003/pr1294-d4c88a4c6> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY7-QA-003/integrate-94556328c>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/windows_process_confinement.rs" ;
+  triage:line 10 ;
+  triage:snippet "\"cfg(windows)\", // over-broad: matches transport_socket.rs's legitimate named-pipe cfg(windows) blocks" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "94556328c" ;
+  triage:occursIn <urn:atm:triage:worktree/AY7-QA-003/94556328c> .
+
+<urn:atm:triage:occurrence/AY7-QA-003/pr1294-d4c88a4c6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/windows_process_confinement.rs" ;
+  triage:line 10 ;
+  triage:snippet "\"cfg(windows)\", // same over-broad marker, unchanged by the develop-1.5.6 merge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "merge/develop-1.5.6-into-phase-ay" ;
+  triage:headSha "d4c88a4c6" ;
+  triage:occursIn <urn:atm:triage:worktree/AY7-QA-003/d4c88a4c6> .
+
+<urn:atm:triage:worktree/AY7-QA-003/94556328c>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "94556328c" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AY7-QA-003/d4c88a4c6>
+  a triage:WorktreeSnapshot ;
+  triage:path "merge/develop-1.5.6-into-phase-ay" ;
+  triage:branch "merge/develop-1.5.6-into-phase-ay" ;
+  triage:headSha "d4c88a4c6" ;
+  triage:orderIndex 1 .
