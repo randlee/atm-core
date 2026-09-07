@@ -7,5 +7,5 @@
 - [x] D3: Implement bounded live-handoff or acknowledged stop/relaunch.
 - [x] D4: Verify fresh doctor success and preflight ordinary ATM restart.
 - [x] D5: Add platform/doctor/JSON/grep fixtures and operator documentation.
-- [ ] Run all required local gates, push, and open the AY6 draft PR.
-- [ ] Merge-forward AY7 and send completion to team-lead and Fenix.
+- [x] Run all required local gates, push, and open the AY6 draft PR.
+- [x] Merge-forward AY7 and send completion to team-lead and Fenix.
