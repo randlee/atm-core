@@ -61,6 +61,13 @@ class AtmReadRequest(_ToolRequest):
             "'pending_ack' (messages that require your acknowledgement)."
         ),
     )
+    peek: bool = Field(
+        default=False,
+        description=(
+            "Inspect the selected message without marking it read. Defaults to false, "
+            "so atm_read marks the selected message read."
+        ),
+    )
     message_id: str | None = Field(
         default=None,
         description="Exact ATM message identifier to read; omit to let the selection and filters choose a message.",
