@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY7-QA-001>
+  a triage:Finding ;
+  triage:findingId "AY7-QA-001" ;
+  triage:title "windows_spawn_site_sets_create_no_window_once counts its own assertion string, failing the required windows-latest Test leg" ;
+  triage:description "quality-mgr qa-pr1285-r2 (PR #1285 @ 718f14a13, CI run 34094274172, job 101655476694, step 'Run replacement-workspace tests excluding legacy atm-daemon'). crates/atm-herdr/src/transport_cli.rs:471-480 windows_spawn_site_sets_create_no_window_once reads its own source via include_str!(\"transport_cli.rs\") and asserts source.matches(\"command.creation_flags(CREATE_NO_WINDOW)\").count() == 1. The file contains that exact substring twice: the production call site at line 188 (command.creation_flags(CREATE_NO_WINDOW);) and the test's own string-literal argument to .matches(...) at line 477 (the include_str dump of the test file includes the test's own source text, so the search string matches itself). Confirmed count is 2, not 1 -- panicked at transport_cli.rs:475 with 'left: 2, right: 1'; test result: 50 passed, 1 failed. Confirmed byte-identical between r1 head f9940ef8c and the AY.6 merge-forward head 718f14a13 (diff empty) -- this is a pre-existing AY.7 r1 test-authoring bug, not a regression introduced by the AY.6 merge. Root cause is test-only self-counting; the production CREATE_NO_WINDOW call site and behavior are not implicated. Fix: restructure the test to not match its own literal (e.g. search only within the fn body preceding the test module, or assert the count is >=1 and separately assert the site appears at the expected non-test line, or grep only src/ excluding the #[cfg(test)] mod boundary)." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-herdr/src/transport_cli.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T08:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY7 ;
+  triage:foundAt "2026-09-07T08:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY7-QA-001/AY7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY7-QA-001/AY7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_cli.rs" ;
+  triage:line 475 ;
+  triage:snippet "assert_eq!(source.matches(\"command.creation_flags(CREATE_NO_WINDOW)\").count(), 1)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay7-windows-herdr-process-installer" ;
+  triage:headSha "718f14a13" ;
+  triage:occursIn <urn:atm:triage:worktree/AY7/718f14a13> .
+
+<urn:atm:triage:worktree/AY7/718f14a13>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1285-r1" ;
+  triage:branch "feature/ay7-windows-herdr-process-installer" ;
+  triage:headSha "718f14a13" ;
+  triage:orderIndex 0 .
