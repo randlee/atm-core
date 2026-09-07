@@ -668,7 +668,7 @@ pub fn runtime_condition_findings(
     snapshot: &crate::protocol::RuntimeStatusSnapshot,
 ) -> Vec<DoctorFinding> {
     let now = crate::types::IsoTimestamp::now();
-    snapshot
+    let mut findings: Vec<_> = snapshot
         .members
         .iter()
         .filter(|observation| observation.state == crate::protocol::RuntimeMemberState::Blocked)
@@ -695,7 +695,22 @@ pub fn runtime_condition_findings(
                 ),
             }
         })
-        .collect()
+        .collect();
+    if snapshot.write_source_preflight_stalls_total > 0 {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningObservabilityHealthDegraded,
+            message: format!(
+                "write source preflight has {} stalled bounded blocking job(s)",
+                snapshot.write_source_preflight_stalls_total
+            ),
+            remediation: Some(
+                "Inspect caller-supplied file/template paths and restart the daemon after resolving permanently blocked filesystem access."
+                    .to_owned(),
+            ),
+        });
+    }
+    findings
 }
 
 fn push_obsolete_identity_finding(
@@ -2437,6 +2452,7 @@ mod tests {
             queue_messages_drained_total: 0,
             queue_drain_failures_total: 0,
             blocking_core_bridge_stalls_total: 0,
+            write_source_preflight_stalls_total: 0,
         };
         let findings = super::runtime_condition_findings(&snapshot);
         assert_eq!(findings.len(), 1);

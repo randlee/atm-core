@@ -189,8 +189,9 @@ mod acknowledgement;
 mod pipeline;
 
 pub use pipeline::{
-    PreparedWrite, WriteOutcome, prepare_write_with_async_runtime, prepare_write_with_runtime,
-    send_mail, send_mail_with_runtime, write_mail, write_mail_with_runtime,
+    PreparedWrite, WriteOutcome, prepare_write_with_preflight_async_runtime,
+    prepare_write_with_runtime, send_mail, send_mail_with_runtime, write_mail,
+    write_mail_with_runtime,
 };
 
 #[cfg(test)]

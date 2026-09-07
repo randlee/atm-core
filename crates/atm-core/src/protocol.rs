@@ -528,6 +528,10 @@ pub struct RuntimeStatusSnapshot {
     /// request budget they were dispatched with.
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub blocking_core_bridge_stalls_total: u64,
+    /// Cumulative caller-owned file/template source preflights that outlived
+    /// their request deadline while retaining bounded blocking capacity.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub write_source_preflight_stalls_total: u64,
 }
 
 fn is_zero_u64(value: &u64) -> bool {
@@ -679,6 +683,7 @@ mod tests {
             queue_messages_drained_total: 0,
             queue_drain_failures_total: 0,
             blocking_core_bridge_stalls_total: 0,
+            write_source_preflight_stalls_total: 0,
         };
 
         let encoded = serde_json::to_vec(&snapshot).expect("encode runtime snapshot");
@@ -746,6 +751,7 @@ mod tests {
             queue_messages_drained_total: 0,
             queue_drain_failures_total: 0,
             blocking_core_bridge_stalls_total: 0,
+            write_source_preflight_stalls_total: 0,
         };
         let decoded: LegacyRuntimeStatusSnapshot =
             serde_json::from_value(serde_json::to_value(snapshot).expect("encode snapshot"))
