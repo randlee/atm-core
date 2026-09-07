@@ -463,6 +463,22 @@ mod tests {
 
         assert_eq!(report.team_rosters.len(), 2);
         assert_eq!(calls.load(Ordering::SeqCst), 2);
+
+        // Release every SQLite handle before deleting the root: Windows
+        // refuses to remove a directory whose files are still open. The
+        // worker tasks own port clones, so wait (bounded) for the aborted
+        // tasks to drop them before the assembly itself goes away.
+        drop(projection);
+        drop(roster_store);
+        let release_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while Arc::strong_count(&assembly.doctor_ports.roster_store_doctor) > 1 {
+            assert!(
+                std::time::Instant::now() < release_deadline,
+                "doctor workers still hold roster ports after 5s"
+            );
+            tokio::task::yield_now().await;
+        }
+        drop(assembly);
         std::fs::remove_dir_all(root).expect("remove temporary runtime root");
     }
 }
