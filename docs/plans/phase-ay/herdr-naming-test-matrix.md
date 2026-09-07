@@ -35,13 +35,13 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 | A-16 | T1:bob, T2:sam | set-member T2:sam alias bob | reject, alias vs canonical unique_name | covered `unique_name_a16_update_alias_rejects_other_team_canonical` (atm-core/src/team_admin/member_mutation.rs) |
 | A-17 | T1:bob (bobby) | add T1:sam (bobby) | reject, same-team alias duplicate | covered `validate_database_wide_aliases` in-roster check (roster_store.rs:204) |
 | A-18 | T1:bob | add T2:bob with `--alias ""` / whitespace | same as A-03: reject | covered `unique_name_permutations` case `unique_name_a18_whitespace_alias_is_absent` (atm-storage-rusqlite/src/roster_store.rs) |
-| A-19 | T1:bob (bobby) | remove T1:bob, then add T2:sam (bobby) | accept, name freed | **GAP** |
-| A-20 | T1:bob | delete team T1, then add T2:bob | accept, name freed | **GAP** |
-| A-21 | none | concurrent add T1:bob and T2:bob, no alias | exactly one succeeds | **GAP** — `roster_aliases_are_globally_unique_under_the_single_writer_lane` (atm-storage-rusqlite/src/lib.rs:3887) covers alias vs alias only; canonical check runs outside the store transaction |
-| A-22 | none | concurrent add T1:robert (bob) and T2:bob | exactly one succeeds | **GAP** |
-| A-23 | T1:bob | daemon/HTTP member-add T2:bob, no alias | reject in the store, CLI not bypassable | **GAP** — check lives in `team_admin` only; must move into `save_roster` transaction (roster_store.rs:91) |
-| A-24 | T1:bob | restore/import a roster containing T2:bob | reject | **GAP** |
-| A-25 | T1:Bob | add T2:bob | accept, exact comparison, no case folding | **GAP** — document; Herdr grammar excludes uppercase anyway (B-03) |
+| A-19 | T1:bob (bobby) | remove T1:bob, then add T2:sam (bobby) | accept, name freed | covered `unique_name_a19_removing_a_member_frees_its_effective_name` (atm-storage-rusqlite/src/roster_store.rs) |
+| A-20 | T1:bob | delete team T1, then add T2:bob | accept, name freed | covered `unique_name_a20_removing_a_team_roster_frees_its_canonical_name` (atm-storage-rusqlite/src/roster_store.rs) |
+| A-21 | none | concurrent add T1:bob and T2:bob, no alias | exactly one succeeds | covered `unique_name_a21_concurrent_canonical_adds_allow_exactly_one` (atm-storage-rusqlite/src/lib.rs) |
+| A-22 | none | concurrent add T1:robert (bob) and T2:bob | exactly one succeeds | covered `unique_name_a22_concurrent_alias_and_canonical_adds_allow_exactly_one` (atm-storage-rusqlite/src/lib.rs) |
+| A-23 | T1:bob | daemon/HTTP member-add T2:bob, no alias | reject in the store, CLI not bypassable | covered `unique_name_a23_store_rejects_non_cli_canonical_name_collisions` (atm-storage-rusqlite/src/roster_store.rs) |
+| A-24 | T1:bob | restore/import a roster containing T2:bob | reject | covered `unique_name_a24_store_rejects_imported_cross_team_collision` (atm-storage-rusqlite/src/roster_store.rs) |
+| A-25 | T1:Bob | add T2:bob | accept, exact comparison, no case folding | covered `unique_name_a25_compares_effective_names_case_sensitively` (atm-storage-rusqlite/src/roster_store.rs) |
 | A-26 | pre-upgrade db already holds T1:bob and T2:bob (no aliases) | open db, `atm members`/read paths | no error, no migration, rows unchanged | covered `unique_name_a26_legacy_collision_is_readable_but_next_write_fails` (roster_store.rs) |
 | A-27 | same seed | add T2:carol (the hmux launch add-member) | reject naming (T1,bob)/(T2,bob) and `--alias` remedy; roster unchanged | covered `unique_name_a27_legacy_collision_blocks_an_unrelated_next_write` (roster_store.rs) |
 | A-28 | same seed | set T2:bob alias=bobby, then add T2:carol | both accept | covered `unique_name_a28_aliasing_the_legacy_conflict_allows_the_next_write` (roster_store.rs) |

@@ -686,6 +686,112 @@ mod tests {
     }
 
     #[test]
+    fn unique_name_a19_removing_a_member_frees_its_effective_name() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        store
+            .save_roster(&roster(
+                "team-a",
+                vec![roster_member("team-a", "bob", Some("bobby"))],
+            ))
+            .expect("seed aliased member");
+        store
+            .save_roster(&roster("team-a", vec![]))
+            .expect("remove member");
+
+        store
+            .save_roster(&roster(
+                "team-b",
+                vec![roster_member("team-b", "sam", Some("bobby"))],
+            ))
+            .expect("removed effective name is available");
+    }
+
+    #[test]
+    fn unique_name_a20_removing_a_team_roster_frees_its_canonical_name() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        store
+            .save_roster(&roster(
+                "team-a",
+                vec![roster_member("team-a", "bob", None)],
+            ))
+            .expect("seed team roster");
+        store
+            .save_roster(&roster("team-a", vec![]))
+            .expect("remove team roster");
+
+        store
+            .save_roster(&roster(
+                "team-b",
+                vec![roster_member("team-b", "bob", None)],
+            ))
+            .expect("removed team canonical name is available");
+    }
+
+    #[test]
+    fn unique_name_a23_store_rejects_non_cli_canonical_name_collisions() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        store
+            .save_roster(&roster(
+                "team-a",
+                vec![roster_member("team-a", "bob", None)],
+            ))
+            .expect("first roster");
+
+        let error = store
+            .save_roster(&roster(
+                "team-b",
+                vec![roster_member("team-b", "bob", None)],
+            ))
+            .expect_err("store boundary rejects a bypassing caller");
+        assert!(error.message().contains("(team-a, bob)"));
+        assert!(error.message().contains("(team-b, bob)"));
+    }
+
+    #[test]
+    fn unique_name_a24_store_rejects_imported_cross_team_collision() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        store
+            .save_roster(&roster(
+                "team-a",
+                vec![roster_member("team-a", "bob", None)],
+            ))
+            .expect("first roster");
+
+        let imported = roster("team-b", vec![roster_member("team-b", "bob", None)]);
+        let error = store
+            .save_roster(&imported)
+            .expect_err("roster import uses the same durable enforcement");
+        assert!(error.message().contains("(team-a, bob)"));
+    }
+
+    #[test]
+    fn unique_name_a25_compares_effective_names_case_sensitively() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        store
+            .save_roster(&roster(
+                "team-a",
+                vec![roster_member("team-a", "Bob", None)],
+            ))
+            .expect("uppercase canonical name");
+        store
+            .save_roster(&roster(
+                "team-b",
+                vec![roster_member("team-b", "bob", None)],
+            ))
+            .expect("case-distinct name remains available");
+    }
+
+    #[test]
     fn save_and_load_support_python_graft_harnesses() {
         let store = SqliteStorageBackend::in_memory_for_test()
             .expect("backend")
