@@ -954,6 +954,9 @@ umbrella:
 - [`sprint-AY.7-windows-herdr-process-installer.md`](./sprint-AY.7-windows-herdr-process-installer.md)
 - [`sprint-AY.8-herdr-socket-transport.md`](./sprint-AY.8-herdr-socket-transport.md)
 - [`sprint-AY.9-herdr-socket-cutover.md`](./sprint-AY.9-herdr-socket-cutover.md)
+- [`sprint-AY.10-herdr-status-stream.md`](./sprint-AY.10-herdr-status-stream.md)
+- [`sprint-AY.11-herdr-stream-shadow-parity.md`](./sprint-AY.11-herdr-stream-shadow-parity.md)
+- [`sprint-AY.12-herdr-drop-poll.md`](./sprint-AY.12-herdr-drop-poll.md)
 
 Not a sprint: [`release-readiness-herdr-live-proof.md`](./release-readiness-herdr-live-proof.md)
 is the live macOS/Windows checklist run under release readiness after the
@@ -1872,3 +1875,7 @@ round below is PASS or every finding has an accepted disposition.
   rationale, AY.12 allowlist conditional removed, `crates/atm-herdr`
   excluded, Size section added); PLAN-CRIT-M1 HR-CORE-011 row read as
   already accepted (fixed: reworded as gated on the item-7 line).
+- plan-scope-reviewer r6 (FAIL, 0 blocking / 1 important; reviewed
+  651f6c5b0; PLAN-SCOPE-501/502/M2 confirmed fixed): PLAN-SCOPE-601 the
+  authoritative sprint-file list stopped at AY.9 (fixed: AY.10, AY.11,
+  AY.12 links added).
