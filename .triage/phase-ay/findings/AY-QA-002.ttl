@@ -15,11 +15,14 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "docs/plans/phase-ay/phase-ay-plan.md (AY.9 decision line, ~line 1095; exit gate mechanical-check spec, ~line 1114)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T20:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY ;
   triage:foundAt "2026-09-07T20:38:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T20:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed concurrently: commit 2fd39b07e (\"docs(phase-ay): AY.9 cutover decision recorded: Ship (Rand, 2026-09-07)\") landed on integrate/phase-ay immediately before this finding was pushed, replacing the fenix-attributed markdown-bolded line with the exact required shape at phase-ay-plan.md:1102. Verified: `grep -E '^Decision \\(Rand, [0-9]{4}-[0-9]{2}-[0-9]{2}\\): (Ship|Defer [A-Z]+|Cancel)$' docs/plans/phase-ay/phase-ay-plan.md` now matches 'Decision (Rand, 2026-09-07): Ship' at head 88b35bbe5. Both exit-gate mechanical checks (this one and the item-7 line closed under ARCH-001) now pass." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY-QA-002/1> ;
   triage:triageRecordVersion "1" .
 
@@ -28,10 +31,11 @@
   triage:file "docs/plans/phase-ay/phase-ay-plan.md" ;
   triage:line 1095 ;
   triage:snippet "Decision (recorded by fenix, 2026-09-07): **Ship**. -- does not match the gate's own required grep pattern for a Rand-attributed plain-text decision line" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "8c30e3c0d" ;
+  triage:fixedAtHeadSha "2fd39b07e" ;
   triage:occursIn <urn:atm:triage:worktree/AY-QA-002/8c30e3c0d> .
 
 <urn:atm:triage:worktree/AY-QA-002/8c30e3c0d>
