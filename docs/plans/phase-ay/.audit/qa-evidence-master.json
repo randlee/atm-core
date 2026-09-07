@@ -3,7 +3,7 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-06T22:24:39Z",
-    "end": "2026-09-07T07:00:33Z"
+    "end": "2026-09-07T07:33:00Z"
   },
   "scope": "phase-ay sprints AY.1-AY.8 orchestrated via graph-orchestration (.sprints/AY) as gh stacks on integrate/phase-ay. Only sprints with a dev Completion event have QA runs: AY.1 (PR #1270; r1 FAIL, r2 FAIL/0 blocking, r3 PASS; merged at 7e40db597), AY.2 (PR #1269; r1-r3 FAIL, r4 PASS at 5e7dd50e1; merged at 1195614ba), AY.3 (PR #1273 stacked on AY.2 then retargeted to integrate/phase-ay; r1 FAIL at 45701a81e, r2 not-closed at ec16200b6, r3 pending at b8afa814f; AY3-QA-002 held for Rand's ruling), AY.4 (PR #1279 stacked on AY.3; r1 FAIL at 296376da0, r2 focused re-verify not-closed at 0e7778a8d, r3 pending at edb2ed877), AY.8 (PR #1280 from integrate/phase-ay; r1 PASS D1-only at f3731606b, r2 FAIL at 696bc1061, r3 FAIL at 26ea2806a with 4/6 closed, r4 pending). AY.5 (arch-ctm, a6) is in dev with no QA run. This master is extended with each authoritative verdict message as quality-mgr reports it; pending rounds are recorded only once their verdict message exists. AY.5 (PR #1282 stacked on AY.4 in stack #1271; r1 PASS at f8876970a, 0 findings; merges after AY.4). AY.6 (PR #1284 stacked on AY.5; r1 PASS at bc32fdf92 with 1 important AY6-QA-001 open, closes before merge). AY.7 (PR #1285, feature/ay7-windows-herdr-process-installer) is in scope from QA-AY7-R1.",
   "count_basis": "headline/reviewer",
@@ -583,6 +583,36 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "pin 6102354a5; CI run 34091661579 all three Test legs green (windows job 101647017086 executes named-pipe tests); AY8-QA-002/008 closed at fb298f809; all 8 AY8 findings fixed; report https://github.com/randlee/atm-core/pull/1280#issuecomment-5566360922"
+    },
+    {
+      "run_id": "QA-AY3-R4",
+      "aich_sprint": "AY3",
+      "phase_sprint": "AY.3",
+      "pass": 4,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-07T07:13:40Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M1XBEGGS15Y3Y59FX2ZFEX92",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "Delta review of merge-forward commit c8bfb76e3 (origin/integrate/phase-ay 4407b006e merged into r3-PASS head b8afa814f); two hand-resolved files boundary_enforcement.rs and transport.rs; AY.3 required validation on the pin; AY3-QA-002 carried.",
+      "result_time_utc": "2026-09-07T07:33:00Z",
+      "result_time_pst": null,
+      "result_message_id": "01M1XC8WH4Z9E6H1EZM4H6ZR0D",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": [
+        "AY3-QA-002 (process: boundary bundle not first commit; pending Rand's ruling; unchanged by merge)"
+      ],
+      "important": [],
+      "minor": [
+        "one pre-existing doc-hygiene item (req-qa)"
+      ],
+      "count_basis": "headline/reviewer",
+      "evidence": "Merge resolution verified clean via per-parent diffs of both hand-resolved files; AY.3 config/doctor and AY.8 socket content intact. fmt/clippy/boundary-lint/atm-herdr all-features/atm-architecture green on pin, reproduced by rust-qa-agent. arch-qa PASS, rust-qa-agent PASS, req-qa FAIL only on AY3-QA-002. RBQA-F001 traced to pre-existing AY.8 d99b04af4 (closed under QA-AY8-R6), not raised. CI run 34094093638 in progress at verdict time. Report: https://github.com/randlee/atm-core/pull/1273#issuecomment-5566809247",
+      "pinned_commit": "c8bfb76e3"
     }
   ]
 }
