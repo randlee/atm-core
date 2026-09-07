@@ -53,7 +53,11 @@ sending due prompts and reminders from queued mail. On the CLI transport
   `herdr_status.rs` allowed)
 - `crates/atm-http-runtime/tests/**` for the two files above
 - doctor projection file (counter removal)
-- `docs/atm-herdr/operations.md`
+- `docs/atm-herdr/architecture.md` (operator section)
+- `crates/atm-herdr/src/status_stream.rs` only if this sprint decides that
+  stream failures feed the nudge breaker (AY.10 C2 defers that decision
+  here); `docs/atm-herdr/requirements.md` HR-CORE-011 is amended in the
+  same commit if so
 
 ## Acceptance criteria
 
@@ -66,5 +70,6 @@ sending due prompts and reminders from queued mail. On the CLI transport
 ## Out of scope
 
 - Any change to prompt/reminder policy.
-- Any `atm-herdr` change.
+- Any `atm-herdr` change other than the breaker-coupling decision named
+  in the allowlist.
 - The legacy synchronous daemon.

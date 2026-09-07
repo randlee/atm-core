@@ -278,9 +278,12 @@ deliverable (AY.8a: Cargo.toml, boundary TOML, transport_socket.rs,
 transport.rs, lib.rs, tests/socket_construction_pin.rs, herdr-versions.md;
 AY.8b: tests/support/fake_herdr_socket/** and the equivalence tests); and
 AY.9's `must_follow` retargets to AY.8b, because AY.9 needs the equivalence
-suite. Exercising the split is a plan amendment PR that updates this
-section's status, AY.9's dependency_relations, and the sprint map and wave
-tables in phase-ay-plan.md in the same commit. No other split is permitted
+suite; AY.10's `stack_parent`/`pr_target` retarget to AY.8b (AY.10 needs the
+fake socket server, which rides AY.8b), and the stack becomes AY.8a ->
+AY.8b -> AY.10. Exercising the split is a plan amendment PR that updates
+this section's status, AY.9's and AY.10's dependency_relations and
+frontmatter, and the sprint map and wave tables in phase-ay-plan.md in the
+same commit. No other split is permitted
 without a plan amendment.
 
 ## Required work

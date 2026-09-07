@@ -13,8 +13,16 @@ status: draft
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: join
-parallel_with: []
+parallel_with: [AY.10]
 dependency_relations:
+  - prerequisite: AY.9
+    dependent: AY.10
+    relation: parallel_safe
+    rationale: AY.10 changes only atm-herdr, its fixtures, the architecture pin, and Herdr docs; AY.9 owns the composition, config reader, and doctor files. Neither reads the other's diff; the shared `crates/atm-herdr/src/lib.rs` and `transport.rs` edits are composed under the P-E rule in phase-ay-plan.md.
+  - prerequisite: AY.9
+    dependent: AY.11
+    relation: must_follow
+    rationale: AY.11 spawns the shadow task only on the socket composition AY.9 selects.
   - prerequisite: AY.7
     dependent: AY.9
     relation: must_follow
@@ -31,9 +39,12 @@ Select the AY.8 socket transport in the Tokio/Axum production composition,
 make it the default with the CLI transport as the permanent explicit
 alternative, and close its
 configuration, doctor, and automated lifecycle contracts on all three CI
-lanes. AY.9 is the phase's last sprint; live macOS/Windows operator proof
-is release readiness after the phase lands on develop (ruling 5), and the
-phase disposition is taken on AY.9's automated gates.
+lanes. AY.9 is the socket-cutover join; AY.10 runs beside it and AY.11
+(and AY.12 if Rand decides to drop the poll) follow it before the phase
+lands on develop. Live macOS/Windows operator proof is release readiness
+after the phase lands on develop (ruling 5); the Ship/Defer/Cancel
+disposition of the cutover is taken on AY.9's automated gates, and phase
+completion is defined under "Phase AY exit gate" in phase-ay-plan.md.
 
 ## Dispatch and PR topology
 
@@ -171,6 +182,30 @@ fixture matrix adds omitted, `socket`, `cli`, unknown string, and unknown key.
 The unknown string and unknown key both fail with `ConfigParseFailed`, with the
 file and offending key/value named according to AY.3's error contract.
 
+### C1a — changed-file allowlist
+
+- `crates/atm-herdr/src/transport.rs` (the one production factory; the
+  AY.9 pin names this file)
+- `crates/atm-herdr/src/lib.rs` (factory export only)
+- `crates/atm-herdr/tests/socket_construction_pin.rs` (AY.8 D10 allowlist
+  replaced by the production-factory pin)
+- `crates/atm-daemon-bootstrap/src/herdr_config.rs` (closed transport enum,
+  `socket_path`, validation matrix)
+- `crates/atm-daemon-bootstrap/src/replacement_handler.rs` (composition
+  selects the factory)
+- `crates/atm-daemon-bootstrap/src/herdr_lifecycle_tests.rs` (L1–L12 under
+  socket default and explicit CLI)
+- `crates/atm-core/src/doctor/**` files that AY.3 D4 created for the Herdr
+  section (transport/endpoint fields and snapshots)
+- `crates/atm-architecture/tests/boundary_enforcement.rs` (forbidden-edge
+  grep for `HerdrEndpoint`, factory pin)
+- `docs/atm-herdr/architecture.md`, `docs/atm-herdr/requirements.md`,
+  `docs/project-plan.md`, user configuration reference
+- `.sprints/AY/events.ttl`
+
+No file under `crates/atm-daemon` changes; `transport_socket.rs`,
+`transport_cli.rs`, and `status_stream.rs` do not change.
+
 ### C2 — doctor projection
 
 The existing endpoint schema is extended by populated values, not new keys:
@@ -260,6 +295,10 @@ serialized JSON, human output, snapshots, or transport logs.
    parent PRs merged; AY.9 is not linked into the implementation stack.
 9. No path under `docs/plans/phase-ay/evidence/` is added or changed by AY.9;
    no sprint carries live evidence.
+9a. The PR file set is a subset of C1a (`git diff --name-only <base>..HEAD`
+    compared mechanically), and `git diff <base>..HEAD -- crates/atm-daemon
+    crates/atm-herdr/src/transport_socket.rs crates/atm-herdr/src/transport_cli.rs
+    crates/atm-herdr/src/status_stream.rs` is empty.
 10. The sprint meets the common phase merge gate: zero blocking, important, or
     in-scope minor findings; quality-mgr posts PASS; all three CI lanes are
     green at merge time; no flaky-test allowance applies.

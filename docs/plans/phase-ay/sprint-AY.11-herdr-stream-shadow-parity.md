@@ -53,8 +53,10 @@ Ordinary PR, target `integrate/phase-ay`, no `gh stack link`.
   runtime-owned task per configured session that calls
   `HerdrStatusStream::subscribe`, applies `Baseline`/`Changed`/`Gone` to a
   RAM map `{AgentName -> (HerdrAgentStatus, observed_at)}`, and on `Closed`
-  waits the queue-wake interval and subscribes again. Started only when the
-  selected transport is socket (AY.9 D1); on CLI the task is not spawned.
+  waits the queue-wake interval and subscribes again. Spawned only when the
+  AY.10 D3 factory returned `Some(stream)` (socket transport); on CLI the
+  factory returns `None` and no task exists. Stream failures never touch
+  the nudge breaker (AY.10 C2).
   Follows the RAM write-through rule already in force for the roster.
 - [ ] D2 — parity check inside `tick_once` in
   `crates/atm-http-runtime/src/herdr_queue_wake.rs`: after the tick's
@@ -72,8 +74,7 @@ Ordinary PR, target `integrate/phase-ay`, no `gh stack link`.
   process: every counter, the CLI-selected no-spawn case, resubscribe after
   `Closed`, and drain (the shadow task stops within the runtime shutdown
   deadline, no detached task).
-- [ ] D5 — `docs/atm-herdr/operations.md` (or the AY.9 doc that owns the
-  Herdr operator section): what the parity counters mean and the exit
+- [ ] D5 — `docs/atm-herdr/architecture.md` operator section (the file AY.9 D5 updates; `docs/atm-herdr/operations.md` does not exist and is not created): what the parity counters mean and the exit
   condition for AY.12 below.
 
 ### Paths to delete
@@ -96,7 +97,7 @@ only the parity block is added to `tick_once`).
 - `crates/atm-daemon-bootstrap/src/replacement_handler.rs` (pass the
   stream handle next to the invoker; one site)
 - doctor projection file owned by AY.9 D4 (five counters)
-- `docs/atm-herdr/operations.md`
+- `docs/atm-herdr/architecture.md` (operator section)
 
 ### Size
 
