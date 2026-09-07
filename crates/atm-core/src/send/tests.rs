@@ -1006,27 +1006,29 @@ fn send_sqlite_failure_is_an_error_without_outbound_delivery_or_hook() {
 #[test]
 fn send_aliases_are_resolved_before_any_message_is_persisted() {
     let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    let sender_alias = format!("sender_{TEST_TEAM}");
+    let recipient_alias = format!("recipient_{TEST_TEAM}");
     let mut sender = roster_entry(
         AgentName::from_validated("canonical-sender"),
         DeliveryHarnessPath::ClaudeCode,
     );
     sender
         .metadata_json
-        .insert("alias".to_string(), serde_json::json!("sender_atm-dev"));
+        .insert("alias".to_string(), serde_json::json!(&sender_alias));
     let mut recipient = roster_entry(
         AgentName::from_validated("canonical-recipient"),
         DeliveryHarnessPath::ClaudeCode,
     );
     recipient
         .metadata_json
-        .insert("alias".to_string(), serde_json::json!("recipient_atm-dev"));
+        .insert("alias".to_string(), serde_json::json!(&recipient_alias));
     runtime.team_roster_override = Some(vec![sender, recipient]);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     let mut request = send_request(tempdir.path());
-    request.caller_identity = AgentName::from_validated("sender_atm-dev");
+    request.caller_identity = AgentName::from_validated(sender_alias.clone());
     request.to = Some(
-        format!("recipient_atm-dev@{TEST_TEAM}")
+        format!("{recipient_alias}@{TEST_TEAM}")
             .parse()
             .expect("alias recipient"),
     );
@@ -1044,8 +1046,8 @@ fn send_aliases_are_resolved_before_any_message_is_persisted() {
         Some("task-123")
     );
     let serialized = serde_json::to_string(&records[0]).expect("serialize message");
-    assert!(!serialized.contains("sender_atm-dev"));
-    assert!(!serialized.contains("recipient_atm-dev"));
+    assert!(!serialized.contains(&sender_alias));
+    assert!(!serialized.contains(&recipient_alias));
 }
 
 #[test]

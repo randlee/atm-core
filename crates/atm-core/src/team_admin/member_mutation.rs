@@ -1370,10 +1370,11 @@ mod tests {
     fn unique_name_a09_canonical_name_of_aliased_member_is_available() {
         let store = TestRosterStore::default();
         let team: TeamName = TEST_TEAM.parse().expect("team");
+        let worker_alias = format!("worker_{TEST_TEAM}");
         let mut worker = roster_member(TEST_TEAM, "worker");
         worker
             .metadata_json
-            .insert("alias".to_string(), json!("worker_atm-dev"));
+            .insert("alias".to_string(), json!(&worker_alias));
         store.seed(&team, vec![lead_member(TEST_TEAM, ROLE_TEAM_LEAD), worker]);
         let root = tempfile::tempdir().expect("tempdir");
 
@@ -1406,7 +1407,7 @@ mod tests {
                 backend: None,
                 target: None,
                 session: None,
-                alias: Some("worker_atm-dev"),
+                alias: Some(worker_alias.as_str()),
                 clear_alias: false,
             },
         )
@@ -1622,6 +1623,7 @@ mod tests {
     fn cross_team_member_names_require_alias_but_first_occurrence_does_not() {
         let store = TestRosterStore::default();
         let first_team: TeamName = "other-team".parse().expect("team");
+        let team_lead_alias = format!("{ROLE_TEAM_LEAD}_{TEST_TEAM}");
         store.seed(&first_team, vec![lead_member("other-team", ROLE_TEAM_LEAD)]);
         let root = tempfile::tempdir().expect("tempdir");
         let no_alias = AddMemberRequest::new_with_backend(
@@ -1655,7 +1657,7 @@ mod tests {
                 backend: None,
                 target: None,
                 session: None,
-                alias: Some("team-lead_atm-dev"),
+                alias: Some(team_lead_alias.as_str()),
                 clear_alias: false,
             },
         )
@@ -1668,10 +1670,11 @@ mod tests {
         let store = TestRosterStore::default();
         let team: TeamName = TEST_TEAM.parse().expect("team");
         let other: TeamName = "other-team".parse().expect("team");
+        let team_lead_alias = format!("{ROLE_TEAM_LEAD}_{TEST_TEAM}");
         let mut local = lead_member(TEST_TEAM, ROLE_TEAM_LEAD);
         local
             .metadata_json
-            .insert("alias".to_string(), json!("team-lead_atm-dev"));
+            .insert("alias".to_string(), json!(&team_lead_alias));
         store.seed(&team, vec![local]);
         store.seed(&other, vec![lead_member("other-team", ROLE_TEAM_LEAD)]);
         let request = UpdateMemberRequest::new_with_backend(
@@ -1702,10 +1705,11 @@ mod tests {
     fn update_member_can_clear_an_existing_alias() {
         let store = TestRosterStore::default();
         let team: TeamName = TEST_TEAM.parse().expect("team");
+        let worker_alias = format!("worker_{TEST_TEAM}");
         let mut worker = roster_member(TEST_TEAM, "worker");
         worker
             .metadata_json
-            .insert("alias".to_string(), json!("worker_atm-dev"));
+            .insert("alias".to_string(), json!(&worker_alias));
         store.seed(&team, vec![lead_member(TEST_TEAM, ROLE_TEAM_LEAD), worker]);
         let request = UpdateMemberRequest::new_with_backend(
             ROLE_TEAM_LEAD.parse().expect("caller"),
