@@ -1266,11 +1266,13 @@ Alias rules:
 - same-team messages keep current canonical sender projection behavior
 - the persisted `from` and `to` of every message, acknowledgement, audit and
   task-state row carry canonical member names only, for same-team and
-  cross-team messages alike; an alias is never written to the database
-  (superseded 2026-09-07 by Rand's ruling in §3.3.2: "the alias should
-  never be used in database")
-- roster aliases (§3.3.2) are resolved the same way, after the `.atm.toml`
-  `[atm].aliases` table
+  cross-team messages alike. The alias itself is stored: Rand
+  (2026-09-07): "alias MUST be in database AND in immutable roster in
+  RAM". It lives in the roster row and its RAM mirror only; message, ack,
+  audit and task-state rows carry the canonical name (Rand: "the alias
+  should never be used in database" refers to those rows)
+- roster aliases (§3.3.2) are the only alias source; `.atm.toml`
+  `[atm].aliases` is retired (§3.3)
 
 Post-send-hook rules:
 - ATM always has one shipped default post-send path in the installed binary:

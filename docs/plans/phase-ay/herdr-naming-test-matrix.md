@@ -94,7 +94,7 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | D-16 | for every D-15 entry: run once with canonical name, once with alias (bare and `@team`) | CLI forwards the token unchanged; daemon ingress substitutes; identical daemon-side handling and identical persisted rows; observation attested to alias dropped | **GAP** (REQ-ROSTER-NAME-010; Rand: "if all prompts are written for either member name or alias, it will work the same"; substitution at daemon ingress, not the CLI) |
 | D-17 | `--from <alias>` and `--to <alias>` filters on read/peek/inbox | same result set as canonical | **GAP** (D-09 covers `--from` on read only) |
 
-## E. Persistence (REQ-ROSTER-NAME-007, "never in the database")
+## E. Persistence (REQ-ROSTER-NAME-007: alias stored in roster row + RAM roster; message/ack/audit/task rows canonical only)
 
 | ID | Case | Expected | Status |
 |----|------|----------|--------|
@@ -131,4 +131,4 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | H-03 | pre-upgrade duplicate unique_names in teams already live in Herdr | Rand: "we need to change members from tmux->herder before launch today. herder rejection already exists, we simply haven't run more than 1 team per computer yet." No new mechanism |
 | H-04 | alias change on a member live in Herdr | Rand: "alias change won't get picked up by herdr until team restarted (no mid-session concern)" |
 | H-05 | `.atm.toml [atm].aliases` | Rand: ".atm.toml is ONLY used by hmux and 'atm doctor' to display a warning if alias is not consistent. NOTHING else in atm uses .atm.toml alias."; `[atm].aliases` removed from atm (D-06) |
-| H-06 | "alias never in the database" scope | roster row holds it; message/ack/audit/task rows never do (§3.3.2 wording) |
+| H-06 | "alias never in the database" scope | Rand: "alias MUST be in database AND in immutable roster in RAM"; message/ack/audit/task rows carry the canonical name only. The phrase "never in the database" is retired from all docs |
