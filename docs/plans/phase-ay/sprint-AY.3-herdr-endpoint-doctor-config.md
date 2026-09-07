@@ -60,8 +60,7 @@ gh pr view feature/ay3-herdr-endpoint-doctor-config \
 Append later children with `gh stack link <stack-number> <branch>`. `link` is
 the `/gh-stack` operation for the external `sc-git-worktree` workflow and does
 not create local stack tracking, so verify bases with `gh pr view --json`.
-Phase AY forbids `gh stack rebase`, `gh stack sync`, and
-`gh stack merge`; use merge commits and no force-push. Parent development
+Rand (2026-09-07): every operation on a stacked branch goes through `gh stack` subcommands (`gh stack push`, `gh stack view --json`, `gh stack merge` bottom-up); merge commits only, never squash, never force-push outside `gh stack`. Parent development
 pushed, not QA completion, triggers a merge commit from AY.2 into AY.3 before
 every development or fix round. Parent PRs merge into `integrate/phase-ay`
 first.

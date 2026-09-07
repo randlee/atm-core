@@ -59,8 +59,7 @@ gh pr view feature/ay6-herdr-restart-coordination \
   --json headRefName,baseRefName,state
 ```
 
-Append AY.7 with `gh stack link <stack-number> <branch>`. Phase AY forbids
-`gh stack rebase`, `gh stack sync`, and `gh stack merge`; `link` creates no
+Append AY.7 with `gh stack link <stack-number> <branch>`. Rand (2026-09-07): every operation on a stacked branch goes through `gh stack` subcommands (`gh stack push`, `gh stack view --json`, `gh stack merge` bottom-up); merge commits only, never squash, never force-push outside `gh stack`. `link` creates no
 local tracking, so verify the base with `gh pr view --json`. Use merge
 commits, no force-push, and parent-first PR completion. AY.5 development pushed
 triggers merge-forward into AY.6 before every development/fix round.
