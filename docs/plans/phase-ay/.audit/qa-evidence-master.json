@@ -3,7 +3,7 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-06T22:24:39Z",
-    "end": "2026-09-07T05:46:07.869200Z"
+    "end": "2026-09-07T05:55:21.938619Z"
   },
   "scope": "phase-ay sprints AY.1-AY.8 orchestrated via graph-orchestration (.sprints/AY) as gh stacks on integrate/phase-ay. Only sprints with a dev Completion event have QA runs: AY.1 (PR #1270; r1 FAIL, r2 FAIL/0 blocking, r3 PASS; merged at 7e40db597), AY.2 (PR #1269; r1-r3 FAIL, r4 PASS at 5e7dd50e1; merged at 1195614ba), AY.3 (PR #1273 stacked on AY.2 then retargeted to integrate/phase-ay; r1 FAIL at 45701a81e, r2 not-closed at ec16200b6, r3 pending at b8afa814f; AY3-QA-002 held for Rand's ruling), AY.4 (PR #1279 stacked on AY.3; r1 FAIL at 296376da0, r2 focused re-verify not-closed at 0e7778a8d, r3 pending at edb2ed877), AY.8 (PR #1280 from integrate/phase-ay; r1 PASS D1-only at f3731606b, r2 FAIL at 696bc1061, r3 FAIL at 26ea2806a with 4/6 closed, r4 pending). AY.5 (arch-ctm, a6) is in dev with no QA run. This master is extended with each authoritative verdict message as quality-mgr reports it; pending rounds are recorded only once their verdict message exists. AY.5 (PR #1282 stacked on AY.4 in stack #1271; r1 PASS at f8876970a, 0 findings; merges after AY.4).",
   "count_basis": "headline/reviewer",
@@ -383,6 +383,31 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "qa-pr1282-r1 verdict PASS at f8876970a (msg 01M1X6E23XZNRCPME1CRGZF2RN; ack 01M1X5W464V4J0PH9Q0BAK62HV). C1-C4, error inventory, A1-A8, V1-V5 and 5 crux checks confirmed by direct source inspection; 95/95 local tests, lint spell/adr-index pass. CI run 34087304720 in progress at report time. GitHub mergeable=CONFLICTING against stacked base feature/ay4 classified as stack topology (criss-cross merge bases; git recursive merge clean), not an AY.5 content defect. Report https://github.com/randlee/atm-core/pull/1282#issuecomment-5565649509"
+    },
+    {
+      "run_id": "QA-AY8-R4",
+      "aich_sprint": "AY8",
+      "phase_sprint": "AY.8",
+      "pass": false,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-07T05:41:05.000000Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M1X66412FC4VX5RR8KMETMFP",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "Round-4 QA for AY.8 after FIX-AY8-R3 (cipher), PR #1280 pinned at 690f86ea5 (worktree qa-pr1280-r4); carry-forward AY8-QA-002/005/007",
+      "result_time_utc": "2026-09-07T05:55:21.938619Z",
+      "result_time_pst": null,
+      "result_message_id": "01M1X6YZ6JA0JF94RM9859BGDH",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 2,
+      "important": 0,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "qa-pr1280-r4 verdict FAIL at 690f86ea5 (msg 01M1X6YZ6JA0JF94RM9859BGDH; ack 01M1X66CCZBZJ73Y7Z3HMADCJ2). Closed AY8-QA-007 (syn removed; Just lint green, run 34087584965) and AY8-QA-005 (fixed, verified out of scope). AY8-QA-002 stays open blocking with narrowed gap: no stalled-connect/write scenario, Windows named-pipe fixture path uncompiled (no coverage of connect_named_pipe pipe-busy retry), no connect/write/read cancellation fixture; original unwired claim withdrawn. New blocking AY8-QA-008: client/server shutdown-ordering race in socket_fixture_matrix_covers_no_newline_oversized_and_stalled_read (BrokenPipe at transport_fixture.rs:290) reproduced on ubuntu and macos Test jobs in run 34087584965, predates the fix commit. Triage at 363e098cd. Report https://github.com/randlee/atm-core/pull/1280#issuecomment-5565721461"
     }
   ]
 }
