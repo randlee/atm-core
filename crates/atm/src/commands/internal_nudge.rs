@@ -178,8 +178,6 @@ impl GraftNudgeSink {
             event: event.clone(),
             kind: atm_core::boundary::NudgeKind::Steer,
             rendered_nudge: rendered_nudge.to_string(),
-            // This legacy diagnostic command has no admitted message body.
-            message_body: String::new(),
         };
         let response = deliver_graft_post_send(
             lease.endpoint,

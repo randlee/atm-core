@@ -266,13 +266,13 @@ impl PreparedWrite {
                 message,
                 post_write.delivery_snapshot.recipient_pane_id.as_ref(),
             )?;
-            if let Some(dispatch) = crate::send::hook::build_built_in_dispatch(
+            let dispatch = crate::send::hook::build_built_in_dispatch(
                 runtime,
                 &post_write.delivery_snapshot,
                 &event,
-                &message.envelope.text,
                 self.outbound_request.nudge_mode,
-            )? {
+            )?;
+            if let Some(dispatch) = dispatch {
                 dispatches.push(dispatch);
             }
         }

@@ -823,7 +823,6 @@ mod tests {
             recipient: dispatch.event.recipient.clone(),
             recipient_team: dispatch.event.recipient_team.clone(),
             rendered_nudge: "<atm>queue</atm>".to_owned(),
-            message_body: "queue body".to_owned(),
         });
         assert!(selector.select_emitter(&dispatch).is_some());
     }
@@ -1002,7 +1001,7 @@ mod tests {
             agent: recipient.clone(),
             kind: NudgeKind::Queue,
             msg_id: message_id,
-            body: "bare CLI body".to_owned(),
+            body: "<atm><action>queue</action></atm>".to_owned(),
         });
         let fifo: atm_http_runtime::BareCliFifo = Default::default();
         let drops: atm_http_runtime::BareCliQueueFullDrops = Default::default();
@@ -1025,6 +1024,7 @@ mod tests {
             atm_http_runtime::drain_bare_cli_messages(&fifo, &member).expect("drain FIFO");
         assert_eq!(drained.len(), 1);
         assert_eq!(drained[0].msg_id, message_id);
+        assert_eq!(drained[0].body, "<atm><action>queue</action></atm>");
         assert!(
             runtime
                 .pending_nudge_store()
@@ -1051,8 +1051,14 @@ mod tests {
         );
 
         for (message_id, body) in [
-            ("01KZ0000000000000000000001", "steer one"),
-            ("01KZ0000000000000000000002", "steer two"),
+            (
+                "01KZ0000000000000000000001",
+                "<atm><action>steer-one</action></atm>",
+            ),
+            (
+                "01KZ0000000000000000000002",
+                "<atm><action>steer-two</action></atm>",
+            ),
         ] {
             let mut dispatch = tmux_dispatch();
             dispatch.kind = NudgeKind::Steer;
@@ -1074,8 +1080,8 @@ mod tests {
         let drained =
             atm_http_runtime::drain_bare_cli_messages(&fifo, &member).expect("drain steer FIFO");
         assert_eq!(drained.len(), 2, "all steer-kind items drain together");
-        assert_eq!(drained[0].body, "steer one");
-        assert_eq!(drained[1].body, "steer two");
+        assert_eq!(drained[0].body, "<atm><action>steer-one</action></atm>");
+        assert_eq!(drained[1].body, "<atm><action>steer-two</action></atm>");
         assert!(
             drained
                 .iter()
@@ -1148,6 +1154,8 @@ mod tests {
         };
         assert_eq!(queue_pull.agent, recipient);
         assert_eq!(queue_pull.team, team);
+        assert!(queue_pull.body.starts_with("<atm"));
+        assert!(!queue_pull.body.contains("full immutable body"));
 
         let fifo: atm_http_runtime::BareCliFifo = Default::default();
         let selector = ReplacementReceivedHookSelector::with_herdr_process_and_fifo(
@@ -1209,7 +1217,7 @@ mod tests {
             agent: recipient.clone(),
             kind: NudgeKind::Queue,
             msg_id: message_id,
-            body: "bare CLI body".to_owned(),
+            body: "<atm><action>queue</action></atm>".to_owned(),
         });
         let fifo: atm_http_runtime::BareCliFifo = Default::default();
         let drops: atm_http_runtime::BareCliQueueFullDrops = Default::default();
@@ -1238,6 +1246,7 @@ mod tests {
             "the FIFO append succeeded and must still be observable"
         );
         assert_eq!(drained[0].msg_id, message_id);
+        assert_eq!(drained[0].body, "<atm><action>queue</action></atm>");
         assert_eq!(
             failing_store.clear_calls.load(Ordering::SeqCst),
             2,

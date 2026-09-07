@@ -357,7 +357,6 @@ fn tmux_and_herdr_dispatches_share_the_rendered_template() {
         &runtime,
         &tmux_snapshot,
         &event,
-        "message body",
         crate::send::NudgeMode::Immediate,
     )
     .expect("tmux dispatch result")
@@ -369,7 +368,6 @@ fn tmux_and_herdr_dispatches_share_the_rendered_template() {
         &runtime,
         &herdr_snapshot,
         &event,
-        "message body",
         crate::send::NudgeMode::Immediate,
     )
     .expect("Herdr dispatch result")
@@ -388,6 +386,21 @@ fn tmux_and_herdr_dispatches_share_the_rendered_template() {
     else {
         panic!("expected Herdr target");
     };
+    let mut bare_cli_snapshot = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    bare_cli_snapshot.bare_cli_post_send = true;
+    let bare_cli = super::hook::build_built_in_dispatch(
+        &runtime,
+        &bare_cli_snapshot,
+        &event,
+        crate::send::NudgeMode::Immediate,
+    )
+    .expect("bare-CLI dispatch result")
+    .expect("bare-CLI dispatch");
+    let PostSendBuiltInTarget::QueuePull(target) = bare_cli.target else {
+        panic!("expected bare-CLI queue-pull target");
+    };
+    assert_eq!(target.body, tmux_text);
+    assert!(!target.body.contains("full immutable body"));
     assert_eq!(tmux_text, herdr_text);
 }
 

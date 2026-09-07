@@ -20,7 +20,6 @@ pub(crate) fn build_built_in_dispatch<R>(
     runtime: &R,
     delivery_snapshot: &DeliveryRecipientSnapshot,
     event: &PostSendHookEvent,
-    message_body: &str,
     nudge_mode: NudgeMode,
 ) -> Result<Option<BuiltInPostSendDispatch>, AtmError>
 where
@@ -72,12 +71,14 @@ where
                 recipient: event.recipient.clone(),
                 recipient_team: event.recipient_team.clone(),
                 rendered_nudge,
-                message_body: message_body.to_owned(),
             }),
             kind,
         }));
     }
     if delivery_snapshot.bare_cli_post_send {
+        let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
+            return Ok(None);
+        };
         return Ok(Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::QueuePull(QueuePullTarget {
@@ -85,7 +86,7 @@ where
                 agent: event.recipient.clone(),
                 kind,
                 msg_id: event.message_id,
-                body: message_body.to_owned(),
+                body: rendered_nudge,
             }),
             kind,
         }));
