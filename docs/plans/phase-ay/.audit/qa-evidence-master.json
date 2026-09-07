@@ -445,7 +445,7 @@
       "assignment_message_id": "01M1X81ARNWE0MJS296981V22W",
       "assignment_from": "fenix",
       "assignment_shared_path": null,
-      "assignment_summary": "Round-4 QA for AY.8 after FIX-AY8-R3 (cipher), PR #1280 pinned at 690f86ea5 (worktree qa-pr1280-r4); carry-forward AY8-QA-002/005/007",
+      "assignment_summary": "Round-5 QA for AY.8 after FIX-AY8-R4 (cipher), PR #1280 pinned at 6ac58fe44 (worktree qa-pr1280-r5); carry-forward AY8-QA-002/008",
       "result_time_utc": "2026-09-07T06:27:30Z",
       "result_time_pst": null,
       "result_message_id": "01M1X8SN3T23SV9NRNS6TF6WMB",
