@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY14-QA-001>
+  a triage:Finding ;
+  triage:findingId "AY14-QA-001" ;
+  triage:title "alias resolution wired only into atm send; caller_context (ack/read --as), read --from, update-member and remove-member never resolve a roster alias to the canonical name" ;
+  triage:description "quality-mgr qa-pr1305-r1 (PR #1305, AY.14 herdr-agent-name-mapping, head 23cebc85f). Cross-confirmed by req-qa ATM-QA-001 (Blocking) and ruthless-boundary-qa RBQA-AY14-F001 (Critical). resolve_roster_alias is called only from crates/atm-core/src/send/write_context.rs (sole call sites in the workspace). crates/atm-core/src/caller_context.rs (resolve_cli_caller_context / resolve_cli_mutation_caller_context, used by atm ack ATM_IDENTITY and atm read --as) never resolves an alias, so atm read --as <alias> targets a mailbox keyed by a name that does not exist. crates/atm/src/commands/read.rs:132 passes --from <alias> raw into MailboxQueryFilters::sender_opt so the filter silently matches nothing. update-member and remove-member match only the canonical agent_name. Sprint requirement (Rand, verbatim in the sprint doc): alias is acceptable at all user/agent facing interfaces and would immediately be replaced at the ingress interface; all agents can use it in place of agent name. Required correction: resolve alias to canonical at every ingress that accepts an agent name (caller context for --as and ATM_IDENTITY, read --from, update-member, remove-member, any other agent-name argument), with the canonical name being the only value that reaches storage or mailbox paths, plus regression tests per ingress using an alias." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-compliance" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/caller_context.rs, crates/atm/src/commands/read.rs, crates/atm/src/commands (update-member, remove-member and every other agent-name argument), crates/atm-core/src/send/write_context.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T18:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY14 ;
+  triage:foundAt "2026-09-07T18:12:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY14-QA-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY14-QA-001/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY14-QA-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 1 ;
+  triage:snippet "resolve_cli_caller_context / resolve_cli_mutation_caller_context never call resolve_roster_alias" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay14-herdr-agent-name-mapping" ;
+  triage:headSha "23cebc85f" ;
+  triage:occursIn <urn:atm:triage:worktree/AY14-QA-001/23cebc85f> .
+
+<urn:atm:triage:occurrence/AY14-QA-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/read.rs" ;
+  triage:line 132 ;
+  triage:snippet "--from <alias> passed raw into MailboxQueryFilters::sender_opt" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay14-herdr-agent-name-mapping" ;
+  triage:headSha "23cebc85f" ;
+  triage:occursIn <urn:atm:triage:worktree/AY14-QA-001/23cebc85f> .
+
+<urn:atm:triage:worktree/AY14-QA-001/23cebc85f>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1305-r1" ;
+  triage:branch "feature/ay14-herdr-agent-name-mapping" ;
+  triage:headSha "23cebc85f" ;
+  triage:orderIndex 0 .
