@@ -1577,6 +1577,7 @@ class HerdrEntryPlatformFake:
         self.name = name
         self.registered: set[str] = set()
         self.account_is_current = True
+        self.account_checks: list[str] = []
         self.started: list[str] = []
 
     def path_for(self, identifier: str) -> Path:
@@ -1596,7 +1597,8 @@ class HerdrEntryPlatformFake:
             raise RuntimeError("entry is not registered")
         self.started.append(identifier)
 
-    def account_matches(self, _identifier: str) -> bool:
+    def account_matches(self, identifier: str) -> bool:
+        self.account_checks.append(identifier)
         return self.account_is_current
 
 
@@ -1668,9 +1670,41 @@ class HerdrEntryTests(unittest.TestCase):
         platform_fake = HerdrEntryPlatformFake(self.root / "windows", "Windows")
         platform_fake.account_is_current = False
         manager = DAEMON_SWITCH.HerdrEntryManager(self.root / "windows-journal", platform_fake)
-        with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "another account"):
+        with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "another account") as captured:
             manager.install(self.default)
+        self.assertEqual(captured.exception.code, "HERDR_ENTRY_ACCOUNT_MISMATCH")
+        self.assertEqual(captured.exception.remedy, "Reinstall both per-user under one account")
         self.assertFalse(platform_fake.path_for("ATM Herdr Server").exists())
+        self.assertEqual(platform_fake.registered, set())
+        self.assertFalse(manager.journal_path.exists())
+
+    def test_windows_installs_one_interactive_logon_task_per_distinct_endpoint(self) -> None:
+        platform_fake = HerdrEntryPlatformFake(self.root / "windows", "Windows")
+        manager = DAEMON_SWITCH.HerdrEntryManager(self.root / "windows-journal", platform_fake)
+        endpoints = [
+            DAEMON_SWITCH.HerdrEndpoint("default"),
+            DAEMON_SWITCH.HerdrEndpoint("blue"),
+            DAEMON_SWITCH.HerdrEndpoint("green"),
+        ]
+
+        entries = [manager.install(endpoint) for endpoint in endpoints]
+
+        expected = {
+            "ATM Herdr Server",
+            "ATM Herdr Server (blue)",
+            "ATM Herdr Server (green)",
+        }
+        self.assertEqual(platform_fake.registered, expected)
+        self.assertEqual(
+            platform_fake.account_checks,
+            ["ATM Herdr Server", "ATM Herdr Server (blue)", "ATM Herdr Server (green)"],
+        )
+        self.assertTrue(all(entry["owned"] and entry["registered"] for entry in entries))
+        for entry_id in expected:
+            rendered = platform_fake.path_for(entry_id).read_text(encoding="utf-8")
+            self.assertIn("trigger=logon", rendered)
+            self.assertIn("interactive=true", rendered)
+            self.assertIn("managed-by=atm daemon-switch", rendered)
 
     def test_doctor_ingestion_uses_only_native_projection(self) -> None:
         payload = {"herdr": {"configured": True, "endpoints": [{"endpoint": "default"}, {"session": "blue"}]}}
