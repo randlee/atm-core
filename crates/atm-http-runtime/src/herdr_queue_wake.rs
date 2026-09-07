@@ -74,7 +74,8 @@ pub struct HerdrQueueWakePump {
     clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>,
     last_task_attempt: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
     pub(crate) escalation_state: EscalationState,
-    breaker_escalation_gate: Arc<Mutex<HerdrBreakerEscalationGate>>,
+    breaker_escalation_gates: Arc<Mutex<HashMap<Option<HerdrSession>, HerdrBreakerEscalationGate>>>,
+    breaker_escalation_min_interval: Duration,
     breaker_cycle_opened_at: Arc<Mutex<HashMap<Option<HerdrSession>, IsoTimestamp>>>,
     pub(crate) daemon_home: PathBuf,
     task_step_available: Arc<Mutex<Option<bool>>>,
@@ -104,9 +105,8 @@ impl HerdrQueueWakePump {
             clock: Arc::new(IsoTimestamp::now),
             last_task_attempt: Arc::new(Mutex::new(HashMap::new())),
             escalation_state: EscalationState::default(),
-            breaker_escalation_gate: Arc::new(Mutex::new(HerdrBreakerEscalationGate::new(
-                Duration::from_secs(1_800),
-            ))),
+            breaker_escalation_gates: Arc::new(Mutex::new(HashMap::new())),
+            breaker_escalation_min_interval: Duration::from_secs(1_800),
             breaker_cycle_opened_at: Arc::new(Mutex::new(HashMap::new())),
             daemon_home: PathBuf::new(),
             task_step_available: Arc::new(Mutex::new(None)),
@@ -128,8 +128,8 @@ impl HerdrQueueWakePump {
     /// Applies the bootstrap-validated breaker escalation cooldown.
     #[must_use]
     pub fn with_breaker_escalation_min_interval(mut self, min_interval: Duration) -> Self {
-        self.breaker_escalation_gate =
-            Arc::new(Mutex::new(HerdrBreakerEscalationGate::new(min_interval)));
+        self.breaker_escalation_gates = Arc::new(Mutex::new(HashMap::new()));
+        self.breaker_escalation_min_interval = min_interval;
         self
     }
 
@@ -299,18 +299,29 @@ impl HerdrQueueWakePump {
             return false;
         };
         let opened_at = self.breaker_cycle_opened_at(session, now);
+        let admitted = self
+            .breaker_escalation_gates
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entry(session.clone())
+            .or_insert_with(|| {
+                HerdrBreakerEscalationGate::new(self.breaker_escalation_min_interval)
+            })
+            .claim(opened_at, now);
+        if !admitted {
+            return false;
+        }
         let task_store = self.service_runtime.task_store().ok();
-        crate::herdr_breaker_escalation::maybe_escalate_breaker_cycle(
-            &self.breaker_escalation_gate,
+        crate::herdr_breaker_escalation::escalate_breaker_cycle(
             &self.service_runtime,
             self.herdr_process.as_ref(),
             task_store.as_ref(),
             &self.daemon_home,
             &team,
             opened_at,
-            now,
         )
-        .await
+        .await;
+        true
     }
 
     async fn list_eligible(
@@ -1788,6 +1799,86 @@ mod tests {
         pump.tick_once().await;
         assert_eq!(pump.stats().blocked_escalations, 1);
         assert_eq!(notifications(&fake), 2);
+    }
+
+    #[tokio::test]
+    async fn ay4_breaker_escalation_is_once_per_cycle_and_interval_bounded() {
+        let (root, runtime, fake, pump, _task_store, keys, now) =
+            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+        let team = keys[0].team().clone();
+        let mut roster = runtime
+            .shared_roster_store_arc()
+            .load_roster(&team)
+            .expect("roster");
+        let mut lead = herdr_member(&team, "ay4-lead");
+        lead.agent_type = atm_storage::AgentType::Lead;
+        roster.members.push(lead);
+        runtime
+            .shared_roster_store_arc()
+            .save_roster(&roster)
+            .expect("roster");
+        let pump = pump
+            .with_daemon_home(root.path().join("home"))
+            .with_breaker_escalation_min_interval(Duration::from_secs(30));
+
+        pump.tick_once().await;
+        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+            io_error_kind: None,
+        }));
+        pump.tick_once().await;
+        assert_eq!(notifications(&fake), 1, "first open cycle escalates once");
+        let notification = fake
+            .calls()
+            .into_iter()
+            .find_map(|call| match call {
+                atm_herdr::testing::FakeHerdrCall::Notify { body, .. } => Some(body),
+                _ => None,
+            })
+            .expect("breaker notification");
+        assert!(notification.contains("state=breaker_open"));
+        assert!(!notification.contains("Herdr breaker opened"));
+
+        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+            io_error_kind: None,
+        }));
+        pump.tick_once().await;
+        assert_eq!(notifications(&fake), 1, "same cycle is deduplicated");
+
+        queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+        pump.tick_once().await;
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str("2030-01-01T00:00:10Z").expect("timestamp");
+        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+            io_error_kind: None,
+        }));
+        pump.tick_once().await;
+        assert_eq!(
+            notifications(&fake),
+            1,
+            "interval suppresses a flapping endpoint"
+        );
+
+        queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+        pump.tick_once().await;
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str("2030-01-01T00:00:30Z").expect("timestamp");
+        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+            io_error_kind: None,
+        }));
+        pump.tick_once().await;
+        assert_eq!(
+            notifications(&fake),
+            2,
+            "later cycle is eligible after interval"
+        );
     }
 
     #[tokio::test]

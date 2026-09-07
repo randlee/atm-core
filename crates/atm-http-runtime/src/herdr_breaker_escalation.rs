@@ -5,7 +5,7 @@
 //! durable-mail policy and its bounded notification side effect.
 
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::LocalServiceRuntime;
@@ -75,24 +75,14 @@ fn elapsed(now: IsoTimestamp, then: IsoTimestamp) -> Duration {
 /// Performs a single admitted breaker-cycle escalation. Durable mail and the
 /// desktop notification intentionally use distinct, privacy-safe payloads.
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn maybe_escalate_breaker_cycle(
-    gate: &Arc<Mutex<HerdrBreakerEscalationGate>>,
+pub(crate) async fn escalate_breaker_cycle(
     runtime: &LocalServiceRuntime,
     herdr_process: &dyn HerdrProcessAdapter,
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     daemon_home: &Path,
     team: &TeamName,
     opened_at: IsoTimestamp,
-    now: IsoTimestamp,
-) -> bool {
-    let admitted = gate
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .claim(opened_at, now);
-    if !admitted {
-        return false;
-    }
-
+) {
     let mail_body = format!(
         "Herdr breaker opened at {opened_at}. Queued ATM mail remains durable. Remediation: run atm doctor --json."
     );
@@ -121,7 +111,6 @@ pub(crate) async fn maybe_escalate_breaker_cycle(
         notify_ok = outcome.notify_ok,
         "Herdr breaker escalation completed"
     );
-    true
 }
 
 #[cfg(test)]
