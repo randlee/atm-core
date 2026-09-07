@@ -61,8 +61,8 @@ running, then the hermes-atm tests.
 - Canonical: this repo, `.claude/skills/atm-*/SKILL.md` (+ `atm-smoke/REPORT.md`).
 - Codex agents: `.codex/skills/<name>` symlinks to the same directories, and `AGENTS.md` names
   every skill, so a Codex agent runs the identical file.
-- Hermes agents: a copy at the Hermes home, `~/.hermes/skills/<name>/SKILL.md` on rand-m5, and
-  `/root/.hermes/skills/<name>/SKILL.md` baked into the atm-hermes-testbed image. Copies are
+- Hermes agents: a copy at the Hermes home, `~/.hermes/skills/<name>/SKILL.md` on any developer
+  host, and `/root/.hermes/skills/<name>/SKILL.md` baked into the atm-hermes-testbed image. Copies are
   byte-identical to the repo files; nobody edits a copy.
 
 ## Not a black box
@@ -88,13 +88,24 @@ The fixture (local host or colima container) is observable and addressable:
   from a product defect; the report's cause line makes the difference visible instead of
   "FAIL, stop everything" on the first hiccup.
 
+## No babysitting
+
+- A run is fully specified by the skill text plus two inputs: the partner agent and the fixture
+  name (`$ATM_TEST_FIXTURE`, else `hostname`). The agent makes no other decision.
+- The expected roster is whatever `atm teams` already holds unless the request lists members;
+  nothing in the environment is edited between runs, and no per-run configuration file exists.
+- The same sentences work on every host that runs an ATM daemon and a Hermes install, and inside
+  the testbed; a new host needs nothing but the repo checkout and the Hermes skill copies.
+- Whoever sends the sentences waits for the reports. There is no polling of agents, no reminders,
+  no decisions mid-run; a missing report after the 30-minute budget is itself the finding.
+
 ## Roles
 
 | role | agent | does |
 | --- | --- | --- |
 | orchestrator | fenix@atm-dev | sends the one-sentence run-book, collects reports, dispatches fixes to arch-ctm, merges |
-| ATM test agent | cipher@atm-dev (CLI only) | runs skills 1–4 as tester on rand-m5; the same role inside the testbed is the container's tester agent |
-| Hermes agent under test | skillrx@hermes on rand-m5; the container's Hermes agents in the testbed | runs `atm-smoke` natively, responds in `atm-nudge-roundtrip` |
+| ATM test agent | a CLI-only agent of the local ATM team (today: cipher) | runs skills 1–4 as tester on the host; the same role inside the testbed is the container's tester agent |
+| Hermes agent under test | a Hermes agent of the host's hermes team (today: skillrx); the container's Hermes agents in the testbed | runs `atm-smoke` natively, responds in `atm-nudge-roundtrip` |
 | testbed maintainer | loki@hermes | bakes the byte-identical skill files into the image; changes no test content |
 | QA | quality-mgr | reads the reports against the skill text; may reject a run for interference |
 | decisions | Rand | approves this plan, authorizes any build/rollout and any publish |
@@ -103,8 +114,9 @@ The fixture (local host or colima container) is observable and addressable:
 
 1. **Skills land** (this PR, #1304): five skills, report template, `.codex/skills` links,
    `AGENTS.md` section, this plan. Docs-only; no code.
-2. **Verify outside the fixture, current install (1.5.6).** Copies at `~/.hermes/skills`. cipher
-   runs 1 → 2 → 3 → 4 as tester against skillrx; skillrx runs 1 and 2 natively and responds in 4.
+2. **Verify outside the fixture, current install (1.5.6).** Copies at `~/.hermes/skills`. The ATM
+   test agent runs 1 → 2 → 3 → 4 as tester against the Hermes agent; the Hermes agent runs 1 and 2
+   natively and responds in 4.
    Eight reports to fenix. Expected: the known 1.5.6 defects (#1297 stale connection after >3 s
    idle, #1298 native read by id count=0) appear as FAIL lines with cause lines. That proves the
    skills catch them. This step is "does the run-book work", not "is 1.5.6 good".
@@ -133,5 +145,7 @@ The fixture (local host or colima container) is observable and addressable:
 - One sentence per skill is enough; no agent asked a follow-up question to run one.
 - Each skill completes in under 5 minutes; the whole run-book in under 30.
 - Every FAIL line carries cause / fix / retest.
-- The same five files, unchanged, run on rand-m5 and inside the testbed image.
+- The same five files, unchanged, run on every developer host that has an ATM daemon and a
+  Hermes install, and inside the testbed image. No host name appears in any skill or report
+  template; the fixture name comes from `$ATM_TEST_FIXTURE` or `hostname` at run time.
 - Nothing was added that is not used by a step in a skill.

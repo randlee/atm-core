@@ -1436,7 +1436,6 @@ provenance.
 ### Colima release integration simplification
 
 `COLIMA-SIMPLIFY-R1` is a complete documentation sprint on branch
-`Hermes/ATM integration tests as agent skills
 `plan/colima-simplify`, targeting `develop`. Its authoritative
 [sprint plan](./plans/phase-aq/sprint-COLIMA-SIMPLIFY-R1.md) replaces the
 multi-party Colima exercise with one unattended testbed command, one aggregate
@@ -1444,6 +1443,16 @@ JSON result, and a 30-minute command-to-verdict budget. It is independent of
 the current ATM build/rollout and parallel-safe with the separate canonical
 Hermes patch-model work. Future testbed implementation lands as small,
 independently mergeable PRs; no testbed or product code changes in this sprint.
+
+### Hermes/ATM integration tests as agent skills
+
+`HERMES-SKILL-TESTS-R1` is a documentation-and-skills sprint on branch
+`feat/atm-test-skills`, targeting `develop`. Its authoritative
+[sprint plan](./plans/phase-aq/sprint-HERMES-SKILL-TESTS-R1.md) makes every
+Hermes-involved integration test one agent skill under `.claude/skills/atm-*`
+(setup-environment, smoke, hermes-ready, nudge-roundtrip, troubleshoot) with one
+report shape, identical on every developer host and inside the Colima testbed.
+The testbed runs these skills; it defines no tests of its own.
 
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 
