@@ -681,6 +681,25 @@ pub mod testing {
         }
     }
 
+    /// Exercises a prompt through the test-only socket facade without adding
+    /// a direct prompt call site to an integration fixture.
+    pub async fn socket_prompt(
+        invoker: &HerdrProcessInvoker,
+        agent: &AgentName,
+        text: &str,
+        deadline: RequestDeadline,
+    ) -> Result<HerdrPromptOutcome, HerdrError> {
+        invoker
+            .call(
+                HerdrOp::Prompt { agent, text },
+                None,
+                deadline,
+                BreakerPolicy::Shared,
+            )
+            .await
+            .and_then(prompt_from_envelope)
+    }
+
     impl FakeHerdrProcessAdapter {
         #[must_use]
         pub fn calls(&self) -> Vec<FakeHerdrCall> {

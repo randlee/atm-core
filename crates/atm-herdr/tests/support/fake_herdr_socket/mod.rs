@@ -37,6 +37,23 @@ impl FakeHerdrSocket {
         Ok(request)
     }
 
+    /// Accept a request and tolerate the client's deliberate early close.
+    /// The transport rejects an oversized response as soon as its byte cap is
+    /// crossed, so the fixture may observe BrokenPipe while finishing it.
+    pub async fn serve_once_allow_client_abort(self, response: Vec<u8>) -> io::Result<Vec<u8>> {
+        let (stream, _) = self.listener.accept().await?;
+        let (read_half, mut write_half) = stream.into_split();
+        let mut reader = BufReader::new(read_half);
+        let mut request = Vec::new();
+        reader.read_until(b'\n', &mut request).await?;
+        match write_half.write_all(&response).await {
+            Ok(()) => {}
+            Err(error) if is_expected_client_abort(&error) => {}
+            Err(error) => return Err(error),
+        }
+        Ok(request)
+    }
+
     /// Accept one request and keep the connection open until the caller
     /// cancels the fixture. This is used to prove the client's read deadline
     /// and cancellation path without spawning a fixture-owned task.
@@ -49,6 +66,22 @@ impl FakeHerdrSocket {
         std::future::pending::<()>().await;
         Ok(())
     }
+
+    /// Accept a connection but do not read it. A sufficiently large request
+    /// therefore exercises the client's bounded write path.
+    pub async fn stall_before_read(self) -> io::Result<()> {
+        let (_stream, _) = self.listener.accept().await?;
+        std::future::pending::<()>().await;
+        Ok(())
+    }
+}
+
+#[cfg(unix)]
+fn is_expected_client_abort(error: &io::Error) -> bool {
+    matches!(
+        error.kind(),
+        io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset
+    )
 }
 
 #[cfg(unix)]
@@ -93,6 +126,30 @@ impl FakeHerdrSocket {
         Ok(request)
     }
 
+    pub async fn serve_once_allow_client_abort(mut self, response: Vec<u8>) -> io::Result<Vec<u8>> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        self.server.connect().await?;
+        let mut request = Vec::new();
+        loop {
+            let mut byte = [0_u8; 1];
+            let read = self.server.read(&mut byte).await?;
+            if read == 0 {
+                break;
+            }
+            request.push(byte[0]);
+            if byte[0] == b'\n' {
+                break;
+            }
+        }
+        match self.server.write_all(&response).await {
+            Ok(()) => {}
+            Err(error) if is_expected_client_abort(&error) => {}
+            Err(error) => return Err(error),
+        }
+        Ok(request)
+    }
+
     pub async fn serve_and_stall(mut self) -> io::Result<()> {
         self.server.connect().await?;
         let mut request = Vec::new();
@@ -110,4 +167,18 @@ impl FakeHerdrSocket {
         std::future::pending::<()>().await;
         Ok(())
     }
+
+    pub async fn stall_before_read(mut self) -> io::Result<()> {
+        self.server.connect().await?;
+        std::future::pending::<()>().await;
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+fn is_expected_client_abort(error: &io::Error) -> bool {
+    matches!(
+        error.kind(),
+        io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset | io::ErrorKind::UnexpectedEof
+    )
 }
