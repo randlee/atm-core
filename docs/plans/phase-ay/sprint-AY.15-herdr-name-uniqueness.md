@@ -52,6 +52,10 @@ dependency_relations:
 - "basically if all prompts are written for either member name or alias, it
   will work the same"
 - "alias@team.host works" (cross-host, matrix D-13: in scope)
+- "I would probably allow the daemon to do the replacement.  cli doesn't
+  need to query for alias before sending.  alias would be in immutable
+  roster, so replacement on ingress to the daemon is the logical single
+  point to translate"
 
 Requirements text: `docs/requirements.md` §3.3.2 `REQ-ROSTER-NAME-001..008`.
 Permutation matrix: `docs/plans/phase-ay/herdr-naming-test-matrix.md`.
@@ -129,10 +133,16 @@ since Rand's 2026-09-07 ruling).
   pre-existing duplicates for the caller's team.
 - D4c Alias parity (REQ-ROSTER-NAME-010, matrix D-15..D-17): inventory
   every clap argument, option and env var in `crates/atm/src` that names a
-  member (write the inventory into matrix row D-15), route each through the
-  one ingress canonicalisation point, and add a parity test that runs each
-  entry with the canonical name and with the alias (bare and `@team`) and
-  asserts identical outbound request and persisted rows.
+  member (write the inventory into matrix row D-15). The single
+  substitution point is daemon ingress (`atm-http-runtime` request
+  handlers and peer receive) against the in-memory roster; the CLI
+  forwards tokens unchanged and performs no alias query. Existing CLI-side
+  canonicalisation may stay only where it is not a roster query; any
+  CLI-side roster lookup for alias resolution is removed. Add a parity
+  test that drives each D-15 entry through the daemon request boundary
+  with the canonical name and with the alias (bare and `@team`) and
+  asserts identical daemon-side handling and persisted rows. D3's
+  database-wide alias resolution lives at that same ingress point.
 - D5 `docs/requirements.md` §3.3.2 wording corrections only if the
   implementation forces one; quote Rand, never author a rule.
 - D6 Close AY14-QA-003: quality-mgr owns closure; reference the record in

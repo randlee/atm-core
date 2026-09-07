@@ -70,7 +70,9 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 | C-04 | stored alias invalid for Herdr (legacy row) | skipped with log, no panic, other members unaffected | covered `local_message_received_backend_treats_invalid_herdr_alias_as_absent` (delivery_channel.rs:465) + AY14-QA-002 closure |
 | C-05 | doctor presence probe for aliased member | probes alias, reports both names | **GAP** — assert log/doctor line shows `member` and `herdr_agent` |
 
-## D. Ingress replacement and resolution (REQ-ROSTER-NAME-007)
+## D. Ingress replacement and resolution (REQ-ROSTER-NAME-007, -010)
+
+Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory roster; the CLI does not query for aliases before sending. Rows below that name a CLI test path are satisfied at the daemon request boundary those commands hit.
 
 | ID | Input | Expected | Status |
 |----|-------|----------|--------|
@@ -86,10 +88,10 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 | D-10 | `atm ack` as alias | canonical | **GAP** |
 | D-11 | `set-member <alias>` / `remove-member <alias>` | canonical before persistence | covered `update_and_remove_member_canonicalize_alias_arguments_before_persistence` (member_mutation.rs:1334) |
 | D-12 | self-send via own alias | rejected as self-send after replacement | **GAP** |
-| D-13 | `alias@team.host` (cross-host) | delivered to the canonical member on the remote host; persisted rows canonical on both hosts; sender forwards the alias when it holds no roster for the remote team, receiver ingress substitutes | **GAP** — Rand (2026-09-07): "alias@team.host works" |
+| D-13 | `alias@team.host` (cross-host) | delivered to the canonical member on the remote host; persisted rows canonical on both hosts; sending daemon forwards the alias unchanged, receiving daemon ingress substitutes | **GAP** — Rand (2026-09-07): "alias@team.host works" |
 | D-14 | alias used as `--chat-id`/qualified identity forms | canonical | **GAP** |
 | D-15 | inventory: every clap argument/option/env var in `crates/atm/src` that names a member, listed here by command and flag | each entry is exercised by D-16 | **GAP** — arch-ctm produces the inventory in this row's sub-table (REQ-ROSTER-NAME-010) |
-| D-16 | for every D-15 entry: run once with canonical name, once with alias (bare and `@team`) | identical outbound request/wire payload and identical persisted rows; observation attested to alias dropped | **GAP** (REQ-ROSTER-NAME-010; Rand: "if all prompts are written for either member name or alias, it will work the same") |
+| D-16 | for every D-15 entry: run once with canonical name, once with alias (bare and `@team`) | CLI forwards the token unchanged; daemon ingress substitutes; identical daemon-side handling and identical persisted rows; observation attested to alias dropped | **GAP** (REQ-ROSTER-NAME-010; Rand: "if all prompts are written for either member name or alias, it will work the same"; substitution at daemon ingress, not the CLI) |
 | D-17 | `--from <alias>` and `--to <alias>` filters on read/peek/inbox | same result set as canonical | **GAP** (D-09 covers `--from` on read only) |
 
 ## E. Persistence (REQ-ROSTER-NAME-007, "never in the database")

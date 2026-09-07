@@ -1033,7 +1033,7 @@ Definitions:
 - `REQ-ROSTER-NAME-007` Ingress replacement: an alias is accepted wherever a
   member name is accepted (send recipient, `--as`, `ATM_IDENTITY`, read and
   peek filters, ack, `set-member`/`remove-member` arguments) and is replaced
-  by the canonical name at the ingress edge, before validation, self-send
+  by the canonical name at daemon ingress (`REQ-ROSTER-NAME-010`), before validation, self-send
   checks, mailbox lookup, routing, audit and persistence. Resolution order:
   a canonical name in the addressed team wins; then the `.atm.toml`
   `[atm].aliases` table; then the roster alias. Because aliases are unique
@@ -1069,14 +1069,20 @@ Definitions:
   the same". Every `atm` argument, option, or environment variable that
   names a team member (positional recipients, `name@team` forms, `--as`,
   `--from`, `--to`, member arguments of `atm teams`, nudge and doctor
-  targets, chat-id and qualified-identity forms) accepts the alias, and the
-  canonical name is substituted before the request leaves the CLI (HTTP
-  runtime request, peer wire, roster write, mailbox row). A prompt or
-  script written with aliases and the same prompt written with canonical
-  names produce identical wire payloads and identical persisted rows.
-  Cross-host: Rand (2026-09-07): "alias@team.host works". A sender that
-  holds no roster for the remote team forwards the alias; the receiving
-  host's ingress substitutes the canonical name, so persisted rows are
+  targets, chat-id and qualified-identity forms) accepts the alias. The
+  substitution point is daemon ingress, not the CLI. Rand (2026-09-07): "I
+  would probably allow the daemon to do the replacement. cli doesn't need
+  to query for alias before sending. alias would be in immutable roster,
+  so replacement on ingress to the daemon is the logical single point to
+  translate." The CLI passes the token through unchanged; the daemon's
+  request ingress (HTTP runtime, peer receive) replaces every member-name
+  field against the in-memory roster before validation, self-send checks,
+  mailbox lookup, routing, audit and persistence. A prompt or script
+  written with aliases and the same prompt written with canonical names
+  produce identical daemon-side handling and identical persisted rows.
+  Cross-host: Rand (2026-09-07): "alias@team.host works". The sending
+  daemon forwards the alias unchanged for a remote team; the receiving
+  daemon's ingress substitutes the canonical name, so persisted rows are
   canonical on both hosts.
 
 The full permutation matrix and its test mapping live in
