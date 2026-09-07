@@ -299,6 +299,7 @@ impl TeamsCommand {
             home_dir,
             current_dir,
             team_override: Some(team.clone()),
+            all_teams: false,
             caller_team: atm_core::caller_context::read_cli_team_from_env_or_warn(
                 "atm::teams::members::runtime",
             ),

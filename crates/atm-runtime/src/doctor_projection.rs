@@ -12,7 +12,7 @@ use atm_core::api::RequestDeadline;
 use atm_core::doctor::{
     DoctorExecutionContext, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity,
     HerdrEndpointDoctor, ReaderPoolDoctorReport, RuntimeDoctorPorts, append_doctor_findings,
-    presence_findings, run_doctor_with_runtime_ports,
+    presence_findings_for_team, run_doctor_with_runtime_ports,
 };
 use atm_core::herdr_configured::herdr_is_configured;
 use atm_core::observability::ObservabilityPort;
@@ -153,14 +153,23 @@ impl DoctorProjection for StorageDoctorProjection {
             .await
             .map_err(|_| AtmError::daemon_unavailable("doctor request deadline expired"))?
             .map_err(|_| AtmError::daemon_unavailable("doctor control lane stopped"))??;
-        if let Some(roster) = report.member_roster.clone() {
-            self.append_herdr_report(&mut report, &roster, deadline)
-                .await?;
-        } else {
+        let rosters = report
+            .member_roster
+            .clone()
+            .into_iter()
+            .chain(report.team_rosters.clone())
+            .collect::<Vec<_>>();
+        let team_context = !report.team_rosters.is_empty();
+        if rosters.is_empty() {
             // Without a resolved team there is no Herdr-backed member to
             // inspect. This is a known, unconfigured state rather than a
             // guessed endpoint result.
             report.herdr.configured = Some(false);
+        } else {
+            for roster in rosters {
+                self.append_herdr_report(&mut report, &roster, team_context, deadline)
+                    .await?;
+            }
         }
         append_context_findings(&mut report, context);
         report.reader_lanes = self.reader_lanes;
@@ -173,17 +182,26 @@ impl StorageDoctorProjection {
         &self,
         report: &mut DoctorReport,
         roster: &atm_core::team_admin::MembersList,
+        team_context: bool,
         deadline: RequestDeadline,
     ) -> Result<(), AtmError> {
         let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::daemon_unavailable("doctor request deadline expired before Herdr projection")
         })?;
-        report.herdr.configured = Some(herdr_is_configured(roster));
+        let configured = herdr_is_configured(roster);
+        report.herdr.configured = Some(report.herdr.configured.unwrap_or(false) || configured);
         match tokio::time::timeout(remaining, self.endpoint_doctor.observe(roster, deadline)).await
         {
             Ok(observations) => {
-                let findings = presence_findings(&observations);
-                report.herdr.endpoints = observations.into_iter().map(Into::into).collect();
+                let findings = if team_context {
+                    presence_findings_for_team(&observations, &roster.team)
+                } else {
+                    atm_core::doctor::presence_findings(&observations)
+                };
+                report
+                    .herdr
+                    .endpoints
+                    .extend(observations.into_iter().map(Into::into));
                 append_doctor_findings(report, findings);
             }
             Err(_) => {

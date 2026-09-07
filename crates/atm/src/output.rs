@@ -620,9 +620,15 @@ fn print_doctor_escalation_recipients(report: &DoctorReport) {
 }
 
 fn print_doctor_roster(report: &DoctorReport) {
-    let Some(roster) = &report.member_roster else {
-        return;
-    };
+    if let Some(roster) = &report.member_roster {
+        print_doctor_roster_block(roster);
+    }
+    for roster in &report.team_rosters {
+        print_doctor_roster_block(roster);
+    }
+}
+
+fn print_doctor_roster_block(roster: &atm_core::team_admin::MembersList) {
     println!();
     println!("Members: {}", roster.team);
     for member in &roster.members {

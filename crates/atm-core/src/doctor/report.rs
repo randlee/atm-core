@@ -400,8 +400,14 @@ pub struct DoctorReport {
     pub daemon_context: Option<DoctorExecutionContext>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reader_lanes: Option<ReaderPoolDoctorReport>,
+    /// Effective doctor scope: `single` or `all_teams`.
+    #[serde(default)]
+    pub team_scope: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_roster: Option<MembersList>,
+    /// One roster block for every team when the effective scope is all teams.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub team_rosters: Vec<MembersList>,
     #[serde(default)]
     pub graft_receivers: GraftReceiversDoctorReport,
     pub observability: AtmObservabilityHealth,

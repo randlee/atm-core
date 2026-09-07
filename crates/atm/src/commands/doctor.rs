@@ -18,6 +18,13 @@ pub struct DoctorCommand {
     #[arg(long, help = "Override the resolved team for the doctor check.")]
     team: Option<String>,
 
+    #[arg(
+        long,
+        conflicts_with = "team",
+        help = "Inspect every team in the canonical roster."
+    )]
+    all_teams: bool,
+
     #[arg(long, help = "Emit the doctor report as JSON.")]
     json: bool,
 }
@@ -65,6 +72,7 @@ impl DoctorCommand {
             home_dir,
             current_dir,
             team_override,
+            all_teams: self.all_teams,
             caller_team,
             caller_identity,
         })
@@ -122,11 +130,26 @@ impl DoctorCommand {
 mod tests {
     use atm_core::error::AtmError;
     use atm_core::test_support::EnvGuard;
+    use clap::{Parser, error::ErrorKind};
     use serial_test::serial;
     use tempfile::TempDir;
 
     use super::DoctorCommand;
     use crate::observability::CliObservability;
+
+    #[derive(Debug, Parser)]
+    struct DoctorCli {
+        #[command(flatten)]
+        doctor: DoctorCommand,
+    }
+
+    #[test]
+    fn all_teams_conflicts_with_team_override() {
+        let error = DoctorCli::try_parse_from(["doctor", "--team", "team-a", "--all-teams"])
+            .expect_err("team and all-teams must conflict");
+
+        assert_eq!(error.kind(), ErrorKind::ArgumentConflict);
+    }
 
     fn test_paths() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
         let tempdir = TempDir::new().expect("tempdir");
@@ -139,6 +162,7 @@ mod tests {
     fn build_query_preserves_team_override() {
         let command = DoctorCommand {
             team: Some("test-team".to_string()),
+            all_teams: false,
             json: true,
         };
 
@@ -155,6 +179,7 @@ mod tests {
     fn build_query_adds_recovery_for_invalid_team_override() {
         let command = DoctorCommand {
             team: Some("bad team".to_string()),
+            all_teams: false,
             json: false,
         };
 
@@ -173,6 +198,7 @@ mod tests {
         let observability = CliObservability::fallback();
         let command = DoctorCommand {
             team: None,
+            all_teams: false,
             json: false,
         };
         let (_tempdir, home_dir, current_dir) = test_paths();
