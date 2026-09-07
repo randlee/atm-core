@@ -15,9 +15,12 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/protocol.rs, docs/adr/ADR-061*.md, crates/atm-core/src/doctor/mod.rs, crates/atm-core/src/doctor/report.rs, crates/atm-core/src/team_admin.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T20:35:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
   triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-07T20:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY-QA-001/1> ;
@@ -28,10 +31,11 @@
   triage:file "crates/atm-core/src/protocol.rs" ;
   triage:line 96 ;
   triage:snippet "HTTP_API_VERSION = \"1.1.0\" unchanged despite additive wire-field changes across AY.3/AY.13/AY.14" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "d1bf1d7d7" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
   triage:occursIn <urn:atm:triage:worktree/AY-QA-001/d1bf1d7d7> .
 
 <urn:atm:triage:worktree/AY-QA-001/d1bf1d7d7>

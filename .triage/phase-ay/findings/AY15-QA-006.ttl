@@ -15,9 +15,12 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "docs/atm-http-runtime/openapi.yaml, crates/atm/openapi.yaml, every field added to a wire struct in AY.15" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T22:05:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
   triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-07T21:55:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-006/1> ;
@@ -29,10 +32,11 @@
   triage:file "docs/atm-http-runtime/openapi.yaml" ;
   triage:line 1 ;
   triage:snippet "no herdr_agent property on the doctor herdr member presence schema" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay15-herdr-name-uniqueness" ;
   triage:headSha "10bc123f8" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
   triage:occursIn <urn:atm:triage:worktree/AY15-QA-006/10bc123f8> .
 
 <urn:atm:triage:occurrence/AY15-QA-006/2>
@@ -40,10 +44,11 @@
   triage:file "crates/atm/openapi.yaml" ;
   triage:line 1 ;
   triage:snippet "no herdr_agent property on the doctor herdr member presence schema" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay15-herdr-name-uniqueness" ;
   triage:headSha "10bc123f8" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
   triage:occursIn <urn:atm:triage:worktree/AY15-QA-006/10bc123f8> .
 
 <urn:atm:triage:worktree/AY15-QA-006/10bc123f8>

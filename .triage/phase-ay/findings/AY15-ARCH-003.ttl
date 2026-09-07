@@ -15,9 +15,12 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/service_runtime.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T22:37:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
   triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-07T22:31:51Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY15-ARCH-003/AY15-ARCH-003/1> ;
@@ -28,10 +31,11 @@
   triage:file "crates/atm-core/src/service_runtime.rs" ;
   triage:line 1 ;
   triage:snippet "#![allow(" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay15-herdr-name-uniqueness" ;
   triage:headSha "715ab21ea" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
   triage:occursIn <urn:atm:triage:worktree/ay15-r8> .
 
 <urn:atm:triage:worktree/ay15-r8>

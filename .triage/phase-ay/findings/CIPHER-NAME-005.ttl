@@ -15,9 +15,12 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-core/src/caller_context.rs; crates/atm-core/src/send/write_context.rs; mailbox and read ingress callers" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
   triage:foundIn triage:AY14 ;
   triage:foundAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CIPHER-NAME-005/1> ;
@@ -29,10 +32,11 @@
   triage:file "crates/atm-core/src/caller_context.rs" ;
   triage:line 59 ;
   triage:snippet "resolve_roster_alias searches only members whose team_name equals the supplied team" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
   triage:occursIn <urn:atm:triage:worktree/CIPHER-NAME-005-10b> .
 
 <urn:atm:triage:occurrence/CIPHER-NAME-005/2>
@@ -40,10 +44,11 @@
   triage:file "crates/atm-core/src/send/write_context.rs" ;
   triage:line 116 ;
   triage:snippet "resolve_recipient uses the implicit caller team before team-scoped alias resolution, so a bare cross-team alias cannot select its owner team" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
   triage:occursIn <urn:atm:triage:worktree/CIPHER-NAME-005-10b> .
 
 <urn:atm:triage:worktree/CIPHER-NAME-005-10b>

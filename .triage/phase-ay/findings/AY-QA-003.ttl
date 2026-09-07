@@ -15,9 +15,12 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "docs/plans/phase-ay/herdr-naming-test-matrix.md (rows A-01, A-05, A-08), crates/atm-core/src/team_admin/member_mutation.rs (ensure_member_absent:441, alias_must_not_collide_with_member_name_or_team_alias:1181)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T21:05:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
   triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-07T21:00:00Z"^^xsd:dateTime ;
   triage:note "Owed by AY.15 (feature/ay15-herdr-name-uniqueness): AY.15's AC1 requires every A-section row to have a genuinely passing named test; correct these three citations or add the missing tests as part of D4." ;
@@ -29,10 +32,11 @@
   triage:file "docs/plans/phase-ay/herdr-naming-test-matrix.md" ;
   triage:line 20 ;
   triage:snippet "A-01 cites ensure_member_absent (a production function, not a test); A-05/A-08 cite a same-team-only test for a claimed cross-team scenario" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "42918d82b" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
   triage:occursIn <urn:atm:triage:worktree/AY-QA-003/42918d82b> .
 
 <urn:atm:triage:worktree/AY-QA-003/42918d82b>

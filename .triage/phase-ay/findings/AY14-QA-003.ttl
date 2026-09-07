@@ -15,9 +15,12 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-core/src/team_admin/member_mutation.rs (ensure_canonical_member_name_available, ensure_alias_available, load_member_add_context, update_member_with_roster_store)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T20:05:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
   triage:foundIn triage:AY14 ;
   triage:foundAt "2026-09-07T19:40:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY14-QA-003/1> ;
@@ -28,10 +31,11 @@
   triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
   triage:line 486 ;
   triage:snippet "ensure_canonical_member_name_available only checks agent_name across other teams, skips own team, never checks metadata_json['alias']" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "f6c9d47b8" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
   triage:occursIn <urn:atm:triage:worktree/AY14-QA-003/f6c9d47b8> .
 
 <urn:atm:triage:worktree/AY14-QA-003/f6c9d47b8>

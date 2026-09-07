@@ -15,9 +15,12 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/config/aliases.rs, crates/atm-core/src/config/mod.rs:65, crates/atm-core/src/send/recipient.rs:34-50, crates/atm-core/src/send/write_context.rs:115-122, crates/atm-core/src/identity/mod.rs, crates/atm-core/src/mailbox/source.rs:252-289" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T21:05:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
   triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-07T21:00:00Z"^^xsd:dateTime ;
   triage:note "Owed by AY.15 (feature/ay15-herdr-name-uniqueness), widening D-06: verify all three call sites (send/recipient.rs, identity/mod.rs, mailbox/source.rs) are addressed, not only the send path." ;
@@ -29,10 +32,11 @@
   triage:file "crates/atm-core/src/send/write_context.rs" ;
   triage:line 116 ;
   triage:snippet "prepare_send_context loads .atm.toml and calls resolve_recipient (legacy config::aliases::resolve_agent_name) before resolve_roster_alias" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "42918d82b" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
   triage:occursIn <urn:atm:triage:worktree/AY-QA-005/42918d82b> .
 
 <urn:atm:triage:worktree/AY-QA-005/42918d82b>
