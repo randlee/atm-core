@@ -218,7 +218,7 @@ fn server_unavailable(error: std::io::Error) -> HerdrError {
 }
 
 #[cfg(windows)]
-trait ChildHandle {
+trait ChildHandle: Send {
     fn pid(&self) -> Option<u32>;
     fn kill<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>>;
     fn wait_for_exit<'a>(
