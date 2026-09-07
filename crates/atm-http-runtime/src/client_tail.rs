@@ -107,10 +107,8 @@ impl UnixSocketConnector {
 fn build_unix_socket_reqwest_client(
     socket_path: &Path,
 ) -> Result<reqwest::Client, HttpRuntimeClientFailure> {
-    reqwest::Client::builder()
+    super::local_reqwest_client_builder()
         .unix_socket(socket_path)
-        .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(LOOPBACK_CONNECT_TIMEOUT)
         .build()
         .map_err(|source| {
             HttpRuntimeClientFailure::Connect(format!("failed to build Unix HTTP client: {source}"))

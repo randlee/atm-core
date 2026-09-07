@@ -145,9 +145,15 @@ impl ReadCommand {
             filters,
         )
         .map(|query| {
-            query
-                .with_caller_chat_id(caller_context.caller_chat_id)
-                .with_activity_observation(caller_context.activity_observation)
+            // A message ID already identifies a mailbox row within the
+            // caller's agent/team scope. A session-chat filter would hide a
+            // bare-agent message that `atm list` can return by that ID.
+            let query = if self.message_id.is_some() {
+                query
+            } else {
+                query.with_caller_chat_id(caller_context.caller_chat_id)
+            };
+            query.with_activity_observation(caller_context.activity_observation)
         })
         .map_err(Into::into)
     }
@@ -247,6 +253,23 @@ mod tests {
         assert!(query.seen_state_update());
         assert_eq!(query.timeout_secs(), Some(9));
         assert!(query.message_id_filter().is_some());
+    }
+
+    #[test]
+    #[serial(env)]
+    fn exact_message_id_does_not_apply_session_chat_scope() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let mut command = base_command();
+        command.chat_id = Some("session-a".to_string());
+        command.message_id = Some("01KRFK5QTF2R6NRS3Q0F8Z9K0S".to_string());
+
+        let query = command.build_query(".".into(), ".".into()).expect("query");
+
+        assert!(query.message_id_filter().is_some());
+        assert_eq!(query.caller_chat_id(), None);
     }
 
     #[test]
