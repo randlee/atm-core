@@ -42,6 +42,35 @@ working?" and, on the one-server-per-team workaround: "will not work".
   pane. The second is refused a name by Herdr, so its nudges log
   `held_target_not_present` forever and doctor presence shows NotVisible.
 
+## Amendment (Rand, 2026-09-07, verbatim)
+
+- "support for alias would mean it was saved to roster" ... "and was in
+  sqlite."
+- "this is a send and identity resolution issue."
+
+So the Herdr-side name is a roster alias, not a Herdr-only key. The
+metadata key is `alias` (not `herdrAgent`), persisted in the members table
+`metadata_json` like `herdrSession`, and it is honoured in three places:
+
+1. Herdr target resolution (D3/D4 below, unchanged in substance).
+2. Send recipient resolution: `atm send <alias>` and `<alias>@<team>`
+   resolve to the canonical member of that team before validation,
+   self-send checks and mailbox lookup (same rules as the existing
+   `.atm.toml` aliases in docs/requirements.md "Alias rules"; the
+   `.atm.toml` table stays and is consulted first, roster alias second).
+3. Sender identity resolution: `ATM_IDENTITY=<alias>` or `--as <alias>`
+   resolves to the canonical member; canonical identity remains the
+   routing, validation and audit identity; persisted `from` is canonical.
+
+Alias validation: ATM name rules (`validate_path_segment`) and, when the
+member backend is Herdr, also Herdr's `[a-z][a-z0-9_-]{0,31}`. An alias
+must be unique within the team and must not equal another member's
+canonical name in that team. CLI flag is `--alias <name>` (D2), not
+`--herdr-agent`. Convention for Herdr collisions: `<identity>_<team>`,
+e.g. `team-lead_atm-dev`. Add D7: recipient and identity resolution tests
+for alias, alias@team, and unknown alias (falls through to canonical parse
+error unchanged).
+
 ## Required behaviour
 
 - A roster member may carry `metadata_json["herdrAgent"]`, the Herdr-side
