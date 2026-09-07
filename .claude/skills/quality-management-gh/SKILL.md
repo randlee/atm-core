@@ -34,6 +34,9 @@ Build the `--vars` JSON for this run from the selected template's frontmatter
 run: `task_id` from the QA assignment, `commit` from `git rev-parse`, and
 counts from the reviewer outputs. Keep numeric fields as JSON numbers and
 `blocking_ids_json` as a JSON string because the templates embed it as JSON.
+Write the vars file outside the repository working tree (in the session
+scratchpad or a temp directory); never commit or stage it, and delete it or
+let it expire after the send.
 A vars file must never be copied from a previous report or a sample; a report
 whose `sprint_id`, `task_id`, or `commit` do not match the assignment is a
 false report.
@@ -119,11 +122,11 @@ Recommended flow:
 
 Suggested commands:
 - blocking review:
-  `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <vars.json> | gh pr review <PR> --request-changes --body-file -`
+  `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr review <PR> --request-changes --body-file -`
 - in-flight update:
-  `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <vars.json> | gh pr comment <PR> --body-file -`
+  `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr comment <PR> --body-file -`
 - ATM verdict:
-  `atm send team-lead --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <vars.json>`
+  `atm send team-lead --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
 
 ## Final Quality Report to PR (Closeout)
 
@@ -137,9 +140,9 @@ Recommended flow:
 
 Suggested command:
 - PR closeout:
-  `atm compose --template ~/.atm/templates/quality-management-gh/quality-report.md.j2 --vars <vars.json> | gh pr review <PR> --approve --body-file -`
+  `atm compose --template ~/.atm/templates/quality-management-gh/quality-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr review <PR> --approve --body-file -`
 - ATM verdict:
-  `atm send team-lead --template ~/.atm/templates/quality-management-gh/quality-report.md.j2 --vars <vars.json>`
+  `atm send team-lead --template ~/.atm/templates/quality-management-gh/quality-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
 
 Use the final template only for `PASS` closeout.
 

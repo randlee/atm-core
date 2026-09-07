@@ -160,11 +160,14 @@ TODO-specific rule:
     `mkdir -p ~/.atm/templates/quality-management-gh && cp .claude/skills/quality-management-gh/*.j2 ~/.atm/templates/quality-management-gh/`.
     Build the report vars for this QA run from the selected template's
     `required_variables` frontmatter; every value must come from this run.
+    Write the vars file outside the repository working tree (in the session
+    scratchpad or a temp directory); never commit or stage it, and delete it
+    or let it expire after the send.
     Render the PR comment with
-    `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <vars.json> | gh pr comment <PR> --body-file -`
+    `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr comment <PR> --body-file -`
     for `FAIL`/`IN-FLIGHT`, or replace `findings-report.md.j2` with
     `quality-report.md.j2` for `PASS`. Send the verdict to team-lead with
-    `atm send team-lead --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <vars.json>`
+    `atm send team-lead --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
     for `FAIL`/`IN-FLIGHT`, or the `quality-report.md.j2` path for `PASS`.
     A PR comment remains required; ATM template admission does not replace it.
 11. Report a final PASS, FAIL, or IN-FLIGHT gate to team-lead, including
@@ -247,14 +250,16 @@ All ATM messages must follow the required sequence:
 For PR updates:
 - install the templates with
   `mkdir -p ~/.atm/templates/quality-management-gh && cp .claude/skills/quality-management-gh/*.j2 ~/.atm/templates/quality-management-gh/`
-- use `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <vars.json> | gh pr comment <PR> --body-file -`
-  and `atm send team-lead --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <vars.json>`
+- use `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr comment <PR> --body-file -`
+  and `atm send team-lead --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
   for `FAIL` and `IN-FLIGHT`
 - replace `findings-report.md.j2` with `quality-report.md.j2` in both
   commands for final `PASS`
-- build `<vars.json>` from the selected template's `required_variables`
-  frontmatter using values from this QA run; never reuse a previous or sample
-  report's vars
+- build `<scratch>/qa-<pr>-vars.json` from the selected template's
+  `required_variables` frontmatter using values from this QA run; never reuse
+  a previous or sample report's vars. Write it outside the repository working
+  tree (in the session scratchpad or a temp directory), never commit or stage
+  it, and delete it or let it expire after the send
 - include the fenced JSON machine-status block rendered by those templates
 - always post the rendered report to the PR; template admission never replaces
   that REST/GitHub comment
