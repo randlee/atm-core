@@ -220,6 +220,10 @@ used as input to any write, resolution or send path; comparison and
 validation only. Text and `--json` output both carry it (field name
 `alias_mismatches`, entries `{team, member, config_alias, roster_alias}`).
 Missing or unparsable `.atm.toml` is not a doctor failure for this check.
+Rand, 2026-09-07, verbatim: "I think adding doctor mismatch reporting is
+useful (at team scope)". The check follows AY.13 scoping: by default only
+panes whose `ATM_TEAM` is the caller's workspace team are compared; the
+AY.13 `--all-teams`/`--verbose` option widens it to every declared pane.
 
 ## Acceptance criteria
 
