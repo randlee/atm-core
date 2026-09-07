@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY8-QA-002>
+  a triage:Finding ;
+  triage:findingId "AY8-QA-002" ;
+  triage:title "D7 fake socket server (crates/atm-herdr/tests/support/fake_herdr_socket/mod.rs) is unwired dead code; required scenario matrix absent" ;
+  triage:description "FakeHerdrSocket implements only bind/serve_once; grep confirms it is never referenced by any test. Required scenarios are entirely absent: absent endpoint, late start, no-newline response, oversized response, stalled connect/write/read, rejected second request on one connection, Windows pipe-busy with paused Tokio time, 17-caller saturation proving resource release, and cancellation at permit-wait/connect/write/read. AY.2 version-recording replay through the fixture is absent. D7 acceptance criterion unfulfilled." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY8 ;
+  triage:foundAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-002/ay8-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY8-QA-002/ay8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/support/fake_herdr_socket/mod.rs" ;
+  triage:line 23 ;
+  triage:snippet "pub fn bind(path: impl AsRef<Path>) -> io::Result<Self> { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "696bc1061" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-696bc1061> .
+
+<urn:atm:triage:worktree/ay8-696bc1061>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/ay8-herdr-socket-transport" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "696bc1061" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY8-QA-004>
+  a triage:Finding ;
+  triage:findingId "AY8-QA-004" ;
+  triage:title "D9 public-item pin never amended; herdr_api_endpoint, HerdrHostEnv, HerdrEndpoint lack test coverage and diverge from sprint contract" ;
+  triage:description "No test in crates/atm-architecture/tests/*.rs references herdr_api_endpoint, HerdrHostEnv, or HerdrEndpoint. The required AY.2 public-item pin amendment is absent, not partial. Separately, sprint doc C1 contract specifies these three items as pub; implementation keeps them pub(crate). Net effect is no new public API surface but diverges from written contract. Needs scrum-master/plan reconciliation; no pin test exists to encode the correct choice. D9 specification violation." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-pin" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY8 ;
+  triage:foundAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-004/ay8-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-004/ay8-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-004/ay8-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY8-QA-004/ay8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_socket.rs" ;
+  triage:line 53 ;
+  triage:snippet "pub(crate) enum HerdrEndpoint {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "696bc1061" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-696bc1061> .
+
+<urn:atm:triage:occurrence/AY8-QA-004/ay8-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_socket.rs" ;
+  triage:line 124 ;
+  triage:snippet "pub(crate) fn herdr_api_endpoint(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "696bc1061" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-696bc1061> .
+
+<urn:atm:triage:occurrence/AY8-QA-004/ay8-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_socket.rs" ;
+  triage:line 11 ;
+  triage:snippet "crates/atm-architecture/tests (missing)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "696bc1061" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-696bc1061> .
+
+<urn:atm:triage:worktree/ay8-696bc1061>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/ay8-herdr-socket-transport" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "696bc1061" ;
+  triage:orderIndex 1 .
