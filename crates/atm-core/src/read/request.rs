@@ -263,9 +263,6 @@ impl PeekQuery {
     /// A present chat ID scopes a read-only mailbox query to that session.
     /// `None` removes chat scoping, leaving mailbox ownership as the only
     /// recipient scope.
-    /// A present chat ID scopes a read-only mailbox query to that session.
-    /// `None` removes chat scoping, leaving mailbox ownership as the only
-    /// recipient scope.
     #[must_use]
     pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
         self.mailbox.participant_filter =
@@ -391,6 +388,9 @@ impl ReadQuery {
     pub fn caller_chat_id(&self) -> Option<&ChatId> {
         self.caller_chat_id.as_ref()
     }
+    /// A present chat ID scopes a read-only mailbox query to that session.
+    /// For an exact ID in the caller's own mailbox, `None` clears the
+    /// participant filter so ownership is the only recipient scope.
     #[must_use]
     pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
         self.mailbox.participant_filter =

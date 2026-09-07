@@ -552,18 +552,16 @@ class CliParityTests(unittest.TestCase):
         self.assertEqual(peek["count"], 1)
         self.assertFalse(peek["mutation_applied"])
 
-    def test_cli_peek_by_listed_id_reaches_bare_agent_message_from_chat(self) -> None:
+    def test_cli_peek_by_id_reaches_other_session_message_from_chat(self) -> None:
         sent = self._native(
             self.second_native_tools,
             "atm_send",
             {
-                "to": f"{self.identity}@{self.team}",
+                "to": f"{self.identity}:other-session@{self.team}",
                 "body": "cli-exact-peek-regression",
             },
         )
         message_id = sent["message_id"]
-        listed = self._native(self.native_tools, "atm_list", {"selection": "all"})
-        self.assertIn(message_id, {row["message_id"] for row in listed["rows"]})
 
         peek = self._cli("peek", "--message-id", message_id, identity=self.identity)
         self.assertEqual(peek["count"], 1)
