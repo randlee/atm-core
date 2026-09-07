@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY15-QA-010>
+  a triage:Finding ;
+  triage:findingId "AY15-QA-010" ;
+  triage:title "Doc drift: http-api.md and openapi.yaml say herdr_agent is null for legacy payloads but the struct omits the field" ;
+  triage:description "quality-mgr qa-pr1310-r9 (PR #1310, AY.15 herdr-name-uniqueness, head 3259d6a72; report: PR #1310 issuecomment 5576663523). Minor doc-drift nit. docs/atm-daemon/http-api.md:120 and docs/atm-http-runtime/openapi.yaml:197 describe herdr_agent as nullable / null for legacy v1.1 payloads, but crates/atm-core/src/doctor/herdr_state.rs:219 declares the field with serde skip_serializing_if = Option::is_none, so a legacy payload omits the key rather than emitting null. Wire-compatible (readers use serde default), HTTP_API_VERSION stays 1.2.0. Correction: reword both docs to say the field is omitted when absent (or make the docs and struct agree the other way). Non-blocking; rides the next PR touching these docs. Merged into integrate/phase-ay at 47f359cf9." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/atm-daemon/http-api.md, docs/atm-http-runtime/openapi.yaml, crates/atm/openapi.yaml herdr_agent wording" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T23:41:09Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-07T23:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-010/AY15-QA-010/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-010/AY15-QA-010/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY15-QA-010/AY15-QA-010/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/http-api.md" ;
+  triage:line 120 ;
+  triage:snippet "name and the effective herdr_agent name; herdr_agent is nullable for" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "3259d6a72" ;
+  triage:occursIn <urn:atm:triage:worktree/ay15-r9> .
+
+<urn:atm:triage:occurrence/AY15-QA-010/AY15-QA-010/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-http-runtime/openapi.yaml" ;
+  triage:line 197 ;
+  triage:snippet "herdr_agent: { type: string, nullable: true, description: Effective Herdr agent name; null for legacy v1.1 payloads. }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "3259d6a72" ;
+  triage:occursIn <urn:atm:triage:worktree/ay15-r9> .
+
+<urn:atm:triage:worktree/ay15-r9>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1310-r9" ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "3259d6a72" ;
+  triage:orderIndex 0 .
