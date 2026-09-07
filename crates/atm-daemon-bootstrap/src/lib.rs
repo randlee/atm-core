@@ -1540,7 +1540,10 @@ mod replacement_runtime_tests {
         ));
 
         let outage_fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
-        outage_fake.queue_get_result(Err(atm_herdr::HerdrError::ServerUnavailable));
+        outage_fake.queue_get_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+        }));
         let outage_findings = HerdrPresenceDoctorAdapter {
             process: outage_fake,
         }
@@ -1569,14 +1572,20 @@ mod replacement_runtime_tests {
             atm_herdr::HerdrError::Timeout,
             atm_herdr::HerdrError::InvalidAgentName,
             atm_herdr::HerdrError::EmptyAgentPrompt,
-            atm_herdr::HerdrError::ServerUnavailable,
-            atm_herdr::HerdrError::InternalError,
+            atm_herdr::HerdrError::ServerUnavailable {
+                message: String::new(),
+                retry_after: None,
+            },
+            atm_herdr::HerdrError::InternalError {
+                message: String::new(),
+            },
             atm_herdr::HerdrError::TimedOut,
             atm_herdr::HerdrError::Unavailable {
                 retry_after: Duration::from_secs(1),
             },
             atm_herdr::HerdrError::Advisory {
                 code: "future_code".to_owned(),
+                message: String::new(),
             },
         ];
         for error in errors {
