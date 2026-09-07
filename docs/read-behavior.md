@@ -130,7 +130,9 @@ Retained tests and requirements establish these rules:
 Mutation belongs to `atm read`, not to `atm list` or `atm peek`.
 
 Required `atm read` behavior:
-- the selected displayed message is always written back with `read = true`
+- the selected displayed message's legal read/seen transition is offered to
+  the supervised non-blocking handoff; `mutation_applied = true` reports
+  acceptance, not durable `read = true` visibility
 - selected unread messages that do not already require acknowledgement remain
   `NoAckRequired` after display
 - selected unread messages that already require acknowledgement remain

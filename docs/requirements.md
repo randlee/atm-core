@@ -1706,7 +1706,9 @@ Peek mutation rule:
 - `atm peek` never mutates mailbox state
 
 Read mutation rules:
-- any selected `atm read` message is written back with `read = true`
+- any selected `atm read` message's legal read/seen transition is offered to
+  the supervised non-blocking handoff; `mutation_applied = true` reports
+  acceptance, not durable `read = true` visibility
 - `atm read` must never create a new pending-ack obligation on display
 - displaying a message never promotes acknowledgement state
 - only sender-owned durable `requires_ack` intent may create `pending_ack_at`

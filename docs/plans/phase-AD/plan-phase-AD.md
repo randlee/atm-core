@@ -45,8 +45,9 @@ model in several release-blocking ways:
 - raw `atm` commands can still diverge by worktree/invocation directory,
   producing unreadable compatibility-only sends unless a wrapper forces the
   command to run from the primary repo root
-- `atm read --unread` can persist the read mutation but still report the wrong
-  message payload and stale unread counts in the returned result
+- historical read paths could report a different message payload from the
+  selected one; the accepted line instead returns the selected reader-lane
+  snapshot and reports state-handoff acceptance separately from durability
 - `atm read --contains` can still miss messages whose full durable body text
   contains the needle when the metadata path only reconstructs summary-level
   text
@@ -233,9 +234,9 @@ The governing rules are:
 - invocation directory and discovered workspace root are not daemon/socket/db
   selectors; they are only inputs to config ingress, repo/file checks, and
   hook-relative path resolution
-- `atm read` output after a durable read-state mutation must remain
-  self-consistent: the returned payload and returned counts must describe the
-  post-mutation state of the same selected durable message
+- `atm read` output must remain self-consistent: the returned payload and
+  returned counts describe the same selected reader-lane snapshot, while
+  `mutation_applied` reports handoff acceptance rather than durable completion
 - if caller identity or caller team is unresolved for a command that requires
   caller context, the CLI must fail the command and must not contact the daemon
 - every downstream request DTO for caller-owned daemon-backed commands must
@@ -631,8 +632,9 @@ Phase `AD` closes only when:
 - raw retained ATM commands behave identically from the primary repo and from
   sibling worktrees for one `ATM_HOME` / host-home installation, with no
   wrapper-only `cwd` forcing required for correctness
-- `atm read` no longer mixes original selection ids with next-unread payloads
-  or stale pre-mutation bucket counts after marking a message read
+- `atm read` returns the original selected message and its reader-lane bucket
+  snapshot without substituting a next-unread payload; durable state is
+  observed later through the bounded list-poll contract
 - `atm read --contains` matches both summary text and full durable message
   body text on the accepted metadata path, with no false negative when the
   match appears only in stored body text

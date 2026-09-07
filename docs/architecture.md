@@ -1078,9 +1078,9 @@ Each list row contains:
 Read-mutation output invariants:
 - when `mutation_applied = true` and a selected message is present, that
   message and `selected_message_id` must identify the same durable message
-- read-side mutation may mark the selected message `read = true`, but it must
-  still return that same message in the payload instead of re-running unread
-  selection and swapping in a different unread message
+- a read-side transition may later mark the selected message `read = true`;
+  the returned payload retains that selected-message identity rather than
+  re-running unread selection and swapping in a different unread message
 - `bucket_counts` describe the reader-lane snapshot. Read-side state-handoff
   acceptance does not promise durable visibility in that response; consumers
   use a bounded later list poll when durability matters.
@@ -1119,9 +1119,10 @@ The queue-query services derive `MessageClass` from `(ReadState, AckState)` and
 apply display-bucket selection to the derived class, not to raw persisted
 fields.
 
-For merged inbox surfaces, any displayed-message mutation must be written back
-to the physical inbox file that contributed the displayed record. The merged
-view is a read projection, not a synthetic write target.
+For merged inbox surfaces, a displayed message's legal read/seen transition is
+offered to the supervised non-blocking handoff for the authoritative ATM store.
+The merged view is a read projection, not a mutation target; retained origin
+inbox files are compatibility inputs rather than the write destination.
 
 ### 6.3 Ack Service
 
